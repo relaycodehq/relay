@@ -1,3 +1,10 @@
+import { RoomService } from "./rooms/service";
+import {
+  connectRoomSchema,
+  sendRoomSchema,
+  presenceSchema,
+  idSchema,
+} from "../shared/rooms";
 import { launchLineQuestion } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
@@ -46,6 +53,14 @@ import {
   type ReviewComment,
   type Discussion,
 } from "../shared/types";
+// Experimental builds have a separate Dock identity, instance lock and saved-data directory.
+app.setName("Review Relay Experimental");
+if (!process.env.RELAY_TEST_DATA)
+  app.setPath(
+    "userData",
+    join(app.getPath("appData"), "Review Relay Experimental"),
+  );
+let rooms: RoomService;
 let win: BrowserWindow | null = null,
   client: Gitea | null = null,
   store: Store,
@@ -145,7 +160,8 @@ app.on("before-quit", (event) => {
   triage?.cancel();
   if (flushing) return;
   flushing = true;
-  void Promise.all([store.flush(), flushLocalFiles()])
+  void (rooms?.dispose() ?? Promise.resolve())
+    .then(() => Promise.all([store.flush(), flushLocalFiles()]))
     .then(() => {
       quitReady = true;
       app.quit();
@@ -177,7 +193,7 @@ function createWindow() {
     minWidth: 1050,
     minHeight: 650,
     show: false,
-    title: "Review Relay",
+    title: "Review Relay Experimental",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
     // Adapted from T3 Code DesktopWindow.getWindowTitleBarOptions (MIT).
     ...(process.platform === "darwin"
@@ -242,6 +258,49 @@ function createWindow() {
 }
 async function dispatch(method: string, args: unknown[]) {
   switch (method) {
+    case "roomConnect":
+    case "roomState":
+    case "roomDisconnect":
+    case "roomPoll":
+    case "roomSend":
+    case "roomCancel":
+    case "roomPresence":
+    case "roomInvite":
+    case "roomMembers":
+    case "roomRevoke": {
+      const ref = refSchema.parse(args[0]);
+      const context = {
+        client: requireClient(),
+        ref,
+        key: repoKey(ref),
+        dir: store.get().folders[repoKey(ref)],
+      };
+      if (method === "roomConnect")
+        return rooms.connect(context, connectRoomSchema.parse(args[1]));
+      if (method === "roomState") return rooms.state(context);
+      if (method === "roomDisconnect") return rooms.disconnect(context);
+      if (method === "roomPoll")
+        return rooms.poll(
+          context,
+          z.number().int().nonnegative().parse(args[1]),
+          args[2] === undefined
+            ? undefined
+            : z.number().int().nonnegative().parse(args[2]),
+        );
+      if (method === "roomSend")
+        return rooms.send(context, sendRoomSchema.parse(args[1]));
+      if (method === "roomCancel")
+        return rooms.cancel(context, idSchema.parse(args[1]));
+      if (method === "roomPresence")
+        return rooms.presence(
+          context,
+          presenceSchema.nullable().parse(args[1]),
+        );
+      if (method === "roomInvite") return rooms.invite(context);
+      if (method === "roomMembers") return rooms.members(context);
+      return rooms.revoke(context, idSchema.parse(args[1]));
+    }
+
     case "triageState":
     case "startTriage":
     case "cancelTriage":
@@ -330,6 +389,7 @@ async function dispatch(method: string, args: unknown[]) {
       return next.account;
     }
     case "disconnect":
+      await rooms.dispose();
       blame.dispose();
       projectChecks.stop();
       cancelLoginRestore();
@@ -545,6 +605,9 @@ async function dispatch(method: string, args: unknown[]) {
           .nullable()
           .parse(args[3]),
       );
+    case "writeClipboard":
+      await clipboard.writeText(z.string().max(32768).parse(args[0]));
+      return;
     case "readClipboard":
       return clipboard.readText();
     case "readLocalFile":
@@ -644,6 +707,23 @@ app
   .then(async () => {
     store = new Store(app.getPath("userData"));
     await store.load();
+    rooms = new RoomService(
+      store,
+      (url, init) => net.fetch(url, init),
+      async (value) => {
+        const available =
+          process.platform === "linux"
+            ? safeStorage.isEncryptionAvailable() &&
+              safeStorage.getSelectedStorageBackend() !== "basic_text"
+            : await safeStorage.isAsyncEncryptionAvailable();
+        return available
+          ? (await safeStorage.encryptStringAsync(value)).toString("base64")
+          : null;
+      },
+      async (value) =>
+        (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
+          .result,
+    );
     triage = new TriageService(store, app.getPath("userData"));
     ipcMain.handle("relay:invoke", async (event, method, args) => {
       const source = event.senderFrame?.url;
@@ -703,7 +783,7 @@ app
         { role: "windowMenu" },
       ]),
     );
-    if (app.isPackaged) app.setAsDefaultProtocolClient("reviewrelay");
+    // Keep the stable app as the reviewrelay: URL handler during this experiment.
     windowReady = true;
     createWindow();
     void restoreSavedLogin();

@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 const methods = [
+  "roomConnect",
+  "roomState",
+  "roomDisconnect",
+  "roomPoll",
+  "roomSend",
+  "roomCancel",
+  "roomPresence",
+  "roomInvite",
+  "roomMembers",
+  "roomRevoke",
   "inspectSymbol",
   "projectCheckInfo",
   "projectCheckState",
@@ -35,6 +45,7 @@ const methods = [
   "readLocalFile",
   "saveLocalFile",
   "readClipboard",
+  "writeClipboard",
   "launchCodex",
   "askCodex",
   "aiSettings",

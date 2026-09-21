@@ -1,3 +1,5 @@
+> **Experimental branch: `experimental/shared-pr-rooms`.** This checkout builds **Review Relay Experimental** with separate application storage; the stable application remains independent. Open a PR and use the chat icon for shared rooms, invitations and `@codex` / `@claude` questions. Read [the room server setup guide](server/README.md) for Mac mini installation, Docker and the precise experimental scope. `npm run package:server` builds the portable server bundle. Agent answers are read-only in this experiment; existing local edit/fix workflows remain separate.
+
 # Review Relay
 
 A desktop Gitea review client for macOS and Linux. Electron + React, with actual MIT-licensed T3 Code diff components and titlebar behavior adapted for a focused review workflow.

@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 dist-electron/
 release/
@@ -6,3 +6,8 @@ test-results/
 playwright-report/
 .DS_Store
 *.log
+dist-server/
+room-data/
+server/setup-key.txt
+*.sqlite*
+server/.secrets/

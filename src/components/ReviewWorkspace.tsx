@@ -60,6 +60,9 @@ import {
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
 interface Props {
+  roomOpen: boolean;
+  onToggleRoom: () => void;
+  onDiscuss: (target: QuestionTarget) => void;
   checks: ChecksController;
   pull: Pull;
   file?: ChangedFile;
@@ -74,6 +77,9 @@ interface Props {
   onFileViewed: (path: string, progress: Progress) => void;
 }
 export function ReviewWorkspace({
+  roomOpen,
+  onToggleRoom,
+  onDiscuss,
   checks,
   pull,
   file,
@@ -261,6 +267,13 @@ export function ReviewWorkspace({
         </div>
         <div className="toolbar-actions">
           {paneControls}
+          <IconButton
+            label="Toggle PR room"
+            active={roomOpen}
+            onClick={onToggleRoom}
+          >
+            <MessageSquare size={17} />
+          </IconButton>
           <ProjectChecksButton checks={checks} onOpenFile={onEditFile} />
           <IconButton
             label="Open pull request in Gitea"
@@ -475,6 +488,7 @@ export function ReviewWorkspace({
                 await qc.invalidateQueries({ queryKey: ["reviewComments"] });
               }}
               onCodex={setCodex}
+              onDiscuss={onDiscuss}
               onAskCodex={(target) =>
                 setQuestion({ pull, file: file!, target })
               }

@@ -1,6 +1,6 @@
 {
   "name": "review-relay",
-  "productName": "Review Relay",
+  "productName": "Review Relay Experimental",
   "version": "0.1.0",
   "description": "A focused desktop review client for Gitea",
   "author": "Review Relay contributors",
@@ -19,7 +19,10 @@
     "package:omarchy": "npm run build && electron-builder --linux dir --x64 && python3 scripts/package-omarchy.py",
     "format": "prettier --write src electron shared tests scripts *.ts",
     "test:triage-live": "node scripts/eval-triage.mjs",
-    "test:setup": "npm ci --prefix tests/fixtures/language-toolchain --ignore-scripts"
+    "test:setup": "npm ci --prefix tests/fixtures/language-toolchain --ignore-scripts",
+    "build:server": "node scripts/build-rooms.mjs",
+    "start:server": "node dist-server/server.mjs",
+    "package:server": "node scripts/package-rooms.mjs"
   },
   "dependencies": {
     "@pierre/diffs": "1.4.3",
@@ -48,8 +51,8 @@
     "vitest": "5.0.1"
   },
   "build": {
-    "appId": "dev.reviewrelay.desktop",
-    "productName": "Review Relay",
+    "appId": "dev.reviewrelay.experimental",
+    "productName": "Review Relay Experimental",
     "directories": {
       "output": "release"
     },
@@ -63,14 +66,6 @@
       "assets/icon.png"
     ],
     "asar": true,
-    "protocols": [
-      {
-        "name": "Review Relay",
-        "schemes": [
-          "reviewrelay"
-        ]
-      }
-    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
@@ -92,5 +87,5 @@
     "compression": "normal"
   },
   "license": "MIT",
-  "desktopName": "review-relay.desktop"
+  "desktopName": "review-relay-experimental.desktop"
 }

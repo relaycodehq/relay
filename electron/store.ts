@@ -4,6 +4,9 @@ import { randomUUID } from "node:crypto";
 import type { Account, Progress, WorkspaceState } from "../shared/types";
 import type { AISettings } from "../shared/settings";
 interface State {
+  roomConnections?: Record<string, string>;
+  roomJoins?: Record<string, string>;
+  roomDeliveries?: Record<string, import("./rooms/service").RoomDelivery>;
   aiSettings?: AISettings;
   version: 1;
   account?: Account;

@@ -1,0 +1,11 @@
+node_modules
+.git
+dist
+dist-electron
+dist-server
+release
+room-data
+server/setup-key.txt
+test-results
+playwright-report
+server/.secrets/

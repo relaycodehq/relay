@@ -72,6 +72,7 @@ interface Props {
   onMark: (start: number, end: number, side: Side) => void;
   onRemoveMark: (id: string) => void;
   onAskCodex: (target: QuestionTarget) => void;
+  onDiscuss: (target: QuestionTarget) => void;
   onEditLine: (line: number) => void;
 }
 interface Annotation {
@@ -102,6 +103,7 @@ export function DiffViewer({
   onRemoveMark,
   onEditLine,
   onAskCodex,
+  onDiscuss,
 }: Props) {
   const contents = useQuery({
     queryKey: [
@@ -353,6 +355,31 @@ export function DiffViewer({
             }}
           >
             <Terminal size={13} /> Ask Codex
+          </button>
+          <button
+            onClick={() => {
+              const range = selection.range,
+                start = Math.min(range.start, range.end),
+                end = Math.max(range.start, range.end);
+              if (
+                (range.endSide && range.endSide !== range.side) ||
+                end - start >= 200
+              ) {
+                onError(
+                  new Error("Select up to 200 lines on one side to discuss."),
+                );
+                return;
+              }
+              onDiscuss({
+                path: file.filename,
+                start,
+                end,
+                side: range.side ?? "additions",
+              });
+            }}
+          >
+            <MessageSquare size={13} />
+            Discuss in room
           </button>
           <button onClick={() => beginComment(selection.range)}>
             <MessageSquare size={13} />

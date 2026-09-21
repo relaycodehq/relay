@@ -1,0 +1,270 @@
+import { createServer, type IncomingMessage } from "node:http";
+import { z } from "zod";
+import { RoomsDatabase, HttpError, hash } from "./database";
+import {
+  idSchema,
+  secretSchema,
+  projectSchema,
+  messageInputSchema,
+  presenceSchema,
+  type Presence,
+} from "../shared/rooms";
+
+const nameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[^\x00-\x1f\x7f]+$/);
+const createSchema = z
+  .object({
+    project: projectSchema,
+    name: nameSchema,
+    sessionToken: secretSchema,
+  })
+  .strict();
+const joinSchema = z
+  .object({
+    projectId: idSchema,
+    code: secretSchema,
+    project: projectSchema,
+    name: nameSchema,
+    sessionToken: secretSchema,
+  })
+  .strict();
+const updateSchema = z
+  .object({
+    body: z.string().max(100000),
+    status: z.enum(["running", "completed", "failed", "cancelled"]),
+    error: z.string().max(1000).nullable(),
+  })
+  .strict();
+const numberSchema = z.coerce
+  .number()
+  .int()
+  .min(0)
+  .max(Number.MAX_SAFE_INTEGER);
+async function body(req: IncomingMessage): Promise<unknown> {
+  if (!req.headers["content-type"]?.startsWith("application/json"))
+    throw new HttpError(415, "JSON required.");
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of req) {
+    bytes += chunk.length;
+    if (bytes > 200000) throw new HttpError(413, "Message too large.");
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new HttpError(400, "Invalid JSON.");
+  }
+}
+export function createRoomsServer(
+  database: RoomsDatabase,
+  adminSecret: string,
+) {
+  secretSchema.parse(adminSecret);
+  const presence = new Map<string, Map<string, Presence>>();
+  const limits = new Map<string, { at: number; count: number }>();
+  const timer = setInterval(() => {
+    database.expire();
+    for (const [room, people] of presence) {
+      for (const [id, p] of people)
+        if (p.at < Date.now() - 20000) people.delete(id);
+      if (!people.size) presence.delete(room);
+    }
+    for (const [ip, b] of limits)
+      if (b.at < Date.now() - 60000) limits.delete(ip);
+  }, 10000);
+  timer.unref();
+  const server = createServer(async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    try {
+      // This API is for desktop clients. Browsers get no CORS or cookie authentication.
+      if (req.headers.origin)
+        throw new HttpError(403, "Browser requests are not accepted.");
+      const ip = req.socket.remoteAddress ?? "unknown",
+        now = Date.now();
+      let bucket = limits.get(ip);
+      if (!bucket || now - bucket.at > 60000) {
+        bucket = { at: now, count: 0 };
+        limits.set(ip, bucket);
+      }
+      if (++bucket.count > 1200)
+        throw new HttpError(429, "Too many requests. Retry shortly.");
+      const url = new URL(req.url ?? "/", "http://rooms.local"),
+        path = url.pathname,
+        method = req.method;
+      let value: unknown;
+      if (path === "/health" && method === "GET")
+        value = { ok: true, protocol: 1 };
+      else if (path === "/v1/projects" && method === "POST") {
+        if (
+          hash(req.headers.authorization?.replace(/^Bearer /, "") ?? "") !==
+          hash(adminSecret)
+        )
+          throw new HttpError(401, "Invalid server setup key.");
+        const input = createSchema.parse(await body(req));
+        const session = database.create(
+          input.project,
+          input.name,
+          input.sessionToken,
+        );
+        value = {
+          projectId: session.projectId,
+          project: database.project(session.projectId),
+          member: { id: session.id, name: session.name, owner: session.owner },
+        };
+      } else if (path === "/v1/join" && method === "POST") {
+        const input = joinSchema.parse(await body(req));
+        if (
+          JSON.stringify(database.project(input.projectId)) !==
+          JSON.stringify(input.project)
+        )
+          throw new HttpError(
+            409,
+            "This invitation belongs to a different repository. Open that project first.",
+          );
+        const session = database.join(
+          input.projectId,
+          input.code,
+          input.name,
+          input.sessionToken,
+        );
+        value = {
+          projectId: session.projectId,
+          project: database.project(session.projectId),
+          member: { id: session.id, name: session.name, owner: session.owner },
+        };
+      } else {
+        const session = database.authenticate(
+          req.headers.authorization?.replace(/^Bearer /, "") ?? "",
+        );
+        if (path === "/v1/me" && method === "GET")
+          value = {
+            projectId: session.projectId,
+            project: database.project(session.projectId),
+            member: {
+              id: session.id,
+              name: session.name,
+              owner: session.owner,
+            },
+          };
+        else if (path === "/v1/invites" && method === "POST")
+          value = database.invite(session);
+        else if (path === "/v1/members" && method === "GET")
+          value = database.members(session);
+        else if (path.startsWith("/v1/members/") && method === "DELETE") {
+          database.revoke(session, idSchema.parse(path.slice(12)));
+          value = { ok: true };
+        } else if (path === "/v1/rooms" && method === "POST") {
+          const input = z
+            .object({
+              number: z.number().int().positive(),
+              title: z.string().min(1).max(500),
+            })
+            .strict()
+            .parse(await body(req));
+          value = database.open(session, input.number, input.title);
+        } else {
+          const m =
+            /^\/v1\/rooms\/([^/]+)(?:\/(messages|presence|topic|runs)(?:\/([^/]+))?)?$/.exec(
+              path,
+            );
+          if (!m) throw new HttpError(404, "Endpoint not found.");
+          const roomId = idSchema.parse(m[1]);
+          database.room(session, roomId);
+          const live = () =>
+            [...(presence.get(roomId)?.values() ?? [])].filter(
+              (p) =>
+                p.at > Date.now() - 20000 &&
+                database.members(session).some((u) => u.id === p.userId),
+            );
+          if (m[2] === "messages" && !m[3] && method === "GET") {
+            const after = numberSchema.parse(
+                url.searchParams.get("after") ?? 0,
+              ),
+              before = url.searchParams.has("before")
+                ? numberSchema.parse(url.searchParams.get("before"))
+                : undefined;
+            value = {
+              ...database.page(session, roomId, after, before),
+              presence: live(),
+            };
+          } else if (m[2] === "messages" && !m[3] && method === "POST")
+            value = database.post(
+              session,
+              roomId,
+              messageInputSchema.parse(await body(req)),
+            );
+          else if (m[2] === "messages" && m[3] && method === "GET")
+            value = database.get(session, roomId, idSchema.parse(m[3]));
+          else if (m[2] === "messages" && m[3] && method === "PATCH") {
+            const input = updateSchema.parse(await body(req));
+            value = database.update(
+              session,
+              roomId,
+              idSchema.parse(m[3]),
+              input.body,
+              input.status,
+              input.error,
+            );
+          } else if (m[2] === "runs" && method === "POST") {
+            const input = z
+              .object({ requestId: idSchema, model: z.string().max(220) })
+              .strict()
+              .parse(await body(req));
+            value = database.start(
+              session,
+              roomId,
+              input.requestId,
+              input.model,
+            );
+          } else if (m[2] === "topic" && method === "GET")
+            value = database.topic(
+              session,
+              roomId,
+              url.searchParams.has("parent")
+                ? idSchema.parse(url.searchParams.get("parent"))
+                : null,
+            );
+          else if (m[2] === "presence" && method === "PUT") {
+            const input = presenceSchema.nullable().parse(await body(req));
+            if (!presence.has(roomId)) presence.set(roomId, new Map());
+            if (input)
+              presence.get(roomId)!.set(session.id, {
+                ...input,
+                userId: session.id,
+                name: session.name,
+                at: Date.now(),
+              });
+            else presence.get(roomId)!.delete(session.id);
+            value = { ok: true };
+          } else throw new HttpError(404, "Endpoint not found.");
+        }
+      }
+      res.end(JSON.stringify(value));
+    } catch (e) {
+      res.statusCode =
+        e instanceof HttpError ? e.status : e instanceof z.ZodError ? 400 : 500;
+      res.end(
+        JSON.stringify({
+          error:
+            e instanceof HttpError
+              ? e.message
+              : e instanceof z.ZodError
+                ? "Invalid request fields."
+                : "The room server could not complete this request.",
+        }),
+      );
+    }
+  });
+  server.requestTimeout = 15000;
+  server.headersTimeout = 10000;
+  server.maxHeadersCount = 30;
+  server.on("close", () => clearInterval(timer));
+  return server;
+}

@@ -1,3 +1,4 @@
+import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings } from "./settings";
 import type { LineQuestion } from "./questions";
 import type {
@@ -190,7 +191,7 @@ export interface LocalFile {
   original: string;
   version: string;
 }
-export interface Api {
+export interface Api extends importRoomApi {
   inspectSymbol(
     ref: PullRef,
     head: string,
@@ -276,6 +277,7 @@ export interface Api {
     contents: string,
   ): Promise<{ version: string }>;
   readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
   launchCodex(
     ref: PullRef,
     head: string,

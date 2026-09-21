@@ -1,3 +1,5 @@
+import { RoomPanel } from "./components/RoomPanel";
+import type { QuestionTarget } from "../shared/questions";
 import { Settings } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
@@ -337,6 +339,13 @@ function Connected({
   pendingUrl?: string;
   initialWorkspace: WorkspaceState;
 }) {
+  const [roomOpen, setRoomOpen] = useState(
+    () => localStorage.getItem("relay-room-open") === "true",
+  );
+  const [roomTarget, setRoomTarget] = useState<{
+    key: string;
+    value: QuestionTarget;
+  } | null>(null);
   const qc = useQueryClient();
   const [restoring, setRestoring] = useState(
     !!initialWorkspace.pull && !pendingUrl,
@@ -639,6 +648,10 @@ function Connected({
       qc.invalidateQueries({ queryKey: ["discussion"] }),
     ]);
   };
+  useEffect(
+    () => setRoomTarget(null),
+    [selected?.owner, selected?.name, selected?.number],
+  );
   const current = allFiles.find((f) => f.filename === file);
   const readCount = allFiles.filter(
     (f) => progress.read[f.filename] === revision,
@@ -999,6 +1012,20 @@ function Connected({
           )
         ) : (
           <ReviewWorkspace
+            onToggleRoom={() => {
+              setRoomOpen((v) => {
+                localStorage.setItem("relay-room-open", String(!v));
+                return !v;
+              });
+            }}
+            roomOpen={roomOpen}
+            onDiscuss={(target) => {
+              setRoomTarget({
+                key: `${pull.data!.owner}/${pull.data!.name}#${pull.data!.number}`,
+                value: target,
+              });
+              setRoomOpen(true);
+            }}
             checks={checks}
             key={JSON.stringify(selected)}
             pull={pull.data}
@@ -1017,6 +1044,38 @@ function Connected({
           />
         )}
       </main>
+      {roomOpen && pull.data && !restoring && (
+        <RoomPanel
+          key={JSON.stringify([
+            account.id,
+            pull.data.owner,
+            pull.data.name,
+            pull.data.number,
+          ])}
+          pull={pull.data}
+          accountId={account.id}
+          path={current?.filename}
+          target={
+            roomTarget?.key ===
+            `${pull.data.owner}/${pull.data.name}#${pull.data.number}`
+              ? roomTarget.value
+              : null
+          }
+          viewed={readCount}
+          onClearTarget={() => setRoomTarget(null)}
+          onClose={() => {
+            setRoomOpen(false);
+            localStorage.setItem("relay-room-open", "false");
+          }}
+          onSelect={selectFile}
+          onLink={() => {
+            void api
+              .linkFolder(pull.data!)
+              .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
+              .catch(setError);
+          }}
+        />
+      )}
       {!!error && (
         <div className="toast error" role="alert">
           <ErrorBox error={error} />
