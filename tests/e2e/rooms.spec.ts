@@ -40,7 +40,12 @@ test.beforeAll(async () => {
   capture = join(root, "agent.jsonl");
   await mkdir(bin);
   await mkdir(repo);
-  fixture = await fixtureServer();
+  fixture = await fixtureServer({
+    users: {
+      "test-alice": { id: 101, login: "alice", full_name: "Alice" },
+      "test-bob": { id: 102, login: "bob", full_name: "Bob" },
+    },
+  });
   database = new RoomsDatabase(join(root, "rooms.sqlite"));
   setupKey = token();
   server = createRoomsServer(database, setupKey);
@@ -83,8 +88,8 @@ test.beforeAll(async () => {
     const page = await app.firstWindow();
     pages.push(page);
     await page.evaluate(
-      async ({ url, ref }) => {
-        await window.relay.connect(url, "test-token");
+      async ({ url, ref, person }) => {
+        await window.relay.connect(url, `test-${person}`);
         await window.relay.saveWorkspace({
           pull: ref,
           file: "src/hooks/useReview.ts",
@@ -93,7 +98,7 @@ test.beforeAll(async () => {
           state: "open",
         });
       },
-      { url: fixture.serverUrl, ref },
+      { url: fixture.serverUrl, ref, person },
     );
     await app.evaluate(({ dialog, clipboard }, repo) => {
       let copied = "";
@@ -232,12 +237,71 @@ test("only the sender's agent starts, streams to both desktops, and receives pin
   expect(turn.input[0].text).toContain("cancellation path");
   expect(turn.input[0].text).toContain("excerpt");
   expect(calls[0].cwd).toBe(await realpath(repo));
-  await alice.screenshot({ path: "test-results/shared-pr-room.png" });
-  await alice.evaluate(() => (document.documentElement.dataset.theme = "dark"));
   await alice
     .getByRole("button", { name: "Hide pull requests", exact: true })
     .click();
-  await alice.screenshot({ path: "test-results/shared-pr-room-dark.png" });
+  await alice.locator(".room-code-context > summary").click();
+  await expect(alice.locator(".room-code-context pre")).toBeVisible();
+  await expect(alice.locator(".room-code-context pre")).toContainText(
+    ".then(response => response.json())",
+  );
+  await expect(alice.locator(".room-code-context pre")).not.toContainText(
+    '"pr":',
+  );
+  await alice.screenshot({
+    path: "test-results/shared-pr-room.png",
+    animations: "disabled",
+  });
+  await alice.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+  await alice.screenshot({
+    path: "test-results/shared-pr-room-dark.png",
+    animations: "disabled",
+  });
+});
+test("conversation layout supports inline reply folding, resizing and recipient selection", async () => {
+  const [alice, bob] = pages;
+  const room = alice.getByRole("complementary", { name: "PR room" });
+  const roomBox = await room.boundingBox(),
+    codeBox = await alice.locator(".review-main").boundingBox();
+  expect(roomBox!.x + roomBox!.width).toBeLessThanOrEqual(codeBox!.x + 1);
+  const replies = alice.locator(".room-replies").first();
+  await replies.locator(":scope > summary").click();
+  await expect(replies).not.toHaveAttribute("open", "");
+  await bob
+    .getByLabel("Message PR room")
+    .fill("The collapsed discussion should stay collapsed.");
+  await bob
+    .getByRole("complementary", { name: "PR room" })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  await expect(
+    alice.getByText("The collapsed discussion should stay collapsed.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(replies).not.toHaveAttribute("open", "");
+  await replies.locator(":scope > summary").click();
+  await expect(replies.locator(".room-reply-thread")).toBeVisible();
+  await alice.getByLabel("Message PR room").fill("Explain this");
+  await alice
+    .getByRole("combobox", { name: "Message recipient" })
+    .selectOption("claude");
+  await expect(alice.getByLabel("Message PR room")).toHaveValue(
+    "@claude Explain this",
+  );
+  await alice
+    .getByRole("combobox", { name: "Message recipient" })
+    .selectOption("people");
+  await expect(alice.getByLabel("Message PR room")).toHaveValue("Explain this");
+  const resizer = alice.getByRole("separator", { name: "Resize conversation" });
+  await resizer.focus();
+  await alice.keyboard.press("ArrowRight");
+  await expect(resizer).toHaveAttribute("aria-valuenow", "470");
+  await alice.reload();
+  await expect(
+    alice.getByRole("separator", { name: "Resize conversation" }),
+  ).toHaveAttribute("aria-valuenow", "470");
+  await expect(alice.getByLabel("Message PR room")).toHaveValue("Explain this");
 });
 test("Claude uses its own provider; cancellation keeps partial Codex output; draft survives reload", async () => {
   const [alice, bob] = pages;

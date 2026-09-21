@@ -968,8 +968,41 @@ function Connected({
           </IconButton>
         </footer>
       </section>
+      {roomOpen && pull.data && !restoring && (
+        <RoomPanel
+          key={JSON.stringify([
+            account.id,
+            pull.data.owner,
+            pull.data.name,
+            pull.data.number,
+          ])}
+          firstPane={requestsHidden && filesHidden}
+          pull={pull.data}
+          accountId={account.id}
+          path={current?.filename}
+          target={
+            roomTarget?.key ===
+            `${pull.data.owner}/${pull.data.name}#${pull.data.number}`
+              ? roomTarget.value
+              : null
+          }
+          viewed={readCount}
+          onClearTarget={() => setRoomTarget(null)}
+          onClose={() => {
+            setRoomOpen(false);
+            localStorage.setItem("relay-room-open", "false");
+          }}
+          onSelect={selectFile}
+          onLink={() => {
+            void api
+              .linkFolder(pull.data!)
+              .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
+              .catch(setError);
+          }}
+        />
+      )}
       <main
-        className={`review-main ${requestsHidden && filesHidden ? "is-first-pane" : ""}`}
+        className={`review-main ${requestsHidden && filesHidden && !(roomOpen && pull.data && !restoring) ? "is-first-pane" : ""}`}
       >
         {(!selected || pull.error || !pull.data || restoring) && (
           <header className="titlebar empty-titlebar">
@@ -1044,38 +1077,6 @@ function Connected({
           />
         )}
       </main>
-      {roomOpen && pull.data && !restoring && (
-        <RoomPanel
-          key={JSON.stringify([
-            account.id,
-            pull.data.owner,
-            pull.data.name,
-            pull.data.number,
-          ])}
-          pull={pull.data}
-          accountId={account.id}
-          path={current?.filename}
-          target={
-            roomTarget?.key ===
-            `${pull.data.owner}/${pull.data.name}#${pull.data.number}`
-              ? roomTarget.value
-              : null
-          }
-          viewed={readCount}
-          onClearTarget={() => setRoomTarget(null)}
-          onClose={() => {
-            setRoomOpen(false);
-            localStorage.setItem("relay-room-open", "false");
-          }}
-          onSelect={selectFile}
-          onLink={() => {
-            void api
-              .linkFolder(pull.data!)
-              .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
-              .catch(setError);
-          }}
-        />
-      )}
       {!!error && (
         <div className="toast error" role="alert">
           <ErrorBox error={error} />

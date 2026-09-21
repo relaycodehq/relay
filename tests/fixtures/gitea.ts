@@ -81,6 +81,7 @@ export async function fixtureServer(
     grouping?: boolean;
     contextGaps?: boolean;
     code?: { before: string; after: string };
+    users?: Record<string, { id: number; login: string; full_name: string }>;
   } = {},
 ) {
   const requests: {
@@ -132,7 +133,9 @@ export async function fixtureServer(
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(data));
     };
-    if (req.headers.authorization !== "token test-token")
+    const fixtureUser =
+      options.users?.[req.headers.authorization?.replace(/^token /, "") ?? ""];
+    if (req.headers.authorization !== "token test-token" && !fixtureUser)
       return json({ message: "unauthorized" }, 401);
     const path = url.pathname.replace("/gitea/api/v1", "");
     const owner = { id: 1, login: "Web" };
@@ -185,7 +188,13 @@ export async function fixtureServer(
       changes: 16,
     }));
     if (path === "/user")
-      return json({ id: 42, login: "reviewer", full_name: "Your workspace" });
+      return json(
+        fixtureUser ?? {
+          id: 42,
+          login: "reviewer",
+          full_name: "Your workspace",
+        },
+      );
     if (path === "/repos/issues/search") {
       const items = [
         {

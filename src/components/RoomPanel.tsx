@@ -5,13 +5,15 @@ import {
   ArrowUpRight,
   AtSign,
   Check,
-  ChevronLeft,
   Copy,
   MessageSquare,
+  ChevronDown,
+  FolderGit2,
+  GitBranch,
+  Zap,
   Reply,
   Send,
   Settings2,
-  Square,
   Users,
   X,
 } from "lucide-react";
@@ -25,14 +27,22 @@ import {
   type SendRoom,
   type Member,
 } from "../../shared/rooms";
-import { choiceLabel, defaultAISettings } from "../../shared/settings";
+import {
+  choiceLabel,
+  defaultAISettings,
+  modelName,
+  effortLabels,
+} from "../../shared/settings";
 import { api } from "../lib/api";
-import { ErrorBox, IconButton, Modal, RichText, Loading } from "./ui";
+import { ErrorBox, IconButton, Modal, Loading } from "./ui";
+import { RoomAvatar, RoomTranscript } from "./RoomTranscript";
+import { PaneResizer } from "./PaneResizer";
 import { ModelField } from "./ModelField";
 import "./rooms.css";
 
 type Props = {
   pull: Pull;
+  firstPane: boolean;
   accountId: string;
   path?: string;
   target: QuestionTarget | null;
@@ -50,6 +60,7 @@ type Draft = {
 };
 export function RoomPanel({
   pull,
+  firstPane,
   accountId,
   path,
   target,
@@ -80,6 +91,7 @@ export function RoomPanel({
     [busy, setBusy] = useState(false),
     [settings, setSettings] = useState(false),
     [people, setPeople] = useState(false),
+    [showPresence, setShowPresence] = useState(false),
     [more, setMore] = useState(false),
     [newMessages, setNewMessages] = useState(false);
   const [sharePresence, setSharePresence] = useState(
@@ -111,8 +123,7 @@ export function RoomPanel({
   const viewport = useRef<HTMLDivElement>(null),
     input = useRef<HTMLTextAreaElement>(null),
     cursor = useRef(0),
-    follow = useRef(true),
-    history = useRef(false);
+    follow = useRef(true);
   const state = useQuery({
     queryKey: ["roomState", key],
     queryFn: () => api.roomState(pull),
@@ -264,28 +275,70 @@ export function RoomPanel({
   };
   const selected = draft.context;
   return (
-    <aside className="room-panel" aria-label="PR room">
+    <aside
+      className={`room-panel ${firstPane ? "is-first-pane" : ""}`}
+      aria-label="PR room"
+    >
+      <PaneResizer
+        pane="room"
+        label="Resize conversation"
+        initial={460}
+        min={340}
+        max={760}
+      />
       <header className="titlebar room-titlebar">
-        <div>
-          <MessageSquare size={17} />
-          <strong>PR room</strong>
-          <span className="room-experimental">Experimental</span>
+        <span className="room-thread-title" title={pull.title}>
+          {pull.title}
+        </span>
+        <div className="room-header-actions">
+          {connection && (
+            <>
+              <button
+                className="room-avatars-button"
+                aria-label="Review presence"
+                title="Who's reviewing"
+                aria-expanded={showPresence}
+                onClick={() => setShowPresence((v) => !v)}
+              >
+                <span className="room-avatar-stack">
+                  <RoomAvatar name={connection.member.name} />
+                  {presence
+                    .filter((p) => p.userId !== connection.member.id)
+                    .slice(0, 2)
+                    .map((p) => (
+                      <RoomAvatar key={p.userId} name={p.name} />
+                    ))}
+                </span>
+              </button>
+              <button
+                className="room-share"
+                aria-label="Room members and invitations"
+                onClick={() => setPeople(true)}
+              >
+                <Users size={13} />
+                Share
+              </button>
+            </>
+          )}
+          <IconButton label="Hide PR room" onClick={onClose}>
+            <X size={14} />
+          </IconButton>
         </div>
-        <IconButton label="Hide PR room" onClick={onClose}>
-          <X size={16} />
-        </IconButton>
       </header>
       <div className="room-subheader">
         <span>
-          {pull.owner}/{pull.name} <strong>#{pull.number}</strong>
+          <MessageSquare size={12} /> PR #{pull.number}{" "}
+          <span className="room-subheader-divider">/</span> Conversation
         </span>
         {connection && (
-          <IconButton
-            label="Room members and invitations"
-            onClick={() => setPeople(true)}
+          <button
+            className="room-connection-status"
+            onClick={() => setShowPresence((v) => !v)}
+            aria-expanded={showPresence}
           >
-            <Users size={16} />
-          </IconButton>
+            <span className={`dot ${networkError ? "" : "green"}`} />
+            {networkError ? "Reconnecting…" : "Connected"}
+          </button>
         )}
       </div>
       {state.isPending ? (
@@ -296,55 +349,65 @@ export function RoomPanel({
         <RoomConnect pull={pull} onConnected={() => void state.refetch()} />
       ) : (
         <>
-          <div className="room-presence">
-            <span className={`dot ${networkError ? "" : "green"}`} />
-            <span>
-              {networkError
-                ? "Reconnecting · your draft is kept"
-                : presence.filter((p) => p.userId !== connection.member.id)
-                      .length
-                  ? `${presence.filter((p) => p.userId !== connection.member.id).length} colleague online`
-                  : "Room connected"}
-            </span>
-            <label title="Share your current file and viewed count while this panel is open">
-              <input
-                type="checkbox"
-                checked={sharePresence}
-                onChange={(e) => {
-                  setSharePresence(e.target.checked);
-                  localStorage.setItem(
-                    "relay-share-room-presence",
-                    String(e.target.checked),
-                  );
-                }}
-              />
-              Share my place
-            </label>
-          </div>
-          {presence
-            .filter((p) => p.userId !== connection.member.id)
-            .map((p) => (
-              <button
-                className="room-colleague"
-                key={p.userId}
-                disabled={!p.path || p.head !== pull.head.sha}
-                onClick={() => p.path && onSelect(p.path)}
-                title={p.path ?? "Reviewing this PR"}
-              >
-                <span className="room-avatar">
-                  {p.name.slice(0, 2).toUpperCase()}
-                </span>
+          {showPresence && (
+            <div
+              className="room-presence-popover"
+              role="region"
+              aria-label="Review presence"
+            >
+              <div className="room-presence">
+                <span className={`dot ${networkError ? "" : "green"}`} />
                 <span>
-                  <strong>{p.name}</strong>
-                  <small>
-                    {p.path?.split("/").at(-1) ?? "Reviewing"} · {p.viewed}/
-                    {p.total} viewed
-                    {p.head !== pull.head.sha ? " · different revision" : ""}
-                  </small>
+                  {networkError
+                    ? "Reconnecting · your draft is kept"
+                    : presence.filter((p) => p.userId !== connection.member.id)
+                          .length
+                      ? `${presence.filter((p) => p.userId !== connection.member.id).length} colleague online`
+                      : "Room connected"}
                 </span>
-                <ArrowUpRight size={14} />
-              </button>
-            ))}
+                <label title="Share your current file and viewed count while this panel is open">
+                  <input
+                    type="checkbox"
+                    checked={sharePresence}
+                    onChange={(e) => {
+                      setSharePresence(e.target.checked);
+                      localStorage.setItem(
+                        "relay-share-room-presence",
+                        String(e.target.checked),
+                      );
+                    }}
+                  />
+                  Share my place
+                </label>
+              </div>
+              {presence
+                .filter((p) => p.userId !== connection.member.id)
+                .map((p) => (
+                  <button
+                    className="room-colleague"
+                    key={p.userId}
+                    disabled={!p.path || p.head !== pull.head.sha}
+                    onClick={() => p.path && onSelect(p.path)}
+                    title={p.path ?? "Reviewing this PR"}
+                  >
+                    <span className="room-avatar">
+                      {p.name.slice(0, 2).toUpperCase()}
+                    </span>
+                    <span>
+                      <strong>{p.name}</strong>
+                      <small>
+                        {p.path?.split("/").at(-1) ?? "Reviewing"} · {p.viewed}/
+                        {p.total} viewed
+                        {p.head !== pull.head.sha
+                          ? " · different revision"
+                          : ""}
+                      </small>
+                    </span>
+                    <ArrowUpRight size={14} />
+                  </button>
+                ))}
+            </div>
+          )}
           <div
             className="room-messages"
             ref={viewport}
@@ -363,7 +426,6 @@ export function RoomPanel({
                 className="room-load"
                 onClick={() =>
                   act(async () => {
-                    history.current = true;
                     const el = viewport.current!,
                       height = el.scrollHeight;
                     const page = await api.roomPoll(
@@ -407,142 +469,34 @@ export function RoomPanel({
                 </small>
               </div>
             )}
-            {messages.map((m) => (
-              <article
-                className={`room-message ${m.kind === "agent" ? "agent-message" : ""}`}
-                key={m.id}
-                data-message-id={m.id}
-              >
-                <div className="room-message-heading">
-                  <span
-                    className={`room-avatar ${m.kind === "agent" ? "agent-avatar" : ""}`}
-                  >
-                    {m.kind === "agent" ? (
-                      <AtSign size={14} />
-                    ) : (
-                      m.author.slice(0, 2).toUpperCase()
-                    )}
-                  </span>
-                  <strong>
-                    {m.kind === "agent" ? `@${m.provider}` : m.author}
-                  </strong>
-                  {m.kind === "agent" && <small>via {m.author}</small>}
-                  <time dateTime={new Date(m.createdAt).toISOString()}>
-                    {new Date(m.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
-                </div>
-                {m.parentId && (
-                  <button
-                    className="room-reply-link"
-                    onClick={() => {
-                      const el = viewport.current?.querySelector(
-                        `[data-message-id="${m.parentId}"]`,
-                      );
-                      if (el)
-                        el.scrollIntoView({
-                          block: "center",
-                          behavior: "smooth",
-                        });
-                      else
-                        setError(
-                          new Error(
-                            "Load earlier messages to see the message this replies to.",
-                          ),
-                        );
-                    }}
-                  >
-                    <Reply size={11} />{" "}
-                    {messages
-                      .find((x) => x.id === m.parentId)
-                      ?.body.slice(0, 65) ?? "Reply to an earlier message"}
-                  </button>
-                )}
-                {m.context.path && (
-                  <button
-                    className="room-context-link"
-                    disabled={m.context.head !== pull.head.sha}
-                    title={m.context.path}
-                    onClick={() => onSelect(m.context.path!)}
-                  >
-                    <span>
-                      {m.context.path.split("/").at(-1)}
-                      {m.context.start
-                        ? `:${m.context.start}${m.context.end !== m.context.start ? `–${m.context.end}` : ""}`
-                        : ""}
-                    </span>
-                    <small>
-                      {m.context.side === "deletions" ? "before · " : ""}
-                      {m.context.head.slice(0, 7)}
-                      {m.context.head !== pull.head.sha
-                        ? " · older revision"
-                        : ""}
-                    </small>
-                  </button>
-                )}
-                <RichText text={m.body} />
-                {m.status === "running" && (
-                  <div className="room-run-status">
-                    <span className="room-thinking" />
-                    {m.provider === "claude" ? "Claude" : "Codex"} is reading
-                    the repository…{" "}
-                    {m.authorId === connection.member.id && (
-                      <button
-                        onClick={() => act(() => api.roomCancel(pull, m.id))}
-                      >
-                        <Square size={10} />
-                        Stop
-                      </button>
-                    )}
-                  </div>
-                )}
-                {m.error && <p className="room-run-error">{m.error}</p>}
-                <div className="room-message-actions">
-                  <button
-                    onClick={() => {
-                      setDraft((d) => ({
-                        ...d,
-                        parentId: m.id,
-                        pending: undefined,
-                      }));
-                      input.current?.focus();
-                    }}
-                  >
-                    <Reply size={12} />
-                    Reply
-                  </button>
-                  {(m.status === "failed" || m.status === "cancelled") &&
-                    m.authorId === connection.member.id && (
-                      <button
-                        onClick={() => {
-                          const request = messages.find(
-                            (x) => x.id === m.requestId,
-                          );
-                          if (request) {
-                            const { excerpt: _, ...context } = request.context;
-                            setDraft({
-                              text: request.body,
-                              parentId: request.parentId,
-                              context: context.start ? context : undefined,
-                            });
-                            input.current?.focus();
-                          } else
-                            setError(
-                              new Error(
-                                "Load the original question above, then ask again.",
-                              ),
-                            );
-                        }}
-                      >
-                        Ask again
-                      </button>
-                    )}
-                  {m.model && <small>{m.model}</small>}
-                </div>
-              </article>
-            ))}
+            <RoomTranscript
+              messages={messages}
+              head={pull.head.sha}
+              memberId={connection.member.id}
+              onSelect={onSelect}
+              onReply={(m) => {
+                setDraft((d) => ({ ...d, parentId: m.id, pending: undefined }));
+                input.current?.focus();
+              }}
+              onCancel={(id) => act(() => api.roomCancel(pull, id))}
+              onRetry={(m) => {
+                const request = messages.find((x) => x.id === m.requestId);
+                if (request) {
+                  const { excerpt: _, ...context } = request.context;
+                  setDraft({
+                    text: request.body,
+                    parentId: request.parentId,
+                    context: context.start ? context : undefined,
+                  });
+                  input.current?.focus();
+                } else
+                  setError(
+                    new Error(
+                      "Load the original question above, then ask again.",
+                    ),
+                  );
+              }}
+            />
           </div>
           {newMessages && (
             <button
@@ -613,59 +567,120 @@ export function RoomPanel({
                 </IconButton>
               </div>
             )}
-            <textarea
-              ref={input}
-              aria-label="Message PR room"
-              placeholder="Message your colleague, or @codex…"
-              rows={3}
-              maxLength={16000}
-              value={draft.text}
-              disabled={busy}
-              onChange={(e) => updateText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-            />
-            <div className="room-compose-tools">
-              <button
-                type="button"
-                className={mention ? "room-mention-active" : ""}
-                onClick={() => {
-                  updateText(
-                    mention ? mention.question : `@codex ${draft.text}`,
-                  );
-                  input.current?.focus();
+            <div className="room-compose-input">
+              <RoomAvatar name={connection.member.name} />
+              <textarea
+                ref={input}
+                aria-label="Message PR room"
+                placeholder="Message the room. @codex or @claude to ask your agent…"
+                rows={3}
+                maxLength={16000}
+                value={draft.text}
+                disabled={busy}
+                onChange={(e) => updateText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    void send();
+                  }
                 }}
+              />
+            </div>
+            <div className="room-compose-tools">
+              <label
+                className="room-recipient"
+                title="Choose who to address. Agents use your own account."
               >
                 <AtSign size={13} />
+                <select
+                  aria-label="Message recipient"
+                  value={mention?.provider ?? "people"}
+                  onChange={(e) => {
+                    const question = mention?.question ?? draft.text;
+                    updateText(
+                      e.target.value === "people"
+                        ? question
+                        : `@${e.target.value} ${question}`,
+                    );
+                    input.current?.focus();
+                  }}
+                >
+                  <option value="people">People</option>
+                  <option value="codex">My Codex</option>
+                  <option value="claude">My Claude</option>
+                </select>
+              </label>
+              <small className="room-send-hint">
                 {mention
-                  ? `My ${mention.provider === "claude" ? "Claude" : "Codex"}`
-                  : "Ask Codex"}
-              </button>
-              <IconButton
-                label="Room agent settings"
-                onClick={() => setSettings(true)}
-              >
-                <Settings2 size={14} />
-              </IconButton>
+                  ? "Your agent · shared answer"
+                  : "Message your colleagues"}
+              </small>
               <button
                 type="submit"
-                className="primary"
+                className="room-send"
+                aria-label={busy ? "Sending…" : mention ? "Ask" : "Send"}
+                title="Send · ⌘/Ctrl ↵"
                 disabled={busy || !draft.text.trim()}
               >
-                {busy ? "Sending…" : mention ? "Ask" : "Send"}
-                <Send size={13} />
+                <Send size={14} />
               </button>
             </div>
-            <small className="room-send-hint">
-              {mention
-                ? "Uses your account · read-only answer shared with the room"
-                : "People only · no agent is invoked"}{" "}
-              · ⌘/Ctrl ↵
-            </small>
+            <div className="room-modelbar">
+              <button
+                type="button"
+                className="room-checkout"
+                onClick={onLink}
+                title="Link this project's local checkout"
+              >
+                <FolderGit2 size={12} />
+                <span>{pull.name}</span>
+                <GitBranch size={11} />
+                <span>{pull.head.ref || pull.head.sha.slice(0, 7)}</span>
+              </button>
+              <div className="room-model-controls">
+                <button
+                  type="button"
+                  onClick={() => setSettings(true)}
+                  title="Reasoning effort"
+                >
+                  {mention?.provider === "claude"
+                    ? claude.effort || "Default"
+                    : choice.reasoningEffort
+                      ? effortLabels[choice.reasoningEffort]
+                      : "Default"}
+                  <ChevronDown size={10} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettings(true)}
+                  title={
+                    mention?.provider === "claude"
+                      ? claude.model || "Claude default"
+                      : choiceLabel(choice)
+                  }
+                >
+                  {mention?.provider === "claude"
+                    ? claude.model || "Claude"
+                    : modelName(choice.model)}
+                  <ChevronDown size={10} />
+                </button>
+                <IconButton
+                  label="Room agent settings"
+                  onClick={() => setSettings(true)}
+                >
+                  <Settings2 size={13} />
+                </IconButton>
+                {mention?.provider !== "claude" && (
+                  <span
+                    className={`room-speed ${choice.fast ? "fast" : ""}`}
+                    title={choice.fast ? "Fast mode" : "Standard speed"}
+                  >
+                    <Zap size={11} />
+                    {choice.fast ? "Fast" : "Standard"}
+                  </span>
+                )}
+              </div>
+            </div>
           </form>
           {!connection.persistent && (
             <p className="room-notice">
