@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fixtureServer } from "../fixtures/gitea";
@@ -9,6 +9,74 @@ const env = Object.fromEntries(
     ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
   ),
 ) as Record<string, string>;
+
+test("experimental first launch restores the stable login; restart and explicit sign-out keep profiles independent", async () => {
+  test.skip(process.platform !== "darwin", "macOS Keychain handoff");
+  const fixture = await fixtureServer();
+  const data = await mkdtemp(join(tmpdir(), "relay-import-login-"));
+  const stableDir = join(data, "app-data", "Review Relay");
+  await mkdir(stableDir, { recursive: true });
+  const account = {
+    id: "fixture-account",
+    server: fixture.serverUrl,
+    user: { id: 42, login: "reviewer", full_name: "Test Reviewer" },
+    persistent: true,
+  };
+  const stable = JSON.stringify({
+    version: 1,
+    account,
+    encryptedToken: Buffer.from("fixture-ciphertext").toString("base64"),
+    folders: { unrelated: "/keep/stable/folder" },
+    progress: {},
+  });
+  await writeFile(join(stableDir, "state.json"), stable);
+  const launch = () =>
+    electron.launch({
+      args: ["tests/fixtures/locked-login.cjs"],
+      env: { ...env, RELAY_TEST_DATA: data },
+    });
+  let app: Awaited<ReturnType<typeof launch>> | undefined;
+  try {
+    for (let restart = 0; restart < 2; restart++) {
+      app = await launch();
+      const page = await app.firstWindow();
+      await expect(
+        page.getByRole("heading", { name: "Unlocking your saved sign-in." }),
+      ).toBeVisible();
+      expect(await app.evaluate(({ app }) => app.getName())).toBe(
+        "Review Relay Experimental",
+      );
+      await app.evaluate(() => (globalThis as any).finishUnlock(true));
+      await expect
+        .poll(
+          async () =>
+            (await page.evaluate(() => window.relay.bootstrap())).account?.id,
+        )
+        .toBe(account.id);
+      const local = JSON.parse(
+        await readFile(join(data, "state.json"), "utf8"),
+      );
+      expect(local.credentialName).toBe("Review Relay");
+      expect(local.folders).toEqual({});
+      expect(JSON.stringify(local)).not.toContain("test-token");
+      if (restart === 1) await page.evaluate(() => window.relay.disconnect());
+      await app.close();
+      app = undefined;
+    }
+    app = await launch();
+    await expect(
+      (await app.firstWindow()).getByRole("button", {
+        name: "Connect to Gitea",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(await readFile(join(stableDir, "state.json"), "utf8")).toBe(stable);
+  } finally {
+    await app?.close();
+    await fixture.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
 
 test("activation and second launch restore hidden/minimized windows without replacing their contents", async () => {
   const data = await mkdtemp(join(tmpdir(), "relay-window-"));
@@ -29,6 +97,14 @@ test("activation and second launch restore hidden/minimized windows without repl
         BrowserWindow.getAllWindows()[0].hide();
         if (process.platform === "darwin") app.hide();
       });
+      await expect
+        .poll(() =>
+          app.evaluate(({ app, BrowserWindow }) => ({
+            visible: BrowserWindow.getAllWindows()[0].isVisible(),
+            hidden: process.platform === "darwin" && app.isHidden(),
+          })),
+        )
+        .toEqual({ visible: false, hidden: process.platform === "darwin" });
       await app.evaluate(({ app }, event) => {
         app.emit(event, {}, [], "");
       }, event);

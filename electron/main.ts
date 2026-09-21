@@ -28,6 +28,11 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { Store } from "./store";
+import {
+  loginProfile,
+  experimentalCredentialName,
+  type LoginProfile,
+} from "./login-profile";
 import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
 import { inspectFolder } from "./repository";
@@ -53,13 +58,28 @@ import {
   type ReviewComment,
   type Discussion,
 } from "../shared/types";
-// Experimental builds have a separate Dock identity, instance lock and saved-data directory.
-app.setName("Review Relay Experimental");
+// The Dock identity, instance lock and saved reviews remain experimental.
+// On macOS, set the encryption namespace before Electron initializes Keychain;
+// restore the display name after ready, once that namespace is fixed.
+app.setName(experimentalCredentialName);
 if (!process.env.RELAY_TEST_DATA)
   app.setPath(
     "userData",
     join(app.getPath("appData"), "Review Relay Experimental"),
   );
+let startupLogin: LoginProfile = { credentialName: experimentalCredentialName };
+let startupLoginError: unknown;
+if (process.platform === "darwin") {
+  try {
+    startupLogin = loginProfile(
+      app.getPath("userData"),
+      join(app.getPath("appData"), "Review Relay"),
+    );
+    app.setName(startupLogin.credentialName);
+  } catch (error) {
+    startupLoginError = error;
+  }
+}
 let rooms: RoomService;
 let win: BrowserWindow | null = null,
   client: Gitea | null = null,
@@ -85,6 +105,7 @@ const prKey = (r: { owner: string; name: string; number: number }) =>
 function showWindow() {
   // Dock activation, a second launch and deep links all restore the same window.
   if (!win) return;
+  if (process.platform === "darwin") app.show();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -705,8 +726,17 @@ async function dispatch(method: string, args: unknown[]) {
 app
   .whenReady()
   .then(async () => {
+    app.setName(experimentalCredentialName);
+    if (startupLoginError) throw startupLoginError;
     store = new Store(app.getPath("userData"));
     await store.load();
+    if (startupLogin.imported) {
+      await store.update((state) => {
+        state.account = startupLogin.imported!.account;
+        state.encryptedToken = startupLogin.imported!.encryptedToken;
+        state.credentialName = startupLogin.credentialName;
+      });
+    }
     rooms = new RoomService(
       store,
       (url, init) => net.fetch(url, init),
