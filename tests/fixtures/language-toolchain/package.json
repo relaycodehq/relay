@@ -1,0 +1,11 @@
+{
+  "name": "review-relay-language-test-toolchain",
+  "private": true,
+  "description": "Pinned project tooling for real Angular/TypeScript integration tests",
+  "dependencies": {
+    "@angular/compiler-cli": "21.2.20",
+    "@angular/core": "21.2.20",
+    "@angular/language-service": "21.2.20",
+    "typescript": "5.9.3"
+  }
+}

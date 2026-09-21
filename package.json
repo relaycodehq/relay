@@ -1,0 +1,96 @@
+{
+  "name": "review-relay",
+  "productName": "Review Relay",
+  "version": "0.1.0",
+  "description": "A focused desktop review client for Gitea",
+  "author": "Review Relay contributors",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "start": "electron .",
+    "package:mac": "npm run build && electron-builder --mac dir",
+    "package:linux": "npm run build && electron-builder --linux AppImage tar.gz --x64",
+    "package:omarchy": "npm run build && electron-builder --linux dir --x64 && python3 scripts/package-omarchy.py",
+    "format": "prettier --write src electron shared tests scripts *.ts",
+    "test:triage-live": "node scripts/eval-triage.mjs",
+    "test:setup": "npm ci --prefix tests/fixtures/language-toolchain --ignore-scripts"
+  },
+  "dependencies": {
+    "@pierre/diffs": "1.4.3",
+    "@tanstack/react-query": "5.103.1",
+    "@tanstack/react-virtual": "3.14.13",
+    "diff": "9.0.0",
+    "jsonc-parser": "3.3.1",
+    "lucide-react": "1.47.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "44.4.2",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "prettier": "3.9.8",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  },
+  "build": {
+    "appId": "dev.reviewrelay.desktop",
+    "productName": "Review Relay",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "THIRD_PARTY_NOTICES.md",
+      "LICENSE",
+      "!node_modules/**/*",
+      "assets/icon.png"
+    ],
+    "asar": true,
+    "protocols": [
+      {
+        "name": "Review Relay",
+        "schemes": [
+          "reviewrelay"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ],
+      "hardenedRuntime": true,
+      "icon": "assets/icon.icns",
+      "identity": "-"
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "icon": "assets/icon.png",
+      "syncDesktopName": true
+    },
+    "compression": "normal"
+  },
+  "license": "MIT",
+  "desktopName": "review-relay.desktop"
+}

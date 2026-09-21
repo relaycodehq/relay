@@ -1,0 +1,60 @@
+import type { ReasoningEffort } from "./settings";
+import type { ChangedFile } from "./types";
+export const TRIAGE_VERSION = 2;
+export const TRIAGE_MODEL = "gpt-5.6-luna";
+export interface ChangeGroup {
+  id: string;
+  name: string;
+  description: string;
+  paths: string[];
+}
+export interface TriageUsage {
+  inputTokens: number;
+  outputTokens: number;
+  batches: number;
+}
+export interface TriageResult {
+  version: number;
+  revision: string;
+  model: string;
+  fast?: boolean;
+  reasoningEffort?: ReasoningEffort;
+  createdAt: string;
+  files: ChangedFile[];
+  groups: ChangeGroup[];
+  ordinary: Record<string, string>;
+  /** Files whose latest model decision failed validation. Absent in older caches. */
+  incompleteFiles?: string[];
+  usage: TriageUsage;
+  notice?: string;
+}
+export interface TriageState {
+  model?: string;
+  fast?: boolean;
+  reasoningEffort?: ReasoningEffort;
+  id: string;
+  revision: string;
+  status:
+    | "scanning"
+    | "classifying"
+    | "matching"
+    | "paused"
+    | "complete"
+    | "cancelled"
+    | "failed";
+  scanned: number;
+  total: number;
+  checked: number;
+  candidates: number;
+  usage: TriageUsage;
+  resume?: {
+    remaining: number;
+    reason: "budget" | "paused" | "error" | "incomplete" | "interrupted";
+  };
+  error?: string;
+  result?: TriageResult;
+}
+export const isAnalyzing = (state?: TriageState | null) =>
+  state?.status === "scanning" ||
+  state?.status === "classifying" ||
+  state?.status === "matching";
