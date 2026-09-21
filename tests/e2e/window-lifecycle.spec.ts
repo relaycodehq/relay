@@ -10,6 +10,39 @@ const env = Object.fromEntries(
   ),
 ) as Record<string, string>;
 
+test("default test windows remain hidden and unfocused while UI actions and activation events work", async () => {
+  test.skip(process.env.RELAY_TEST_HEADED === "1", "Background runner check");
+  const data = await mkdtemp(join(tmpdir(), "relay-background-"));
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: { ...env, RELAY_TEST_DATA: data },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page
+      .getByLabel("Gitea server", { exact: true })
+      .fill("https://background.test");
+    await app.evaluate(({ app }) => {
+      app.emit("activate");
+      app.emit("second-instance", {}, [], "");
+    });
+    expect(
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().map((w) => ({
+          visible: w.isVisible(),
+          focused: w.isFocused(),
+        })),
+      ),
+    ).toEqual([{ visible: false, focused: false }]);
+    await expect(page.getByLabel("Gitea server", { exact: true })).toHaveValue(
+      "https://background.test",
+    );
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
 test("experimental first launch restores the stable login; restart and explicit sign-out keep profiles independent", async () => {
   test.skip(process.platform !== "darwin", "macOS Keychain handoff");
   const fixture = await fixtureServer();
@@ -79,6 +112,10 @@ test("experimental first launch restores the stable login; restart and explicit 
 });
 
 test("activation and second launch restore hidden/minimized windows without replacing their contents", async () => {
+  test.skip(
+    process.env.RELAY_TEST_HEADED !== "1",
+    "Native focus test requires explicit RELAY_TEST_HEADED=1; it can interrupt the desktop.",
+  );
   const data = await mkdtemp(join(tmpdir(), "relay-window-"));
   const app = await electron.launch({
     args: ["tests/fixtures/launch.cjs"],
@@ -207,7 +244,7 @@ for (const cancel of [false, true]) {
             BrowserWindow.getAllWindows()[0].isVisible(),
           ),
         )
-        .toBe(true);
+        .toBe(process.env.RELAY_TEST_HEADED === "1");
       // IPC remains available even while the OS credential request is unresolved.
       expect(
         (await page.evaluate(() => window.relay.bootstrap())).loginRestore,
@@ -274,6 +311,10 @@ for (const cancel of [false, true]) {
 }
 
 test("asynchronous credential storage reads existing encrypted logins and round-trips new logins", async () => {
+  test.skip(
+    process.env.RELAY_TEST_NATIVE_STORAGE !== "1",
+    "Real Keychain integration requires explicit RELAY_TEST_NATIVE_STORAGE=1; it may show an OS prompt.",
+  );
   const data = await mkdtemp(join(tmpdir(), "relay-crypto-"));
   const app = await electron.launch({
     args: ["tests/fixtures/launch.cjs"],

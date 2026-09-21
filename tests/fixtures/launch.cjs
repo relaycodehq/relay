@@ -1,4 +1,51 @@
-const { app } = require("electron");
+const { app, BrowserWindow, safeStorage } = require("electron");
+// All normal E2E runs stay off the user's desktop. Keep this in the fixture,
+// never in the shipped app: native visibility checks explicitly opt in.
+if (process.env.RELAY_TEST_HEADED !== "1") {
+  if (process.platform === "darwin") app.setActivationPolicy("prohibited");
+  for (const name of ["show", "showInactive", "focus", "restore"])
+    BrowserWindow.prototype[name] = () => {};
+  app.show = app.focus = () => {};
+  for (const flag of [
+    "disable-backgrounding-occluded-windows",
+    "disable-renderer-backgrounding",
+    "disable-background-timer-throttling",
+  ])
+    app.commandLine.appendSwitch(flag);
+}
+// Ordinary UI tests must not open the user's Keychain. This reversible fixture
+// encoding is test-only; the actual OS integration is a separate opt-in check.
+if (process.env.RELAY_TEST_NATIVE_STORAGE !== "1") {
+  safeStorage.isEncryptionAvailable = () => true;
+  safeStorage.isAsyncEncryptionAvailable = async () => true;
+  safeStorage.getSelectedStorageBackend = () => "fixture";
+  safeStorage.encryptString = (value) =>
+    Buffer.from("fixture:" + Buffer.from(value).toString("base64"));
+  safeStorage.encryptStringAsync = async (value) =>
+    safeStorage.encryptString(value);
+  safeStorage.decryptString = (value) => {
+    const text = value.toString();
+    if (!text.startsWith("fixture:"))
+      throw new Error("Not a fixture credential");
+    return Buffer.from(text.slice(8), "base64").toString();
+  };
+  safeStorage.decryptStringAsync = async (value) => ({
+    result: safeStorage.decryptString(value),
+    shouldReEncrypt: false,
+  });
+}
+if (process.env.RELAY_TEST_LOCKED_LOGIN === "1") {
+  safeStorage.decryptString = () => {
+    throw new Error("Synchronous decryption blocks the app");
+  };
+  safeStorage.decryptStringAsync = () =>
+    new Promise((resolve, reject) => {
+      globalThis.finishUnlock = (success) =>
+        success
+          ? resolve({ result: "test-token", shouldReEncrypt: false })
+          : reject(new Error("Keychain access denied"));
+    });
+}
 // Keep sibling-profile discovery away from the user's real Application Support.
 app.setPath(
   "appData",
