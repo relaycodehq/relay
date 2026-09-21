@@ -41,12 +41,12 @@ class OmarchyInstallerTests(unittest.TestCase):
         saved.write_text('{"draft":"keep me"}')
         self.install()
         app, binary, desktop = installer.locations(self.prefix, self.data)
-        literal = "reviewrelay://open?url=hello $(touch nope) 'quotes'"
+        literal = "reviewrelay-room://join?url=hello $(touch nope) 'quotes'"
         result = subprocess.run([str(binary), literal], capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.strip(), literal)
         self.assertIn('Exec="', desktop.read_text())
-        self.assertIn('apps \\\\$safe/lib/review-relay/review-relay" %U', desktop.read_text())
-        self.assertIn("MimeType=x-scheme-handler/reviewrelay;", desktop.read_text())
+        self.assertIn('apps \\\\$safe/lib/review-relay-experimental/review-relay" %U', desktop.read_text())
+        self.assertIn("MimeType=x-scheme-handler/reviewrelay-room;", desktop.read_text())
         (self.bundle / "app/resources/app.asar").write_bytes(b"fixture application v2")
         self.install()
         self.assertEqual((app / "resources/app.asar").read_bytes(), b"fixture application v2")
@@ -57,14 +57,14 @@ class OmarchyInstallerTests(unittest.TestCase):
         self.assertEqual(saved.read_text(), '{"draft":"keep me"}')
 
     def test_refuses_unrelated_existing_command_or_app(self):
-        binary = self.prefix / "bin/review-relay"
+        binary = self.prefix / "bin/review-relay-experimental"
         binary.parent.mkdir(parents=True)
         binary.write_text("some other app")
         with self.assertRaisesRegex(RuntimeError, "unrelated command"):
             self.install()
         self.assertEqual(binary.read_text(), "some other app")
         binary.unlink()
-        app = self.prefix / "lib/review-relay"
+        app = self.prefix / "lib/review-relay-experimental"
         app.mkdir(parents=True)
         (app / "important.txt").write_text("keep this")
         with self.assertRaisesRegex(RuntimeError, "unrelated installation"):

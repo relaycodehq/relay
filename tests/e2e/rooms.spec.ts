@@ -21,6 +21,7 @@ import { createServer, request } from "node:http";
 import { fixtureServer, newCode } from "../fixtures/gitea";
 import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
+import { roomAppUrl } from "../../shared/rooms";
 let fixture: Awaited<ReturnType<typeof fixtureServer>>,
   database: RoomsDatabase,
   server: ReturnType<typeof createRoomsServer>,
@@ -46,6 +47,7 @@ test.beforeAll(async () => {
     users: {
       "test-alice": { id: 101, login: "alice", full_name: "Alice" },
       "test-bob": { id: 102, login: "bob", full_name: "Bob" },
+      "test-colleague": { id: 103, login: "colleague", full_name: "Colleague" },
     },
   });
   database = new RoomsDatabase(join(root, "rooms.sqlite"));
@@ -161,29 +163,46 @@ test.afterAll(async () => {
 test("two desktops join by invitation; ordinary messages and replies never launch an agent", async () => {
   const [alice, bob] = pages;
   await alice
-    .getByRole("button", { name: "Set up project", exact: true })
+    .getByRole("button", { name: "Hosting settings", exact: true })
     .click();
+  await alice.getByText("Manage hosting access", { exact: true }).click();
   await alice.getByLabel("Room server", { exact: true }).fill(serverUrl);
   await alice.getByLabel("Server setup key").fill(setupKey);
-  await alice.getByRole("button", { name: "Create project room" }).click();
+  await alice
+    .getByRole("button", { name: "Save hosting access", exact: true })
+    .click();
+  await expect(
+    alice.getByText(`Ready to create invitations using ${serverUrl}.`),
+  ).toBeVisible();
+  await alice
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  await alice
+    .getByRole("button", { name: "Invite colleague", exact: true })
+    .click();
   await expect(alice.getByLabel("Message PR room")).toBeVisible();
-  await alice
-    .getByRole("button", { name: "Room members and invitations" })
-    .click();
-  await alice
-    .getByRole("button", { name: "Create one-use invitation" })
-    .click();
   const invite = await alice
     .getByLabel("Invitation link", { exact: true })
     .inputValue();
   expect(invite.startsWith(serverUrl + "/#join=")).toBe(true);
+  expect(invite).not.toContain(setupKey);
+  expect(await readFile(join(root, "alice/state.json"), "utf8")).not.toContain(
+    setupKey,
+  );
   await alice
     .getByRole("button", { name: "Copy invitation", exact: true })
     .click();
   expect(await alice.evaluate(() => window.relay.readClipboard())).toBe(invite);
   await alice.getByRole("button", { name: "Done", exact: true }).click();
-  await bob.getByLabel("Project invitation", { exact: true }).fill(invite);
-  await bob.getByRole("button", { name: "Join project room" }).click();
+  await apps[1].evaluate(({ app }, url) => {
+    app.emit("open-url", { preventDefault() {} }, url);
+  }, roomAppUrl(invite));
+  await expect(
+    bob.getByRole("heading", { name: "Join the review", exact: true }),
+  ).toBeVisible();
+  await bob
+    .getByRole("button", { name: "Join and open PR", exact: true })
+    .click();
   await expect(bob.getByLabel("Message PR room")).toBeVisible();
   await alice
     .getByLabel("Message PR room")
@@ -355,4 +374,60 @@ test("Claude uses its own provider; cancellation keeps partial Codex output; dra
   await expect(
     bob.getByText("Claude found the same cache guard.", { exact: true }),
   ).toBeVisible();
+});
+
+test("an invitation survives cold launch and sign-in, opens the correct PR, and reopens safely for an existing member", async () => {
+  const invitation = await pages[0].evaluate(
+    (ref) => window.relay.roomInvite(ref),
+    ref,
+  );
+  const data = join(root, "new-colleague");
+  await mkdir(data);
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs", roomAppUrl(invitation.code)],
+    env: { ...environment, RELAY_TEST_DATA: data },
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(page.getByLabel("Gitea server", { exact: true })).toHaveValue(
+      fixture.serverUrl,
+    );
+    await page
+      .getByLabel("Personal access token", { exact: true })
+      .fill("test-colleague");
+    await page
+      .getByRole("button", { name: "Connect to Gitea", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Join the review", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Join and open PR", exact: true })
+      .click();
+    await expect(page.getByLabel("Message PR room")).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Make pull request reviews faster and more reliable",
+      }),
+    ).toBeVisible();
+    await app.evaluate(
+      ({ app }, url) =>
+        app.emit("second-instance", {}, ["review-relay", url], ""),
+      roomAppUrl(invitation.code),
+    );
+    await page
+      .getByRole("button", { name: "Join and open PR", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Join the review", exact: true }),
+    ).not.toBeVisible();
+    await expect(page.getByLabel("Message PR room")).toBeVisible();
+  } finally {
+    await app.close();
+  }
 });

@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 const methods = [
+  "roomHosting",
+  "saveRoomHosting",
+  "roomAcceptInvitation",
   "roomConnect",
   "roomState",
   "roomDisconnect",

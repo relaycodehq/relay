@@ -16,7 +16,7 @@ if header[:6] != b"\x7fELF\x02\x01" or header[18:20] != b"\x3e\x00":
 if not (source / "resources/app.asar").is_file():
     raise SystemExit("The packaged app.asar is missing.")
 
-name = "ReviewRelay-Omarchy-x86_64"
+name = "ReviewRelay-Experimental-Omarchy-x86_64"
 archive = release / f"{name}.tar.gz"
 with tempfile.TemporaryDirectory(prefix=".omarchy-", dir=release) as temporary:
     bundle = Path(temporary) / name

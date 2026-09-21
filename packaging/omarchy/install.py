@@ -9,8 +9,8 @@ import subprocess
 import sys
 import tempfile
 
-MARKER = "Review Relay user installation v1\n"
-DESKTOP_MARKER = "X-ReviewRelay-Installer=1"
+MARKER = "Review Relay Experimental user installation v1\n"
+DESKTOP_MARKER = "X-ReviewRelay-Experimental-Installer=1"
 
 
 def desktop_command(path):
@@ -22,9 +22,9 @@ def desktop_command(path):
 
 
 def locations(prefix, data_dir):
-    app = prefix / "lib/review-relay"
-    binary = prefix / "bin/review-relay"
-    desktop = data_dir / "applications/review-relay.desktop"
+    app = prefix / "lib/review-relay-experimental"
+    binary = prefix / "bin/review-relay-experimental"
+    desktop = data_dir / "applications/review-relay-experimental.desktop"
     for path in (app, binary, desktop):
         if any(char in str(path) for char in "\n\r\t="):
             raise RuntimeError("Installation paths cannot contain control characters or '='.")
@@ -46,6 +46,11 @@ def refresh(desktop):
         subprocess.run([command, str(desktop.parent)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    mime = shutil.which("xdg-mime")
+    if mime and desktop.exists():
+        subprocess.run([mime, "default", desktop.name, "x-scheme-handler/reviewrelay-room"], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 def install(bundle, prefix, data_dir):
     app, binary, desktop = locations(prefix, data_dir)
@@ -56,11 +61,11 @@ def install(bundle, prefix, data_dir):
         directory.mkdir(parents=True, exist_ok=True)
     desktop_contents = "\n".join([
         "[Desktop Entry]", "Type=Application", "Version=1.0",
-        "Name=Review Relay", "Comment=Review Gitea pull requests",
+        "Name=Review Relay Experimental", "Comment=Review Gitea pull requests",
         f"Exec={desktop_command(app / 'review-relay')} %U",
         f"Icon={str(app / 'review-relay.png').replace(chr(92), chr(92) * 2)}",
         "Terminal=false", "Categories=Development;",
-        "StartupWMClass=review-relay", "MimeType=x-scheme-handler/reviewrelay;",
+        "StartupWMClass=review-relay", "MimeType=x-scheme-handler/reviewrelay-room;",
         DESKTOP_MARKER, "",
     ])
     old_desktop = desktop.read_bytes() if desktop.exists() else None
@@ -92,7 +97,7 @@ def install(bundle, prefix, data_dir):
                 desktop.write_bytes(old_desktop)
             raise
     refresh(desktop)
-    print(f"Installed Review Relay. Find it in your app launcher, or run:\n{binary}")
+    print(f"Installed Review Relay Experimental. Find it in your app launcher, or run:\n{binary}")
     print("Your login, settings and review progress are kept between updates.")
 
 
@@ -103,7 +108,7 @@ def uninstall(prefix, data_dir):
     if app.exists():
         shutil.rmtree(app)
     refresh(desktop)
-    print("Removed Review Relay. Saved login, settings and review progress were kept.")
+    print("Removed Review Relay Experimental. Saved login, settings and review progress were kept.")
 
 
 def main():

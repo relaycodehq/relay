@@ -52,6 +52,7 @@ type Props = {
   onSelect: (path: string) => void;
   onClearTarget: () => void;
   onLink: () => void;
+  onAppSettings: () => void;
 };
 type Draft = {
   text: string;
@@ -70,6 +71,7 @@ export function RoomPanel({
   onSelect,
   onClearTarget,
   onLink,
+  onAppSettings,
 }: Props) {
   const key = JSON.stringify([accountId, pull.owner, pull.name, pull.number]);
   const storageKey = `relay-room-draft:${key}`;
@@ -92,6 +94,7 @@ export function RoomPanel({
     [busy, setBusy] = useState(false),
     [settings, setSettings] = useState(false),
     [people, setPeople] = useState(false),
+    [generatedInvite, setGeneratedInvite] = useState(""),
     [showPresence, setShowPresence] = useState(false),
     [more, setMore] = useState(false),
     [newMessages, setNewMessages] = useState(false);
@@ -347,7 +350,16 @@ export function RoomPanel({
       ) : state.error ? (
         <ErrorBox error={state.error} retry={() => void state.refetch()} />
       ) : !connection ? (
-        <RoomConnect pull={pull} onConnected={() => void state.refetch()} />
+        <RoomConnect
+          pull={pull}
+          onSettings={onAppSettings}
+          onConnected={() => void state.refetch()}
+          onInvited={async (code) => {
+            await state.refetch();
+            setGeneratedInvite(code);
+            setPeople(true);
+          }}
+        />
       ) : (
         <>
           {showPresence && (
@@ -777,7 +789,11 @@ export function RoomPanel({
             <RoomPeople
               pull={pull}
               state={state.data!}
-              onClose={() => setPeople(false)}
+              initialInvite={generatedInvite}
+              onClose={() => {
+                setPeople(false);
+                setGeneratedInvite("");
+              }}
               onDisconnect={() => {
                 act(async () => {
                   await api.roomDisconnect(pull);
@@ -798,16 +814,17 @@ export function RoomPanel({
 function RoomConnect({
   pull,
   onConnected,
+  onInvited,
+  onSettings,
 }: {
   pull: Pull;
   onConnected: () => void;
+  onInvited: (code: string) => Promise<void>;
+  onSettings: () => void;
 }) {
-  const [mode, setMode] = useState<"join" | "create">("join"),
-    [server, setServer] = useState("https://example.com/review-relay"),
-    [secret, setSecret] = useState(""),
-    [invite, setInvite] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState<unknown>();
+  const [invite, setInvite] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
   return (
     <div className="room-connect">
       <div className="room-empty-icon">
@@ -815,104 +832,68 @@ function RoomConnect({
       </div>
       <h2>Review it together.</h2>
       <p>
-        A shared conversation beside the code.
+        Create a link for this pull request.
         <br />
-        Your agents, your own accounts.
+        Your colleague opens it in Review Relay.
       </p>
-      <div className="segmented">
-        <button
-          className={mode === "join" ? "active" : ""}
-          onClick={() => setMode("join")}
-        >
-          Join project
-        </button>
-        <button
-          className={mode === "create" ? "active" : ""}
-          onClick={() => setMode("create")}
-        >
-          Set up project
-        </button>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
+      <button
+        className="primary"
+        disabled={busy}
+        onClick={() => {
           setBusy(true);
           setError(undefined);
-          void (async () => {
-            let input;
-            if (mode === "join") {
-              input = parseRoomInvitation(invite);
-            } else input = { server, secret: secret.trim() };
-            await api.roomConnect(pull, input);
-            setSecret("");
-            setInvite("");
-            onConnected();
-          })()
+          void api
+            .roomInvite(pull)
+            .then((i) => onInvited(i.code))
             .catch(setError)
             .finally(() => setBusy(false));
         }}
       >
-        {mode === "join" ? (
+        <Users size={16} />
+        {busy ? "Creating invitation…" : "Invite colleague"}
+      </button>
+      <p className="field-note">
+        A private conversation beside the code. Everyone uses their own Gitea
+        login and agent account.
+      </p>
+      <details>
+        <summary>Have an invitation link?</summary>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError(undefined);
+            void (async () => {
+              const { server, secret, projectId } = parseRoomInvitation(invite);
+              await api.roomConnect(pull, { server, secret, projectId });
+              onConnected();
+            })()
+              .catch(setError)
+              .finally(() => setBusy(false));
+          }}
+        >
           <label>
             Project invitation
             <textarea
-              aria-label="Project invitation"
               rows={3}
-              placeholder="Paste your colleague’s invitation link"
               value={invite}
               onChange={(e) => setInvite(e.target.value)}
               autoComplete="off"
+              placeholder="Paste an invitation link"
             />
           </label>
-        ) : (
-          <>
-            <label>
-              Room server
-              <input
-                aria-label="Room server"
-                value={server}
-                onChange={(e) => setServer(e.target.value)}
-                placeholder="https://reviews.example.com"
-              />
-            </label>
-            <label>
-              Server setup key
-              <input
-                aria-label="Server setup key"
-                type="password"
-                autoComplete="off"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-              />
-            </label>
-          </>
-        )}
-        <p className="room-trust-note">
-          The server and invited participants can read shared messages, selected
-          code and answers. Connect only to a server you trust. Gitea and agent
-          credentials stay on your computer.
-        </p>
-        {!!error && <ErrorBox error={error} />}
-        <button
-          className="primary"
-          disabled={busy || (mode === "join" ? !invite.trim() : !secret.trim())}
-        >
-          {busy
-            ? "Connecting…"
-            : mode === "join"
-              ? "Join project room"
-              : "Create project room"}
-          <ArrowUpRight size={14} />
-        </button>
-      </form>
-      <small>
-        Room access is granted by invitation. It does not grant repository
-        access or publish anything to Gitea.
-      </small>
+          <button disabled={busy || !invite.trim()}>Join project room</button>
+        </form>
+      </details>
+      {!!error && <ErrorBox error={error} />}
+      <button className="subtle" onClick={onSettings}>
+        Hosting settings
+      </button>
     </div>
   );
 }
 function RoomPeople({
+  initialInvite,
   pull,
   state,
   onClose,
@@ -920,10 +901,11 @@ function RoomPeople({
 }: {
   pull: Pull;
   state: RoomState;
+  initialInvite: string;
   onClose: () => void;
   onDisconnect: () => void;
 }) {
-  const [invite, setInvite] = useState(""),
+  const [invite, setInvite] = useState(initialInvite),
     [copied, setCopied] = useState(false),
     [error, setError] = useState<unknown>();
   const members = useQuery({
@@ -981,7 +963,7 @@ function RoomPeople({
                 .catch(setError);
             }}
           >
-            Create one-use invitation
+            {invite ? "Generate another link" : "Invite colleague"}
           </button>
           {invite && (
             <label>

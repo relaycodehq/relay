@@ -66,6 +66,14 @@
       "assets/icon.png"
     ],
     "asar": true,
+    "protocols": [
+      {
+        "name": "Review Relay project invitation",
+        "schemes": [
+          "reviewrelay-room"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [

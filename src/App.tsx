@@ -1,4 +1,6 @@
 import { RoomPanel } from "./components/RoomPanel";
+import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
+import { parseRoomInvitation, roomProtocol } from "../shared/rooms";
 import type { QuestionTarget } from "../shared/questions";
 import { Settings } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
@@ -84,6 +86,8 @@ export default function App() {
   });
   const qc = useQueryClient();
   const [settings, setSettings] = useState(false);
+  const [incomingLink, setIncomingLink] = useState<{ url: string }>();
+  useEffect(() => api.onOpenUrl((url) => setIncomingLink({ url })), []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (
@@ -115,6 +119,7 @@ export default function App() {
           account={account}
           onSettings={() => setSettings(true)}
           pendingUrl={boot.data.pendingUrl}
+          incomingLink={incomingLink}
           initialWorkspace={boot.data.workspace}
         />
       ) : (
@@ -122,6 +127,7 @@ export default function App() {
           onConnected={connected}
           loginRestore={boot.data.loginRestore}
           savedServer={boot.data.savedServer}
+          invitationUrl={incomingLink?.url ?? boot.data.pendingUrl}
           platform={boot.data.platform}
           onRestoreAction={async (action) => {
             if (action === "retry") await api.retryLoginRestore();
@@ -153,12 +159,14 @@ function SignIn({
   savedServer,
   platform,
   onRestoreAction,
+  invitationUrl,
 }: {
   onConnected: (a: Account) => Promise<void>;
   loginRestore: Bootstrap["loginRestore"];
   savedServer?: string;
   platform: string;
   onRestoreAction: (action: "retry" | "cancel") => Promise<void>;
+  invitationUrl?: string;
 }) {
   const [server, setServer] = useState(
       savedServer ?? "https://git.internal.example/gitea",
@@ -166,6 +174,15 @@ function SignIn({
     [token, setToken] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
+  useEffect(() => {
+    if (!invitationUrl || token) return;
+    try {
+      const project = parseRoomInvitation(invitationUrl).project;
+      if (project) setServer(project.server);
+    } catch {
+      /* Normal PR links continue through the existing sign-in flow. */
+    }
+  }, [invitationUrl, token]);
   const restoreAction = async (action: "retry" | "cancel") => {
     setBusy(true);
     setError(undefined);
@@ -333,12 +350,15 @@ function Connected({
   onSettings,
   pendingUrl,
   initialWorkspace,
+  incomingLink,
 }: {
   account: Account;
   onSettings: () => void;
   pendingUrl?: string;
   initialWorkspace: WorkspaceState;
+  incomingLink?: { url: string };
 }) {
+  const [roomInvitationUrl, setRoomInvitationUrl] = useState<string>();
   const [roomOpen, setRoomOpen] = useState(
     () => localStorage.getItem("relay-room-open") === "true",
   );
@@ -604,6 +624,20 @@ function Connected({
   };
   const openUrl = async (url: string) => {
     try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol === roomProtocol + ":" ||
+        parsed.hash.startsWith("#join=")
+      ) {
+        const invitation = parseRoomInvitation(url);
+        if (!invitation.project || !invitation.number)
+          throw new Error(
+            "This older invitation has no PR target. Open its repository and paste the link into its PR room.",
+          );
+        setRoomInvitationUrl(url);
+        setUrlOpen(false);
+        return;
+      }
       select(await api.parseUrl(url));
       setUrlOpen(false);
     } catch (e) {
@@ -611,9 +645,9 @@ function Connected({
     }
   };
   useEffect(() => {
-    if (pendingUrl) void openUrl(pendingUrl);
-    return api.onOpenUrl((url) => void openUrl(url));
-  }, []);
+    const url = incomingLink?.url ?? pendingUrl;
+    if (url) void openUrl(url);
+  }, [pendingUrl, incomingLink]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
@@ -979,6 +1013,7 @@ function Connected({
           firstPane={requestsHidden && filesHidden}
           pull={pull.data}
           accountId={account.id}
+          onAppSettings={onSettings}
           path={current?.filename}
           target={
             roomTarget?.key ===
@@ -1082,6 +1117,21 @@ function Connected({
           <ErrorBox error={error} />
           <button onClick={() => setError(undefined)}>Dismiss</button>
         </div>
+      )}
+      {roomInvitationUrl && (
+        <RoomInvitationDialog
+          key={roomInvitationUrl}
+          url={roomInvitationUrl}
+          account={account}
+          onClose={() => setRoomInvitationUrl(undefined)}
+          onJoined={(ref) => {
+            select(ref);
+            setRoomOpen(true);
+            localStorage.setItem("relay-room-open", "true");
+            void qc.invalidateQueries({ queryKey: ["roomState"] });
+            setRoomInvitationUrl(undefined);
+          }}
+        />
       )}
       {urlOpen && (
         <OpenUrl onOpen={openUrl} onClose={() => setUrlOpen(false)} />

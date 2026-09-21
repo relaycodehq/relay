@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { useAISettings } from "../lib/useAISettings";
 import { Avatar, ErrorBox, Modal } from "./ui";
 import { ModelField } from "./ModelField";
+import { RoomHostingSettings } from "./RoomHostingSettings";
 export function Settings({
   account,
   onClose,
@@ -130,6 +131,7 @@ export function Settings({
           <p>Loading model settings…</p>
         )}
       </section>
+      <RoomHostingSettings />
       <div className="shortcut-list">
         <span>
           Settings <kbd>⌘ / Ctrl ,</kbd>

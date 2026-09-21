@@ -12,6 +12,8 @@ import {
   roomInvitation,
   connectionSchema,
   projectSchema,
+  roomHostingSchema,
+  type RoomHosting,
   type ConnectRoom,
   type RoomConnection,
   type RoomState,
@@ -51,6 +53,32 @@ export class RoomService {
     private encrypt: (s: string) => Promise<string | null>,
     private decrypt: (s: string) => Promise<string>,
   ) {}
+  private async hosting(): Promise<RoomHosting | null> {
+    const saved = this.store.get().roomHosting;
+    return saved
+      ? roomHostingSchema.parse(JSON.parse(await this.decrypt(saved)))
+      : null;
+  }
+  async hostingStatus() {
+    return { server: (await this.hosting())?.server ?? null };
+  }
+  async saveHosting(input: RoomHosting | null) {
+    let encrypted: string | null = null;
+    if (input) {
+      const value = roomHostingSchema.parse(input);
+      // Check authorization without creating a project or disclosing the key.
+      await this.request(value.server, "/v1/setup", value.secret);
+      encrypted = await this.encrypt(JSON.stringify(value));
+      if (!encrypted)
+        throw new Error(
+          "Secure credential storage is required to save room hosting access.",
+        );
+    }
+    await this.store.update((s) => {
+      if (encrypted) s.roomHosting = encrypted;
+      else delete s.roomHosting;
+    });
+  }
   private async request<T>(
     server: string,
     path: string,
@@ -164,6 +192,15 @@ export class RoomService {
       throw new Error(
         "Wait for your current answer or stop it before changing rooms.",
       );
+    // Verify repository access before consuming an invitation or creating membership.
+    await c.client.pull(c.ref);
+    const current = await this.connection(c);
+    if (
+      input.projectId &&
+      current?.projectId === input.projectId &&
+      current.server === input.server
+    )
+      return this.state(c);
     const fingerprint = createHash("sha256")
       .update(JSON.stringify([c.key, input]))
       .digest("hex");
@@ -251,6 +288,14 @@ export class RoomService {
     );
   }
   async invite(c: Context) {
+    if (!(await this.connection(c))) {
+      const hosting = await this.hosting();
+      if (!hosting)
+        throw new Error(
+          "Set up shared-room hosting once in Settings, or open a colleague’s invitation.",
+        );
+      await this.connect(c, hosting);
+    }
     const { connection } = await this.ready(c);
     const invitation = await this.request<{ code: string; expiresAt: number }>(
       connection.server,
@@ -260,11 +305,14 @@ export class RoomService {
       {},
     );
     return {
-      code: roomInvitation({
-        server: connection.server,
-        projectId: connection.projectId,
-        secret: invitation.code,
-      }),
+      code: roomInvitation(
+        {
+          server: connection.server,
+          projectId: connection.projectId,
+          secret: invitation.code,
+        },
+        { project: this.project(c), number: c.ref.number },
+      ),
       expiresAt: invitation.expiresAt,
     };
   }

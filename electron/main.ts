@@ -1,9 +1,13 @@
 import { RoomService } from "./rooms/service";
+import { readHostingSetup } from "./rooms/provision";
 import {
   connectRoomSchema,
   sendRoomSchema,
   presenceSchema,
   idSchema,
+  roomHostingSchema,
+  roomProtocol,
+  parseRoomInvitation,
 } from "../shared/rooms";
 import { launchLineQuestion } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
@@ -48,6 +52,7 @@ import {
   shaSchema,
   sideSchema,
   workspaceSchema,
+  normalizeServer,
 } from "../shared/validation";
 import {
   emptyProgress,
@@ -142,20 +147,39 @@ async function restoreSavedLogin() {
   }
 }
 function receiveUrl(url: string) {
-  if (!url.startsWith("reviewrelay:")) return;
+  if (!isAppUrl(url)) return;
   pendingUrl = url;
   if (!win && windowReady) createWindow();
   if (win) {
     showWindow();
-    if (client && !win.webContents.isLoading()) {
-      pendingUrl = undefined;
+    if (!win.webContents.isLoading()) {
+      if (client) pendingUrl = undefined;
       win.webContents.send("relay:open-url", url);
     }
   }
 }
-if (!app.requestSingleInstanceLock()) app.quit();
+function isAppUrl(url: string) {
+  return (
+    url.length <= 16384 &&
+    (url.startsWith("reviewrelay:") || url.startsWith(roomProtocol + ":"))
+  );
+}
+const hostingSetup = process.argv.includes("--configure-room-hosting-stdin")
+  ? readHostingSetup(process.stdin).then(
+      (value) => ({ value }),
+      (error) => ({ error }),
+    )
+  : null;
+if (!app.requestSingleInstanceLock()) {
+  if (hostingSetup) {
+    console.error(
+      "Close Review Relay Experimental before configuring hosting.",
+    );
+    app.exit(1);
+  } else app.quit();
+}
 app.on("second-instance", (_event, args) => {
-  const url = args.find((a) => a.startsWith("reviewrelay:"));
+  const url = args.find(isAppUrl);
   if (url) receiveUrl(url);
   else {
     if (!win && windowReady) createWindow();
@@ -205,8 +229,7 @@ app.on("before-quit", (event) => {
       }
     });
 });
-pendingUrl =
-  process.argv.find((value) => value.startsWith("reviewrelay:")) ?? pendingUrl;
+pendingUrl = process.argv.find(isAppUrl) ?? pendingUrl;
 function createWindow() {
   win = new BrowserWindow({
     width: 1500,
@@ -279,6 +302,44 @@ function createWindow() {
 }
 async function dispatch(method: string, args: unknown[]) {
   switch (method) {
+    case "roomHosting":
+      return rooms.hostingStatus();
+    case "saveRoomHosting":
+      return rooms.saveHosting(roomHostingSchema.nullable().parse(args[0]));
+    case "roomAcceptInvitation": {
+      const invitation = parseRoomInvitation(
+        z.string().max(16384).parse(args[0]),
+      );
+      if (!invitation.project || !invitation.number)
+        throw new Error(
+          "This older invitation has no PR target. Open its repository and paste the invitation in the room.",
+        );
+      if (
+        normalizeServer(invitation.project.server) !==
+        normalizeServer(requireClient().account.server)
+      )
+        throw new Error(
+          `Sign into ${invitation.project.server} in Settings to join this project.`,
+        );
+      const ref = refSchema.parse({
+        ...invitation.project,
+        number: invitation.number,
+      });
+      const state = await rooms.connect(
+        {
+          client: requireClient(),
+          ref,
+          key: repoKey(ref),
+          dir: store.get().folders[repoKey(ref)],
+        },
+        {
+          server: invitation.server,
+          secret: invitation.secret,
+          projectId: invitation.projectId,
+        },
+      );
+      return { ref, state };
+    }
     case "roomConnect":
     case "roomState":
     case "roomDisconnect":
@@ -754,6 +815,16 @@ app
         (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
           .result,
     );
+    if (hostingSetup) {
+      const input = await hostingSetup;
+      if ("error" in input) throw input.error;
+      await rooms.saveHosting(input.value);
+      await store.flush();
+      console.log("Shared-room hosting access saved securely.");
+      quitReady = true;
+      app.quit();
+      return;
+    }
     triage = new TriageService(store, app.getPath("userData"));
     ipcMain.handle("relay:invoke", async (event, method, args) => {
       const source = event.senderFrame?.url;
@@ -813,7 +884,8 @@ app
         { role: "windowMenu" },
       ]),
     );
-    // Keep the stable app as the reviewrelay: URL handler during this experiment.
+    // Use a dedicated invitation scheme; stable PR links keep their existing handler.
+    if (app.isPackaged) app.setAsDefaultProtocolClient(roomProtocol);
     windowReady = true;
     createWindow();
     void restoreSavedLogin();
@@ -823,6 +895,13 @@ app
     });
   })
   .catch((e) => {
+    if (hostingSetup) {
+      console.error(
+        "Hosting setup failed. Check the server, setup key and Keychain access.",
+      );
+      app.exit(1);
+      return;
+    }
     dialog.showErrorBox("Review Relay could not start", e.message);
     app.quit();
   });

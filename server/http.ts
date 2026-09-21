@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { z } from "zod";
+import { landingHtml, landingPolicy } from "./landing";
 import { RoomsDatabase, HttpError, hash, type Session } from "./database";
 import {
   idSchema,
@@ -83,7 +84,18 @@ export function createRoomsServer(
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'",
+    );
+    res.setHeader("Referrer-Policy", "no-referrer");
     try {
+      if (req.url === "/" && req.method === "GET") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Content-Security-Policy", landingPolicy);
+        res.end(landingHtml);
+        return;
+      }
       // This API is for desktop clients. Browsers get no CORS or cookie authentication.
       if (req.headers.origin)
         throw new HttpError(403, "Browser requests are not accepted.");
@@ -92,8 +104,8 @@ export function createRoomsServer(
         method = req.method,
         secret = req.headers.authorization?.replace(/^Bearer /, "") ?? "",
         isAdmin =
-          path === "/v1/projects" &&
-          method === "POST" &&
+          ((path === "/v1/projects" && method === "POST") ||
+            (path === "/v1/setup" && method === "GET")) &&
           hash(secret) === adminHash;
       let session: Session | undefined;
       if (secret && !isAdmin) {
@@ -122,7 +134,10 @@ export function createRoomsServer(
       let value: unknown;
       if (path === "/health" && method === "GET")
         value = { ok: true, protocol: 1 };
-      else if (path === "/v1/projects" && method === "POST") {
+      else if (path === "/v1/setup" && method === "GET") {
+        if (!isAdmin) throw new HttpError(401, "Invalid server setup key.");
+        value = { ok: true };
+      } else if (path === "/v1/projects" && method === "POST") {
         if (!isAdmin) throw new HttpError(401, "Invalid server setup key.");
         const input = createSchema.parse(await body(req));
         const session = database.create(

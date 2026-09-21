@@ -18,13 +18,19 @@ Data and logs live in `~/Library/Application Support/Review Relay Rooms/`. The g
 pbcopy < "$HOME/Library/Application Support/Review Relay Rooms/setup-key.txt"
 ```
 
-Open a PR in **Review Relay Experimental**, click the chat icon, choose **Set up project**, enter the server address and paste that setup key. Create a separate one-use invitation for each colleague from **People in this project**. They paste it into **Join project** while reviewing a PR from the same Gitea repository. They need their own Gitea login and repository access.
+On the owner's desktop, open **Settings → Shared rooms → Manage hosting access** and save the HTTPS server address and setup key once. The app validates it and encrypts it with the OS credential store. It is never included in invitation links or distributed app builds.
+
+Open a PR and its conversation, then click **Invite colleague**. This automatically creates the project room if necessary and generates a one-use invitation to that PR. Copy the link and send it to your colleague. Existing room owners can generate more links from **People in this project**.
+
+Your colleague clicks the HTTPS link. A small landing page opens **Review Relay Experimental** through its registered `reviewrelay-room:` protocol; browsers may ask them to confirm opening the app. They sign into their own Gitea account if needed, then choose **Join and open PR**. The app checks repository access before redeeming the invitation. If the app is not installed yet, install it and reopen the same link. Use the Omarchy installer on Linux to register its desktop launcher and protocol handler. An invitation can also be pasted into the app's **Open PR by URL** dialog.
+
+Administrators can provision a closed desktop with `--configure-room-hosting-stdin`: send a JSON object with `server` and `secret` on stdin. The app validates the key, encrypts it, flushes settings and exits; it never accepts the secret in a process argument. Ordinary colleagues need no hosting setup key.
 
 For remote colleagues, serve port 4319 through an HTTPS reverse proxy or a private HTTPS tunnel. The desktop accepts HTTPS remotely and HTTP only on loopback. Do not forward an unencrypted port from your router. Configure the public/private HTTPS address before making invitations; they include the address used to connect. No domain, router, TLS service or VPN is configured by the installer.
 
 The desktop supports a server at a URL prefix, for example `https://reviews.example.com/review-relay`. `Caddyfile.example` shows an HTTPS proxy that strips the prefix before forwarding to the loopback server. Merge its routes into the existing site configuration, validate the complete configuration with `caddy validate`, then use `caddy reload`. Caddy's HTTPS listener must be reachable and the hostname must resolve to it (or your existing HTTPS edge). Do not replace unrelated hosted sites. The experimental desktop defaults to `https://example.com/review-relay`; you can enter your own server instead.
 
-Authentication still applies behind the proxy: the public health check and desktop connection notice reveal no room data. Project creation requires the administrator setup key; joining requires a one-use invitation; room APIs require a member session. Requests from browser origins are rejected. Authenticated members have separate rate limits, so anonymous requests through a shared proxy address do not exhaust their allowance. Forwarded IP headers are not trusted.
+Authentication still applies behind the proxy: the public health check and invitation landing page reveal no room data. The invitation secret remains in the URL fragment and is not sent to the landing page in an HTTP request. Project creation requires the administrator setup key; joining requires a one-use invitation; room APIs require a member session. API requests from browser origins are rejected. The landing page has a restrictive, hash-based Content Security Policy and no third-party content; let the server supply its CSP rather than overriding it at the proxy. Authenticated members have separate rate limits, so anonymous requests through a shared proxy address do not exhaust their allowance. Forwarded IP headers are not trusted.
 
 To stop and uninstall the login service, from the extracted bundle:
 

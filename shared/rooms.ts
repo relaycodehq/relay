@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { filePathSchema, refSchema, shaSchema, sideSchema } from "./validation";
+import {
+  filePathSchema,
+  refSchema,
+  shaSchema,
+  sideSchema,
+  normalizeServer,
+} from "./validation";
 import { aiSettingsSchema } from "./settings";
 
 export const roomServerSchema = z
@@ -145,28 +151,97 @@ export const connectRoomSchema = z
   })
   .strict();
 export type ConnectRoom = z.infer<typeof connectRoomSchema>;
-export function roomInvitation(input: Required<ConnectRoom>): string {
+export const roomHostingSchema = connectRoomSchema.omit({ projectId: true });
+export type RoomHosting = z.infer<typeof roomHostingSchema>;
+export const roomProtocol = "reviewrelay-room";
+const invitationTargetSchema = z.object({
+  project: projectSchema.extend({
+    server: z.string().transform(normalizeServer),
+  }),
+  number: refSchema.shape.number,
+});
+export type RoomInvitation = Required<ConnectRoom> &
+  Partial<z.infer<typeof invitationTargetSchema>>;
+export function roomInvitation(
+  input: Required<ConnectRoom>,
+  target?: z.infer<typeof invitationTargetSchema>,
+): string {
   const { server, projectId, secret } = connectRoomSchema
     .required()
     .parse(input);
-  return `${server}/#join=${projectId}.${secret}`;
+  const params = new URLSearchParams({ join: `${projectId}.${secret}` });
+  if (target) {
+    const value = invitationTargetSchema.parse(target);
+    params.set("project", JSON.stringify(value.project));
+    params.set("pr", String(value.number));
+  }
+  return `${server}/#${params}`;
 }
-export function parseRoomInvitation(value: string): Required<ConnectRoom> {
+export function parseRoomInvitation(value: string): RoomInvitation {
   try {
+    if (value.length > 16384) throw new Error();
     const url = new URL(value.trim());
-    const match = /^#join=([0-9a-f-]+)\.([A-Za-z0-9_-]{43})$/i.exec(url.hash);
+    const params = new URLSearchParams(url.hash.slice(1));
+    for (const key of params.keys()) {
+      if (
+        !["join", "project", "pr"].includes(key) ||
+        params.getAll(key).length !== 1
+      )
+        throw new Error();
+    }
+    const match = /^([0-9a-f-]+)\.([A-Za-z0-9_-]{43})$/i.exec(
+      params.get("join") ?? "",
+    );
     if (!match) throw new Error();
+    let server: string;
+    if (url.protocol === roomProtocol + ":") {
+      if (
+        url.hostname !== "join" ||
+        url.username ||
+        url.password ||
+        url.port ||
+        !["", "/"].includes(url.pathname) ||
+        [...url.searchParams.keys()].join() !== "server"
+      )
+        throw new Error();
+      server = url.searchParams.get("server") ?? "";
+    } else {
+      url.hash = "";
+      server = url.href;
+    }
     url.hash = "";
-    return connectRoomSchema.required().parse({
-      server: url.href,
+    const input = connectRoomSchema.required().parse({
+      server,
       projectId: match[1],
       secret: match[2],
     });
+    const target =
+      params.has("project") || params.has("pr")
+        ? invitationTargetSchema.parse({
+            project: JSON.parse(params.get("project") ?? "null"),
+            number: Number(params.get("pr")),
+          })
+        : {};
+    return { ...input, ...target };
   } catch {
     throw new Error(
       "Paste the full project invitation link from an HTTPS room server.",
     );
   }
+}
+export function roomAppUrl(value: string): string {
+  const invitation = parseRoomInvitation(value);
+  const link = roomInvitation(
+    {
+      server: invitation.server,
+      projectId: invitation.projectId,
+      secret: invitation.secret,
+    },
+    invitation.project && invitation.number
+      ? { project: invitation.project, number: invitation.number }
+      : undefined,
+  );
+  return `${roomProtocol}://join?server=${encodeURIComponent(invitation.server)}${new URL(link).hash}`;
 }
 export const sendRoomSchema = messageInputSchema
   .omit({ context: true })
@@ -197,6 +272,12 @@ export interface RoomState {
   room: Room | null;
 }
 export interface RoomApi {
+  roomHosting(): Promise<{ server: string | null }>;
+  saveRoomHosting(input: RoomHosting | null): Promise<void>;
+  roomAcceptInvitation(url: string): Promise<{
+    ref: { owner: string; name: string; number: number };
+    state: RoomState;
+  }>;
   roomConnect(
     ref: { owner: string; name: string; number: number },
     input: ConnectRoom,
