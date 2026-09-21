@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { z } from "zod";
-import { RoomsDatabase, HttpError, hash } from "./database";
+import { RoomsDatabase, HttpError, hash, type Session } from "./database";
 import {
   idSchema,
   secretSchema,
@@ -65,6 +65,7 @@ export function createRoomsServer(
   adminSecret: string,
 ) {
   secretSchema.parse(adminSecret);
+  const adminHash = hash(adminSecret);
   const presence = new Map<string, Map<string, Presence>>();
   const limits = new Map<string, { at: number; count: number }>();
   const timer = setInterval(() => {
@@ -86,27 +87,43 @@ export function createRoomsServer(
       // This API is for desktop clients. Browsers get no CORS or cookie authentication.
       if (req.headers.origin)
         throw new HttpError(403, "Browser requests are not accepted.");
-      const ip = req.socket.remoteAddress ?? "unknown",
-        now = Date.now();
-      let bucket = limits.get(ip);
+      const url = new URL(req.url ?? "/", "http://rooms.local"),
+        path = url.pathname,
+        method = req.method,
+        secret = req.headers.authorization?.replace(/^Bearer /, "") ?? "",
+        isAdmin =
+          path === "/v1/projects" &&
+          method === "POST" &&
+          hash(secret) === adminHash;
+      let session: Session | undefined;
+      if (secret && !isAdmin) {
+        try {
+          session = database.authenticate(secret);
+        } catch (error) {
+          if (!(error instanceof HttpError) || error.status !== 401)
+            throw error;
+        }
+      }
+      // A reverse proxy shares one socket address. Anonymous traffic must not
+      // consume signed-in members' allowance. Never trust forwarded IP headers.
+      const key = session
+        ? `member:${session.id}`
+        : isAdmin
+          ? "setup"
+          : `anonymous:${req.socket.remoteAddress ?? "unknown"}`;
+      const now = Date.now();
+      let bucket = limits.get(key);
       if (!bucket || now - bucket.at > 60000) {
         bucket = { at: now, count: 0 };
-        limits.set(ip, bucket);
+        limits.set(key, bucket);
       }
       if (++bucket.count > 1200)
         throw new HttpError(429, "Too many requests. Retry shortly.");
-      const url = new URL(req.url ?? "/", "http://rooms.local"),
-        path = url.pathname,
-        method = req.method;
       let value: unknown;
       if (path === "/health" && method === "GET")
         value = { ok: true, protocol: 1 };
       else if (path === "/v1/projects" && method === "POST") {
-        if (
-          hash(req.headers.authorization?.replace(/^Bearer /, "") ?? "") !==
-          hash(adminSecret)
-        )
-          throw new HttpError(401, "Invalid server setup key.");
+        if (!isAdmin) throw new HttpError(401, "Invalid server setup key.");
         const input = createSchema.parse(await body(req));
         const session = database.create(
           input.project,
@@ -140,9 +157,11 @@ export function createRoomsServer(
           member: { id: session.id, name: session.name, owner: session.owner },
         };
       } else {
-        const session = database.authenticate(
-          req.headers.authorization?.replace(/^Bearer /, "") ?? "",
-        );
+        if (!session)
+          throw new HttpError(
+            401,
+            "Room sign-in expired or was revoked. Ask for a new invitation.",
+          );
         if (path === "/v1/me" && method === "GET")
           value = {
             projectId: session.projectId,

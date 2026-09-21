@@ -21,6 +21,7 @@ import type { Pull } from "../../shared/types";
 import type { QuestionTarget } from "../../shared/questions";
 import {
   agentMention,
+  parseRoomInvitation,
   type RoomMessage,
   type RoomState,
   type Presence,
@@ -802,7 +803,7 @@ function RoomConnect({
   onConnected: () => void;
 }) {
   const [mode, setMode] = useState<"join" | "create">("join"),
-    [server, setServer] = useState("http://127.0.0.1:4319"),
+    [server, setServer] = useState("https://example.com/review-relay"),
     [secret, setSecret] = useState(""),
     [invite, setInvite] = useState(""),
     [busy, setBusy] = useState(false),
@@ -840,11 +841,7 @@ function RoomConnect({
           void (async () => {
             let input;
             if (mode === "join") {
-              const u = new URL(invite.trim()),
-                m = /^#join=([0-9a-f-]+)\.([A-Za-z0-9_-]{43})$/.exec(u.hash);
-              if (!m)
-                throw new Error("Paste the full project invitation link.");
-              input = { server: u.origin, projectId: m[1], secret: m[2] };
+              input = parseRoomInvitation(invite);
             } else input = { server, secret: secret.trim() };
             await api.roomConnect(pull, input);
             setSecret("");

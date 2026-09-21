@@ -22,6 +22,10 @@ Open a PR in **Review Relay Experimental**, click the chat icon, choose **Set up
 
 For remote colleagues, serve port 4319 through an HTTPS reverse proxy or a private HTTPS tunnel. The desktop accepts HTTPS remotely and HTTP only on loopback. Do not forward an unencrypted port from your router. Configure the public/private HTTPS address before making invitations; they include the address used to connect. No domain, router, TLS service or VPN is configured by the installer.
 
+The desktop supports a server at a URL prefix, for example `https://reviews.example.com/review-relay`. `Caddyfile.example` shows an HTTPS proxy that strips the prefix before forwarding to the loopback server. Merge its routes into the existing site configuration, validate the complete configuration with `caddy validate`, then use `caddy reload`. Caddy's HTTPS listener must be reachable and the hostname must resolve to it (or your existing HTTPS edge). Do not replace unrelated hosted sites. The experimental desktop defaults to `https://example.com/review-relay`; you can enter your own server instead.
+
+Authentication still applies behind the proxy: the public health check and desktop connection notice reveal no room data. Project creation requires the administrator setup key; joining requires a one-use invitation; room APIs require a member session. Requests from browser origins are rejected. Authenticated members have separate rate limits, so anonymous requests through a shared proxy address do not exhaust their allowance. Forwarded IP headers are not trusted.
+
 To stop and uninstall the login service, from the extracted bundle:
 
 ```sh

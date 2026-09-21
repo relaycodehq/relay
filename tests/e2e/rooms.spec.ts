@@ -17,12 +17,14 @@ import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { createServer, request } from "node:http";
 import { fixtureServer, newCode } from "../fixtures/gitea";
 import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
 let fixture: Awaited<ReturnType<typeof fixtureServer>>,
   database: RoomsDatabase,
-  server: ReturnType<typeof createRoomsServer>;
+  server: ReturnType<typeof createRoomsServer>,
+  proxy: ReturnType<typeof createServer>;
 let root: string,
   bin: string,
   repo: string,
@@ -50,7 +52,29 @@ test.beforeAll(async () => {
   setupKey = token();
   server = createRoomsServer(database, setupKey);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  serverUrl = `http://127.0.0.1:${(server.address() as any).port}`;
+  const upstream = `http://127.0.0.1:${(server.address() as any).port}`;
+  // Exercise the real deployment shape, including invitations copied between clients.
+  proxy = createServer((req, res) => {
+    if (!req.url?.startsWith("/review-relay/")) {
+      res.writeHead(404).end();
+      return;
+    }
+    const forwarded = request(
+      upstream + req.url.slice("/review-relay".length),
+      {
+        method: req.method,
+        headers: req.headers,
+      },
+      (response) => {
+        res.writeHead(response.statusCode!, response.headers);
+        response.pipe(res);
+      },
+    );
+    forwarded.on("error", () => res.writeHead(502).end());
+    req.pipe(forwarded);
+  });
+  await new Promise<void>((r) => proxy.listen(0, "127.0.0.1", r));
+  serverUrl = `http://127.0.0.1:${(proxy.address() as any).port}/review-relay`;
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
   git("init", "--quiet");
@@ -128,6 +152,7 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   for (const app of apps) await app.close().catch(() => {});
+  await new Promise<void>((r) => proxy?.close(() => r()));
   await new Promise<void>((r) => server?.close(() => r()));
   database?.close();
   await fixture?.close();
@@ -151,6 +176,7 @@ test("two desktops join by invitation; ordinary messages and replies never launc
   const invite = await alice
     .getByLabel("Invitation link", { exact: true })
     .inputValue();
+  expect(invite.startsWith(serverUrl + "/#join=")).toBe(true);
   await alice
     .getByRole("button", { name: "Copy invitation", exact: true })
     .click();

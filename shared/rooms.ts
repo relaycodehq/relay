@@ -13,7 +13,7 @@ export const roomServerSchema = z
         u.password ||
         u.search ||
         u.hash ||
-        u.pathname !== "/" ||
+        !/^\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]*$/.test(u.pathname) ||
         !(
           u.protocol === "https:" ||
           (u.protocol === "http:" &&
@@ -21,7 +21,7 @@ export const roomServerSchema = z
         )
       )
         throw new Error();
-      return u.origin;
+      return u.origin + u.pathname.replace(/\/$/, "");
     } catch {
       ctx.addIssue({
         code: "custom",
@@ -145,6 +145,29 @@ export const connectRoomSchema = z
   })
   .strict();
 export type ConnectRoom = z.infer<typeof connectRoomSchema>;
+export function roomInvitation(input: Required<ConnectRoom>): string {
+  const { server, projectId, secret } = connectRoomSchema
+    .required()
+    .parse(input);
+  return `${server}/#join=${projectId}.${secret}`;
+}
+export function parseRoomInvitation(value: string): Required<ConnectRoom> {
+  try {
+    const url = new URL(value.trim());
+    const match = /^#join=([0-9a-f-]+)\.([A-Za-z0-9_-]{43})$/i.exec(url.hash);
+    if (!match) throw new Error();
+    url.hash = "";
+    return connectRoomSchema.required().parse({
+      server: url.href,
+      projectId: match[1],
+      secret: match[2],
+    });
+  } catch {
+    throw new Error(
+      "Paste the full project invitation link from an HTTPS room server.",
+    );
+  }
+}
 export const sendRoomSchema = messageInputSchema
   .omit({ context: true })
   .extend({

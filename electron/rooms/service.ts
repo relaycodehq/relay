@@ -9,6 +9,7 @@ import { findExecutable } from "../executables";
 import { choiceLabel } from "../../shared/settings";
 import {
   agentMention,
+  roomInvitation,
   connectionSchema,
   projectSchema,
   type ConnectRoom,
@@ -259,7 +260,11 @@ export class RoomService {
       {},
     );
     return {
-      code: `${connection.server}/#join=${connection.projectId}.${invitation.code}`,
+      code: roomInvitation({
+        server: connection.server,
+        projectId: connection.projectId,
+        secret: invitation.code,
+      }),
       expiresAt: invitation.expiresAt,
     };
   }

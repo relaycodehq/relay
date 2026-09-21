@@ -8,6 +8,8 @@ import { createRoomsServer } from "../../server/http";
 import {
   agentMention,
   roomServerSchema,
+  roomInvitation,
+  parseRoomInvitation,
   type MessageInput,
 } from "../../shared/rooms";
 
@@ -156,14 +158,84 @@ describe("mentions and transport", () => {
     expect(roomServerSchema.parse("http://127.0.0.1:4319/")).toBe(
       "http://127.0.0.1:4319",
     );
+    expect(roomServerSchema.parse("https://rooms.test/review-relay/")).toBe(
+      "https://rooms.test/review-relay",
+    );
     for (const url of [
       "http://192.168.1.2:4319",
       "https://a:b@rooms.test",
       "file:///tmp/rooms",
-      "https://rooms.test/path",
+      "https://rooms.test/path//rooms",
+      "https://rooms.test/path%2frooms",
       "https://rooms.test/?token=x",
+      "https://rooms.test/#fragment",
     ])
       expect(roomServerSchema.safeParse(url).success).toBe(false);
+  });
+  it("preserves a proxy base path through invitation creation and redemption", () => {
+    for (const server of [
+      "https://rooms.test",
+      "https://rooms.test/review-relay",
+    ]) {
+      const input = { server, projectId: randomUUID(), secret: token() };
+      const link = roomInvitation(input);
+      expect(parseRoomInvitation(link)).toEqual(input);
+      const url = new URL(link);
+      expect(url.search).toBe("");
+      expect(url.hash).toContain(input.secret);
+      for (const invalid of [
+        link.replace("https:", "http:"),
+        link.replace("rooms.test", "user:password@rooms.test"),
+        link.replace("/#join=", "/?token=leak#join="),
+        link.replace(input.projectId, "invalid"),
+      ])
+        expect(() => parseRoomInvitation(invalid)).toThrow("invitation link");
+    }
+  });
+  it("keeps authenticated members working when anonymous proxy traffic is rate limited", async () => {
+    const { db, aliceToken, bobToken } = setup(),
+      admin = token(),
+      server = createRoomsServer(db, admin);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as any).port}`;
+      for (let batch = 0; batch < 60; batch++) {
+        await Promise.all(
+          Array.from({ length: 20 }, async () => {
+            const response = await fetch(url + "/v1/me");
+            expect(response.status).toBe(401);
+            await response.text();
+          }),
+        );
+      }
+      const blocked = await fetch(url + "/v1/me", {
+        headers: {
+          Authorization: `Bearer ${token()}`,
+          "X-Forwarded-For": "203.0.113.1",
+        },
+      });
+      expect(blocked.status).toBe(429);
+      await blocked.text();
+      for (const secret of [aliceToken, bobToken]) {
+        const response = await fetch(url + "/v1/me", {
+          headers: { Authorization: `Bearer ${secret}` },
+        });
+        expect(response.status).toBe(200);
+        await response.text();
+      }
+      const response = await fetch(url + "/v1/projects", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${admin}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      expect(response.status).toBe(400); // Authenticated setup reaches input validation.
+      await response.text();
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
   it("enforces HTTP authentication, rejects browser origins and validates message fields", async () => {
     const { db, aliceToken, room } = setup(),

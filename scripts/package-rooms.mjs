@@ -20,6 +20,7 @@ try {
   for (const [from, to] of [
     ["dist-server/server.mjs", "server.mjs"],
     ["server/README.md", "README.md"],
+    ["server/Caddyfile.example", "Caddyfile.example"],
     ["scripts/install-rooms-macos.py", "install-rooms-macos.py"],
     ["LICENSE", "LICENSE"],
     ["node_modules/zod/LICENSE", "ZOD-LICENSE"],
