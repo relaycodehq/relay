@@ -29,6 +29,7 @@ import {
   GitBranch,
   GitPullRequest,
   MessageSquare,
+  Settings2,
   Terminal,
   WrapText,
   UnfoldVertical,
@@ -60,8 +61,7 @@ import {
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
 interface Props {
-  roomOpen: boolean;
-  onToggleRoom: () => void;
+  onSettings: () => void;
   onDiscuss: (target: QuestionTarget) => void;
   checks: ChecksController;
   pull: Pull;
@@ -77,8 +77,7 @@ interface Props {
   onFileViewed: (path: string, progress: Progress) => void;
 }
 export function ReviewWorkspace({
-  roomOpen,
-  onToggleRoom,
+  onSettings,
   onDiscuss,
   checks,
   pull,
@@ -267,13 +266,6 @@ export function ReviewWorkspace({
         </div>
         <div className="toolbar-actions">
           {paneControls}
-          <IconButton
-            label="Toggle PR room"
-            active={roomOpen}
-            onClick={onToggleRoom}
-          >
-            <MessageSquare size={17} />
-          </IconButton>
           <ProjectChecksButton checks={checks} onOpenFile={onEditFile} />
           <IconButton
             label="Open pull request in Gitea"
@@ -289,6 +281,9 @@ export function ReviewWorkspace({
             Finish review{draftCount > 0 && <span>{draftCount}</span>}
             <ChevronDown size={13} />
           </button>
+          <IconButton label="Open settings" onClick={onSettings}>
+            <Settings2 size={16} />
+          </IconButton>
         </div>
       </header>
       <section className="pr-heading">

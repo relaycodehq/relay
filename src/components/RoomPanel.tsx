@@ -280,6 +280,7 @@ export function RoomPanel({
   const selected = draft.context;
   return (
     <aside
+      id="pr-room"
       className={`room-panel ${firstPane ? "is-first-pane" : ""}`}
       aria-label="PR room"
     >

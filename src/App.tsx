@@ -691,17 +691,22 @@ function Connected({
     (f) => progress.read[f.filename] === revision,
   ).length;
   const paneControls = (
-    <div className="pane-settings-controls">
-      <PaneControls
-        requestsHidden={requestsHidden}
-        filesHidden={filesHidden}
-        onToggleRequests={() => setRequestsHidden((v) => !v)}
-        onToggleFiles={() => setFilesHidden((v) => !v)}
-      />
-      <IconButton label="Open settings" onClick={onSettings}>
-        <Settings2 size={16} />
-      </IconButton>
-    </div>
+    <PaneControls
+      requestsHidden={requestsHidden}
+      filesHidden={filesHidden}
+      onToggleRequests={() => setRequestsHidden((v) => !v)}
+      onToggleFiles={() => setFilesHidden((v) => !v)}
+      roomOpen={roomOpen}
+      onToggleRoom={
+        pull.data && !restoring
+          ? () =>
+              setRoomOpen((v) => {
+                localStorage.setItem("relay-room-open", String(!v));
+                return !v;
+              })
+          : undefined
+      }
+    />
   );
   return (
     <>
@@ -1042,7 +1047,12 @@ function Connected({
         {(!selected || pull.error || !pull.data || restoring) && (
           <header className="titlebar empty-titlebar">
             <span>Your review workspace</span>
-            {paneControls}
+            <div className="toolbar-actions">
+              {paneControls}
+              <IconButton label="Open settings" onClick={onSettings}>
+                <Settings2 size={16} />
+              </IconButton>
+            </div>
           </header>
         )}
         {!selected ? (
@@ -1080,13 +1090,7 @@ function Connected({
           )
         ) : (
           <ReviewWorkspace
-            onToggleRoom={() => {
-              setRoomOpen((v) => {
-                localStorage.setItem("relay-room-open", String(!v));
-                return !v;
-              });
-            }}
-            roomOpen={roomOpen}
+            onSettings={onSettings}
             onDiscuss={(target) => {
               setRoomTarget({
                 key: `${pull.data!.owner}/${pull.data!.name}#${pull.data!.number}`,

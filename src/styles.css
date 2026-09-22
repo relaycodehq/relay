@@ -2663,11 +2663,6 @@ html {
   font-size: 11px;
 }
 
-.pane-settings-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 .settings-modal {
   max-width: 650px;
 }
