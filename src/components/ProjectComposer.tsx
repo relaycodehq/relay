@@ -20,10 +20,15 @@ import {
   effortLabels,
   type ReasoningEffort,
   aiSettingsSchema,
+  claudeEfforts,
+  type ClaudeModel,
+  modelSchema,
+  reasoningEffortSchema,
 } from "../../shared/settings";
 import type { ProjectChatSend } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
+import { api } from "../lib/api";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { ComposerSelect } from "./ComposerSelect";
 import {
@@ -49,6 +54,7 @@ export function ProjectComposer({
   onSend,
   onStop,
   planProvider,
+  contextMeter,
 }: {
   onCommand: (command: RelayCommand) => boolean;
   draftKey: string;
@@ -77,6 +83,7 @@ export function ProjectComposer({
   ) => Promise<boolean>;
   onStop: () => void;
   planProvider?: "codex" | "claude";
+  contextMeter?: ReactNode;
 }) {
   const settings = useAISettings();
   const [saved] = useState(() => {
@@ -98,6 +105,31 @@ export function ProjectComposer({
   const [choice, setChoice] = useState<ModelChoice | undefined>(
     () => aiSettingsSchema.shape.questions.safeParse(saved?.choice).data,
   );
+  const [claude, setClaude] = useState<{
+    model: string;
+    reasoningEffort: ReasoningEffort;
+  }>(() => ({
+    model: modelSchema.safeParse(saved?.claude?.model).data ?? "",
+    reasoningEffort: claudeEfforts.includes(saved?.claude?.reasoningEffort)
+      ? reasoningEffortSchema.parse(saved.claude.reasoningEffort)
+      : "",
+  }));
+  const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
+  useEffect(() => {
+    let live = true;
+    void api
+      .claudeModels()
+      .catch(() => [])
+      .then((models) => {
+        if (live) setClaudeModels(models);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+  // Unknown models (list failed or a custom id) offer every Claude level.
+  const claudeModelEfforts =
+    claudeModels?.find((m) => m.id === claude.model)?.efforts ?? claudeEfforts;
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>(() =>
     savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
   );
@@ -107,9 +139,15 @@ export function ProjectComposer({
   useEffect(() => {
     localStorage.setItem(
       "composer-settings:" + settingsKey,
-      JSON.stringify({ provider, choice, runtimeMode, interactionMode }),
+      JSON.stringify({
+        provider,
+        choice,
+        claude,
+        runtimeMode,
+        interactionMode,
+      }),
     );
-  }, [settingsKey, provider, choice, runtimeMode, interactionMode]);
+  }, [settingsKey, provider, choice, claude, runtimeMode, interactionMode]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
   const filePick = useRef<HTMLInputElement>(null);
@@ -137,6 +175,11 @@ export function ProjectComposer({
   const selected = choice ?? settings.data?.questions;
   const mention = agentMention(draft);
   const recipient = mention?.provider ?? provider;
+  // Claude keeps its own model and effort; Codex-only settings never reach it.
+  const choiceFor = (to: string): ModelChoice | undefined =>
+    selected && to === "claude"
+      ? { ...selected, ...claude, fast: false }
+      : selected;
   const commands = useComposerCommands({
     draft,
     onDraft,
@@ -208,7 +251,7 @@ export function ProjectComposer({
         ...(running ? { delivery: "queue" as const } : {}),
         body:
           mention || recipient === "message" ? body : `@${recipient} ${body}`,
-        choice: selected,
+        choice: choiceFor(recipient)!,
         provider: recipient === "claude" ? "claude" : "codex",
         runtimeMode,
         interactionMode,
@@ -252,7 +295,7 @@ export function ProjectComposer({
                 const accepted = await onSend({
                   body: `@${planProvider} Implement the plan from your previous response.`,
                   provider: planProvider,
-                  choice: selected,
+                  choice: choiceFor(planProvider)!,
                   runtimeMode,
                   interactionMode: "default",
                 });
@@ -276,7 +319,14 @@ export function ProjectComposer({
           {commands.error}
         </p>
       )}
-      <div className="thread-context-controls">{context}</div>
+      <div className="thread-context-controls">
+        {context}
+        <ProjectBranchPicker
+          projectId={projectId}
+          branch={branch}
+          disabled={checkoutDisabled || running || busy}
+        />
+      </div>
       <form
         className="project-composer"
         onSubmit={(e) => {
@@ -362,9 +412,22 @@ export function ProjectComposer({
           <ComposerModelPicker
             provider={recipient}
             choice={selected}
+            claudeModel={claude.model}
+            claudeModels={claudeModels}
             onSelect={(next, model) => {
               setProvider(next);
               if (mention) onDraft(mention.question);
+              if (next === "claude") {
+                const efforts =
+                  claudeModels?.find((m) => m.id === model)?.efforts ??
+                  claudeEfforts;
+                setClaude((c) => ({
+                  model,
+                  reasoningEffort: efforts.includes(c.reasoningEffort)
+                    ? c.reasoningEffort
+                    : "",
+                }));
+              }
               if (next === "codex" && selected) {
                 const candidate = { ...selected, model };
                 setChoice({
@@ -406,6 +469,27 @@ export function ProjectComposer({
               </button>
             </>
           )}
+          {recipient === "claude" &&
+            selected &&
+            claudeModelEfforts.length > 0 && (
+              <>
+                <span className="composer-divider" aria-hidden />
+                <ComposerSelect<ReasoningEffort>
+                  label="Reasoning effort"
+                  value={claude.reasoningEffort}
+                  options={[
+                    { value: "", label: "Default" },
+                    ...claudeModelEfforts.map((value) => ({
+                      value,
+                      label: effortLabels[value],
+                    })),
+                  ]}
+                  onChange={(reasoningEffort) =>
+                    setClaude((c) => ({ ...c, reasoningEffort }))
+                  }
+                />
+              </>
+            )}
           {recipient !== "message" && (
             <ComposerModeControls
               runtimeMode={runtimeMode}
@@ -440,6 +524,7 @@ export function ProjectComposer({
             <Paperclip size={15} />
           </button>
           <span className="spacer" />
+          {contextMeter}
           {running && (
             <button
               type="button"
@@ -477,14 +562,6 @@ export function ProjectComposer({
           )}
         </div>
       </form>
-      <div className="composer-context-strip">
-        <ProjectBranchPicker
-          projectId={projectId}
-          branch={branch}
-          disabled={checkoutDisabled || running || busy}
-        />
-        <kbd>⌘ / Ctrl ↵</kbd>
-      </div>
     </div>
   );
 }

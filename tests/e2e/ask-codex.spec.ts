@@ -94,6 +94,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
   await page
     .getByLabel("Grouping model", { exact: true })
     .selectOption("gpt-5.6-sol");
@@ -132,6 +133,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
       .getByRole("dialog", { name: "Settings", exact: true })
       .getByRole("status"),
   ).toContainText("Settings saved");
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
   for (const theme of ["dark", "light"]) {
     await page.getByRole("button", { name: theme, exact: true }).click();
     await page.screenshot({
@@ -164,6 +166,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
   await expect(page.getByLabel("Grouping model", { exact: true })).toHaveValue(
     "gpt-5.6-sol",
   );

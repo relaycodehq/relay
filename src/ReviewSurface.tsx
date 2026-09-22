@@ -3,7 +3,7 @@ import { RelayMark } from "./components/RelayMark";
 import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
 import { parseRoomInvitation, roomProtocol } from "../shared/rooms";
 import type { QuestionTarget } from "../shared/questions";
-import { Settings } from "./components/Settings";
+import { Settings, type SettingsCategory } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
 import { shouldResumeReview } from "./lib/resumeReview";
@@ -283,7 +283,7 @@ export function Connected({
     onDiscuss?: (target: QuestionTarget, pull: Pull) => void;
   };
   account: Account;
-  onSettings: () => void;
+  onSettings: (category?: SettingsCategory) => void;
   pendingUrl?: string;
   initialWorkspace: WorkspaceState;
   incomingLink?: { url: string };
@@ -794,7 +794,7 @@ export function Connected({
               {new URL(account.server).host}
             </small>
           </div>
-          <IconButton label="Settings" onClick={onSettings}>
+          <IconButton label="Settings" onClick={() => onSettings()}>
             <Settings2 size={17} />
           </IconButton>
         </footer>
@@ -994,7 +994,7 @@ export function Connected({
             <span>Your review workspace</span>
             <div className="toolbar-actions">
               {paneControls}
-              <IconButton label="Open settings" onClick={onSettings}>
+              <IconButton label="Open settings" onClick={() => onSettings()}>
                 <Settings2 size={16} />
               </IconButton>
             </div>
@@ -1035,7 +1035,7 @@ export function Connected({
           )
         ) : (
           <ReviewWorkspace
-            onSettings={onSettings}
+            onSettings={() => onSettings()}
             onDiscuss={(target) => {
               if (embedded?.onDiscuss) {
                 embedded.onDiscuss(target, pull.data!);

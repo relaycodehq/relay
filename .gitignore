@@ -12,3 +12,4 @@ server/setup-key.txt
 *.sqlite*
 server/.secrets/
 /t3code/
+/openusage/

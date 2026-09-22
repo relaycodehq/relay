@@ -1,26 +1,196 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { Menu } from "@base-ui/react/menu";
 import {
-  Search,
-  Plus,
+  Bell,
+  Check,
   ChevronRight,
-  FolderGit2,
+  Clock,
   Folder,
   FolderOpen,
-  MessageSquare,
+  FolderTree,
   GitPullRequest,
-  Users,
+  Plus,
+  RotateCcw,
+  Search,
   Settings2,
-  LogIn,
+  SquarePen,
+  Sunrise,
+  Users,
+  X,
 } from "lucide-react";
-import type { Project, ChatSummary } from "../../shared/projects";
+import type { Project, ChatSummary, ChatTriage } from "../../shared/projects";
+import {
+  chatActivitySection,
+  chatIsEmpty,
+  shortAge,
+  snoozePresets,
+  wakeLabel,
+} from "../../shared/chat-activity";
 import { api } from "../lib/api";
 import { IconButton } from "./ui";
+import { ProviderIcon } from "./ComposerModelPicker";
 import { ProjectFolderDialog } from "./ProjectFolderDialog";
 import {
+  moveProjectInList,
   projectFolderTree,
   type ProjectFolderNode,
 } from "../../shared/project-folders";
+import "./sidebar.css";
+
+const THREADS_PER_PROJECT = 5;
+const PROJECT_DRAG = "application/x-relay-project";
+
+type DropTarget =
+  | { kind: "project"; id: string; where: "before" | "after" }
+  | { kind: "folder"; path: string };
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "null");
+    return value && typeof value === "object" ? (value as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Sidebar conveniences never block the workspace.
+  }
+}
+
+/** Last time each thread was open here; drives the unread dot. */
+function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
+  const [since] = useState(() => {
+    const saved = Number(localStorage.getItem("relay-thread-seen-since"));
+    if (saved > 0) return saved;
+    const now = Date.now();
+    localStorage.setItem("relay-thread-seen-since", String(now));
+    return now;
+  });
+  const [seen, setSeen] = useState<Record<string, number>>(() =>
+    readJson("relay-thread-seen", {}),
+  );
+  const current = chats.find((c) => c.id === chatId);
+  useEffect(() => {
+    if (!current || (seen[current.id] ?? 0) >= current.updated) return;
+    setSeen((s) => {
+      const next = { ...s, [current.id]: current.updated };
+      writeJson("relay-thread-seen", next);
+      return next;
+    });
+  }, [current?.id, current?.updated]);
+  return (c: ChatSummary) =>
+    c.id !== chatId && c.updated > Math.max(since, seen[c.id] ?? 0);
+}
+
+function useNow(interval = 30_000) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(timer);
+  }, [interval]);
+  return now;
+}
+
+/** Stable hue per project so the activity cards are scannable by colour. */
+function projectHue(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  return Math.abs(hash) % 360;
+}
+
+function ProjectBadge({ name }: { name: string }) {
+  return (
+    <span
+      className="sb-project-badge"
+      style={{ "--hue": projectHue(name) } as React.CSSProperties}
+      aria-hidden
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+function StatusMark({
+  chat,
+  unread,
+  now,
+}: {
+  chat: ChatSummary;
+  unread: boolean;
+  now: number;
+}) {
+  if (chat.waiting)
+    return (
+      <span className="sb-status waiting" title="Needs your input">
+        <i />
+      </span>
+    );
+  if (chat.running)
+    return (
+      <span className="sb-status running" title="Working">
+        <i />
+      </span>
+    );
+  if (unread)
+    return (
+      <span className="sb-status unread" title="New activity">
+        <i />
+      </span>
+    );
+  return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
+}
+
+function scopeLabel(chat: ChatSummary) {
+  return chat.scope.kind === "pr" ? `PR #${chat.scope.ref.number}` : "Project";
+}
+
+function SnoozeMenu({
+  onSnooze,
+  now,
+}: {
+  onSnooze: (until: number) => void;
+  now: number;
+}) {
+  const presets = useMemo(() => snoozePresets(new Date(now)), [now]);
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className="sb-card-action icon"
+        aria-label="Snooze"
+        title="Snooze"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Clock size={14} />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="bottom" align="end" sideOffset={6}>
+          <Menu.Popup className="sb-menu">
+            <div className="sb-menu-heading">Snooze until…</div>
+            {presets.map((preset) => (
+              <Menu.Item
+                key={preset.id}
+                className="sb-menu-item"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSnooze(preset.until);
+                }}
+              >
+                <span>{preset.label}</span>
+                <small>{wakeLabel(preset.until, new Date(now))}</small>
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
 export function ProjectSidebar({
   projects,
   projectId,
@@ -51,30 +221,96 @@ export function ProjectSidebar({
   onInbox: () => void;
 }) {
   const qc = useQueryClient();
+  const now = useNow();
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem("relay-project-expansion") ?? "{}",
-      );
-      return Object.fromEntries(
-        Object.entries(saved)
-          .filter(([, value]) => typeof value === "boolean")
-          .map(([key, value]) => [key, value === true]),
-      );
-    } catch {
-      return {};
-    }
-  });
-  useEffect(() => {
-    localStorage.setItem("relay-project-expansion", JSON.stringify(expanded));
-  }, [expanded]);
+  const [view, setView] = useState<"threads" | "activity">(() =>
+    localStorage.getItem("relay-sidebar-view") === "activity"
+      ? "activity"
+      : "threads",
+  );
+  useEffect(() => localStorage.setItem("relay-sidebar-view", view), [view]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      Object.entries(
+        readJson<Record<string, unknown>>("relay-project-expansion", {}),
+      )
+        .filter(([, value]) => typeof value === "boolean")
+        .map(([key, value]) => [key, value === true]),
+    ),
+  );
+  useEffect(() => writeJson("relay-project-expansion", expanded), [expanded]);
+  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
+  const [shelves, setShelves] = useState({ snoozed: false, settled: false });
   const [organizing, setOrganizing] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [drop, setDrop] = useState<DropTarget | null>(null);
+  const expandTimer = useRef<{ key: string; timer: number } | null>(null);
+  const clearDrag = () => {
+    setDragging(null);
+    setDrop(null);
+    if (expandTimer.current) clearTimeout(expandTimer.current.timer);
+    expandTimer.current = null;
+  };
+  const moveProject = async (id: string, target: DropTarget) => {
+    let folder = "",
+      before: string | null = null;
+    if (target.kind === "folder") folder = target.path;
+    else {
+      const others = projects.filter((p) => p.id !== id);
+      const index = others.findIndex((p) => p.id === target.id);
+      if (index < 0) return;
+      folder = others[index].folder ?? "";
+      before =
+        target.where === "before"
+          ? target.id
+          : (others.slice(index + 1).find((p) => (p.folder ?? "") === folder)
+              ?.id ?? null);
+    }
+    qc.setQueriesData<Project[]>({ queryKey: ["projects"] }, (list) =>
+      list ? moveProjectInList(list, id, folder, before) : list,
+    );
+    try {
+      await api.moveProject(id, folder, before);
+    } finally {
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+    }
+  };
+  /** Shared dragover handling: accept only project drags, mark the target. */
+  const dragOver = (e: React.DragEvent, target: DropTarget) => {
+    if (!dragging || !e.dataTransfer.types.includes(PROJECT_DRAG)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    setDrop((current) =>
+      JSON.stringify(current) === JSON.stringify(target) ? current : target,
+    );
+  };
+  const dropOn = (e: React.DragEvent, target: DropTarget) => {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id = dragging;
+    clearDrag();
+    if (target.kind === "project" && target.id === id) return;
+    void moveProject(id, target);
+  };
+  /** Hovering a collapsed folder while dragging opens it, like Finder. */
+  const openWhileDragging = (key: string, isOpen: boolean) => {
+    if (isOpen || expandTimer.current?.key === key) return;
+    if (expandTimer.current) clearTimeout(expandTimer.current.timer);
+    expandTimer.current = {
+      key,
+      timer: window.setTimeout(
+        () => setExpanded((state) => ({ ...state, [key]: true })),
+        550,
+      ),
+    };
+  };
   const lists = useQueries({
     queries: projects.map((p) => ({
       queryKey: ["project-chats", p.id],
       queryFn: () => api.projectChats(p.id),
-      refetchInterval: 10000,
+      refetchInterval: 5000,
     })),
   });
   useEffect(
@@ -89,50 +325,131 @@ export function ProjectSidebar({
       }),
     [qc],
   );
+  useEffect(() => {
+    const toggle = (e: KeyboardEvent) => {
+      if (e.metaKey && e.altKey && e.code === "KeyU") {
+        e.preventDefault();
+        setView((v) => (v === "activity" ? "threads" : "activity"));
+      }
+    };
+    window.addEventListener("keydown", toggle);
+    return () => window.removeEventListener("keydown", toggle);
+  }, []);
+  const byId = new Map(projects.map((p) => [p.id, p]));
   const all = lists
     .flatMap((q) => q.data ?? [])
+    .filter((c) => c.id === chatId || !chatIsEmpty(c))
     .sort((a, b) => b.updated - a.updated);
+  const unread = useSeen(chatId, all);
+  const triage = async (c: ChatSummary, action: ChatTriage) => {
+    qc.setQueryData<ChatSummary[]>(["project-chats", c.projectId], (list) =>
+      list?.map((entry) =>
+        entry.id === c.id
+          ? {
+              ...entry,
+              settledAt: action.kind === "settle" ? Date.now() : undefined,
+              snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
+              snoozedUntil: action.kind === "snooze" ? action.until : undefined,
+            }
+          : entry,
+      ),
+    );
+    try {
+      await api.triageProjectChat(c.id, action);
+    } finally {
+      void qc.invalidateQueries({ queryKey: ["project-chats", c.projectId] });
+    }
+  };
+  const sections = {
+    active: [] as ChatSummary[],
+    snoozed: [] as ChatSummary[],
+    settled: [] as ChatSummary[],
+  };
+  for (const c of all) sections[chatActivitySection(c, now)].push(c);
+  const attention = sections.active.filter(
+    (c) => c.waiting || unread(c),
+  ).length;
+  const query = search.trim().toLowerCase();
   const matches = (c: ChatSummary) =>
-    `${c.title} ${projects.find((p) => p.id === c.projectId)?.name ?? ""}`
+    `${c.title} ${byId.get(c.projectId)?.name ?? ""}`
       .toLowerCase()
-      .includes(search.toLowerCase());
-  const row = (c: ChatSummary, recent = false) => (
+      .includes(query);
+  const open = (c: ChatSummary) => {
+    if (!dirty) onChat(c);
+  };
+
+  const threadRow = (c: ChatSummary, withProject = false) => (
     <button
       key={c.id}
-      className={`thread-nav-row ${chatId === c.id ? "selected" : ""}`}
+      className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
       disabled={dirty}
       title={c.title}
-      onClick={() => onChat(c)}
+      onClick={() => open(c)}
     >
-      {c.scope.kind === "pr" ? (
-        <GitPullRequest size={14} />
-      ) : c.shared ? (
-        <Users size={14} />
-      ) : (
-        <MessageSquare size={14} />
+      <span className="sb-thread-title">{c.title}</span>
+      {withProject && (
+        <small className="sb-thread-project">
+          {byId.get(c.projectId)?.name}
+        </small>
       )}
-      <span>{c.title}</span>
-      {recent && (
-        <small>{projects.find((p) => p.id === c.projectId)?.name}</small>
+      {c.scope.kind === "pr" && !withProject && (
+        <small className="sb-thread-pr">#{c.scope.ref.number}</small>
       )}
+      <StatusMark chat={c} unread={unread(c)} now={now} />
     </button>
   );
+
   const renderProject = (p: Project) => {
-    const i = projects.findIndex((entry) => entry.id === p.id);
-    const open = expanded[p.id] ?? p.id === projectId;
+    const chats = all.filter((c) => c.projectId === p.id);
+    const isOpen = expanded[p.id] ?? p.id === projectId;
+    const more = showAll[p.id];
+    const visible = more ? chats : chats.slice(0, THREADS_PER_PROJECT);
+    const busy = chats.some((c) => c.running);
     return (
-      <section key={p.id} className="sidebar-project">
-        <div className="project-nav-heading">
+      <section
+        key={p.id}
+        className={[
+          "sb-project",
+          p.id === projectId && "current",
+          dragging === p.id && "dragging",
+          drop?.kind === "project" &&
+            drop.id === p.id &&
+            dragging !== p.id &&
+            `drop-${drop.where}`,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onDragOver={(e) => {
+          const row =
+            e.currentTarget.firstElementChild!.getBoundingClientRect();
+          dragOver(e, {
+            kind: "project",
+            id: p.id,
+            where: e.clientY < row.top + row.height / 2 ? "before" : "after",
+          });
+        }}
+        onDrop={(e) => drop?.kind === "project" && dropOn(e, drop)}
+      >
+        <div
+          className="sb-project-row"
+          draggable={!dirty}
+          onDragStart={(e) => {
+            e.dataTransfer.setData(PROJECT_DRAG, p.id);
+            e.dataTransfer.effectAllowed = "move";
+            setDragging(p.id);
+          }}
+          onDragEnd={clearDrag}
+        >
           <button
-            className="project-expand"
-            aria-label={`${open ? "Collapse" : "Expand"} ${p.name}`}
-            aria-expanded={open}
-            onClick={() => setExpanded((s) => ({ ...s, [p.id]: !open }))}
+            className="sb-project-expand"
+            aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
+            aria-expanded={isOpen}
+            onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
           >
-            <ChevronRight size={12} />
+            {isOpen ? <FolderOpen size={15} /> : <Folder size={15} />}
           </button>
           <button
-            className="project-select"
+            className="sb-project-name"
             disabled={dirty}
             title={`${p.path} · Right-click to organize`}
             onContextMenu={(e) => {
@@ -144,70 +461,93 @@ export function ProjectSidebar({
               setExpanded((s) => ({ ...s, [p.id]: true }));
             }}
           >
-            <FolderGit2 size={15} />
             <span>{p.name}</span>
+            {busy && !isOpen && (
+              <span className="sb-status running" title="Working">
+                <i />
+              </span>
+            )}
           </button>
-          <IconButton
-            label={`New thread in ${p.name}`}
-            disabled={dirty}
-            onClick={() => onNew(p)}
-          >
-            <Plus size={14} />
-          </IconButton>
-        </div>
-        {open && (
-          <div className="project-chat-list">
-            {(lists[i].data ?? []).filter(matches).map((c) => row(c))}
-            <button
-              className="new-project-chat"
-              disabled={dirty}
-              onClick={() => onNew(p)}
-            >
-              <Plus size={13} />
-              New thread
-            </button>
-            <button
-              className="new-project-chat"
+          <div className="sb-row-actions">
+            <IconButton
+              label={`Shared conversations in ${p.name}`}
               disabled={dirty}
               onClick={() => onShared(p)}
             >
               <Users size={13} />
-              Shared conversations
-            </button>
+            </IconButton>
+            <IconButton
+              label={`New thread in ${p.name}`}
+              disabled={dirty}
+              onClick={() => onNew(p)}
+            >
+              <Plus size={14} />
+            </IconButton>
+          </div>
+        </div>
+        {isOpen && (
+          <div className="sb-thread-list">
+            {visible.map((c) => threadRow(c))}
+            {!chats.length && (
+              <button
+                className="sb-thread sb-ghost"
+                disabled={dirty}
+                onClick={() => onNew(p)}
+              >
+                <span className="sb-thread-title">Start a thread</span>
+              </button>
+            )}
+            {chats.length > THREADS_PER_PROJECT && (
+              <button
+                className="sb-thread sb-ghost"
+                onClick={() => setShowAll((s) => ({ ...s, [p.id]: !more }))}
+              >
+                <span className="sb-thread-title">
+                  {more
+                    ? "Show less"
+                    : `Show ${chats.length - THREADS_PER_PROJECT} more`}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </section>
     );
   };
+
   function renderFolder(node: ProjectFolderNode): React.ReactNode {
     return (
       <>
         {node.folders.map((folder) => {
           const key = "folder:" + folder.path;
-          const open = expanded[key] ?? true;
+          const isOpen = expanded[key] ?? true;
           return (
             <section
               key={folder.path}
-              className="virtual-project-folder"
+              className="sb-folder"
               aria-label={`Folder ${folder.path}`}
             >
               <button
-                className="virtual-folder-heading"
-                aria-label={`${open ? "Collapse" : "Expand"} folder ${folder.path}`}
-                aria-expanded={open}
+                onDragOver={(e) => {
+                  dragOver(e, { kind: "folder", path: folder.path });
+                  openWhileDragging(key, isOpen);
+                }}
+                onDrop={(e) => dropOn(e, { kind: "folder", path: folder.path })}
+                className={`sb-folder-toggle ${
+                  drop?.kind === "folder" && drop.path === folder.path
+                    ? "drop-into"
+                    : ""
+                }`}
+                aria-label={`${isOpen ? "Collapse" : "Expand"} folder ${folder.path}`}
+                aria-expanded={isOpen}
                 onClick={() =>
-                  setExpanded((state) => ({ ...state, [key]: !open }))
+                  setExpanded((state) => ({ ...state, [key]: !isOpen }))
                 }
               >
-                <ChevronRight size={12} />
-                {open ? <FolderOpen size={15} /> : <Folder size={15} />}
                 <span>{folder.name}</span>
+                <ChevronRight size={11} />
               </button>
-              {open && (
-                <div className="virtual-folder-children">
-                  {renderFolder(folder)}
-                </div>
-              )}
+              {isOpen && renderFolder(folder)}
             </section>
           );
         })}
@@ -215,8 +555,229 @@ export function ProjectSidebar({
       </>
     );
   }
+
+  const card = (c: ChatSummary) => {
+    const p = byId.get(c.projectId);
+    const isUnread = unread(c);
+    const state = c.waiting
+      ? { text: "Needs your input", tone: "waiting" }
+      : c.running
+        ? { text: "Working…", tone: "running" }
+        : c.snoozedUntil && c.snoozedUntil <= now
+          ? { text: "Woke up", tone: "unread" }
+          : isUnread
+            ? { text: "New reply", tone: "unread" }
+            : { text: shortAge(c.updated, now) + " ago", tone: "" };
+    return (
+      <div
+        key={c.id}
+        role="button"
+        tabIndex={0}
+        aria-disabled={dirty}
+        className={`sb-card ${chatId === c.id ? "selected" : ""} ${isUnread ? "unread" : ""}`}
+        onClick={() => open(c)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open(c);
+          }
+        }}
+      >
+        <div className="sb-card-top">
+          <ProjectBadge name={p?.name ?? "?"} />
+          <span className="sb-card-project">{p?.name}</span>
+          <div className="sb-card-actions">
+            {!c.waiting && (
+              <SnoozeMenu
+                now={now}
+                onSnooze={(until) => void triage(c, { kind: "snooze", until })}
+              />
+            )}
+            {!c.running && !c.waiting && (
+              <button
+                className="sb-card-action"
+                title="Settle — hide until something new happens"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void triage(c, { kind: "settle" });
+                }}
+              >
+                <Check size={13} />
+                Settle
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="sb-card-title">{c.title}</div>
+        <div className="sb-card-meta">
+          <span className="sb-card-scope">
+            {c.scope.kind === "pr" && <GitPullRequest size={11} />}
+            {scopeLabel(c)}
+          </span>
+          <span className={`sb-card-state ${state.tone}`}>
+            {state.tone && <i />}
+            {state.text}
+          </span>
+          {c.provider && (
+            <span className="sb-card-provider">
+              <ProviderIcon provider={c.provider} />
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const compactRow = (c: ChatSummary, kind: "snoozed" | "settled") => {
+    const p = byId.get(c.projectId);
+    return (
+      <div
+        key={c.id}
+        role="button"
+        tabIndex={0}
+        className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
+        onClick={() => open(c)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") open(c);
+        }}
+      >
+        <ProjectBadge name={p?.name ?? "?"} />
+        <span className="sb-compact-title">{c.title}</span>
+        <small>
+          {kind === "snoozed"
+            ? wakeLabel(c.snoozedUntil!, new Date(now))
+            : shortAge(c.updated, now)}
+        </small>
+        <button
+          className="sb-card-action icon"
+          title={kind === "snoozed" ? "Wake now" : "Move back to activity"}
+          aria-label={kind === "snoozed" ? "Wake now" : "Unsettle"}
+          onClick={(e) => {
+            e.stopPropagation();
+            void triage(c, { kind: kind === "snoozed" ? "wake" : "unsettle" });
+          }}
+        >
+          {kind === "snoozed" ? <Sunrise size={13} /> : <RotateCcw size={13} />}
+        </button>
+      </div>
+    );
+  };
+
+  const shelf = (
+    kind: "snoozed" | "settled",
+    label: string,
+    items: ChatSummary[],
+  ) =>
+    items.length > 0 && (
+      <section className="sb-shelf">
+        <button
+          className="sb-shelf-toggle"
+          aria-expanded={shelves[kind]}
+          onClick={() => setShelves((s) => ({ ...s, [kind]: !s[kind] }))}
+        >
+          <span>
+            {label} <b>{items.length}</b>
+          </span>
+          <hr />
+          <ChevronRight size={12} />
+        </button>
+        {shelves[kind] && (
+          <div className="sb-shelf-list">
+            {items.map((c) => compactRow(c, kind))}
+          </div>
+        )}
+      </section>
+    );
+
+  const activity = (
+    <div className="sb-scroll sb-activity">
+      <div className="sb-view-heading">
+        <h2>Activity</h2>
+        <small>
+          {sections.active.length
+            ? `${sections.active.length} open`
+            : "All settled"}
+        </small>
+      </div>
+      <div className="sb-cards">{sections.active.map(card)}</div>
+      {!sections.active.length && (
+        <div className="sb-empty">
+          <span className="sb-empty-icon">
+            <Check size={18} />
+          </span>
+          <strong>Inbox zero</strong>
+          <p>Threads come back here when an agent replies or needs you.</p>
+        </div>
+      )}
+      {shelf("snoozed", "Snoozed", sections.snoozed)}
+      {shelf("settled", "Settled", sections.settled)}
+    </div>
+  );
+
+  const threads = (
+    <div className="sb-scroll">
+      <nav className="sb-nav">
+        <button
+          className="sb-nav-item primary"
+          disabled={dirty || !projects.length}
+          onClick={() => {
+            const p = byId.get(projectId ?? "") ?? projects[0];
+            if (p) onNew(p);
+          }}
+        >
+          <SquarePen size={15} />
+          New thread
+        </button>
+        <button className="sb-nav-item" disabled={dirty} onClick={onInbox}>
+          <GitPullRequest size={15} />
+          Pull requests
+        </button>
+      </nav>
+      <div
+        className={`sb-section-heading ${
+          drop?.kind === "folder" && drop.path === "" ? "drop-into" : ""
+        }`}
+        title={dragging ? "Drop to move out of folders" : undefined}
+        onDragOver={(e) => dragOver(e, { kind: "folder", path: "" })}
+        onDrop={(e) => dropOn(e, { kind: "folder", path: "" })}
+      >
+        <h2>Projects</h2>
+        <div className="sb-row-actions">
+          <IconButton
+            label="Organize projects"
+            disabled={!projects.length}
+            onClick={() => setOrganizing(projectId ?? projects[0]?.id ?? "")}
+          >
+            <FolderTree size={13} />
+          </IconButton>
+          <IconButton label="Add project" disabled={dirty} onClick={onAdd}>
+            <Plus size={14} />
+          </IconButton>
+        </div>
+      </div>
+      {renderFolder(projectFolderTree(projects))}
+      {!projects.length && (
+        <p className="sb-note">Add a local Git folder to get started.</p>
+      )}
+    </div>
+  );
+
+  const results = all.filter(matches);
+  const searching = (
+    <div className="sb-scroll">
+      <div className="sb-view-heading">
+        <h2>Results</h2>
+        <small>{results.length}</small>
+      </div>
+      <div className="sb-thread-list flat">
+        {results.slice(0, 50).map((c) => threadRow(c, true))}
+      </div>
+      {!results.length && <p className="sb-note">No matching threads.</p>}
+    </div>
+  );
+
   return (
-    <>
+    <div className="sb">
       {organizing !== null && (
         <ProjectFolderDialog
           projects={projects}
@@ -224,67 +785,58 @@ export function ProjectSidebar({
           onClose={() => setOrganizing(null)}
         />
       )}
-      <div className="sidebar-search">
-        <Search size={15} />
-        <input
-          aria-label="Search threads"
-          placeholder="Search threads…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="projects-list">
-        <section className="recent-threads">
-          <h2>{search ? "Search results" : "Recent"}</h2>
-          {all
-            .filter(matches)
-            .slice(0, search ? 30 : 5)
-            .map((c) => row(c, true))}
-          {!all.filter(matches).length && (
-            <p className="sidebar-empty-note">
-              {search
-                ? "No matching threads."
-                : "Your conversations will appear here."}
-            </p>
-          )}
-        </section>
-        <div className="sidebar-section-heading">
-          <h2>Projects</h2>
-          <div className="sidebar-heading-actions">
-            <IconButton
-              label="Organize projects"
-              disabled={!projects.length}
-              onClick={() => setOrganizing(projectId ?? projects[0]?.id ?? "")}
+      <div className="sb-top">
+        <div className="sb-search">
+          <Search size={13} />
+          <input
+            aria-label="Search threads"
+            placeholder="Search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setSearch("");
+            }}
+          />
+          {search && (
+            <button
+              className="sb-search-clear"
+              aria-label="Clear search"
+              onClick={() => setSearch("")}
             >
-              <Folder size={15} />
-            </IconButton>
-            <IconButton label="Add project" disabled={dirty} onClick={onAdd}>
-              <Plus size={15} />
-            </IconButton>
-          </div>
+              <X size={12} />
+            </button>
+          )}
         </div>
-        {renderFolder(projectFolderTree(projects))}
-        {!projects.length && (
-          <p className="project-sidebar-note">
-            Add a local Git folder to get started.
-          </p>
-        )}
-      </div>
-      <footer>
-        <button disabled={dirty} onClick={onInbox}>
-          <GitPullRequest size={15} />
-          Pull request inbox
+        <button
+          className={`sb-bell ${view === "activity" ? "active" : ""}`}
+          aria-pressed={view === "activity"}
+          aria-label="View activity"
+          title="View activity  ⌥⌘U"
+          onClick={() => {
+            setSearch("");
+            setView((v) => (v === "activity" ? "threads" : "activity"));
+          }}
+        >
+          <Bell size={15} />
+          {attention > 0 && (
+            <span className="sb-bell-count">
+              {attention > 9 ? "9+" : attention}
+            </span>
+          )}
         </button>
-        <div className="sidebar-account">
-          <button onClick={onAccount}>
-            <LogIn size={14} />
-            {account ?? "Connect Gitea"}
-          </button>
-          <IconButton label="Open settings" onClick={onSettings}>
-            <Settings2 size={15} />
-          </IconButton>
-        </div>
-      </footer>
-    </>
+      </div>
+      {query ? searching : view === "activity" ? activity : threads}
+      <div className="sb-footer">
+        <button className="sb-account" onClick={onAccount}>
+          <span className="sb-avatar" aria-hidden>
+            {(account ?? "?").slice(0, 2).toUpperCase()}
+          </span>
+          <span>{account ?? "Connect Gitea"}</span>
+        </button>
+        <IconButton label="Open settings" onClick={onSettings}>
+          <Settings2 size={15} />
+        </IconButton>
+      </div>
+    </div>
   );
 }

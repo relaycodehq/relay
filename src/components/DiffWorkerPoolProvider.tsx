@@ -3,6 +3,7 @@ import { WorkerPoolContext } from "@pierre/diffs/react";
 import { WorkerPoolManager } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
 import { useEffect, useState, type ReactNode } from "react";
+import { useSyntaxThemes } from "../lib/appearance";
 let shared:
   | {
       pool: WorkerPoolManager;
@@ -13,6 +14,7 @@ let shared:
 export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
   const [pool, setPool] = useState<WorkerPoolManager>();
   const [error, setError] = useState("");
+  const syntaxThemes = useSyntaxThemes();
   useEffect(() => {
     const entry = (shared ??= {
       pool: new WorkerPoolManager(
@@ -22,7 +24,7 @@ export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
           totalASTLRUCacheSize: 1,
         },
         {
-          theme: { light: "pierre-light", dark: "pierre-dark" },
+          theme: syntaxThemes,
           preferredHighlighter: "shiki-js",
           tokenizeMaxLineLength: 1000,
           useTokenTransformer: true,
@@ -51,6 +53,10 @@ export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
         }, 10000);
     };
   }, []);
+  // Workers highlight with the pool's theme; switching themes re-tokenizes.
+  useEffect(() => {
+    void pool?.setRenderOptions({ theme: syntaxThemes }).catch(() => {});
+  }, [pool, syntaxThemes]);
   if (error)
     return <div className="empty small">Syntax worker failed: {error}</div>;
   return pool ? (

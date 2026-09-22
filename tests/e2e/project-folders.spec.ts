@@ -73,7 +73,7 @@ test("organizes virtual folders, preserves child expansion across restart, and c
     await move("web-store", "Work/Frontend");
     await move("acme-service", "Work");
     await page
-      .locator(".project-select")
+      .locator(".sb-project-name")
       .filter({ hasText: "web-store" })
       .click();
     await page

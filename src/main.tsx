@@ -4,8 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/ui";
 import App from "./App";
 import "./styles.css";
-document.documentElement.dataset.theme =
-  localStorage.getItem("theme") ?? "system";
+import { initAppearance } from "./lib/appearance";
+initAppearance();
 const client = new QueryClient({
   defaultOptions: {
     queries: {

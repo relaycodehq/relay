@@ -10,7 +10,11 @@ import { questionContext } from "./questions";
 import { Projects } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
-import { chatScopeSchema, projectChatSendSchema } from "../shared/projects";
+import {
+  chatScopeSchema,
+  chatTriageSchema,
+  projectChatSendSchema,
+} from "../shared/projects";
 import { LiveSync } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
 import { digest, flushGitOperations } from "./working-tree";
@@ -35,6 +39,8 @@ import {
 import { launchLineQuestion } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
+import { listClaudeModels } from "./rooms/claude-project";
+import { readProviderUsage } from "./provider-usage";
 import { ProjectChecks } from "./checks/service";
 import { BlameService } from "./blame";
 import { detectProject } from "./checks/detect";
@@ -46,6 +52,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   nativeTheme,
   net,
   safeStorage,
@@ -395,6 +402,12 @@ async function dispatch(method: string, args: unknown[]) {
         idSchema.parse(args[0]),
         projectFolderSchema.parse(args[1]),
       );
+    case "moveProject":
+      return projects.move(
+        idSchema.parse(args[0]),
+        projectFolderSchema.parse(args[1]),
+        idSchema.nullable().parse(args[2]),
+      );
     case "projects":
       return projects.list(client);
     case "addProject": {
@@ -410,6 +423,11 @@ async function dispatch(method: string, args: unknown[]) {
       return projectChats.setScope(
         idSchema.parse(args[0]),
         chatScopeSchema.parse(args[1]),
+      );
+    case "triageProjectChat":
+      return projectChats.triage(
+        idSchema.parse(args[0]),
+        chatTriageSchema.parse(args[1]),
       );
     case "projectCommands": {
       const root = await projects.root(idSchema.parse(args[0]));
@@ -550,8 +568,12 @@ async function dispatch(method: string, args: unknown[]) {
         idSchema.parse(args[0]),
         chatScopeSchema.parse(args[1]),
       );
-    case "projectChat":
-      return projectChats.get(idSchema.parse(args[0]));
+    case "projectChat": {
+      const id = idSchema.parse(args[0]);
+      const chat = await projectChats.get(id);
+      projectChats.ensureTitle(id);
+      return chat;
+    }
     case "projectChatImage":
       return projectChats.image(
         idSchema.parse(args[0]),
@@ -564,6 +586,11 @@ async function dispatch(method: string, args: unknown[]) {
       );
     case "resumeProjectChat":
       return projectChats.resume(idSchema.parse(args[0]));
+    case "compactProjectChat":
+      return projectChats.compact(
+        idSchema.parse(args[0]),
+        args[1] == null ? undefined : idSchema.parse(args[1]),
+      );
     case "projectChatQueueAction":
       return projectChats.queueAction(
         idSchema.parse(args[0]),
@@ -1134,6 +1161,10 @@ async function dispatch(method: string, args: unknown[]) {
       });
       return settings;
     }
+    case "claudeModels":
+      return listClaudeModels();
+    case "providerUsage":
+      return readProviderUsage(z.enum(["claude", "codex"]).parse(args[0]));
     case "askCodex": {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);
@@ -1171,6 +1202,28 @@ async function dispatch(method: string, args: unknown[]) {
         bodySchema.parse(args[5]),
         requireClient().account.server,
       );
+      return;
+    }
+    case "applyAppearance": {
+      const appearance = z
+        .object({
+          kind: z.enum(["light", "dark"]),
+          background: z.string().regex(/^#[0-9a-f]{6}$/i),
+          icon: z
+            .string()
+            .max(2_000_000)
+            .regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
+        })
+        .strict()
+        .parse(args[0]);
+      // Native chrome (vibrancy, menus, scrollbars) follows the theme's mode.
+      nativeTheme.themeSource = appearance.kind;
+      win?.setBackgroundColor(appearance.background);
+      const icon = nativeImage.createFromDataURL(appearance.icon);
+      if (!icon.isEmpty()) {
+        if (process.platform === "darwin") app.dock?.setIcon(icon);
+        else win?.setIcon(icon);
+      }
       return;
     }
     case "openExternal": {

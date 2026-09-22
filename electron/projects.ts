@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import type { Gitea } from "./gitea";
 import type { Project } from "../shared/projects";
+import { moveProjectInList } from "../shared/project-folders";
 import { git, gitBytes, digest, workingTree } from "./working-tree";
 import { inspectRepository } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
@@ -36,6 +37,14 @@ export class Projects {
       const project = s.projects!.find((p) => p.id === id)!;
       if (folder) project.folder = folder;
       else delete project.folder;
+    });
+  }
+  /** Moves a project into `folder`, before `before` (or last in that folder). */
+  async move(id: string, folder: string, before: string | null) {
+    this.get(id);
+    if (before === id) return;
+    await this.store.update((s) => {
+      s.projects = moveProjectInList(s.projects!, id, folder, before);
     });
   }
   private linkAttempts = new Set<string>();

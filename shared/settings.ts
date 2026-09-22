@@ -5,7 +5,7 @@ export const modelSchema = z
   .trim()
   .min(1)
   .max(160)
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/, "Enter a valid Codex model ID.");
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/[\]-]*$/, "Enter a valid model ID.");
 export const reasoningEffortSchema = z.enum([
   "",
   "none",
@@ -38,6 +38,30 @@ const presetEfforts: Record<string, ReasoningEffort[]> = {
   "gpt-5.6-terra": [...commonEfforts, "max", "ultra"],
   "gpt-6-astra": [...commonEfforts, "max", "ultra"],
 };
+export type ClaudeModel = {
+  id: string;
+  name: string;
+  description: string;
+  efforts: ReasoningEffort[];
+};
+/** Levels accepted by `claude --effort` and the Agent SDK. */
+export const claudeEfforts: ReasoningEffort[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+/** Only efforts Claude accepts; Codex-only levels fall back to its default. */
+export const claudeArgs = (choice: {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+}) => ({
+  model: choice.model,
+  effort: claudeEfforts.includes(choice.reasoningEffort)
+    ? choice.reasoningEffort
+    : "",
+});
 export const reasoningEffortsFor = (model: string): ReasoningEffort[] =>
   presetEfforts[model] ?? reasoningEffortSchema.options.filter((e) => e !== "");
 export const supportsEffort = (choice: {

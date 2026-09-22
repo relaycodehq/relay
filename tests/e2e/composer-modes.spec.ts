@@ -87,7 +87,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       document.documentElement.dataset.theme = "dark";
     });
     await page
-      .locator(".project-nav-heading")
+      .locator(".sb-project-row")
       .getByRole("button", { name: "web-store", exact: true })
       .click();
     await expect(
@@ -111,7 +111,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       .click();
     await page.getByRole("option", { name: "High", exact: true }).click();
     await page
-      .locator(".project-nav-heading")
+      .locator(".sb-project-row")
       .getByRole("button", { name: "personal-project", exact: true })
       .click();
     await expect(
@@ -124,7 +124,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       }),
     ).toBeVisible();
     await page
-      .locator(".project-nav-heading")
+      .locator(".sb-project-row")
       .getByRole("button", { name: "web-store", exact: true })
       .click();
     await expect(

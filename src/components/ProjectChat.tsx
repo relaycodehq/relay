@@ -32,6 +32,7 @@ import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer } from "./ProjectComposer";
 import { AgentTurn } from "./AgentTurn";
+import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import type { ProjectFileLink } from "../lib/project-file-links";
@@ -111,6 +112,25 @@ const Message = memo(function Message({
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
 }) {
+  if (m.compaction)
+    return (
+      <div
+        className="context-compaction"
+        data-message-id={m.id}
+        data-status={m.status}
+        role="status"
+      >
+        <span>
+          {m.status === "streaming"
+            ? "Compacting context…"
+            : m.status === "complete"
+              ? "Context compacted"
+              : m.status === "cancelled"
+                ? "Compaction stopped"
+                : (m.error ?? "Compaction failed")}
+        </span>
+      </div>
+    );
   return (
     <article
       className={`project-message ${m.role}`}
@@ -346,6 +366,10 @@ export function ProjectChat({
       : !m.parentId || !messages.some((p) => p.id === m.parentId),
   );
   const running = messages.some((m) => m.status === "streaming");
+  const context = latestContext(shown);
+  const compacting = shown.some(
+    (m) => m.compaction && m.status === "streaming",
+  );
   const draftKey = `chat-draft:${id}${root ? ":" + root.id : ""}`;
   const draft = drafts[draftKey] ?? localStorage.getItem(draftKey) ?? "";
   const onDraft = (v: string, key = draftKey) => {
@@ -619,9 +643,11 @@ export function ProjectChat({
               />
             ))}
             {!running &&
-              shown.some((m) => m.role === "assistant") &&
+              shown.some((m) => m.role === "assistant" && !m.compaction) &&
               ["cancelled", "failed"].includes(
-                shown.filter((m) => m.role === "assistant").at(-1)!.status,
+                shown
+                  .filter((m) => m.role === "assistant" && !m.compaction)
+                  .at(-1)!.status,
               ) &&
               history.data?.lastInput &&
               (history.data.lastInput.parentId ?? null) ===
@@ -776,6 +802,24 @@ export function ProjectChat({
           onStop={() => {
             if (chat) void api.cancelProjectChat(chat.id).catch(setError);
           }}
+          contextMeter={
+            chat &&
+            context && (
+              <ContextWindowMeter
+                usage={context.usage}
+                provider={context.provider}
+                compacting={compacting}
+                compactDisabled={running || busy}
+                onCompact={() => {
+                  setError(undefined);
+                  void api
+                    .compactProjectChat(chat.id, root?.id ?? null)
+                    .then(() => history.refetch())
+                    .catch(setError);
+                }}
+              />
+            )
+          }
           context={
             <>
               <button

@@ -299,6 +299,7 @@ test("keeps remembered reviews separate for each account and restores them after
   };
   const disconnect = async () => {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page
       .getByRole("button", { name: "Disconnect account", exact: true })
       .click();

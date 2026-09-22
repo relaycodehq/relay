@@ -41,6 +41,7 @@ import { api } from "../lib/api";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
 import { useTheme } from "../lib/useTheme";
+import { useSyntaxThemes } from "../lib/appearance";
 import DiffWorker from "../lib/diff.worker?worker";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 interface Props {
@@ -172,6 +173,7 @@ export function DiffViewer({
     } | null>(null);
   const revision = revisionOf(pull);
   const theme = useTheme();
+  const syntaxThemes = useSyntaxThemes();
   const [highlightLarge, setHighlightLarge] = useState(false);
   const isLarge =
     !!diff &&
@@ -487,7 +489,7 @@ export function DiffViewer({
               },
             });
           },
-          theme: { light: "pierre-light", dark: "pierre-dark" },
+          theme: syntaxThemes,
           themeType: theme,
           tokenizeMaxLength: highlightLarge ? 100000 : 5000,
           useTokenTransformer: true,

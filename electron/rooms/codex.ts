@@ -12,7 +12,7 @@ import { codexModelArgs, type ModelChoice } from "../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity } from "./activity";
 import { CodexAnswerStream } from "./answer-stream";
-import type { AgentActivity } from "../../shared/projects";
+import type { AgentActivity, ContextUsage } from "../../shared/projects";
 export interface AgentOptions {
   onControl?: (control: { steer: (text: string) => Promise<void> }) => void;
   cwd: string;
@@ -24,6 +24,9 @@ export interface AgentOptions {
   onActivity?: (activity: AgentActivity) => void;
   onTitle?: (title: string) => void;
   onPlan?: (text: string) => void;
+  onContext?: (usage: ContextUsage) => void;
+  /** Compact the resumed session instead of sending `prompt`. */
+  compact?: boolean;
   images?: {
     path: string;
     mimeType: "image/png" | "image/jpeg" | "image/webp";
@@ -103,6 +106,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   };
   const notification = (method: string, p: any) => {
     if (settled || (p.threadId && threadId && p.threadId !== threadId)) return;
+    if (method === "thread/tokenUsage/updated") {
+      const usage = codexContextUsage(p.tokenUsage);
+      if (usage) options.onContext?.(usage);
+    }
     if (method === "thread/name/updated" && typeof p.threadName === "string")
       options.onTitle?.(p.threadName);
     if (p.item?.type === "fileChange" && p.item.id && p.item.changes)
@@ -255,6 +262,14 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       threadId = started.thread.id;
       await options.session?.onId(threadId);
       options.signal.throwIfAborted();
+      if (options.compact) {
+        if (!options.session?.id)
+          throw new Error("There is no Codex session to compact yet.");
+        // Compaction runs as its own turn; turn/started and turn/completed settle it.
+        await transport.request("thread/compact/start", { threadId });
+        if (options.signal.aborted) abort();
+        return result;
+      }
       const turn = await transport.request("turn/start", {
         threadId,
         cwd: options.cwd,
@@ -321,4 +336,19 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     if (!sessionKey || !succeeded || options.signal.aborted)
       await connection.close();
   }
+}
+
+/** Codex reports the newest request's size as `last`; that is what fills the window. */
+export function codexContextUsage(value: any): ContextUsage | undefined {
+  const used = value?.last?.totalTokens;
+  if (typeof used !== "number" || !Number.isFinite(used) || used <= 0) return;
+  const max = value.modelContextWindow,
+    total = value.total?.totalTokens;
+  return {
+    usedTokens: used,
+    ...(typeof max === "number" && max > 0 ? { maxTokens: max } : {}),
+    ...(typeof total === "number" && total > used
+      ? { totalTokens: total }
+      : {}),
+  };
 }

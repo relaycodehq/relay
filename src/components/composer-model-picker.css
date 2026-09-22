@@ -54,9 +54,12 @@
 }
 .model-picker-popup {
   display: flex;
-  width: 362px;
+  width: 400px;
   max-width: calc(100vw - 24px);
   height: 366px;
+}
+.model-picker-popup:has(.usage-footer) {
+  height: 434px;
 }
 .model-picker-rail {
   width: 44px;
@@ -108,6 +111,13 @@
 .model-picker-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.model-picker-list {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -175,7 +185,14 @@
   font-size: 11px;
   margin-top: 5px;
 }
+.model-picker-row-label small > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .model-picker-row-label small .provider-glyph {
+  flex: none;
   width: 12px;
   height: 12px;
 }
@@ -235,6 +252,74 @@
   margin: 0;
   border-top: 1px solid var(--border);
 }
+.usage-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 8px 12px 9px;
+}
+.usage-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.usage-meters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.usage-meters[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+.usage-meter-top,
+.usage-meter-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.usage-meter-top > span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+}
+.usage-meter-bottom > span:first-child {
+  color: var(--text);
+}
+.usage-meter-bottom > span:last-child,
+.usage-limit {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.usage-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.usage-meter[data-pace="hot"] .usage-limit,
+.usage-meter[data-pace="spent"] .usage-limit {
+  color: #e36a5c;
+}
+.usage-track {
+  height: 5px;
+  margin: 5px 0 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
+  overflow: hidden;
+}
+.usage-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.usage-meter[data-pace="warn"] .usage-fill {
+  background: #e3a23a;
+}
+.usage-meter[data-pace="hot"] .usage-fill {
+  background: #ef6a5a;
+}
 .composer-select-popup {
   padding: 5px;
   min-width: 160px;
@@ -260,4 +345,87 @@
 }
 .model-picker-row[data-default] small {
   display: none;
+}
+
+.composer-tools .context-meter-trigger {
+  padding: 6px;
+  --context-ring: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+.context-meter-trigger[data-pace="warn"] {
+  --context-ring: #e3a23a;
+}
+.context-meter-trigger[data-pace="hot"] {
+  --context-ring: #ef6a5a;
+}
+.context-meter-trigger svg {
+  transform: rotate(-90deg);
+}
+.context-ring-track,
+.context-ring-fill {
+  fill: none;
+  stroke-width: 2.25;
+}
+.context-ring-track {
+  stroke: color-mix(in srgb, var(--muted) 28%, transparent);
+}
+.context-ring-fill {
+  stroke: var(--context-ring);
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.5s ease-out,
+    stroke 0.3s;
+}
+.context-meter-trigger[data-compacting] svg {
+  animation: context-compacting 1.2s ease-in-out infinite;
+}
+@keyframes context-compacting {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .context-ring-fill {
+    transition: none;
+  }
+  .context-meter-trigger[data-compacting] svg {
+    animation: none;
+  }
+}
+.context-meter-popup {
+  width: 236px;
+  padding: 10px 5px 5px;
+}
+.context-meter-popup .usage-meter {
+  padding: 0 7px;
+  display: grid;
+  gap: 2px;
+}
+.context-meter-note {
+  margin: 8px 7px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.context-compact {
+  width: calc(100% + 10px);
+  margin: 10px -5px -5px;
+  padding: 9px 12px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  justify-content: flex-start;
+}
+.context-compact > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.context-compact:not(:disabled):hover {
+  background: var(--hover);
+}
+.context-compact:disabled {
+  cursor: default;
+  color: var(--muted);
 }

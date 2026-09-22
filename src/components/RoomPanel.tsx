@@ -1,4 +1,5 @@
 import { LiveSyncControls } from "./LiveSyncControls";
+import type { SettingsCategory } from "./Settings";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -53,7 +54,7 @@ type Props = {
   onSelect: (path: string) => void;
   onClearTarget: () => void;
   onLink: () => void;
-  onAppSettings: () => void;
+  onAppSettings: (category?: SettingsCategory) => void;
 };
 type Draft = {
   text: string;
@@ -830,7 +831,7 @@ function RoomConnect({
   pull: Pull;
   onConnected: () => void;
   onInvited: (code: string) => Promise<void>;
-  onSettings: () => void;
+  onSettings: (category?: SettingsCategory) => void;
 }) {
   const access = useQuery({
     queryKey: ["room-access-info", pull.owner, pull.name],
@@ -910,7 +911,7 @@ function RoomConnect({
         </form>
       </details>
       {!!error && <ErrorBox error={error} />}
-      <button className="subtle" onClick={onSettings}>
+      <button className="subtle" onClick={() => onSettings("rooms")}>
         Hosting settings
       </button>
     </div>

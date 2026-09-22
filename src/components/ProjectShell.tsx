@@ -29,7 +29,7 @@ import {
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { Connected, SignIn } from "../ReviewSurface";
-import { Settings } from "./Settings";
+import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ProjectFileLink } from "../lib/project-file-links";
@@ -67,6 +67,7 @@ export default function ProjectShell() {
   });
   const [openPrRequest, setOpenPrRequest] = useState(0);
   const [choosePR, setChoosePR] = useState(false);
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
   const [settings, setSettings] = useState(false),
     [signin, setSignin] = useState(false),
     [error, setError] = useState<unknown>(),
@@ -394,7 +395,9 @@ export default function ProjectShell() {
   const account = boot.data.account;
   return (
     <div className={`app project-app platform-${boot.data.platform}`}>
-      <header className="titlebar project-titlebar">
+      <header
+        className={`titlebar project-titlebar ${projectsHidden ? "sidebar-collapsed" : ""}`}
+      >
         <div className="project-titlebar-brand">
           <span className="traffic-space" />
           <button
@@ -530,7 +533,12 @@ export default function ProjectShell() {
               account={account}
               initialWorkspace={boot.data.workspace}
               incomingLink={incoming}
-              onSettings={() => setSettings(true)}
+              onSettings={(category) => {
+                setSettingsCategory(
+                  category === "rooms" ? category : undefined,
+                );
+                setSettings(true);
+              }}
             />
           </div>
         ) : !project ? (
@@ -758,7 +766,15 @@ export default function ProjectShell() {
       {settings && (
         <Settings
           account={account ?? null}
-          onClose={() => setSettings(false)}
+          initialCategory={settingsCategory}
+          onClose={() => {
+            setSettings(false);
+            setSettingsCategory(undefined);
+          }}
+          onConnect={() => {
+            setSettings(false);
+            setSignin(true);
+          }}
           onDisconnect={async () => {
             await api.disconnect();
             qc.removeQueries({

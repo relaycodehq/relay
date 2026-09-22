@@ -11,9 +11,16 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { modelSchema, type ModelChoice } from "../../shared/settings";
+import {
+  modelSchema,
+  type ClaudeModel,
+  type ModelChoice,
+} from "../../shared/settings";
+import type { ProviderUsage } from "../../shared/provider-usage";
 import { OpenAI, ClaudeAI } from "../vendor/t3code/model-picker/ProviderIcons";
 import { scoreModelPickerSearch } from "../vendor/t3code/model-picker/modelPickerSearch";
+import { api } from "../lib/api";
+import { UsageMeters } from "./UsageMeters";
 import "./composer-model-picker.css";
 
 export type MessageProvider = "codex" | "claude" | "message";
@@ -24,6 +31,7 @@ type Model = {
   name: string;
   legacy?: boolean;
   custom?: boolean;
+  description?: string;
 };
 const models: Model[] = [
   { provider: "codex", id: "gpt-6-astra", name: "GPT-6-Astra" },
@@ -63,10 +71,15 @@ export function ProviderIcon({ provider }: { provider: MessageProvider }) {
 export function ComposerModelPicker({
   provider,
   choice,
+  claudeModel,
+  claudeModels,
   onSelect,
 }: {
   provider: MessageProvider;
   choice: ModelChoice | undefined;
+  claudeModel: string;
+  /** Listed by the installed Claude CLI; undefined while loading. */
+  claudeModels: ClaudeModel[] | undefined;
   onSelect: (provider: MessageProvider, model: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -78,16 +91,44 @@ export function ComposerModelPicker({
     readList(customsKey).filter((id) => modelSchema.safeParse(id).success),
   );
   const search = useRef<HTMLInputElement>(null);
+  const [usage, setUsage] = useState<
+    Partial<Record<"codex" | "claude", ProviderUsage>>
+  >({});
+  const [now, setNow] = useState(() => Date.now());
   const selectedKey = JSON.stringify([
     provider,
-    provider === "codex" ? choice?.model || "" : "",
+    provider === "codex"
+      ? choice?.model || ""
+      : provider === "claude"
+        ? claudeModel
+        : "",
   ]);
-  const catalog = [...models];
+  // CLI-listed Claude models sit above "Claude default", like Codex presets.
+  const catalog = models.flatMap((m): Model[] =>
+    m.provider === "claude"
+      ? [
+          ...(claudeModels ?? []).map((c) => ({
+            provider: "claude" as const,
+            id: c.id,
+            name: c.name,
+            description: c.description,
+          })),
+          m,
+        ]
+      : [m],
+  );
+  if (
+    claudeModel &&
+    !catalog.some((m) => m.provider === "claude" && m.id === claudeModel)
+  )
+    catalog.push({ provider: "claude", id: claudeModel, name: claudeModel });
   for (const id of [...customs, choice?.model || ""]) {
     if (id && !catalog.some((m) => m.provider === "codex" && m.id === id))
       catalog.push({ provider: "codex", id, name: id, custom: true });
   }
-  const current = catalog.find((m) => modelKey(m) === selectedKey)!;
+  const current =
+    catalog.find((m) => modelKey(m) === selectedKey) ??
+    catalog.find((m) => m.provider === provider && !m.id)!;
   const rows = catalog
     .filter((m) => {
       if (category === "favorites") return favorites.includes(modelKey(m));
@@ -140,6 +181,34 @@ export function ComposerModelPicker({
   useEffect(() => {
     localStorage.setItem(customsKey, JSON.stringify(customs));
   }, [customs]);
+  useEffect(() => {
+    if (!open) return;
+    let cancel = false;
+    for (const provider of ["codex", "claude"] as const) {
+      void api
+        .providerUsage(provider)
+        .then((value) => {
+          if (!cancel) setUsage((prev) => ({ ...prev, [provider]: value }));
+        })
+        .catch(() => {
+          if (!cancel) {
+            setUsage((prev) => ({
+              ...prev,
+              [provider]: {
+                provider,
+                windows: [],
+                message: "Couldn't read usage",
+              },
+            }));
+          }
+        });
+    }
+    const tick = setInterval(() => setNow(Date.now()), 20_000);
+    return () => {
+      cancel = true;
+      clearInterval(tick);
+    };
+  }, [open]);
   function changeCategory(next: Category) {
     setCategory(next);
     setQuery("");
@@ -246,132 +315,143 @@ export function ComposerModelPicker({
               )}
             </Toolbar.Root>
             <div className="model-picker-content">
-              <Combobox.Root<string>
-                inline
-                open
-                autoHighlight
-                items={rows.map(modelKey)}
-                filter={null}
-                inputValue={query}
-                onInputValueChange={setQuery}
-                value={selectedKey}
-                onValueChange={(key) => {
-                  const m = rows.find((row) => modelKey(row) === key);
-                  if (m) select(m);
-                }}
-              >
-                <div className="model-picker-search">
-                  <Search size={16} aria-hidden />
-                  <Combobox.Input
-                    ref={search}
-                    aria-label="Search models"
-                    placeholder="Search models…"
-                    autoComplete="off"
-                    spellCheck={false}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setOpen(false);
-                      }
-                    }}
-                  />
-                </div>
-                <div className="model-picker-scroll">
-                  <Combobox.List aria-label="Models">
-                    {rows.map((m, index) => {
-                      const key = modelKey(m),
-                        favorite = favorites.includes(key);
-                      return (
-                        <Fragment key={key}>
-                          {category === "codex" &&
-                            !query.trim() &&
-                            m.legacy &&
-                            legacyToggle}
-                          <Combobox.Item
-                            data-default={
-                              m.provider === "codex" && !m.id ? "" : undefined
-                            }
-                            onClick={() => {
-                              if (selectedKey === key) select(m);
-                            }}
-                            value={key}
-                            index={index}
-                            className="model-picker-row"
-                            aria-label={m.name}
-                          >
-                            <div className="model-picker-row-label">
-                              <span>{m.name}</span>
-                              <small>
-                                <ProviderIcon provider={m.provider} />
-                                {m.custom
-                                  ? "Custom Codex model"
-                                  : m.provider === "claude"
-                                    ? "Claude · CLI default"
-                                    : providerNames[m.provider]}
-                              </small>
-                            </div>
-                            <div className="model-picker-row-actions">
-                              {selectedKey === key && (
-                                <Check size={12} aria-hidden />
-                              )}
-                              {index < 9 && (
-                                <kbd>
-                                  {navigator.platform.includes("Mac")
-                                    ? "⌘"
-                                    : "Ctrl "}
-                                  {index + 1}
-                                </kbd>
-                              )}
-                              {m.provider !== "message" && (
-                                <button
-                                  type="button"
-                                  className="model-favorite"
-                                  aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
-                                  aria-pressed={favorite}
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onKeyDown={(e) => {
-                                    if (e.key !== "Escape" && e.key !== "Tab")
+              <div className="model-picker-list">
+                <Combobox.Root<string>
+                  inline
+                  open
+                  autoHighlight
+                  items={rows.map(modelKey)}
+                  filter={null}
+                  inputValue={query}
+                  onInputValueChange={setQuery}
+                  value={selectedKey}
+                  onValueChange={(key) => {
+                    const m = rows.find((row) => modelKey(row) === key);
+                    if (m) select(m);
+                  }}
+                >
+                  <div className="model-picker-search">
+                    <Search size={16} aria-hidden />
+                    <Combobox.Input
+                      ref={search}
+                      aria-label="Search models"
+                      placeholder="Search models…"
+                      autoComplete="off"
+                      spellCheck={false}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="model-picker-scroll">
+                    <Combobox.List aria-label="Models">
+                      {rows.map((m, index) => {
+                        const key = modelKey(m),
+                          favorite = favorites.includes(key);
+                        return (
+                          <Fragment key={key}>
+                            {category === "codex" &&
+                              !query.trim() &&
+                              m.legacy &&
+                              legacyToggle}
+                            <Combobox.Item
+                              data-default={
+                                m.provider !== "message" && !m.id
+                                  ? ""
+                                  : undefined
+                              }
+                              onClick={() => {
+                                if (selectedKey === key) select(m);
+                              }}
+                              value={key}
+                              index={index}
+                              className="model-picker-row"
+                              aria-label={m.name}
+                            >
+                              <div className="model-picker-row-label">
+                                <span>{m.name}</span>
+                                <small>
+                                  <ProviderIcon provider={m.provider} />
+                                  <span>
+                                    {m.custom
+                                      ? "Custom Codex model"
+                                      : m.provider === "claude"
+                                        ? m.id
+                                          ? m.description || "Claude"
+                                          : "Claude · CLI default"
+                                        : providerNames[m.provider]}
+                                  </span>
+                                </small>
+                              </div>
+                              <div className="model-picker-row-actions">
+                                {selectedKey === key && (
+                                  <Check size={12} aria-hidden />
+                                )}
+                                {index < 9 && (
+                                  <kbd>
+                                    {navigator.platform.includes("Mac")
+                                      ? "⌘"
+                                      : "Ctrl "}
+                                    {index + 1}
+                                  </kbd>
+                                )}
+                                {m.provider !== "message" && (
+                                  <button
+                                    type="button"
+                                    className="model-favorite"
+                                    aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
+                                    aria-pressed={favorite}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key !== "Escape" && e.key !== "Tab")
+                                        e.stopPropagation();
+                                    }}
+                                    onClick={(e) => {
                                       e.stopPropagation();
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFavorites((prev) =>
-                                      favorite
-                                        ? prev.filter((v) => v !== key)
-                                        : [...prev, key].slice(-100),
-                                    );
-                                  }}
-                                >
-                                  <Star
-                                    size={14}
-                                    fill={favorite ? "currentColor" : "none"}
-                                  />
-                                </button>
-                              )}
-                            </div>
-                          </Combobox.Item>
-                        </Fragment>
-                      );
-                    })}
-                  </Combobox.List>
-                  {rows.length === 0 && (
-                    <p className="model-picker-empty">
-                      {category === "favorites" && !query
-                        ? "Star models to keep them here."
-                        : "No matching models."}
-                    </p>
-                  )}
-                  {category === "codex" &&
-                    !query.trim() &&
-                    !legacy &&
-                    legacyToggle}
-                </div>
-              </Combobox.Root>
-              {category === "claude" && (
-                <p className="model-picker-note">
-                  Uses the model configured in your Claude CLI.
-                </p>
+                                      setFavorites((prev) =>
+                                        favorite
+                                          ? prev.filter((v) => v !== key)
+                                          : [...prev, key].slice(-100),
+                                      );
+                                    }}
+                                  >
+                                    <Star
+                                      size={14}
+                                      fill={favorite ? "currentColor" : "none"}
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                            </Combobox.Item>
+                          </Fragment>
+                        );
+                      })}
+                    </Combobox.List>
+                    {category === "claude" && !claudeModels && (
+                      <p className="model-picker-note">
+                        Loading models from Claude…
+                      </p>
+                    )}
+                    {rows.length === 0 && (
+                      <p className="model-picker-empty">
+                        {category === "favorites" && !query
+                          ? "Star models to keep them here."
+                          : "No matching models."}
+                      </p>
+                    )}
+                    {category === "codex" &&
+                      !query.trim() &&
+                      !legacy &&
+                      legacyToggle}
+                  </div>
+                </Combobox.Root>
+              </div>
+              {(category === "claude" || category === "codex") && (
+                <UsageMeters usage={usage[category]} now={now} />
               )}
               {category === "message" && (
                 <p className="model-picker-note">

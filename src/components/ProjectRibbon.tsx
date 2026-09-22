@@ -4,7 +4,7 @@ import { useId } from "react";
 export function ProjectRibbon() {
   const id = useId();
   const sweep =
-    "M1 10 C65 3 151 20 239 8 C172 24 71 7 1 10 Z";
+    "M5 15.5 C62 10 148 9 234 5.5 C239 5.3 240 10.2 235.5 11 C150 15 72 19.5 7 20.5 C2 20.8 1 16 5 15.5 Z";
   return (
     <svg
       className="project-name-ribbon"

@@ -21,6 +21,7 @@ import { FolderGit2, Save, Undo2, Redo2, RotateCw } from "lucide-react";
 import type { LocalFile, Pull } from "../../shared/types";
 import { api } from "../lib/api";
 import { useTheme } from "../lib/useTheme";
+import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import DiffWorker from "../lib/diff.worker?worker";
@@ -63,6 +64,7 @@ export default function LocalFileEditor({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const syntaxThemes = useSyntaxThemes();
   const [source, setSource] = useState<LocalFile>();
   const [diff, setDiff] = useState<FileDiffMetadata>();
   const [error, setError] = useState<unknown>();
@@ -570,7 +572,7 @@ export default function LocalFileEditor({
                   options={{
                     ...symbols.handlers,
                     useTokenTransformer: true,
-                    theme: { light: "pierre-light", dark: "pierre-dark" },
+                    theme: syntaxThemes,
                     themeType: theme,
                     diffStyle: "split",
                     expandUnchanged: true,

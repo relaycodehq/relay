@@ -2,7 +2,8 @@ import type { ProjectApi } from "./projects";
 import type { LiveSyncApi } from "./live-sync";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
-import type { AISettings } from "./settings";
+import type { AISettings, ClaudeModel } from "./settings";
+import type { ProviderUsage } from "./provider-usage";
 import type { LineQuestion } from "./questions";
 import type {
   ProjectCheckInfo,
@@ -233,6 +234,8 @@ export interface Api
   ): Promise<string[]>;
   aiSettings(): Promise<AISettings>;
   saveAISettings(settings: AISettings): Promise<AISettings>;
+  providerUsage(provider: "claude" | "codex"): Promise<ProviderUsage>;
+  claudeModels(): Promise<ClaudeModel[]>;
   askCodex(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   retryLoginRestore(): Promise<void>;
@@ -291,6 +294,12 @@ export interface Api
     comment: string,
   ): Promise<void>;
   openExternal(url: string): Promise<void>;
+  /** Syncs native chrome and the dock icon with the in-app theme. */
+  applyAppearance(appearance: {
+    kind: "light" | "dark";
+    background: string;
+    icon: string;
+  }): Promise<void>;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
 }

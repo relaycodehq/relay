@@ -2,18 +2,8 @@
   display: block;
   flex-shrink: 0;
   object-fit: contain;
-  /* Desaturate the original fold gradients, then darken for a light surface. */
-  filter: grayscale(1) invert(1);
-}
-
-:root[data-theme="dark"] .relay-mark {
-  filter: grayscale(1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="dark"]) .relay-mark {
-    filter: grayscale(1);
-  }
+  /* Tinted from the theme accent in RelayMark. */
+  filter: drop-shadow(0 1px 1px #0003);
 }
 
 .relay-brand-toggle {

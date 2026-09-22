@@ -192,3 +192,31 @@ Relay’s runtime permission labels/descriptions, Build/Plan toggle, Codex sandb
 © Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
 
 Package source and documentation: https://github.com/anthropics/claude-agent-sdk-typescript. This dependency is not covered by T3 Code’s MIT license.
+
+## OpenUsage
+
+Claude and Codex session/weekly limits in the model picker adapt OpenUsage’s usage-window mapping and burn-rate pacing. Relay reads the local Claude Code and Codex CLI sign-in and calls the provider usage APIs itself; the OpenUsage application is not required.
+
+Source: https://github.com/robinebers/openusage
+
+MIT License
+
+Copyright (c) 2026 Robin Ebers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

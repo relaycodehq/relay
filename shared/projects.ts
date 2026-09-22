@@ -33,8 +33,41 @@ export interface ChatSummary {
   created: number;
   updated: number;
   shared?: { roomId: string; server: string; memberId: string };
+  /** Provider of the latest answer, for the activity card. */
+  provider?: "codex" | "claude";
+  /** No messages yet; absent on summaries saved before this field existed. */
+  empty?: boolean;
+  /** Settled until a newer update; see shared/chat-activity. */
+  settledAt?: number;
+  snoozedAt?: number;
+  snoozedUntil?: number;
+  /** Live state added by list(); never persisted. */
+  running?: boolean;
+  waiting?: boolean;
+}
+export const chatTriageSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("settle") }).strict(),
+  z.object({ kind: z.literal("unsettle") }).strict(),
+  z
+    .object({
+      kind: z.literal("snooze"),
+      until: z.number().int().positive(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("wake") }).strict(),
+]);
+export type ChatTriage = z.infer<typeof chatTriageSchema>;
+/** How full the provider session's context window was after this answer. */
+export interface ContextUsage {
+  usedTokens: number;
+  maxTokens?: number;
+  /** Tokens processed across the whole session, when the provider reports it. */
+  totalTokens?: number;
 }
 export interface ChatMessage {
+  /** Local marker: this answer compacted the provider session instead of replying. */
+  compaction?: boolean;
+  context?: ContextUsage;
   /** Local proposed-plan action; shared chats receive the final text only. */
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
@@ -151,8 +184,11 @@ export interface ProjectApi {
     messageId: string,
   ): Promise<void>;
   resumeProjectChat(id: string): Promise<void>;
+  compactProjectChat(id: string, parentId?: string | null): Promise<void>;
   setProjectFolder(id: string, folder: string): Promise<void>;
+  moveProject(id: string, folder: string, before: string | null): Promise<void>;
   setProjectChatScope(id: string, scope: ChatScope): Promise<ChatSummary>;
+  triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   projectCommands(
     id: string,
     provider: "codex" | "claude",

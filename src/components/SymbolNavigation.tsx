@@ -15,6 +15,7 @@ import type {
 } from "../../shared/checks";
 import { api } from "../lib/api";
 import { useTheme } from "../lib/useTheme";
+import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 
@@ -364,6 +365,7 @@ function SymbolPreview({
   const [selection, setSelection] = useState<SymbolQuery>();
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null),
     theme = useTheme();
+  const syntaxThemes = useSyntaxThemes();
   useEffect(() => {
     let current = true;
     setSource(undefined);
@@ -449,7 +451,7 @@ function SymbolPreview({
             range: { start: location.line, end: location.line },
           }}
           options={{
-            theme: { light: "pierre-light", dark: "pierre-dark" },
+            theme: syntaxThemes,
             themeType: theme,
             disableFileHeader: true,
             preferredHighlighter: "shiki-js",

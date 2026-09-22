@@ -263,6 +263,18 @@ if (args.includes("--permission-prompt-tool")) {
         method: "turn/started",
         params: { threadId: "fixture-thread", turn: { id: "fixture-turn" } },
       });
+      send({
+        method: "thread/tokenUsage/updated",
+        params: {
+          threadId: "fixture-thread",
+          turnId: "fixture-turn",
+          tokenUsage: {
+            last: { totalTokens: 193_500 },
+            total: { totalTokens: 412_000 },
+            modelContextWindow: 258_000,
+          },
+        },
+      });
       if (
         !approvalGranted &&
         m.params.input[0].text
@@ -447,6 +459,34 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         }, 2600);
+    } else if (m.method === "thread/compact/start") {
+      record({ compact: m.params });
+      send({ id: m.id, result: {} });
+      send({
+        method: "turn/started",
+        params: { threadId: "fixture-thread", turn: { id: "fixture-compact" } },
+      });
+      setTimeout(() => {
+        send({
+          method: "thread/tokenUsage/updated",
+          params: {
+            threadId: "fixture-thread",
+            turnId: "fixture-compact",
+            tokenUsage: {
+              last: { totalTokens: 18_000 },
+              total: { totalTokens: 430_000 },
+              modelContextWindow: 258_000,
+            },
+          },
+        });
+        send({
+          method: "turn/completed",
+          params: {
+            threadId: "fixture-thread",
+            turn: { id: "fixture-compact", status: "completed" },
+          },
+        });
+      }, 300);
     } else if (m.method === "turn/steer") {
       record({ steer: m.params });
       send({ id: m.id, result: { turnId: "fixture-turn" } });

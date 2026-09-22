@@ -7,7 +7,7 @@ export async function openSignIn(page: Page) {
 }
 export async function openInbox(page: Page) {
   const button = page.getByRole("button", {
-    name: "Pull request inbox",
+    name: "Pull requests",
     exact: true,
   });
   if (await button.isVisible()) await button.click();

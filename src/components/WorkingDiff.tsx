@@ -4,9 +4,11 @@ import type { FilePair } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import DiffWorker from "../lib/diff.worker?worker";
 import { useTheme } from "../lib/useTheme";
+import { useSyntaxThemes } from "../lib/appearance";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 import { ErrorBox, Loading } from "./ui";
 export function WorkingDiff({ pair }: { pair: FilePair }) {
+  const syntaxThemes = useSyntaxThemes();
   const theme = useTheme(),
     [diff, setDiff] = useState<FileDiffMetadata | null>(null),
     [error, setError] = useState<unknown>();
@@ -46,7 +48,7 @@ export function WorkingDiff({ pair }: { pair: FilePair }) {
       className="working-diff"
       items={items}
       options={{
-        theme: { light: "pierre-light", dark: "pierre-dark" },
+        theme: syntaxThemes,
         themeType: theme,
         preferredHighlighter: "shiki-js",
         diffStyle: "split",

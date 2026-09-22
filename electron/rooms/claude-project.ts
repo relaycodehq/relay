@@ -9,6 +9,8 @@ import type {
 import { findExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
 import type { AgentQuestion } from "../../shared/agent-modes";
+import type { ContextUsage } from "../../shared/projects";
+import type { ClaudeModel } from "../../shared/settings";
 
 async function sdk(): Promise<typeof import("@anthropic-ai/claude-agent-sdk")> {
   // Keep the SDK's ESM runtime intact inside Electron's CommonJS main bundle.
@@ -66,12 +68,60 @@ type ClaudeSession = {
   iterator: AsyncIterator<import("@anthropic-ai/claude-agent-sdk").SDKMessage>;
   plan: string;
   threadId?: string;
+  /** Learned from the first result; the SDK only reports it per finished turn. */
+  contextWindow?: number;
   busy: boolean;
 };
 const sessions = new Map<string, ClaudeSession>();
 function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();
+}
+let modelList: Promise<ClaudeModel[]> | undefined;
+/** Asks the installed CLI which models this account can use, once per launch. */
+export function listClaudeModels(): Promise<ClaudeModel[]> {
+  modelList ??= (async () => {
+    const [{ query }, executable] = await Promise.all([
+      sdk(),
+      findExecutable("claude"),
+    ]);
+    const input = new ClaudeInput();
+    const stream = query({
+      prompt: input.read(),
+      options: {
+        pathToClaudeCodeExecutable: executable,
+        settingSources: ["user"],
+        strictMcpConfig: true,
+        mcpServers: {},
+      },
+    });
+    try {
+      const models = await Promise.race([
+        stream.supportedModels(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Claude did not list models.")),
+            20000,
+          ),
+        ),
+      ]);
+      return (models ?? [])
+        .filter((m) => m.value !== "default")
+        .map((m) => ({
+          id: m.value,
+          name: m.displayName || m.value,
+          description: m.description,
+          efforts:
+            m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
+        }));
+    } finally {
+      input.close();
+      stream.close();
+    }
+  })();
+  // A failed probe (CLI missing, signed out) should be retried on next open.
+  modelList.catch(() => (modelList = undefined));
+  return modelList;
 }
 export function closeClaudeSession(key: string) {
   const session = sessions.get(key);
@@ -137,6 +187,9 @@ export async function runClaudeProject(
         strictMcpConfig: true,
         mcpServers: {},
         ...(options.model ? { model: options.model } : {}),
+        ...(options.effort
+          ? { effort: options.effort as NonNullable<Options["effort"]> }
+          : {}),
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -250,15 +303,30 @@ export async function runClaudeProject(
       })),
     );
     options.signal.throwIfAborted();
+    if (options.compact && !session.threadId && !options.session?.id)
+      throw new Error("There is no Claude session to compact yet.");
     session.input.push({
       type: "user",
       session_id: session.threadId ?? "",
       parent_tool_use_id: null,
       message: {
         role: "user",
-        content: [{ type: "text", text: options.prompt }, ...images],
+        content: options.compact
+          ? "/compact"
+          : [{ type: "text", text: options.prompt }, ...images],
       },
     });
+    let context: ContextUsage | undefined;
+    const report = (usedTokens: number) => {
+      if (!(usedTokens > 0)) return;
+      context = {
+        usedTokens,
+        ...(session!.contextWindow
+          ? { maxTokens: session!.contextWindow }
+          : {}),
+      };
+      options.onContext?.(context);
+    };
     while (true) {
       const next = await session.iterator.next();
       if (next.done)
@@ -285,7 +353,11 @@ export async function runClaudeProject(
           publish(currentText);
         }
       }
+      if (message.type === "system" && message.subtype === "compact_boundary")
+        report(message.compact_metadata.post_tokens ?? 0);
       if (message.type === "assistant") {
+        if (!message.parent_tool_use_id)
+          report(claudeContextTokens(message.message.usage));
         const text = message.message.content
           .filter((p) => p.type === "text")
           .map((p) => p.text)
@@ -321,6 +393,17 @@ export async function runClaudeProject(
       if (message.type === "result") {
         if (message.is_error || message.subtype !== "success")
           throw new Error("Claude could not complete this turn.");
+        const windows = Object.values(message.modelUsage ?? {})
+          .map((usage) => usage.contextWindow)
+          .filter((size) => size > 0);
+        if (windows.length) {
+          session.contextWindow = Math.max(...windows);
+          if (context) report(context.usedTokens);
+        }
+        if (options.compact) {
+          succeeded = true;
+          return "";
+        }
         publish(session.plan || message.result || answer);
         if (!answer.trim()) throw new Error("Claude returned an empty answer.");
         succeeded = true;
@@ -338,4 +421,20 @@ export async function runClaudeProject(
       }
     }
   }
+}
+
+/** A request's prompt plus its reply is what the next request carries forward. */
+export function claudeContextTokens(usage: unknown): number {
+  if (!usage || typeof usage !== "object") return 0;
+  const u = usage as Record<string, unknown>;
+  const count = (key: string) =>
+    typeof u[key] === "number" && Number.isFinite(u[key])
+      ? (u[key] as number)
+      : 0;
+  return (
+    count("input_tokens") +
+    count("cache_creation_input_tokens") +
+    count("cache_read_input_tokens") +
+    count("output_tokens")
+  );
 }

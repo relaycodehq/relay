@@ -562,8 +562,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       }),
     ).toBeVisible();
     await page
-      .locator(".recent-threads")
+      .locator(".projects-sidebar")
       .getByRole("button", { name: /Cache guard behavior/ })
+      .first()
       .click();
     await expect(
       page.getByText("Claude found the same cache guard.", { exact: true }),
@@ -588,10 +589,10 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
     await expect(page.getByLabel("Message project")).toBeFocused();
-    await expect(page.locator(".composer-context-strip")).toContainText(
+    await expect(page.locator(".thread-context-controls")).toContainText(
       "feature",
     );
-    await expect(page.locator(".composer-context-strip")).not.toContainText(
+    await expect(page.locator(".thread-context-controls")).not.toContainText(
       "reasoning",
     );
     const branchPicker = page.locator(".composer-branch-trigger");
@@ -625,7 +626,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         exact: true,
       }),
     ).toHaveCount(0);
-    await expect(page.locator(".recent-threads")).toContainText(
+    await expect(page.locator(".projects-sidebar")).toContainText(
       "Cache guard behavior",
     );
   } finally {
