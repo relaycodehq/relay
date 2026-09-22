@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -68,6 +69,7 @@ test.beforeAll(async () => {
   ) as Record<string, string>;
   env = { ...env, PATH: bin + ":" + env.PATH, RELAY_TEST_DATA: data };
   await launch();
+  await openSignIn(page);
   await page
     .getByLabel("Gitea server", { exact: true })
     .fill(fixture.serverUrl);
@@ -75,6 +77,7 @@ test.beforeAll(async () => {
     .getByLabel("Personal access token", { exact: true })
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
+  await openInbox(page);
   await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
 });
@@ -148,6 +151,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   if (
     await page.getByRole("button", { name: "Connect to Gitea" }).isVisible()
   ) {
+    await openSignIn(page);
     await page
       .getByLabel("Gitea server", { exact: true })
       .fill(fixture.serverUrl);
@@ -155,6 +159,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
       .getByLabel("Personal access token", { exact: true })
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
+    await openInbox(page);
   }
   await page
     .getByRole("button", { name: "Open settings", exact: true })

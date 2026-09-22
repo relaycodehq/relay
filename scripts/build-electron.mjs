@@ -31,3 +31,16 @@ await build({
     js: 'import { createRequire as createRuntimeRequire } from "node:module"; const require = createRuntimeRequire(import.meta.url);',
   },
 });
+
+// The Claude SDK is ESM. Bundle it separately so import.meta and native imports retain their semantics.
+await build({
+  entryPoints: ["electron/rooms/claude-sdk.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  outfile: "dist-electron/claude-sdk.mjs",
+  banner: {
+    js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
+  },
+});

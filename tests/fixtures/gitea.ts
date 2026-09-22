@@ -78,12 +78,14 @@ export const triageAfter = triageBefore
   );
 export async function fixtureServer(
   options: {
+    createPull?: boolean;
     grouping?: boolean;
     contextGaps?: boolean;
     code?: { before: string; after: string };
     users?: Record<string, { id: number; login: string; full_name: string }>;
   } = {},
 ) {
+  let createdPull: any = null;
   const requests: {
     method: string;
     path: string;
@@ -187,6 +189,15 @@ export async function fixtureServer(
       deletions: 4,
       changes: 16,
     }));
+    if (path === "/repos/Web/web-store")
+      return json({
+        id: 7,
+        full_name: "Web/web-store",
+        permissions: { pull: true },
+        default_branch: "main",
+        clone_url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/gitea/Web/web-store.git`,
+        ssh_url: "",
+      });
     if (path === "/user")
       return json(
         fixtureUser ?? {
@@ -234,8 +245,40 @@ export async function fixtureServer(
       res.setHeader("x-total-count", items.length);
       return json(items);
     }
+    if (path === "/repos/Web/web-store/branches")
+      return json([{ name: "main" }, { name: "feature" }]);
+    if (path.startsWith("/repos/Web/web-store/branches/"))
+      return json({ commit: { id: path.endsWith("/main") ? baseSha : head } });
+    if (
+      options.createPull &&
+      path === "/repos/Web/web-store/pulls" &&
+      req.method === "POST"
+    ) {
+      createdPull = {
+        ...pull,
+        number: 8,
+        title: body.title,
+        body: body.body,
+        draft: body.title.startsWith("WIP:"),
+        head: { ...pull.head, ref: body.head },
+        base: { ...pull.base, ref: body.base },
+      };
+      return json(createdPull, 201);
+    }
+    if (options.createPull && path === "/repos/Web/web-store/pulls")
+      return json(createdPull ? [createdPull] : []);
+    if (path === "/repos/Web/web-store/pulls") {
+      const state = url.searchParams.get("state");
+      const items =
+        !state || state === "all" || state === pullState ? [pull] : [];
+      res.setHeader("x-total-count", items.length);
+      return json(items);
+    }
     if (/^\/repos\/Web\/web-store\/pulls\/\d+$/.test(path))
-      return json({ ...pull, number: Number(path.split("/").at(-1)) });
+      return json({
+        ...(createdPull ?? pull),
+        number: Number(path.split("/").at(-1)),
+      });
     if (path.endsWith("/files")) {
       const page = Number(url.searchParams.get("page") ?? 1);
       res.setHeader("x-total-count", files.length);

@@ -1,10 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { findExecutable } from "../executables";
+import { git } from "../working-tree";
 import { inspectFolder } from "../repository";
 import { configPath, detectProject } from "./detect";
 import { filePathSchema } from "../../shared/validation";
@@ -73,8 +74,8 @@ const symbolResultSchema = z.object({
 type Session = {
   key: string;
   root: string;
-  server: string;
-  ref: PullRef;
+  server: string | null;
+  ref: PullRef | null;
   seq: number;
   updates: Map<string, number>;
   process: ChildProcessWithoutNullStreams;
@@ -126,10 +127,10 @@ export class ProjectChecks {
     ) {
       s.lastValidated = Date.now();
       try {
-        const local = await inspectFolder(s.root, s.server, s.ref);
+        const local = await this.checkout(s.root, s.server, s.ref);
         if (local.head !== head || !local.remoteMatches)
           throw new Error(
-            "The local checkout changed. Switch to this PR’s head and restart live checks.",
+            "The local checkout changed. Refresh the project and restart live checks.",
           );
       } catch (e) {
         if (this.session === s) this.stop(key);
@@ -140,18 +141,38 @@ export class ProjectChecks {
     }
     return s.state;
   }
+  private async checkout(
+    root: string,
+    server: string | null,
+    ref: PullRef | null,
+  ) {
+    if (server && ref) return inspectFolder(root, server, ref);
+    const path = await realpath(root);
+    if (
+      path !== root ||
+      (await realpath(
+        (await git(root, ["rev-parse", "--show-toplevel"])).trim(),
+      )) !== path
+    )
+      throw new Error("The project root changed. Reopen the correct folder.");
+    return {
+      path,
+      head: (await git(root, ["rev-parse", "HEAD"])).trim(),
+      remoteMatches: true,
+    };
+  }
   async start(
     key: string,
     root: string,
-    server: string,
-    ref: PullRef,
+    server: string | null,
+    ref: PullRef | null,
     head: string,
     targetId: string,
   ) {
     this.stop();
     this.pendingKey = key;
     const generation = this.generation;
-    const local = await inspectFolder(root, server, ref);
+    const local = await this.checkout(root, server, ref);
     if (!local.remoteMatches || local.head !== head)
       throw new Error(
         "Live checks need the linked repository at this PR’s head commit. Your checkout has not been changed.",

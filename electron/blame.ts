@@ -23,16 +23,16 @@ export class BlameService {
 
   read(
     folder: string,
-    server: string,
-    repo: Repo,
+    server: string | null,
+    repo: Repo | null,
     input: BlameQuery,
   ): Promise<LineBlame> {
     const query = blameQuerySchema.parse(input);
     const key = JSON.stringify([
       folder,
       server,
-      repo.owner,
-      repo.name,
+      repo?.owner,
+      repo?.name,
       query.revision,
       query.path,
       query.line,
@@ -67,12 +67,15 @@ export class BlameService {
 
   private async lookup(
     folder: string,
-    server: string,
-    repo: Repo,
+    server: string | null,
+    repo: Repo | null,
     query: BlameQuery,
     signal: AbortSignal,
   ): Promise<LineBlame> {
-    const local = await inspectRepository(folder, server, repo, signal);
+    const local =
+      server && repo
+        ? await inspectRepository(folder, server, repo, signal)
+        : { path: folder, remoteMatches: true };
     if (!local.remoteMatches)
       throw new Error(
         "The linked folder no longer matches this repository. Link the correct folder to see blame.",

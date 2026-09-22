@@ -4,7 +4,7 @@ import type { ChecksController } from "../lib/useProjectChecks";
 import { useContentHash } from "../lib/diagnostics";
 import { DiagnosticMessage } from "./ProjectChecks";
 import { diagnosticSummary, diagnosticSeverity } from "../../shared/checks";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   EditProvider,
   type CodeViewHandle,
@@ -46,12 +46,18 @@ const createEditor: EditorFactory<undefined, undefined> = (type, options) =>
 export default function LocalFileEditor({
   checks,
   pull,
+  project,
+  inline = false,
+  onDirtyChange,
   path,
   line,
   onClose,
 }: {
   checks: ChecksController;
-  pull: Pull;
+  pull?: Pull;
+  project?: { id: string; head: string };
+  inline?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
   path: string;
   line?: number;
   onClose: () => void;
@@ -70,12 +76,26 @@ export default function LocalFileEditor({
   );
   const [bufferText, setBufferText] = useState<string>();
   const bufferHash = useContentHash(bufferText);
+  const target = pull ?? {
+    projectId: project!.id,
+    head: { sha: source?.head ?? project!.head },
+  };
+  const revision = pull?.head.sha ?? source?.head ?? project!.head;
+  useEffect(
+    () => onDirtyChange?.(dirty || saving),
+    [dirty, saving, onDirtyChange],
+  );
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const blame = useLineBlame(
-    pull,
+    target,
     {
-      deletions: { revision: pull.head.sha, path, label: "PR head" },
+      deletions: {
+        revision: revision,
+        path,
+        label: project ? "HEAD" : "PR head",
+      },
       additions: {
-        revision: pull.head.sha,
+        revision: revision,
         path,
         label: "Local checkout",
         ...(source?.original !== bufferText
@@ -95,7 +115,7 @@ export default function LocalFileEditor({
     checkState.files[path]?.hash === bufferHash
       ? checkState.files[path]
       : undefined;
-  const symbols = useSymbolNavigation(pull, path, bufferHash, checkState);
+  const symbols = useSymbolNavigation(target, path, bufferHash, checkState);
   const fileProblems = useMemo(
     () =>
       checkState?.status === "ready" &&
@@ -176,14 +196,18 @@ export default function LocalFileEditor({
     setLoading(true);
     setError(undefined);
     try {
-      const folder = link ? await api.linkFolder(pull) : await api.folder(pull);
+      const folder =
+        project ||
+        (link ? await api.linkFolder(pull!) : await api.folder(pull!));
       if (!isCurrent()) return;
       if (!folder) {
         setNeedsFolder(true);
         return;
       }
       setNeedsFolder(false);
-      const file = await api.readLocalFile(pull, pull.head.sha, path);
+      const file = project
+        ? await api.projectFile(project.id, path)
+        : await api.readLocalFile(pull!, revision, path);
       if (!isCurrent()) return;
       text.current = baseline.current = file.contents;
       setBufferText(file.contents);
@@ -233,7 +257,7 @@ export default function LocalFileEditor({
       old: {
         name: path,
         contents: source.original,
-        cacheKey: `${pull.head.sha}:${path}`,
+        cacheKey: `${revision}:${path}`,
       },
       next: {
         name: path,
@@ -274,13 +298,15 @@ export default function LocalFileEditor({
     setError(undefined);
     const contents = text.current;
     try {
-      const result = await api.saveLocalFile(
-        pull,
-        pull.head.sha,
-        path,
-        version.current,
-        contents,
-      );
+      const result = await (project
+        ? api.saveProjectFile(
+            project.id,
+            path,
+            source.head,
+            version.current,
+            contents,
+          )
+        : api.saveLocalFile(pull!, revision, path, version.current, contents));
       if (!live.current) return;
       version.current = result.version;
       baseline.current = contents;
@@ -317,7 +343,8 @@ export default function LocalFileEditor({
   });
   const large = (source?.contents.split("\n").length ?? 0) > 5000;
   return (
-    <Modal
+    <EditorFrame
+      inline={inline}
       title={`Edit locally · ${path.split("/").pop()}`}
       className="local-editor-modal"
       onClose={requestClose}
@@ -325,7 +352,10 @@ export default function LocalFileEditor({
       {symbols.overlay}
       <div className="local-editor-path" title={source?.path ?? path}>
         <FolderGit2 size={14} />
-        <span>{source?.path ?? `${pull.owner}/${pull.name} · ${path}`}</span>
+        <span>
+          {source?.path ??
+            `${pull ? `${pull.owner}/${pull.name} · ` : ""}${path}`}
+        </span>
         {source && <small>{source.branch}</small>}
       </div>
       {!!error && <ErrorBox error={error} />}
@@ -427,7 +457,7 @@ export default function LocalFileEditor({
           {symbols.controls}
           {blame.overlay}
           <div className="editor-versions">
-            <span>PR head · read-only</span>
+            <span>{project ? "HEAD" : "PR head"} · read-only</span>
             <span>Local working tree · editable</span>
           </div>
           <div
@@ -608,6 +638,26 @@ export default function LocalFileEditor({
           </p>
         </>
       )}
-    </Modal>
+    </EditorFrame>
+  );
+}
+
+function EditorFrame({
+  inline,
+  children,
+  ...props
+}: {
+  inline: boolean;
+  children: ReactNode;
+  title: string;
+  className: string;
+  onClose: () => void;
+}) {
+  return inline ? (
+    <section className="project-inline-editor" aria-label="Code editor">
+      {children}
+    </section>
+  ) : (
+    <Modal {...props}>{children}</Modal>
   );
 }

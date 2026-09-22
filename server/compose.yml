@@ -4,6 +4,8 @@ services:
       context: ..
       dockerfile: server/Dockerfile
     restart: unless-stopped
+    environment:
+      RELAY_ROOMS_GITEA_SERVERS: ${RELAY_ROOMS_GITEA_SERVERS:?Set trusted Gitea base URLs, separated by commas}
     ports:
       - "127.0.0.1:4319:4319"
     volumes:

@@ -1,3 +1,4 @@
+import type { RepositoryIdentity } from "./repository-access";
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, chmodSync } from "node:fs";
@@ -43,6 +44,7 @@ export class RoomsDatabase {
       CREATE TABLE IF NOT EXISTS members(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), name TEXT NOT NULL, owner INTEGER NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS invites(hash TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), expires INTEGER NOT NULL, used_by TEXT);
       CREATE TABLE IF NOT EXISTS rooms(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), number INTEGER NOT NULL, title TEXT NOT NULL, UNIQUE(project_id,number));
+      CREATE TABLE IF NOT EXISTS repository_identities(member_id TEXT PRIMARY KEY REFERENCES members(id),gitea_id INTEGER NOT NULL,server TEXT NOT NULL,repository_id INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS clock(id INTEGER PRIMARY KEY CHECK(id=1),seq INTEGER NOT NULL);
       INSERT OR IGNORE INTO clock VALUES(1,0);
       CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,room_id TEXT NOT NULL REFERENCES rooms(id),author_id TEXT NOT NULL REFERENCES members(id),ord INTEGER NOT NULL,seq INTEGER NOT NULL,updated INTEGER NOT NULL,data TEXT NOT NULL);
@@ -51,7 +53,7 @@ export class RoomsDatabase {
       CREATE INDEX IF NOT EXISTS messages_running ON messages(updated) WHERE json_extract(data,'$.status')='running';
       CREATE TABLE IF NOT EXISTS runs(request_id TEXT PRIMARY KEY REFERENCES messages(id), message_id TEXT NOT NULL UNIQUE REFERENCES messages(id));`);
   }
-  private transaction<T>(fn: () => T): T {
+  transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const result = fn();
@@ -62,7 +64,7 @@ export class RoomsDatabase {
       throw e;
     }
   }
-  private seq() {
+  seq() {
     return Number(
       (
         this.db
@@ -89,6 +91,35 @@ export class RoomsDatabase {
       owner: !!row.owner,
     };
   }
+  bindIdentity(
+    session: Session,
+    identity: RepositoryIdentity,
+    initial = false,
+  ) {
+    const row = this.db
+      .prepare("SELECT * FROM repository_identities WHERE member_id=?")
+      .get(session.id) as Row | undefined;
+    if (row) {
+      if (
+        row.gitea_id !== identity.userId ||
+        row.server !== identity.server ||
+        row.repository_id !== identity.repositoryId
+      )
+        throw new HttpError(
+          403,
+          "This room membership belongs to a different Gitea identity or repository.",
+        );
+      return;
+    }
+    if (!initial)
+      throw new HttpError(
+        401,
+        "This older membership needs a fresh invitation or project setup to verify its Gitea identity. Your shared history is preserved.",
+      );
+    this.db
+      .prepare("INSERT INTO repository_identities VALUES(?,?,?,?)")
+      .run(session.id, identity.userId, identity.server, identity.repositoryId);
+  }
   project(id: string): RoomProject {
     const r = this.db
       .prepare("SELECT identity FROM projects WHERE id=?")
@@ -103,13 +134,19 @@ export class RoomsDatabase {
         .prepare("SELECT id FROM projects WHERE identity=?")
         .get(identity) as Row | undefined;
       if (existing) {
-        const s = this.authenticate(sessionToken);
-        if (s.projectId !== existing.id || !s.owner)
-          throw new HttpError(
-            409,
-            "This project already has a room owner. Use a project invitation.",
-          );
-        return s;
+        try {
+          const s = this.authenticate(sessionToken);
+          if (s.projectId === existing.id && s.owner) return s;
+        } catch (error) {
+          if (!(error instanceof HttpError) || error.status !== 401)
+            throw error;
+        }
+        // Only the HTTP setup-key endpoint calls create. Preserve all old content
+        // while rotating ownership to a newly verified local account.
+        this.db
+          .prepare("UPDATE members SET owner=0 WHERE project_id=? AND owner=1")
+          .run(existing.id);
+        return this.member(existing.id, name, true, sessionToken);
       }
       const id = randomUUID();
       this.db.prepare("INSERT INTO projects VALUES(?,?)").run(id, identity);
@@ -189,14 +226,29 @@ export class RoomsDatabase {
     this.db.prepare("UPDATE members SET revoked=1 WHERE id=?").run(id);
   }
   open(s: Session, number: number, title: string): Room {
-    this.db
+    const hasChats = (
+      this.db.prepare("PRAGMA table_info(rooms)").all() as Row[]
+    ).some((r) => r.name === "chat_key");
+    const canonical = hasChats ? " AND chat_key IS NULL" : "";
+    const existing = this.db
       .prepare(
-        "INSERT INTO rooms VALUES(?,?,?,?) ON CONFLICT(project_id,number) DO UPDATE SET title=excluded.title",
+        "SELECT id FROM rooms WHERE project_id=? AND number=?" + canonical,
       )
-      .run(randomUUID(), s.projectId, number, title);
+      .get(s.projectId, number) as Row | undefined;
+    if (existing)
+      this.db
+        .prepare("UPDATE rooms SET title=? WHERE id=?")
+        .run(title, existing.id);
+    else
+      this.db
+        .prepare(
+          "INSERT INTO rooms(id,project_id,number,title) VALUES(?,?,?,?)",
+        )
+        .run(randomUUID(), s.projectId, number, title);
     const r = this.db
       .prepare(
-        "SELECT id,number,title FROM rooms WHERE project_id=? AND number=?",
+        "SELECT id,number,title FROM rooms WHERE project_id=? AND number=?" +
+          canonical,
       )
       .get(s.projectId, number) as Row;
     return { id: r.id, number: r.number, title: r.title };

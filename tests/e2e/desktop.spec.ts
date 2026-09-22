@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -40,9 +41,10 @@ test.afterAll(async () => {
 });
 test("native app: connect, lazy review, inline threads, drafts, restart, large diff", async () => {
   await expect(
-    page.getByRole("heading", { name: "Make room for a better review." }),
+    page.getByRole("heading", { name: "Your project. Your conversation." }),
   ).toBeVisible();
   await page.screenshot({ path: join(screenshots, "01-connect.png") });
+  await openSignIn(page);
   await page
     .getByLabel("Gitea server", { exact: true })
     .fill(fixture.serverUrl);
@@ -50,6 +52,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .getByLabel("Personal access token", { exact: true })
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
+  await openInbox(page);
   await expect(
     page.getByRole("button", { name: /Make pull request reviews/ }),
   ).toBeVisible();

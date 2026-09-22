@@ -1,14 +1,14 @@
-Review Relay Experimental for Omarchy — Linux x86_64 (Intel / AMD)
+Relay for Omarchy — Linux x86_64 (Intel / AMD)
 
 INSTALL
 
-1. Extract ReviewRelay-Experimental-Omarchy-x86_64.tar.gz.
-2. Open a terminal in the extracted ReviewRelay-Experimental-Omarchy-x86_64 folder.
+1. Extract Relay-Omarchy-x86_64.tar.gz.
+2. Open a terminal in the extracted Relay-Omarchy-x86_64 folder.
 3. Run:
 
    python3 install.py
 
-Run it as your normal user, without sudo. Then search for Review Relay in
+Run it as your normal user, without sudo. Then search for Relay in
 your app launcher. You can also start it with ~/.local/bin/review-relay-experimental.
 No Node, Docker, build tools, or FUSE/AppImage setup is needed.
 
@@ -27,9 +27,10 @@ xdg-terminal-exec. Choose model, reasoning effort and Fast mode in Settings.
 
 UPDATES / REMOVE
 
-Quit Review Relay and run the installer from a newer download to update.
+Quit Relay and run the installer from a newer download to update.
 Your login, local drafts, settings and viewed-file progress are preserved.
-The installer owns only ~/.local/lib/review-relay-experimental, its ~/.local/bin command
+The launcher is named Relay. Internal installation paths keep their original names
+so existing installations update in place. The installer owns only ~/.local/lib/review-relay-experimental, its ~/.local/bin command
 and the review-relay-experimental.desktop launcher in your XDG applications directory.
 
 To uninstall, quit the app and run:
@@ -52,7 +53,7 @@ TROUBLESHOOTING
   namespaces; if a hardened system disables them, ask its administrator to
   configure sandbox support. Do not run the app as root or use --no-sandbox.
 - If code checks are unavailable, install the linked project's dependencies
-  normally first. Review Relay never runs project install scripts for you.
+  normally first. Relay never runs project install scripts for you.
 
 VERIFICATION
 
@@ -63,12 +64,12 @@ launched on an actual Omarchy/Hyprland desktop; that runtime check remains.
 The Linux test container could not be downloaded in the build environment.
 
 Source and third-party licenses are included with the release/source tree.
-Electron and Chromium licenses are in app/. Review Relay's license and
+Electron and Chromium licenses are in app/. Relay's license and
 third-party notices are alongside this file and within app/resources/app.asar.
 
 PROJECT INVITATIONS
 
 The installer registers reviewrelay-room links. Open your colleague's HTTPS
-invitation and choose Open Review Relay. Sign into your own Gitea account,
+invitation and choose Open Relay. Sign into your own Gitea account,
 then choose Join and open PR. Hosting access is not required to join.
 The experimental app installs alongside the stable version.

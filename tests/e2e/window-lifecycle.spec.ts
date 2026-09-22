@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ test("default test windows remain hidden and unfocused while UI actions and acti
   });
   try {
     const page = await app.firstWindow();
+    await openSignIn(page);
     await page
       .getByLabel("Gitea server", { exact: true })
       .fill("https://background.test");
@@ -73,11 +75,12 @@ test("experimental first launch restores the stable login; restart and explicit 
     for (let restart = 0; restart < 2; restart++) {
       app = await launch();
       const page = await app.firstWindow();
+      await openSignIn(page);
       await expect(
         page.getByRole("heading", { name: "Unlocking your saved sign-in." }),
       ).toBeVisible();
       expect(await app.evaluate(({ app }) => app.getName())).toBe(
-        "Review Relay Experimental",
+        "Relay",
       );
       await app.evaluate(() => (globalThis as any).finishUnlock(true));
       await expect
@@ -97,6 +100,7 @@ test("experimental first launch restores the stable login; restart and explicit 
       app = undefined;
     }
     app = await launch();
+    await openSignIn(await app.firstWindow());
     await expect(
       (await app.firstWindow()).getByRole("button", {
         name: "Connect to Gitea",
@@ -123,6 +127,7 @@ test("activation and second launch restore hidden/minimized windows without repl
   });
   try {
     const page = await app.firstWindow();
+    await openSignIn(page);
     await page
       .getByLabel("Gitea server", { exact: true })
       .fill("https://git.example.com/keep-this-input");
@@ -235,6 +240,7 @@ for (const cancel of [false, true]) {
     });
     try {
       const page = await app.firstWindow();
+      await openSignIn(page);
       await expect(
         page.getByRole("heading", { name: "Unlocking your saved sign-in." }),
       ).toBeVisible();
@@ -295,6 +301,13 @@ for (const cancel of [false, true]) {
         await app.evaluate(() => {
           (globalThis as any).finishUnlock(true);
         });
+        await expect
+          .poll(
+            async () =>
+              (await page.evaluate(() => window.relay.bootstrap())).account?.id,
+          )
+          .toBe(account.id);
+        await openInbox(page);
         await expect(
           page.getByRole("combobox", { name: "Current file" }),
         ).toHaveValue("src/hooks/useReview.ts");

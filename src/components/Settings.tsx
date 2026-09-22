@@ -13,7 +13,7 @@ export function Settings({
   onClose,
   onDisconnect,
 }: {
-  account: Account;
+  account: Account | null;
   onClose: () => void;
   onDisconnect: () => Promise<void>;
 }) {
@@ -38,18 +38,22 @@ export function Settings({
   };
   return (
     <Modal title="Settings" className="settings-modal" onClose={onClose}>
-      <div className="settings-account">
-        <Avatar name={account.user.login} />
-        <div>
-          <strong>{account.user.login}</strong>
-          <p>{account.server}</p>
-        </div>
-      </div>
-      <p className="field-note">
-        {account.persistent
-          ? "Your token is encrypted using the operating system’s credential protection."
-          : "Your token is kept for this session only because secure credential storage is unavailable."}
-      </p>
+      {account && (
+        <>
+          <div className="settings-account">
+            <Avatar name={account.user.login} />
+            <div>
+              <strong>{account.user.login}</strong>
+              <p>{account.server}</p>
+            </div>
+          </div>
+          <p className="field-note">
+            {account.persistent
+              ? "Your token is encrypted using the operating system’s credential protection."
+              : "Your token is kept for this session only because secure credential storage is unavailable."}
+          </p>
+        </>
+      )}
       <label>Appearance</label>
       <div className="segmented appearance">
         {[
@@ -156,19 +160,23 @@ export function Settings({
         </span>
       </div>
       {!!error && <ErrorBox error={error} />}
-      <button
-        className="danger subtle"
-        onClick={() => void onDisconnect().catch(setError)}
-      >
-        <LogOut size={16} />
-        Disconnect account
-      </button>
-      <p className="field-note">
-        Local drafts, read marks, and folder links are preserved for this
-        account.
-      </p>
+      {account && (
+        <>
+          <button
+            className="danger subtle"
+            onClick={() => void onDisconnect().catch(setError)}
+          >
+            <LogOut size={16} />
+            Disconnect account
+          </button>
+          <p className="field-note">
+            Local drafts, read marks, and folder links are preserved for this
+            account.
+          </p>
+        </>
+      )}
       <p className="about">
-        Review Relay 0.1.0 · Built with code from{" "}
+        Relay 0.1.0 · Built with code from{" "}
         <a
           href="https://github.com/pingdotgg/t3code"
           onClick={(e) => {

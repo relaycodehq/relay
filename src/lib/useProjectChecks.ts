@@ -4,10 +4,21 @@ import type { Pull } from "../../shared/types";
 import type { ProjectCheckState } from "../../shared/checks";
 import { api } from "./api";
 
-export function useProjectChecks(pull?: Pull) {
+export function useProjectChecks(
+  pull?: Pull,
+  local?: { id: string; head: string },
+) {
   const qc = useQueryClient();
-  const identity = pull ? `${pull.html_url}:${pull.head.sha}` : "";
-  const preference = pull ? `relay-checks:${pull.html_url}` : "";
+  const identity = local
+    ? `${local.id}:${local.head}`
+    : pull
+      ? `${pull.html_url}:${pull.head.sha}`
+      : "";
+  const preference = local
+    ? `relay-checks:project:${local.id}`
+    : pull
+      ? `relay-checks:${pull.html_url}`
+      : "";
   const [preferenceVersion, setPreferenceVersion] = useState(0);
   const { selection, enabled } = useMemo(
     () => ({
@@ -21,27 +32,34 @@ export function useProjectChecks(pull?: Pull) {
   useEffect(() => setError(undefined), [preference]);
   const info = useQuery({
     queryKey: ["project-check-info", identity],
-    queryFn: () => api.projectCheckInfo(pull!),
-    enabled: !!pull,
+    queryFn: () =>
+      local ? api.localCheckInfo(local.id) : api.projectCheckInfo(pull!),
+    enabled: !!(pull || local),
     retry: false,
     refetchInterval: (q) => (q.state.data === null ? 3000 : false),
   });
   const queryKey = useMemo(() => ["project-check-state", identity], [identity]);
   const state = useQuery({
     queryKey,
-    queryFn: () => api.projectCheckState(pull!, pull!.head.sha),
-    enabled: !!pull,
+    queryFn: () =>
+      local
+        ? api.localCheckState(local.id, local.head)
+        : api.projectCheckState(pull!, pull!.head.sha),
+    enabled: !!(pull || local),
     refetchInterval: enabled ? 1000 : false,
     retry: false,
   });
   const target =
     info.data?.targets.find((t) => t.id === selection) ?? info.data?.targets[0];
   useEffect(() => {
-    if (!pull || !target || !enabled) return;
+    if ((!pull && !local) || !target || !enabled) return;
     let current = true;
     setError(undefined);
-    void api
-      .startProjectChecks(pull, pull.head.sha, target.id)
+    void (
+      local
+        ? api.startLocalChecks(local.id, local.head, target.id)
+        : api.startProjectChecks(pull!, pull!.head.sha, target.id)
+    )
       .then((s) => {
         if (current) qc.setQueryData(queryKey, s);
       })
@@ -50,7 +68,9 @@ export function useProjectChecks(pull?: Pull) {
       });
     return () => {
       current = false;
-      void api.stopProjectChecks(pull).catch(() => {});
+      void (
+        local ? api.stopLocalChecks(local.id) : api.stopProjectChecks(pull!)
+      ).catch(() => {});
       qc.setQueryData(queryKey, null);
     };
   }, [identity, target?.id, enabled, retry]);
@@ -64,11 +84,13 @@ export function useProjectChecks(pull?: Pull) {
   };
   const buffer = useCallback(
     (path: string, text: string | null) => {
-      if (!pull || !enabled) return Promise.resolve();
+      if ((!pull && !local) || !enabled) return Promise.resolve();
       qc.setQueryData<ProjectCheckState | null>(queryKey, (s) =>
         s ? { ...s, status: "checking", files: {}, diagnostics: [] } : s,
       );
-      return api.updateCheckBuffer(pull, pull.head.sha, path, text);
+      return local
+        ? api.updateLocalCheckBuffer(local.id, local.head, path, text)
+        : api.updateCheckBuffer(pull!, pull!.head.sha, path, text);
     },
     [identity, enabled, queryKey],
   );

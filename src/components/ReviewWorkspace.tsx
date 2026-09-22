@@ -1,3 +1,4 @@
+import { LocalChanges } from "./LocalChanges";
 import { AskCodex } from "./AskCodex";
 import type { QuestionTarget } from "../../shared/questions";
 import type { ChecksController } from "../lib/useProjectChecks";
@@ -97,7 +98,7 @@ export function ReviewWorkspace({
     file: ChangedFile;
     target: QuestionTarget;
   } | null>(null);
-  const [tab, setTab] = useState<"files" | "conversation">("files"),
+  const [tab, setTab] = useState<"files" | "conversation" | "local">("files"),
     [layout, setLayout] = useState<"split" | "unified">("split"),
     [wrap, setWrap] = useState(false),
     [fullContext, setFullContext] = useState(false),
@@ -196,6 +197,7 @@ export function ReviewWorkspace({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (
+        tab !== "files" ||
         e.ctrlKey ||
         e.metaKey ||
         e.altKey ||
@@ -332,6 +334,13 @@ export function ReviewWorkspace({
             <MessageSquare size={15} />
             Conversation
           </button>
+          <button
+            className={tab === "local" ? "active" : ""}
+            onClick={() => setTab("local")}
+          >
+            <GitBranch size={15} />
+            Local changes
+          </button>
         </div>
         <div className="review-progress">
           <span>
@@ -346,7 +355,9 @@ export function ReviewWorkspace({
           </div>
         </div>
       </div>
-      {tab === "files" ? (
+      {tab === "local" ? (
+        <LocalChanges key={`${pull.owner}/${pull.name}`} pull={pull} />
+      ) : tab === "files" ? (
         <>
           <div className="file-toolbar">
             <div className="file-name">
@@ -649,7 +660,7 @@ export function ReviewWorkspace({
               {folder.data.head !== pull.head.sha && (
                 <p className="warning-note">
                   Check out PR commit {pull.head.sha.slice(0, 8)} before
-                  launching Codex. Review Relay never switches branches or
+                  launching Codex. Relay never switches branches or
                   overwrites your work.
                 </p>
               )}

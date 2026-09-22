@@ -30,6 +30,10 @@ export class Gitea {
     private token: string,
     private fetchRequest: FetchRequest,
   ) {}
+  // Main-process only: credentials never cross the renderer IPC boundary.
+  withRepositoryCredential<T>(send: (token: string) => Promise<T>): Promise<T> {
+    return send(this.token);
+  }
   private controllers = new Set<AbortController>();
   dispose() {
     for (const c of this.controllers) c.abort();

@@ -1,3 +1,4 @@
+import { roomVerifier, roomClient, roomClone } from "../fixtures/room-access";
 import { describe, it, expect } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
@@ -83,7 +84,7 @@ describe("desktop invitations", () => {
     const root = await mkdtemp(join(tmpdir(), "relay-hosting-"));
     const database = new RoomsDatabase(":memory:"),
       secret = token();
-    const server = createRoomsServer(database, secret);
+    const server = createRoomsServer(database, secret, roomVerifier);
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const url = `http://127.0.0.1:${(server.address() as any).port}`;
     const store = new Store(root);
@@ -100,10 +101,8 @@ describe("desktop invitations", () => {
     const context = {
       key: "project",
       ref: { owner: "Web", name: "portal", number: 7 },
-      client: {
-        account: { server: target.project.server, user: { login: "Alice" } },
-        pull: async () => ({ title: "Fixture PR" }),
-      } as unknown as Gitea,
+      dir: await roomClone(join(root, "repo"), target.project),
+      client: roomClient(target.project),
     };
     try {
       await expect(
@@ -121,6 +120,7 @@ describe("desktop invitations", () => {
       );
       const restored = new RoomService(store, fetch, encrypt, decrypt);
       expect(await restored.hostingStatus()).toEqual({ server: url });
+      await restored.allowAccess(context, url);
       const invitation = await restored.invite(context);
       expect(parseRoomInvitation(invitation.code)).toMatchObject(target);
       expect(invitation.code).not.toContain(secret);
@@ -141,7 +141,7 @@ describe("desktop invitations", () => {
   it("serves a credential-free landing page with hashed CSP while keeping setup and room APIs authenticated", async () => {
     const database = new RoomsDatabase(":memory:"),
       secret = token();
-    const server = createRoomsServer(database, secret);
+    const server = createRoomsServer(database, secret, roomVerifier);
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const url = `http://127.0.0.1:${(server.address() as any).port}`;
     try {
@@ -150,7 +150,7 @@ describe("desktop invitations", () => {
         csp = response.headers.get("content-security-policy")!;
       expect(response.headers.get("content-type")).toContain("text/html");
       expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-      expect(html).toContain("Open Review Relay");
+      expect(html).toContain("Open Relay");
       expect(html).not.toContain(secret);
       for (const tag of ["style", "script"]) {
         const content = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(

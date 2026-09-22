@@ -8,10 +8,10 @@ if (/^[0-9a-f-]{36}\\.[A-Za-z0-9_-]{43}$/i.test(params.get('join')||'')) {
  const server=location.origin+location.pathname.replace(/\\/$/,'');
  button.href='${roomProtocol}://join?server='+encodeURIComponent(server)+location.hash;
  button.hidden=false;
- status.textContent='Opening your project invitation. If your browser asks, choose Open Review Relay.';
+ status.textContent='Opening your project invitation. If your browser asks, choose Open Relay.';
  location.href=button.href;
 } else if(location.hash) status.textContent='This invitation link is incomplete. Ask your colleague for a new link.';`;
 const hash = (text: string) =>
   createHash("sha256").update(text).digest("base64");
 export const landingPolicy = `default-src 'none'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`;
-export const landingHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Review together · Review Relay</title><style>${style}</style></head><body><main><div class="icon" aria-hidden="true">↗</div><h1>Review it together.</h1><p id="status">Open a project invitation from your colleague to join the conversation beside the code.</p><a hidden>Open Review Relay</a><small>Use the current Review Relay Experimental app for macOS or Linux. If it isn’t installed yet, install it and open this invitation again.</small><footer>Your own Gitea login. Your own agent. One shared conversation.</footer></main><script>${script}</script></body></html>`;
+export const landingHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Review together · Relay</title><style>${style}</style></head><body><main><div class="icon" aria-hidden="true">↗</div><h1>Review it together.</h1><p id="status">Open a project invitation from your colleague to join the conversation beside the code.</p><a hidden>Open Relay</a><small>Use the current Relay app for macOS or Linux. If it isn’t installed yet, install it and open this invitation again.</small><footer>Your own Gitea login. Your own agent. One shared conversation.</footer></main><script>${script}</script></body></html>`;

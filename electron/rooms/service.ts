@@ -1,3 +1,4 @@
+import { RoomAccess, type ProjectRoomContext } from "./access";
 import { runClaude } from "./claude";
 import { randomBytes, createHash } from "node:crypto";
 import type { Store } from "../store";
@@ -37,6 +38,8 @@ export interface RoomDelivery {
 }
 type Network = (url: string, init?: RequestInit) => Promise<Response>;
 export class RoomService {
+  private contexts = new Map<string, ProjectRoomContext>();
+  private access: RoomAccess;
   private connections = new Map<string, RoomConnection>();
   private pendingJoins = new Map<string, string>();
   private rooms = new Map<string, RoomState>();
@@ -52,7 +55,12 @@ export class RoomService {
     private fetcher: Network,
     private encrypt: (s: string) => Promise<string | null>,
     private decrypt: (s: string) => Promise<string>,
-  ) {}
+  ) {
+    this.access = new RoomAccess(store, (...args) => this.request(...args));
+  }
+  async allowAccess(c: ProjectRoomContext, server: string) {
+    await this.access.allow(c, server);
+  }
   private async hosting(): Promise<RoomHosting | null> {
     const saved = this.store.get().roomHosting;
     return saved
@@ -85,6 +93,7 @@ export class RoomService {
     secret: string | undefined,
     method = "GET",
     body?: unknown,
+    retryAccess = true,
   ): Promise<T> {
     const response = await this.fetcher(server + path, {
       method,
@@ -123,6 +132,14 @@ export class RoomService {
     } catch {
       throw new Error("The room server returned an invalid response.");
     }
+    if (response.status === 428 && retryAccess && secret) {
+      const context = this.contexts.get(secret);
+      const connection = context && (await this.connection(context));
+      if (context && connection) {
+        await this.access.ensure(context, connection, true);
+        return this.request(server, path, secret, method, body, false);
+      }
+    }
     if (!response.ok)
       throw new Error(
         typeof value?.error === "string"
@@ -131,14 +148,14 @@ export class RoomService {
       );
     return value as T;
   }
-  private project(c: Context) {
+  private project(c: ProjectRoomContext) {
     return projectSchema.parse({
       server: c.client.account.server,
       owner: c.ref.owner,
       name: c.ref.name,
     });
   }
-  private async connection(c: Context) {
+  private async connection(c: ProjectRoomContext) {
     let connection = this.connections.get(c.key);
     if (!connection && this.store.get().roomConnections?.[c.key]) {
       connection = connectionSchema.parse(
@@ -148,11 +165,13 @@ export class RoomService {
       );
       this.connections.set(c.key, connection);
     }
+    if (connection) this.contexts.set(connection.token, c);
     return connection;
   }
   async state(c: Context): Promise<RoomState> {
     const connection = await this.connection(c);
     if (!connection) return { connection: null, room: null };
+    await this.access.ensure(c, connection);
     const key = `${c.key}:${c.ref.number}`;
     const cached = this.rooms.get(key);
     if (cached) return cached;
@@ -188,19 +207,26 @@ export class RoomService {
     return state;
   }
   async connect(c: Context, input: ConnectRoom) {
+    await this.connectProject(c, input);
+    return this.state(c);
+  }
+  async connectProject(c: ProjectRoomContext, input: ConnectRoom) {
+    await this.access.clone(c);
     if (this.active)
       throw new Error(
         "Wait for your current answer or stop it before changing rooms.",
       );
     // Verify repository access before consuming an invitation or creating membership.
-    await c.client.pull(c.ref);
+    await c.client.request(c.client.repo(c.ref));
     const current = await this.connection(c);
     if (
       input.projectId &&
       current?.projectId === input.projectId &&
       current.server === input.server
-    )
-      return this.state(c);
+    ) {
+      await this.access.ensure(c, current);
+      return current;
+    }
     const fingerprint = createHash("sha256")
       .update(JSON.stringify([c.key, input]))
       .digest("hex");
@@ -223,20 +249,31 @@ export class RoomService {
     const name = (
       c.client.account.user.full_name || c.client.account.user.login
     ).slice(0, 80);
-    const identity = await this.request<any>(
+    const identity = await this.access.credential(
+      c,
       input.server,
-      input.projectId ? "/v1/join" : "/v1/projects",
-      input.projectId ? undefined : input.secret,
-      "POST",
-      input.projectId
-        ? {
-            projectId: input.projectId,
-            code: input.secret,
-            project: this.project(c),
-            name,
-            sessionToken: token,
-          }
-        : { project: this.project(c), name, sessionToken: token },
+      (giteaToken) =>
+        this.request<any>(
+          input.server,
+          input.projectId ? "/v1/join" : "/v1/projects",
+          input.projectId ? undefined : input.secret,
+          "POST",
+          input.projectId
+            ? {
+                projectId: input.projectId,
+                code: input.secret,
+                project: this.project(c),
+                name,
+                sessionToken: token,
+                giteaToken,
+              }
+            : {
+                project: this.project(c),
+                name,
+                sessionToken: token,
+                giteaToken,
+              },
+        ),
     );
     const connection = connectionSchema.parse({
       server: input.server,
@@ -257,7 +294,39 @@ export class RoomService {
     this.pendingJoins.delete(fingerprint);
     this.connections.set(c.key, connection);
     this.clearRooms(c.key);
-    return this.state(c);
+    return connection;
+  }
+  async projectServer(c: ProjectRoomContext) {
+    return (
+      (await this.connection(c))?.server ??
+      (await this.hosting())?.server ??
+      null
+    );
+  }
+  async projectSession(c: ProjectRoomContext) {
+    let connection = await this.connection(c);
+    if (!connection) {
+      const hosting = await this.hosting();
+      if (!hosting)
+        throw new Error(
+          "Configure room hosting in Settings or join a project invitation first.",
+        );
+      connection = await this.connectProject(c, hosting);
+    }
+    await this.access.ensure(c, connection);
+    return {
+      server: connection.server,
+      projectId: connection.projectId,
+      member: connection.member,
+      request: <T>(path: string, method = "GET", body?: unknown) =>
+        this.request<T>(
+          connection!.server,
+          path,
+          connection!.token,
+          method,
+          body,
+        ),
+    };
   }
   private clearRooms(key: string) {
     for (const k of this.rooms.keys())
@@ -270,6 +339,22 @@ export class RoomService {
       throw new Error("Connect this project to a shared room first.");
     return { connection, room: state.room };
   }
+  async workspace(c: Context) {
+    const { connection, room } = await this.ready(c);
+    return {
+      id: `${connection.server}:${room.id}`,
+      request: async (path: string, method = "GET", body?: unknown) => {
+        await this.access.ensure(c, connection);
+        return this.request(
+          connection.server,
+          `/v1/rooms/${room.id}/workspace${path}`,
+          connection.token,
+          method,
+          body,
+        );
+      },
+    };
+  }
   async disconnect(c: Context) {
     if (this.active?.key === c.key) this.active.abort.abort();
     await this.store.update((s) => {
@@ -281,11 +366,31 @@ export class RoomService {
   async poll(c: Context, after: number, before?: number): Promise<RoomPage> {
     const { connection, room } = await this.ready(c);
     void this.flush(c).catch(() => {});
-    return this.request(
+    const page = await this.request<RoomPage>(
       connection.server,
       `/v1/rooms/${room.id}/messages?after=${after}${before !== undefined ? `&before=${before}` : ""}`,
       connection.token,
     );
+    // Completed answers are shared; this sender's locally checkpointed partial
+    // is overlaid only in its own desktop, never in a colleague's response.
+    for (const value of Object.values(this.store.get().roomDeliveries ?? {}))
+      if (value.key === c.key && value.roomId === room.id) {
+        let message = page.messages.find((m) => m.id === value.id);
+        if (!message) {
+          message = await this.request<RoomMessage>(
+            connection.server,
+            `/v1/rooms/${room.id}/messages/${value.id}`,
+            connection.token,
+          );
+          page.messages.push(message);
+        }
+        Object.assign(message, {
+          body: value.body,
+          status: value.status,
+          error: value.error,
+        });
+      }
+    return page;
   }
   async invite(c: Context) {
     if (!(await this.connection(c))) {
@@ -507,6 +612,7 @@ export class RoomService {
     try {
       const connection = await this.connection(c);
       if (!connection) return;
+      await this.access.ensure(c, connection);
       for (const [id, pending] of Object.entries(
         this.store.get().roomDeliveries ?? {},
       )) {
@@ -522,8 +628,13 @@ export class RoomService {
           `/v1/rooms/${value.roomId}/messages/${id}`,
           connection.token,
           "PATCH",
-          { body: value.body, status: value.status, error: value.error },
+          {
+            body: value.status === "running" ? "" : value.body,
+            status: value.status,
+            error: value.error,
+          },
         );
+        if (value.status === "running") continue;
         await this.store.update((s) => {
           if (
             JSON.stringify(s.roomDeliveries?.[id]) === JSON.stringify(pending)

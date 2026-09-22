@@ -1,20 +1,20 @@
-> **Experimental branch: `experimental/shared-pr-rooms`.** This checkout builds **Review Relay Experimental** with separate application storage; the stable application remains independent. Open a PR and use the chat icon for shared rooms, invitations and `@codex` / `@claude` questions. Read [the room server setup guide](server/README.md) for Mac mini installation, Docker and the precise experimental scope. `npm run package:server` builds the portable server bundle. Agent answers are read-only in this experiment; existing local edit/fix workflows remain separate.
+> **Experimental branch: `experimental/shared-pr-rooms`.** This checkout builds **Relay** (formerly Review Relay Experimental), retaining its existing application storage and credentials. The project workspace combines local Git changes, editing, private streaming agent chats, shared conversations and PR review. Start with [the project workflow](docs/project-workspace.md), [room server setup](server/README.md), or [updating the pinned T3 streaming modules](docs/t3-streaming.md). Stable remains independent.
 
-# Review Relay
+# Relay
 
 A desktop Gitea review client for macOS and Linux. Electron + React, with actual MIT-licensed T3 Code diff components and titlebar behavior adapted for a focused review workflow.
 
 ## Run the app
 
-- **macOS (Apple Silicon):** quit any running Review Relay, extract `release/ReviewRelay-mac-arm64.zip`, and open its `Review Relay.app`. You can copy it to Applications. This local build is ad-hoc signed, not Apple-notarized.
-- **Omarchy (Intel/AMD x86-64):** extract `release/ReviewRelay-Omarchy-x86_64.tar.gz`, open a terminal in the extracted folder, and run `python3 install.py` without sudo. This installs the bundled app and registers **Review Relay** in your app launcher; no Node, Docker or FUSE is needed. The included README covers setup, updates and removal. The installer preserves account/review data and will not overwrite unrelated installations. It requires the usual desktop libraries and enabled Linux user namespaces for Chromium's sandbox.
-- **Linux (x86-64):** make `release/Review Relay-0.1.0.AppImage` executable and launch it. `release/review-relay-0.1.0.tar.gz` is also provided. A desktop session and Electron's standard GTK/NSS/GBM libraries are required. AppImage may require your distribution's FUSE compatibility package. Do not disable the Chromium sandbox to work around setup problems.
+- **macOS (Apple Silicon):** quit any running Relay or Review Relay Experimental, extract `release/Relay-mac-arm64.zip`, and open its `Relay.app`. You can copy it to Applications. This local build is ad-hoc signed, not Apple-notarized.
+- **Omarchy (Intel/AMD x86-64):** extract `release/Relay-Omarchy-x86_64.tar.gz`, open a terminal in the extracted folder, and run `python3 install.py` without sudo. This installs the bundled app and registers **Relay** in your app launcher; no Node, Docker or FUSE is needed. The included README covers setup, updates and removal. The installer preserves account/review data and will not overwrite unrelated installations. It requires the usual desktop libraries and enabled Linux user namespaces for Chromium's sandbox.
+- **Linux (x86-64):** make `release/Relay-0.1.0.AppImage` executable and launch it. `release/review-relay-0.1.0.tar.gz` is also provided. A desktop session and Electron's standard GTK/NSS/GBM libraries are required. AppImage may require your distribution's FUSE compatibility package. Do not disable the Chromium sandbox to work around setup problems.
 
 The Linux package was cross-built; Linux runtime verification is still outstanding. See `VERIFICATION.md` for exactly what was tested.
 
 ## Connect to Gitea
 
-1. Leave the server as `https://git.internal.example/gitea`, or enter another HTTPS Gitea base URL (including its subpath).
+1. Choose **Connect Gitea** in the project sidebar. Leave the server as `https://git.internal.example/gitea`, or enter another HTTPS Gitea base URL (including its subpath).
 2. Use **Create a token in Gitea** to open your account's Applications settings. Create a personal access token with `read:user`, `write:repository`, and `write:issue`, including private repository access if needed.
 3. Enter the token directly in the app. PRs are discovered through your account; you do not need to paste individual links.
 
@@ -23,6 +23,8 @@ The app supports one active Gitea account. Browser OAuth/SSO is not implemented.
 The window opens while the saved login unlocks. If Keychain needs permission, the app shows its progress and stays responsive; denied access can be retried, or you can sign in again without deleting your review state. Clicking the Dock icon or launching the app again restores a hidden/minimized window. Local development builds are ad-hoc signed, so macOS may request Keychain permission after an update.
 
 ## Review workflow
+
+The cross-project Pull request inbox retains this workflow; individual projects embed the same review tools in their Pull requests view.
 
 The app reopens your last unfinished PR and selected file after a reload or full restart, with your inbox filter, search and open/closed selection. Closed or merged PRs, and PRs you have approved at the current head commit, are not reopened automatically. Older, stale or dismissed approvals do not prevent resuming a saved review; completed PRs can still be opened manually. This is saved separately for each Gitea account. Files beyond the first metadata page are located without loading other diffs; if a saved file no longer exists, the first available file opens. An explicitly opened PR URL takes priority.
 
@@ -35,16 +37,16 @@ The app reopens your last unfinished PR and selected file after a reload or full
 - If you already have a pending review in Gitea, finish or discard that review there before submitting here. This avoids unexpectedly publishing comments drafted in another client.
 - **Open PR by URL** accepts regular Gitea PR links, including `/files`. Installed builds also register `reviewrelay://open?url=<URL-encoded Gitea PR URL>`.
 
-| Shortcut | Action |
-| --- | --- |
-| Cmd/Ctrl , | Open Settings |
-| Cmd/Ctrl F | Search pull requests |
-| Cmd/Ctrl K | Open PR by URL |
-| Cmd/Ctrl B | Toggle file list |
-| Cmd/Ctrl Shift B | Toggle pull requests |
-| J / K | Next / previous file |
-| V | Toggle current file viewed |
-| Escape | Close dialog |
+| Shortcut         | Action                     |
+| ---------------- | -------------------------- |
+| Cmd/Ctrl ,       | Open Settings              |
+| Cmd/Ctrl F       | Search pull requests       |
+| Cmd/Ctrl K       | Open PR by URL             |
+| Cmd/Ctrl B       | Toggle file list           |
+| Cmd/Ctrl Shift B | Toggle pull requests       |
+| J / K            | Next / previous file       |
+| V                | Toggle current file viewed |
+| Escape           | Close dialog               |
 
 ## Group repeated changes with Codex
 
@@ -110,7 +112,7 @@ Diff parsing and syntax highlighting run in workers. The diff, inbox, and file l
 
 Electron still has a substantial baseline footprint. In the measured 15,000-line test, only 40 code rows were mounted and the sum of process working sets was roughly 565–634 MiB across local runs (shared pages may be counted more than once). This is a measurement of one fixture, not a general memory guarantee.
 
-Local review state is stored in Electron's userData directory as `state.json`, using serialized atomic writes and private file permissions. Back up that directory to preserve local drafts. macOS normally uses `~/Library/Application Support/Review Relay`; Linux normally uses `$XDG_CONFIG_HOME/Review Relay` or `~/.config/Review Relay`. The token is encrypted; review text and folder paths are not encrypted. Corrupt state files are preserved and surfaced as an error.
+Local review state is stored in Electron's userData directory as `state.json`, using serialized atomic writes and private file permissions. Back up that directory to preserve local drafts. The Relay rename deliberately retains `~/Library/Application Support/Review Relay Experimental` on macOS and `$XDG_CONFIG_HOME/Review Relay Experimental` or `~/.config/Review Relay Experimental` on Linux. The bundle ID, invitation scheme and credential namespaces also remain unchanged so existing data, links and saved logins continue to work. The token is encrypted; review text and folder paths are not encrypted. Corrupt state files are preserved and surfaced as an error.
 
 ## Develop and build
 
@@ -144,3 +146,13 @@ Source layout: `electron/` owns credentials, API calls, disk and process access;
 This is an implemented and locally tested first release, not a claim of production certification. Before distributing broadly: verify the real private Gitea review flow, run Linux desktop tests on the target distribution, validate a real interactive Codex launch, and configure Developer ID signing/notarization. Automatic updates, multi-account switching, browser SSO, merge controls, image previews, and an embedded terminal are not included.
 
 T3 Code provenance and its MIT license are in `THIRD_PARTY_NOTICES.md`.
+
+### Composer commands and branch pull requests
+
+Use `/openpr` (or **Create PR** beside Changes) to open the current branch’s pull request or prepare a new Gitea PR. The preview includes target branch, title, description, draft status and any required push. Creation only publishes committed changes after an explicit click; it never stages local edits or force-pushes.
+
+The composer also offers `/changes`, `/files` and `/new`. With Codex selected, enabled skills are discovered from the installed Codex app-server for the project. Type `$logical` anywhere in a message to find a matching skill, or use `/skill:name`; arrow keys and Enter/Tab select it. Selected skills are sent as native Codex skill inputs. Claude currently supports Relay’s local actions, but has no skill discovery in this menu.
+
+### Virtual project folders
+
+Use the folder icon beside **Projects** (or right-click a project) to organize it under a virtual path such as `Work/Frontend`. Other projects assigned the same path share that folder. Clear the path to return a project to the top level. This never moves the checkout on disk. Folder and project expansion states are saved independently and survive app restarts.

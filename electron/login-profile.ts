@@ -20,7 +20,7 @@ function readProfile(dir: string): Record<string, unknown> | undefined {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
     throw new Error(
-      "The saved Review Relay sign-in could not be read. Existing data has been preserved.",
+      "The saved Relay sign-in could not be read. Existing data has been preserved.",
     );
   }
 }
@@ -60,7 +60,7 @@ export function loginProfile(dir: string, stableDir: string): LoginProfile {
     .safeParse(stable);
   if (!saved.success)
     throw new Error(
-      "The saved Review Relay sign-in could not be read. Existing data has been preserved.",
+      "The saved Relay sign-in could not be read. Existing data has been preserved.",
     );
   return { credentialName: stableCredentialName, imported: saved.data };
 }

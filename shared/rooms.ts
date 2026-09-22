@@ -154,12 +154,18 @@ export type ConnectRoom = z.infer<typeof connectRoomSchema>;
 export const roomHostingSchema = connectRoomSchema.omit({ projectId: true });
 export type RoomHosting = z.infer<typeof roomHostingSchema>;
 export const roomProtocol = "reviewrelay-room";
-const invitationTargetSchema = z.object({
-  project: projectSchema.extend({
-    server: z.string().transform(normalizeServer),
-  }),
-  number: refSchema.shape.number,
-});
+const invitationTargetSchema = z
+  .object({
+    project: projectSchema.extend({
+      server: z.string().transform(normalizeServer),
+    }),
+    number: refSchema.shape.number.optional(),
+    conversation: idSchema.optional(),
+  })
+  .refine(
+    (v) => !!v.number || !!v.conversation,
+    "Invitation needs a PR or conversation.",
+  );
 export type RoomInvitation = Required<ConnectRoom> &
   Partial<z.infer<typeof invitationTargetSchema>>;
 export function roomInvitation(
@@ -173,7 +179,8 @@ export function roomInvitation(
   if (target) {
     const value = invitationTargetSchema.parse(target);
     params.set("project", JSON.stringify(value.project));
-    params.set("pr", String(value.number));
+    if (value.number) params.set("pr", String(value.number));
+    if (value.conversation) params.set("chat", value.conversation);
   }
   return `${server}/#${params}`;
 }
@@ -184,7 +191,7 @@ export function parseRoomInvitation(value: string): RoomInvitation {
     const params = new URLSearchParams(url.hash.slice(1));
     for (const key of params.keys()) {
       if (
-        !["join", "project", "pr"].includes(key) ||
+        !["join", "project", "pr", "chat"].includes(key) ||
         params.getAll(key).length !== 1
       )
         throw new Error();
@@ -216,10 +223,11 @@ export function parseRoomInvitation(value: string): RoomInvitation {
       secret: match[2],
     });
     const target =
-      params.has("project") || params.has("pr")
+      params.has("project") || params.has("pr") || params.has("chat")
         ? invitationTargetSchema.parse({
             project: JSON.parse(params.get("project") ?? "null"),
-            number: Number(params.get("pr")),
+            ...(params.has("pr") ? { number: Number(params.get("pr")) } : {}),
+            ...(params.has("chat") ? { conversation: params.get("chat") } : {}),
           })
         : {};
     return { ...input, ...target };
@@ -237,8 +245,12 @@ export function roomAppUrl(value: string): string {
       projectId: invitation.projectId,
       secret: invitation.secret,
     },
-    invitation.project && invitation.number
-      ? { project: invitation.project, number: invitation.number }
+    invitation.project && (invitation.number || invitation.conversation)
+      ? {
+          project: invitation.project,
+          number: invitation.number,
+          conversation: invitation.conversation,
+        }
       : undefined,
   );
   return `${roomProtocol}://join?server=${encodeURIComponent(invitation.server)}${new URL(link).hash}`;
@@ -272,6 +284,13 @@ export interface RoomState {
   room: Room | null;
 }
 export interface RoomApi {
+  roomAccessInfo(
+    ref: import("./types").PullRef,
+  ): Promise<{ server: string | null }>;
+  allowRoomAccess(
+    ref: import("./types").PullRef,
+    server: string,
+  ): Promise<void>;
   roomHosting(): Promise<{ server: string | null }>;
   saveRoomHosting(input: RoomHosting | null): Promise<void>;
   roomAcceptInvitation(url: string): Promise<{

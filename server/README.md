@@ -1,99 +1,70 @@
-# Review Relay room server — experimental
+# Relay room server — experimental protocol 2
 
-This server stores project membership, PR-room messages, replies, shared code excerpts and agent answers in SQLite. It never runs an agent or receives Gitea/provider credentials. Each participant invokes **their own local agent** by starting a message with `@codex` or `@claude`. Ordinary messages are human conversation. Mentioning an agent in quoted code or in the middle of a sentence does not run it.
+The server stores project membership, shared conversations, completed agent answers and opt-in saved-file synchronization in SQLite. Each participant runs their own Codex or Claude locally. Private chats and partial token streams stay on the requesting computer. Sharing a private chat explicitly uploads its saved history.
 
-## On your Mac mini
+## Access requirements
 
-Use the `ReviewRelay-RoomServer.tar.gz` bundle. It contains a self-contained server, this guide and an installer. Install Node.js **22.16 or newer** and Python 3, extract the bundle, then run inside its folder:
+Every participant must sign in to Gitea, have access to the repository, and link a matching local Git clone. An invitation alone is insufficient. The desktop checks the clone; the server independently checks the Gitea identity and repository. A Git remote is not a cryptographic access proof—Gitea authorization is the security boundary.
+
+**The room server receives the participant's Gitea token over HTTPS for verification.** This requires explicit consent in the desktop. It only sends the token to operator-allowlisted Gitea base URLs and never persists it or logs it. Provider credentials never leave the participant's computer. Repository grants last at most 60 seconds, are renewed by the desktop, and are lost on server restart. Existing downloaded history cannot be revoked retroactively.
+
+Use a server and administrator you trust: shared messages and synced source files are readable by the server administrator and authorized project members. This is not end-to-end encryption. All chats shared to a project are available to its members; there are no per-conversation private subgroups. The desktop keeps an offline copy of shared history. Invitations expire in 24 hours and are single use. Project owners can revoke membership from the PR room's people panel.
+
+Only configured Gitea URLs can be contacted. Redirects are rejected, response sizes and request duration are bounded, and browser-origin requests are rejected. Session tokens are hashed in SQLite. Do not log HTTP bodies or authorization headers in a proxy.
+
+## Mac mini installation
+
+Install Node.js **22.16 or newer** and Python 3. Extract `ReviewRelay-RoomServer.tar.gz`, then run inside its folder as your normal Mac user:
 
 ```sh
-python3 install-rooms-macos.py
+python3 install-rooms-macos.py --gitea-server https://gitea.example.com/gitea
 ```
 
-No sudo. This creates a user LaunchAgent, starts the server at `http://127.0.0.1:4319`, and restarts it when that Mac user logs in. The Mac must stay awake and logged in for the service to remain available. An existing managed installation is updated in place; its database and setup key are retained.
+Repeat `--gitea-server` for additional trusted hosts. The server must be able to resolve and reach each Gitea host; private hosts require appropriate DNS/VPN routing. Do not replace a private host with an untrusted proxy to bypass this check.
 
-Data and logs live in `~/Library/Application Support/Review Relay Rooms/`. The generated `setup-key.txt` is an administrator secret, readable only by that Mac user. To copy it locally without printing it in terminal output:
+This installs a user LaunchAgent, listening on `127.0.0.1:4319`. The Mac must stay awake and the user logged in. Updates preserve the database, setup key, and prior Gitea allowlist unless new `--gitea-server` arguments are supplied. Data lives in `~/Library/Application Support/Review Relay Rooms/`. The setup key and service file use owner-only permissions.
+
+Put HTTPS in front of the loopback service. The supplied Caddy example supports either a dedicated host or a path prefix. With a prefix such as `/review-relay`, strip it before proxying to port 4319. Do not expose the unencrypted backend port to the Internet. Invitation URLs use the HTTPS address configured in the desktop.
+
+In the owner's desktop, use **Settings → Shared rooms → Manage hosting access** to save the public URL and setup key. The key is encrypted in the OS credential store and is never included in an invitation or distributed app. To copy the key locally without printing it:
 
 ```sh
 pbcopy < "$HOME/Library/Application Support/Review Relay Rooms/setup-key.txt"
 ```
 
-On the owner's desktop, open **Settings → Shared rooms → Manage hosting access** and save the HTTPS server address and setup key once. The app validates it and encrypts it with the OS credential store. It is never included in invitation links or distributed app builds.
+Create a local project chat, then choose **Share conversation → Verify access and share**. Copy its generated invitation to your colleague. The HTTPS landing page opens the installed app through `reviewrelay-room:`; the colleague selects the matching local clone and verifies their own Gitea account. Browsers may ask before opening the app. The app must be installed first.
 
-Open a PR and its conversation, then click **Invite colleague**. This automatically creates the project room if necessary and generates a one-use invitation to that PR. Copy the link and send it to your colleague. Existing room owners can generate more links from **People in this project**.
-
-Your colleague clicks the HTTPS link. A small landing page opens **Review Relay Experimental** through its registered `reviewrelay-room:` protocol; browsers may ask them to confirm opening the app. They sign into their own Gitea account if needed, then choose **Join and open PR**. The app checks repository access before redeeming the invitation. If the app is not installed yet, install it and reopen the same link. Use the Omarchy installer on Linux to register its desktop launcher and protocol handler. An invitation can also be pasted into the app's **Open PR by URL** dialog.
-
-Administrators can provision a closed desktop with `--configure-room-hosting-stdin`: send a JSON object with `server` and `secret` on stdin. The app validates the key, encrypts it, flushes settings and exits; it never accepts the secret in a process argument. Ordinary colleagues need no hosting setup key.
-
-For remote colleagues, serve port 4319 through an HTTPS reverse proxy or a private HTTPS tunnel. The desktop accepts HTTPS remotely and HTTP only on loopback. Do not forward an unencrypted port from your router. Configure the public/private HTTPS address before making invitations; they include the address used to connect. No domain, router, TLS service or VPN is configured by the installer.
-
-The desktop supports a server at a URL prefix, for example `https://reviews.example.com/review-relay`. `Caddyfile.example` shows an HTTPS proxy that strips the prefix before forwarding to the loopback server. Merge its routes into the existing site configuration, validate the complete configuration with `caddy validate`, then use `caddy reload`. Caddy's HTTPS listener must be reachable and the hostname must resolve to it (or your existing HTTPS edge). Do not replace unrelated hosted sites. The experimental desktop defaults to `https://example.com/review-relay`; you can enter your own server instead.
-
-Authentication still applies behind the proxy: the public health check and invitation landing page reveal no room data. The invitation secret remains in the URL fragment and is not sent to the landing page in an HTTP request. Project creation requires the administrator setup key; joining requires a one-use invitation; room APIs require a member session. API requests from browser origins are rejected. The landing page has a restrictive, hash-based Content Security Policy and no third-party content; let the server supply its CSP rather than overriding it at the proxy. Authenticated members have separate rate limits, so anonymous requests through a shared proxy address do not exhaust their allowance. Forwarded IP headers are not trusted.
-
-To stop and uninstall the login service, from the extracted bundle:
+Stop/remove the login service without deleting data:
 
 ```sh
 python3 install-rooms-macos.py --uninstall
 ```
 
-This preserves messages, setup key and logs.
+## Upgrading from protocol 1
 
-## Run without the Mac installer
+Upgrade clients and server together. Old clients lack repository verification and cannot use protocol 2 shared endpoints. Old project/chat/message IDs and saved workspaces are migrated in place; history is retained. Existing unverified memberships require a fresh invitation, or the server owner can reconnect using the saved hosting setup key. This binds the new membership to its verified Gitea identity. Do not discard the database or setup key.
 
-From source:
+Before installing, back up SQLite with the SQLite online backup API (including committed WAL contents). Alternatively stop the server and copy the database, WAL and SHM files together. Keep the setup key, previous server bundle and LaunchAgent configuration in a private backup. A rollback requires restoring the compatible database backup as well as the server.
 
-```sh
-npm ci
-npm run build:server
-mkdir -p room-data
-node -e "require('node:fs').writeFileSync('room-data/setup-key.txt',require('node:crypto').randomBytes(32).toString('base64url'),{mode:0o600,flag:'wx'})"
-RELAY_ROOMS_SETUP_KEY_FILE="$PWD/room-data/setup-key.txt" npm run start:server
-```
+## Docker or direct Node
 
-The bundle can also run directly with `RELAY_ROOMS_SETUP_KEY_FILE=/path/to/key.txt node server.mjs`. Options: `HOST` (default `127.0.0.1`), `PORT` (4319), `RELAY_ROOMS_DB` (`./room-data/rooms.sqlite`), `RELAY_ROOMS_SETUP_KEY_FILE`. `/health` returns `{ "ok": true, "protocol": 1 }`. Errors and logs do not print credentials or conversation bodies.
-
-## Docker alternative
-
-From the repository root:
+From this checkout, create an owner-readable `server/.secrets/setup-key.txt` containing a 32-byte base64url secret, then:
 
 ```sh
-node -e "const fs=require('node:fs');fs.mkdirSync('server/.secrets',{mode:0o700});fs.writeFileSync('server/.secrets/setup-key.txt',require('node:crypto').randomBytes(32).toString('base64url'),{mode:0o644,flag:'wx'})"
+export RELAY_ROOMS_GITEA_SERVERS=https://gitea.example.com/gitea
 docker compose -f server/compose.yml up -d --build
 ```
 
-The image runs as the unprivileged `node` user. A named volume stores SQLite. The published port binds to loopback. Supply HTTPS separately. The host secret directory is private (0700); its mounted secret file is readable by the unprivileged container user. Docker deployment was not exercised in this build; the same bundled server was tested directly under Node.
+The container is non-root, has a read-only root filesystem, uses a persistent volume for SQLite, and exposes only loopback port 4319. HTTPS still belongs at the reverse proxy.
 
-## Account and invitation behavior
+For direct Node execution, build with `npm run build:server` and set `RELAY_ROOMS_SETUP_KEY_FILE`, `RELAY_ROOMS_GITEA_SERVERS` (comma-separated), `RELAY_ROOMS_DB`, and optionally `HOST` / `PORT`. Run `node dist-server/server.mjs`. `/health` returns protocol version 2 and `repositoryAccess: true`; it does not validate connectivity or issue credentials.
 
-- Room membership is independent of Gitea membership. The app validates repository identity when joining and checks the PR revision against the user's own Gitea connection before sharing code. The room server does **not** independently verify Gitea permissions. A project invitation grants access to all of that project's room history; share it only with trusted colleagues. Names are labels; the server-issued member ID is the authenticated identity.
-- Invitations expire after 24 hours and can be used once. The owner can remove a participant immediately. A member's session expires after 90 days. Removing someone does not erase their existing messages or copies they already received. Unused invitations currently expire rather than offering a separate revoke control.
-- Each desktop encrypts its room session with the OS credential store when available. Without secure storage it is session-only. Gitea tokens, Codex/Claude auth and unrelated local/private conversations never go to the server.
-- The server and members can read shared content. This is not end-to-end encrypted. Back up the database and keep server access restricted. Stop the service before copying `rooms.sqlite`, or use SQLite's online backup API; do not copy only the database while WAL writes are active.
+## Saved-file synchronization
 
-## Agent behavior
+File sync is off until each person explicitly enables it for the shared conversation. Both clones must start at the same commit. Saved UTF-8 working changes (including new files/deletions) are exchanged, with per-file compare-and-swap revisions. Concurrent differing edits stop that file with an explicit conflict; they never silently overwrite one another. Unsent editor buffers are not broadcast, and stale local saves are rejected after disk changes.
 
-Codex uses its official stdio app-server interface. Verified with **Codex CLI 0.154.0** and Luna. Each question gets a fresh ephemeral thread with a named read-only permission profile, repository-only file access plus Codex's minimal platform files, denied network, disabled configured MCP servers and no approval escalation. Unsupported permission-profile support fails closed. This does not change saved Codex configuration.
+Git staging, commits, branches and pushes remain local. Branch switches and Git operations pause synchronization. Reopen/restart requires explicit resume. Ignored files, binaries, symlinks, submodules, LFS and files over 2 MiB are excluded. A room workspace is bounded to 2,000 files / 64 MiB. This is saved-file collaboration, not keystroke-level CRDT editing.
 
-Claude uses local Claude Code's streaming CLI. Verified with **Claude Code 2.1.278**. It requires support for `--restricted` (2.1.248+) and `--safe-mode`; the available tools are `Read`, `Glob`, `Grep`. Shell, write tools, external MCP tools and personal customizations are disabled for these questions. Its own sign-in is preserved. Because it has no shell, it cannot inspect historical Git blobs beyond supplied excerpts when your checkout differs.
+## Verification
 
-The room's model/effort controls apply to Codex; Fast is explicitly on or off. Claude has separate model and effort fields. Invalid or unavailable models produce a visible error, never a silent provider switch. There is one active local room question at a time; different people can run their own agents concurrently.
-
-Only the question, explicit reply ancestors (up to 16 messages / 48 KB), PR identity, pinned base/head, current file and selected-line excerpt are supplied. The agent reads additional repository files only as needed. Reply to a message when its discussion should be included; a new top-level question does not inherit the entire room. Private CLI sessions are never imported. Only visible answer text is shared, not raw tool output or private reasoning.
-
-Code excerpts come from exact Gitea revisions, including the old side of a diff. Outdated selections require a PR refresh before sending. Local checkout changes are reported in the prompt; no branch is switched automatically.
-
-## Delivery and recovery
-
-Messages use immutable IDs, so retrying a send after a lost response does not duplicate it. Drafts survive renderer reload. The server persists messages and latest answer snapshots; clients poll incremental sequence cursors, so a reconnect catches up without replaying an agent invocation.
-
-Partial/final answers are written to a local delivery outbox before upload. Failed uploads retry while that project's room is open, including after restart. A silent sender is marked disconnected after 90 seconds, preserving the last answer. An eventual answer from that same authenticated sender can still complete it. **Ask again** prepares a new explicit request; reconnecting never silently reruns a paid question. Do not disconnect the room account while an answer awaits delivery.
-
-Presence is optional and expires after 20 seconds. It shares only the current path, PR head and viewed count while the panel is visible. Clicking a colleague's file works only on a matching revision. It does not copy viewed marks, change their selection, or approve anything in Gitea.
-
-## Experimental scope
-
-This implements shared review discussion and read-only agent questions. It does not implement collaborative code editing, patch proposals, automatic branch synchronization, team SSO, server-side Gitea authorization, or continuous full-repository replication. Existing local editing and explicit Codex fix handoffs remain available separately.
-
-Implementation references: [Codex app-server](https://learn.chatgpt.com/docs/app-server), [Codex permissions](https://learn.chatgpt.com/docs/permissions), [Claude CLI](https://code.claude.com/docs/en/cli-reference). These interfaces are version-sensitive; run the integration tests and provider smoke checks when updating either CLI.
+Unit/integration tests cover authorization, identity binding, revoked repository access, allowlist enforcement, migration, idempotent invitations/messages, durable final delivery, saved-file conflicts and path safety. Hidden Electron tests exercise private-to-shared chat, separate local agents, invitations, file sync and explicit Git actions. Live deployment still needs verification against the operator's actual Gitea network and clients; fixture tests cannot prove that network works.

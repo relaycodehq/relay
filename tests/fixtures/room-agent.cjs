@@ -6,14 +6,134 @@ function record(data) {
   if (capture)
     fs.appendFileSync(
       capture,
-      JSON.stringify({ cwd: process.cwd(), args, ...data }) + "\n",
+      JSON.stringify({ cwd: process.cwd(), pid: process.pid, args, ...data }) +
+        "\n",
     );
 }
-if (args.includes("--print")) {
+if (args.includes("--permission-prompt-tool")) {
+  let approvalGranted = false;
+  const rl = require("node:readline").createInterface({ input: process.stdin });
+  const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
+  function finish(answer) {
+    emit({
+      type: "stream_event",
+      uuid: "fixture-event",
+      session_id: "fixture-claude",
+      event: {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: answer },
+      },
+    });
+    emit({
+      type: "result",
+      subtype: "success",
+      uuid: "fixture-result",
+      session_id: "fixture-claude",
+      is_error: false,
+      result: answer,
+      duration_ms: 1,
+      duration_api_ms: 1,
+      num_turns: 1,
+      total_cost_usd: 0,
+      usage: { input_tokens: 1, output_tokens: 1 },
+      modelUsage: {},
+      permission_denials: [],
+    });
+  }
+  rl.on("line", (line) => {
+    const m = JSON.parse(line);
+    if (m.type === "control_response") {
+      record({ claudeResponse: m });
+      if (m.response?.response?.updatedPermissions?.length)
+        approvalGranted = true;
+      finish("Approval flow completed.");
+      return;
+    }
+    if (m.type === "control_request") {
+      emit({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: m.request_id,
+          response: {
+            commands: [],
+            models: [],
+            output_style: "default",
+            available_output_styles: [],
+          },
+        },
+      });
+    }
+    if (m.type === "user") {
+      record({ provider: "claude", prompt: JSON.stringify(m) });
+      const text = m.message.content
+        .find((p) => p.type === "text")
+        .text.split("\n\n")[0];
+      if (
+        (!approvalGranted && text.includes("fixture request approval")) ||
+        text.includes("fixture ask question") ||
+        text.includes("fixture propose plan")
+      ) {
+        const tool = text.includes("fixture ask question")
+          ? "AskUserQuestion"
+          : text.includes("fixture propose plan")
+            ? "ExitPlanMode"
+            : "Bash";
+        emit({
+          type: "control_request",
+          request_id: "fixture-claude-request",
+          request: {
+            subtype: "can_use_tool",
+            tool_name: tool,
+            tool_use_id: "fixture-tool",
+            input:
+              tool === "AskUserQuestion"
+                ? {
+                    questions: [
+                      {
+                        header: "Approach",
+                        question: "Which approach should the plan use?",
+                        options: [
+                          {
+                            label: "Small change",
+                            description: "Reuse the current design",
+                          },
+                          { label: "Refactor", description: "Restructure it" },
+                        ],
+                      },
+                    ],
+                  }
+                : tool === "ExitPlanMode"
+                  ? {
+                      plan: "## Proposed plan\n\n1. Update the cache guard.\n2. Verify the fix.",
+                    }
+                  : { command: "npm test" },
+            permission_suggestions: [
+              {
+                type: "addRules",
+                rules: [{ toolName: "Bash", ruleContent: "npm test" }],
+                behavior: "allow",
+                destination: "session",
+              },
+            ],
+          },
+        });
+      } else finish("Claude found the same cache guard.");
+    }
+  });
+} else if (args.includes("--print")) {
   let prompt = "";
   process.stdin.on("data", (d) => (prompt += d));
   process.stdin.on("end", () => {
     record({ provider: "claude", prompt });
+    const text = args.includes("--input-format")
+      ? JSON.parse(prompt).message.content.find((part) => part.type === "text")
+          .text
+      : prompt;
+    const answer = text.startsWith("Generate a short title")
+      ? '{"title":"Cache guard behavior"}'
+      : "Claude found the same cache guard.";
     process.stdout.write(
       JSON.stringify({
         type: "stream_event",
@@ -21,7 +141,7 @@ if (args.includes("--print")) {
           type: "content_block_delta",
           delta: {
             type: "text_delta",
-            text: "Claude found the same cache guard.",
+            text: answer,
           },
         },
       }) + "\n",
@@ -31,60 +151,307 @@ if (args.includes("--print")) {
         type: "result",
         subtype: "success",
         is_error: false,
-        result: "Claude found the same cache guard.",
+        result: answer,
       }) + "\n",
     );
   });
 } else {
   const rl = require("node:readline").createInterface({ input: process.stdin });
   const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
+  let planning = false;
+  let approvalGranted = false;
   rl.on("line", (line) => {
     const m = JSON.parse(line);
     if (m.id === undefined) return;
-    if (m.method === "initialize")
+    if (m.id === "fixture-approval" || m.id === "fixture-question") {
+      record({ response: m });
+      if (m.result?.decision === "acceptForSession") approvalGranted = true;
+      if (planning) {
+        send({
+          method: "item/plan/delta",
+          params: {
+            threadId: "fixture-thread",
+            itemId: "fixture-plan",
+            delta: "## Proposed plan\n\n1. Update the cache guard.",
+          },
+        });
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-plan",
+              type: "plan",
+              text: "## Proposed plan\n\n1. Update the cache guard.\n2. Verify the fix.",
+            },
+          },
+        });
+      }
+      send({
+        method: "item/completed",
+        params: {
+          threadId: "fixture-thread",
+          item: {
+            id: "fixture-answer",
+            type: "agentMessage",
+            phase: "final_answer",
+            text: "Approval flow completed.",
+          },
+        },
+      });
+      send({
+        method: "turn/completed",
+        params: {
+          threadId: "fixture-thread",
+          turn: { id: "fixture-turn", status: "completed" },
+        },
+      });
+      return;
+    }
+    if (m.method === "initialize") {
+      if (process.env.RELAY_AGENT_HOLD_INITIALIZE === "1") {
+        record({ initializing: true });
+        return;
+      }
       send({ id: m.id, result: { userAgent: "fixture" } });
-    else if (m.method === "config/read")
+    } else if (m.method === "skills/list") {
+      record({ discovery: true });
+      send({
+        id: m.id,
+        result: {
+          data: [
+            {
+              cwd: process.cwd(),
+              skills: [
+                {
+                  name: "explain",
+                  path: require("node:path").join(
+                    process.cwd(),
+                    ".agents/skills/explain/SKILL.md",
+                  ),
+                  enabled: true,
+                  description: "Explain this project",
+                },
+                {
+                  name: "disabled-skill",
+                  path: "/tmp/disabled/SKILL.md",
+                  enabled: false,
+                  description: "Disabled",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    } else if (m.method === "config/read")
       send({ id: m.id, result: { config: {} } });
-    else if (m.method === "thread/start") {
-      record({ provider: "codex", thread: m.params });
+    else if (m.method === "thread/start" || m.method === "thread/resume") {
+      record({ provider: "codex", thread: m.params, method: m.method });
       send({
         id: m.id,
         result: {
           thread: { id: "fixture-thread" },
+          model: "fixture-model",
           activePermissionProfile: { id: "review-relay-room" },
         },
       });
     } else if (m.method === "turn/start") {
       record({ provider: "codex", turn: m.params });
+      planning = m.params.collaborationMode?.mode === "plan";
       send({ id: m.id, result: { turn: { id: "fixture-turn" } } });
       send({
         method: "turn/started",
         params: { threadId: "fixture-thread", turn: { id: "fixture-turn" } },
       });
-      setTimeout(
-        () =>
+      if (
+        !approvalGranted &&
+        m.params.input[0].text
+          .split("\n\n")[0]
+          .includes("fixture request approval")
+      ) {
+        send({
+          id: "fixture-approval",
+          method: "item/commandExecution/requestApproval",
+          params: {
+            threadId: "fixture-thread",
+            turnId: "fixture-turn",
+            itemId: "fixture-command",
+            command: "npm test",
+            cwd: process.cwd(),
+            reason: "Run the project checks",
+            availableDecisions: [
+              "accept",
+              "acceptForSession",
+              "decline",
+              "cancel",
+            ],
+          },
+        });
+        return;
+      }
+      if (
+        m.params.input[0].text.split("\n\n")[0].includes("fixture ask question")
+      ) {
+        send({
+          id: "fixture-question",
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "fixture-thread",
+            turnId: "fixture-turn",
+            itemId: "fixture-question",
+            questions: [
+              {
+                id: "approach",
+                header: "Approach",
+                question: "Which approach should the plan use?",
+                options: [
+                  {
+                    label: "Small change",
+                    description: "Reuse the current design",
+                  },
+                  { label: "Refactor", description: "Restructure it" },
+                ],
+              },
+            ],
+          },
+        });
+        return;
+      }
+      if (m.params.input[0].text.startsWith("Generate a short title")) {
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-title",
+              type: "agentMessage",
+              phase: "final_answer",
+              text: '{"title":"Cache guard behavior"}',
+            },
+          },
+        });
+        send({
+          method: "turn/completed",
+          params: {
+            threadId: "fixture-thread",
+            turn: { id: "fixture-turn", status: "completed" },
+          },
+        });
+        return;
+      }
+      if (!process.env.RELAY_AGENT_NO_TITLE)
+        send({
+          method: "thread/name/updated",
+          params: {
+            threadId: "fixture-thread",
+            threadName: "Cache guard behavior",
+          },
+        });
+      send({
+        method: "item/started",
+        params: {
+          threadId: "fixture-thread",
+          item: {
+            id: "fixture-commentary",
+            type: "agentMessage",
+            phase: "commentary",
+          },
+        },
+      });
+      send({
+        method: "item/agentMessage/delta",
+        params: {
+          threadId: "fixture-thread",
+          itemId: "fixture-commentary",
+          delta: "I'll inspect the cache guard first.",
+        },
+      });
+      send({
+        method: "item/completed",
+        params: {
+          threadId: "fixture-thread",
+          item: {
+            id: "fixture-commentary",
+            type: "agentMessage",
+            phase: "commentary",
+            text: "I'll inspect the cache guard first.",
+          },
+        },
+      });
+      send({
+        method: "item/started",
+        params: {
+          threadId: "fixture-thread",
+          item: {
+            id: "fixture-command",
+            type: "commandExecution",
+            command: "git diff --stat",
+            status: "inProgress",
+          },
+        },
+      });
+      send({
+        method: "item/completed",
+        params: {
+          threadId: "fixture-thread",
+          item: {
+            id: "fixture-command",
+            type: "commandExecution",
+            command: "git diff --stat",
+            status: "completed",
+            exitCode: 0,
+            aggregatedOutput: "example.ts | 2 +-",
+          },
+        },
+      });
+      setTimeout(() => {
+        send({
+          method: "item/started",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-answer",
+              type: "agentMessage",
+              phase: "final_answer",
+            },
+          },
+        });
+        send({
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "fixture-thread",
+            itemId: "fixture-answer",
+            delta: "The cache guard prevents duplicate requests.",
+          },
+        });
+      }, 100);
+      if (!m.params.input[0].text.includes("wait for cancellation"))
+        setTimeout(() => {
           send({
-            method: "item/agentMessage/delta",
+            method: "item/completed",
             params: {
               threadId: "fixture-thread",
-              delta: "The cache guard prevents duplicate requests.",
-            },
-          }),
-        100,
-      );
-      if (!m.params.input[0].text.includes("wait for cancellation"))
-        setTimeout(
-          () =>
-            send({
-              method: "turn/completed",
-              params: {
-                threadId: "fixture-thread",
-                turn: { id: "fixture-turn", status: "completed" },
+              item: {
+                id: "fixture-answer",
+                type: "agentMessage",
+                phase: "final_answer",
+                text: "The cache guard prevents duplicate requests.",
               },
-            }),
-          2600,
-        );
+            },
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { id: "fixture-turn", status: "completed" },
+            },
+          });
+        }, 2600);
+    } else if (m.method === "turn/steer") {
+      record({ steer: m.params });
+      send({ id: m.id, result: { turnId: "fixture-turn" } });
     } else if (m.method === "turn/interrupt") {
+      record({ interrupt: m.params });
       send({ id: m.id, result: {} });
       send({
         method: "turn/completed",

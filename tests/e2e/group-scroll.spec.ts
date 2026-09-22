@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -20,6 +21,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
   });
   try {
     const page = await app.firstWindow();
+    await openSignIn(page);
     await page
       .getByLabel("Gitea server", { exact: true })
       .fill(fixture.serverUrl);
@@ -27,6 +29,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       .getByLabel("Personal access token", { exact: true })
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
+    await openInbox(page);
     await page
       .getByRole("button", { name: /Make pull request reviews/ })
       .click();
@@ -184,6 +187,14 @@ test("group actions keep the sidebar position while explicit file navigation rev
     await press("v");
     await expect(current).toHaveValue(path(1)); // Flat mode follows repository order.
     await resetProgress();
+    await expectSelectionInView();
+    // A restored file may open its containing group. Collapse it so the target
+    // header is on screen before testing that the click itself preserves scroll.
+    if (
+      (await header("Shared API update 12").getAttribute("aria-expanded")) ===
+      "true"
+    )
+      await header("Shared API update 12").click();
     await current.selectOption(path(63));
     await expectSelectionInView();
     await list.evaluate((el) => {

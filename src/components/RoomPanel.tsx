@@ -1,3 +1,4 @@
+import { LiveSyncControls } from "./LiveSyncControls";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -346,10 +347,18 @@ export function RoomPanel({
           </button>
         )}
       </div>
+      {connection && (
+        <div className="room-sync-controls">
+          <LiveSyncControls pull={pull} />
+        </div>
+      )}
       {state.isPending ? (
         <Loading text="Opening room…" />
       ) : state.error ? (
-        <ErrorBox error={state.error} retry={() => void state.refetch()} />
+        <>
+          <ErrorBox error={state.error} />
+          <RoomAccessPrompt pull={pull} onReady={() => void state.refetch()} />
+        </>
       ) : !connection ? (
         <RoomConnect
           pull={pull}
@@ -823,6 +832,10 @@ function RoomConnect({
   onInvited: (code: string) => Promise<void>;
   onSettings: () => void;
 }) {
+  const access = useQuery({
+    queryKey: ["room-access-info", pull.owner, pull.name],
+    queryFn: () => api.roomAccessInfo(pull),
+  });
   const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -835,7 +848,7 @@ function RoomConnect({
       <p>
         Create a link for this pull request.
         <br />
-        Your colleague opens it in Review Relay.
+        Your colleague opens it in Relay.
       </p>
       <button
         className="primary"
@@ -843,8 +856,13 @@ function RoomConnect({
         onClick={() => {
           setBusy(true);
           setError(undefined);
-          void api
-            .roomInvite(pull)
+          void (async () => {
+            if (!access.data?.server)
+              throw new Error("Configure room hosting in Settings first.");
+            if (!(await api.folder(pull))) await api.linkFolder(pull);
+            await api.allowRoomAccess(pull, access.data.server);
+            return api.roomInvite(pull);
+          })()
             .then((i) => onInvited(i.code))
             .catch(setError)
             .finally(() => setBusy(false));
@@ -855,7 +873,10 @@ function RoomConnect({
       </button>
       <p className="field-note">
         A private conversation beside the code. Everyone uses their own Gitea
-        login and agent account.
+        login and agent account. The room server{" "}
+        {access.data?.server ?? "configured in Settings"} receives your Gitea
+        token over HTTPS for a repository access check and does not store it. A
+        matching local clone is required.
       </p>
       <details>
         <summary>Have an invitation link?</summary>
@@ -866,6 +887,8 @@ function RoomConnect({
             setError(undefined);
             void (async () => {
               const { server, secret, projectId } = parseRoomInvitation(invite);
+              if (!(await api.folder(pull))) await api.linkFolder(pull);
+              await api.allowRoomAccess(pull, server);
               await api.roomConnect(pull, { server, secret, projectId });
               onConnected();
             })()
@@ -948,8 +971,8 @@ function RoomPeople({
         ))}
       </div>
       <p className="muted">
-        Names are participant labels, not verified Gitea identities. Invite only
-        trusted collaborators.
+        Membership is tied to a verified Gitea account with repository access.
+        Display names come from Gitea.
       </p>
       {state.connection?.member.owner && (
         <>
@@ -1009,5 +1032,51 @@ function RoomPeople({
         </button>
       </div>
     </Modal>
+  );
+}
+
+function RoomAccessPrompt({
+  pull,
+  onReady,
+}: {
+  pull: Pull;
+  onReady: () => void;
+}) {
+  const info = useQuery({
+    queryKey: ["room-access-info", pull.owner, pull.name],
+    queryFn: () => api.roomAccessInfo(pull),
+  });
+  const [error, setError] = useState<unknown>();
+  return (
+    <div className="room-connect">
+      <p>
+        Verify Gitea access and link the matching clone before reopening shared
+        history.
+      </p>
+      <p className="field-note">
+        {info.data?.server} receives your Gitea token over HTTPS for this check,
+        without storing it.
+      </p>
+      <button
+        disabled={!info.data?.server}
+        onClick={() =>
+          void (async () => {
+            if (!(await api.folder(pull))) await api.linkFolder(pull);
+            await api.allowRoomAccess(pull, info.data!.server!);
+            onReady();
+          })().catch(setError)
+        }
+      >
+        Verify shared access
+      </button>
+      <button
+        onClick={() =>
+          void api.roomDisconnect(pull).then(onReady).catch(setError)
+        }
+      >
+        Reconnect project
+      </button>
+      {!!error && <ErrorBox error={error} />}
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 {
-  "name": "review-relay",
-  "productName": "Review Relay Experimental",
+  "name": "relay",
+  "productName": "Relay",
   "version": "0.1.0",
-  "description": "A focused desktop review client for Gitea",
+  "description": "A project workspace for agent chats, code changes and pull request reviews",
   "author": "Review Relay contributors",
   "private": true,
   "type": "module",
@@ -22,13 +22,23 @@
     "test:setup": "npm ci --prefix tests/fixtures/language-toolchain --ignore-scripts",
     "build:server": "node scripts/build-rooms.mjs",
     "start:server": "node dist-server/server.mjs",
-    "package:server": "node scripts/package-rooms.mjs"
+    "package:server": "node scripts/package-rooms.mjs",
+    "vendor:t3:check": "python3 scripts/update-t3-streaming.py",
+    "vendor:t3:update": "python3 scripts/update-t3-streaming.py --update",
+    "test:streaming": "vitest run tests/unit/t3-streaming.test.ts tests/unit/project-chats.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.276",
+    "@base-ui/react": "1.4.1",
     "@pierre/diffs": "1.4.3",
     "@tanstack/react-query": "5.103.1",
     "@tanstack/react-virtual": "3.14.13",
+    "@tiptap/core": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
     "diff": "9.0.0",
+    "effect": "4.0.0-rc.115",
     "jsonc-parser": "3.3.1",
     "lucide-react": "1.47.0",
     "react": "19.3.0",
@@ -52,7 +62,7 @@
   },
   "build": {
     "appId": "dev.reviewrelay.experimental",
-    "productName": "Review Relay Experimental",
+    "productName": "Relay",
     "directories": {
       "output": "release"
     },
@@ -68,7 +78,7 @@
     "asar": true,
     "protocols": [
       {
-        "name": "Review Relay project invitation",
+        "name": "Relay project invitation",
         "schemes": [
           "reviewrelay-room"
         ]

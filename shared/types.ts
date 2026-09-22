@@ -1,3 +1,6 @@
+import type { ProjectApi } from "./projects";
+import type { LiveSyncApi } from "./live-sync";
+import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings } from "./settings";
 import type { LineQuestion } from "./questions";
@@ -191,7 +194,8 @@ export interface LocalFile {
   original: string;
   version: string;
 }
-export interface Api extends importRoomApi {
+export interface Api
+  extends importRoomApi, WorkingTreeApi, LiveSyncApi, ProjectApi {
   inspectSymbol(
     ref: PullRef,
     head: string,

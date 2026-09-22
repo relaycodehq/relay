@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+
+# Installation identifiers stay stable so existing installs update in place.
 MARKER = "Review Relay Experimental user installation v1\n"
 DESKTOP_MARKER = "X-ReviewRelay-Experimental-Installer=1"
 
@@ -61,7 +63,7 @@ def install(bundle, prefix, data_dir):
         directory.mkdir(parents=True, exist_ok=True)
     desktop_contents = "\n".join([
         "[Desktop Entry]", "Type=Application", "Version=1.0",
-        "Name=Review Relay Experimental", "Comment=Review Gitea pull requests",
+        "Name=Relay", "Comment=Chat about projects, edit code and review pull requests",
         f"Exec={desktop_command(app / 'review-relay')} %U",
         f"Icon={str(app / 'review-relay.png').replace(chr(92), chr(92) * 2)}",
         "Terminal=false", "Categories=Development;",
@@ -97,7 +99,7 @@ def install(bundle, prefix, data_dir):
                 desktop.write_bytes(old_desktop)
             raise
     refresh(desktop)
-    print(f"Installed Review Relay Experimental. Find it in your app launcher, or run:\n{binary}")
+    print(f"Installed Relay. Find it in your app launcher, or run:\n{binary}")
     print("Your login, settings and review progress are kept between updates.")
 
 
@@ -108,7 +110,7 @@ def uninstall(prefix, data_dir):
     if app.exists():
         shutil.rmtree(app)
     refresh(desktop)
-    print("Removed Review Relay Experimental. Saved login, settings and review progress were kept.")
+    print("Removed Relay. Saved login, settings and review progress were kept.")
 
 
 def main():
@@ -132,4 +134,4 @@ if __name__ == "__main__":
     try:
         main()
     except (OSError, RuntimeError) as error:
-        sys.exit(f"Could not install/uninstall Review Relay: {error}")
+        sys.exit(f"Could not install/uninstall Relay: {error}")

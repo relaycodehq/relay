@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -26,6 +27,7 @@ test.beforeAll(async () => {
     env: env as Record<string, string>,
   });
   page = await app.firstWindow();
+  await openSignIn(page);
   await page
     .getByLabel("Gitea server", { exact: true })
     .fill(fixture.serverUrl);
@@ -33,6 +35,7 @@ test.beforeAll(async () => {
     .getByLabel("Personal access token", { exact: true })
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
+  await openInbox(page);
   await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   await page
     .getByRole("combobox", { name: "Current file" })

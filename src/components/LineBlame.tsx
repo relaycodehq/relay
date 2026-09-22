@@ -33,7 +33,7 @@ const fromTooltip = (event: SyntheticEvent) =>
 /** Delegated gutter events also catch moving from code to its own line number.
  * Pierre's onLineEnter only fires when the line changes, not the column. */
 export function useLineBlame(
-  pull: PullRef,
+  pull: PullRef | { projectId: string },
   sources: Record<Side, Source | undefined>,
   layout: string,
 ) {
@@ -77,13 +77,7 @@ export function useLineBlame(
       }
     | undefined
   >(undefined);
-  const identity = JSON.stringify([
-    pull.owner,
-    pull.name,
-    pull.number,
-    sources,
-    layout,
-  ]);
+  const identity = JSON.stringify([pull, sources, layout]);
   const clear = () => {
     clearTimeout(timer.current);
     clearTimeout(leaveTimer.current);
@@ -191,8 +185,19 @@ export function useLineBlame(
         return;
       }
       setHover(next);
-      void api
-        .blame(pull, { revision: source.revision, path: source.path, line })
+      void (
+        "projectId" in pull
+          ? api.localBlame(pull.projectId, {
+              revision: source.revision,
+              path: source.path,
+              line,
+            })
+          : api.blame(pull, {
+              revision: source.revision,
+              path: source.path,
+              line,
+            })
+      )
         .then((result) => {
           if (generation.current === request) setHover({ ...next, result });
         })

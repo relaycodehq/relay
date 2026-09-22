@@ -1,3 +1,5 @@
+import { GiteaRepositoryVerifier } from "../../server/repository-access";
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -52,7 +54,11 @@ test.beforeAll(async () => {
   });
   database = new RoomsDatabase(join(root, "rooms.sqlite"));
   setupKey = token();
-  server = createRoomsServer(database, setupKey);
+  server = createRoomsServer(
+    database,
+    setupKey,
+    new GiteaRepositoryVerifier([fixture.serverUrl]),
+  );
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const upstream = `http://127.0.0.1:${(server.address() as any).port}`;
   // Exercise the real deployment shape, including invitations copied between clients.
@@ -138,6 +144,7 @@ test.beforeAll(async () => {
       });
     }, repo);
     await page.reload();
+    await openInbox(page);
     await page
       .getByRole("button", { name: /Make pull request reviews faster/ })
       .click();
@@ -237,7 +244,7 @@ test("two desktops join by invitation; ordinary messages and replies never launc
   ).toBeVisible();
   expect(await readFile(capture, "utf8").catch(() => "")).toBe("");
 });
-test("only the sender's agent starts, streams to both desktops, and receives pinned code plus reply ancestors", async () => {
+test("only the sender's agent starts, shares its completed answer, and receives pinned code plus reply ancestors", async () => {
   const [alice, bob] = pages;
   await alice
     .locator(".room-message")
@@ -394,6 +401,12 @@ test("an invitation survives cold launch and sign-in, opens the correct PR, and 
   });
   try {
     const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
     await expect(page.getByLabel("Gitea server", { exact: true })).toHaveValue(
       fixture.serverUrl,
     );
@@ -403,9 +416,13 @@ test("an invitation survives cold launch and sign-in, opens the correct PR, and 
     await page
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
+    await openInbox(page);
     await expect(
       page.getByRole("heading", { name: "Join the review", exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Link matching local clone", exact: true })
+      .click();
     await page
       .getByRole("button", { name: "Join and open PR", exact: true })
       .click();

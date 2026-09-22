@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { ErrorBox } from "./ui";
 
 export function RoomHostingSettings() {
+  const qc = useQueryClient();
+  const changed = () =>
+    qc.invalidateQueries({
+      predicate: (q) =>
+        ["roomHosting", "room-access-info", "chat-share-info"].includes(
+          String(q.queryKey[0]),
+        ),
+    });
   const hosting = useQuery({
     queryKey: ["roomHosting"],
     queryFn: () => api.roomHosting(),
@@ -60,7 +68,7 @@ export function RoomHostingSettings() {
               })
               .then(() => {
                 setSecret("");
-                return hosting.refetch();
+                return changed();
               })
               .catch(setError)
               .finally(() => setBusy(false));
@@ -75,7 +83,7 @@ export function RoomHostingSettings() {
               setBusy(true);
               void api
                 .saveRoomHosting(null)
-                .then(() => hosting.refetch())
+                .then(changed)
                 .catch(setError)
                 .finally(() => setBusy(false));
             }}

@@ -1,14 +1,20 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useId,
   type ReactNode,
   Component,
   type ErrorInfo,
 } from "react";
-import { X, AlertCircle, LoaderCircle } from "lucide-react";
+import { X, AlertCircle, LoaderCircle, FileCode2, Folder } from "lucide-react";
 import Markdown from "react-markdown";
+import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
+import {
+  projectFileLink,
+  type ProjectFileLink,
+} from "../lib/project-file-links";
 export function IconButton({
   label,
   children,
@@ -28,6 +34,7 @@ export function IconButton({
       className={`icon-button ${active ? "active" : ""}`}
       title={label}
       aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
       disabled={disabled}
     >
@@ -108,22 +115,89 @@ export function Loading({ text = "Loading…" }: { text?: string }) {
     </div>
   );
 }
-export function RichText({ text }: { text: string }) {
+function markdownNodeText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const value = node as { value?: unknown; children?: unknown[] };
+  if (typeof value.value === "string") return value.value;
+  return Array.isArray(value.children)
+    ? value.children.map(markdownNodeText).join("")
+    : "";
+}
+export function RichText({
+  text,
+  projectRoot,
+  onOpenFile,
+}: {
+  text: string;
+  projectRoot?: string;
+  onOpenFile?: (target: ProjectFileLink) => void;
+}) {
+  const remarkPlugins = useMemo(() => [createIncrementalMarkdownPlugin()], []);
   return (
     <div className="markdown">
       <Markdown
+        remarkPlugins={remarkPlugins}
         components={{
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              onClick={(e) => {
-                e.preventDefault();
-                if (href) void api.openExternal(href).catch(() => {});
-              }}
-            >
-              {children}
-            </a>
+          pre: ({ node }) => (
+            <pre>
+              <code>{markdownNodeText(node)}</code>
+            </pre>
           ),
+          a: ({ href, children }) => {
+            const target =
+              projectRoot && href ? projectFileLink(href, projectRoot) : null;
+            return target && onOpenFile ? (
+              <button
+                type="button"
+                className="chat-file-link"
+                title={`${target.path}${target.line ? `:${target.line}` : ""}`}
+                onClick={() => onOpenFile?.(target)}
+              >
+                {target.directory ? (
+                  <Folder size={12} />
+                ) : (
+                  <FileCode2 size={12} />
+                )}
+                {children}
+              </button>
+            ) : href && /^(https?:|mailto:)/i.test(href) ? (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (href) void api.openExternal(href).catch(() => {});
+                }}
+              >
+                {children}
+              </a>
+            ) : (
+              <span>{children}</span>
+            );
+          },
+          code: ({ children, className }) => {
+            const value = String(children).trim();
+            const target =
+              !className && projectRoot && onOpenFile && !value.includes("\n")
+                ? projectFileLink(value, projectRoot, true)
+                : null;
+            return target ? (
+              <button
+                type="button"
+                className="chat-file-link"
+                title={`${target.path}${target.line ? `:${target.line}` : ""}`}
+                onClick={() => onOpenFile?.(target)}
+              >
+                {target.directory ? (
+                  <Folder size={12} />
+                ) : (
+                  <FileCode2 size={12} />
+                )}
+                <span>{children}</span>
+              </button>
+            ) : (
+              <code className={className}>{children}</code>
+            );
+          },
           img: ({ alt }) => <span className="muted">[Image: {alt}]</span>,
         }}
       >
@@ -171,7 +245,7 @@ export class ErrorBoundary extends Component<
       <div className="empty">
         <h2>Something went wrong</h2>
         <p>{this.state.error.message}</p>
-        <button onClick={() => location.reload()}>Reload Review Relay</button>
+        <button onClick={() => location.reload()}>Reload Relay</button>
       </div>
     ) : (
       this.props.children

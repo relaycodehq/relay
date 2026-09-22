@@ -1,3 +1,4 @@
+import { roomVerifier, roomClient, roomClone } from "../fixtures/room-access";
 import { it, expect, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -23,7 +24,7 @@ it("retries a redeemed invitation after a lost response without a secure credent
   await store.load();
   const database = new RoomsDatabase(join(root, "rooms.sqlite"));
   const setup = token(),
-    server = createRoomsServer(database, setup);
+    server = createRoomsServer(database, setup, roomVerifier);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${(server.address() as any).port}`;
   const project = {
@@ -38,7 +39,12 @@ it("retries a redeemed invitation after a lost response without a secure credent
       Authorization: `Bearer ${setup}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ project, name: "Alice", sessionToken: ownerToken }),
+    body: JSON.stringify({
+      project,
+      name: "Alice",
+      sessionToken: ownerToken,
+      giteaToken: "alice",
+    }),
   }).then((r) => r.json());
   const invite = await fetch(url + "/v1/invites", {
     method: "POST",
@@ -51,10 +57,8 @@ it("retries a redeemed invitation after a lost response without a secure credent
   const context = {
     key: "bob-project",
     ref: { owner: project.owner, name: project.name, number: 7 },
-    client: {
-      account: { id: "bob", server: project.server, user: { login: "bob" } },
-      pull: async () => ({ title: "Fixture PR" }),
-    } as unknown as Gitea,
+    dir: await roomClone(join(root, "repo"), project),
+    client: roomClient(project, "bob"),
   };
   let dropResponse = true;
   const service = new RoomService(
@@ -79,6 +83,7 @@ it("retries a redeemed invitation after a lost response without a secure credent
     secret: invite.code,
   };
   try {
+    await service.allowAccess(context, url);
     await expect(service.connect(context, input)).rejects.toThrow(
       "Response lost",
     );
@@ -112,11 +117,16 @@ it("recovers a final answer from disk after network loss and app restart without
   await store.load();
   const database = new RoomsDatabase(join(root, "rooms.sqlite")),
     key = token(),
-    server = createRoomsServer(database, key);
+    server = createRoomsServer(database, key, roomVerifier);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${(server.address() as any).port}`;
   const ref = { owner: "Web", name: "portal", number: 7 };
   const client = {
+    ...roomClient({
+      server: "https://gitea.test",
+      owner: "Web",
+      name: "portal",
+    }),
     account: {
       id: "alice",
       server: "https://gitea.test",
@@ -146,6 +156,7 @@ it("recovers a final answer from disk after network loss and app restart without
     });
   });
   try {
+    await service.allowAccess(context, url);
     await service.connect(context, { server: url, secret: key });
     await service.send(
       context,

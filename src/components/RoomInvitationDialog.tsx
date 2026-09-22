@@ -18,6 +18,8 @@ export function RoomInvitationDialog({
 }) {
   const invitation = parseRoomInvitation(url);
   const [busy, setBusy] = useState(false),
+    [linking, setLinking] = useState(false),
+    [linked, setLinked] = useState(false),
     [error, setError] = useState<unknown>();
   const matching =
     invitation.project?.server === normalizeServer(account.server);
@@ -34,7 +36,9 @@ export function RoomInvitationDialog({
       <p className="field-note">
         Hosted at {invitation.server}. Joining gives you access to this
         project’s room history. Shared messages, code excerpts and agent answers
-        are visible to members and the server owner.
+        are visible to members and the server owner. Joining sends your Gitea
+        token over HTTPS to this server to verify repository access; it is not
+        stored there. A matching local clone is required.
       </p>
       {!matching && (
         <ErrorBox
@@ -45,12 +49,36 @@ export function RoomInvitationDialog({
           }
         />
       )}
+      <button
+        disabled={busy || linking || !matching}
+        onClick={async () => {
+          setLinking(true);
+          setError(undefined);
+          try {
+            const folder = await api.linkFolder({
+              owner: invitation.project!.owner,
+              name: invitation.project!.name,
+            });
+            if (folder) setLinked(true);
+          } catch (e) {
+            setError(e);
+          } finally {
+            setLinking(false);
+          }
+        }}
+      >
+        {linking
+          ? "Linking folder…"
+          : linked
+            ? "Local clone linked"
+            : "Link matching local clone"}
+      </button>
       {!!error && <ErrorBox error={error} />}
       <div className="modal-actions">
         <button onClick={onClose}>Cancel</button>
         <button
           className="primary"
-          disabled={busy || !matching}
+          disabled={busy || linking || !matching}
           onClick={() => {
             setBusy(true);
             setError(undefined);

@@ -1,3 +1,4 @@
+import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -33,6 +34,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     page.getByRole("heading", { name: "A fresh pair of eyes." });
   try {
     await launch();
+    await openSignIn(page!);
     await page!
       .getByLabel("Gitea server", { exact: true })
       .fill(fixture.serverUrl);
@@ -42,6 +44,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     await page!
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
+    await openInbox(page!);
     await open();
     await expect(page!.locator("diffs-container")).toBeVisible();
     await page!
@@ -129,6 +132,7 @@ test("restores the PR, late-page file and filters across reload/restart; explici
   const path = "src/components/file-63.tsx";
   try {
     await launch();
+    await openSignIn(page!);
     await page!
       .getByLabel("Gitea server", { exact: true })
       .fill(fixture.serverUrl);
@@ -138,6 +142,7 @@ test("restores the PR, late-page file and filters across reload/restart; explici
     await page!
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
+    await openInbox(page!);
     await page!
       .getByRole("button", { name: "Created by me", exact: true })
       .click();
@@ -282,6 +287,7 @@ test("keeps remembered reviews separate for each account and restores them after
   });
   const page = await app.firstWindow();
   const connect = async (url: string) => {
+    await openSignIn(page);
     await page.getByLabel("Gitea server", { exact: true }).fill(url);
     await page
       .getByLabel("Personal access token", { exact: true })
@@ -289,6 +295,7 @@ test("keeps remembered reviews separate for each account and restores them after
     await page
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
+    await openInbox(page);
   };
   const disconnect = async () => {
     await page.getByRole("button", { name: "Settings", exact: true }).click();

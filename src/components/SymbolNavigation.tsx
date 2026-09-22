@@ -18,6 +18,11 @@ import { useTheme } from "../lib/useTheme";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 
+type SymbolTarget = Pull | { projectId: string; head: { sha: string } };
+const inspect = (target: SymbolTarget, query: SymbolQuery) =>
+  "projectId" in target
+    ? api.inspectLocalSymbol(target.projectId, target.head.sha, query)
+    : api.inspectSymbol(target, target.head.sha, query);
 type Token = TokenEventBase | DiffTokenEventBaseProps;
 type Action = "definition" | "references";
 type Entry = { query: SymbolQuery; result: SymbolResult; id: number };
@@ -39,7 +44,7 @@ const identifier = (token: Token) =>
 
 /** A single symbol controller keeps peeks separate from review selection and unsaved buffers. */
 export function useSymbolNavigation(
-  pull: Pull,
+  pull: SymbolTarget,
   path: string,
   hash: string | undefined,
   checks?: ProjectCheckState | null,
@@ -92,7 +97,7 @@ export function useSymbolNavigation(
     setError(undefined);
     try {
       const q = { ...query, kind };
-      const result = await api.inspectSymbol(pull, pull.head.sha, q);
+      const result = await inspect(pull, q);
       if (request !== generation.current) return;
       setHistory((previous) =>
         [
@@ -125,8 +130,7 @@ export function useSymbolNavigation(
         rect = token.tokenElement.getBoundingClientRect(),
         request = hoverGeneration.current;
       timer.current = setTimeout(() => {
-        void api
-          .inspectSymbol(pull, pull.head.sha, query)
+        void inspect(pull, query)
           .then((result) => {
             if (request === hoverGeneration.current && result.display)
               setHover({
@@ -267,7 +271,7 @@ function SymbolResults({
   entry,
   onNavigate,
 }: {
-  pull: Pull;
+  pull: SymbolTarget;
   entry: Entry;
   onNavigate: (query: SymbolQuery, kind: Action) => Promise<void>;
 }) {
@@ -351,7 +355,7 @@ function SymbolPreview({
   location,
   onNavigate,
 }: {
-  pull: Pull;
+  pull: SymbolTarget;
   location: SymbolLocation;
   onNavigate: (query: SymbolQuery, kind: Action) => Promise<void>;
 }) {
@@ -365,14 +369,13 @@ function SymbolPreview({
     setSource(undefined);
     setError(undefined);
     setSelection(undefined);
-    void api
-      .inspectSymbol(pull, pull.head.sha, {
-        path: location.path,
-        hash: location.hash,
-        line: location.line,
-        column: location.column,
-        kind: "source",
-      })
+    void inspect(pull, {
+      path: location.path,
+      hash: location.hash,
+      line: location.line,
+      column: location.column,
+      kind: "source",
+    })
       .then((r) => {
         if (current) setSource(r.source);
       })

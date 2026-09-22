@@ -1,3 +1,4 @@
+import { roomVerifier } from "../fixtures/room-access";
 import { describe, it, expect, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -195,10 +196,30 @@ describe("mentions and transport", () => {
   it("keeps authenticated members working when anonymous proxy traffic is rate limited", async () => {
     const { db, aliceToken, bobToken } = setup(),
       admin = token(),
-      server = createRoomsServer(db, admin);
+      server = createRoomsServer(db, admin, roomVerifier);
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     try {
       const url = `http://127.0.0.1:${(server.address() as any).port}`;
+      for (const [credential, secret] of [
+        ["alice", aliceToken],
+        ["bob", bobToken],
+      ]) {
+        db.bindIdentity(
+          db.authenticate(secret),
+          await roomVerifier.verify(project, credential),
+          true,
+        );
+        const verified = await fetch(url + "/v1/access", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${secret}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ giteaToken: credential }),
+        });
+        expect(verified.status).toBe(200);
+        await verified.text();
+      }
       for (let batch = 0; batch < 60; batch++) {
         await Promise.all(
           Array.from({ length: 20 }, async () => {
@@ -239,10 +260,25 @@ describe("mentions and transport", () => {
   });
   it("enforces HTTP authentication, rejects browser origins and validates message fields", async () => {
     const { db, aliceToken, room } = setup(),
-      server = createRoomsServer(db, token());
+      server = createRoomsServer(db, token(), roomVerifier);
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     try {
       const url = `http://127.0.0.1:${(server.address() as any).port}`;
+      db.bindIdentity(
+        db.authenticate(aliceToken),
+        await roomVerifier.verify(project, "alice"),
+        true,
+      );
+      const verified = await fetch(url + "/v1/access", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ giteaToken: "alice" }),
+      });
+      expect(verified.status).toBe(200);
+      await verified.text();
       expect((await fetch(url + `/v1/rooms/${room.id}/messages`)).status).toBe(
         401,
       );
