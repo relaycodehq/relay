@@ -316,11 +316,15 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
 
 it("asks Claude for its models again once the user signs in", async () => {
   // Signed out, the CLI still lists the models built into it.
-  const cli = (tokenSource: string, models: string[]) =>
+  const cli = (tokenSource: string | undefined, models: string[]) =>
     vi.mocked(query).mockImplementation(
       () =>
         ({
-          accountInfo: async () => ({ tokenSource, apiProvider: "firstParty" }),
+          // A CLI that reports no account at all may still be signed in.
+          accountInfo: async () =>
+            tokenSource
+              ? { tokenSource, apiProvider: "firstParty" }
+              : undefined,
           supportedModels: async () =>
             models.map((value) => ({ value, displayName: value })),
           close() {},
@@ -328,7 +332,7 @@ it("asks Claude for its models again once the user signs in", async () => {
     );
   cli("none", ["opus[1m]"]);
   await expect(listClaudeModels()).rejects.toThrow("Sign in to Claude");
-  cli("claude.ai", ["opus", "claude-opus-5"]);
+  cli(undefined, ["opus", "claude-opus-5"]);
   expect((await listClaudeModels()).map((m) => m.id)).toEqual([
     "opus",
     "claude-opus-5",

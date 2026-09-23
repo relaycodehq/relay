@@ -315,8 +315,9 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
       const models = await Promise.race([
         // Signed out, the CLI still lists the models built into it. Kept,
         // that list would outlast signing in; failing lets the picker ask again.
+        // A CLI that reports no account isn't known to be signed out.
         stream.accountInfo().then((account) => {
-          if (account.tokenSource === "none" && !account.apiKeySource)
+          if (account?.tokenSource === "none" && !account.apiKeySource)
             throw new Error("Sign in to Claude to list its models.");
           return stream.supportedModels();
         }),
