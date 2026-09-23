@@ -16,6 +16,7 @@ import {
   type TriageResult,
 } from "../../shared/triage";
 import { filePathSchema } from "../../shared/validation";
+import { ResponseTooLarge } from "../../shared/http";
 import {
   prepareCandidate,
   addRelatedChanges,
@@ -43,8 +44,6 @@ const defaults = {
   evidenceChars: 2_000_000,
   retries: 1,
 };
-const tooLarge = (message: string) =>
-  /safe display size|too large for the inline viewer/.test(message);
 class RevisionChanged extends Error {}
 
 export class TriageService {
@@ -333,7 +332,7 @@ export class TriageService {
               e instanceof Error
                 ? e.message.slice(0, 1000)
                 : "File could not be analyzed";
-            if (tooLarge(reason)) skip(path, reason);
+            if (e instanceof ResponseTooLarge) skip(path, reason);
             else checkpoint.failures[path] = { stage: "scan", reason };
           }
         }

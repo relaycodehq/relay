@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RoomProject } from "../shared/rooms";
 import { normalizeServer } from "../shared/validation";
+import { readBounded, ResponseTooLarge } from "../shared/http";
 import { HttpError } from "./database";
 export interface RepositoryIdentity {
   userId: number;
@@ -65,30 +66,18 @@ export class GiteaRepositoryVerifier implements RepositoryVerifier {
           "Gitea could not verify your access to this repository.",
         );
       }
-      const reader = response.body?.getReader();
-      if (!reader)
+      if (!response.body)
         throw new HttpError(503, "Gitea returned no access-check response.");
-      const chunks: Uint8Array[] = [];
-      let size = 0;
+      let text: string;
       try {
-        for (;;) {
-          const part = await reader.read();
-          if (part.done) break;
-          size += part.value.length;
-          if (size > 256000) {
-            await reader.cancel();
-            throw new HttpError(
-              503,
-              "Gitea access-check response is too large.",
-            );
-          }
-          chunks.push(part.value);
-        }
-      } finally {
-        reader.releaseLock();
+        text = await readBounded(response, 256000, "");
+      } catch (error) {
+        if (error instanceof ResponseTooLarge)
+          throw new HttpError(503, "Gitea access-check response is too large.");
+        throw error;
       }
       try {
-        return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        return JSON.parse(text);
       } catch {
         throw new HttpError(
           503,

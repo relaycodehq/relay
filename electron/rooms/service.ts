@@ -26,6 +26,7 @@ import {
   type RoomContext,
 } from "../../shared/rooms";
 import { runCodex } from "./codex";
+import { readBounded } from "../../shared/http";
 
 type Context = { client: Gitea; ref: PullRef; key: string; dir?: string };
 export interface RoomDelivery {
@@ -105,27 +106,11 @@ export class RoomService {
       redirect: "error",
       signal: AbortSignal.timeout(10000),
     });
-    if (Number(response.headers.get("content-length") ?? 0) > 8_000_000)
-      throw new Error("Room server returned too much data.");
-    const reader = response.body?.getReader();
-    let bytes = 0;
-    const chunks: Uint8Array[] = [];
-    if (reader)
-      try {
-        for (;;) {
-          const part = await reader.read();
-          if (part.done) break;
-          bytes += part.value.byteLength;
-          if (bytes > 8_000_000) {
-            await reader.cancel();
-            throw new Error("Room server returned too much data.");
-          }
-          chunks.push(part.value);
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    const text = Buffer.concat(chunks).toString("utf8");
+    const text = await readBounded(
+      response,
+      8_000_000,
+      "Room server returned too much data.",
+    );
     let value: any;
     try {
       value = JSON.parse(text);

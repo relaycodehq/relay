@@ -9,6 +9,7 @@ import type {
   Draft,
 } from "../shared/types";
 import { networkError } from "./network-errors";
+import { readBounded } from "../shared/http";
 import { normalizeServer, parsePullUrl } from "../shared/validation";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
@@ -85,30 +86,13 @@ export class Gitea {
                   : `Gitea returned HTTP ${response.status}. Please retry.`,
         );
       }
-      const limit = options.limit ?? MAX_JSON;
-      if (Number(response.headers.get("content-length")) > limit) {
-        await response.body?.cancel();
-        throw new Error(
-          "This file is too large for the inline viewer (2 MiB per side). Open it in Gitea or your local editor.",
-        );
-      }
-      const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      if (reader)
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.length;
-          if (size > limit) {
-            await reader.cancel();
-            throw new Error(
-              "Response exceeded the safe display size. Open this file in Gitea or your local editor.",
-            );
-          }
-          chunks.push(value);
-        }
-      const body = Buffer.concat(chunks).toString("utf8");
+      const body = await readBounded(
+        response,
+        options.limit ?? MAX_JSON,
+        options.raw
+          ? "This file is too large for the inline viewer. Open it in Gitea or your local editor."
+          : "Gitea returned more data than Relay can safely handle. Please retry.",
+      );
       return {
         data: (options.raw ? body : body ? JSON.parse(body) : null) as T,
         headers: response.headers,

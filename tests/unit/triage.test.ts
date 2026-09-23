@@ -19,6 +19,7 @@ import {
   type ClassificationResult,
 } from "../../electron/triage/classifier";
 import { TriageService } from "../../electron/triage/service";
+import { ResponseTooLarge } from "../../shared/http";
 import { Store } from "../../electron/store";
 import type { ChangedFile, FilePair, Pull } from "../../shared/types";
 import type { Gitea } from "../../electron/gitea";
@@ -823,6 +824,20 @@ describe("Analysis lifecycle and durable groups", () => {
     expect((await finish(f)).status).toBe("complete");
     expect(downloads).toHaveBeenCalledTimes(calls + 1);
     expect(downloads.mock.calls.at(-1)![1].filename).toBe("one.ts");
+  });
+  it("keeps a file too large to fetch in individual review instead of retrying it", async () => {
+    const f = await fixture();
+    const original = f.client.contentsAt.bind(f.client);
+    vi.spyOn(f.client, "contentsAt").mockImplementation((pull, changed) =>
+      changed.filename === "one.ts"
+        ? Promise.reject(new ResponseTooLarge("This file is too large."))
+        : original(pull, changed),
+    );
+    await f.service.start(f.client, ref, "key", head, base);
+    const done = await finish(f);
+    expect(done.status).toBe("complete");
+    expect(done.resume).toBeFalsy();
+    expect(done.result!.ordinary["one.ts"]).toBe("This file is too large.");
   });
   it("resumes a legacy partial result while retaining its confirmed groups", async () => {
     const f = await fixture();
