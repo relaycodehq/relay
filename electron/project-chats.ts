@@ -123,6 +123,15 @@ export class ProjectChats {
   private titleUpdates = new Set<Promise<void>>();
   /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
   private titlesAsked = new Set<string>();
+  /** What a deep review does after a turn ends; closing waits for it. */
+  private reviewSteps = new Set<Promise<void>>();
+  private reviewStep(id: string, turn: { request?: string; answer?: string }) {
+    const step = this.reviews
+      .finished(id, turn)
+      .catch((e) => console.warn("Deep review could not continue:", e));
+    this.reviewSteps.add(step);
+    void step.finally(() => this.reviewSteps.delete(step));
+  }
   private reviews = new DeepReviews({
     load: (id) => this.load(id),
     save: (chat) => this.save(chat),
@@ -1196,9 +1205,7 @@ export class ProjectChats {
       ).finally(() => {
         active.requests.close();
         this.active.delete(id);
-        void this.reviews
-          .finished(id, { request: input.id, answer: answer.id })
-          .catch((e) => console.warn("Deep review could not continue:", e));
+        this.reviewStep(id, { request: input.id, answer: answer.id });
         // The finished answer moved `updated`; refresh the sidebar summary
         // only after the thread stops counting as active.
         void this.updateSummary(chat).catch(() => {});
@@ -1388,9 +1395,7 @@ export class ProjectChats {
         active.requests.close();
         this.active.delete(chat.id);
         void this.updateSummary(chat).catch(() => {});
-        void this.reviews
-          .finished(chat.id, { answer: message.id })
-          .catch((e) => console.warn("Deep review could not continue:", e));
+        this.reviewStep(chat.id, { answer: message.id });
         void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
       });
       void active.job.catch(() => {});
@@ -2147,6 +2152,7 @@ export class ProjectChats {
     await Promise.allSettled([...this.controls.values()]);
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled([...this.active.values()].map((a) => a.job));
+    await Promise.allSettled([...this.reviewSteps]);
     await Promise.allSettled([
       ...this.syncing.values(),
       ...this.loading.values(),
