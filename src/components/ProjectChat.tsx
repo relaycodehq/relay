@@ -275,6 +275,19 @@ function placeInView(view: HTMLElement) {
       return { id: m.dataset.messageId!, offset: box.top - top };
   }
 }
+/** Scrolls a message back to its place in the view; false if it isn't shown. */
+function scrollToPlace(
+  view: HTMLElement,
+  { id, offset }: { id: string; offset: number },
+) {
+  const message = view.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+  if (!message) return false;
+  view.scrollTop +=
+    message.getBoundingClientRect().top -
+    view.getBoundingClientRect().top -
+    offset;
+  return true;
+}
 const Message = memo(function Message({
   message: m,
   chatId,
@@ -586,7 +599,9 @@ export function ProjectChat({
   const scroll = useRef<HTMLDivElement>(null),
     column = useRef<HTMLDivElement>(null),
     follow = useRef(true),
-    returning = useRef<{ id: string; offset: number } | undefined>(undefined);
+    returning = useRef<{ id: string; offset: number } | undefined>(undefined),
+    // Where holding that message left the scroll; a scroll elsewhere is the reader's.
+    placed = useRef(0);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
   const composerDock = useRef<HTMLDivElement>(null);
@@ -856,16 +871,11 @@ export function ProjectChat({
     const el = scroll.current;
     if (!el) return;
     const back = returning.current;
-    if (back) {
-      const top = el.querySelector(
-        `[data-message-id="${CSS.escape(back.id)}"]`,
-      );
-      if (top) {
-        el.scrollTop +=
-          top.getBoundingClientRect().top -
-          el.getBoundingClientRect().top -
-          back.offset;
-        returning.current = undefined;
+    // Sending a message pins the thread instead.
+    if (back && !follow.current) {
+      // Held there until the reader scrolls; see the observer below.
+      if (scrollToPlace(el, back)) {
+        placed.current = el.scrollTop;
         return;
       }
       // Further back than the latest messages: show enough to reach it.
@@ -876,10 +886,10 @@ export function ProjectChat({
       }
       // Still opening, or that message is gone: then the bottom it is.
       if (!history.data) return;
-      returning.current = undefined;
       readingPlaces.delete(place);
       follow.current = true;
     }
+    returning.current = undefined;
     if (follow.current) el.scrollTop = el.scrollHeight;
   }, [messages, rootId, visible]);
   async function send(
@@ -1158,10 +1168,15 @@ export function ProjectChat({
     const content = column.current;
     if (!content) return;
     // Messages grow after they render: off-screen ones swap their estimated
-    // height for the real one, and images and code load late. Stay pinned.
+    // height for the real one, and images and code load late. Stay pinned,
+    // or keep the message the reader came back to where it was: the ones
+    // around it only take their real heights a frame after it's placed.
     const observer = new ResizeObserver(() => {
-      if (follow.current && scroll.current)
-        scroll.current.scrollTop = scroll.current.scrollHeight;
+      const el = scroll.current;
+      if (!el) return;
+      if (follow.current) el.scrollTop = el.scrollHeight;
+      else if (returning.current && scrollToPlace(el, returning.current))
+        placed.current = el.scrollTop;
     });
     observer.observe(content);
     return () => observer.disconnect();
@@ -1310,7 +1325,12 @@ export function ProjectChat({
             const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
             follow.current = distance < 80;
             setScrolledUp(distance > 160);
-            if (returning.current) return;
+            // Holding a message in place scrolls too; the reader scrolling
+            // anywhere else lets it go.
+            if (returning.current) {
+              if (e.scrollTop === placed.current) return;
+              returning.current = undefined;
+            }
             if (follow.current) {
               readingPlaces.delete(place);
               return;
