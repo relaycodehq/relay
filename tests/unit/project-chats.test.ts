@@ -549,11 +549,14 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
       },
     ],
   });
+  // The thread stays active a moment after its answer reads complete.
   await vi.waitFor(
-    async () =>
+    async () => {
       expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
         "complete",
-      ),
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
     { timeout: 6000 },
   );
   const image = (await chats.get(chat.id)).messages[0].images?.[0];
