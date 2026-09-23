@@ -1170,7 +1170,8 @@ export class ProjectChats {
           ? `\n\nFile rollbacks since your earlier turns; re-read these files before relying on what you saw:\n${chat.checkoutNotes.map((n) => `- ${n}`).join("\n")}`
           : "";
       if (rollbacks) delete chat.checkoutNotes;
-      if (!command) (chat.scopeHeard ??= {})[heardKey] = scopeKey;
+      // A command goes out alone, so a session it starts hears the scope next turn.
+      (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
       const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
       const prompt = command
         ? mention.question

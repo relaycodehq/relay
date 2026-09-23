@@ -521,6 +521,32 @@ it("sends a Claude slash command as the whole prompt so Claude runs it", async (
     "/security-review focus on auth",
   );
 }, 10000);
+it("tells a Claude session begun with a command what the thread is about on its next turn", async () => {
+  const chat = await chats.create(projectId, {
+    kind: "pr",
+    ref: { owner: "Web", name: "portal", number: 7 },
+  });
+  for (const body of ["@claude /security-review", "@claude Fix the first"]) {
+    await chats.send(chat.id, { ...input(body), provider: "claude" });
+    await vi.waitFor(
+      async () => {
+        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+          "complete",
+        );
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 6000 },
+    );
+  }
+  const prompts = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((r) => r.provider === "claude" && !r.args.includes("--print"))
+    .map((r) => JSON.parse(r.prompt).message.content[0].text as string);
+  expect(prompts[0]).toBe("/security-review");
+  expect(prompts[1]).toContain("This discussion concerns PR #7 in Web/portal");
+}, 15000);
 it("keeps ordinary notes local, cancels a partial answer, and does not duplicate retried messages", async () => {
   const chat = await chats.create(projectId, { kind: "project" }),
     note = input("Consider a cache here.");
