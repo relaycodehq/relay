@@ -2,7 +2,7 @@ import { realpath } from "node:fs/promises";
 import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
-import type { Gitea } from "./gitea";
+import { ApiError, type Gitea } from "./gitea";
 import type { Project } from "../shared/projects";
 import {
   moveProjectInList,
@@ -180,12 +180,18 @@ export class Projects {
         client.account.server,
       );
       if (!repo) continue;
-      const response = await client.request<{ full_name: string }>(
-        client.repo(repo),
-      );
+      const response = await client
+        .request<{ full_name: string }>(client.repo(repo))
+        .catch((e: unknown) => {
+          // A deleted repository, or one this account can't see, isn't it.
+          if (e instanceof ApiError && [403, 404].includes(e.status))
+            return null;
+          throw e;
+        });
       if (
+        !response ||
         response.data.full_name.toLowerCase() !==
-        `${repo.owner}/${repo.name}`.toLowerCase()
+          `${repo.owner}/${repo.name}`.toLowerCase()
       )
         continue;
       await this.store.update((s) => {
