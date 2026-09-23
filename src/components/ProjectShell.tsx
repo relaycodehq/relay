@@ -245,14 +245,9 @@ export default function ProjectShell() {
         project &&
         !legacy &&
         !dirty &&
-        !settings &&
-        !signin &&
-        !choosePR &&
-        !share &&
-        !invitation &&
-        !browseShared &&
         !error &&
-        !document.querySelector('[role="dialog"]')
+        // Modal <dialog>s have no role attribute; popovers do.
+        !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
         navigate(project, undefined, true);
@@ -269,19 +264,7 @@ export default function ProjectShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    project?.id,
-    chatId,
-    legacy,
-    dirty,
-    settings,
-    signin,
-    choosePR,
-    share,
-    invitation,
-    browseShared,
-    error,
-  ]);
+  }, [project?.id, legacy, dirty, error]);
   async function add() {
     try {
       const p = await api.addProject();

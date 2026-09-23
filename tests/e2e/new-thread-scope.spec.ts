@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 
-test("a new thread in another project starts on the repository, not its old draft scope", async () => {
+test("new threads start on the repository, and not behind an open dialog", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-scope-")));
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -69,6 +69,24 @@ test("a new thread in another project starts on the repository, not its old draf
     await expect(page.locator(".project-window-title")).toContainText("alpha");
     await expect(context("Deep review")).not.toHaveClass(/selected/);
     await expect(context("Repository")).toHaveClass(/selected/);
+
+    // The new-thread shortcut leaves the workspace alone behind a dialog.
+    const changes = page
+      .getByRole("group", { name: "Workspace panes" })
+      .getByRole("button", { name: "Changes", exact: true });
+    await changes.click();
+    await expect(changes).toHaveAttribute("aria-pressed", "true");
+    await page.getByLabel("Message project").fill("Later");
+    await page.getByRole("button", { name: "Send message" }).click({
+      button: "right",
+    });
+    await page.getByRole("menuitem", { name: "Pick a time…" }).click();
+    await expect(page.getByLabel("Send at")).toBeVisible();
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+N" : "Control+N",
+    );
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(changes).toHaveAttribute("aria-pressed", "true");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
