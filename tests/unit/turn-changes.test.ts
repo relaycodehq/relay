@@ -114,7 +114,7 @@ it("keeps no ref when only someone else changed files during the turn", async ()
   expect(() => git("rev-parse", "--verify", "-q", turnRef(id))).toThrow();
 });
 
-it("matches the agent's paths from a subfolder and through symlinked folders", () => {
+it("matches the agent's paths whether relative, absolute or dotted", () => {
   const files = [
     { path: "app/src/x.ts", additions: 1, deletions: 0 },
     { path: "app/src/y.ts", additions: 1, deletions: 0 },
@@ -125,11 +125,10 @@ it("matches the agent's paths from a subfolder and through symlinked folders", (
     ownFiles(
       files,
       {
-        edited: ["src/x.ts", "/private/tmp/repo/app/src/y.ts"],
-        commands: ["sed -i '' 's/a/b/' ./src/z.ts"],
+        edited: ["app/src/x.ts", "/repo/app/src/y.ts"],
+        commands: ["sed -i '' 's/a/b/' ./app/src/z.ts"],
       },
-      "/tmp/repo/app",
-      ["/tmp/repo", "/private/tmp/repo"],
+      "/repo",
     ).map((f) => f.path),
   ).toEqual(["app/src/x.ts", "app/src/y.ts", "app/src/z.ts"]);
 });
@@ -151,7 +150,6 @@ it("matches a file a command names from the folder it changed into", () => {
         ],
       },
       "/repo",
-      ["/repo"],
     ).map((f) => f.path),
   ).toEqual(["app/src/x.ts", "web/z.ts"]);
 });

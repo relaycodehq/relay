@@ -4,7 +4,6 @@ import {
   copyFile,
   lstat,
   mkdtemp,
-  realpath,
   rm,
   rmdir,
   stat,
@@ -168,7 +167,7 @@ function names(text: string, path: string) {
 const cdTarget = /(?:^|[\s;&|("'])cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|)"']+))/g;
 
 /**
- * The files among `files` (relative to the repository `top`) that the agent
+ * The files among `files` (relative to the checkout `root`) that the agent
  * changed: written by its file tools, or named in a command it ran. The
  * snapshots see the whole checkout, so without this a turn would also claim
  * edits from the user's editor, other threads and CLI sessions that ran
@@ -177,47 +176,35 @@ const cdTarget = /(?:^|[\s;&|("'])cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|)"']+))/g;
 export function ownFiles(
   files: TurnFileChange[],
   claim: TurnClaim,
-  cwd: string,
-  tops: string[],
+  root: string,
 ) {
   const edited = new Set<string>();
-  for (const path of claim.edited)
-    for (const top of tops) {
-      const rel = relative(top, resolve(cwd, path));
-      if (rel && !rel.startsWith("..") && !isAbsolute(rel)) edited.add(rel);
-    }
+  for (const path of claim.edited) {
+    const rel = relative(root, resolve(root, path));
+    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) edited.add(rel);
+  }
   // A command can name a file from a folder it moves into: `cd sub && sed -i … file.ts`.
   const commands = claim.commands.map((command) => ({
     command,
     folders: [
-      cwd,
+      root,
       ...[...command.matchAll(cdTarget)].map((m) =>
-        resolve(cwd, m[1] ?? m[2] ?? m[3]!),
+        resolve(root, m[1] ?? m[2] ?? m[3]!),
       ),
     ],
   }));
   return files.filter((file) => {
     if (edited.has(file.path)) return true;
+    const absolute = join(root, file.path);
     return commands.some(({ command, folders }) => {
-      const forms = new Set([file.path, `./${file.path}`]);
-      for (const top of tops) {
-        const absolute = join(top, file.path);
-        forms.add(absolute);
-        for (const folder of folders) {
-          const from = relative(folder, absolute);
-          if (from && !from.startsWith("..")) forms.add(from).add(`./${from}`);
-        }
+      const forms = new Set([absolute]);
+      for (const folder of folders) {
+        const from = relative(folder, absolute);
+        if (from && !from.startsWith("..")) forms.add(from).add(`./${from}`);
       }
       return [...forms].some((form) => names(command, form));
     });
   });
-}
-
-/** The repository's top folder, both as given and with symlinks resolved. */
-async function repositoryTops(root: string) {
-  const top = (await run(root, ["rev-parse", "--show-toplevel"])).trim();
-  const real = await realpath(top).catch(() => top);
-  return [...new Set([top, real])];
 }
 
 /**
@@ -249,8 +236,7 @@ export async function finishTurn(
         after,
       ]),
     );
-    if (claim && files.length)
-      files = ownFiles(files, claim, root, await repositoryTops(root));
+    if (claim) files = ownFiles(files, claim, root);
     files = files.slice(0, maxFiles);
     if (!files.length) await run(root, ["update-ref", "-d", ref]);
     else if (answerId === messageId)
