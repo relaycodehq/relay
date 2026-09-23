@@ -859,6 +859,12 @@ export function ProjectChat({
         returning.current = undefined;
         return;
       }
+      // Further back than the latest messages: show enough to reach it.
+      const index = shown.findIndex((m) => m.id === back.id);
+      if (index >= 0) {
+        setVisible(shown.length - index);
+        return;
+      }
       // Still opening, or that message is gone: then the bottom it is.
       if (!history.data) return;
       returning.current = undefined;
@@ -866,7 +872,7 @@ export function ProjectChat({
       follow.current = true;
     }
     if (follow.current) el.scrollTop = el.scrollHeight;
-  }, [messages, rootId]);
+  }, [messages, rootId, visible]);
   async function send(
     value: Pick<
       ProjectChatSend,
