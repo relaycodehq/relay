@@ -537,17 +537,15 @@ export function ProjectComposer({
         return next;
       });
   }
+  const sendDisabled =
+    busy ||
+    (!draft.trim() && !images.length && !allowEmpty) ||
+    preparing ||
+    !selected;
   /** `sendAt` holds the message until then (Send later). */
   async function send(steer = false, sendAt?: number) {
     if (busy || commands.interceptSend()) return;
-    if (
-      !selected ||
-      (!draft.trim() && !images.length && !allowEmpty) ||
-      busy ||
-      preparing ||
-      sending.current
-    )
-      return;
+    if (sendDisabled || sending.current) return;
     const body =
       mention && !mention.question && images.length
         ? `@${mention.provider} Describe the attached screenshot.`
@@ -602,11 +600,6 @@ export function ProjectComposer({
       sending.current = false;
     }
   }
-  const sendDisabled =
-    busy ||
-    (!draft.trim() && !images.length && !allowEmpty) ||
-    preparing ||
-    !selected;
   return (
     <div className="thread-compose-wrap">
       {planProvider && (
