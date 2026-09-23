@@ -415,6 +415,10 @@ export async function runClaudeProject(
   // Steers Claude hasn't finished with, by the uuid sent with them. Claude
   // reports each one's progress; `state` stays unset on CLIs that don't.
   const steering = new Map<string, { id?: string; state?: string }>();
+  // The prompt's own progress, on CLIs that report it.
+  const prompt: { uuid: ReturnType<typeof randomUUID>; state?: string } = {
+    uuid: randomUUID(),
+  };
   // Text followed by a tool call is commentary, not the answer. Keep it out of the body.
   const commentary = new Set<string>();
   // A tool result only carries the call id; keep the call's label for the finished row.
@@ -603,6 +607,7 @@ export async function runClaudeProject(
       session.turn = turn;
       session.input.push({
         type: "user",
+        uuid: prompt.uuid,
         session_id: session.threadId ?? "",
         parent_tool_use_id: null,
         message: {
@@ -683,6 +688,14 @@ export async function runClaudeProject(
           if (steer.id) options.onSteered?.(steer.id);
         } else if (lifecycle.state !== "queued")
           steering.delete(lifecycle.command_uuid!);
+      }
+      if (
+        lifecycle.type === "command_lifecycle" &&
+        lifecycle.command_uuid === prompt.uuid
+      ) {
+        prompt.state = lifecycle.state;
+        // Text before Claude picked the prompt up answered something else.
+        if (prompt.state === "started" && answer) publish("");
       }
       if (message.type === "stream_event" && !message.parent_tool_use_id) {
         const event = message.event;
@@ -771,6 +784,16 @@ export async function runClaudeProject(
           }
       }
       if (message.type === "result") {
+        // Claude finishes what it queued before the prompt first: resuming a
+        // session reports a background command the last process left running
+        // with a result of its own, sometimes before the prompt is even queued.
+        const origin = (message as { origin?: { kind?: string } }).origin;
+        if (
+          !options.adopt &&
+          (prompt.state === "queued" ||
+            (prompt.state !== "started" && origin && origin.kind !== "human"))
+        )
+          continue;
         steerable = false;
         if (message.is_error || message.subtype !== "success")
           throw new Error("Claude could not complete this turn.");
