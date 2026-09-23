@@ -1321,6 +1321,14 @@
 .project-message {
   padding: 22px 0;
   border-bottom: 0;
+  /* Long threads: messages far off screen skip layout and paint. `auto`
+     remembers each one's real height once it has been shown. */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 400px;
+  overflow-clip-margin: 8px;
+}
+.project-message.user {
+  contain-intrinsic-block-size: auto 120px;
 }
 .project-message > header {
   margin-bottom: 10px;

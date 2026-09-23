@@ -474,6 +474,7 @@ export function ProjectChat({
   const created = useRef<ChatSummary | undefined>(undefined);
   const [visible, setVisible] = useState(80);
   const scroll = useRef<HTMLDivElement>(null),
+    column = useRef<HTMLDivElement>(null),
     follow = useRef(true);
   const composer = useRef<ComposerHandle>(null);
   const composerDock = useRef<HTMLDivElement>(null);
@@ -912,6 +913,18 @@ export function ProjectChat({
     observer.observe(dock);
     return () => observer.disconnect();
   }, [isEmpty]);
+  useEffect(() => {
+    const content = column.current;
+    if (!content) return;
+    // Messages grow after they render: off-screen ones swap their estimated
+    // height for the real one, and images and code load late. Stay pinned.
+    const observer = new ResizeObserver(() => {
+      if (follow.current && scroll.current)
+        scroll.current.scrollTop = scroll.current.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [isEmpty]);
   const peers =
     presence.data?.filter((p) => p.userId !== chat?.shared?.memberId) ?? [];
   return (
@@ -1008,7 +1021,7 @@ export function ProjectChat({
               retry={() => void history.refetch()}
             />
           )}
-          <div className="thread-message-column">
+          <div className="thread-message-column" ref={column}>
             {root && <h2 className="reply-heading">Side conversation</h2>}
             {shown.length > visible && (
               <button
