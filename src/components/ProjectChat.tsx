@@ -1356,7 +1356,9 @@ export function ProjectChat({
                           <DeepReviewReport
                             chatId={chat.id}
                             state={review}
-                            busy={busy}
+                            // A fix asked for while the lead works would wait in the
+                            // queue, its findings still open to ask for again.
+                            busy={busy || running}
                             onFix={(findings) => void fixFindings(findings)}
                             onStatus={setFindingStatus}
                             onOpenFile={openFile}

@@ -236,3 +236,59 @@ test("a message sent after a deep review failed to start gets a thread of its ow
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("the next findings wait until the lead has finished a fix", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(join(repo, "src"), { recursive: true });
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [];\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const app = await launch(root);
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page
+      .getByRole("button", { name: "Add project folder", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    // Codex takes a moment over each fix, long enough to ask for another.
+    await page.getByRole("button", { name: "Lead model" }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page
+      .getByRole("option", { name: "GPT-5.6-Sol", exact: true })
+      .click();
+    await page.getByLabel("What to focus on").fill("fixture two findings");
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+    const report = page.locator(".deep-review-report");
+    await expect(report.locator(".deep-review-task")).toHaveCount(2, {
+      timeout: 20000,
+    });
+    await report.getByRole("button", { name: "Fix selected (1)" }).click();
+    await expect(report.getByText("Fixing…")).toBeVisible();
+    const other = report.getByRole("button", { name: "Fix the other 1" });
+    await expect(other).toBeDisabled();
+    await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
+    await expect(other).toBeEnabled();
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

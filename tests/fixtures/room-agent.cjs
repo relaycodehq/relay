@@ -2,27 +2,38 @@
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 // A deep review lead's answer: a summary, then its findings for Relay to list.
-const leadAnswer = [
-  "Reordering the queue can drop a message `F1`.",
-  "",
-  "```relay-findings",
-  JSON.stringify({
-    findings: [
-      {
-        id: "F1",
-        priority: "P1",
-        title: "Reordering the queue can drop a message",
-        files: [{ path: "src/queue.ts", line: 3 }],
-        reviewers: [1, 2],
-        check: "Read the drop handler.",
-      },
-    ],
-    dropped: [
-      { title: "Unused import", reason: "Already gone.", reviewers: [2] },
-    ],
-  }),
-  "```",
-].join("\n");
+const leadReport = (findings) =>
+  [
+    "Reordering the queue can drop a message `F1`.",
+    "",
+    "```relay-findings",
+    JSON.stringify({
+      findings,
+      dropped: [
+        { title: "Unused import", reason: "Already gone.", reviewers: [2] },
+      ],
+    }),
+    "```",
+  ].join("\n");
+const queueFinding = {
+  id: "F1",
+  priority: "P1",
+  title: "Reordering the queue can drop a message",
+  files: [{ path: "src/queue.ts", line: 3 }],
+  reviewers: [1, 2],
+  check: "Read the drop handler.",
+};
+const leadAnswer = leadReport([queueFinding]);
+const twoFindings = leadReport([
+  queueFinding,
+  {
+    id: "F2",
+    priority: "P2",
+    title: "The queue never shrinks",
+    files: [{ path: "src/queue.ts", line: 1 }],
+    reviewers: [2],
+  },
+]);
 const capture = process.env.RELAY_AGENT_CAPTURE;
 function record(data) {
   if (capture)
@@ -459,6 +470,8 @@ if (args.includes("--permission-prompt-tool")) {
       const said = m.params.input[0].text;
       const answer =
         Object.entries({
+          // A review whose focus asks for it reports two findings.
+          "fixture two findings": twoFindings,
           "You lead a deep review": leadAnswer,
           "fixture edit files":
             "Added `src/guard.ts`; `src/cache.ts:1` needed no change.",
