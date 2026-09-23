@@ -338,3 +338,47 @@ test("keeps remembered reviews separate for each account and restores them after
     await second.close();
   }
 });
+
+test("the pull request inbox keeps its place after a visit to projects", async () => {
+  const fixture = await fixtureServer();
+  const dataDir = await mkdtemp(join(tmpdir(), "relay-inbox-return-"));
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: { ...env, RELAY_TEST_DATA: dataDir },
+  });
+  try {
+    const page = await app.firstWindow();
+    await openSignIn(page);
+    await page
+      .getByLabel("Gitea server", { exact: true })
+      .fill(fixture.serverUrl);
+    await page
+      .getByLabel("Personal access token", { exact: true })
+      .fill("test-token");
+    await page
+      .getByRole("button", { name: "Connect to Gitea", exact: true })
+      .click();
+    await openInbox(page);
+    await page
+      .getByRole("button", { name: /Make pull request reviews/ })
+      .click();
+    await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#7");
+    await page
+      .getByRole("button", { name: "Back to projects", exact: true })
+      .click();
+    await openInbox(page);
+    await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#7");
+    expect(
+      (await page.evaluate(() => window.relay.bootstrap())).workspace.pull
+        ?.number,
+    ).toBe(7);
+  } finally {
+    await app.close();
+    await fixture.close();
+  }
+});

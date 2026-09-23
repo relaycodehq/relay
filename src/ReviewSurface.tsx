@@ -335,9 +335,15 @@ export function Connected({
   } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    void api
-      .saveWorkspace({ pull: selected, file, filter, query, state })
-      .catch(setError);
+    // A project's review pane keeps its own place; only the inbox's is saved.
+    if (embedded) return;
+    const workspace = { pull: selected, file, filter, query, state };
+    // The inbox remounts from the bootstrap snapshot, so keep that current too.
+    qc.setQueryData<Bootstrap>(
+      ["bootstrap"],
+      (boot) => boot && { ...boot, workspace },
+    );
+    void api.saveWorkspace(workspace).catch(setError);
   }, [selected, file, filter, query, state]);
   useEffect(() => {
     localStorage.setItem("relay-requests-hidden", String(requestsHidden));
