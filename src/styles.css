@@ -31,28 +31,7 @@
   --diff-deletion: #f9dcdf;
   color-scheme: light;
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --sidebar: #232326;
-  --inbox: #28282c;
-  --surface: #1e1e21;
-  --toolbar: #242427;
-  --text: #e1e1e5;
-  --muted: #94949f;
-  --border: #37373d;
-  --hover: #34343c;
-  --selected: #41414f;
-  --accent: #aaa8e5;
-  --accent-soft: #32313f;
-  --code-background: #1e1e21;
-  --code-foreground: #dedee6;
-  --background: #1e1e21;
-  --primary: #aaa8e5;
-  --diff-addition: #213f2d;
-  --diff-deletion: #45272c;
-  background: var(--surface);
-  color: var(--text);
-}
+/* Before the appearance store sets the palette inline, a dark system opens dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
     color-scheme: dark;
