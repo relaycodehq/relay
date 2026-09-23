@@ -6,7 +6,6 @@ import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import { createPullRequestSchema } from "../shared/pull-request-create";
 import { branches, changeBranch } from "./branches";
 import { branchActionSchema } from "../shared/branches";
-import { questionContext } from "./questions";
 import { Projects } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
@@ -19,9 +18,9 @@ import {
 import { LiveSync } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
 import { digest } from "./hash";
-import { flushGitOperations } from "./working-tree";
 import { gitActionSchema, workingPathSchema } from "../shared/working-tree";
 import {
+  flushGitOperations,
   workingTree,
   workingDiff,
   performGitAction,
@@ -38,7 +37,7 @@ import {
   roomProtocol,
   parseRoomInvitation,
 } from "../shared/rooms";
-import { launchLineQuestion } from "./questions";
+import { launchLineQuestion, questionContext } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
@@ -94,8 +93,11 @@ import {
 import {
   emptyProgress,
   emptyWorkspace,
+  type ApiMethod,
   type ChangedFile,
   type Issue,
+  type Pull,
+  type Repo,
   type Review,
   type ReviewComment,
   type Discussion,
@@ -157,6 +159,30 @@ const repoKey = (r: { owner: string; name: string }) =>
   JSON.stringify([requireClient().account.id, r.owner, r.name]);
 const prKey = (r: { owner: string; name: string; number: number }) =>
   JSON.stringify([requireClient().account.id, r.owner, r.name, r.number]);
+/** The checkout linked to a Gitea repository, if any. */
+const linkedFolder = (r: Repo): string | undefined =>
+  store.get().folders[repoKey(r)];
+function requireFolder(
+  r: Repo,
+  message = "Link this repository to a local folder first.",
+) {
+  const dir = linkedFolder(r);
+  if (!dir) throw new Error(message);
+  return dir;
+}
+/** Linux's basic_text backend stores plaintext; secrets then stay in memory. */
+const canEncrypt = async () =>
+  process.platform === "linux"
+    ? safeStorage.isEncryptionAvailable() &&
+      safeStorage.getSelectedStorageBackend() !== "basic_text"
+    : await safeStorage.isAsyncEncryptionAvailable();
+/** Encrypts with the OS credential store; null when it can't persist safely. */
+const seal = async (value: string) =>
+  (await canEncrypt())
+    ? (await safeStorage.encryptStringAsync(value)).toString("base64")
+    : null;
+const unseal = async (value: string) =>
+  (await safeStorage.decryptStringAsync(Buffer.from(value, "base64"))).result;
 function showWindow() {
   // Dock activation, a second launch and deep links all restore the same window.
   if (!win) return;
@@ -181,9 +207,7 @@ async function restoreSavedLogin() {
   const generation = ++restoreGeneration;
   loginRestore = "unlocking";
   try {
-    const { result } = await safeStorage.decryptStringAsync(
-      Buffer.from(saved.encryptedToken, "base64"),
-    );
+    const result = await unseal(saved.encryptedToken);
     // A delayed Keychain response must not undo a new sign-in or sign-out.
     if (generation !== restoreGeneration) return;
     if (!result) throw new Error("Empty saved credential");
@@ -369,7 +393,7 @@ const symbolQuerySchema = z
     kind: z.enum(["hover", "definition", "references", "source"]),
   })
   .strict();
-async function dispatch(method: string, args: unknown[]) {
+async function dispatch(method: ApiMethod, args: unknown[]) {
   switch (method) {
     case "localCheckInfo":
       return detectProject(await projects.root(idSchema.parse(args[0])));
@@ -599,12 +623,10 @@ async function dispatch(method: string, args: unknown[]) {
         gitActionSchema.parse(args[1]),
       );
     case "projectPulls": {
-      const repo = await projects.linked(
-        idSchema.parse(args[0]),
-        requireClient(),
-      );
-      const page = await requireClient().page<import("../shared/types").Pull>(
-        `${requireClient().repo(repo)}/pulls?state=${z.enum(["open", "closed", "all"]).parse(args[1])}`,
+      const client = requireClient();
+      const repo = await projects.linked(idSchema.parse(args[0]), client);
+      const page = await client.page<Pull>(
+        `${client.repo(repo)}/pulls?state=${z.enum(["open", "closed", "all"]).parse(args[1])}`,
         pageSchema.parse(args[2]),
       );
       return {
@@ -714,28 +736,18 @@ async function dispatch(method: string, args: unknown[]) {
         ...invitation.project,
         number: invitation.number,
       });
-      await rooms.allowAccess(
-        {
-          client: requireClient(),
-          ref,
-          key: repoKey(ref),
-          dir: store.get().folders[repoKey(ref)],
-        },
-        invitation.server,
-      );
-      const state = await rooms.connect(
-        {
-          client: requireClient(),
-          ref,
-          key: repoKey(ref),
-          dir: store.get().folders[repoKey(ref)],
-        },
-        {
-          server: invitation.server,
-          secret: invitation.secret,
-          projectId: invitation.projectId,
-        },
-      );
+      const context = {
+        client: requireClient(),
+        ref,
+        key: repoKey(ref),
+        dir: linkedFolder(ref),
+      };
+      await rooms.allowAccess(context, invitation.server);
+      const state = await rooms.connect(context, {
+        server: invitation.server,
+        secret: invitation.secret,
+        projectId: invitation.projectId,
+      });
       return { ref, state };
     }
     case "liveSyncState":
@@ -769,11 +781,12 @@ async function dispatch(method: string, args: unknown[]) {
         if ("chatId" in target)
           workspace = await projectChats.workspace(target.chatId);
         else {
-          const client = requireClient(),
-            dir = store.get().folders[repoKey(target)];
-          if (!dir)
-            throw new Error("Link this repository to a local folder first.");
-          const root = await validateRepo(dir, client.account.server, target);
+          const client = requireClient();
+          const root = await validateRepo(
+            requireFolder(target),
+            client.account.server,
+            target,
+          );
           workspace = {
             ...(await rooms.workspace({
               client,
@@ -845,7 +858,7 @@ async function dispatch(method: string, args: unknown[]) {
         client: requireClient(),
         ref,
         key: repoKey(ref),
-        dir: store.get().folders[repoKey(ref)],
+        dir: linkedFolder(ref),
       };
       if (method === "roomAccessInfo")
         return { server: await rooms.projectServer(context) };
@@ -858,6 +871,7 @@ async function dispatch(method: string, args: unknown[]) {
         return rooms.connect(context, connectRoomSchema.parse(args[1]));
       if (method === "roomState") return rooms.state(context);
       if (method === "roomDisconnect") {
+        // PR keys extend this repository's key: [account, owner, name, number].
         for (const [key, sync] of liveSyncs)
           if (key.startsWith(repoKey(ref).slice(0, -1) + ","))
             await sync.stop();
@@ -952,15 +966,8 @@ async function dispatch(method: string, args: unknown[]) {
       const next = await Gitea.connect(server, token, (url, options) =>
         net.fetch(url, options),
       );
-      const persistent =
-        process.platform === "linux"
-          ? safeStorage.isEncryptionAvailable() &&
-            safeStorage.getSelectedStorageBackend() !== "basic_text"
-          : await safeStorage.isAsyncEncryptionAvailable();
-      const encryptedToken = persistent
-        ? (await safeStorage.encryptStringAsync(token)).toString("base64")
-        : undefined;
-      next.account.persistent = persistent;
+      const encryptedToken = (await seal(token)) ?? undefined;
+      next.account.persistent = encryptedToken !== undefined;
       await store.update((s) => {
         s.account = next.account;
         s.encryptedToken = encryptedToken;
@@ -1034,9 +1041,8 @@ async function dispatch(method: string, args: unknown[]) {
     case "blame": {
       const r = refSchema.parse(args[0]),
         query = blameQuerySchema.parse(args[1]),
-        dir = store.get().folders[repoKey(r)];
-      if (!dir)
-        throw new Error(
+        dir = requireFolder(
+          r,
           "Link this repository to a local folder to see line history.",
         );
       return blame.read(dir, requireClient().account.server, r, query);
@@ -1113,10 +1119,11 @@ async function dispatch(method: string, args: unknown[]) {
     case "workingDiff":
     case "gitAction": {
       const r = repoSchema.parse(args[0]);
-      const dir = store.get().folders[repoKey(r)];
-      if (!dir)
-        throw new Error("Link this repository to a local folder first.");
-      const root = await validateRepo(dir, requireClient().account.server, r);
+      const root = await validateRepo(
+        requireFolder(r),
+        requireClient().account.server,
+        r,
+      );
       if (method === "workingTree") return workingTree(root);
       if (method === "workingDiff")
         return workingDiff(
@@ -1128,7 +1135,7 @@ async function dispatch(method: string, args: unknown[]) {
     }
     case "folder": {
       const r = repoSchema.parse(args[0]),
-        dir = store.get().folders[repoKey(r)];
+        dir = linkedFolder(r);
       return dir ? inspectFolder(dir, requireClient().account.server, r) : null;
     }
     case "linkFolder": {
@@ -1148,7 +1155,7 @@ async function dispatch(method: string, args: unknown[]) {
           "This folder’s Git remote does not match the Gitea project. Choose the correct repository.",
         );
       for (const sync of liveSyncs.values())
-        if (sync.root === store.get().folders[repoKey(r)]) await sync.stop();
+        if (sync.root === linkedFolder(r)) await sync.stop();
       await store.update((s) => {
         s.folders[repoKey(r)] = local.path;
       });
@@ -1161,10 +1168,8 @@ async function dispatch(method: string, args: unknown[]) {
         symbolQuerySchema.parse(args[2]),
       );
     case "projectCheckInfo": {
-      const r = refSchema.parse(args[0]);
-      const dir = store.get().folders[repoKey(r)];
-      if (!dir) return null;
-      return detectProject(dir);
+      const dir = linkedFolder(refSchema.parse(args[0]));
+      return dir ? detectProject(dir) : null;
     }
     case "projectCheckState":
       return projectChecks.state(
@@ -1183,12 +1188,9 @@ async function dispatch(method: string, args: unknown[]) {
     case "startProjectChecks": {
       const r = refSchema.parse(args[0]),
         head = shaSchema.parse(args[1]);
-      const dir = store.get().folders[repoKey(r)];
-      if (!dir)
-        throw new Error("Link this repository to a local folder first.");
       return projectChecks.start(
         prKey(r),
-        dir,
+        requireFolder(r),
         requireClient().account.server,
         r,
         head,
@@ -1214,9 +1216,7 @@ async function dispatch(method: string, args: unknown[]) {
     case "readLocalFile":
     case "saveLocalFile": {
       const r = refSchema.parse(args[0]);
-      const dir = store.get().folders[repoKey(r)];
-      if (!dir)
-        throw new Error("Link this repository to a local folder first.");
+      const dir = requireFolder(r);
       const head = shaSchema.parse(args[1]);
       const path = filePathSchema.parse(args[2]);
       if ((await requireClient().pull(r)).head.sha !== head)
@@ -1274,8 +1274,7 @@ async function dispatch(method: string, args: unknown[]) {
     case "askCodex": {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);
-      const dir = store.get().folders[repoKey(ref)];
-      if (!dir) throw new Error("Link a local repository folder first.");
+      const dir = requireFolder(ref);
       const settings = aiSettingsSchema.parse(
         store.get().aiSettings ?? defaultAISettings,
       );
@@ -1292,8 +1291,7 @@ async function dispatch(method: string, args: unknown[]) {
     }
     case "launchCodex": {
       const r = refSchema.parse(args[0]),
-        dir = store.get().folders[repoKey(r)];
-      if (!dir) throw new Error("Link a local repository folder first.");
+        dir = requireFolder(r);
       const head = shaSchema.parse(args[1]);
       const p = await requireClient().pull(r);
       if (p.head.sha !== head)
@@ -1371,36 +1369,14 @@ app
     rooms = new RoomService(
       store,
       (url, init) => net.fetch(url, init),
-      async (value) => {
-        const available =
-          process.platform === "linux"
-            ? safeStorage.isEncryptionAvailable() &&
-              safeStorage.getSelectedStorageBackend() !== "basic_text"
-            : await safeStorage.isAsyncEncryptionAvailable();
-        return available
-          ? (await safeStorage.encryptStringAsync(value)).toString("base64")
-          : null;
-      },
-      async (value) =>
-        (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
-          .result,
+      seal,
+      unseal,
     );
     devops = new DevOps(
       store,
       (url, init) => net.fetch(url, init),
-      async (value) => {
-        const available =
-          process.platform === "linux"
-            ? safeStorage.isEncryptionAvailable() &&
-              safeStorage.getSelectedStorageBackend() !== "basic_text"
-            : await safeStorage.isAsyncEncryptionAvailable();
-        return available
-          ? (await safeStorage.encryptStringAsync(value)).toString("base64")
-          : null;
-      },
-      async (value) =>
-        (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
-          .result,
+      seal,
+      unseal,
       join(app.getPath("userData"), "devops-relevance.json"),
     );
     projectChats = new ProjectChats(
@@ -1450,8 +1426,9 @@ app
       try {
         return {
           ok: true,
+          // Unknown names fall through to dispatch's default case.
           value: await dispatch(
-            z.string().parse(method),
+            z.string().parse(method) as ApiMethod,
             z.array(z.unknown()).max(10).parse(args),
           ),
         };

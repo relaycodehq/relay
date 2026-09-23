@@ -210,6 +210,7 @@ export class ProjectChats {
     providerThrough,
     sharedCursor,
     replySessions,
+    checkoutNotes,
     ...summary
   }: ProjectChat): ChatSummary {
     const provider = [...messages]
@@ -614,10 +615,7 @@ export class ProjectChats {
         chat.title = promptTitle(input.body);
       this.cache.set(id, chat);
       await this.save(chat);
-      await this.store.update((s) => {
-        const index = s.chats!.findIndex((c) => c.id === id);
-        s.chats![index] = this.summary(chat);
-      });
+      await this.updateSummary(chat);
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!mention) {

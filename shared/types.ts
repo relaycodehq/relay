@@ -319,6 +319,8 @@ export interface Api
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
 }
+/** Request/response methods; the `on…` members subscribe to main-process events. */
+export type ApiMethod = Exclude<keyof Api, `on${string}`>;
 export const emptyProgress = (): Progress => ({
   read: {},
   drafts: [],

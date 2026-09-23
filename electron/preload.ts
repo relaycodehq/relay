@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { ApiMethod } from "../shared/types";
 const methods = [
   "localCheckInfo",
   "localCheckState",
@@ -134,7 +135,12 @@ const methods = [
   "installUpdate",
   "applyAppearance",
   "parseUrl",
-];
+] as const satisfies readonly ApiMethod[];
+// Fails to compile, naming the method, when the Api gains one this list lacks.
+const complete: Exclude<ApiMethod, (typeof methods)[number]> extends never
+  ? true
+  : Exclude<ApiMethod, (typeof methods)[number]> = true;
+void complete;
 const api = Object.fromEntries(
   methods.map((method) => [
     method,
