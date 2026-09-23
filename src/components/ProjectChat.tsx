@@ -3,6 +3,7 @@ import type { RelayCommand } from "../../shared/commands";
 import { agentMention } from "../../shared/rooms";
 import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -11,6 +12,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -26,6 +28,7 @@ import {
   Clock3,
   CalendarClock,
   RotateCcw,
+  ScanSearch,
 } from "lucide-react";
 import { wakeLabel } from "../../shared/chat-activity";
 import { CopyImageMenu } from "./CopyImageMenu";
@@ -81,6 +84,18 @@ import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import type { PullRef } from "../../shared/types";
+import {
+  fixRequest,
+  type DeepReviewStart,
+  type Finding,
+} from "../../shared/deep-review";
+import {
+  DeepReviewCouncil,
+  DeepReviewReport,
+  DeepReviewRequest,
+  DeepReviewSetup,
+  findingCode,
+} from "./DeepReview";
 function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
   const container = useRef<HTMLDivElement>(null);
   const [source, setSource] = useState<string>();
@@ -260,6 +275,8 @@ const Message = memo(function Message({
   projectRoot,
   onOpenFile,
   replyCount = 0,
+  inlineCode,
+  after,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -275,6 +292,10 @@ const Message = memo(function Message({
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
+  /** See RichText; the lead's summary shows findings this way. */
+  inlineCode?: (value: string) => ReactNode | undefined;
+  /** Shown below the answer, like a deep review's findings. */
+  after?: ReactNode;
 }) {
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
@@ -378,9 +399,11 @@ const Message = memo(function Message({
             text={text}
             projectRoot={projectRoot}
             onOpenFile={onOpenFile}
+            inlineCode={inlineCode}
           />
         )
       ) : null}
+      {after}
       {!!m.changes?.length && m.status !== "streaming" && (
         <ChangedFilesCard
           files={m.changes}
@@ -434,6 +457,7 @@ export function ProjectChat({
   onRepository,
   onChoosePR,
   onSelectPR,
+  onDeepReview,
   onSwitchProject,
   onAddProject,
   canChoosePR,
@@ -460,6 +484,7 @@ export function ProjectChat({
   onRepository: () => void;
   onChoosePR: () => void;
   onSelectPR: (ref: PullRef) => void;
+  onDeepReview: () => void;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
   canChoosePR: boolean;
@@ -672,6 +697,93 @@ export function ProjectChat({
         !m.handoff &&
         m.id !== root?.id,
     )?.provider;
+  const review = history.data?.deepReview;
+  // Reviewers work in threads of their own; this one waits for the lead.
+  const reviewing = review?.status === "reviewing";
+  const leadAnswered = messages.some(
+    (m) => m.role === "assistant" && !m.parentId,
+  );
+  const reviewCode = useMemo(
+    () => (chat && review?.report ? findingCode(chat.id, review) : undefined),
+    [chat?.id, review],
+  );
+  async function startReview(config: DeepReviewStart) {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const target =
+        created.current ??
+        (await api.createProjectChat(project.id, { kind: "review" }));
+      created.current = target;
+      // Messages in the thread go to the lead, with the lead's settings.
+      const { lead } = config;
+      localStorage.setItem(
+        "composer-settings:" + target.id,
+        JSON.stringify({
+          provider: lead.provider,
+          ...(lead.provider === "codex"
+            ? { choice: lead.choice }
+            : {
+                claude: {
+                  model: lead.choice.model,
+                  reasoningEffort: lead.choice.reasoningEffort,
+                },
+              }),
+          runtimeMode: config.runtimeMode,
+          interactionMode: "default",
+        }),
+      );
+      await api.startDeepReview(target.id, config);
+      follow.current = true;
+      await onCreated(target);
+      await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  // Straight to the lead; whatever the composer holds stays there.
+  async function fixFindings(findings: Finding[]) {
+    if (!chat || !review || !findings.length || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.sendProjectChat(chat.id, {
+        id: crypto.randomUUID(),
+        body: fixRequest(review.lead.provider, findings),
+        provider: review.lead.provider,
+        choice: review.lead.choice,
+        runtimeMode: review.runtimeMode,
+        interactionMode: "default",
+        fixes: findings.map((f) => f.id),
+      });
+      follow.current = true;
+      await history.refetch();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function setFindingStatus(id: string, status: "open" | "dismissed") {
+    if (!chat) return;
+    void api
+      .setDeepReviewFinding(chat.id, id, status)
+      .then(() => history.refetch())
+      .catch(setError);
+  }
+  function resumeReview() {
+    if (!chat || busy) return;
+    setBusy(true);
+    setError(undefined);
+    void api
+      .resumeDeepReview(chat.id)
+      .then(() => history.refetch())
+      .catch(setError)
+      .finally(() => setBusy(false));
+  }
   function compact(instructions?: string) {
     if (!chat) return;
     setError(undefined);
@@ -1046,6 +1158,57 @@ export function ProjectChat({
   }, [isEmpty]);
   const peers =
     presence.data?.filter((p) => p.userId !== chat?.shared?.memberId) ?? [];
+  const contextButtons = (
+    <>
+      {/* A thread's scope is fixed once it starts. */}
+      {!chat && (
+        <>
+          <button
+            className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
+            onClick={onRepository}
+          >
+            <FolderGit2 size={14} />
+            Repository
+          </button>
+          {canChoosePR ? (
+            <ProjectPullPicker
+              project={project}
+              selected={scope.kind === "pr" ? scope.ref : null}
+              onSelect={onSelectPR}
+              disabled={dirty}
+              compact
+            />
+          ) : (
+            <button
+              className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
+              onClick={onChoosePR}
+              disabled={dirty}
+            >
+              <GitPullRequest size={14} />
+              {scope.kind === "pr" ? `PR #${scope.ref.number}` : "Review a PR"}
+              <ChevronDown size={12} />
+            </button>
+          )}
+          <button
+            className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
+            onClick={onDeepReview}
+            disabled={dirty}
+          >
+            <ScanSearch size={14} />
+            Deep review
+          </button>
+        </>
+      )}
+      {scope.kind === "pr" && (
+        <button
+          className="thread-review-action"
+          onClick={() => onOpenCode("pulls")}
+        >
+          Review changes →
+        </button>
+      )}
+    </>
+  );
   return (
     <section
       className={`project-chat ${isEmpty ? "empty-thread" : ""}`}
@@ -1080,12 +1243,17 @@ export function ProjectChat({
             aria-label="Share conversation"
             onClick={onShare}
             disabled={
-              !chat.shared && messages.some((message) => message.images?.length)
+              (!chat.shared &&
+                messages.some((message) => message.images?.length)) ||
+              chat.scope.kind === "review"
             }
             title={
-              !chat.shared && messages.some((message) => message.images?.length)
-                ? "This conversation contains private screenshots and cannot be shared yet"
-                : undefined
+              chat.scope.kind === "review"
+                ? "Deep reviews can't be shared yet"
+                : !chat.shared &&
+                    messages.some((message) => message.images?.length)
+                  ? "This conversation contains private screenshots and cannot be shared yet"
+                  : undefined
             }
           >
             <Users size={14} />
@@ -1167,20 +1335,49 @@ export function ProjectChat({
                 Earlier messages
               </button>
             )}
-            {shown.slice(-visible).map((m) => (
-              <Message
-                key={m.id}
-                message={m}
-                chatId={chat?.id ?? ""}
-                onReply={openReply}
-                onChanges={openChanges}
-                onTurnDiff={openTurnDiff}
-                onRewind={rewindTurn}
-                projectRoot={project.path}
-                onOpenFile={openFile}
-                replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
-              />
-            ))}
+            {shown.slice(-visible).map((m) =>
+              review && m.id === review.request ? (
+                <Fragment key={m.id}>
+                  <DeepReviewRequest message={m} state={review} />
+                  <DeepReviewCouncil
+                    state={review}
+                    hasLead={leadAnswered}
+                    busy={busy}
+                    projectRoot={project.path}
+                    onOpenFile={openFile}
+                    onResume={resumeReview}
+                  />
+                </Fragment>
+              ) : (
+                <Message
+                  key={m.id}
+                  message={m}
+                  chatId={chat?.id ?? ""}
+                  onReply={openReply}
+                  onChanges={openChanges}
+                  onTurnDiff={openTurnDiff}
+                  onRewind={rewindTurn}
+                  projectRoot={project.path}
+                  onOpenFile={openFile}
+                  replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
+                  {...(chat && review?.report?.messageId === m.id
+                    ? {
+                        inlineCode: reviewCode,
+                        after: (
+                          <DeepReviewReport
+                            chatId={chat.id}
+                            state={review}
+                            busy={busy}
+                            onFix={(findings) => void fixFindings(findings)}
+                            onStatus={setFindingStatus}
+                            onOpenFile={openFile}
+                          />
+                        ),
+                      }
+                    : {})}
+                />
+              ),
+            )}
             {!running &&
               shown.some(
                 (m) => m.role === "assistant" && !m.compaction && !m.handoff,
@@ -1408,11 +1605,15 @@ export function ProjectChat({
               aria-label={
                 scope.kind === "pr"
                   ? `Let’s review PR #${scope.ref.number} in ${project.name}.`
-                  : `What should we work on in ${project.name}?`
+                  : scope.kind === "review"
+                    ? `Deep review of ${project.name}`
+                    : `What should we work on in ${project.name}?`
               }
             >
               {scope.kind === "pr" ? (
                 <>Let’s review PR #{scope.ref.number} in </>
+              ) : scope.kind === "review" ? (
+                <>Deep review of </>
               ) : (
                 <>What should we work on in </>
               )}
@@ -1423,67 +1624,63 @@ export function ProjectChat({
                 onSelect={onSwitchProject}
                 onAdd={onAddProject}
               />
-              {scope.kind === "pr" ? "." : "?"}
+              {scope.kind === "pr" ? "." : scope.kind === "review" ? "" : "?"}
             </h1>
             <p>
               {scope.kind === "pr"
                 ? "Ask about the changes. Open the review when you’re ready."
-                : "Understand the code, work on an idea, or review your changes."}
+                : scope.kind === "review"
+                  ? "Reviewers read the changes on their own. The lead checks what they found, then fixes it with you."
+                  : "Understand the code, work on an idea, or review your changes."}
             </p>
           </div>
         )}
         {!!error && <ErrorBox error={error} />}
-        <ProjectComposer
-          key={`${id}:${root?.id ?? "main"}:${composerRevision}`}
-          handleRef={composer}
-          onCommand={runCommand}
-          // A side conversation keeps its own agent and opens on the one that wrote its message.
-          settingsKey={root ? `${id}:${root.id}` : id}
-          inherit={
-            root
-              ? {
-                  settingsKey: id,
-                  provider:
-                    root.role === "assistant" ? root.provider : undefined,
-                }
-              : undefined
-          }
-          draftKey={draftKey}
-          draft={draft}
-          onDraft={onDraft}
-          shared={!!chat?.shared}
-          running={running}
-          busy={busy}
-          branch={checkout.data?.branch}
-          projectId={project.id}
-          checkoutDisabled={dirty}
-          onSend={send}
-          notice={
-            stopped?.length ? (
-              <StoppedStrip
-                items={stopped}
-                onResolve={async (action) => {
-                  if (!chat) return;
-                  try {
-                    await api.resolveStoppedWork(chat.id, action);
-                  } catch (e) {
-                    setError(e);
-                    throw e;
-                  } finally {
-                    void qc.invalidateQueries({
-                      queryKey: ["project-chats"],
-                    });
+        {isEmpty && scope.kind === "review" && !chat ? (
+          <DeepReviewSetup
+            project={project}
+            context={contextButtons}
+            branch={checkout.data?.branch}
+            changes={checkout.data?.changes.length ?? 0}
+            canChoosePR={canChoosePR}
+            busy={busy}
+            checkoutDisabled={dirty}
+            onStart={startReview}
+          />
+        ) : (
+          <ProjectComposer
+            key={`${id}:${root?.id ?? "main"}:${composerRevision}`}
+            handleRef={composer}
+            onCommand={runCommand}
+            // A side conversation keeps its own agent and opens on the one that wrote its message.
+            settingsKey={root ? `${id}:${root.id}` : id}
+            inherit={
+              root
+                ? {
+                    settingsKey: id,
+                    provider:
+                      root.role === "assistant" ? root.provider : undefined,
                   }
-                }}
-              />
-            ) : (
-              pending && (
-                <WaitingStrip
-                  pending={pending}
-                  onStop={async (item) => {
+                : undefined
+            }
+            draftKey={draftKey}
+            draft={draft}
+            onDraft={onDraft}
+            shared={!!chat?.shared}
+            running={running || reviewing}
+            busy={busy}
+            branch={checkout.data?.branch}
+            projectId={project.id}
+            checkoutDisabled={dirty}
+            onSend={send}
+            notice={
+              stopped?.length ? (
+                <StoppedStrip
+                  items={stopped}
+                  onResolve={async (action) => {
                     if (!chat) return;
                     try {
-                      await api.stopProjectChatPending(chat.id, item.id);
+                      await api.resolveStoppedWork(chat.id, action);
                     } catch (e) {
                       setError(e);
                       throw e;
@@ -1494,120 +1691,106 @@ export function ProjectChat({
                     }
                   }}
                 />
-              )
-            )
-          }
-          placeholder={
-            pending?.some((p) => p.kind === "task")
-              ? "Message Claude, its background work keeps going…"
-              : pending
-                ? "Message Claude now, or wait for it to check back…"
-                : undefined
-          }
-          planProvider={
-            !running &&
-            shown.at(-1)?.status === "complete" &&
-            shown.at(-1)?.proposedPlan
-              ? shown.at(-1)?.provider
-              : undefined
-          }
-          onStop={() => {
-            if (chat) void api.cancelProjectChat(chat.id).catch(setError);
-          }}
-          contextMeter={
-            chat &&
-            context && (
-              <ContextWindowMeter
-                chatId={chat.id}
-                usage={context.usage}
-                provider={context.provider}
-                compacting={compacting}
-                compactDisabled={running || busy}
-                openSignal={showContext}
-                onCompact={() => compact()}
-              />
-            )
-          }
-          context={
-            <>
-              <button
-                className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
-                onClick={onRepository}
-              >
-                <FolderGit2 size={14} />
-                Repository
-              </button>
-              {canChoosePR ? (
-                <ProjectPullPicker
-                  project={project}
-                  selected={scope.kind === "pr" ? scope.ref : null}
-                  onSelect={onSelectPR}
-                  disabled={dirty}
-                  compact
-                />
               ) : (
-                <button
-                  className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
-                  onClick={onChoosePR}
-                  disabled={dirty}
-                >
-                  <GitPullRequest size={14} />
-                  {scope.kind === "pr"
-                    ? `PR #${scope.ref.number}`
-                    : "Review a PR"}
-                  <ChevronDown size={12} />
-                </button>
-              )}
-              {scope.kind === "pr" && (
-                <button
-                  className="thread-review-action"
-                  onClick={() => onOpenCode("pulls")}
-                >
-                  Review changes →
-                </button>
-              )}
-            </>
-          }
-          allowEmpty={!root && (!!workItem || !!codeRefs.length)}
-          attachment={
-            !root && (selection || workItem || codeRefs.length) ? (
-              <>
-                {!!codeRefs.length && (
-                  <CodeReferenceList
-                    references={codeRefs}
-                    onRemove={(index) =>
-                      setCodeRefs((refs) => refs.filter((_, i) => i !== index))
-                    }
+                pending && (
+                  <WaitingStrip
+                    pending={pending}
+                    onStop={async (item) => {
+                      if (!chat) return;
+                      try {
+                        await api.stopProjectChatPending(chat.id, item.id);
+                      } catch (e) {
+                        setError(e);
+                        throw e;
+                      } finally {
+                        void qc.invalidateQueries({
+                          queryKey: ["project-chats"],
+                        });
+                      }
+                    }}
                   />
-                )}
-                {workItem && (
-                  <WorkItemChip
-                    item={workItem}
-                    onRemove={() => setWorkItem(undefined)}
-                  />
-                )}
-                {selection && (
-                  <div className="composer-reply">
-                    <span>
-                      {selection.side === "deletions" ? "Before PR" : "PR head"}{" "}
-                      · {selection.path}:{selection.start} ·{" "}
-                      {(selection.side === "deletions"
-                        ? selection.base
-                        : selection.head
-                      ).slice(0, 8)}
-                    </span>
-                    <IconButton
-                      label="Remove selected code"
-                      onClick={() => setSelection(undefined)}
-                    >
-                      <X size={13} />
-                    </IconButton>
-                  </div>
-                )}
-              </>
-            ) : undefined
-          }
-        />
+                )
+              )
+            }
+            placeholder={
+              reviewing
+                ? "Reviewers are at work. Messages wait for the lead…"
+                : pending?.some((p) => p.kind === "task")
+                  ? "Message Claude, its background work keeps going…"
+                  : pending
+                    ? "Message Claude now, or wait for it to check back…"
+                    : undefined
+            }
+            planProvider={
+              !running &&
+              shown.at(-1)?.status === "complete" &&
+              shown.at(-1)?.proposedPlan
+                ? shown.at(-1)?.provider
+                : undefined
+            }
+            onStop={() => {
+              if (chat) void api.cancelProjectChat(chat.id).catch(setError);
+            }}
+            contextMeter={
+              chat &&
+              context && (
+                <ContextWindowMeter
+                  chatId={chat.id}
+                  usage={context.usage}
+                  provider={context.provider}
+                  compacting={compacting}
+                  compactDisabled={running || busy}
+                  openSignal={showContext}
+                  onCompact={() => compact()}
+                />
+              )
+            }
+            context={contextButtons}
+            allowEmpty={!root && (!!workItem || !!codeRefs.length)}
+            attachment={
+              !root && (selection || workItem || codeRefs.length) ? (
+                <>
+                  {!!codeRefs.length && (
+                    <CodeReferenceList
+                      references={codeRefs}
+                      onRemove={(index) =>
+                        setCodeRefs((refs) =>
+                          refs.filter((_, i) => i !== index),
+                        )
+                      }
+                    />
+                  )}
+                  {workItem && (
+                    <WorkItemChip
+                      item={workItem}
+                      onRemove={() => setWorkItem(undefined)}
+                    />
+                  )}
+                  {selection && (
+                    <div className="composer-reply">
+                      <span>
+                        {selection.side === "deletions"
+                          ? "Before PR"
+                          : "PR head"}{" "}
+                        · {selection.path}:{selection.start} ·{" "}
+                        {(selection.side === "deletions"
+                          ? selection.base
+                          : selection.head
+                        ).slice(0, 8)}
+                      </span>
+                      <IconButton
+                        label="Remove selected code"
+                        onClick={() => setSelection(undefined)}
+                      >
+                        <X size={13} />
+                      </IconButton>
+                    </div>
+                  )}
+                </>
+              ) : undefined
+            }
+          />
+        )}
         {isEmpty && scope.kind === "project" && !root && (
           <WorkItemCards
             project={project}

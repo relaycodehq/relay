@@ -4,7 +4,7 @@ import type {
   InteractionMode,
   AskAgentRequest,
 } from "../../shared/agent-modes";
-import { codexPolicy } from "./codex-policy";
+import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
 import { findExecutable } from "../executables";
@@ -17,6 +17,7 @@ import type {
   ContextUsage,
   ForkPoint,
 } from "../../shared/projects";
+import type { CodexReviewTarget } from "../../shared/deep-review";
 export interface AgentOptions {
   /** `id` names the chat message the steer came from, for `onSteered`. */
   onControl?: (control: {
@@ -50,6 +51,10 @@ export interface AgentOptions {
   purpose?: "answer" | "title";
   runtimeMode?: RuntimeMode;
   interactionMode?: InteractionMode;
+  /** A deep review's reviewer: it may read and run anything but changes no files. */
+  readOnly?: boolean;
+  /** Run Codex's own `/review` of this target instead of sending `prompt`. */
+  review?: CodexReviewTarget;
   onRequest?: AskAgentRequest;
   session?: {
     key?: string;
@@ -78,7 +83,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   options.signal.throwIfAborted();
   const policy =
     options.runtimeMode && options.purpose !== "title"
-      ? codexPolicy(options.runtimeMode)
+      ? options.readOnly
+        ? codexReviewerPolicy
+        : codexPolicy(options.runtimeMode)
       : undefined;
   const sessionKey = policy ? options.session?.key : undefined;
   const connection = acquireCodexConnection(
@@ -106,6 +113,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       ...codexModelArgs(options.choice).filter(
         (_, i, a) => !(a[i] === "--model" || a[i - 1] === "--model"),
       ),
+      // `/review` runs on its own model setting unless told otherwise.
+      ...(options.review && options.choice.model
+        ? ["-c", `review_model=${JSON.stringify(options.choice.model)}`]
+        : []),
     ],
     options.cwd,
   );
@@ -113,7 +124,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     threadId = "",
     turnId = "",
     settled = false;
-  let plan = "";
+  let plan = "",
+    // Codex hands a finished `/review` back as one item, not as an answer.
+    review = "";
   const fileChanges = new Map<string, unknown>();
   const stream = new CodexAnswerStream(options.onText, (id, text) =>
     options.onCommentary?.(id, text),
@@ -127,7 +140,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   const finish = (error?: Error) => {
     if (settled) return;
     settled = true;
-    error ? fail(error) : complete(plan || stream.answer);
+    error ? fail(error) : complete(plan || review || stream.answer);
   };
   const notification = (method: string, p: any) => {
     if (settled || (p.threadId && threadId && p.threadId !== threadId)) return;
@@ -148,6 +161,14 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         return;
       }
       options.onPlan?.(plan);
+    }
+    if (
+      method === "item/completed" &&
+      p.item?.type === "exitedReviewMode" &&
+      typeof p.item.review === "string"
+    ) {
+      review = p.item.review.slice(0, 100000);
+      options.onText(review);
     }
     if (
       method === "item/completed" &&
@@ -308,6 +329,16 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           throw new Error("There is no Codex session to compact yet.");
         // Compaction runs as its own turn; turn/started and turn/completed settle it.
         await transport.request("thread/compact/start", { threadId });
+        if (options.signal.aborted) abort();
+        return result;
+      }
+      if (options.review) {
+        const started = await transport.request("review/start", {
+          threadId,
+          target: options.review,
+          delivery: "inline",
+        });
+        turnId = started.turn.id;
         if (options.signal.aborted) abort();
         return result;
       }

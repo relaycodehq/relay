@@ -32,3 +32,10 @@ export function codexPolicy(mode: RuntimeMode) {
       };
   }
 }
+/** A deep review's reviewer: reads and runs what it likes, writes nothing, never asks. */
+export const codexReviewerPolicy = {
+  approvalPolicy: "never",
+  sandbox: "read-only",
+  approvalsReviewer: "user",
+  sandboxPolicy: { type: "readOnly" },
+};

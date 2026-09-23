@@ -1,6 +1,28 @@
 // Real subprocess transport; deterministic local provider for desktop integration tests.
 const fs = require("node:fs");
 const args = process.argv.slice(2);
+// A deep review lead's answer: a summary, then its findings for Relay to list.
+const leadAnswer = [
+  "Reordering the queue can drop a message `F1`.",
+  "",
+  "```relay-findings",
+  JSON.stringify({
+    findings: [
+      {
+        id: "F1",
+        priority: "P1",
+        title: "Reordering the queue can drop a message",
+        files: [{ path: "src/queue.ts", line: 3 }],
+        reviewers: [1, 2],
+        check: "Read the drop handler.",
+      },
+    ],
+    dropped: [
+      { title: "Unused import", reason: "Already gone.", reviewers: [2] },
+    ],
+  }),
+  "```",
+].join("\n");
 const capture = process.env.RELAY_AGENT_CAPTURE;
 function record(data) {
   if (capture)
@@ -175,6 +197,10 @@ if (args.includes("--permission-prompt-tool")) {
             delta: { type: "text_delta", text: "Looking into it." },
           },
         });
+      } else if (text.startsWith("/code-review")) {
+        finish("- **[P1] Queue reorder can drop a message** `src/queue.ts:3`");
+      } else if (text.startsWith("You lead a deep review")) {
+        finish(leadAnswer);
       } else if (text.includes("fixture background task")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.
@@ -419,6 +445,7 @@ if (args.includes("--permission-prompt-tool")) {
       const said = m.params.input[0].text;
       const answer =
         Object.entries({
+          "You lead a deep review": leadAnswer,
           "fixture edit files":
             "Added `src/guard.ts`; `src/cache.ts:1` needed no change.",
           "fixture long link": "See `src/long.ts:250`.",
@@ -572,6 +599,41 @@ if (args.includes("--permission-prompt-tool")) {
             },
           });
         }, 2600);
+    } else if (m.method === "review/start") {
+      // Codex's own review hands its result back as one item.
+      record({ provider: "codex", review: m.params });
+      send({
+        id: m.id,
+        result: {
+          turn: { id: "fixture-review" },
+          reviewThreadId: "fixture-thread",
+        },
+      });
+      send({
+        method: "turn/started",
+        params: { threadId: "fixture-thread", turn: { id: "fixture-review" } },
+      });
+      setTimeout(() => {
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-review-exit",
+              type: "exitedReviewMode",
+              review:
+                "- [P1] Queue reorder can drop a message — src/queue.ts:3",
+            },
+          },
+        });
+        send({
+          method: "turn/completed",
+          params: {
+            threadId: "fixture-thread",
+            turn: { id: "fixture-review", status: "completed" },
+          },
+        });
+      }, 300);
     } else if (m.method === "thread/compact/start") {
       record({ compact: m.params });
       send({ id: m.id, result: {} });

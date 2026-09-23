@@ -400,15 +400,20 @@ export const RichText = memo(function RichText({
   text,
   projectRoot,
   onOpenFile,
+  inlineCode,
 }: {
   text: string;
   projectRoot?: string;
   onOpenFile?: (target: ProjectFileLink) => void;
+  /** Shows some inline code as something else, like a finding's `F1`. */
+  inlineCode?: (value: string) => ReactNode | undefined;
 }) {
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
   const openFile = useRef(onOpenFile);
   openFile.current = onOpenFile;
+  const custom = useRef(inlineCode);
+  custom.current = inlineCode;
   const linksFiles = !!onOpenFile;
   const components = useMemo<Components>(
     () => ({
@@ -456,6 +461,8 @@ export const RichText = memo(function RichText({
       },
       code: ({ children, className }) => {
         const value = String(children).trim();
+        const shown = className ? undefined : custom.current?.(value);
+        if (shown) return shown;
         const target =
           !className && projectRoot && linksFiles && !value.includes("\n")
             ? projectFileLink(value, projectRoot, true)
@@ -471,7 +478,8 @@ export const RichText = memo(function RichText({
       },
       img: ({ alt }) => <span className="muted">[Image: {alt}]</span>,
     }),
-    [projectRoot, linksFiles],
+    // A new renderer redraws text that was shown before it arrived.
+    [projectRoot, linksFiles, inlineCode],
   );
   const blocks = useMemo(() => markdownBlocks(text), [text]);
   // Streaming changes the text every token; keep the map (and the chips

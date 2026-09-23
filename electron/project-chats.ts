@@ -44,6 +44,12 @@ import {
   turnDiff,
 } from "./turn-changes";
 import { cleanTitle, generateThreadTitle, promptTitle } from "./thread-titles";
+import { DeepReviews, type PullInfo } from "./deep-review";
+import type {
+  DeepReviewStart,
+  FindingStatus,
+  ReviewerTask,
+} from "../shared/deep-review";
 import {
   aiSettingsSchema,
   claudeArgs,
@@ -101,6 +107,25 @@ export class ProjectChats {
     { abort: AbortController; job: Promise<void> }
   >();
   private titleUpdates = new Set<Promise<void>>();
+  private reviews = new DeepReviews({
+    load: (id) => this.load(id),
+    save: (chat) => this.save(chat),
+    project: (id) => this.projects.get(id),
+    root: (projectId) => this.projects.root(projectId),
+    createReviewer: (parent, task) => this.createReviewer(parent, task),
+    send: (id, input) => this.send(id, input),
+    lead: (chat, input, prompt) => this.lead(chat, input, prompt),
+    active: (id) => this.active.has(id),
+    stop: (id) => this.active.get(id)?.abort.abort(),
+    touch: async (chat, messageId) => {
+      const message = chat.messages.find((m) => m.id === messageId);
+      if (!message) return;
+      message.version++;
+      await this.save(chat);
+      this.emit({ chatId: chat.id, message: structuredClone(message) });
+    },
+    summary: (chat) => this.updateSummary(chat),
+  });
   constructor(
     private store: Store,
     private projects: Projects,
@@ -118,11 +143,22 @@ export class ProjectChats {
   ) {}
   list(projectId: string): ChatSummary[] {
     this.projects.get(projectId);
-    return (this.store.get().chats ?? [])
-      .filter((c) => c.projectId === projectId)
+    const chats = (this.store.get().chats ?? []).filter(
+      (c) => c.projectId === projectId,
+    );
+    // A review runs while any of its reviewers does.
+    const reviewing = new Map<string, ActiveChat>();
+    for (const c of chats) {
+      const active = c.reviewer && this.active.get(c.id);
+      const earlier = c.reviewer && reviewing.get(c.reviewer.parent);
+      if (active && (!earlier || earlier.started > active.started))
+        reviewing.set(c.reviewer!.parent, active);
+    }
+    return chats
+      .filter((c) => !c.reviewer)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
-        const active = this.active.get(c.id);
+        const active = this.active.get(c.id) ?? reviewing.get(c.id);
         const pending = [
           ...this.pending(c.id),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
@@ -357,7 +393,7 @@ export class ProjectChats {
     const chat = this.cache.get(id)!;
     const now = Date.now();
     if (triage.kind === "archive") {
-      if (this.active.has(id))
+      if (this.active.has(id) || this.reviews.reviewing(chat))
         throw new Error("Stop the running answer before archiving.");
       chat.archivedAt = now;
       await this.save(chat);
@@ -400,6 +436,8 @@ export class ProjectChats {
       throw new Error(
         "Shared conversation context is fixed. Open a separate PR thread.",
       );
+    if (scope.kind === "review" || chat.scope.kind === "review")
+      throw new Error("A deep review covers what it started with.");
     const repo = this.projects.get(chat.projectId).repository;
     if (
       scope.kind === "pr" &&
@@ -417,7 +455,12 @@ export class ProjectChats {
       id: randomUUID(),
       projectId,
       scope,
-      title: scope.kind === "pr" ? `PR #${scope.ref.number}` : "New chat",
+      title:
+        scope.kind === "pr"
+          ? `PR #${scope.ref.number}`
+          : scope.kind === "review"
+            ? "Deep review"
+            : "New chat",
       created: Date.now(),
       updated: Date.now(),
       messages: [],
@@ -428,6 +471,49 @@ export class ProjectChats {
     });
     this.cache.set(chat.id, chat);
     return this.summary(chat);
+  }
+  startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
+    return this.control(id, async () => {
+      if (this.disposing) throw new Error("Relay is closing.");
+      this.projects.assertCheckoutAvailable((await this.load(id)).projectId);
+      await this.reviews.start(id, config, pull);
+    });
+  }
+  resumeDeepReview(id: string) {
+    return this.control(id, async () => {
+      if (this.disposing) throw new Error("Relay is closing.");
+      await this.reviews.resume(id);
+    });
+  }
+  setDeepReviewFinding(
+    id: string,
+    findingId: string,
+    status: Extract<FindingStatus, "open" | "dismissed">,
+  ) {
+    return this.control(id, () =>
+      this.reviews.setFinding(id, findingId, status),
+    );
+  }
+  /** A reviewer's own thread, shown only inside its review. */
+  private async createReviewer(parent: ProjectChat, task: ReviewerTask) {
+    const chat: ProjectChat = {
+      id: randomUUID(),
+      projectId: parent.projectId,
+      scope: { kind: "review" },
+      reviewer: task,
+      title: `Reviewer ${task.slot + 1}`,
+      // Its name is fixed; no title is generated for it.
+      renamed: true,
+      created: Date.now(),
+      updated: Date.now(),
+      messages: [],
+    };
+    await this.save(chat);
+    await this.store.update((s) => {
+      (s.chats ??= []).push(this.summary(chat));
+    });
+    this.cache.set(chat.id, chat);
+    return chat;
   }
   private summary({
     messages,
@@ -444,6 +530,7 @@ export class ProjectChats {
     replySessions,
     checkoutNotes,
     scopeHeard,
+    deepReview,
     ...summary
   }: ProjectChat): ChatSummary {
     const provider = [...messages]
@@ -502,6 +589,13 @@ export class ProjectChats {
             }
           }
           if (chat.queue?.length) chat.queuePaused = true;
+          // A review whose agents ran in an earlier session can only be resumed.
+          const review = chat.deepReview;
+          if (review?.status === "reviewing" || review?.status === "leading") {
+            review.status =
+              review.status === "reviewing" ? "stopped" : "failed";
+            interrupted = true;
+          }
           for (const m of chat.messages) {
             // Older saves kept every tool call twice; the trace alone is shown.
             if (m.trace) delete m.activity;
@@ -615,13 +709,19 @@ export class ProjectChats {
     }
   }
   hasActiveProject(projectId: string) {
-    return this.list(projectId).some((chat) => this.active.has(chat.id));
+    // Reviewer threads count too, though the sidebar never lists them.
+    return (this.store.get().chats ?? []).some(
+      (chat) => chat.projectId === projectId && this.active.has(chat.id),
+    );
   }
   send(id: string, input: ProjectChatSend) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
       if (input.sendAt) return this.schedule(id, input);
-      if (!this.active.has(id)) {
+      if (
+        !this.active.has(id) &&
+        !this.reviews.reviewing(await this.load(id))
+      ) {
         await this.sendNow(id, input);
         // Asking an agent again picks a stopped queue back up after this
         // answer. Drain waits behind this control, so it sees the change.
@@ -701,6 +801,7 @@ export class ProjectChats {
     if (this.disposing || this.active.has(id)) return;
     await this.load(id);
     const chat = this.cache.get(id)!;
+    if (this.reviews.reviewing(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {
@@ -913,6 +1014,7 @@ export class ProjectChats {
         ...(chat.shared ? { pending: true } : {}),
       };
       chat.messages.push(user);
+      this.reviews.sent(chat, input);
       chat.updated = Date.now();
       chat.branch = (await currentBranch(root)) ?? chat.branch;
       if (chat.messages.length === 1 && !chat.renamed)
@@ -991,7 +1093,11 @@ export class ProjectChats {
       const scope =
         chat.scope.kind === "pr"
           ? `This discussion concerns PR #${chat.scope.ref.number} in ${chat.scope.ref.owner}/${chat.scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`
-          : "This is a general discussion of the linked project and its local working changes.";
+          : chat.scope.kind === "review"
+            ? chat.reviewer
+              ? "You are one of several reviewers in a deep review. Don't change any files."
+              : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
+            : "This is a general discussion of the linked project and its local working changes.";
       const previous = chat.messages.filter(
           (m) => m.id !== user.id && m.id !== answer.id && onBranch(m),
         ),
@@ -1080,6 +1186,9 @@ export class ProjectChats {
       ).finally(() => {
         active.requests.close();
         this.active.delete(id);
+        void this.reviews
+          .finished(id, { request: input.id, answer: answer.id })
+          .catch((e) => console.warn("Deep review could not continue:", e));
         // The finished answer moved `updated`; refresh the sidebar summary
         // only after the thread stops counting as active.
         void this.updateSummary(chat).catch(() => {});
@@ -1221,6 +1330,65 @@ export class ProjectChats {
         void this.updateSummary(chat).catch(() => {});
         void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
       }
+    }
+  }
+  /**
+   * The lead's first turn in a deep review. It answers the review request,
+   * so it has no user message of its own; later turns are ordinary ones.
+   */
+  private async lead(
+    chat: ProjectChat,
+    input: ProjectChatSend,
+    prompt: string,
+  ) {
+    if (this.disposing) throw new Error("Relay is closing.");
+    if (this.active.has(chat.id))
+      throw new Error("This chat already has a running answer.");
+    const abort = new AbortController();
+    const active: ActiveChat = {
+      started: Date.now(),
+      abort,
+      input,
+      requests: new AgentRequests(abort.signal),
+    };
+    this.active.set(chat.id, active);
+    const message: ChatMessage = {
+      id: randomUUID(),
+      role: "assistant",
+      body: "",
+      status: "streaming",
+      provider: input.provider,
+      created: Date.now(),
+      version: 1,
+    };
+    try {
+      const root = await this.projects.root(chat.projectId);
+      // Resume and later sends pick the lead's agent and settings up from here.
+      chat.lastInput = input;
+      chat.messages.push(message);
+      await this.save(chat);
+      await this.updateSummary(chat);
+      this.emit({ chatId: chat.id, message: structuredClone(message) });
+      active.job = this.answer(
+        chat,
+        message,
+        root,
+        prompt,
+        input,
+        abort,
+      ).finally(() => {
+        active.requests.close();
+        this.active.delete(chat.id);
+        void this.updateSummary(chat).catch(() => {});
+        void this.reviews
+          .finished(chat.id, { answer: message.id })
+          .catch((e) => console.warn("Deep review could not continue:", e));
+        void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+      });
+      void active.job.catch(() => {});
+    } catch (e) {
+      this.active.delete(chat.id);
+      throw e;
     }
   }
   /** Compacts the provider session behind the newest answer on this branch. */
@@ -1470,6 +1638,14 @@ export class ProjectChats {
         },
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
+        ...(chat.reviewer
+          ? {
+              readOnly: true,
+              ...(chat.reviewer.codex && !compact && !adopt
+                ? { review: chat.reviewer.codex }
+                : {}),
+            }
+          : {}),
         onRequest: this.active.get(chat.id)?.requests.ask,
         session: {
           key: sessionKey,
@@ -1822,6 +1998,8 @@ export class ProjectChats {
       throw new Error(
         "This conversation contains private screenshots and cannot be shared yet.",
       );
+    if (chat.scope.kind === "review")
+      throw new Error("Deep reviews can't be shared yet.");
     if (chat.shared) return this.summary(chat);
     if (!this.sharing) throw new Error("Sharing is unavailable.");
     await this.sharing.allow(chat.projectId);
@@ -1950,11 +2128,12 @@ export class ProjectChats {
     if (response.kind === "approval" && response.decision === "cancel")
       return this.cancel(id);
   }
-  cancel(id: string) {
+  async cancel(id: string) {
     const chat = this.cache.get(id);
     if (chat) chat.queuePaused = true;
     this.active.get(id)?.abort.abort();
-    return chat ? this.save(chat) : Promise.resolve();
+    if (chat) await this.reviews.stop(chat);
+    return chat ? this.save(chat) : undefined;
   }
   async dispose() {
     await this.keepPending().catch((e) =>

@@ -10,6 +10,7 @@ import type {
 import { findExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
 import { claudeActivity, claudeEditedPaths } from "./activity";
+import { reportedFindings } from "../../shared/deep-review";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
   AgentActivity,
@@ -477,6 +478,8 @@ export async function runClaudeProject(
   const commentary = new Set<string>();
   // A tool result only carries the call id; keep the call's label for the finished row.
   const toolCalls = new Map<string, AgentActivity>();
+  // Findings `/code-review` reported to its tool rather than in its answer.
+  let reported: string | undefined;
   const publish = (text: string) => {
     if (text.length > 100000) throw new Error("Answer size limit reached.");
     answer = text;
@@ -579,6 +582,22 @@ export async function runClaudeProject(
         },
         canUseTool: async (tool, input, callback) => {
           const options = holder.options;
+          // A reviewer works unattended and leaves the checkout as it found it.
+          if (options.readOnly) {
+            if (tool === "AskUserQuestion" || tool === "ExitPlanMode")
+              return {
+                behavior: "deny",
+                message:
+                  "Nobody is watching this review to answer. Decide on your own and keep reviewing.",
+              };
+            if (["Edit", "MultiEdit", "Write", "NotebookEdit"].includes(tool))
+              return {
+                behavior: "deny",
+                message:
+                  "This review only reads the code. Report the problem instead of changing files.",
+              };
+            return { behavior: "allow", updatedInput: input };
+          }
           if (!options.onRequest)
             return {
               behavior: "deny",
@@ -845,6 +864,8 @@ export async function runClaudeProject(
           options.onCommentary?.(message.message.id, text);
         }
         for (const tool of tools) {
+          if (tool.name === "ReportFindings" && !message.parent_tool_use_id)
+            reported = reportedFindings(tool.input) ?? reported;
           const activity = claudeActivity(tool.id, tool.name, tool.input);
           // A subagent's calls fold under the agent call that started it.
           if (message.parent_tool_use_id)
@@ -936,7 +957,12 @@ export async function runClaudeProject(
           succeeded = true;
           return "";
         }
-        publish(session.plan || message.result || answer);
+        const final = session.plan || message.result || answer;
+        publish(
+          reported && !session.plan
+            ? [final, reported].filter((part) => part.trim()).join("\n\n")
+            : final,
+        );
         // A turn Claude started itself may only have run tools.
         if (!answer.trim() && !options.adopt)
           throw new Error("Claude returned an empty answer.");

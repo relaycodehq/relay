@@ -1,0 +1,515 @@
+/* Deep review: its setup in the composer, the reviewers, and the findings. */
+
+/* Setup, inside the composer above the prompt. */
+.deep-review-setup {
+  display: grid;
+  gap: 2px;
+  padding: 12px 12px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.deep-review-field {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 12px;
+  padding: 8px 6px;
+}
+.deep-review-field + .deep-review-field {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.deep-review-label {
+  display: flex;
+  align-items: center;
+  align-self: start;
+  min-height: 30px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+.deep-review-field-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.deep-review-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.deep-review-targets button {
+  padding: 5px 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  gap: 6px;
+}
+.deep-review-targets button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.composer-tools.deep-review-target {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  gap: 4px;
+  min-height: 30px;
+}
+.deep-review-target-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.deep-review-reviewers {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.deep-review-reviewers li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.deep-review-slot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.deep-review-native {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.deep-review-add {
+  justify-self: start;
+  gap: 5px;
+  padding-left: 2px;
+}
+.deep-review-lead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.deep-review-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+.deep-review-check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+}
+.deep-review-check input,
+.deep-review-task input {
+  width: auto;
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.project-composer .deep-review-focus {
+  display: block;
+  min-height: 64px;
+  resize: none;
+  font: inherit;
+  color: var(--text);
+}
+.project-composer .deep-review-focus::placeholder {
+  color: var(--muted);
+}
+.deep-review-hint {
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.composer-tools .deep-review-start {
+  border-radius: 99px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+/* The request, in your message. */
+.deep-review-request {
+  display: grid;
+  gap: 10px;
+}
+.deep-review-request-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+.deep-review-request-title > svg {
+  color: var(--accent);
+}
+.deep-review-request-title .diff-stat {
+  font-size: 11px;
+}
+.deep-review-request-agents {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.deep-review-request p {
+  margin: 0;
+}
+.deep-review-arrow {
+  color: var(--muted);
+}
+.deep-review-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.deep-review-agent .provider-glyph {
+  width: 13px;
+  height: 13px;
+}
+
+/* The reviewers: fixed-height panes, so nothing jumps while they stream. */
+.deep-review-council {
+  margin: 6px 0 4px;
+}
+.deep-review-council-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.deep-review-council-toggle strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.deep-review-council-toggle[aria-expanded="true"] {
+  margin-bottom: 10px;
+}
+.deep-review-council-glyphs {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+}
+.deep-review-council-glyphs .provider-glyph {
+  width: 13px;
+  height: 13px;
+}
+.deep-review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+/* One reviewer fills the row; with three, the last one does. */
+.deep-review-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.deep-review-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--toolbar);
+  overflow: hidden;
+}
+.deep-review-pane > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.deep-review-pane > header .provider-glyph {
+  width: 14px;
+  height: 14px;
+}
+.deep-review-pane-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--muted);
+}
+.deep-review-pane-status.done {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.deep-review-pane-thread {
+  height: 340px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 18px;
+}
+.deep-review-pane-thread .project-message {
+  padding: 14px 0 6px;
+}
+.deep-review-pane-thread .project-message.user > .markdown {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.deep-review-pane-prompt p {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.deep-review-stopped {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.deep-review-handover {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+/* Priority without colour: P0 and P1 read darker, P2 and P3 step back. */
+.deep-review-priority {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 24px;
+  height: 18px;
+  margin: 0 1px 0 4px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  vertical-align: 1px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+.deep-review-priority:is([data-priority="P0"], [data-priority="P1"]) {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+  color: var(--text);
+  font-weight: 650;
+}
+button.deep-review-priority:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* The findings, each with its files. */
+.deep-review-report {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.deep-review-tray {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--toolbar);
+  overflow: hidden;
+}
+.deep-review-tasks {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+.deep-review-task {
+  padding: 8px 14px 10px 16px;
+  scroll-margin: 12px;
+}
+.deep-review-task + .deep-review-task {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.deep-review-task[data-hover] {
+  background: color-mix(in srgb, var(--hover) 60%, transparent);
+}
+.deep-review-task-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+.deep-review-task .deep-review-priority {
+  margin: 0;
+}
+.deep-review-task-fixed {
+  flex: none;
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.deep-review-task-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+[data-status="fixed"] .deep-review-task-title {
+  color: var(--muted);
+}
+[data-status="dismissed"] .deep-review-task-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.deep-review-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.deep-review-status .text-button {
+  gap: 3px;
+  padding: 0;
+  font-size: 11px;
+}
+.deep-review-found-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.deep-review-found-by .provider-glyph {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--toolbar);
+  box-shadow: 0 0 0 1.5px var(--toolbar);
+}
+.deep-review-found-by .provider-glyph + .provider-glyph {
+  margin-left: -5px;
+}
+.deep-review-dismiss {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+}
+.deep-review-task:hover .deep-review-dismiss,
+.deep-review-dismiss:focus-visible {
+  opacity: 1;
+}
+/* The files sit under the title, lined up with it. */
+.deep-review-task-files {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 0;
+  padding: 0 0 0 60px;
+  list-style: none;
+}
+.deep-review-task-file {
+  display: flex;
+  justify-content: flex-start;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: -4px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.deep-review-task-file:hover {
+  background: var(--hover);
+}
+.deep-review-task-file .file-entry-icon {
+  width: 14px;
+  height: 14px;
+}
+.deep-review-task-file-line {
+  color: var(--muted);
+}
+.deep-review-task-file-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  opacity: 0.75;
+}
+:is([data-status="fixed"], [data-status="dismissed"])
+  .deep-review-task-file-name {
+  color: var(--muted);
+}
+.deep-review-tray > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.deep-review-tray > footer button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.deep-review-dropped {
+  color: var(--muted);
+  font-size: 12px;
+}
+.deep-review-dropped summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  list-style: none;
+}
+.deep-review-dropped summary::-webkit-details-marker {
+  display: none;
+}
+.deep-review-dropped[open] summary svg {
+  transform: rotate(90deg);
+}
+.deep-review-dropped ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  list-style: none;
+}
+.deep-review-dropped li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.deep-review-dropped-title {
+  color: var(--text);
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+}

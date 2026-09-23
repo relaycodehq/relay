@@ -1,0 +1,161 @@
+import {
+  test,
+  expect,
+  _electron as electron,
+  type ElectronApplication,
+} from "@playwright/test";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+  realpath,
+} from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { fixtureServer } from "../fixtures/gitea";
+
+test("reviews uncommitted changes with two agents, then fixes a finding with the lead", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project"),
+    bin = join(root, "bin"),
+    capture = join(root, "agent.jsonl");
+  const fixture = await fixtureServer();
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(join(repo, "src"), { recursive: true });
+    await mkdir(bin);
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Fixture");
+    git("config", "user.email", "fixture@example.invalid");
+    git("remote", "add", "origin", fixture.serverUrl + "/Web/web-store.git");
+    await writeFile(
+      join(repo, "src", "queue.ts"),
+      "export const queue = [];\n",
+    );
+    git("add", ".");
+    git("commit", "-qm", "Start");
+    await writeFile(
+      join(repo, "src", "queue.ts"),
+      "export const queue = [1];\n",
+    );
+    const agent =
+      `#!${process.execPath}\n` +
+      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    for (const name of ["codex", "claude"])
+      await writeFile(join(bin, name), agent, { mode: 0o700 });
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+      ),
+    ) as Record<string, string>;
+    app = await electron.launch({
+      args: ["tests/fixtures/launch.cjs"],
+      env: {
+        ...env,
+        PATH: bin + ":" + env.PATH,
+        RELAY_TEST_DATA: join(root, "data"),
+        RELAY_TEST_HEADED: "0",
+        RELAY_TEST_NATIVE_STORAGE: "0",
+        RELAY_AGENT_CAPTURE: capture,
+        RELAY_AGENT_NO_TITLE: "1",
+      },
+    });
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, repo) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [repo],
+      });
+    }, repo);
+    await page.evaluate(async (url) => {
+      await window.relay.connect(url, "test-token");
+      await window.relay.addProject();
+    }, fixture.serverUrl);
+    await page.reload();
+
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Deep review of project" }),
+    ).toBeVisible();
+    await expect(page.getByText("1 file changed on main")).toBeVisible();
+    // Two reviewers by default, and a lead.
+    await expect(page.locator(".deep-review-reviewers > li")).toHaveCount(2);
+    await expect(
+      page.getByRole("group", { name: "Lead", exact: true }),
+    ).toBeVisible();
+    await page.getByLabel("What to focus on").fill("the queue");
+    await page.screenshot({ path: "test-results/deep-review-setup.png" });
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+
+    await expect(page.locator(".deep-review-request")).toContainText(
+      "Uncommitted changes",
+    );
+    const panes = page.locator(".deep-review-pane");
+    await expect(panes).toHaveCount(2);
+    await expect(panes.first()).toContainText("/code-review high");
+    await expect(panes.nth(1)).toContainText("/review");
+
+    // The lead's summary shows each finding as its priority, above the list.
+    const report = page.locator(".deep-review-report");
+    await expect(report).toBeVisible({ timeout: 20000 });
+    await expect(
+      page
+        .getByText("Reordering the queue can drop a message", {
+          exact: false,
+        })
+        .first(),
+    ).toBeVisible();
+    await expect(report.locator(".deep-review-task")).toHaveCount(1);
+    await expect(report).toContainText("queue.ts");
+    await expect(report).toContainText("L3");
+    await expect(page.locator(".deep-review-dropped")).toContainText(
+      "Not kept · 1",
+    );
+    // The summary names each finding by its priority.
+    await expect(
+      page.locator(".project-message.assistant button.deep-review-priority"),
+    ).toHaveText("P1");
+    // The reviewers fold away once the lead has reported, and open again.
+    await expect(panes).toHaveCount(0);
+    await page.screenshot({ path: "test-results/deep-review-findings.png" });
+    await page.getByRole("button", { name: /Council/ }).click();
+    await expect(panes).toHaveCount(2);
+    await expect(panes.nth(1)).toContainText(
+      "Queue reorder can drop a message",
+    );
+    await page.screenshot({ path: "test-results/deep-review-council.png" });
+    await page.getByRole("button", { name: /Council/ }).click();
+
+    await report
+      .getByRole("button", { name: "Fix all 1", exact: true })
+      .click();
+    await expect(
+      page.getByText("Fix this finding from the review", { exact: false }),
+    ).toBeVisible();
+    await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
+    await page.screenshot({ path: "test-results/deep-review-fixed.png" });
+
+    const records = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(records.find((r) => r.review)?.review.target).toEqual({
+      type: "uncommittedChanges",
+    });
+  } finally {
+    await app?.close();
+    await fixture.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

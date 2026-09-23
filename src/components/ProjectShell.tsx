@@ -373,7 +373,7 @@ export default function ProjectShell() {
     try {
       const scope = { kind: "pr" as const, ref };
       const target =
-        chat && !chat.shared
+        chat && !chat.shared && chat.scope.kind !== "review"
           ? await api.setProjectChatScope(chat.id, scope)
           : await api.createProjectChat(project.id, scope);
       await chats.refetch();
@@ -682,6 +682,9 @@ export default function ProjectShell() {
                 onSelectPR={(ref) => {
                   setChatId(null);
                   setDraftScope({ kind: "pr", ref });
+                }}
+                onDeepReview={() => {
+                  if (!dirty) setDraftScope({ kind: "review" });
                 }}
                 onSwitchProject={(next) => navigate(next, undefined, true)}
                 onAddProject={() => void add()}

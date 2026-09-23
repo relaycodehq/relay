@@ -11,6 +11,12 @@ import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
 import type { FilePair, LocalFile, Page, Issue, Repo } from "./types";
 import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
+import type {
+  DeepReviewStart,
+  DeepReviewState,
+  FindingStatus,
+  ReviewerTask,
+} from "./deep-review";
 export interface Project {
   /** Sidebar-only folder path; never a filesystem location. */
   folder?: string;
@@ -30,6 +36,8 @@ export const projectNameSchema = z
 export const chatScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project") }).strict(),
   z.object({ kind: z.literal("pr"), ref: refSchema }).strict(),
+  // What a deep review covers is fixed when it starts; see `deepReview`.
+  z.object({ kind: z.literal("review") }).strict(),
 ]);
 export type ChatScope = z.infer<typeof chatScopeSchema>;
 export interface ChatSummary {
@@ -60,6 +68,8 @@ export interface ChatSummary {
   stopped?: { at: number; items: ChatPending[] };
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
+  /** A deep review's reviewer; its thread shows inside the review, never on its own. */
+  reviewer?: ReviewerTask;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
@@ -234,6 +244,7 @@ export interface ProjectChat extends ChatSummary {
   checkoutNotes?: string[];
   /** Local: the scope each agent session last heard, by `provider:branch`. */
   scopeHeard?: Record<string, string>;
+  deepReview?: DeepReviewState;
   replySessions?: Record<
     string,
     {
@@ -284,6 +295,11 @@ export const projectChatSendSchema = z
     viewing: filePathSchema.optional(),
     selection: lineQuestionSchema.optional(),
     images: z.array(pastedImageSchema).max(3).optional(),
+    /** Deep review findings this message asks the lead to fix. */
+    fixes: z
+      .array(z.string().regex(/^F\d{1,3}$/))
+      .max(50)
+      .optional(),
   })
   .strict();
 export type ProjectChatSend = z.infer<typeof projectChatSendSchema>;
@@ -434,6 +450,16 @@ export interface ProjectApi {
   projectChatImage(id: string, imageId: string): Promise<string>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
+  startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** Runs the reviewers that didn't finish, then the lead. */
+  resumeDeepReview(id: string): Promise<void>;
+  setDeepReviewFinding(
+    id: string,
+    findingId: string,
+    status: Extract<FindingStatus, "open" | "dismissed">,
+  ): Promise<void>;
+  /** Recent commits on the checked-out branch, newest first. */
+  projectRecentCommits(id: string): Promise<{ sha: string; subject: string }[]>;
   onProjectChat(
     callback: (event: {
       chatId: string;

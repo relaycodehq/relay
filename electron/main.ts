@@ -9,6 +9,8 @@ import { branchActionSchema } from "../shared/branches";
 import { Projects } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
+import { deepReviewStartSchema } from "../shared/deep-review";
+import { git } from "./git";
 import {
   chatScopeSchema,
   chatTriageSchema,
@@ -804,6 +806,45 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "cancelProjectChat":
       return projectChats.cancel(idSchema.parse(args[0]));
+    case "startDeepReview": {
+      const id = idSchema.parse(args[0]);
+      const config = deepReviewStartSchema.parse(args[1]);
+      // The forge knows which branch a pull request merges into.
+      const pull =
+        config.target.kind === "pr"
+          ? await requireClient().pull(config.target.ref)
+          : undefined;
+      return projectChats.startDeepReview(
+        id,
+        config,
+        pull && { number: pull.number, title: pull.title, base: pull.base.ref },
+      );
+    }
+    case "resumeDeepReview":
+      return projectChats.resumeDeepReview(idSchema.parse(args[0]));
+    case "setDeepReviewFinding":
+      return projectChats.setDeepReviewFinding(
+        idSchema.parse(args[0]),
+        z
+          .string()
+          .regex(/^F\d{1,3}$/)
+          .parse(args[1]),
+        z.enum(["open", "dismissed"]).parse(args[2]),
+      );
+    case "projectRecentCommits": {
+      const log = await git(await projects.root(idSchema.parse(args[0])), [
+        "log",
+        "-40",
+        "--format=%H%x00%s",
+      ]).catch(() => "");
+      return log
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [sha, subject] = line.split("\0");
+          return { sha: sha!, subject: (subject ?? "").slice(0, 200) };
+        });
+    }
     case "roomHosting":
       return rooms.hostingStatus();
     case "saveRoomHosting":
