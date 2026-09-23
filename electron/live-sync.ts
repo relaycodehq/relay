@@ -1,13 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import {
-  git,
-  gitBytes,
-  digest,
-  serializeRepo,
-  ignoredPaths,
-  gitOperation,
-} from "./working-tree";
+import { git, gitBytes } from "./git";
+import { digest } from "./hash";
+import { serializeRepo, ignoredPaths, gitOperation } from "./working-tree";
 import { decodeText, readWorkingFile, writeWorkingFile } from "./working-files";
 import {
   syncManifestSchema,

@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath, rename, unlink, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { digest } from "./working-tree";
+import { digest } from "./hash";
 import { workingPathSchema } from "../shared/working-tree";
 export const textLimit = 2 * 1024 * 1024;
 export interface WorkingFile {

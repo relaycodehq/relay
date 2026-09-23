@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { realpath } from "node:fs/promises";
 import type { LocalFolder, Repo } from "../shared/types";
+import { gitEnv } from "./git";
 const exec = promisify(execFile);
 const git = async (path: string, args: string[], signal?: AbortSignal) =>
   (
@@ -9,13 +10,21 @@ const git = async (path: string, args: string[], signal?: AbortSignal) =>
       timeout: 10000,
       maxBuffer: 1024 * 1024,
       signal,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_OPTIONAL_LOCKS: "0",
-      },
+      env: gitEnv(),
     })
   ).stdout.trim();
+/** A remote as a URL, reading scp-style `user@host:path` as SSH. */
+export function remoteUrl(raw: string): URL | null {
+  try {
+    return new URL(
+      raw.includes("://")
+        ? raw
+        : raw.replace(/^([^@]+@)?([^:]+):/, "ssh://$2/"),
+    );
+  } catch {
+    return null;
+  }
+}
 
 /** Repository identity without scanning the working tree. */
 export async function inspectRepository(
@@ -32,21 +41,14 @@ export async function inspectRepository(
   const host = new URL(server).hostname;
   const suffix = `${repo.owner}/${repo.name}`.toLowerCase();
   const remoteMatches = remotes.split("\n").some((row) => {
-    const raw = row.split(/\s+/)[1] ?? "";
-    try {
-      const normalized = raw.includes("://")
-        ? new URL(raw)
-        : new URL(raw.replace(/^([^@]+@)?([^:]+):/, "ssh://$2/"));
-      return (
-        normalized.hostname === host &&
-        normalized.pathname
-          .replace(/\.git$/, "")
-          .toLowerCase()
-          .endsWith(`/${suffix}`)
-      );
-    } catch {
-      return false;
-    }
+    const remote = remoteUrl(row.split(/\s+/)[1] ?? "");
+    return (
+      remote?.hostname === host &&
+      remote.pathname
+        .replace(/\.git$/, "")
+        .toLowerCase()
+        .endsWith(`/${suffix}`)
+    );
   });
   return { path, remoteMatches };
 }

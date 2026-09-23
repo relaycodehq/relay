@@ -18,7 +18,8 @@ import {
 } from "../shared/projects";
 import { LiveSync } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
-import { digest, flushGitOperations } from "./working-tree";
+import { digest } from "./hash";
+import { flushGitOperations } from "./working-tree";
 import { gitActionSchema, workingPathSchema } from "../shared/working-tree";
 import {
   workingTree,

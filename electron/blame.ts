@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { inspectRepository } from "./repository";
+import { gitEnv } from "./git";
 import { blameQuerySchema } from "../shared/validation";
 import type { BlameQuery, LineBlame, Repo } from "../shared/types";
 
@@ -87,13 +88,7 @@ export class BlameService {
           signal,
           timeout: 10000,
           maxBuffer: 3 * 1024 * 1024,
-          env: {
-            ...process.env,
-            GIT_TERMINAL_PROMPT: "0",
-            GIT_OPTIONAL_LOCKS: "0",
-            GIT_NO_REPLACE_OBJECTS: "1",
-            GIT_NO_LAZY_FETCH: "1",
-          },
+          env: gitEnv({ GIT_NO_REPLACE_OBJECTS: "1", GIT_NO_LAZY_FETCH: "1" }),
         })
       ).stdout;
     try {

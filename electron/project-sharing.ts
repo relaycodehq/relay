@@ -1,4 +1,4 @@
-import { git } from "./working-tree";
+import { git } from "./git";
 import type { Projects } from "./projects";
 import type { RoomService } from "./rooms/service";
 import type { Gitea } from "./gitea";

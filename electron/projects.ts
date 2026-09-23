@@ -9,30 +9,22 @@ import {
   parentGroup,
   rebaseGroup,
 } from "../shared/project-folders";
-import { git, gitBytes, digest } from "./working-tree";
-import { inspectRepository } from "./repository";
+import { git, gitBytes } from "./git";
+import { digest } from "./hash";
+import { inspectRepository, remoteUrl } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
 export function repositoryFromRemote(
   raw: string,
   server: string,
 ): Project["repository"] {
-  try {
-    const remote = new URL(
-        raw.includes("://")
-          ? raw
-          : raw.replace(/^([^@]+@)?([^:]+):/, "ssh://$2/"),
-      ),
-      base = new URL(server);
-    if (remote.hostname !== base.hostname) return null;
-    const parts = remote.pathname
-      .replace(/\.git$/, "")
-      .split("/")
-      .filter(Boolean);
-    if (parts.length < 2) return null;
-    return { server, owner: parts.at(-2)!, name: parts.at(-1)! };
-  } catch {
-    return null;
-  }
+  const remote = remoteUrl(raw);
+  if (!remote || remote.hostname !== new URL(server).hostname) return null;
+  const parts = remote.pathname
+    .replace(/\.git$/, "")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  return { server, owner: parts.at(-2)!, name: parts.at(-1)! };
 }
 const unique = (values: string[]) => [...new Set(values)];
 export class Projects {

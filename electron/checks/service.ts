@@ -5,7 +5,7 @@ import { mkdtemp, readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { findExecutable } from "../executables";
-import { git } from "../working-tree";
+import { git } from "../git";
 import { inspectFolder } from "../repository";
 import { configPath, detectProject } from "./detect";
 import { filePathSchema } from "../../shared/validation";

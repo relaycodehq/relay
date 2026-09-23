@@ -1,4 +1,5 @@
-import { git, gitOperation, serializeRepo } from "./working-tree";
+import { git } from "./git";
+import { gitOperation, serializeRepo } from "./working-tree";
 import type { BranchAction, BranchList } from "../shared/branches";
 export async function branches(root: string): Promise<BranchList> {
   const [current, head, refs] = await Promise.all([

@@ -25,7 +25,7 @@ import { runCodex } from "./rooms/codex";
 import type { ProjectSharing } from "./project-sharing";
 import { runClaude } from "./rooms/claude";
 import { projectTasks } from "./tasks";
-import { git } from "./working-tree";
+import { git } from "./git";
 import {
   dropRevert,
   finishTurn,

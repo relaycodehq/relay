@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Gitea, ApiError } from "./gitea";
-import { git, workingTree, serializeRepo } from "./working-tree";
+import { git } from "./git";
+import { workingTree, serializeRepo } from "./working-tree";
 import type { Repo, Pull } from "../shared/types";
 import type {
   BranchPull,

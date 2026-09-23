@@ -10,7 +10,8 @@ import {
   writeWorkingFile,
   flushWorkingFiles,
 } from "./working-files";
-import { digest } from "./working-tree";
+import { digest } from "./hash";
+import { gitEnv } from "./git";
 const exec = promisify(execFile);
 export const flushLocalFiles = flushWorkingFiles;
 async function validate(
@@ -36,11 +37,7 @@ async function validate(
       await exec("git", ["-C", local.path, ...args], {
         timeout: 10000,
         maxBuffer: 2 * 1024 * 1024 + 4096,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: "0",
-          GIT_LITERAL_PATHSPECS: "1",
-        },
+        env: gitEnv(),
         encoding: "buffer",
       })
     ).stdout;

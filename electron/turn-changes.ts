@@ -14,7 +14,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { decodeText } from "./working-files";
-import { digest } from "./working-tree";
+import { digest } from "./hash";
+import { gitEnv } from "./git";
 import type { FilePair } from "../shared/types";
 import type { TurnFileChange } from "../shared/projects";
 
@@ -45,12 +46,7 @@ async function run(root: string, args: string[], env?: NodeJS.ProcessEnv) {
       timeout: 30000,
       maxBuffer: 16 * 1024 * 1024,
       encoding: "utf8",
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_LITERAL_PATHSPECS: "1",
-        ...env,
-      },
+      env: gitEnv(env),
     })
   ).stdout;
 }
@@ -224,6 +220,7 @@ export async function turnDiff(
         timeout: 15000,
         maxBuffer: maxText + 4096,
         encoding: "buffer",
+        env: gitEnv(),
       })
     ).stdout;
     if (bytes.includes(0)) {
@@ -277,6 +274,8 @@ async function checkedOut(root: string, rev: string, path: string) {
       timeout: 15000,
       maxBuffer: maxText + 4096,
       encoding: "buffer",
+      // Filters such as LFS may reach the network; they must not prompt.
+      env: gitEnv(),
     })
   ).stdout;
 }
@@ -294,7 +293,12 @@ async function mergeBack(root: string, path: string, from: string, to: string) {
       await exec(
         "git",
         ["-C", root, "merge-file", "-p", "-q", join(root, path), base, other],
-        { timeout: 15000, maxBuffer: maxText * 2, encoding: "buffer" },
+        {
+          timeout: 15000,
+          maxBuffer: maxText * 2,
+          encoding: "buffer",
+          env: gitEnv(),
+        },
       )
     ).stdout;
   } catch {

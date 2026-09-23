@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createHash } from "node:crypto";
 import { lstat } from "node:fs/promises";
-import { join, isAbsolute } from "node:path";
+import { join } from "node:path";
 import { inspectRepository } from "./repository";
+import { git, gitBytes, gitEnv, redactCredentials } from "./git";
+import { digest } from "./hash";
+import { decodeText, readWorkingFile } from "./working-files";
 import {
   workingPathSchema,
   type WorkingTree,
@@ -12,24 +13,6 @@ import {
   type WorkingChange,
 } from "../shared/working-tree";
 import type { Repo, FilePair } from "../shared/types";
-const exec = promisify(execFile);
-export const digest = (s: string | Buffer) =>
-  createHash("sha256").update(s).digest("hex");
-export async function gitBytes(root: string, args: string[]) {
-  return (
-    await exec("git", ["-C", root, ...args], {
-      timeout: 15000,
-      maxBuffer: 2 * 1024 * 1024 + 4096,
-      encoding: "buffer",
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_OPTIONAL_LOCKS: "0",
-        GIT_LITERAL_PATHSPECS: "1",
-      },
-    })
-  ).stdout;
-}
 export async function ignoredPaths(
   root: string,
   paths: string[],
@@ -43,7 +26,8 @@ export async function ignoredPaths(
         timeout: 15000,
         maxBuffer: 16 * 1024 * 1024,
         encoding: "utf8",
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        // check-ignore rejects literal pathspec magic outright.
+        env: gitEnv({ GIT_LITERAL_PATHSPECS: undefined }),
       },
       (error, stdout) => {
         if (error && Number(error.code) !== 1) reject(error);
@@ -72,36 +56,6 @@ export async function gitOperation(root: string): Promise<string | null> {
     ),
   );
   return names.find((_, i) => !!entries[i]) ?? null;
-}
-export async function git(
-  root: string,
-  args: string[],
-  timeout = 15000,
-): Promise<string> {
-  try {
-    return (
-      await exec("git", ["-C", root, ...args], {
-        timeout,
-        maxBuffer: 16 * 1024 * 1024,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: "0",
-          GIT_OPTIONAL_LOCKS: "0",
-          GIT_LITERAL_PATHSPECS: "1",
-          GCM_INTERACTIVE: "never",
-        },
-        encoding: "utf8",
-      })
-    ).stdout;
-  } catch (e) {
-    const error = e as Error & { stderr?: string };
-    // Git may include credential-bearing remote URLs in failures.
-    throw new Error(
-      (error.stderr || error.message)
-        .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/g, "$1[redacted]@")
-        .slice(0, 3000),
-    );
-  }
 }
 export async function validateRepo(root: string, server: string, repo: Repo) {
   const local = await inspectRepository(root, server, repo);
@@ -232,11 +186,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     behind: counts[0],
     operation,
     pushTarget: destination?.label ?? null,
-    pushUrl:
-      destination?.url.replace(
-        /(https?:\/\/)[^\s/@]+:[^\s/@]+@/g,
-        "$1[redacted]@",
-      ) ?? null,
+    pushUrl: destination ? redactCredentials(destination.url) : null,
     outgoing: log
       .trim()
       .split("\n")
@@ -376,7 +326,6 @@ export async function workingDiff(
     throw new Error(
       "This file has merge conflicts. Resolve them in your editor, then stage the result.",
     );
-  const { decodeText } = await import("./working-files");
   const fromGit = async (spec: string, name: string, absent: boolean) =>
     absent
       ? null
@@ -400,7 +349,6 @@ export async function workingDiff(
   else if (c.worktree === "D") next = null;
   else {
     // The shared safe reader rejects symlink parents, hardlinks, binary and oversized files.
-    const { readWorkingFile } = await import("./working-files");
     const value = await readWorkingFile(root, path);
     next = value
       ? { name: path, contents: value.contents, cacheKey: value.hash }
