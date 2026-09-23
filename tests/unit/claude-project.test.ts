@@ -6,7 +6,7 @@ import {
   stopClaudeTask,
   wakeupTime,
 } from "../../electron/rooms/claude-project";
-import type { AgentActivity } from "../../shared/projects";
+import type { AgentActivity, ContextUsage } from "../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 vi.mock("../../electron/executables", () => ({
@@ -47,7 +47,11 @@ function claude(frames: (prompt: string) => object[]) {
         yield* frames(sent.value.uuid);
         await new Promise(() => {});
       })(),
-      { close() {} },
+      {
+        close() {},
+        // As the CLI reports it for its default model.
+        getContextUsage: async () => ({ rawMaxTokens: 1_000_000 }),
+      },
     ) as unknown as ReturnType<typeof query>;
   });
 }
@@ -88,6 +92,35 @@ it("skips any result that lands while the prompt is still queued", async () => {
     result("banana"),
   ]);
   await expect(run()).resolves.toBe("banana");
+});
+
+it("measures a fresh session's context against the window Claude reports", async () => {
+  claude((uuid) => [
+    lifecycle(uuid, "started"),
+    {
+      ...answer("banana"),
+      message: {
+        id: "msg",
+        content: [{ type: "text", text: "banana" }],
+        usage: { input_tokens: 150_000 },
+      },
+    },
+    result("banana"),
+  ]);
+  const seen: ContextUsage[] = [];
+  await runClaudeProject({
+    cwd: "/project",
+    prompt: "Reply with just the word banana.",
+    choice: {} as never,
+    // The default model, Opus, has a 1M window without a `[1m]` suffix.
+    model: "",
+    effort: "",
+    signal: new AbortController().signal,
+    onText() {},
+    onContext: (usage) => seen.push(usage),
+    session: { key: crypto.randomUUID(), id: session_id, async onId() {} },
+  });
+  expect(seen).toEqual([{ usedTokens: 150_000, maxTokens: 1_000_000 }]);
 });
 
 it("still reports an empty answer to the prompt itself", async () => {
@@ -150,7 +183,7 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
         yield tasks();
         await new Promise(() => {});
       })(),
-      { close() {}, stopTask },
+      { close() {}, stopTask, getContextUsage: async () => ({}) },
     ) as unknown as ReturnType<typeof query>;
   });
   const key = crypto.randomUUID();

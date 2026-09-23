@@ -18,7 +18,7 @@ import type {
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
-import { claudeContextWindow, type ClaudeModel } from "../../shared/settings";
+import type { ClaudeModel } from "../../shared/settings";
 import type { ProviderCommand } from "../../shared/commands";
 
 export async function sdk(): Promise<
@@ -132,7 +132,7 @@ type ClaudeSession = {
   unprompted?: Promise<void>;
   plan: string;
   threadId?: string;
-  /** Learned from the first result; the SDK only reports it per finished turn. */
+  /** Asked for as the session starts; each result confirms it. */
   contextWindow?: number;
   /** The cache lifetime Claude last reported writing with. */
   cacheTtl?: number;
@@ -685,6 +685,14 @@ export async function runClaudeProject(
       };
       const { query } = await sdk();
       holder.stream = query({ prompt: holder.input.read(), options: config });
+      // Only the CLI knows the model's window (Opus has 1M without a `[1m]`
+      // suffix); ask now rather than wait for the first result to report it.
+      void holder.stream
+        .getContextUsage({ detail: "summary" })
+        .then(({ rawMaxTokens }) => {
+          if (rawMaxTokens > 0) holder.contextWindow ??= rawMaxTokens;
+        })
+        .catch(() => {});
       holder.turn = turn;
       void pump(holder, holder.stream[Symbol.asyncIterator]());
       session = holder;
@@ -750,17 +758,11 @@ export async function runClaudeProject(
     let request: { id: string; at: number } | undefined;
     const report = (usedTokens: number) => {
       if (!(usedTokens > 0)) return;
-      // Until this process's first result reports the window, go by the
-      // model: a fresh session (e.g. after a restart) would otherwise show
-      // no percentage for its whole first turn.
-      const maxTokens =
-        session!.contextWindow ??
-        (usedTokens > 200_000 || claudeContextWindow(options.model) === "1m"
-          ? 1_000_000
-          : 200_000);
       context = {
         usedTokens,
-        maxTokens,
+        ...(session!.contextWindow
+          ? { maxTokens: session!.contextWindow }
+          : {}),
         ...(cache ? { cache } : {}),
       };
       options.onContext?.(context);
