@@ -279,7 +279,8 @@ app.on("window-all-closed", () => {
 let quitReady = false,
   flushing = false,
   quitConfirmed = false,
-  askingToQuit = false;
+  askingToQuit = false,
+  closingToQuit = false;
 app.on("before-quit", (event) => {
   if (quitReady || !store) {
     blame.dispose();
@@ -318,6 +319,13 @@ app.on("before-quit", (event) => {
         // rather than keep the work running with no window to watch it from.
         if (!win && windowReady) createWindow();
       });
+    return;
+  }
+  // Its unsaved-edits prompt can still cancel the quit, so the window closes
+  // before anything shuts down; closing it asks to quit again.
+  if (win) {
+    closingToQuit = true;
+    win.close();
     return;
   }
   triage?.cancel();
@@ -443,10 +451,7 @@ function createWindow() {
       cancelId: 0,
     });
     if (choice === 1) event.preventDefault();
-    else {
-      quitReady = false;
-      flushing = false;
-    }
+    else closingToQuit = false;
   });
   win.webContents.on("render-process-gone", () => projectChecks.stop());
   win.on("closed", () => {
@@ -456,6 +461,10 @@ function createWindow() {
     // (Windows quits with its last window, taking the overlay with it.)
     app.setBadgeCount(0);
     win = null;
+    if (closingToQuit) {
+      closingToQuit = false;
+      app.quit();
+    }
   });
   if (dev && !app.isPackaged) {
     if (dev !== "http://127.0.0.1:5177") throw new Error("Invalid dev URL");
