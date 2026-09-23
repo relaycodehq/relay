@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { NotText, textLimit, tooLarge } from "./working-files";
 const exec = promisify(execFile);
 /** Git never prompts, takes optional locks, or reads paths as patterns. */
 export const gitEnv = (extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
@@ -36,12 +37,21 @@ export async function git(
   }
 }
 export async function gitBytes(root: string, args: string[]) {
-  return (
-    await exec("git", ["-C", root, ...args], {
-      timeout: 15000,
-      maxBuffer: 2 * 1024 * 1024 + 4096,
-      encoding: "buffer",
-      env: gitEnv(),
-    })
-  ).stdout;
+  try {
+    return (
+      await exec("git", ["-C", root, ...args], {
+        timeout: 15000,
+        maxBuffer: textLimit + 4096,
+        encoding: "buffer",
+        env: gitEnv(),
+      })
+    ).stdout;
+  } catch (e) {
+    // Only text is read this way, and the buffer stops just past its limit.
+    if (
+      (e as NodeJS.ErrnoException).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+    )
+      throw new NotText(tooLarge);
+    throw e;
+  }
 }

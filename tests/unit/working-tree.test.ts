@@ -101,6 +101,20 @@ it("handles literal odd filenames, renames, deletion and untracked files", async
       ?.worktree,
   ).toBe("D");
 });
+it("shows changed binary and oversized files as binary instead of failing", async () => {
+  await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 1]));
+  await writeFile(join(root, "data.json"), "1".repeat(3 * 1024 * 1024));
+  git("add", ".");
+  git("commit", "-qm", "Assets");
+  await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 2]));
+  await writeFile(join(root, "data.json"), "2".repeat(3 * 1024 * 1024));
+  const binary = { old: null, next: null, binary: true };
+  for (const path of ["logo.png", "data.json"])
+    expect(await workingDiff(root, path, "unstaged")).toEqual(binary);
+  git("add", ".");
+  for (const path of ["logo.png", "data.json"])
+    expect(await workingDiff(root, path, "staged")).toEqual(binary);
+});
 it("rejects stale state and non-fast-forward pushes without changing the working files", async () => {
   await writeFile(join(root, "code.ts"), "local\n");
   const old = await workingTree(root);

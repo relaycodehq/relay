@@ -10,11 +10,13 @@ export interface WorkingFile {
   hash: string;
   mode: number;
 }
+/** Binary or oversized content, which diffs show as a placeholder. */
+export class NotText extends Error {}
+export const tooLarge = "Text files larger than 2 MiB are not supported here.";
 export function decodeText(bytes: Buffer): string {
-  if (bytes.length > textLimit)
-    throw new Error("Text files larger than 2 MiB are not supported here.");
+  if (bytes.length > textLimit) throw new NotText(tooLarge);
   if (bytes.includes(0))
-    throw new Error("Binary files are not supported here.");
+    throw new NotText("Binary files are not supported here.");
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
@@ -78,8 +80,7 @@ export async function readWorkingFile(
     const stat = await handle.stat();
     if (!stat.isFile() || stat.nlink !== 1)
       throw new Error("Choose a regular, unlinked file.");
-    if (stat.size > textLimit)
-      throw new Error("Text files larger than 2 MiB are not supported here.");
+    if (stat.size > textLimit) throw new NotText(tooLarge);
     const bytes = Buffer.alloc(textLimit + 1);
     let length = 0;
     while (length < bytes.length) {

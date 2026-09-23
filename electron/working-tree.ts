@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { inspectRepository } from "./repository";
 import { git, gitBytes, gitEnv, redactCredentials } from "./git";
 import { digest } from "./hash";
-import { decodeText, readWorkingFile } from "./working-files";
+import { NotText, decodeText, readWorkingFile } from "./working-files";
 import {
   workingPathSchema,
   type WorkingTree,
@@ -333,33 +333,30 @@ export async function workingDiff(
           cacheKey: "",
         };
   const oldName = c.previousPath ?? path;
-  const old =
-    area === "staged"
-      ? await fromGit(
-          `HEAD:${oldName}`,
-          oldName,
-          c.index === "A" || c.index === "?",
-        )
-      : await fromGit(`:${path}`, path, c.index === "?" || c.index === "D");
-  let next: FilePair["next"];
-  if (area === "staged")
-    next = await fromGit(`:${path}`, path, c.index === "D");
-  else if (c.worktree === "D") next = null;
-  else {
-    // The shared safe reader rejects symlink parents, hardlinks, binary and oversized files.
-    const value = await readWorkingFile(root, path);
-    next = value
-      ? { name: path, contents: value.contents, cacheKey: value.hash }
-      : null;
-  }
-  for (const f of [old, next])
-    if (f) {
-      if (
-        Buffer.byteLength(f.contents) > 2 * 1024 * 1024 ||
-        f.contents.includes("\0")
-      )
-        return { old: null, next: null, binary: true };
-      f.cacheKey ||= digest(f.contents);
+  let old: FilePair["old"], next: FilePair["next"];
+  try {
+    old =
+      area === "staged"
+        ? await fromGit(
+            `HEAD:${oldName}`,
+            oldName,
+            c.index === "A" || c.index === "?",
+          )
+        : await fromGit(`:${path}`, path, c.index === "?" || c.index === "D");
+    if (area === "staged")
+      next = await fromGit(`:${path}`, path, c.index === "D");
+    else if (c.worktree === "D") next = null;
+    else {
+      // The shared safe reader rejects symlink parents and hardlinks.
+      const value = await readWorkingFile(root, path);
+      next = value
+        ? { name: path, contents: value.contents, cacheKey: value.hash }
+        : null;
     }
+  } catch (e) {
+    if (e instanceof NotText) return { old: null, next: null, binary: true };
+    throw e;
+  }
+  for (const f of [old, next]) if (f) f.cacheKey ||= digest(f.contents);
   return { old, next, binary: false };
 }
