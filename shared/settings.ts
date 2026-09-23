@@ -114,6 +114,14 @@ export const supportsEffort = (
 ) =>
   !choice.reasoningEffort ||
   reasoningEffortsFor(choice.model, listed).includes(choice.reasoningEffort);
+/** The choice as its model takes it: an effort the model lacks becomes its default. */
+export const supportedChoice = <
+  T extends { model: string; reasoningEffort: ReasoningEffort },
+>(
+  choice: T,
+  listed?: CodexModel[],
+): T =>
+  supportsEffort(choice, listed) ? choice : { ...choice, reasoningEffort: "" };
 const choiceSchema = z
   .object({
     model: modelSchema,

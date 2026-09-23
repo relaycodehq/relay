@@ -24,7 +24,7 @@ import {
 import { ArrowUp, Zap, Paperclip, X } from "lucide-react";
 import {
   type ModelChoice,
-  supportsEffort,
+  supportedChoice,
   reasoningEffortsFor,
   effortLabels,
   type ReasoningEffort,
@@ -210,8 +210,10 @@ export function ProjectComposer({
       live = false;
     };
   }, [draftKey]);
-  const selected =
+  const codexChoice =
     choice ?? (settings.data && codexQuestionChoice(settings.data));
+  // An effort Codex no longer lists for the model runs as its default.
+  const selected = codexChoice && supportedChoice(codexChoice, codexModels);
   const mention = agentMention(draft);
   const recipient = mention?.provider ?? provider;
   const showUsage = useUsageRing();
@@ -238,15 +240,8 @@ export function ProjectComposer({
           : "",
       }));
     }
-    if (next === "codex" && selected) {
-      const candidate = { ...selected, model };
-      setChoice({
-        ...candidate,
-        reasoningEffort: supportsEffort(candidate, codexModels)
-          ? candidate.reasoningEffort
-          : "",
-      });
-    }
+    if (next === "codex" && selected)
+      setChoice(supportedChoice({ ...selected, model }, codexModels));
   }
   /** A command picked an agent, so an @mention would only override it. */
   function dropMention() {
@@ -530,8 +525,7 @@ export function ProjectComposer({
       (!draft.trim() && !images.length && !allowEmpty) ||
       busy ||
       preparing ||
-      sending.current ||
-      (recipient === "codex" && !supportsEffort(selected, codexModels))
+      sending.current
     )
       return;
     const body =
@@ -592,8 +586,7 @@ export function ProjectComposer({
     busy ||
     (!draft.trim() && !images.length && !allowEmpty) ||
     preparing ||
-    !selected ||
-    (recipient === "codex" && !supportsEffort(selected, codexModels));
+    !selected;
   return (
     <div className="thread-compose-wrap">
       {planProvider && (

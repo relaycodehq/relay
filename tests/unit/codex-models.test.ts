@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { findExecutable } from "../../electron/executables";
 import { codexModels } from "../../electron/provider-commands";
-import { reasoningEffortsFor, supportsEffort } from "../../shared/settings";
+import {
+  reasoningEffortsFor,
+  supportedChoice,
+  supportsEffort,
+} from "../../shared/settings";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -91,4 +95,16 @@ it("lists the signed-in Codex models once, and asks again after a failure or sig
   expect(
     supportsEffort({ model: "my-custom-model", reasoningEffort: "ultra" }),
   ).toBe(true);
+  // A saved effort the model no longer lists runs as its default.
+  const saved = {
+    model: "gpt-5.5",
+    fast: true,
+    reasoningEffort: "high" as const,
+  };
+  expect(supportedChoice(saved, models)).toEqual({
+    ...saved,
+    reasoningEffort: "",
+  });
+  const low = { ...saved, reasoningEffort: "low" as const };
+  expect(supportedChoice(low, models)).toBe(low);
 });
