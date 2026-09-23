@@ -56,3 +56,35 @@ it("treats an unphased last message as the answer and moves earlier prose into c
   expect(stream.answer).toBe("Done.");
   expect(commentary.get("first")).toBe("I will inspect it.");
 });
+
+it("lets a long turn write any number of progress notes", () => {
+  const commentary = new Map<string, string>();
+  const stream = new CodexAnswerStream(
+    () => {},
+    (id, text) =>
+      text === null ? commentary.delete(id) : commentary.set(id, text),
+  );
+  // A long Codex turn writes a note before most tool calls.
+  for (let i = 0; i < 150; i++) {
+    const item = { id: `note-${i}`, type: "agentMessage", phase: "commentary" };
+    stream.update("item/started", { item });
+    stream.update("item/agentMessage/delta", {
+      itemId: item.id,
+      delta: `Checking step ${i}.`,
+    });
+    stream.update("item/completed", {
+      item: { ...item, text: `Checking step ${i}.` },
+    });
+  }
+  stream.update("item/completed", {
+    item: {
+      id: "final",
+      type: "agentMessage",
+      phase: "final_answer",
+      text: "Done.",
+    },
+  });
+  expect(stream.answer).toBe("Done.");
+  expect(commentary.size).toBe(150);
+  expect(commentary.get("note-149")).toBe("Checking step 149.");
+});

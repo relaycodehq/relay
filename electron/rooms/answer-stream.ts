@@ -19,6 +19,7 @@ export class CodexAnswerStream {
       method !== "item/completed"
     )
       return;
+    let finished: string | undefined;
     if (method === "item/agentMessage/delta") {
       if (typeof params.delta !== "string") return;
       const id = typeof params.itemId === "string" ? params.itemId : "answer";
@@ -35,6 +36,8 @@ export class CodexAnswerStream {
       if (method === "item/completed" && typeof item.text === "string")
         entry.text = item.text;
       this.messages.set(id, entry);
+      if (method === "item/completed" && entry.phase === "commentary")
+        finished = id;
     }
     if (
       this.messages.size > 100 ||
@@ -43,6 +46,12 @@ export class CodexAnswerStream {
     )
       throw new Error("Answer size limit reached.");
     this.publish();
+    // A finished note never changes or becomes the answer. Forget it once
+    // shown: a long turn writes hundreds, and they don't count to the limit.
+    if (finished) {
+      this.messages.delete(finished);
+      this.visibleCommentary.delete(finished);
+    }
   }
   private publish() {
     const entries = [...this.messages.entries()];
