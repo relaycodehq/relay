@@ -46,6 +46,15 @@ describe("pasted texts", () => {
     );
     expect(pastedTexts(message("@codex  explain", ...pastes))).toEqual(pastes);
   });
+  it("reads every paste of a message the attachment version sent", () => {
+    // Before pills, pastes followed the text, one blank line apart.
+    const body =
+      "Why?\n\nPasted text #1:\n\n```\none\n```\n\nPasted text #2:\n\n```\ntwo\n```";
+    expect(pastedTexts(body)).toEqual([
+      { n: 1, text: "one" },
+      { n: 2, text: "two" },
+    ]);
+  });
   it("renumbers pastes in order", () => {
     const renumbered = replacePastedTexts(
       message("Compare", ...pastes),

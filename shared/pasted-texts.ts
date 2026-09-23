@@ -8,10 +8,11 @@ export interface PastedText {
 /**
  * A pill's text in the message: the paste fenced under its label, set apart
  * by blank lines. A sent message can also start with it, or with it right
- * after the agent mention.
+ * after the agent mention. Messages sent before pills put their pastes one
+ * blank line apart, which the block before already took.
  */
 export const pasteBlock =
-  /(?:^|\n\n?|(?<=^@(?:codex|claude) +))Pasted text #(\d+):\n\n(`{3,})\n([\s\S]*?)\n\2(?:\n\n|$)/g;
+  /(?:^|\n\n?|(?<=\n\n)|(?<=^@(?:codex|claude) +))Pasted text #(\d+):\n\n(`{3,})\n([\s\S]*?)\n\2(?:\n\n|$)/g;
 
 /** Unifies line endings and drops blank lines around the paste, keeping indentation. */
 export const cleanPaste = (raw: string) =>
