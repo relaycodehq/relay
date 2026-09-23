@@ -582,3 +582,39 @@ it("comes back stopped after Relay closes mid-review, ready to resume", async ()
     { timeout: 15000 },
   );
 });
+
+it("frees the findings a fix was on when Relay died mid-fix", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ reviewers: [{ provider: "codex", choice }] }),
+  );
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 15000 },
+  );
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    // The lead keeps at it until Relay goes away.
+    body: "@claude fixture wait for steer",
+    provider: "claude",
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    fixes: ["F1"],
+  });
+  expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe("fixing");
+  // A crash: nothing stops the fix or saves how it ended.
+  const crashed = chats;
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  try {
+    await chats.setDeepReviewFinding(chat.id, "F1", "dismissed");
+    expect((await chats.get(chat.id)).deepReview?.statuses?.F1).toBe(
+      "dismissed",
+    );
+  } finally {
+    await crashed.dispose();
+  }
+});

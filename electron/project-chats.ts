@@ -622,12 +622,21 @@ export class ProjectChats {
             }
           }
           if (chat.queue?.length) chat.queuePaused = true;
-          // A review whose agents ran in an earlier session can only be resumed.
+          // A review whose agents ran in an earlier session can only be resumed,
+          // and a fix that was running then left its findings open.
           const review = chat.deepReview;
           if (review?.status === "reviewing" || review?.status === "leading") {
             review.status =
               review.status === "reviewing" ? "stopped" : "failed";
             interrupted = true;
+          }
+          if (review?.fixing) {
+            for (const id of Object.values(review.fixing).flat())
+              if (review.statuses?.[id] === "fixing") {
+                review.statuses[id] = "open";
+                interrupted = true;
+              }
+            delete review.fixing;
           }
           for (const m of chat.messages) {
             // Older saves kept every tool call twice; the trace alone is shown.
