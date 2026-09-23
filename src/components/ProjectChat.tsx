@@ -64,6 +64,9 @@ import {
   type CodeReference,
 } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
+import { parsePastedTexts, pastedTextMessage } from "../../shared/pasted-texts";
+import { loadDraftPastes, saveDraftPastes } from "../lib/draft-pastes";
+import { PastedTextCard } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../lib/project-file-links";
@@ -178,6 +181,19 @@ function HandoffRow({
     </div>
   );
 }
+/** A queued message's text, with its attachments counted rather than shown. */
+function QueuedBody({ input }: { input: ProjectChatSend }) {
+  const { body, pastes } = parsePastedTexts(input.body);
+  return (
+    <>
+      <p>{body.replace(/^@(codex|claude)\s+/i, "")}</p>
+      {!!input.images?.length && (
+        <small>{input.images.length} screenshot(s)</small>
+      )}
+      {!!pastes.length && <small>{pastes.length} pasted text(s)</small>}
+    </>
+  );
+}
 /** Drag type for reordering queued messages, so other drops are ignored. */
 const QUEUED_DRAG = "application/x-relay-queued-message";
 const Message = memo(function Message({
@@ -206,13 +222,17 @@ const Message = memo(function Message({
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
 }) {
-  const parsed = useMemo(
-    () =>
-      m.role === "user" && m.body
-        ? parseCodeReferences(m.body)
-        : { refs: [], body: m.body },
-    [m.role, m.body],
-  );
+  const parsed = useMemo(() => {
+    if (m.role !== "user" || !m.body)
+      return { refs: [], pastes: [], body: m.body };
+    const code = parseCodeReferences(m.body);
+    return { refs: code.refs, ...parsePastedTexts(code.body) };
+  }, [m.role, m.body]);
+  // A message of only attachments leaves just the agent mention behind.
+  const text =
+    m.role === "user"
+      ? parsed.body?.replace(/^@(codex|claude)\s+/i, "")
+      : parsed.body;
   if (m.handoff)
     return (
       <HandoffRow
@@ -297,13 +317,9 @@ const Message = memo(function Message({
           }
         />
       )}
-      {parsed.body?.trim() ? (
+      {text?.trim() ? (
         <RichText
-          text={
-            m.role === "user"
-              ? parsed.body.replace(/^@(codex|claude)\s+/i, "")
-              : parsed.body
-          }
+          text={text}
           projectRoot={m.role === "assistant" ? projectRoot : undefined}
           onOpenFile={m.role === "assistant" ? onOpenFile : undefined}
         />
@@ -319,10 +335,13 @@ const Message = memo(function Message({
           }
         />
       )}
-      {!!m.images?.length && (
+      {(!!m.images?.length || !!parsed.pastes.length) && (
         <div className="message-images">
-          {m.images.map((image) => (
+          {m.images?.map((image) => (
             <MessageImage key={image.id} chatId={chatId} image={image} />
+          ))}
+          {parsed.pastes.map((paste, i) => (
+            <PastedTextCard key={i} paste={paste} />
           ))}
         </div>
       )}
@@ -735,10 +754,20 @@ export function ProjectChat({
       const restoredCode = parent
         ? { refs: [], body: input.body }
         : parseCodeReferences(input.body);
-      const body = [old.trim(), restoredCode.body.trim()]
+      const restoredText = parsePastedTexts(restoredCode.body);
+      const held = loadDraftPastes(key),
+        top = Math.max(0, ...held.map((p) => p.n));
+      // Pastes keep their numbers unless the draft already holds some.
+      const pastes = [
+        ...held,
+        ...restoredText.pastes.map((p, i) =>
+          held.length ? { ...p, n: top + i + 1 } : p,
+        ),
+      ];
+      const body = [old.trim(), restoredText.body.trim()]
         .filter(Boolean)
         .join("\n\n");
-      if (body.length > 32000)
+      if (pastedTextMessage(pastes, body).length > 32000)
         throw new Error(
           "Send or shorten the current draft before restoring this message.",
         );
@@ -760,6 +789,7 @@ export function ProjectChat({
         );
       // Persist the complete draft before removing the durable queue entry.
       await saveDraftImages(key, restored);
+      saveDraftPastes(key, pastes);
       onDraft(body, key);
       localStorage.setItem(
         "composer-settings:" + id,
@@ -1126,12 +1156,7 @@ export function ProjectChat({
                       dropQueued();
                     }}
                   >
-                    <p>
-                      {queued.input.body.replace(/^@(codex|claude)\s+/i, "")}
-                    </p>
-                    {!!queued.input.images?.length && (
-                      <small>{queued.input.images.length} screenshot(s)</small>
-                    )}
+                    <QueuedBody input={queued.input} />
                     <footer>
                       <span
                         className="queued-status"

@@ -60,6 +60,14 @@ import {
 } from "../lib/draft-images";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
+import {
+  cleanPaste,
+  isLongPaste,
+  pastedTextMessage,
+  type PastedText,
+} from "../../shared/pasted-texts";
+import { loadDraftPastes, saveDraftPastes } from "../lib/draft-pastes";
+import { PastedTextCard } from "./PastedTextCard";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -202,6 +210,13 @@ export function ProjectComposer({
   const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
   const [sketching, setSketching] = useState<string>();
   const sketchHistories = useRef(new Map<string, SketchHistory>());
+  const [pastes, setPastes] = useState<PastedText[]>(() =>
+    loadDraftPastes(draftKey),
+  );
+  function updatePastes(next: PastedText[]) {
+    setPastes(next);
+    saveDraftPastes(draftKey, next);
+  }
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(draftKey);
@@ -438,22 +453,49 @@ export function ProjectComposer({
         return next;
       });
   }
+  function attachPaste(text: string) {
+    const next = [
+      ...pastes,
+      { n: Math.max(0, ...pastes.map((p) => p.n)) + 1, text },
+    ];
+    if (pastedTextMessage(next, draft).length > 32000) {
+      setImageError(
+        "That paste is too long. A message holds up to 32,000 characters.",
+      );
+      return;
+    }
+    setImageError(undefined);
+    updatePastes(next);
+  }
+  function inlinePaste(paste: PastedText) {
+    updatePastes(pastes.filter((p) => p.n !== paste.n));
+    onDraft([draft.trimEnd(), paste.text].filter(Boolean).join("\n\n"));
+  }
   async function send(steer = false) {
     if (busy || commands.interceptSend()) return;
     if (
       !selected ||
-      (!draft.trim() && !images.length && !allowEmpty) ||
+      (!draft.trim() && !images.length && !pastes.length && !allowEmpty) ||
       busy ||
       preparing ||
       sending.current ||
       (recipient === "codex" && !supportsEffort(selected))
     )
       return;
-    const body =
-      mention && !mention.question && images.length
+    const screenshotsOnly = images.length > 0 && !pastes.length;
+    const body = pastedTextMessage(
+      pastes,
+      mention && !mention.question && screenshotsOnly
         ? `@${mention.provider} Describe the attached screenshot.`
         : draft.trim() ||
-          (images.length ? "Describe the attached screenshot." : "");
+            (screenshotsOnly ? "Describe the attached screenshot." : ""),
+    );
+    if (body.length > 32000) {
+      setImageError(
+        "This message is too long. Shorten it or remove a pasted text.",
+      );
+      return;
+    }
     sending.current = true;
     try {
       let attached: DraftImage[];
@@ -485,6 +527,7 @@ export function ProjectComposer({
             }
           : {}),
       });
+      if (sent && pastes.length) updatePastes([]);
       if (sent && images.length) {
         try {
           await saveDraftImages(draftKey, []);
@@ -556,8 +599,8 @@ export function ProjectComposer({
         }}
       >
         {attachment}
-        {images.length > 0 && (
-          <div className="composer-images" aria-label="Attached screenshots">
+        {(images.length > 0 || pastes.length > 0) && (
+          <div className="composer-images" aria-label="Attachments">
             {images.map((image) => (
               <div className="composer-image" key={image.id}>
                 <button
@@ -580,6 +623,16 @@ export function ProjectComposer({
                   <X size={13} />
                 </button>
               </div>
+            ))}
+            {pastes.map((paste) => (
+              <PastedTextCard
+                key={paste.n}
+                paste={paste}
+                onRemove={() =>
+                  updatePastes(pastes.filter((p) => p.n !== paste.n))
+                }
+                onInline={() => inlinePaste(paste)}
+              />
             ))}
           </div>
         )}
@@ -623,10 +676,18 @@ export function ProjectComposer({
               : Array.from(event.clipboardData.items)
                   .map((item) => item.getAsFile())
                   .filter((file): file is File => !!file);
-            if (!files.some((file) => file.type.startsWith("image/"))) return;
+            if (files.some((file) => file.type.startsWith("image/"))) {
+              event.preventDefault();
+              event.stopPropagation();
+              void addImages(files);
+              return;
+            }
+            // Long pastes ride along as attachments instead of flooding the draft.
+            const text = cleanPaste(event.clipboardData.getData("text/plain"));
+            if (!isLongPaste(text)) return;
             event.preventDefault();
             event.stopPropagation();
-            void addImages(files);
+            attachPaste(text);
           }}
           onDrop={(event) => {
             const files = Array.from(event.dataTransfer.files);
@@ -798,7 +859,10 @@ export function ProjectComposer({
               </svg>
             </button>
           )}
-          {(!running || !!draft.trim() || !!images.length) && (
+          {(!running ||
+            !!draft.trim() ||
+            !!images.length ||
+            !!pastes.length) && (
             <button
               className="primary send-message"
               aria-label="Send message"
@@ -809,7 +873,10 @@ export function ProjectComposer({
               }
               disabled={
                 busy ||
-                (!draft.trim() && !images.length && !allowEmpty) ||
+                (!draft.trim() &&
+                  !images.length &&
+                  !pastes.length &&
+                  !allowEmpty) ||
                 preparing ||
                 !selected ||
                 (recipient === "codex" && !supportsEffort(selected))

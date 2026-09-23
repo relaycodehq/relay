@@ -430,9 +430,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         }),
       );
     }, screenshotPng);
-    await expect(page.getByLabel("Attached screenshots")).toBeVisible();
+    await expect(page.getByLabel("Attachments")).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel("Attached screenshots")).toBeVisible();
+    await expect(page.getByLabel("Attachments")).toBeVisible();
     await page.getByLabel("Message project").fill("Explain this project");
     await page
       .getByRole("button", { name: "Send message", exact: true })
