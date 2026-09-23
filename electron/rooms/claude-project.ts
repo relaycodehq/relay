@@ -16,7 +16,7 @@ import type {
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
-import type { ClaudeModel } from "../../shared/settings";
+import { claudeContextWindow, type ClaudeModel } from "../../shared/settings";
 import type { ProviderCommand } from "../../shared/commands";
 
 export async function sdk(): Promise<
@@ -646,11 +646,17 @@ export async function runClaudeProject(
     let request: { id: string; at: number } | undefined;
     const report = (usedTokens: number) => {
       if (!(usedTokens > 0)) return;
+      // Until this process's first result reports the window, go by the
+      // model: a fresh session (e.g. after a restart) would otherwise show
+      // no percentage for its whole first turn.
+      const maxTokens =
+        session!.contextWindow ??
+        (usedTokens > 200_000 || claudeContextWindow(options.model) === "1m"
+          ? 1_000_000
+          : 200_000);
       context = {
         usedTokens,
-        ...(session!.contextWindow
-          ? { maxTokens: session!.contextWindow }
-          : {}),
+        maxTokens,
         ...(cache ? { cache } : {}),
       };
       options.onContext?.(context);
