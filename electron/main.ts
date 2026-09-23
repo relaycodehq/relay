@@ -12,6 +12,7 @@ import { ProjectChats } from "./project-chats";
 import {
   chatScopeSchema,
   chatTriageSchema,
+  knownMessagesSchema,
   projectChatSendSchema,
   projectNameSchema,
 } from "../shared/projects";
@@ -651,8 +652,12 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return projectChats.shareInfo(idSchema.parse(args[0]));
     case "shareProjectChat":
       return projectChats.share(idSchema.parse(args[0]));
-    case "syncProjectChat":
-      return projectChats.sync(idSchema.parse(args[0]));
+    case "syncProjectChat": {
+      const id = idSchema.parse(args[0]);
+      return args[1] == null
+        ? projectChats.sync(id)
+        : projectChats.syncChanges(id, knownMessagesSchema.parse(args[1]));
+    }
     case "projectChatInvite":
       return projectChats.invite(idSchema.parse(args[0]));
     case "sharedProjectChats":
@@ -676,7 +681,10 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "projectChat": {
       const id = idSchema.parse(args[0]);
-      const chat = await projectChats.get(id);
+      const chat =
+        args[1] == null
+          ? await projectChats.get(id)
+          : await projectChats.changes(id, knownMessagesSchema.parse(args[1]));
       projectChats.ensureTitle(id);
       return chat;
     }

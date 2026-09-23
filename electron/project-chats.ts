@@ -18,6 +18,8 @@ import type {
   ProjectChatSend,
   ChatImage,
   AgentProvider,
+  KnownMessages,
+  ProjectChatPatch,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
 import { replyRoot } from "../shared/projects";
@@ -122,7 +124,7 @@ export class ProjectChats {
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
-    await this.get(id);
+    await this.load(id);
     const chat = this.cache.get(id)!;
     const now = Date.now();
     if (triage.kind === "archive") {
@@ -150,7 +152,7 @@ export class ProjectChats {
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");
-    await this.get(id);
+    await this.load(id);
     const chat = this.cache.get(id)!;
     chat.title = title;
     chat.renamed = true;
@@ -159,7 +161,7 @@ export class ProjectChats {
     return this.summary(chat);
   }
   async setScope(id: string, scope: ChatScope) {
-    await this.get(id);
+    await this.load(id);
     const chat = this.cache.get(id)!;
     if (this.active.has(id) || chat.queue?.length)
       throw new Error(
@@ -223,6 +225,25 @@ export class ProjectChats {
     };
   }
   async get(id: string): Promise<ProjectChat> {
+    const chat = await this.load(id);
+    return { ...structuredClone(chat), requests: this.requests(id) };
+  }
+  /** Like get, but messages the caller already holds at the same version come back as their ids. */
+  async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
+    const { messages, ...chat } = await this.load(id);
+    return {
+      ...structuredClone(chat),
+      messages: messages.map((m) =>
+        known[m.id] === m.version ? m.id : structuredClone(m),
+      ),
+      requests: this.requests(id),
+    };
+  }
+  private requests(id: string) {
+    return this.active.get(id)?.requests.list() ?? [];
+  }
+  /** The cached chat itself, read from disk the first time; never hand it out. */
+  private async load(id: string): Promise<ProjectChat> {
     if (!this.store.get().chats?.some((c) => c.id === id))
       throw new Error("Chat not found.");
     if (!this.cache.has(id)) {
@@ -248,7 +269,9 @@ export class ProjectChats {
             }
           }
           if (chat.queue?.length) chat.queuePaused = true;
-          for (const m of chat.messages)
+          for (const m of chat.messages) {
+            // Older saves kept every tool call twice; the trace alone is shown.
+            if (m.trace) delete m.activity;
             if (m.status === "streaming") {
               m.status = "failed";
               m.error =
@@ -265,6 +288,7 @@ export class ProjectChats {
               m.ended = Date.now();
               interrupted = true;
             }
+          }
           if (interrupted) await this.save(chat);
           this.cache.set(id, chat);
         })();
@@ -276,10 +300,7 @@ export class ProjectChats {
         if (this.loading.get(id) === pending) this.loading.delete(id);
       }
     }
-    return {
-      ...structuredClone(this.cache.get(id)!),
-      requests: this.active.get(id)?.requests.list() ?? [],
-    };
+    return this.cache.get(id)!;
   }
   private imagePath(chatId: string, image: ChatImage) {
     if (
@@ -293,7 +314,7 @@ export class ProjectChats {
     return join(this.dir, "images", chatId, `${image.id}.${ext}`);
   }
   async image(chatId: string, imageId: string): Promise<string> {
-    const chat = await this.get(chatId);
+    const chat = await this.load(chatId);
     const image = chat.messages
       .flatMap((message) => message.images ?? [])
       .find((item) => item.id === imageId);
@@ -377,7 +398,7 @@ export class ProjectChats {
         }
         return;
       }
-      await this.get(id);
+      await this.load(id);
       const chat = this.cache.get(id)!;
       if (
         chat.messages.some((m) => m.id === input.id) ||
@@ -407,7 +428,7 @@ export class ProjectChats {
   }
   private async drain(id: string) {
     if (this.disposing || this.active.has(id)) return;
-    await this.get(id);
+    await this.load(id);
     const chat = this.cache.get(id)!;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
@@ -493,7 +514,7 @@ export class ProjectChats {
   ) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      await this.get(id);
+      await this.load(id);
       const chat = this.cache.get(id)!;
       if (action === "steer") return this.steerQueued(chat, messageId);
       if (action === "remove")
@@ -512,7 +533,7 @@ export class ProjectChats {
   resume(id: string) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      await this.get(id);
+      await this.load(id);
       const chat = this.cache.get(id)!;
       if (this.active.has(id))
         throw new Error("This thread is already running.");
@@ -544,7 +565,7 @@ export class ProjectChats {
     };
     this.active.set(id, active);
     try {
-      await this.get(id);
+      await this.load(id);
       const chat = this.cache.get(id)!;
       this.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.projects.root(chat.projectId);
@@ -872,7 +893,7 @@ export class ProjectChats {
       if (this.disposing) throw new Error("Relay is closing.");
       if (this.active.has(id))
         throw new Error("Wait for the current answer before compacting.");
-      await this.get(id);
+      await this.load(id);
       const chat = this.cache.get(id)!;
       const root = await this.projects.root(chat.projectId);
       const branch = parentId ? chat.replySessions?.[parentId] : undefined;
@@ -1053,10 +1074,6 @@ export class ProjectChats {
         onActivity: (activity: import("../shared/projects").AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
             projectTasks.record(root, chat.id, activity.label);
-          const entries = (message.activity ??= []);
-          const index = entries.findIndex((a) => a.id === activity.id);
-          if (index >= 0) entries[index] = activity;
-          else if (entries.length < 80) entries.push(activity);
           const trace = (message.trace ??= []);
           const traceIndex = trace.findIndex((a) => a.id === activity.id);
           const entry = {
@@ -1232,7 +1249,7 @@ export class ProjectChats {
   }
   /** Retries titles for threads whose first title run failed earlier. */
   async turnDiff(chatId: string, messageId: string, path: string) {
-    const chat = await this.get(chatId);
+    const chat = await this.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
       throw new Error("This turn didn't change that file.");
@@ -1247,7 +1264,7 @@ export class ProjectChats {
     force: boolean,
   ): Promise<{ conflicts: string[] }> {
     return this.control(chatId, async () => {
-      await this.get(chatId);
+      await this.load(chatId);
       const chat = this.cache.get(chatId)!;
       this.projects.assertCheckoutAvailable(chat.projectId);
       // An agent editing the same checkout would race the rollback.
@@ -1318,6 +1335,7 @@ export class ProjectChats {
           ? `I rolled back your edits to ${listed}${more} from your turn at ${when}; those files are back to how that turn found them, apart from later edits that merged cleanly.`
           : `I restored your edits to ${listed}${more} from your turn at ${when} after an earlier rollback.`,
       ].slice(-10);
+      message.version++;
       await this.save(chat);
       this.emit({ chatId, message: structuredClone(message) });
       return { conflicts: [] };
@@ -1362,7 +1380,7 @@ export class ProjectChats {
     await this.updateSummary(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message), title });
   }
-  private syncing = new Map<string, Promise<ProjectChat>>();
+  private syncing = new Map<string, Promise<void>>();
   private async updateSummary(chat: ProjectChat) {
     await this.store.update((s) => {
       const index = s.chats!.findIndex((c) => c.id === chat.id);
@@ -1392,7 +1410,7 @@ export class ProjectChats {
     await this.save(chat);
   }
   async shareInfo(id: string) {
-    const chat = await this.get(id);
+    const chat = await this.load(id);
     if (!this.sharing) throw new Error("Sharing is unavailable.");
     return {
       ...(await this.sharing.info(chat.projectId)),
@@ -1404,7 +1422,7 @@ export class ProjectChats {
       throw new Error(
         "Stop or finish the current answer before sharing this conversation.",
       );
-    await this.get(id);
+    await this.load(id);
     const chat = this.cache.get(id)!;
     if (chat.messages.some((message) => message.images?.length))
       throw new Error(
@@ -1420,12 +1438,20 @@ export class ProjectChats {
     return this.summary(chat);
   }
   async sync(id: string) {
+    await this.pull(id);
+    return this.get(id);
+  }
+  /** Sync, answering like changes. */
+  async syncChanges(id: string, known: KnownMessages) {
+    await this.pull(id);
+    return this.changes(id, known);
+  }
+  private async pull(id: string) {
     const existing = this.syncing.get(id);
     if (existing) return existing;
     const job = (async () => {
-      await this.get(id);
-      const chat = this.cache.get(id)!;
-      if (!chat.shared) return this.get(id);
+      const chat = await this.load(id);
+      if (!chat.shared) return;
       if (!this.sharing) throw new Error("Sharing is unavailable.");
       await this.deliver(chat);
       let changed = false;
@@ -1463,14 +1489,10 @@ export class ProjectChats {
         await this.save(chat);
         await this.updateSummary(chat);
       }
-      return {
-        ...structuredClone(chat),
-        requests: this.active.get(id)?.requests.list() ?? [],
-      };
     })();
     this.syncing.set(id, job);
     try {
-      return await job;
+      await job;
     } finally {
       this.syncing.delete(id);
     }
@@ -1479,18 +1501,18 @@ export class ProjectChats {
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,
   ) {
-    const chat = await this.get(id);
+    const chat = await this.load(id);
     if (!chat.shared || !this.sharing) return [];
     return this.sharing.presence(chat, value);
   }
   async workspace(id: string) {
-    const chat = await this.get(id);
+    const chat = await this.load(id);
     if (!chat.shared || !this.sharing)
       throw new Error("Share the conversation before enabling live sync.");
     return this.sharing.workspace(chat);
   }
   async invite(id: string) {
-    const chat = await this.get(id);
+    const chat = await this.load(id);
     if (!chat.shared || !this.sharing)
       throw new Error("Share this conversation before inviting someone.");
     return this.sharing.invite(chat);
@@ -1506,7 +1528,7 @@ export class ProjectChats {
     if (!metadata)
       throw new Error("Shared conversation not found in this project.");
     if (this.store.get().chats?.some((c) => c.id === roomId)) {
-      const existing = await this.get(roomId);
+      const existing = await this.load(roomId);
       if (existing.projectId !== projectId)
         throw new Error(
           "This conversation is linked to another local project.",

@@ -26,6 +26,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import {
+  applyChatPatch,
   replyRoot,
   type ChatMessage,
   type ChatSummary,
@@ -398,8 +399,21 @@ export function ProjectChat({
     scope = chat?.scope ?? draftScope;
   const history = useQuery({
     queryKey: ["project-chat", chat?.id],
-    queryFn: () =>
-      chat!.shared ? api.syncProjectChat(chat!.id) : api.projectChat(chat!.id),
+    queryFn: async () => {
+      // Long threads would otherwise cross IPC whole on every poll; only
+      // messages whose version moved come back in full.
+      const previous = qc.getQueryData<ProjectChatData>([
+        "project-chat",
+        chat!.id,
+      ]);
+      const known = previous
+        ? Object.fromEntries(previous.messages.map((m) => [m.id, m.version]))
+        : undefined;
+      const patch = await (chat!.shared
+        ? api.syncProjectChat(chat!.id, known)
+        : api.projectChat(chat!.id, known));
+      return applyChatPatch(patch, previous);
+    },
     enabled: !!chat,
     refetchInterval: (query) =>
       chat?.shared

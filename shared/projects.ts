@@ -199,6 +199,31 @@ export interface ProjectChat extends ChatSummary {
     }
   >;
 }
+/** Message id → version the renderer already holds. */
+export type KnownMessages = Record<string, number>;
+export const knownMessagesSchema = z
+  .record(z.string().max(200), z.number().int().nonnegative())
+  .refine((known) => Object.keys(known).length <= 20000);
+/** A chat where messages the caller already holds at the same version are sent as their ids. */
+export interface ProjectChatPatch extends Omit<ProjectChat, "messages"> {
+  messages: (ChatMessage | string)[];
+}
+/** Rebuilds a patched chat, reusing the previous message objects it only named. */
+export function applyChatPatch(
+  patch: ProjectChatPatch,
+  previous: ProjectChat | undefined,
+): ProjectChat {
+  const held = new Map(previous?.messages.map((m) => [m.id, m]));
+  return {
+    ...patch,
+    messages: patch.messages.map((m) => {
+      if (typeof m !== "string") return m;
+      const kept = held.get(m);
+      if (!kept) throw new Error("Conversation update is missing a message.");
+      return kept;
+    }),
+  };
+}
 export const projectChatSendSchema = z
   .object({
     delivery: z.enum(["queue", "steer"]).optional(),
@@ -279,7 +304,7 @@ export interface ProjectApi {
   projectChatShareInfo(
     id: string,
   ): Promise<{ server: string | null; project: string; messages: number }>;
-  syncProjectChat(id: string): Promise<ProjectChat>;
+  syncProjectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   projectChatInvite(id: string): Promise<{ url: string; expiresAt: number }>;
   sharedProjectChats(id: string): Promise<ChatSummary[]>;
   openSharedProjectChat(
@@ -354,7 +379,7 @@ export interface ProjectApi {
   projectPulls(id: string, state: string, page: number): Promise<Page<Issue>>;
   projectChats(id: string): Promise<ChatSummary[]>;
   createProjectChat(id: string, scope: ChatScope): Promise<ChatSummary>;
-  projectChat(id: string): Promise<ProjectChat>;
+  projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   projectChatImage(id: string, imageId: string): Promise<string>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;

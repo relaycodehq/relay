@@ -16,7 +16,7 @@ import { Projects } from "../../electron/projects";
 import { ProjectChats } from "../../electron/project-chats";
 import { findExecutable } from "../../electron/executables";
 import { defaultAISettings } from "../../shared/settings";
-import type { ChatMessage } from "../../shared/projects";
+import { applyChatPatch, type ChatMessage } from "../../shared/projects";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -67,6 +67,30 @@ const input = (body: string) => ({
     reasoningEffort: "high" as const,
     fast: true,
   },
+});
+it("sends only messages the renderer doesn't hold at their current version", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const full = await chats.get(chat.id);
+  const [question, answer] = full.messages;
+  const patch = await chats.changes(chat.id, {
+    [question!.id]: question!.version,
+    [answer!.id]: answer!.version - 1,
+  });
+  expect(patch.messages).toEqual([question!.id, answer]);
+  expect(patch.title).toBe(full.title);
+  const held = { ...full, messages: [question!, { ...answer!, body: "old" }] };
+  const rebuilt = applyChatPatch(patch, held);
+  expect(rebuilt.messages[0]).toBe(question);
+  expect(rebuilt.messages[1]).toEqual(answer);
+  expect(() => applyChatPatch(patch, undefined)).toThrow("missing a message");
 });
 it("streams locally, persists final answers, and resumes the same Codex session with selected settings", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -665,7 +689,11 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
     .map((r) => r.turn.input[0].text);
   expect(prompts[1]).toContain("focused reply to this message");
   expect(prompts[3]).not.toContain("BRANCH");
-  expect(saved.messages.at(-1)?.activity).toMatchObject([
+  expect(
+    saved.messages
+      .at(-1)
+      ?.trace?.flatMap((e) => (e.kind === "activity" ? [e.activity] : [])),
+  ).toMatchObject([
     {
       kind: "command",
       status: "complete",
@@ -673,6 +701,7 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
       detail: "example.ts | 2 +-",
     },
   ]);
+  expect(saved.messages.at(-1)?.activity).toBeUndefined();
   await expect(
     chats.send(chat.id, {
       ...input("@codex Unknown reply"),
