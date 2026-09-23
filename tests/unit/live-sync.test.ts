@@ -197,3 +197,30 @@ it("excludes ignored and unsafe files and authorizes room/file writes", async ()
   ).toThrow("colleague changed");
   expect(workspace.read(alice, room, "safe.ts").revision).toBe(first.revision);
 });
+it("refuses shared files under names Windows reads as the .git folder", async () => {
+  // Windows drops a trailing dot, knows .git as GIT~1 and opens it through a
+  // stream name, so each of these would land in .git/hooks on a Windows peer.
+  for (const path of [
+    ".git./hooks/post-checkout",
+    ".git /hooks/post-checkout",
+    "GIT~1/hooks/post-checkout",
+    ".git::$INDEX_ALLOCATION/hooks/post-checkout",
+    "sub/.git.",
+  ])
+    expect(() =>
+      workspace.write(alice, room, {
+        path,
+        expected: 0,
+        value: { contents: "#!/bin/sh\n", mode: 0o755 },
+      }),
+    ).toThrow("Unsafe repository path");
+  for (const path of [".github/ci.yml", ".gitignore", "notes:draft.md"])
+    workspace.write(alice, room, {
+      path,
+      expected: 0,
+      value: { contents: "fine\n", mode: 0o644 },
+    });
+  await sb.tick();
+  expect(await readFile(join(b, ".github/ci.yml"), "utf8")).toBe("fine\n");
+  expect(await readFile(join(b, "notes:draft.md"), "utf8")).toBe("fine\n");
+});

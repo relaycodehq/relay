@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { FilePair, Repo } from "./types";
 import { filePathSchema } from "./validation";
+// Windows also opens .git as ".git.", ".git ", "GIT~1" and ".git::$INDEX_ALLOCATION".
+const dotGit = /^(\.git[. ]*|git~\d+)(:.*)?$/i;
 export const workingPathSchema = filePathSchema.refine(
-  (p) =>
-    !p.includes("\\") &&
-    !p.split("/").some((v) => !v || v.toLowerCase() === ".git"),
+  (p) => !p.includes("\\") && !p.split("/").some((v) => !v || dotGit.test(v)),
   "Unsafe repository path",
 );
 export type ChangeArea = "staged" | "unstaged";
