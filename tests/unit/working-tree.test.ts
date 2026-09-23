@@ -7,6 +7,7 @@ import {
   readFile,
   rm,
   rename,
+  mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -152,4 +153,19 @@ it("changes its revision when only the staged part of a changed file moves", asy
   // Refreshing unchanged files' index stat data is not a change.
   git("update-index", "-q", "--really-refresh");
   expect((await workingTree(root)).revision).toBe(after.revision);
+});
+it("lists the other changes beside an untracked nested repository", async () => {
+  // Git reports a nested repository as one "inner/" entry it never looks into.
+  await mkdir(join(root, "inner"));
+  execFileSync("git", ["-C", join(root, "inner"), "init", "-q"]);
+  await writeFile(join(root, "inner", "notes.md"), "Mine\n");
+  await writeFile(join(root, "code.ts"), "export const a = 2;\n");
+  let tree = await workingTree(root);
+  expect(tree.changes.map((c) => c.path)).toEqual(["code.ts"]);
+  tree = await performGitAction(root, {
+    kind: "stage",
+    revision: tree.revision,
+    paths: ["code.ts"],
+  });
+  expect(tree.changes[0]).toMatchObject({ path: "code.ts", index: "M" });
 });

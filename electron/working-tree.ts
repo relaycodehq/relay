@@ -132,8 +132,11 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   ]);
   const head = headRaw.trim(),
     branch = branchRaw.trim(),
-    changes = parseStatus(raw);
-  for (const c of changes) workingPathSchema.parse(c.path);
+    // Paths Relay can't open, such as a nested repository's "inner/", stay
+    // out of the list instead of failing it.
+    changes = parseStatus(raw).filter(
+      (c) => workingPathSchema.safeParse(c.path).success,
+    );
   // Staging the status line doesn't show (such as `git add -p`) only happens
   // on changed paths. The whole index is megabytes in a large repository.
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
