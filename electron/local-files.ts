@@ -1,5 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { LocalFile, PullRef } from "../shared/types";
 import { shaSchema } from "../shared/validation";
 import { inspectFolder } from "./repository";
@@ -11,8 +9,7 @@ import {
   flushWorkingFiles,
 } from "./working-files";
 import { digest } from "./hash";
-import { gitEnv } from "./git";
-const exec = promisify(execFile);
+import { gitBytes } from "./git";
 export const flushLocalFiles = flushWorkingFiles;
 async function validate(
   root: string,
@@ -32,16 +29,9 @@ async function validate(
       "Your checkout is on a different commit. Check out this PR’s head before editing. Your local files have not been changed.",
     );
   const full = await safeWorkingPath(local.path, path);
-  const git = async (...args: string[]) =>
-    (
-      await exec("git", ["-C", local.path, ...args], {
-        timeout: 10000,
-        maxBuffer: 2 * 1024 * 1024 + 4096,
-        env: gitEnv(),
-        encoding: "buffer",
-      })
-    ).stdout;
-  const tree = (await git("ls-tree", "-z", head, "--", path)).toString("utf8");
+  const tree = (
+    await gitBytes(local.path, ["ls-tree", "-z", head, "--", path])
+  ).toString("utf8");
   if (
     !/^100(644|755) blob [a-f0-9]+\t/.test(tree) ||
     tree.slice(tree.indexOf("\t") + 1) !== `${path}\0`
@@ -49,7 +39,7 @@ async function validate(
     throw new Error(
       "This file is not a regular file in the PR head. Deleted files and submodules cannot be edited here.",
     );
-  return { full, local, git };
+  return { full, local };
 }
 export async function readLocalFile(
   root: string,
@@ -58,10 +48,10 @@ export async function readLocalFile(
   head: string,
   path: string,
 ): Promise<LocalFile> {
-  const { full, local, git } = await validate(root, server, ref, head, path);
+  const { full, local } = await validate(root, server, ref, head, path);
   const [disk, original] = await Promise.all([
     readWorkingFile(local.path, path),
-    git("show", `${head}:${path}`),
+    gitBytes(local.path, ["show", `${head}:${path}`]),
   ]);
   if (!disk) throw new Error("This file was deleted locally.");
   return {
