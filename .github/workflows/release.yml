@@ -96,7 +96,8 @@ jobs:
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
         # The commit message without trailers like Co-Authored-By.
-        run: printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
+        run: |
+          printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
       - name: Write update feed
         run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
