@@ -277,6 +277,15 @@
 .project-message.assistant > header strong {
   color: var(--accent);
 }
+.project-message.assistant > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.project-message > header .provider-glyph {
+  width: 14px;
+  height: 14px;
+}
 .project-message .markdown {
   font-size: 13px;
   line-height: 1.65;

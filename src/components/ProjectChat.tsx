@@ -50,6 +50,7 @@ import {
 } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
+import { ProviderIcon } from "./ComposerModelPicker";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
@@ -247,6 +248,7 @@ const Message = memo(function Message({
     >
       <header>
         <strong>
+          {m.role === "assistant" && <ProviderIcon provider={m.provider} />}
           {m.role === "user"
             ? (m.author ?? "You")
             : m.provider === "codex"
