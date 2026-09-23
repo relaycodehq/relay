@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   ChevronDown,
   ChevronRight,
@@ -109,22 +110,20 @@ interface Setup {
   runChecks: boolean;
 }
 const setupKey = (projectId: string) => "deep-review-setup:" + projectId;
+// The start schema is strict, so the saved target has to be part of it.
+const setupSchema = deepReviewStartSchema
+  .pick({ reviewers: true, lead: true, runChecks: true })
+  .extend({
+    kind: z
+      .enum(["uncommitted", "branch", "pr", "commit"])
+      .catch("uncommitted"),
+    base: z.string().catch(""),
+  });
 function savedSetup(projectId: string): Setup | undefined {
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(setupKey(projectId)) || "null",
-    );
-    const parsed = deepReviewStartSchema
-      .pick({ reviewers: true, lead: true, runChecks: true })
-      .safeParse(saved);
-    if (!parsed.success) return;
-    return {
-      ...parsed.data,
-      kind: ["uncommitted", "branch", "pr", "commit"].includes(saved.kind)
-        ? saved.kind
-        : "uncommitted",
-      base: typeof saved.base === "string" ? saved.base : "",
-    };
+    return setupSchema.safeParse(
+      JSON.parse(localStorage.getItem(setupKey(projectId)) || "null"),
+    ).data;
   } catch {
     return;
   }
