@@ -9,7 +9,6 @@ import {
 import type { ThemedToken } from "@pierre/diffs";
 import { Check, Copy } from "lucide-react";
 import { api } from "../lib/api";
-import { resolvePalette, themeById } from "../lib/themes";
 
 // Tokenizing runs on the main thread; past this a block stays plain.
 const MAX_HIGHLIGHT_LENGTH = 40_000;
@@ -26,20 +25,19 @@ interface Highlighted {
 // Read from the attributes applyToDocument sets on <html>, so the markdown
 // renderer doesn't depend on the appearance store (or localStorage).
 function syntaxTheme() {
-  const { theme, palette } = document.documentElement.dataset;
-  const kind = theme === "light" ? "light" : "dark";
-  return resolvePalette(themeById(palette ?? ""), kind, kind === "dark").syntax;
+  const { theme, syntax } = document.documentElement.dataset;
+  return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
 }
 function subscribeSyntaxTheme(listener: () => void) {
   const observer = new MutationObserver(listener);
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-theme", "data-palette"],
+    attributeFilter: ["data-theme", "data-syntax"],
   });
   return () => observer.disconnect();
 }
 
-async function tokenize(code: string, lang: string, theme: string) {
+export async function tokenize(code: string, lang: string, theme: string) {
   // Loaded lazily so the markdown renderer doesn't pull Shiki in up front.
   const { getSharedHighlighter } = await import("@pierre/diffs");
   const highlighter = await getSharedHighlighter({
@@ -49,7 +47,7 @@ async function tokenize(code: string, lang: string, theme: string) {
   return highlighter.codeToTokens(code, { lang, theme }).tokens;
 }
 
-function tokenStyle(token: ThemedToken): CSSProperties | undefined {
+export function tokenStyle(token: ThemedToken): CSSProperties | undefined {
   const style = token.fontStyle ?? 0;
   if (!token.color && !style) return undefined;
   return {

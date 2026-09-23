@@ -73,7 +73,7 @@ export const themes: Theme[] = [
   {
     id: "relay",
     name: "Relay",
-    description: "The default. Follows your system’s light or dark mode.",
+    description: "Quiet neutrals with a soft violet accent.",
     light: relayLight,
     dark: relayDark,
     swatches: [
@@ -292,12 +292,26 @@ export const themes: Theme[] = [
 
 export type AppearanceMode = "system" | "light" | "dark";
 
-export interface Appearance {
+/**
+ * What one colour mode shows: a base theme and the few things you can tune
+ * on top of it. Absent overrides fall back to the theme's own colours.
+ */
+export interface ThemeChoice {
   theme: string;
-  mode: AppearanceMode;
-  /** Optional accent override; the theme's own accent when absent. */
   accent?: string;
+  background?: string;
+  foreground?: string;
+  /** 0–100; DEFAULT_CONTRAST keeps the theme's own. */
+  contrast?: number;
 }
+
+export interface Appearance {
+  mode: AppearanceMode;
+  light: ThemeChoice;
+  dark: ThemeChoice;
+}
+
+export const DEFAULT_CONTRAST = 50;
 
 const STORAGE_KEY = "relay-appearance";
 
@@ -305,8 +319,43 @@ function isHex(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
 
+/** "#abc", "abc", "#aabbcc" or "aabbcc" as "#aabbcc"; null otherwise. */
+export function normalizeHex(value: string): string | null {
+  const digits = value.trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(digits))
+    return "#" + [...digits].map((d) => d + d).join("");
+  return /^[0-9a-f]{6}$/.test(digits) ? "#" + digits : null;
+}
+
+export function themeById(id: string): Theme {
+  return themes.find((t) => t.id === id) ?? themes[0];
+}
+
+/** Themes that have a palette for `kind`. */
+export function themesFor(kind: ThemeKind): Theme[] {
+  return themes.filter((t) => t[kind]);
+}
+
+function parseChoice(kind: ThemeKind, saved: unknown): ThemeChoice {
+  const value = (saved ?? {}) as Record<string, unknown>;
+  const { contrast } = value;
+  return {
+    theme: themesFor(kind).some((t) => t.id === value.theme)
+      ? (value.theme as string)
+      : "relay",
+    ...(isHex(value.accent) ? { accent: value.accent } : {}),
+    ...(isHex(value.background) ? { background: value.background } : {}),
+    ...(isHex(value.foreground) ? { foreground: value.foreground } : {}),
+    ...(Number.isInteger(contrast) &&
+    (contrast as number) >= 0 &&
+    (contrast as number) <= 100
+      ? { contrast: contrast as number }
+      : {}),
+  };
+}
+
 export function loadAppearance(): Appearance {
-  let saved: Partial<Appearance> = {};
+  let saved: Record<string, unknown> = {};
   try {
     saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
   } catch {
@@ -314,15 +363,26 @@ export function loadAppearance(): Appearance {
   }
   // Earlier builds only stored the light/dark choice under "theme".
   const legacy = localStorage.getItem("theme");
-  const mode = ["system", "light", "dark"].includes(String(saved.mode))
+  let mode: AppearanceMode = ["system", "light", "dark"].includes(
+    String(saved.mode),
+  )
     ? (saved.mode as AppearanceMode)
     : legacy === "light" || legacy === "dark"
       ? legacy
       : "system";
+  // Later ones kept one theme and accent for both modes.
+  if (typeof saved.theme === "string") {
+    const theme = themes.find((t) => t.id === saved.theme);
+    const shared = { theme: saved.theme, accent: saved.accent };
+    saved = { light: theme?.light && shared, dark: theme?.dark && shared };
+    // A single-mode theme showed its own mode whatever was picked.
+    if (theme && !(theme.light && theme.dark))
+      mode = theme.light ? "light" : "dark";
+  }
   return {
-    theme: themes.some((t) => t.id === saved.theme) ? saved.theme! : "relay",
     mode,
-    ...(isHex(saved.accent) ? { accent: saved.accent } : {}),
+    light: parseChoice("light", saved.light),
+    dark: parseChoice("dark", saved.dark),
   };
 }
 
@@ -335,19 +395,76 @@ export function saveAppearance(value: Appearance) {
   }
 }
 
-export function themeById(id: string): Theme {
-  return themes.find((t) => t.id === id) ?? themes[0];
+export function kindFor(mode: AppearanceMode, systemDark: boolean): ThemeKind {
+  return mode === "system" ? (systemDark ? "dark" : "light") : mode;
 }
 
-/** The palette a theme shows in `mode`; single-mode themes ignore it. */
-export function resolvePalette(
-  theme: Theme,
-  mode: AppearanceMode,
-  systemDark: boolean,
-): Palette {
-  const wanted =
-    mode === "system" ? (systemDark ? "dark" : "light") : (mode as ThemeKind);
-  return theme[wanted] ?? theme.dark ?? theme.light!;
+export function isCustomized(choice: ThemeChoice): boolean {
+  return (
+    !!(choice.accent || choice.background || choice.foreground) ||
+    choice.contrast !== undefined
+  );
+}
+
+/** The palette `choice` shows in `kind`, with its overrides applied. */
+export function resolvePalette(kind: ThemeKind, choice: ThemeChoice): Palette {
+  const base = themeById(choice.theme)[kind] ?? themes[0][kind]!;
+  return reshape(base, choice);
+}
+
+/**
+ * Moves a palette onto a new background and foreground. Every neutral keeps
+ * its place between the theme's own background and text, and whatever tint it
+ * had, so the theme's structure survives new colours; contrast spreads or
+ * tightens those places. Without overrides the palette comes back unchanged.
+ */
+function reshape(base: Palette, choice: ThemeChoice): Palette {
+  const background = choice.background ?? base.surface;
+  const foreground = choice.foreground ?? base.text;
+  const contrast = choice.contrast ?? DEFAULT_CONTRAST;
+  if (
+    background === base.surface &&
+    foreground === base.text &&
+    contrast === DEFAULT_CONTRAST
+  )
+    return base;
+  const from = rgb(base.surface),
+    span = rgb(base.text).map((v, i) => v - from[i]),
+    length = span.reduce((sum, v) => sum + v * v, 0) || 1;
+  const bg = rgb(background),
+    fg = rgb(foreground);
+  // Surfaces and borders stand out half to twice as much as the theme's.
+  const strength = 2 ** ((contrast - DEFAULT_CONTRAST) / DEFAULT_CONTRAST);
+  const place = (color: string, scale: (at: number) => number) => {
+    const c = rgb(color);
+    const at =
+      c.reduce((sum, v, i) => sum + (v - from[i]) * span[i], 0) / length;
+    const to = Math.min(1, Math.max(-1, scale(at)));
+    return hex(
+      c.map(
+        (v, i) => bg[i] + (fg[i] - bg[i]) * to + v - (from[i] + span[i] * at),
+      ),
+    );
+  };
+  const neutral = (color: string) => place(color, (at) => at * strength);
+  // Diff tints keep their offset from the background.
+  const tint = (color: string) =>
+    hex(rgb(color).map((v, i) => v - from[i] + bg[i]));
+  return {
+    ...base,
+    surface: background,
+    text: foreground,
+    sidebar: neutral(base.sidebar),
+    toolbar: neutral(base.toolbar),
+    inbox: neutral(base.inbox),
+    border: neutral(base.border),
+    hover: neutral(base.hover),
+    selected: neutral(base.selected),
+    // Secondary text drifts less, so it stays readable at low contrast.
+    muted: place(base.muted, (at) => 1 - (1 - at) / Math.sqrt(strength)),
+    diffAddition: tint(base.diffAddition),
+    diffDeletion: tint(base.diffDeletion),
+  };
 }
 
 // Colour helpers --------------------------------------------------------------
@@ -397,13 +514,24 @@ export interface ResolvedAppearance {
   accent: string;
 }
 
+export function resolveChoice(
+  kind: ThemeKind,
+  choice: ThemeChoice,
+): ResolvedAppearance {
+  const palette = resolvePalette(kind, choice);
+  return {
+    theme: themeById(choice.theme),
+    palette,
+    accent: choice.accent ?? palette.accent,
+  };
+}
+
 export function resolveAppearance(
   value: Appearance,
   systemDark: boolean,
 ): ResolvedAppearance {
-  const theme = themeById(value.theme);
-  const palette = resolvePalette(theme, value.mode, systemDark);
-  return { theme, palette, accent: value.accent ?? palette.accent };
+  const kind = kindFor(value.mode, systemDark);
+  return resolveChoice(kind, value[kind]);
 }
 
 export function tokens({ palette, accent }: ResolvedAppearance) {
@@ -443,4 +571,5 @@ export function applyToDocument(resolved: ResolvedAppearance) {
   root.style.colorScheme = resolved.palette.kind;
   root.dataset.theme = resolved.palette.kind;
   root.dataset.palette = resolved.theme.id;
+  root.dataset.syntax = resolved.palette.syntax;
 }

@@ -5,7 +5,10 @@ import {
   resolveAppearance,
   saveAppearance,
   type Appearance,
+  type AppearanceMode,
   type ResolvedAppearance,
+  type ThemeChoice,
+  type ThemeKind,
 } from "./themes";
 import { relayIconPng } from "./relay-icon";
 
@@ -47,11 +50,22 @@ export function initAppearance() {
   });
 }
 
-export function setAppearance(patch: Partial<Appearance>) {
-  value = { ...value, ...patch };
-  if ("accent" in patch && !patch.accent) delete value.accent;
+function update(next: Appearance) {
+  value = next;
   saveAppearance(value);
   apply();
+}
+
+export function setMode(mode: AppearanceMode) {
+  update({ ...value, mode });
+}
+
+/** Patches one mode's theme; an undefined field goes back to the theme's. */
+export function setThemeChoice(kind: ThemeKind, patch: Partial<ThemeChoice>) {
+  const choice = { ...value[kind], ...patch };
+  for (const key of Object.keys(patch) as (keyof ThemeChoice)[])
+    if (choice[key] === undefined) delete choice[key];
+  update({ ...value, [kind]: choice });
 }
 
 function subscribe(listener: () => void) {

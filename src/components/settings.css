@@ -237,10 +237,10 @@
   color: var(--muted);
 }
 
-/* Theme gallery. */
-.theme-grid {
+/* Colour mode cards. */
+.mode-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .settings-screen .theme-card {
@@ -284,17 +284,11 @@
 .theme-card-label > svg {
   color: var(--accent);
 }
-.theme-card small {
-  padding: 0 3px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
-}
 .theme-preview {
   position: relative;
   display: flex;
   width: 100%;
-  height: 86px;
+  height: 96px;
   border-radius: 7px;
   overflow: hidden;
 }
@@ -344,16 +338,101 @@
   border-radius: 4px;
 }
 
+/* Code preview: a small split diff in the theme being edited. */
+.theme-code {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+  padding: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--code-background);
+  color: var(--code-foreground);
+  font: 12px/1.75 var(--font-mono);
+  overflow: hidden;
+}
+.theme-code-side + .theme-code-side {
+  border-left: 1px solid var(--border);
+}
+.theme-code-line {
+  --bar: transparent;
+  display: flex;
+  white-space: pre;
+}
+.theme-code-number {
+  flex: none;
+  width: 38px;
+  padding-right: 12px;
+  text-align: right;
+  color: var(--muted);
+  box-shadow: inset 3px 0 var(--bar);
+  user-select: none;
+}
+.theme-code-line code {
+  min-width: 0;
+  padding: 0 12px 0 4px;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+.theme-code-line.added {
+  --bar: light-dark(#1a7f37, #3fb950);
+  background: light-dark(
+    color-mix(in srgb, var(--code-background) 50%, var(--diff-addition)),
+    color-mix(in srgb, var(--code-background) 70%, var(--diff-addition))
+  );
+}
+.theme-code-line.removed {
+  --bar: light-dark(#cf222e, #f85149);
+  background: light-dark(
+    color-mix(in srgb, var(--code-background) 50%, var(--diff-deletion)),
+    color-mix(in srgb, var(--code-background) 70%, var(--diff-deletion))
+  );
+}
+.theme-code-line.added .theme-code-number {
+  color: var(--bar);
+  background: light-dark(
+    color-mix(in srgb, var(--code-background) 35%, var(--diff-addition)),
+    color-mix(in srgb, var(--code-background) 60%, var(--diff-addition))
+  );
+}
+.theme-code-line.removed .theme-code-number {
+  color: var(--bar);
+  background: light-dark(
+    color-mix(in srgb, var(--code-background) 35%, var(--diff-deletion)),
+    color-mix(in srgb, var(--code-background) 60%, var(--diff-deletion))
+  );
+}
+
+/* Theme dropdown. */
+.theme-select .composer-control {
+  min-width: 170px;
+  color: var(--text);
+}
+.theme-select .composer-control > span:not(.theme-dot) {
+  flex: 1;
+  text-align: left;
+}
+.theme-dot {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+
 /* Accent picker. */
 .accent-picker {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .settings-screen .accent-swatch {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -370,49 +449,26 @@
     0 0 0 2px var(--surface),
     0 0 0 4px var(--text);
 }
+/* A rainbow ring marks the custom colour well. */
 .accent-custom {
-  position: relative;
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 7px;
-  height: 28px;
-  margin: 0 0 0 4px;
-  padding: 0 10px 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  font-size: 12px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 0 2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #f25f5c,
+    #ffb86c,
+    #f1fa8c,
+    #50c878,
+    #5b9bd5,
+    #9d7ce8,
+    #f25f5c
+  );
   cursor: pointer;
 }
-.accent-custom input {
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  cursor: pointer;
-}
-.accent-custom input::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-.accent-custom input::-webkit-color-swatch {
-  border: 0;
-  border-radius: 50%;
-}
-.settings-screen .accent-reset {
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-}
-.settings-screen .accent-reset:hover {
-  color: var(--text);
-  background: var(--hover);
-}
+
 .settings-app-icon {
   display: block;
   border-radius: 14px;
@@ -495,6 +551,53 @@
 }
 .settings-row.wide .settings-row-control input:not([type="checkbox"]) {
   width: 100%;
+}
+/* Colour wells: the accent's custom well and the background and foreground
+   fields. Beats the generic row input rule by coming after it. */
+.settings-row-control .accent-custom input[type="color"],
+.settings-row-control .color-field input[type="color"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.settings-row-control .accent-custom input[type="color"] {
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.settings-row-control input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.settings-row-control input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent);
+}
+.color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.color-field:focus-within {
+  border-color: var(--accent);
+}
+.settings-row-control .color-field input[type="text"] {
+  width: 84px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  box-shadow: none;
 }
 .settings-row-control input[type="range"] {
   width: 180px;
@@ -640,7 +743,8 @@
   .setting,
   .settings-switch,
   .settings-switch::before,
-  .settings-screen .theme-card {
+  .settings-screen .theme-card,
+  .settings-screen .accent-swatch {
     animation: none;
     transition: none;
   }

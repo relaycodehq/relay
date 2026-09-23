@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -33,7 +34,7 @@ import {
 } from "../../shared/settings";
 import { api } from "../lib/api";
 import { useAISettings } from "../lib/useAISettings";
-import { setAppearance, useAppearance } from "../lib/appearance";
+import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import { setUsageRing, useUsageRing } from "../lib/usage-ring";
 import {
@@ -43,14 +44,23 @@ import {
   type SendKey,
 } from "../lib/send-key";
 import {
+  DEFAULT_CONTRAST,
+  isCustomized,
+  normalizeHex,
+  resolveChoice,
   resolvePalette,
-  themes,
+  themesFor,
   type AppearanceMode,
-  type Theme,
+  type Palette as ThemePalette,
+  type ResolvedAppearance,
+  type ThemeChoice,
+  type ThemeKind,
 } from "../lib/themes";
 import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
 import { Avatar, ErrorBox, IconButton } from "./ui";
 import { ModelField } from "./ModelField";
+import { ComposerSelect } from "./ComposerSelect";
+import { ThemeCodePreview } from "./ThemeCodePreview";
 import {
   SettingsCard,
   SettingsFooter,
@@ -161,11 +171,11 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-function ThemePreview({ theme }: { theme: Theme }) {
-  const p = theme.dark ?? theme.light!;
-  const q = theme.light && theme.dark ? theme.light : undefined;
-  const pane = (palette: typeof p, half?: "left" | "right") => (
+/** A miniature window per look; two looks share it half and half. */
+function ThemePreview({ looks }: { looks: ResolvedAppearance[] }) {
+  const pane = ({ palette, accent }: ResolvedAppearance, half?: string) => (
     <div
+      key={palette.kind}
       className={`theme-preview-window ${half ?? ""}`}
       style={{ background: palette.surface, borderColor: palette.border }}
     >
@@ -182,21 +192,233 @@ function ThemePreview({ theme }: { theme: Theme }) {
         <i style={{ background: palette.text, opacity: 0.8, width: "62%" }} />
         <i style={{ background: palette.muted, opacity: 0.6, width: "84%" }} />
         <i style={{ background: palette.muted, opacity: 0.6, width: "48%" }} />
-        <b style={{ background: palette.accent }} />
+        <b style={{ background: accent }} />
       </div>
     </div>
   );
   return (
     <div className="theme-preview">
-      {q ? (
-        <>
-          {pane(q, "left")}
-          {pane(p, "right")}
-        </>
-      ) : (
-        pane(p)
-      )}
+      {looks.length > 1
+        ? [pane(looks[0], "left"), pane(looks[1], "right")]
+        : pane(looks[0])}
     </div>
+  );
+}
+
+const kindLabels: Record<ThemeKind, string> = { light: "Light", dark: "Dark" };
+
+/** The theme's background with its accent at the centre. */
+function ThemeDot({
+  palette,
+  accent,
+}: {
+  palette: ThemePalette;
+  accent?: string;
+}) {
+  return (
+    <span
+      className="theme-dot"
+      style={{
+        background: `radial-gradient(circle, ${accent ?? palette.accent} 0 3px, ${palette.surface} 3.5px)`,
+      }}
+    />
+  );
+}
+
+function ThemeSelect({
+  kind,
+  look,
+  onChange,
+}: {
+  kind: ThemeKind;
+  look: ResolvedAppearance;
+  onChange: (theme: string) => void;
+}) {
+  // Popups must render inside a modal <dialog> to sit in its top layer.
+  const [container, setContainer] = useState<HTMLElement>();
+  const ref = useCallback(
+    (el: HTMLElement | null) =>
+      setContainer(el?.closest("dialog") ?? undefined),
+    [],
+  );
+  return (
+    <div ref={ref} className="composer-tools model-field theme-select">
+      <ComposerSelect
+        label={`${kindLabels[kind]} theme`}
+        container={container}
+        value={look.theme.id}
+        icon={<ThemeDot palette={look.palette} accent={look.accent} />}
+        options={themesFor(kind).map((theme) => ({
+          value: theme.id,
+          label: theme.name,
+          icon: <ThemeDot palette={theme[kind]!} />,
+        }))}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+/** A colour well beside its hex code; either one edits the colour. */
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (color: string) => void;
+}) {
+  const [draft, setDraft] = useState<string>();
+  return (
+    <div className="color-field">
+      <input
+        type="color"
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <input
+        type="text"
+        aria-label={`${label} hex code`}
+        spellCheck={false}
+        maxLength={7}
+        value={draft ?? value.toUpperCase()}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const color = normalizeHex(e.target.value);
+          if (color && e.target.value.replace("#", "").length === 6)
+            onChange(color);
+        }}
+        onBlur={(e) => {
+          const color = normalizeHex(e.target.value);
+          if (color) onChange(color);
+          setDraft(undefined);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
+}
+
+/** One colour mode's theme and the few colours you can tune on top of it. */
+function ThemeChoiceCard({
+  kind,
+  choice,
+  look,
+}: {
+  kind: ThemeKind;
+  choice: ThemeChoice;
+  look: ResolvedAppearance;
+}) {
+  const { theme, palette, accent } = look;
+  const base = resolvePalette(kind, { theme: theme.id });
+  const change = (patch: Partial<ThemeChoice>) => setThemeChoice(kind, patch);
+  const label = kindLabels[kind];
+  const contrast = choice.contrast ?? DEFAULT_CONTRAST;
+  return (
+    <SettingsCard>
+      <SettingsRow label="Theme" hint={theme.description}>
+        <ThemeSelect
+          kind={kind}
+          look={look}
+          // A new theme brings its own colours; contrast is a preference.
+          onChange={(id) =>
+            change({
+              theme: id,
+              accent: undefined,
+              background: undefined,
+              foreground: undefined,
+            })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Accent"
+        hint="Highlights, selection and the app icon."
+      >
+        <div className="accent-picker">
+          {[...new Set([base.accent, ...theme.swatches])].map((color) => (
+            <button
+              key={color}
+              className={`accent-swatch ${
+                accent.toLowerCase() === color.toLowerCase() ? "selected" : ""
+              }`}
+              style={{ background: color }}
+              aria-label={`${label} accent ${color}`}
+              aria-pressed={accent.toLowerCase() === color.toLowerCase()}
+              title={color}
+              onClick={() =>
+                change({ accent: color === base.accent ? undefined : color })
+              }
+            />
+          ))}
+          <label className="accent-custom" title="Custom colour">
+            <input
+              type="color"
+              aria-label={`${label} custom accent`}
+              value={accent}
+              onChange={(e) => change({ accent: e.target.value })}
+            />
+          </label>
+        </div>
+      </SettingsRow>
+      <SettingsRow label="Background">
+        <ColorField
+          label={`${label} background`}
+          value={palette.surface}
+          onChange={(color) =>
+            change({ background: color === base.surface ? undefined : color })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow label="Foreground">
+        <ColorField
+          label={`${label} foreground`}
+          value={palette.text}
+          onChange={(color) =>
+            change({ foreground: color === base.text ? undefined : color })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Contrast"
+        hint="How far sidebars, borders and secondary text stand apart."
+      >
+        <input
+          type="range"
+          min={0}
+          max={100}
+          aria-label={`${label} contrast`}
+          value={contrast}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            change({
+              contrast: value === DEFAULT_CONTRAST ? undefined : value,
+            });
+          }}
+        />
+        <span className="settings-row-value">{contrast}</span>
+      </SettingsRow>
+      <SettingsFooter note="Code keeps the theme’s own syntax colours.">
+        <button
+          disabled={!isCustomized(choice)}
+          onClick={() =>
+            change({
+              accent: undefined,
+              background: undefined,
+              foreground: undefined,
+              contrast: undefined,
+            })
+          }
+        >
+          <RotateCcw size={12} />
+          Reset to {theme.name}
+        </button>
+      </SettingsFooter>
+    </SettingsCard>
   );
 }
 
@@ -247,148 +469,90 @@ export function Settings({
   const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
   const sendKey = useSendKey();
-  const activeTheme = appearance.theme;
-  const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
   const iconSrc = useMemo(
     () => svgDataUrl(relayIconSvg(appearance.accent)),
     [appearance.accent],
   );
-  const modes: [AppearanceMode, typeof Monitor][] = [
-    ["system", Monitor],
-    ["light", Sun],
-    ["dark", Moon],
+  const { mode } = appearance.value;
+  const looks: Record<ThemeKind, ResolvedAppearance> = {
+    light: resolveChoice("light", appearance.value.light),
+    dark: resolveChoice("dark", appearance.value.dark),
+  };
+  const modes: [
+    AppearanceMode,
+    string,
+    typeof Monitor,
+    ResolvedAppearance[],
+  ][] = [
+    ["system", "System", Monitor, [looks.light, looks.dark]],
+    ["light", "Light", Sun, [looks.light]],
+    ["dark", "Dark", Moon, [looks.dark]],
   ];
-  const modeAvailable = (mode: AppearanceMode) =>
-    mode === "system"
-      ? !!(activeTheme.light && activeTheme.dark)
-      : !!activeTheme[mode];
+  // Following the system shows both themes; the preview follows the one
+  // being edited.
+  const kinds: ThemeKind[] = mode === "system" ? ["light", "dark"] : [mode];
+  const [editing, setEditing] = useState<ThemeKind>();
+  const previewKind =
+    editing && kinds.includes(editing) ? editing : appearance.palette.kind;
 
   const entries: Entry[] = [
     {
       id: "theme",
       category: "appearance",
       title: "Theme",
-      description: "Colours for the whole app, including code and diffs.",
-      keywords: themes.map((t) => t.name).join(" ") + " color palette skin",
-      block: true,
-      render: () => (
-        <div className="theme-grid" role="radiogroup" aria-label="Theme">
-          {themes.map((theme) => {
-            const selected = theme.id === activeTheme.id;
-            const palette = resolvePalette(
-              theme,
-              appearance.value.mode,
-              systemDark,
-            );
-            return (
-              <button
-                key={theme.id}
-                role="radio"
-                aria-checked={selected}
-                className={`theme-card ${selected ? "selected" : ""}`}
-                onClick={() =>
-                  setAppearance({
-                    theme: theme.id,
-                    accent: undefined,
-                    // A single-mode theme decides light or dark itself.
-                    ...(theme.light && theme.dark ? {} : { mode: "system" }),
-                  })
-                }
-              >
-                <ThemePreview theme={theme} />
-                <span className="theme-card-label">
-                  <RelayMark size={16} accent={palette.accent} />
-                  <strong>{theme.name}</strong>
-                  {selected && <Check size={13} />}
-                </span>
-                <small>{theme.description}</small>
-              </button>
-            );
-          })}
-        </div>
-      ),
-    },
-    {
-      id: "mode",
-      category: "appearance",
-      title: "Color mode",
-      description: modeAvailable("system")
-        ? "Follow the system or keep Relay light or dark."
-        : `${activeTheme.name} is a ${activeTheme.dark ? "dark" : "light"} theme.`,
-      keywords: "appearance light dark system night",
-      render: () => (
-        <div className="segmented settings-segmented">
-          {modes.map(([mode, Icon]) => (
-            <button
-              key={mode}
-              className={
-                appearance.value.mode === mode ||
-                (!modeAvailable("system") && mode === appearance.palette.kind)
-                  ? "active"
-                  : ""
-              }
-              disabled={!modeAvailable(mode)}
-              onClick={() => setAppearance({ mode })}
-            >
-              <Icon size={14} />
-              {mode}
-            </button>
-          ))}
-        </div>
-      ),
-    },
-    {
-      id: "accent",
-      category: "appearance",
-      title: "Accent color",
       description:
-        "Highlights, selection and the app icon. Pick from the theme or choose your own.",
-      keywords: "primary colour highlight tint brand",
+        "Follow the system or keep Relay light or dark. Each mode has its own theme.",
+      keywords:
+        "appearance color colour mode light dark system night code preview syntax diff",
       block: true,
       render: () => (
-        <div className="accent-picker">
-          {[
-            ...new Set([appearance.palette.accent, ...activeTheme.swatches]),
-          ].map((color) => (
-            <button
-              key={color}
-              className={`accent-swatch ${
-                appearance.accent.toLowerCase() === color.toLowerCase()
-                  ? "selected"
-                  : ""
-              }`}
-              style={{ background: color }}
-              aria-label={`Accent ${color}`}
-              title={color}
-              onClick={() =>
-                setAppearance({
-                  accent:
-                    color === appearance.palette.accent ? undefined : color,
-                })
-              }
-            />
-          ))}
-          <label className="accent-custom" title="Custom colour">
-            <input
-              type="color"
-              aria-label="Custom accent color"
-              value={appearance.accent}
-              onChange={(e) => setAppearance({ accent: e.target.value })}
-            />
-            <span>Custom</span>
-          </label>
-          {appearance.value.accent && (
-            <button
-              className="accent-reset"
-              onClick={() => setAppearance({ accent: undefined })}
-            >
-              <RotateCcw size={12} />
-              Theme default
-            </button>
-          )}
-        </div>
+        <>
+          <div className="mode-grid" role="radiogroup" aria-label="Color mode">
+            {modes.map(([value, label, Icon, previews]) => (
+              <button
+                key={value}
+                role="radio"
+                aria-checked={mode === value}
+                className={`theme-card ${mode === value ? "selected" : ""}`}
+                onClick={() => setMode(value)}
+              >
+                <ThemePreview looks={previews} />
+                <span className="theme-card-label">
+                  <Icon size={14} />
+                  <strong>{label}</strong>
+                  {mode === value && <Check size={13} />}
+                </span>
+              </button>
+            ))}
+          </div>
+          <ThemeCodePreview look={looks[previewKind]} />
+        </>
       ),
     },
+    ...kinds.map((kind) => ({
+      id: `${kind}-theme`,
+      category: "appearance" as const,
+      title: `${kindLabels[kind]} theme`,
+      description:
+        mode === "system"
+          ? `Used while your system is in ${kind} mode.`
+          : undefined,
+      keywords:
+        themesFor(kind)
+          .map((t) => t.name)
+          .join(" ") +
+        " accent background foreground contrast color colour palette skin",
+      block: true,
+      render: () => (
+        <div onFocusCapture={() => setEditing(kind)}>
+          <ThemeChoiceCard
+            kind={kind}
+            choice={appearance.value[kind]}
+            look={looks[kind]}
+          />
+        </div>
+      ),
+    })),
     {
       id: "usage-ring",
       category: "appearance",
