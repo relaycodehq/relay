@@ -532,6 +532,10 @@ export async function runClaudeProject(
               }
             : {}),
         settingSources: ["user", "project", "local"],
+        // Allow rules in those settings skip canUseTool; this list they can't.
+        ...(options.readOnly
+          ? { disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit"] }
+          : {}),
         strictMcpConfig: true,
         mcpServers: {},
         extraArgs: chromeArgs,
@@ -598,11 +602,13 @@ export async function runClaudeProject(
                 message:
                   "Nobody is watching this review to answer. Decide on your own and keep reviewing.",
               };
-            if (["Edit", "MultiEdit", "Write", "NotebookEdit"].includes(tool))
+            // Claude Code runs the commands it knows only read without asking,
+            // so a command that gets here might change files.
+            if (tool === "Bash")
               return {
                 behavior: "deny",
                 message:
-                  "This review only reads the code. Report the problem instead of changing files.",
+                  "This review only reads the code. Run only commands that read, and report problems instead of changing files.",
               };
             return { behavior: "allow", updatedInput: input };
           }
