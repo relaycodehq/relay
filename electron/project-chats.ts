@@ -275,17 +275,15 @@ export class ProjectChats {
     this.armTimer("send:" + chatId, at, () => this.sendScheduled(chatId));
   }
   /** The earliest scheduled message still waiting to go out on its own. */
-  private nextSend(chat: ProjectChat) {
-    const times = (chat.scheduled ?? [])
-      .filter((s) => !s.error)
-      .map((s) => s.at);
+  private nextSend(scheduled: ScheduledChatMessage[] = []) {
+    const times = scheduled.filter((s) => !s.error).map((s) => s.at);
     return times.length ? Math.min(...times) : undefined;
   }
   private async saveScheduled(chat: ProjectChat) {
     if (!chat.scheduled?.length) delete chat.scheduled;
     await this.save(chat);
     await this.updateSummary(chat);
-    this.armSend(chat.id, this.nextSend(chat));
+    this.armSend(chat.id, this.nextSend(chat.scheduled));
   }
   /** Sends the scheduled messages that are due, oldest first. */
   private async sendScheduled(chatId: string) {
@@ -425,7 +423,7 @@ export class ProjectChats {
         throw new Error("Stop the running answer before archiving.");
       // Nothing reopens an archived thread to cancel what would still run in it.
       if (
-        this.nextSend(chat) ||
+        this.nextSend(chat.scheduled) ||
         chat.heldWakeups?.length ||
         this.pending(id).length
       )
@@ -573,7 +571,7 @@ export class ProjectChats {
     const provider = [...messages]
       .reverse()
       .find((m) => m.role === "assistant")?.provider;
-    const nextSend = this.nextSend({ messages, scheduled } as ProjectChat);
+    const nextSend = this.nextSend(scheduled);
     return {
       ...summary,
       ...(provider ? { provider } : {}),
