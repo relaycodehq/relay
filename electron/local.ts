@@ -154,7 +154,9 @@ export function powershellScript(
     `Set-Location -LiteralPath ${powershellQuote(dir)}`,
     `$prompt = Get-Content -Raw -Encoding UTF8 -LiteralPath ${powershellQuote(promptPath)}`,
     `Remove-Item -Force -LiteralPath ${powershellQuote(promptPath)}, ${powershellQuote(scriptPath)}`,
-    String.raw`$prompt = ($prompt -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'`,
+    // PowerShell versions disagree on a trailing backslash before the closing quote.
+    String.raw`if ($prompt.EndsWith('\')) { $prompt += [char]10 }`,
+    String.raw`$prompt = $prompt -replace '(\\*)"', '$1$1\"'`,
     `& ${[file, ...rest].map(powershellQuote).join(" ")} $prompt`,
     "",
   ].join("\r\n");

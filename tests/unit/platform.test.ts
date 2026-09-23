@@ -133,7 +133,8 @@ describe.runIf(windows)("Windows", () => {
       expect(JSON.parse(await readFile(out, "utf8"))).toEqual([
         "--flag",
         "two words",
-        prompt,
+        // A trailing backslash gets a newline so no PowerShell version can swallow it.
+        prompt + "\n",
       ]);
     },
   );
