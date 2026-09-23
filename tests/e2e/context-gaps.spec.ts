@@ -58,8 +58,8 @@ for (const layout of ["split", "unified"] as const)
       .click();
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page
-      .getByRole("button", {
-        name: layout === "split" ? "light" : "dark",
+      .getByRole("radio", {
+        name: layout === "split" ? "Light" : "Dark",
         exact: true,
       })
       .click();

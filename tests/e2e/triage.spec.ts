@@ -195,7 +195,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     page.getByText("0 of 4 reviewed", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "dark", exact: true }).click();
+  await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Current file" })

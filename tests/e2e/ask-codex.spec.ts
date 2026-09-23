@@ -146,10 +146,12 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
       .getByRole("status"),
   ).toContainText("Settings saved");
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
-  for (const theme of ["dark", "light"]) {
-    await page.getByRole("button", { name: theme, exact: true }).click();
+  for (const theme of ["Dark", "Light"]) {
+    await page.getByRole("radio", { name: theme, exact: true }).click();
     await page.screenshot({
-      path: resolve(`test-results/screenshots/24-settings-${theme}.png`),
+      path: resolve(
+        `test-results/screenshots/24-settings-${theme.toLowerCase()}.png`,
+      ),
     });
   }
   await page.getByRole("button", { name: "Close dialog" }).click();
