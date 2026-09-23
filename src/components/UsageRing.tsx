@@ -99,7 +99,13 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
           state ? `${agent} usage: ${state.label}` : `${agent} usage, checking…`
         }
       >
-        <svg className="usage-ring-dial" width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+        <svg
+          className="usage-ring-dial"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          aria-hidden
+        >
           {(["weekly", "session"] as const).map((kind) => {
             const { radius } = RINGS[kind];
             const circumference = 2 * Math.PI * radius;
