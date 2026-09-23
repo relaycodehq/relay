@@ -427,6 +427,15 @@ export class ProjectChats {
     if (triage.kind === "archive") {
       if (this.active.has(id) || this.reviews.reviewing(chat))
         throw new Error("Stop the running answer before archiving.");
+      // Nothing reopens an archived thread to cancel what would still run in it.
+      if (
+        this.nextSend(chat) ||
+        chat.heldWakeups?.length ||
+        this.pending(id).length
+      )
+        throw new Error(
+          "Cancel the scheduled messages and Claude's background work before archiving.",
+        );
       chat.archivedAt = now;
       await this.save(chat);
       await this.updateSummary(chat);

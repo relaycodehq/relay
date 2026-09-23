@@ -2,12 +2,14 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { Store } from "../../electron/store";
 import { Projects } from "../../electron/projects";
 import { ProjectChats } from "../../electron/project-chats";
 import { claudePending } from "../../electron/rooms/claude-project";
 import type { ChatPending } from "../../shared/projects";
+import { defaultAISettings } from "../../shared/settings";
 
 vi.mock("../../electron/rooms/claude-project", async (actual) => ({
   ...(await actual<typeof import("../../electron/rooms/claude-project")>()),
@@ -117,4 +119,27 @@ it("sends a kept wake-up itself once it comes due", async () => {
     body: expect.stringContaining("Compare the runs"),
   });
   expect(chats.list(projectId)[0].heldWakeups).toBeUndefined();
+});
+
+it("won't archive a thread with work still to run in it", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const later = {
+    id: randomUUID(),
+    body: "Check the deploy.",
+    provider: "claude" as const,
+    runtimeMode: "full-access" as const,
+    interactionMode: "default" as const,
+    choice: defaultAISettings.questions,
+    sendAt: Date.now() + 3_600_000,
+  };
+  await chats.send(chat.id, later);
+  const archive = () => chats.triage(chat.id, { kind: "archive" });
+  await expect(archive()).rejects.toThrow("before archiving");
+  await chats.queueAction(chat.id, "remove", later.id);
+  leave(chat.id, [task]);
+  await expect(archive()).rejects.toThrow("before archiving");
+  vi.mocked(claudePending).mockReturnValue([]);
+  await expect(archive()).resolves.toMatchObject({
+    archivedAt: expect.any(Number),
+  });
 });

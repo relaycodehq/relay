@@ -708,7 +708,7 @@ export function ProjectSidebar({
           )}
           <StatusMark chat={c} unread={unread(c)} now={now} />
         </button>
-        {!c.running && (
+        {!c.running && !c.pending?.length && !c.nextSend && (
           <button
             className="sb-thread-archive"
             title="Archive"
