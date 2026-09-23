@@ -1151,6 +1151,32 @@ it("drains queued follow-ups in order and retains a paused queue across restart"
   expect((await chats.get(chat.id)).queue).toHaveLength(0);
 }, 20000);
 
+it("leaves a paused queue paused when Relay sends Claude's wake-up itself", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  const held = input("@codex Held for later");
+  await chats.send(chat.id, held);
+  await chats.dispose();
+  // Kept when Relay closed; sent once it's due after the restart.
+  const file = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  saved.heldWakeups = [{ id: "w", prompt: "Compare", at: Date.now() }];
+  await writeFile(file, JSON.stringify(saved));
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  await (
+    chats as unknown as { fireWakeup(id: string, w: string): Promise<void> }
+  ).fireWakeup(chat.id, "w");
+  await vi.waitFor(
+    () => expect(chats.hasActiveProject(projectId)).toBe(false),
+    { timeout: 10000 },
+  );
+  const after = await chats.get(chat.id);
+  expect(after.queuePaused).toBe(true);
+  expect(after.queue?.map((q) => q.input.id)).toEqual([held.id]);
+}, 20000);
+
 it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const soon = input("Check the deploy.");

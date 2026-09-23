@@ -227,10 +227,14 @@ export class ProjectChats {
     const work = this.pending(id).find((p) => p.item.id === pendingId);
     if (!work) throw new Error("That work has already finished.");
     if (work.item.kind === "task") return stopClaudeTask(work.key, pendingId);
-    return this.send(id, {
-      ...this.sessionInput(chat, "claude", work.parentId),
-      body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
-    });
+    return this.send(
+      id,
+      {
+        ...this.sessionInput(chat, "claude", work.parentId),
+        body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
+      },
+      true,
+    );
   }
   /** Background commands and agents still running, across every thread. */
   runningTasks() {
@@ -334,10 +338,14 @@ export class ProjectChats {
     const wakeup = chat.heldWakeups?.find((w) => w.id === id);
     if (!wakeup) return;
     await this.dropWakeup(chat, id);
-    await this.send(chatId, {
-      ...this.sessionInput(chat, "claude", wakeup.parentId),
-      body: `@claude Relay restarted before your scheduled wake-up, so it's sending it for you:\n\n${wakeup.prompt}`,
-    });
+    await this.send(
+      chatId,
+      {
+        ...this.sessionInput(chat, "claude", wakeup.parentId),
+        body: `@claude Relay restarted before your scheduled wake-up, so it's sending it for you:\n\n${wakeup.prompt}`,
+      },
+      true,
+    );
   }
   /**
    * Relay is closing, and Claude's sessions with it. Background work dies
@@ -389,10 +397,14 @@ export class ProjectChats {
             ? `- Background work: ${item.description}`
             : `- Recurring wake-up: ${item.prompt}`,
         );
-      await this.send(id, {
-        ...this.sessionInput(chat, "claude", parentId),
-        body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
-      });
+      await this.send(
+        id,
+        {
+          ...this.sessionInput(chat, "claude", parentId),
+          body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
+        },
+        true,
+      );
     }
   }
   /**
@@ -757,7 +769,8 @@ export class ProjectChats {
       (chat) => chat.projectId === projectId && this.active.has(chat.id),
     );
   }
-  send(id: string, input: ProjectChatSend) {
+  /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
+  send(id: string, input: ProjectChatSend, fromRelay = false) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
       if (input.sendAt) return this.schedule(id, input);
@@ -769,7 +782,7 @@ export class ProjectChats {
         // Asking an agent again picks a stopped queue back up after this
         // answer. Drain waits behind this control, so it sees the change.
         const chat = this.cache.get(id);
-        if (chat?.queuePaused && agentMention(input.body)) {
+        if (chat?.queuePaused && agentMention(input.body) && !fromRelay) {
           delete chat.queuePaused;
           await this.save(chat);
         }
