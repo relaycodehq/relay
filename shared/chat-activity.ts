@@ -33,6 +33,24 @@ export function chatActivitySection(
   return "active";
 }
 
+/** Only the latest settled threads stay in Activity; Projects lists them all. */
+export const SETTLED_SHELF_SIZE = 15;
+
+export function chatActivitySections(chats: ChatSummary[], now: number) {
+  const sections: Record<ChatActivitySection, ChatSummary[]> = {
+    active: [],
+    snoozed: [],
+    settled: [],
+  };
+  for (const c of chats) sections[chatActivitySection(c, now)].push(c);
+  // Latest settled first: a thread settled just now stays there to undo, even
+  // when its last message is older than the rest.
+  sections.settled = sections.settled
+    .sort((a, b) => b.settledAt! - a.settledAt!)
+    .slice(0, SETTLED_SHELF_SIZE);
+  return sections;
+}
+
 /** Empty threads (e.g. an unused PR thread) only clutter the lists. */
 export function chatIsEmpty(chat: ChatSummary): boolean {
   return (chat.empty ?? chat.updated === chat.created) && !chat.shared;

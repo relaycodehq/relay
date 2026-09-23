@@ -34,7 +34,7 @@ import {
   type ChatTriage,
 } from "../../shared/projects";
 import {
-  chatActivitySection,
+  chatActivitySections,
   chatIsEmpty,
   shortAge,
   snoozePresets,
@@ -58,8 +58,6 @@ import "./sidebar.css";
 
 const THREADS_PER_PROJECT = 5;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
-/** Only the latest settled threads stay in Activity; Projects lists them all. */
-const SETTLED_SHELF_SIZE = 15;
 const SHELF_PAGE = 5;
 const PROJECT_DRAG = "application/x-relay-project";
 
@@ -636,13 +634,7 @@ export function ProjectSidebar({
       void qc.invalidateQueries({ queryKey: ["project-chats", c.projectId] });
     }
   };
-  const sections = {
-    active: [] as ChatSummary[],
-    snoozed: [] as ChatSummary[],
-    settled: [] as ChatSummary[],
-  };
-  for (const c of all) sections[chatActivitySection(c, now)].push(c);
-  sections.settled = sections.settled.slice(0, SETTLED_SHELF_SIZE);
+  const sections = chatActivitySections(all, now);
   const attention = sections.active.filter(
     (c) => c.waiting || unread(c),
   ).length;

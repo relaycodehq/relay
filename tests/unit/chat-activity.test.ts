@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chatActivitySection,
+  chatActivitySections,
   chatIsEmpty,
   shortAge,
   snoozePresets,
@@ -46,6 +47,30 @@ describe("chat activity", () => {
     expect(
       chatActivitySection(chat({ ...snoozed, waiting: true }), 10_000),
     ).toBe("active");
+  });
+
+  it("keeps the latest settled threads on the shelf, not the latest updated", () => {
+    const hour = 3_600_000;
+    const recent = Array.from({ length: 16 }, (_, i) =>
+      chat({
+        id: `recent-${i}`,
+        updated: 100 * hour - i * hour,
+        settledAt: 100 * hour - i * hour + 1,
+      }),
+    );
+    // Its last message is older than all the others, but it was settled last.
+    const justSettled = chat({
+      id: "old",
+      updated: 10 * hour,
+      settledAt: 101 * hour,
+    });
+    const { settled } = chatActivitySections(
+      [...recent, justSettled],
+      102 * hour,
+    );
+    expect(settled).toHaveLength(15);
+    expect(settled[0].id).toBe("old");
+    expect(settled.map((c) => c.id)).not.toContain("recent-15");
   });
 
   it("treats unused threads as empty but keeps shared ones", () => {
