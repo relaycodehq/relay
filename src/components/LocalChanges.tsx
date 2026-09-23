@@ -1,5 +1,5 @@
 import { LiveSyncControls } from "./LiveSyncControls";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,6 +13,7 @@ import type { Pull } from "../../shared/types";
 import type { ChangeArea, GitAction } from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
+import { linksTo, type ProjectFileLink } from "../lib/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
 import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
@@ -25,15 +26,20 @@ export function LocalChanges({
   slots,
   onOpenFile,
   onAsk,
+  reveal,
+  onRevealConsumed,
 }: {
   pull?: Pull;
   projectId?: string;
   onSelection?: (path: string | null) => void;
   /** When hosted in a workspace pane, the toolbar lives in the pane header. */
   slots?: PaneSlots;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, line?: number) => void;
   /** Attaches selected diff lines to the project chat composer. */
   onAsk?: (ref: CodeReference) => void;
+  /** A file to select, such as one clicked in the chat. */
+  reveal?: (ProjectFileLink & { request: number }) | null;
+  onRevealConsumed?: () => void;
 }) {
   const qc = useQueryClient(),
     key = projectId
@@ -67,6 +73,17 @@ export function LocalChanges({
     [notice, setNotice] = useState(""),
     [push, setPush] = useState(false),
     [collapsed, setCollapsed] = useState<ChangeArea[]>([]);
+  // A requested file selects its row once the tree lists it; until then the
+  // review says it has no local changes.
+  const [wanted, setWanted] = useState<ProjectFileLink | null>(null),
+    [line, setLine] = useState<number>(),
+    [revealed, setRevealed] = useState(0);
+  const fileList = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!reveal) return;
+    setWanted(reveal);
+    onRevealConsumed?.();
+  }, [reveal?.request]);
   useEffect(() => {
     if (storageKey)
       localStorage.setItem(storageKey, JSON.stringify({ selected, message }));
@@ -82,6 +99,10 @@ export function LocalChanges({
     refetchInterval: busy || projectId ? false : 3000,
   });
   const tree = state.data;
+  const missing =
+    wanted && tree && !tree.changes.some((c) => linksTo(wanted, c.path))
+      ? wanted
+      : null;
   const diff = useQuery({
     queryKey: [...key, "diff", selected?.path, selected?.area, tree?.revision],
     queryFn: () =>
@@ -110,6 +131,28 @@ export function LocalChanges({
     )
       setSelected({ ...selected, area: "unstaged" });
   }, [tree, selected]);
+  useEffect(() => {
+    if (!wanted || !tree) return;
+    const change = tree.changes.find((c) => linksTo(wanted, c.path));
+    if (!change) {
+      setSelected(null);
+      return;
+    }
+    // Agents leave their edits unstaged, so their diff comes first.
+    const area: ChangeArea =
+      change.worktree !== " " || change.conflict ? "unstaged" : "staged";
+    setSelected({ path: change.path, area });
+    setCollapsed((c) => c.filter((a) => a !== area));
+    setLine(wanted.directory ? undefined : wanted.line);
+    setWanted(null);
+    setRevealed((n) => n + 1);
+  }, [wanted, tree]);
+  useEffect(() => {
+    if (revealed)
+      fileList.current
+        ?.querySelector(".working-file.selected")
+        ?.scrollIntoView({ block: "nearest" });
+  }, [revealed]);
   async function act(action: GitAction) {
     setBusy(true);
     setError(undefined);
@@ -249,7 +292,7 @@ export function LocalChanges({
                 min={200}
                 max={600}
               />
-              <div className="working-file-list">
+              <div className="working-file-list" ref={fileList}>
                 {sections.map((s) => {
                   const open = !collapsed.includes(s.area),
                     staged = s.area === "staged";
@@ -315,9 +358,11 @@ export function LocalChanges({
                                 className="change-select"
                                 aria-label={`${changeLabels[kind]} ${c.path}`}
                                 title={`${changeLabels[kind]}: ${c.previousPath ? `${c.previousPath} → ` : ""}${c.path}`}
-                                onClick={() =>
-                                  setSelected({ path: c.path, area: s.area })
-                                }
+                                onClick={() => {
+                                  setSelected({ path: c.path, area: s.area });
+                                  setWanted(null);
+                                  setLine(undefined);
+                                }}
                               >
                                 <FileEntryIcon
                                   path={c.path}
@@ -409,6 +454,8 @@ export function LocalChanges({
                       pair={diff.data}
                       sideLabels={sideLabels(selected.area)}
                       split={split}
+                      line={line}
+                      onLineShown={() => setLine(undefined)}
                       onAsk={
                         onAsk &&
                         ((t) =>
@@ -425,6 +472,24 @@ export function LocalChanges({
                     <Loading text="Loading local diff…" />
                   )}
                 </>
+              ) : missing ? (
+                <div className="empty">
+                  <h2>
+                    {missing.directory
+                      ? `Nothing in ${missing.path}/ has local changes.`
+                      : `${missing.path} has no local changes.`}
+                  </h2>
+                  {onOpenFile && !missing.directory && (
+                    <div>
+                      <button
+                        onClick={() => onOpenFile(missing.path, missing.line)}
+                      >
+                        <SquarePen size={14} />
+                        Open in editor
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="empty">
                   <h2>

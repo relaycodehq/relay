@@ -29,6 +29,8 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     git("config", "user.email", "test@example.invalid");
     git("remote", "add", "origin", fixture.serverUrl + "/Web/web-store.git");
     await writeFile(join(repo, "README.md"), "# Cache\n");
+    await mkdir(join(repo, "src"));
+    await writeFile(join(repo, "src/cache.ts"), "export const cache = 1;\n");
     git("add", ".");
     git("commit", "-qm", "Base");
     // Uncommitted work from before the turn stays out of its card.
@@ -160,6 +162,39 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
         expect.stringMatching(/^refs\/relay\/turns\/[0-9a-f-]{36}$/),
       ]);
     expect(git("diff", "--cached", "--name-only")).toBe("");
+
+    // A file clicked in the chat shows its local diff in Changes, even over a
+    // turn's diff. Files opens only when asked.
+    await card.getByRole("button", { name: /guard\.ts/ }).click();
+    await expect(
+      page.getByRole("region", { name: "Turn changes" }),
+    ).toBeVisible();
+    const answer = page.locator(".project-message.assistant").first();
+    await answer.locator('.chat-file-link[title="src/guard.ts"]').click();
+    const local = page.getByRole("region", { name: "Local changes" });
+    await expect(local.locator(".working-file.selected")).toContainText(
+      "guard.ts",
+    );
+    await expect(local.locator(".working-review > header strong")).toHaveText(
+      "src/guard.ts",
+    );
+    await expect(page.locator(".project-file-list")).toHaveCount(0);
+    // A file without local changes says so, and offers the editor.
+    await answer.locator('.chat-file-link[title="src/cache.ts:1"]').click();
+    await expect(local.locator(".working-review")).toContainText(
+      "src/cache.ts has no local changes.",
+    );
+    await expect(local.locator(".working-file.selected")).toHaveCount(0);
+    await expect(page.locator(".project-file-list")).toHaveCount(0);
+    await local
+      .getByRole("button", { name: "Open in editor", exact: true })
+      .click();
+    await expect(
+      page.locator(".project-inline-editor").getByRole("textbox", {
+        name: "src/cache.ts",
+        exact: true,
+      }),
+    ).toBeVisible();
   } finally {
     await app.close();
     await fixture.close();

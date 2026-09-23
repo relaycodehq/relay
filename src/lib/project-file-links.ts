@@ -10,6 +10,11 @@ export type ProjectFileLink = {
   directory: boolean;
 };
 
+/** Whether a link names this file, or a folder that contains it. */
+export function linksTo(link: ProjectFileLink, path: string) {
+  return link.directory ? path.startsWith(link.path + "/") : path === link.path;
+}
+
 /** Resolve T3-style code links inside the linked clone, never outside it. */
 export function projectFileLink(
   value: string,

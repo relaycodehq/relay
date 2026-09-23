@@ -223,6 +223,10 @@
 .working-review > header span {
   color: var(--muted);
 }
+/* A long path in "no local changes" wraps instead of widening the pane. */
+.working-review > .empty h2 {
+  overflow-wrap: anywhere;
+}
 .working-diff {
   flex: 1;
   min-height: 0;

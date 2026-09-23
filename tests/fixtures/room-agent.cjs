@@ -399,8 +399,19 @@ if (args.includes("--permission-prompt-tool")) {
         });
         return;
       }
+      // Answers that link project files, for the chat's file links.
+      const said = m.params.input[0].text;
+      const answer =
+        Object.entries({
+          "fixture edit files":
+            "Added `src/guard.ts`; `src/cache.ts:1` needed no change.",
+          "fixture long link": "See `src/long.ts:250`.",
+          "fixture pr links":
+            "See `src/lib/cache.ts`, `src/components/file-60.tsx` and `src/nowhere.ts`.",
+        }).find(([prompt]) => said.includes(prompt))?.[1] ??
+        "The cache guard prevents duplicate requests.";
       // Edits the checkout mid-turn, so Relay's turn snapshots see changes.
-      if (m.params.input[0].text.includes("fixture edit files")) {
+      if (said.includes("fixture edit files")) {
         const fs = require("node:fs"),
           path = require("node:path");
         fs.appendFileSync(
@@ -495,7 +506,7 @@ if (args.includes("--permission-prompt-tool")) {
           params: {
             threadId: "fixture-thread",
             itemId: "fixture-answer",
-            delta: "The cache guard prevents duplicate requests.",
+            delta: answer,
           },
         });
       }, 100);
@@ -509,7 +520,7 @@ if (args.includes("--permission-prompt-tool")) {
                 id: "fixture-answer",
                 type: "agentMessage",
                 phase: "final_answer",
-                text: "The cache guard prevents duplicate requests.",
+                text: answer,
               },
             },
           });

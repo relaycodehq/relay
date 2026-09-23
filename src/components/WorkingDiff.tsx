@@ -6,6 +6,7 @@ import type {
   FileDiffMetadata,
   SelectedLineRange,
 } from "@pierre/diffs";
+import type { CodeViewHandle } from "@pierre/diffs/react";
 import { Columns2, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
@@ -21,6 +22,7 @@ export interface WorkingLineTarget {
   /** The selected source lines, from the side they were picked on. */
   code: string;
 }
+type Viewer = CodeViewHandle<undefined, undefined>;
 /** Side-by-side or inline diffs, remembered across diff panes. */
 export function useSplitDiff() {
   const [split, setSplit] = useState(
@@ -53,11 +55,16 @@ export function WorkingDiff({
   sideLabels,
   split = true,
   onAsk,
+  line,
+  onLineShown,
 }: {
   pair: FilePair;
   sideLabels?: Record<Side, string>;
   split?: boolean;
   onAsk?: (target: WorkingLineTarget) => void;
+  /** A line of the new side to scroll to once the diff renders. */
+  line?: number;
+  onLineShown?: () => void;
 }) {
   const syntaxThemes = useSyntaxThemes();
   const theme = useTheme(),
@@ -68,6 +75,8 @@ export function WorkingDiff({
   // Side-by-side needs room; narrow panes read better as a unified diff.
   const frame = useRef<HTMLDivElement>(null),
     width = useElementWidth(frame);
+  // The viewer mounts once the syntax workers are ready, after the diff.
+  const [viewer, setViewer] = useState<Viewer | null>(null);
   useEffect(() => {
     setDiff(null);
     setError(undefined);
@@ -86,6 +95,21 @@ export function WorkingDiff({
     () => (diff ? [{ id: "working", type: "diff", fileDiff: diff }] : []),
     [diff],
   );
+  // A line hidden in unchanged code scrolls to the fold that holds it.
+  useEffect(() => {
+    if (!line || !viewer) return;
+    const request = requestAnimationFrame(() => {
+      viewer.scrollTo({
+        type: "line",
+        id: "working",
+        lineNumber: line,
+        side: "additions",
+        align: "center",
+      });
+      onLineShown?.();
+    });
+    return () => cancelAnimationFrame(request);
+  }, [line, viewer, diff]);
   const ask = (range: SelectedLineRange | null) => {
     if (!range || !onAsk) return;
     const side = range.side ?? "additions";
@@ -125,6 +149,7 @@ export function WorkingDiff({
     return (
       <StyledDiffCodeView
         className="working-diff"
+        viewerRef={setViewer}
         items={items}
         selectedLines={onAsk ? selection : undefined}
         onSelectedLinesChange={(next) => {

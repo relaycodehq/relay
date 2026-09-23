@@ -23,7 +23,8 @@ export type FileTarget = ProjectFileLink & {
 
 /**
  * Uncommitted work in the project folder, or what one agent turn changed
- * while a turn is open. Files open in the Files pane.
+ * while a turn is open. A file clicked in the chat selects its row here;
+ * only "Open in editor" opens the Files pane.
  */
 export function ProjectChanges({
   project,
@@ -33,14 +34,18 @@ export function ProjectChanges({
   onAsk,
   turn,
   onCloseTurn,
+  reveal,
+  onRevealConsumed,
 }: {
   project: Project;
   slots: PaneSlots;
   onViewing: (v: Viewing) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, line?: number) => void;
   onAsk: (ref: CodeReference) => void;
   turn?: (TurnDiffTarget & { request: number }) | null;
   onCloseTurn: () => void;
+  reveal?: FileTarget | null;
+  onRevealConsumed: () => void;
 }) {
   if (turn)
     return (
@@ -59,6 +64,8 @@ export function ProjectChanges({
       onOpenFile={onOpenFile}
       onAsk={onAsk}
       onSelection={(path) => onViewing({ path, viewed: 0, total: 0 })}
+      reveal={reveal?.projectId === project.id ? reveal : null}
+      onRevealConsumed={onRevealConsumed}
     />
   );
 }
@@ -211,7 +218,7 @@ export function ProjectFiles({
         <div className="empty project-editor-empty">
           <FileCode2 size={28} />
           <h2>Open a file</h2>
-          <p>Pick a file on the left, or click a file link in the chat.</p>
+          <p>Pick a file on the left, or open one from Changes.</p>
           {tree.error && <ErrorBox error={tree.error} />}
         </div>
       )}

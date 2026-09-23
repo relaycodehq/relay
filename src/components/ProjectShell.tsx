@@ -106,6 +106,7 @@ export default function ProjectShell() {
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
     [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
+    [changeTarget, setChangeTarget] = useState<FileTarget | null>(null),
     [turnDiff, setTurnDiff] = useState<
       (TurnDiffTarget & { request: number }) | null
     >(null),
@@ -327,7 +328,7 @@ export default function ProjectShell() {
     }));
     panes.show("changes");
   }
-  function openChatFile(target: ProjectFileLink) {
+  function openInEditor(target: ProjectFileLink) {
     if (dirty) {
       setError(
         new Error("Save or close the edited file before opening another file."),
@@ -340,6 +341,17 @@ export default function ProjectShell() {
       request: (previous?.request ?? 0) + 1,
     }));
     panes.show("files");
+  }
+  // A file clicked in the chat shows its diff in Changes. Files opens only
+  // when asked: its toggle, or "Open in editor".
+  function openChatFile(target: ProjectFileLink) {
+    setChangeTarget((previous) => ({
+      ...target,
+      projectId: project!.id,
+      request: (previous?.request ?? 0) + 1,
+    }));
+    setTurnDiff(null);
+    panes.show("changes");
   }
   function navigate(p: Project, next?: ChatSummary, fresh = false) {
     if (dirty) return;
@@ -502,7 +514,7 @@ export default function ProjectShell() {
               quiet
               checks={checks}
               onOpenFile={(path, line) =>
-                openChatFile({ path, line, directory: false })
+                openInEditor({ path, line, directory: false })
               }
             />
             <BranchPullRequest
@@ -696,7 +708,12 @@ export default function ProjectShell() {
                             ref: pull,
                             slots: changesSlots,
                             onEditFile: (path, line) =>
-                              openChatFile({ path, line, directory: false }),
+                              openInEditor({ path, line, directory: false }),
+                            reveal:
+                              changeTarget?.projectId === project.id
+                                ? changeTarget
+                                : null,
+                            onRevealConsumed: () => setChangeTarget(null),
                             onPresence: (next) => {
                               setViewing(next);
                               if (next.path)
@@ -753,11 +770,13 @@ export default function ProjectShell() {
                       project={project}
                       slots={changesSlots}
                       onViewing={setViewing}
-                      onOpenFile={(path) =>
-                        openChatFile({ path, directory: false })
+                      onOpenFile={(path, line) =>
+                        openInEditor({ path, line, directory: false })
                       }
                       turn={turnDiff}
                       onCloseTurn={() => setTurnDiff(null)}
+                      reveal={changeTarget}
+                      onRevealConsumed={() => setChangeTarget(null)}
                       onAsk={(code) => {
                         setContextText({
                           id: crypto.randomUUID(),

@@ -39,6 +39,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
+import { linksTo, type ProjectFileLink } from "./lib/project-file-links";
 import type {
   Account,
   Bootstrap,
@@ -282,6 +283,9 @@ export function Connected({
     slots?: PaneSlots;
     /** Open a file in the host's editor instead of a modal. */
     onEditFile?: (path: string, line?: number) => void;
+    /** A file to select, such as one clicked in the host's chat. */
+    reveal?: (ProjectFileLink & { request: number }) | null;
+    onRevealConsumed?: () => void;
   };
   account: Account;
   onSettings: (category?: SettingsCategory) => void;
@@ -502,6 +506,34 @@ export function Connected({
   }, [
     allFiles,
     file,
+    analysisResult,
+    files.data,
+    files.hasNextPage,
+    files.isFetching,
+    files.isError,
+  ]);
+  // Declared after the fallback above, so a requested file wins over it.
+  const reveal = embedded?.reveal;
+  useEffect(() => {
+    if (!reveal || (!analysisResult && !files.data)) return;
+    const match = allFiles.find((f) => linksTo(reveal, f.filename));
+    if (!match && !analysisResult && files.hasNextPage) {
+      if (!files.isFetching && !files.isError) void files.fetchNextPage();
+      return;
+    }
+    if (match) selectFile(match.filename);
+    else
+      setError(
+        new Error(
+          reveal.directory
+            ? `This pull request doesn’t change anything in ${reveal.path}/.`
+            : `This pull request doesn’t change ${reveal.path}.`,
+        ),
+      );
+    embedded?.onRevealConsumed?.();
+  }, [
+    reveal?.request,
+    allFiles,
     analysisResult,
     files.data,
     files.hasNextPage,
