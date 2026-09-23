@@ -14,7 +14,7 @@ The Linux package was cross-built; Linux runtime verification is still outstandi
 
 ## Connect to Gitea
 
-1. Choose **Connect Gitea** in the project sidebar. Leave the server as `https://git.internal.example/gitea`, or enter another HTTPS Gitea base URL (including its subpath).
+1. Choose **Connect Gitea** in the project sidebar and enter your HTTPS Gitea base URL, including its subpath (for example `https://git.example.com/gitea`). Later sign-ins remember it.
 2. Use **Create a token in Gitea** to open your account's Applications settings. Create a personal access token with `read:user`, `write:repository`, and `write:issue`, including private repository access if needed.
 3. Enter the token directly in the app. PRs are discovered through your account; you do not need to paste individual links.
 

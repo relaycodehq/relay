@@ -87,9 +87,8 @@ export function SignIn({
   onRestoreAction: (action: "retry" | "cancel") => Promise<void>;
   invitationUrl?: string;
 }) {
-  const [server, setServer] = useState(
-      savedServer ?? "https://git.internal.example/gitea",
-    ),
+  // No built-in default: releases are public, and a work host doesn't belong in them.
+  const [server, setServer] = useState(savedServer ?? ""),
     [token, setToken] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
@@ -239,6 +238,7 @@ export function SignIn({
               </form>
               <button
                 className="text-button"
+                disabled={!server.trim()}
                 onClick={() => {
                   try {
                     void api
