@@ -704,9 +704,14 @@ export function ProjectChat({
   const leadAnswered = messages.some(
     (m) => m.role === "assistant" && !m.parentId,
   );
+  // Keyed on the report alone: a new renderer redraws the whole summary, and
+  // the review changes with every finding dismissed or fixed.
   const reviewCode = useMemo(
-    () => (chat && review?.report ? findingCode(chat.id, review) : undefined),
-    [chat?.id, review],
+    () =>
+      chat && review?.report
+        ? findingCode(chat.id, review.report.findings)
+        : undefined,
+    [chat?.id, review?.report],
   );
   // A start that failed leaves its thread for the next try. Kept apart from
   // `created`, so a message sent from this draft instead gets a thread of its own.

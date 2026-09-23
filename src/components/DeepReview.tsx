@@ -870,8 +870,7 @@ function PriorityTag({
 }
 
 /** Shows `F1` in the lead's summary as that finding's priority. */
-export function findingCode(chatId: string, state: DeepReviewState) {
-  const findings = state.report?.findings ?? [];
+export function findingCode(chatId: string, findings: Finding[]) {
   return (value: string) => {
     const finding = findings.find((f) => f.id === value);
     return finding ? (

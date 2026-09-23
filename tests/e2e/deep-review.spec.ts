@@ -128,9 +128,19 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       "Not kept · 1",
     );
     // The summary names each finding by its priority.
-    await expect(
-      page.locator(".project-message.assistant button.deep-review-priority"),
-    ).toHaveText("P1");
+    const tag = page.locator(
+      ".project-message.assistant button.deep-review-priority",
+    );
+    await expect(tag).toHaveText("P1");
+    // Dismissing a finding and taking it back leaves the summary as it was drawn.
+    const drawn = await tag.elementHandle();
+    await report.getByRole("button", { name: /^Dismiss / }).click();
+    await report.getByRole("button", { name: "Undo" }).click();
+    await expect(report.locator(".deep-review-task")).toHaveAttribute(
+      "data-status",
+      "open",
+    );
+    expect(await drawn!.evaluate((el) => el.isConnected)).toBe(true);
     // The reviewers fold away once the lead has reported, and open again.
     await expect(panes).toHaveCount(0);
     await page.screenshot({ path: "test-results/deep-review-findings.png" });
