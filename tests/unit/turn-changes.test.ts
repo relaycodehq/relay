@@ -134,6 +134,28 @@ it("matches the agent's paths from a subfolder and through symlinked folders", (
   ).toEqual(["app/src/x.ts", "app/src/y.ts", "app/src/z.ts"]);
 });
 
+it("matches a file a command names from the folder it changed into", () => {
+  const files = [
+    { path: "app/src/x.ts", additions: 1, deletions: 0 },
+    { path: "app/src/y.ts", additions: 1, deletions: 0 },
+    { path: "web/z.ts", additions: 1, deletions: 0 },
+  ];
+  expect(
+    ownFiles(
+      files,
+      {
+        edited: [],
+        commands: [
+          `/bin/zsh -lc "cd app/src && sed -i '' 's/a/b/' x.ts"`,
+          "cd '/repo/web' && npx prettier --write ./z.ts",
+        ],
+      },
+      "/repo",
+      ["/repo"],
+    ).map((f) => f.path),
+  ).toEqual(["app/src/x.ts", "web/z.ts"]);
+});
+
 it("drops the ref when a turn changes nothing", async () => {
   const id = randomUUID();
   const before = await startTurn(root, id);

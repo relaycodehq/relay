@@ -164,6 +164,8 @@ function names(text: string, path: string) {
   }
   return false;
 }
+/** `cd dir`, `cd "dir"` or `cd 'dir'`, also inside a quoted `zsh -lc "…"`. */
+const cdTarget = /(?:^|[\s;&|("'])cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|)"']+))/g;
 
 /**
  * The files among `files` (relative to the repository `top`) that the agent
@@ -184,18 +186,30 @@ export function ownFiles(
       const rel = relative(top, resolve(cwd, path));
       if (rel && !rel.startsWith("..") && !isAbsolute(rel)) edited.add(rel);
     }
+  // A command can name a file from a folder it moves into: `cd sub && sed -i … file.ts`.
+  const commands = claim.commands.map((command) => ({
+    command,
+    folders: [
+      cwd,
+      ...[...command.matchAll(cdTarget)].map((m) =>
+        resolve(cwd, m[1] ?? m[2] ?? m[3]!),
+      ),
+    ],
+  }));
   return files.filter((file) => {
     if (edited.has(file.path)) return true;
-    const forms = new Set([file.path, `./${file.path}`]);
-    for (const top of tops) {
-      const absolute = join(top, file.path);
-      forms.add(absolute);
-      const fromCwd = relative(cwd, absolute);
-      if (!fromCwd.startsWith("..")) forms.add(fromCwd).add(`./${fromCwd}`);
-    }
-    return claim.commands.some((command) =>
-      [...forms].some((form) => names(command, form)),
-    );
+    return commands.some(({ command, folders }) => {
+      const forms = new Set([file.path, `./${file.path}`]);
+      for (const top of tops) {
+        const absolute = join(top, file.path);
+        forms.add(absolute);
+        for (const folder of folders) {
+          const from = relative(folder, absolute);
+          if (from && !from.startsWith("..")) forms.add(from).add(`./${from}`);
+        }
+      }
+      return [...forms].some((form) => names(command, form));
+    });
   });
 }
 
