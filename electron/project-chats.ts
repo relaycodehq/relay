@@ -185,13 +185,15 @@ export class ProjectChats {
       if (active && (!earlier || earlier.started > active.started))
         reviewing.set(c.reviewer!.parent, active);
     }
+    // Once for the list: the sidebar asks every few seconds.
+    const live = this.pending();
     return chats
       .filter((c) => !c.reviewer)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
         const active = this.active.get(c.id) ?? reviewing.get(c.id);
         const pending = [
-          ...this.pending(c.id).map((p) => p.item),
+          ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
             kind: "wakeup",
             id: w.id,
