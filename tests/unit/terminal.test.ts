@@ -18,7 +18,9 @@ function spawned(error?: Error) {
 }
 
 it("uses the desktop's configured terminal with literal paths and repository cwd", async () => {
-  vi.mocked(findExecutable).mockImplementation(async (name) => `/usr/bin/${name}`);
+  vi.mocked(findExecutable).mockImplementation(
+    async (name) => `/usr/bin/${name}`,
+  );
   vi.mocked(spawn).mockImplementation(() => spawned());
   const root = "/home/friend/project with 'quotes' $(nope)";
   const script = "/home/friend/Review Relay/handoffs/test.command";

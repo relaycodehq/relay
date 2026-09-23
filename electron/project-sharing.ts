@@ -104,15 +104,14 @@ export class ProjectSharing {
   }
   async list(id: string) {
     const s = await this.session({ projectId: id });
-    const rows =
-      await s.request<
-        {
-          id: string;
-          title: string;
-          scope: ChatSummary["scope"];
-          updated: number;
-        }[]
-      >("/v1/conversations");
+    const rows = await s.request<
+      {
+        id: string;
+        title: string;
+        scope: ChatSummary["scope"];
+        updated: number;
+      }[]
+    >("/v1/conversations");
     return rows.map((row) => ({
       id: row.id,
       projectId: id,

@@ -5,7 +5,10 @@ import {
   takeBatch,
   type Candidate,
 } from "../../electron/triage/evidence";
-import { classifyChanges, type ClassificationResult } from "../../electron/triage/classifier";
+import {
+  classifyChanges,
+  type ClassificationResult,
+} from "../../electron/triage/classifier";
 const cases: {
   path: string;
   before: string;

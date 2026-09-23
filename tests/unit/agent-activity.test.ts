@@ -60,7 +60,12 @@ it("caps retained output, represents failures, and excludes local execution trac
   ).toBeUndefined();
   expect(
     claudeActivity("t", "Read", { file_path: "/repo/src/a.ts", limit: 4 }),
-  ).toEqual({ id: "t", kind: "read", label: "/repo/src/a.ts", status: "running" });
+  ).toEqual({
+    id: "t",
+    kind: "read",
+    label: "/repo/src/a.ts",
+    status: "running",
+  });
   expect(
     claudeActivity("g", "Grep", { pattern: "useState", path: "src" }).label,
   ).toBe("useState in src");

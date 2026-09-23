@@ -58,7 +58,9 @@ export function claudeActivity(
   value: unknown,
 ): AgentActivity {
   const input =
-    value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
   const text = (key: string) =>
     typeof input[key] === "string" ? (input[key] as string).trim() : "";
   const call = (kind: AgentActivity["kind"], label: string) => ({

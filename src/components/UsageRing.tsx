@@ -108,7 +108,12 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
             const left = meter?.leftPercent ?? 0;
             return (
               <g key={kind} className="usage-ring" data-kind={kind}>
-                <circle className="usage-ring-track" cx="10" cy="10" r={radius} />
+                <circle
+                  className="usage-ring-track"
+                  cx="10"
+                  cy="10"
+                  r={radius}
+                />
                 <circle
                   className="usage-ring-fill"
                   data-pace={meter?.pace ?? "ok"}

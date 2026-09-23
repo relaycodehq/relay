@@ -79,9 +79,7 @@ test("experimental first launch restores the stable login; restart and explicit 
       await expect(
         page.getByRole("heading", { name: "Unlocking your saved sign-in." }),
       ).toBeVisible();
-      expect(await app.evaluate(({ app }) => app.getName())).toBe(
-        "Relay",
-      );
+      expect(await app.evaluate(({ app }) => app.getName())).toBe("Relay");
       await app.evaluate(() => (globalThis as any).finishUnlock(true));
       await expect
         .poll(

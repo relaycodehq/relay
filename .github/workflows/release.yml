@@ -33,6 +33,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      # Flagged, not blocking: a formatting slip shouldn't hold back a release.
+      # Branches run the same check strictly in checks.yml.
+      - run: npm run format:check
+        continue-on-error: true
       - run: npm run build
       - run: npm run test:setup
       - run: npm test

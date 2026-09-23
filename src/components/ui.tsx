@@ -15,13 +15,7 @@ import {
   type CSSProperties,
   type ErrorInfo,
 } from "react";
-import {
-  X,
-  AlertCircle,
-  Folder,
-  Copy,
-  Check,
-} from "lucide-react";
+import { X, AlertCircle, Folder, Copy, Check } from "lucide-react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
@@ -168,8 +162,7 @@ function markdownNodeText(node: unknown): string {
 /** The fence language of a `pre` node, from its `language-*` code class. */
 function markdownCodeLanguage(node: unknown): string | undefined {
   const code = (node as { children?: unknown[] } | undefined)?.children?.[0] as
-    | { properties?: { className?: unknown } }
-    | undefined;
+    { properties?: { className?: unknown } } | undefined;
   const classes = code?.properties?.className;
   const match = (Array.isArray(classes) ? classes : [])
     .map(String)
@@ -227,9 +220,7 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
         }
         onPointerDown={startResize}
         onDoubleClick={(event) => {
-          if (
-            (event.target as HTMLElement).closest(".markdown-table-resizer")
-          )
+          if ((event.target as HTMLElement).closest(".markdown-table-resizer"))
             setWidths(null);
         }}
       >
