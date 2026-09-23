@@ -87,6 +87,14 @@ let modelList: Promise<CodexModel[]> | undefined;
 /** Asks the installed CLI which models this account can use, once per launch. */
 export function codexModels(): Promise<CodexModel[]> {
   modelList ??= withAppServer(homedir(), "listing models", async (wire) => {
+    // Signed out, Codex still lists the few models built into it. Kept, that
+    // list would outlast signing in; failing lets the picker ask again.
+    const { account, requiresOpenaiAuth } = await wire.request(
+      "account/read",
+      {},
+    );
+    if (!account && requiresOpenaiAuth)
+      throw new Error("Sign in to Codex to list its models.");
     const models: CodexModel[] = [];
     let cursor: string | null | undefined;
     for (let page = 0; page < 10; page++) {
