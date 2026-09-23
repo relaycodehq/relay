@@ -6,6 +6,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -244,6 +245,11 @@ function UserText({ text }: { text: string }) {
 }
 /** Drag type for reordering queued messages, so other drops are ignored. */
 const QUEUED_DRAG = "application/x-relay-queued-message";
+/** Where the reader left each thread they scrolled up in, by the message at
+ * the top of the view. Heights above it are estimates after a switch, so a
+ * pixel offset would land somewhere else. Threads left at the bottom have no
+ * entry and open pinned there. */
+const readingPlaces = new Map<string, { id: string; offset: number }>();
 const Message = memo(function Message({
   message: m,
   chatId,
@@ -544,7 +550,9 @@ export function ProjectChat({
   const [visible, setVisible] = useState(80);
   const scroll = useRef<HTMLDivElement>(null),
     column = useRef<HTMLDivElement>(null),
-    follow = useRef(true);
+    follow = useRef(true),
+    returning = useRef<{ id: string; offset: number } | undefined>(undefined);
+  const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
   const composerDock = useRef<HTMLDivElement>(null);
   const [scrolledUp, setScrolledUp] = useState(false);
@@ -697,12 +705,13 @@ export function ProjectChat({
     localStorage.setItem(key, v);
     setDrafts((s) => ({ ...s, [key]: v }));
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (rootId) localStorage.setItem("chat-reply:" + id, rootId);
     else localStorage.removeItem("chat-reply:" + id);
-    follow.current = true;
+    returning.current = readingPlaces.get(place);
+    follow.current = !returning.current;
     setVisible(80);
-  }, [rootId, id]);
+  }, [place]);
   useEffect(() => {
     if (contextText) {
       setRootId(null);
@@ -722,9 +731,29 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
-  useEffect(() => {
-    if (follow.current && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
+  useLayoutEffect(() => {
+    const el = scroll.current;
+    if (!el) return;
+    const back = returning.current;
+    if (back) {
+      const top = el.querySelector(
+        `[data-message-id="${CSS.escape(back.id)}"]`,
+      );
+      if (top) {
+        el.scrollTop +=
+          top.getBoundingClientRect().top -
+          el.getBoundingClientRect().top -
+          back.offset;
+        returning.current = undefined;
+        return;
+      }
+      // Still opening, or that message is gone: then the bottom it is.
+      if (!history.data) return;
+      returning.current = undefined;
+      readingPlaces.delete(place);
+      follow.current = true;
+    }
+    if (follow.current) el.scrollTop = el.scrollHeight;
   }, [messages, rootId]);
   async function send(
     value: Pick<
@@ -992,12 +1021,17 @@ export function ProjectChat({
     const observer = new ResizeObserver(() => {
       if (dock.classList.contains("collapsed")) return;
       setDockHeight(dock.offsetHeight);
-      if (follow.current && scroll.current)
-        scroll.current.scrollTop = scroll.current.scrollHeight;
     });
     observer.observe(dock);
     return () => observer.disconnect();
   }, [isEmpty]);
+  // The padding lands a render after the measurement, and a thread opens with
+  // none, so re-pin once it has. Pinning before it would leave the end of the
+  // thread under the composer, and the next scroll event would stop following.
+  useLayoutEffect(() => {
+    if (follow.current && scroll.current)
+      scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [dockHeight]);
   useEffect(() => {
     const content = column.current;
     if (!content) return;
@@ -1095,6 +1129,23 @@ export function ProjectChat({
             const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
             follow.current = distance < 80;
             setScrolledUp(distance > 160);
+            if (returning.current) return;
+            if (follow.current) {
+              readingPlaces.delete(place);
+              return;
+            }
+            const view = e.getBoundingClientRect().top;
+            for (const m of column.current?.querySelectorAll<HTMLElement>(
+              "[data-message-id]",
+            ) ?? []) {
+              const box = m.getBoundingClientRect();
+              if (box.bottom <= view) continue;
+              readingPlaces.set(place, {
+                id: m.dataset.messageId!,
+                offset: box.top - view,
+              });
+              break;
+            }
           }}
         >
           {chat && history.isPending && (

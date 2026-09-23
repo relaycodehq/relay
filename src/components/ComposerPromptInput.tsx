@@ -371,6 +371,8 @@ export function ComposerPromptInput({
       Paste,
     ],
     content: content(value, labels.current, quotes.current),
+    // The composer remounts per thread, so opening one lands in its input.
+    autofocus: "end",
     editorProps: {
       attributes: {
         role: "textbox",
