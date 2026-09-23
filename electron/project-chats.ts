@@ -2050,17 +2050,18 @@ export class ProjectChats {
         chat.sharedCursor = result.next;
         if (!result.more) break;
       }
-      if (changed)
-        chat.messages.sort((a, b) =>
-          a.seq && b.seq
-            ? a.seq - b.seq
-            : a.seq
-              ? -1
-              : b.seq
-                ? 1
-                : a.created - b.created,
-        );
       if (changed) {
+        // Shared messages go by their place on the server and ones still to
+        // deliver go last. A message never shared, like a handoff note or a
+        // compaction, stays right after the one it followed.
+        let after = 0;
+        const place = new Map(
+          chat.messages.map((m) => [
+            m,
+            m.seq ? (after = m.seq) : m.pending ? Infinity : after + 0.5,
+          ]),
+        );
+        chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
         await this.save(chat);
         await this.updateSummary(chat);
       }

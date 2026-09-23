@@ -1555,3 +1555,71 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
     "Claude found the same cache guard.",
   );
 }, 12000);
+it("keeps a shared thread's local handoff note where it happened when others' messages arrive", async () => {
+  let seq = 0;
+  const others: ChatMessage[] = [];
+  const sharing = {
+    allow: async () => {},
+    share: async () => ({
+      roomId: "room",
+      server: "https://relay.invalid",
+      memberId: "me",
+    }),
+    send: async (_: unknown, messages: ChatMessage[]) =>
+      messages.map((m) => ({ ...m, author: "Me", seq: ++seq })),
+    poll: async (_: unknown, after: number) => ({
+      conversation: { updated: 0 },
+      messages: others.filter((m) => m.seq! > after),
+      next: seq,
+      more: false,
+    }),
+  } as unknown as ConstructorParameters<typeof ProjectChats>[4];
+  await chats.dispose();
+  chats = new ProjectChats(
+    store,
+    projects,
+    join(root, "chats"),
+    () => {},
+    sharing,
+  );
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.share(chat.id);
+  for (const [body, count] of [
+    ["@codex Explain the cache guard", 2],
+    ["@claude Now fix it", 5],
+  ] as const) {
+    await chats.send(chat.id, {
+      ...input(body),
+      provider: body.startsWith("@claude") ? "claude" : "codex",
+    });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+  others.push({
+    id: randomUUID(),
+    role: "user",
+    body: "Bob: looks good",
+    status: "complete",
+    created: Date.now(),
+    provider: "codex",
+    version: 1,
+    author: "Bob",
+    seq: ++seq,
+  });
+  const synced = await chats.sync(chat.id);
+  expect(synced.messages.map((m) => (m.handoff ? "handoff" : m.body))).toEqual([
+    "@codex Explain the cache guard",
+    "The cache guard prevents duplicate requests.",
+    "@claude Now fix it",
+    "handoff",
+    "Claude found the same cache guard.",
+    "Bob: looks good",
+  ]);
+}, 30000);
