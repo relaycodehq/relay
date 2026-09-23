@@ -74,6 +74,16 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await page
       .getByRole("button", { name: "Close files", exact: true })
       .click();
+    await toggle("Files").click();
+    await expect(
+      page.locator(".project-inline-editor").getByRole("textbox", {
+        name: "src/b.ts",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Close files", exact: true })
+      .click();
 
     // Regression: the Changes pane never pops the remembered file in a modal.
     await toggle("Changes").click();
