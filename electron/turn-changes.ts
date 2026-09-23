@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { decodeText } from "./working-files";
 import { digest } from "./hash";
@@ -163,6 +163,8 @@ function names(text: string, path: string) {
   }
   return false;
 }
+/** Git lists paths with forward slashes, on Windows too. */
+const gitPath = (path: string) => path.split(sep).join("/");
 /** `cd dir`, `cd "dir"` or `cd 'dir'`, also inside a quoted `zsh -lc "…"`. */
 const cdTarget = /(?:^|[\s;&|("'])cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|)"']+))/g;
 
@@ -181,7 +183,8 @@ export function ownFiles(
   const edited = new Set<string>();
   for (const path of claim.edited) {
     const rel = relative(root, resolve(root, path));
-    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) edited.add(rel);
+    if (rel && !rel.startsWith("..") && !isAbsolute(rel))
+      edited.add(gitPath(rel));
   }
   // A command can name a file from a folder it moves into: `cd sub && sed -i … file.ts`.
   const commands = claim.commands.map((command) => ({
@@ -202,6 +205,8 @@ export function ownFiles(
         const from = relative(folder, absolute);
         if (from && !from.startsWith("..")) forms.add(from).add(`./${from}`);
       }
+      // A command on Windows may write a path with either slash.
+      for (const form of [...forms]) forms.add(gitPath(form));
       return [...forms].some((form) => names(command, form));
     });
   });
