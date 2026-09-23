@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { shaSchema } from "./validation";
+import { digestSchema, shaSchema, textSchema } from "./validation";
 import { workingPathSchema } from "./working-tree";
 import type { PullRef } from "./types";
 export const syncValueSchema = z
   .object({
-    contents: z.string().max(2 * 1024 * 1024),
+    contents: textSchema,
     mode: z.union([z.literal(0o644), z.literal(0o755)]),
   })
   .strict()
@@ -20,10 +20,7 @@ export const syncWriteSchema = z
 export const syncFileSchema = z.object({
   path: workingPathSchema,
   revision: z.number().int().positive(),
-  hash: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/)
-    .nullable(),
+  hash: digestSchema.nullable(),
   mode: z.number().int().nullable(),
   author: z.string(),
   updated: z.number(),

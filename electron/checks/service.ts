@@ -8,7 +8,11 @@ import { findExecutable } from "../executables";
 import { git } from "../git";
 import { inspectFolder } from "../repository";
 import { configPath, detectProject } from "./detect";
-import { filePathSchema } from "../../shared/validation";
+import {
+  digestSchema,
+  filePathSchema,
+  textSchema,
+} from "../../shared/validation";
 import type { PullRef } from "../../shared/types";
 import type {
   ProjectCheckState,
@@ -34,7 +38,7 @@ const resultSchema = z.object({
   files: z.record(
     filePathSchema,
     z.object({
-      hash: z.string().regex(/^[a-f0-9]{64}$/),
+      hash: digestSchema,
       errors: z.number().int().nonnegative(),
       warnings: z.number().int().nonnegative(),
       suggestions: z.number().int().nonnegative(),
@@ -50,8 +54,8 @@ const symbolResultSchema = z.object({
   source: z
     .object({
       path: filePathSchema,
-      text: z.string().max(2 * 1024 * 1024),
-      hash: z.string().regex(/^[a-f0-9]{64}$/),
+      text: textSchema,
+      hash: digestSchema,
     })
     .optional(),
   display: z.string().max(20000),
@@ -64,7 +68,7 @@ const symbolResultSchema = z.object({
         column: z.number().int().positive(),
         length: z.number().int().nonnegative(),
         preview: z.string().max(300),
-        hash: z.string().regex(/^[a-f0-9]{64}$/),
+        hash: digestSchema,
       }),
     )
     .max(500),

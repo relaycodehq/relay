@@ -84,6 +84,7 @@ import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
   bodySchema,
   blameQuerySchema,
+  digestSchema,
   draftSchema,
   filePathSchema,
   progressSchema,
@@ -91,6 +92,7 @@ import {
   repoSchema,
   shaSchema,
   sideSchema,
+  textSchema,
   workspaceSchema,
   normalizeServer,
 } from "../shared/validation";
@@ -476,7 +478,7 @@ const symbolQuerySchema = z
     path: filePathSchema,
     line: z.number().int().min(1).max(500000),
     column: z.number().int().min(1).max(2000000),
-    hash: z.string().regex(/^[a-f0-9]{64}$/),
+    hash: digestSchema,
     kind: z.enum(["hover", "definition", "references", "source"]),
   })
   .strict();
@@ -514,11 +516,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         "project:" + idSchema.parse(args[0]),
         shaSchema.parse(args[1]),
         workingPathSchema.parse(args[2]),
-        z
-          .string()
-          .max(2 * 1024 * 1024)
-          .nullable()
-          .parse(args[3]),
+        textSchema.nullable().parse(args[3]),
       );
     case "inspectLocalSymbol":
       return projectChecks.symbol(
@@ -661,14 +659,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         idSchema.parse(args[0]),
         workingPathSchema.parse(args[1]),
         shaSchema.parse(args[2]),
-        z
-          .string()
-          .regex(/^[a-f0-9]{64}$/)
-          .parse(args[3]),
-        z
-          .string()
-          .max(2 * 1024 * 1024)
-          .parse(args[4]),
+        digestSchema.parse(args[3]),
+        textSchema.parse(args[4]),
       );
     case "projectTasks":
       return projectTasks.list(await projects.root(idSchema.parse(args[0])));
@@ -976,11 +968,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         path,
         z.enum(["local", "shared"]).parse(args[2]),
         z.number().int().positive().parse(args[3]),
-        z
-          .string()
-          .regex(/^[a-f0-9]{64}$/)
-          .nullable()
-          .parse(args[4]),
+        digestSchema.nullable().parse(args[4]),
       );
     }
     case "roomAccessInfo":
@@ -1344,11 +1332,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         prKey(refSchema.parse(args[0])),
         shaSchema.parse(args[1]),
         filePathSchema.parse(args[2]),
-        z
-          .string()
-          .max(2 * 1024 * 1024)
-          .nullable()
-          .parse(args[3]),
+        textSchema.nullable().parse(args[3]),
       );
     case "writeClipboard":
       await clipboard.writeText(z.string().max(32768).parse(args[0]));
@@ -1387,14 +1371,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         r,
         head,
         path,
-        z
-          .string()
-          .regex(/^[a-f0-9]{64}$/)
-          .parse(args[3]),
-        z
-          .string()
-          .max(2 * 1024 * 1024)
-          .parse(args[4]),
+        digestSchema.parse(args[3]),
+        textSchema.parse(args[4]),
       );
     }
     case "aiSettings":

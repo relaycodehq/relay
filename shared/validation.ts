@@ -23,6 +23,10 @@ export const filePathSchema = z
     "Invalid file path",
   );
 export const shaSchema = z.string().regex(/^[a-f0-9]{40,64}$/);
+/** A SHA-256 of file contents, as `digest` makes for versions and checks. */
+export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
+/** File text small enough to edit, check or sync (2 MiB). */
+export const textSchema = z.string().max(2 * 1024 * 1024);
 export const blameQuerySchema = z
   .object({
     revision: shaSchema,
