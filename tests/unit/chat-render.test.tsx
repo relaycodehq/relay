@@ -30,6 +30,19 @@ it("renders source links as local code chips and refuses out-of-project file lin
   expect(fenced).not.toContain("chat-file-link");
 });
 
+it("shows only inline code through inlineCode, like a finding's F1", () => {
+  const html = renderToStaticMarkup(
+    <RichText
+      text={"Fix `F1` first, in `src/util.ts:3`.\n\n```\nF1\n```"}
+      projectRoot="/Users/test/workspace"
+      onOpenFile={() => {}}
+      inlineCode={(value) => (value === "F1" ? <b>P1</b> : undefined)}
+    />,
+  );
+  expect(html.match(/<b>P1<\/b>/g)).toHaveLength(1);
+  expect(html).toContain('title="src/util.ts:3"');
+});
+
 it("labels file chips T3-style: type icon, file name, line, and parents only on a clash", () => {
   const html = renderToStaticMarkup(
     <RichText

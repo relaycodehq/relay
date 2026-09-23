@@ -412,8 +412,6 @@ export const RichText = memo(function RichText({
   // every code span, table and quote whenever the text changes.
   const openFile = useRef(onOpenFile);
   openFile.current = onOpenFile;
-  const custom = useRef(inlineCode);
-  custom.current = inlineCode;
   const linksFiles = !!onOpenFile;
   const components = useMemo<Components>(
     () => ({
@@ -461,7 +459,7 @@ export const RichText = memo(function RichText({
       },
       code: ({ children, className }) => {
         const value = String(children).trim();
-        const shown = className ? undefined : custom.current?.(value);
+        const shown = className ? undefined : inlineCode?.(value);
         if (shown) return shown;
         const target =
           !className && projectRoot && linksFiles && !value.includes("\n")
