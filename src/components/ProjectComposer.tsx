@@ -248,8 +248,11 @@ export function ProjectComposer({
       : selected;
   const [pickModel, setPickModel] = useState(0);
   function selectModel(next: "codex" | "claude" | "message", model: string) {
-    setProvider(next);
+    applyModel(next, model);
     if (mention) onDraft(mention.question);
+  }
+  function applyModel(next: "codex" | "claude" | "message", model: string) {
+    setProvider(next);
     if (next === "claude") {
       const efforts =
         claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
@@ -270,12 +273,81 @@ export function ProjectComposer({
       });
     }
   }
-  const toggles: CommandOption[] = [
-    { value: "on", label: "on" },
-    { value: "off", label: "off" },
+  /** A command picked an agent, so an @mention would only override it. */
+  function dropMention() {
+    const prefix = /^\s*@(?:codex|claude)(?=\s|$)\s*/i.exec(draft)?.[0];
+    if (prefix)
+      promptInput.current?.insertText({
+        start: 0,
+        end: prefix.length,
+        text: "",
+      });
+  }
+  const agentNames = { codex: "Codex", claude: "Claude" };
+  // Every model /model can switch to, the current agent's first.
+  function modelOptions() {
+    const listed = [
+      ...codexModels.map((m) => ({
+        provider: "codex" as const,
+        value: m.id,
+        description: m.name,
+      })),
+      ...(claudeModels ?? []).flatMap((m) => {
+        const long = withClaudeContextWindow(m.id, "1m");
+        return [
+          { provider: "claude" as const, value: m.id, description: m.name },
+          ...(m.longContext && !claudeModels?.some((o) => o.id === long)
+            ? [
+                {
+                  provider: "claude" as const,
+                  value: long,
+                  description: `${m.name} · 1M context`,
+                },
+              ]
+            : []),
+        ];
+      }),
+    ];
+    const current =
+      recipient === "claude" ? claude.model : (selected?.model ?? "");
+    return [
+      ...listed.filter((m) => m.provider === recipient),
+      ...(recipient === "message"
+        ? []
+        : [
+            {
+              provider: recipient,
+              value: "default",
+              description: `${agentNames[recipient]} default`,
+            },
+          ]),
+      ...listed.filter((m) => m.provider !== recipient),
+    ].map((m) => ({
+      ...m,
+      label: m.value,
+      source: agentNames[m.provider],
+      current: m.provider === recipient && m.value === (current || "default"),
+    }));
+  }
+  const toggles = (on: boolean): CommandOption[] => [
+    { value: "on", label: "on", current: on },
+    { value: "off", label: "off", current: !on },
   ];
   // Values offered after a composer command, for the current agent.
   function commandOptions(command: RelayCommand): CommandOption[] | undefined {
+    if (command === "provider")
+      return (["codex", "claude", "message"] as const).map((value) => ({
+        value,
+        label: value,
+        description:
+          value === "codex"
+            ? `Codex · ${codexModels.find((m) => m.id === selected?.model)?.name ?? (selected?.model || "default model")}`
+            : value === "claude"
+              ? `Claude · ${claudeListed ? claudeListed.name + (claudeContextWindow(claude.model) === "1m" ? " · 1M" : "") : claude.model || "default model"}`
+              : "Send without running an agent",
+        current: value === recipient,
+      }));
+    if (command === "model") return modelOptions();
     if (recipient === "message") return undefined;
     if (command === "effort") {
       const efforts =
@@ -284,35 +356,35 @@ export function ProjectComposer({
           : selected
             ? reasoningEffortsFor(selected.model, codexModels)
             : [];
+      const effort =
+        recipient === "claude"
+          ? claude.reasoningEffort
+          : selected?.reasoningEffort;
       return [
-        { value: "default", label: "default", description: "Model default" },
+        {
+          value: "default",
+          label: "default",
+          description: "Model default",
+          current: !effort,
+        },
         ...efforts.map((e) => ({
           value: e,
           label: e,
           description: effortLabels[e],
+          current: e === effort,
         })),
       ];
     }
-    if (command === "model")
-      return recipient === "claude"
-        ? (claudeModels ?? []).map((m) => ({
-            value: m.id,
-            label: m.id,
-            description: m.name,
-          }))
-        : codexModels.map((m) => ({
-            value: m.id,
-            label: m.id,
-            description: m.name,
-          }));
     if (command === "permissions")
       return runtimeModes.map((m) => ({
         value: m.value,
         label: m.value,
         description: `${m.label} · ${m.description}`,
+        current: m.value === runtimeMode,
       }));
-    if (command === "plan" || (command === "fast" && recipient === "codex"))
-      return toggles;
+    if (command === "plan") return toggles(interactionMode === "plan");
+    if (command === "fast" && recipient === "codex")
+      return toggles(!!selected?.fast);
     return undefined;
   }
   function toggle(args: string, current: boolean) {
@@ -322,32 +394,47 @@ export function ProjectComposer({
   // Applies a settings command to this composer; anything else goes up.
   function runCommand(command: RelayCommand, args: string): boolean | string {
     if (!composerCommands.includes(command)) return onCommand(command, args);
+    const value = args.toLowerCase();
+    if (command === "provider") {
+      const next = (["codex", "claude", "message"] as const).find(
+        (p) => p === value,
+      );
+      if (!next) return "Choose one of: codex, claude, message.";
+      setProvider(next);
+      dropMention();
+      return true;
+    }
+    if (command === "model") {
+      if (!args) {
+        setPickModel((n) => n + 1);
+        return true;
+      }
+      const option = modelOptions().find(
+        (o) =>
+          o.value.toLowerCase() === value ||
+          o.description.toLowerCase() === value,
+      );
+      const model = option
+        ? option.value === "default"
+          ? ""
+          : option.value
+        : modelSchema.safeParse(args).data;
+      const next = option?.provider ?? recipient;
+      if (model === undefined) return "Enter a valid model ID.";
+      if (next === "message")
+        return "Choose Codex or Claude before changing agent settings.";
+      applyModel(next, model);
+      dropMention();
+      return true;
+    }
     if (recipient === "message")
       return "Choose Codex or Claude before changing agent settings.";
-    const value = args.toLowerCase();
     if (
       args &&
       ["plan", "fast"].includes(command) &&
       !["on", "off"].includes(value)
     )
       return `Use /${command} on or /${command} off.`;
-    if (command === "model") {
-      if (!args) {
-        setPickModel((n) => n + 1);
-        return true;
-      }
-      const model =
-        value === "default"
-          ? ""
-          : (commandOptions("model")?.find(
-              (o) =>
-                o.value.toLowerCase() === value ||
-                o.description?.toLowerCase() === value,
-            )?.value ?? modelSchema.safeParse(args).data);
-      if (model === undefined) return "Enter a valid model ID.";
-      selectModel(recipient, model);
-      return true;
-    }
     if (command === "effort") {
       const effort = value === "default" ? "" : value;
       const allowed = commandOptions("effort")?.some((o) => o.value === value);
@@ -373,6 +460,10 @@ export function ProjectComposer({
       setInteractionMode(
         toggle(args, interactionMode === "plan") ? "plan" : "default",
       );
+      return true;
+    }
+    if (command === "build") {
+      setInteractionMode("default");
       return true;
     }
     if (recipient !== "codex") return "Fast mode is only available for Codex.";

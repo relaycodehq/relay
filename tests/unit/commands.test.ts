@@ -26,10 +26,39 @@ describe("relay commands", () => {
     expect(argumentTrigger("/effort hi")).toEqual({
       name: "effort",
       query: "hi",
+      start: 0,
+      inline: false,
     });
-    expect(argumentTrigger("/effort ")).toEqual({ name: "effort", query: "" });
+    expect(argumentTrigger("/effort ")).toMatchObject({
+      name: "effort",
+      query: "",
+    });
     expect(argumentTrigger("/effort high now")).toBeNull();
     expect(argumentTrigger("/effort")).toBeNull();
-    expect(commandTrigger("/eff")).toMatchObject({ prefix: "/", query: "eff" });
+    expect(commandTrigger("/eff")).toMatchObject({
+      prefix: "/",
+      query: "eff",
+      inline: false,
+    });
+  });
+  it("finds commands typed in the middle of a message", () => {
+    expect(commandTrigger("fix the bug /eff")).toMatchObject({
+      prefix: "/",
+      query: "eff",
+      start: 12,
+      end: 16,
+      inline: true,
+    });
+    expect(argumentTrigger("fix the bug /effort x and", 21)).toEqual({
+      name: "effort",
+      query: "x",
+      start: 12,
+      inline: true,
+    });
+    expect(commandTrigger("look in src/eff")).toBeNull();
+    expect(commandTrigger("use $exp")).toMatchObject({
+      prefix: "$",
+      inline: false,
+    });
   });
 });

@@ -29,7 +29,7 @@ export interface SkillPick {
 }
 export interface PromptInputHandle {
   insertSkill: (skill: SkillPick) => void;
-  /** Replaces a range of the draft with plain text and puts the caret after it. */
+  /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
   insertText: (range: { start: number; end: number; text: string }) => void;
   /** Adds a quoted passage as a pill ahead of anything already typed. */
   insertQuote: (text: string) => void;
@@ -424,17 +424,16 @@ export function ComposerPromptInput({
       },
       insertText({ start, end, text }) {
         if (!editor) return;
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(
-            {
-              from: position(editor.state.doc, start),
-              to: position(editor.state.doc, end),
-            },
-            { type: "text", text },
-          )
-          .run();
+        const range = {
+          from: position(editor.state.doc, start),
+          to: position(editor.state.doc, end),
+        };
+        const chain = editor.chain().focus();
+        // ProseMirror has no empty text nodes; removing is a delete.
+        (text
+          ? chain.insertContentAt(range, { type: "text", text })
+          : chain.deleteRange(range)
+        ).run();
       },
       insertQuote(quote) {
         if (!editor || !quote) return;

@@ -93,6 +93,46 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await expect(
       page.getByRole("combobox", { name: "Reasoning effort" }),
     ).toContainText("High");
+    // Settings commands work mid-sentence and take out only their own text.
+    await input.fill("Fix the bug /eff");
+    await input.press("Enter");
+    await expect(
+      page.getByRole("option", { name: /\/effort high.*Current/ }),
+    ).toHaveAttribute("aria-selected", "true");
+    await input.press("ArrowDown");
+    await input.press("Enter");
+    await expect(input).toHaveText(/^Fix the bug\s*$/);
+    await expect(
+      page.getByRole("combobox", { name: "Reasoning effort" }),
+    ).toContainText("Extra high");
+    await input.fill("Fix the bug");
+    for (let i = 0; i < " the bug".length; i++) await input.press("ArrowLeft");
+    await input.pressSequentially(" /pla");
+    await expect(page.getByRole("option", { name: /\/plan/ })).toBeVisible();
+    await input.press("Enter");
+    await expect(input).toHaveText("Fix the bug");
+    await expect(
+      page.getByRole("button", { name: /^Plan mode/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await input.fill("Fix the bug /bui");
+    await input.press("Enter");
+    await expect(
+      page.getByRole("button", { name: /^Default mode/ }),
+    ).toBeVisible();
+    const model = page.getByRole("button", {
+      name: "Choose model and provider",
+    });
+    await input.fill("Explain /provider cl");
+    await input.press("Enter");
+    await expect(model).toContainText("Claude");
+    await input.fill("Explain /model sol");
+    await input.press("Enter");
+    await expect(model).toContainText("GPT-6-Sol");
+    await expect(input).toHaveText(/^Explain\s*$/);
+    await input.fill("See /usr/lib");
+    await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
+      0,
+    );
     await input.fill("Please use $exp");
     await expect(page.getByRole("option", { name: /Explain/ })).toBeVisible();
     await input.press("Tab");

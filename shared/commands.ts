@@ -10,13 +10,19 @@ export const relayCommands = [
     args: "[instructions]",
   },
   { name: "context", description: "Show context window usage" },
-  { name: "model", description: "Choose the model", args: "[model]" },
+  {
+    name: "provider",
+    description: "Switch between Codex, Claude, and messages only",
+    args: "<agent>",
+  },
+  { name: "model", description: "Choose the model", args: "<model>" },
   {
     name: "effort",
     description: "Set reasoning effort",
     args: "<level>",
   },
   { name: "plan", description: "Toggle plan mode", args: "[on|off]" },
+  { name: "build", description: "Leave plan mode" },
   {
     name: "permissions",
     description: "Set what the agent may do without asking",
@@ -25,11 +31,16 @@ export const relayCommands = [
   { name: "fast", description: "Toggle Codex Fast mode", args: "[on|off]" },
 ] as const;
 export type RelayCommand = (typeof relayCommands)[number]["name"];
-/** Commands the composer applies to its own settings. */
+/**
+ * Commands the composer applies to its own settings. They also work in the
+ * middle of a message, and take only their own text out of it.
+ */
 export const composerCommands: readonly RelayCommand[] = [
+  "provider",
   "model",
   "effort",
   "plan",
+  "build",
   "permissions",
   "fast",
 ];
@@ -45,6 +56,10 @@ export interface CommandOption {
   value: string;
   label: string;
   description?: string;
+  /** Whose it is, when not Relay's, e.g. a model's agent. */
+  source?: string;
+  /** The setting's present value. */
+  current?: boolean;
 }
 /** Relay commands take arguments only where they declare them. */
 export function relayCommand(
@@ -58,21 +73,36 @@ export function relayCommand(
   if (!command || (args && !("args" in command))) return null;
   return { name: command.name, args };
 }
-/** The argument being typed after a command name, e.g. `/effort hi`. */
+/**
+ * The argument being typed after a command name, e.g. `/effort hi`. `inline`
+ * marks one typed after other text, where only composer commands apply.
+ */
 export function argumentTrigger(text: string, cursor = text.length) {
-  const match = /^\/([a-z]+) (\S*)$/i.exec(text.slice(0, cursor));
-  return match ? { name: match[1].toLowerCase(), query: match[2] } : null;
+  const before = text.slice(0, cursor);
+  const match = /(^|\s)\/([a-z]+) (\S*)$/i.exec(before);
+  if (!match) return null;
+  const start = match.index + match[1].length;
+  return {
+    name: match[2].toLowerCase(),
+    query: match[3],
+    start,
+    inline: !!before.slice(0, start).trim(),
+  };
 }
-/** Slash actions start a message; $skill references can appear anywhere. */
+/**
+ * Slash actions start a message, and composer commands can follow other text
+ * (`inline`); $skill references can appear anywhere.
+ */
 export function commandTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
   const match = /(^|\s)([$/])([^\s]*)$/.exec(before);
-  if (!match || (match[2] === "/" && before.slice(0, match.index).trim()))
-    return null;
+  if (!match) return null;
+  const start = match.index + match[1].length;
   return {
     prefix: match[2] as "/" | "$",
     query: match[3],
-    start: match.index + match[1].length,
+    start,
     end: cursor,
+    inline: match[2] === "/" && !!before.slice(0, start).trim(),
   };
 }

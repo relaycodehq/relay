@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   Blocks,
+  Check,
   Folder,
   Settings,
   SquareTerminal,
@@ -20,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   relayCommands,
   relayCommand,
+  composerCommands,
   commandTrigger,
   argumentTrigger,
   type CommandOption,
@@ -60,9 +62,14 @@ export function useComposerCommands({
   const at = Math.min(cursor ?? draft.length, draft.length);
   const trigger = commandTrigger(draft, at);
   const argument = argumentTrigger(draft, at);
-  const argCommand = relayCommands.find((c) => c.name === argument?.name);
+  const argCommand = relayCommands.find(
+    (c) =>
+      c.name === argument?.name &&
+      (!argument.inline || composerCommands.includes(c.name)),
+  );
   const argOptions = argCommand ? options(argCommand.name) : undefined;
-  const visible =
+  const inline = argCommand ? argument!.inline : !!trigger?.inline;
+  const open =
     (!!trigger || !!argOptions?.length) && dismissed !== draft && !disabled;
   const providerCommands = useQuery({
     queryKey: ["provider-commands", projectId, provider],
@@ -71,7 +78,8 @@ export function useComposerCommands({
         projectId,
         provider === "claude" ? "claude" : "codex",
       ),
-    enabled: (visible || draft.startsWith("/")) && provider !== "message",
+    enabled:
+      ((open && !inline) || draft.startsWith("/")) && provider !== "message",
     staleTime: 60000,
     retry: false,
   });
@@ -84,6 +92,7 @@ export function useComposerCommands({
     description: string;
     source: string;
     Icon: typeof Zap;
+    current?: boolean;
   };
   const items: Item[] = (
     argCommand && argOptions
@@ -92,21 +101,27 @@ export function useComposerCommands({
           name: o.value,
           label: `/${argCommand.name} ${o.label}`,
           description: o.description ?? "",
-          source: "Relay",
-          Icon: Zap,
+          source: o.current ? "Current" : (o.source ?? "Relay"),
+          Icon: o.current ? Check : Zap,
+          current: o.current,
         }))
       : [
           ...(prefix === "/"
-            ? relayCommands.map((c) => ({
-                kind: "relay" as const,
-                name: c.name,
-                label: "/" + c.name + ("args" in c ? " " + c.args : ""),
-                description: c.description,
-                source: "Relay",
-                Icon: Zap,
-              }))
+            ? relayCommands
+                .filter((c) => !inline || composerCommands.includes(c.name))
+                .map((c) => ({
+                  kind: "relay" as const,
+                  name: c.name,
+                  label: "/" + c.name + ("args" in c ? " " + c.args : ""),
+                  description: c.description,
+                  source: "Relay",
+                  Icon: Zap,
+                }))
             : []),
-          ...(provider !== "message" ? (providerCommands.data ?? []) : [])
+          ...(provider !== "message" && !inline
+            ? (providerCommands.data ?? [])
+            : []
+          )
             .filter((c) => prefix === "/" || c.source !== "claude")
             .map((c) =>
               c.source === "claude"
@@ -152,8 +167,14 @@ export function useComposerCommands({
             ),
         ]
   )
-    .filter((c) => `${c.name} ${c.label}`.toLowerCase().includes(query))
+    .filter((c) =>
+      `${c.name} ${c.label} ${c.kind === "argument" ? c.description : ""}`
+        .toLowerCase()
+        .includes(query),
+    )
     .slice(0, 60);
+  // Mid-sentence, a slash that matches nothing is just text, e.g. a path.
+  const visible = open && (!inline || items.length > 0);
   const [bounds, setBounds] = useState({
     left: 0,
     top: 0,
@@ -161,8 +182,16 @@ export function useComposerCommands({
     maxHeight: 300,
     above: true,
   });
+  // A bare value list starts on the present value, so arrows step from it.
   useEffect(() => {
-    setActive(0);
+    setActive(
+      query
+        ? 0
+        : Math.max(
+            0,
+            items.findIndex((i) => i.current),
+          ),
+    );
     setError(undefined);
   }, [draft, provider]);
   useLayoutEffect(() => {
@@ -195,21 +224,38 @@ export function useComposerCommands({
       window.removeEventListener("scroll", measure, true);
     };
   }, [visible, items.length, input]);
-  function run(command: RelayCommand, args: string) {
+  /**
+   * Workspace actions clear the draft. Composer settings take out only their
+   * own text, first, so the command sees the rest; a refusal puts it back.
+   */
+  function run(command: RelayCommand, args: string, start?: number) {
+    if (start === undefined || !composerCommands.includes(command)) {
+      const result = onCommand(command, args);
+      if (typeof result === "string") setError(result);
+      else if (result) onDraft("");
+      return;
+    }
+    // One following space goes too, so the sentence closes up.
+    const end = draft[at] === " " ? at + 1 : at;
+    const text = draft.slice(start, end);
+    onFill({ start, end, text: "" });
     const result = onCommand(command, args);
+    if (result === true) return;
+    onFill({ start, end: start, text });
     if (typeof result === "string") setError(result);
-    else if (result) onDraft("");
   }
   function choose(index: number) {
     const item = items[index];
     if (!item) return;
-    if (item.kind === "argument") run(argCommand!.name, item.name);
+    if (item.kind === "argument")
+      run(argCommand!.name, item.name, argument!.start);
     else if (item.kind === "relay") {
       const command = relayCommands.find((c) => c.name === item.name)!;
+      const start = trigger?.start ?? 0;
       // Required values are picked from the follow-up list.
       if ("args" in command && command.args.startsWith("<"))
-        onFill({ start: 0, end: at, text: `/${command.name} ` });
-      else run(command.name, "");
+        onFill({ start, end: at, text: `/${command.name} ` });
+      else run(command.name, "", start);
     } else if (item.kind === "claude")
       onFill({ start: 0, end: at, text: `/${item.name} ` });
     else
