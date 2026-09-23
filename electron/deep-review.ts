@@ -47,6 +47,8 @@ export interface DeepReviewHost {
   ): Promise<void>;
   active(chatId: string): boolean;
   stop(chatId: string): void;
+  /** Ends a thread's agent processes; it resumes their sessions if it runs again. */
+  close(chatId: string): void;
   /** Tells the renderer this message, and so the review, changed. */
   touch(chat: ProjectChat, messageId: string): Promise<void>;
   summary(chat: ProjectChat): Promise<void>;
@@ -185,7 +187,11 @@ export class DeepReviews {
   async finished(chatId: string, turn: { request?: string; answer?: string }) {
     const chat = await this.host.load(chatId).catch(() => undefined);
     if (!chat) return;
-    if (chat.reviewer) return this.reviewerDone(chat.reviewer.parent);
+    if (chat.reviewer) {
+      // A reviewer answers once; left running, its agent idles until Relay quits.
+      this.host.close(chat.id);
+      return this.reviewerDone(chat.reviewer.parent);
+    }
     const state = chat.deepReview;
     if (!state) return;
     const answer = turn.answer

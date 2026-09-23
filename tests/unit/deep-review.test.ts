@@ -342,6 +342,31 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   ).rejects.toThrow("no longer in this review");
 });
 
+it("ends each reviewer's agent once it has reported", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(chat.id, config());
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 15000 },
+  );
+  const records = await capture();
+  const reviewers: number[] = [
+    records.find((r) => r.review).pid,
+    records.find((r) => r.prompt?.includes('"text":"/code-review')).pid,
+  ];
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  await vi.waitFor(() => expect(reviewers.filter(alive)).toEqual([]));
+});
+
 it("holds messages for the lead until the reviewers finish", async () => {
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "review" });

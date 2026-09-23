@@ -133,6 +133,14 @@ export class ProjectChats {
     lead: (chat, input, prompt) => this.lead(chat, input, prompt),
     active: (id) => this.active.has(id),
     stop: (id) => this.active.get(id)?.abort.abort(),
+    close: (id) => {
+      for (const key of this.providerSessions)
+        if ((JSON.parse(key) as string[])[1] === id) {
+          this.providerSessions.delete(key);
+          closeClaudeSession(key);
+          void closeCodexConnection(key).catch(() => {});
+        }
+    },
     touch: async (chat, messageId) => {
       const message = chat.messages.find((m) => m.id === messageId);
       if (!message) return;
