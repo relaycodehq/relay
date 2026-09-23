@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   claudePending,
+  listClaudeModels,
   runClaudeProject,
   stopClaudeTask,
   wakeupTime,
@@ -311,4 +312,25 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
   ]);
   expect(agent.at(-1)).toMatchObject({ detail: "Auth lives in auth.ts." });
   expect(agent.every((a) => !a.parentId)).toBe(true);
+});
+
+it("asks Claude for its models again once the user signs in", async () => {
+  // Signed out, the CLI still lists the models built into it.
+  const cli = (tokenSource: string, models: string[]) =>
+    vi.mocked(query).mockImplementation(
+      () =>
+        ({
+          accountInfo: async () => ({ tokenSource, apiProvider: "firstParty" }),
+          supportedModels: async () =>
+            models.map((value) => ({ value, displayName: value })),
+          close() {},
+        }) as unknown as ReturnType<typeof query>,
+    );
+  cli("none", ["opus[1m]"]);
+  await expect(listClaudeModels()).rejects.toThrow("Sign in to Claude");
+  cli("claude.ai", ["opus", "claude-opus-5"]);
+  expect((await listClaudeModels()).map((m) => m.id)).toEqual([
+    "opus",
+    "claude-opus-5",
+  ]);
 });
