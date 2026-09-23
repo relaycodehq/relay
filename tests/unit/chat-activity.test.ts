@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   chatActivitySection,
   chatActivitySections,
   chatIsEmpty,
   shortAge,
   snoozePresets,
+  wakeLabel,
 } from "../../shared/chat-activity";
 import type { ChatSummary } from "../../shared/projects";
 
@@ -109,5 +110,23 @@ describe("chat activity", () => {
     expect(shortAge(0, 5 * 60_000)).toBe("5m");
     expect(shortAge(0, 3 * 3_600_000)).toBe("3h");
     expect(shortAge(0, 2 * 86_400_000)).toBe("2d");
+  });
+
+  it("names the wake day right when the clocks change", () => {
+    vi.stubEnv("TZ", "Europe/Prague");
+    try {
+      // Clocks go back on 25 October 2026, so that day lasts 25 hours.
+      const fallBack = new Date(2026, 9, 25, 10);
+      expect(
+        wakeLabel(new Date(2026, 9, 25, 23, 30).getTime(), fallBack),
+      ).not.toMatch(/tomorrow/);
+      // They go forward on 28 March 2027, a 23-hour day.
+      const springForward = new Date(2027, 2, 28, 10);
+      expect(
+        wakeLabel(new Date(2027, 2, 29, 0, 30).getTime(), springForward),
+      ).toMatch(/^tomorrow /);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

@@ -103,9 +103,9 @@ export function wakeLabel(until: number, now: Date): string {
     hour: "numeric",
     minute: "2-digit",
   });
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const days = Math.floor((until - today.getTime()) / 86_400_000);
+  const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
+  // Rounded: a day the clocks change on lasts 23 or 25 hours.
+  const days = Math.round((midnight(wake) - midnight(now)) / 86_400_000);
   if (days <= 0) return time;
   if (days === 1) return `tomorrow ${time}`;
   if (days < 7)
