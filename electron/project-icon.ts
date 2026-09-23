@@ -21,6 +21,8 @@ const MAX_BYTES = 256 * 1024;
 /** PNGs up to this size are accepted when they can be scaled down. */
 const MAX_SHRINK_BYTES = 16 * 1024 * 1024;
 const MIN_PIXELS = 32;
+/** Decoding takes width × height × 4 bytes whatever the file size: 64 MiB here. */
+const MAX_PIXELS = 4096;
 const SKIPPED_DIRS = new Set([
   "node_modules",
   "vendor",
@@ -302,7 +304,8 @@ class Search {
       if (ratio < 0.8 || ratio > 1.25) return null;
       if (
         image.type === "raster" &&
-        Math.min(image.width, image.height) < MIN_PIXELS
+        (Math.min(image.width, image.height) < MIN_PIXELS ||
+          Math.max(image.width, image.height) > MAX_PIXELS)
       )
         return null;
       const dataUrl = large

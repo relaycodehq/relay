@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mkdir,
   mkdtemp,
@@ -155,6 +155,15 @@ describe("findProjectIcon", () => {
     await put("icon.png", png(2048, 2048, 300 * 1024));
     const icon = await findProjectIcon(root, () => "data:image/png;base64,x");
     expect(icon?.dataUrl).toBe("data:image/png;base64,x");
+  });
+
+  it("never decodes an image too large to hold in memory", async () => {
+    // A few MB of compressed PNG can claim 20000 × 20000 pixels: 1.6 GB decoded.
+    await put("favicon.png", png(20000));
+    await put("icon.png", png(20000, 20000, 300 * 1024));
+    const shrink = vi.fn(() => "data:image/png;base64,x");
+    expect(await findProjectIcon(root, shrink)).toBeNull();
+    expect(shrink).not.toHaveBeenCalled();
   });
 
   it("does not follow links out of the project", async () => {
