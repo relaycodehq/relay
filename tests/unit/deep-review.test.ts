@@ -414,10 +414,13 @@ it("stops its reviewers with the review, and picks up where it stopped", async (
   expect((await chats.get(chat.id)).deepReview?.status).toBe("stopped");
   const reviewer = (await chats.get(chat.id)).deepReview!.reviewers[0]!;
   await vi.waitFor(
-    async () =>
+    async () => {
       expect((await chats.get(reviewer.chatId)).messages.at(-1)?.status).toBe(
         "cancelled",
-      ),
+      );
+      // The answer reads cancelled a moment before its reviewer lets go.
+      expect(chats.list(projectId)[0]?.running).toBeFalsy();
+    },
     { timeout: 10000 },
   );
   // Nothing hands over to the lead after a stop.
