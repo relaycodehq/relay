@@ -370,8 +370,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
               collaborationMode: {
                 mode: options.interactionMode ?? "default",
                 settings: {
+                  // These win over `model` and `effort`; unset, keep what
+                  // Codex chose for the thread from its own config.
                   model: options.choice.model || started.model,
-                  reasoning_effort: options.choice.reasoningEffort || "medium",
+                  reasoning_effort:
+                    options.choice.reasoningEffort || started.reasoningEffort,
                   developer_instructions: null,
                 },
               },
