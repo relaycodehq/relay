@@ -74,8 +74,8 @@ import {
 import { CodeReferenceList } from "./CodeReferenceChip";
 import {
   pasteBlock,
-  pasteMarkdown,
   pastedTexts,
+  pastesAfter,
   replacePastedTexts,
   type PastedText,
 } from "../../shared/pasted-texts";
@@ -940,13 +940,7 @@ export function ProjectChat({
       const restoredCode = parent
         ? { refs: [], body: input.body }
         : parseCodeReferences(input.body);
-      // Pastes keep their numbers unless the draft already holds some.
-      const top = Math.max(0, ...pastedTexts(old).map((p) => p.n));
-      const restoredText = top
-        ? replacePastedTexts(restoredCode.body, ({ text }, i) =>
-            pasteMarkdown({ n: top + i + 1, text }),
-          )
-        : restoredCode.body;
+      const restoredText = pastesAfter(old, restoredCode.body);
       const body = [old.trim(), restoredText.trim()]
         .filter(Boolean)
         .join("\n\n");

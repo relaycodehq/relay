@@ -4,6 +4,7 @@ import {
   isLongPaste,
   pasteMarkdown,
   pastedTexts,
+  pastesAfter,
   replacePastedTexts,
   type PastedText,
 } from "../../shared/pasted-texts";
@@ -54,6 +55,13 @@ describe("pasted texts", () => {
       { ...pastes[0], n: 5 },
       { ...pastes[1], n: 6 },
     ]);
+  });
+  it("numbers pastes coming into a draft after the draft's own", () => {
+    const copied = pasteMarkdown({ n: 1, text: "copied" });
+    expect(
+      pastedTexts(pastesAfter(message("Compare", ...pastes), copied)),
+    ).toEqual([{ n: 4, text: "copied" }]);
+    expect(pastesAfter("Compare", copied)).toBe(copied);
   });
   it("ignores text that only looks like a paste", () => {
     const typed = "Pasted text #1:\n\n```\nnot fenced apart\n```and then more";

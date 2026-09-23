@@ -25,6 +25,7 @@ import {
   pasteBlock,
   pastedLines,
   pasteMarkdown,
+  pastesAfter,
   type PastedText,
 } from "../../shared/pasted-texts";
 export interface SkillPick {
@@ -385,8 +386,13 @@ export function ComposerPromptInput({
         if (event.clipboardData?.files.length) return false;
         const plain = event.clipboardData?.getData("text/plain");
         if (plain === undefined) return false;
+        // A pill copied within the draft, or from another, gets a new number.
         const fragment = view.state.schema.nodeFromJSON(
-          content(plain, labels.current, quotes.current),
+          content(
+            pastesAfter(text(view.state.doc), plain),
+            labels.current,
+            quotes.current,
+          ),
         ).firstChild!.content;
         view.dispatch(
           view.state.tr
@@ -589,7 +595,10 @@ export function ComposerPromptInput({
         editor
           .chain()
           .focus()
-          .insertContent({ type: "relayPaste", attrs: { n: n + 1, text: pasted } })
+          .insertContent({
+            type: "relayPaste",
+            attrs: { n: n + 1, text: pasted },
+          })
           .run();
         editor.view.dispatch(closeHistory(editor.state.tr));
         // The length limit rejects the transaction rather than truncating it.

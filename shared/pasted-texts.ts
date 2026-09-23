@@ -45,6 +45,16 @@ export function replacePastedTexts(
   );
 }
 
+/** Text going into a draft, its pastes numbered after any the draft holds. */
+export function pastesAfter(draft: string, body: string) {
+  const top = Math.max(0, ...pastedTexts(draft).map((p) => p.n));
+  return top
+    ? replacePastedTexts(body, ({ text }, i) =>
+        pasteMarkdown({ n: top + i + 1, text }),
+      )
+    : body;
+}
+
 /** The pastes in a message, in the order they appear. */
 export function pastedTexts(body: string) {
   const found: PastedText[] = [];
