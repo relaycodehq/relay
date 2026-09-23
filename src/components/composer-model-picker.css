@@ -90,11 +90,11 @@
 .model-provider-tab[aria-pressed="true"]::after {
   content: "";
   position: absolute;
-  right: -5px;
+  left: -4px;
   top: 9px;
   height: 19px;
   width: 3px;
-  border-radius: 3px 0 0 3px;
+  border-radius: 0 3px 3px 0;
   background: var(--accent);
 }
 .model-provider-tab:first-child {
