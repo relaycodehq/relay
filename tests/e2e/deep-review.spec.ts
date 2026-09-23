@@ -45,6 +45,42 @@ async function launch(root: string) {
   });
 }
 
+/** Relay on a new project whose src/queue.ts has an uncommitted change. */
+async function openProject() {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(join(repo, "src"), { recursive: true });
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [];\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const app = await launch(root);
+  const page = await app.firstWindow();
+  await app.evaluate(({ dialog }, dir) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [dir],
+    });
+  }, repo);
+  await page
+    .getByRole("button", { name: "Add project folder", exact: true })
+    .click();
+  return {
+    page,
+    close: async () => {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
 test("reviews uncommitted changes with two agents, then fixes a finding with the lead", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-deep-review-")),
@@ -247,32 +283,8 @@ test("a message sent after a deep review failed to start gets a thread of its ow
 });
 
 test("the next findings wait until the lead has finished a fix", async () => {
-  const root = await realpath(
-    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
-  );
-  const repo = join(root, "project");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
-  await mkdir(join(repo, "src"), { recursive: true });
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Fixture");
-  git("config", "user.email", "fixture@example.invalid");
-  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [];\n");
-  git("add", ".");
-  git("commit", "-qm", "Start");
-  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
-  const app = await launch(root);
+  const { page, close } = await openProject();
   try {
-    const page = await app.firstWindow();
-    await app.evaluate(({ dialog }, dir) => {
-      dialog.showOpenDialog = async () => ({
-        canceled: false,
-        filePaths: [dir],
-      });
-    }, repo);
-    await page
-      .getByRole("button", { name: "Add project folder", exact: true })
-      .click();
     await page
       .getByRole("button", { name: "Deep review", exact: true })
       .click();
@@ -297,7 +309,34 @@ test("the next findings wait until the lead has finished a fix", async () => {
     await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
     await expect(other).toBeEnabled();
   } finally {
-    await app.close();
-    await rm(root, { recursive: true, force: true });
+    await close();
+  }
+});
+
+test("the focus note keeps the send key set for messages", async () => {
+  const { page, close } = await openProject();
+  try {
+    await page.evaluate(() =>
+      localStorage.setItem("relay-send-key", "mod-enter"),
+    );
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    const focus = page.getByLabel("What to focus on");
+    await focus.fill("the queue");
+    // Enter adds a line here, as in the composer; ⌘/Ctrl+Enter starts.
+    await focus.press("Enter");
+    await focus.pressSequentially("and its tests");
+    await expect(focus).toHaveValue("the queue\nand its tests");
+    await focus.press("ControlOrMeta+Enter");
+    await expect(page.locator(".deep-review-request")).toContainText(
+      /the queue\s+and its tests/,
+    );
+    await expect(page.locator(".deep-review-report")).toBeVisible({
+      timeout: 20000,
+    });
+  } finally {
+    await close();
   }
 });

@@ -47,6 +47,7 @@ import { savedRuntimeMode } from "../../shared/agent-modes";
 import type { PullRef } from "../../shared/types";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import { api } from "../lib/api";
+import { sendsMessage, useSendKey } from "../lib/send-key";
 import { FileEntryIcon, RichText } from "./ui";
 import { AgentTurn } from "./AgentTurn";
 import { ModelField } from "./ModelField";
@@ -154,6 +155,7 @@ export function DeepReviewSetup({
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const claudeModels = useClaudeModels();
+  const sendKey = useSendKey();
   const [setup, setSetup] = useState<Setup>(
     () =>
       savedSetup(project.id) ?? {
@@ -475,11 +477,7 @@ export function DeepReviewSetup({
           maxLength={4000}
           onChange={(e) => setFocus(e.target.value)}
           onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
+            if (sendsMessage(e, sendKey)) {
               e.preventDefault();
               void start();
             }
