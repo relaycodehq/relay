@@ -1113,8 +1113,12 @@ export function ProjectChat({
     },
     [],
   );
+  // A first message scheduled with Send later still shows, to send or take back.
   const isEmpty =
-    !messages.length && !history.error && (!chat || !history.isPending);
+    !messages.length &&
+    !history.data?.scheduled?.length &&
+    !history.error &&
+    (!chat || !history.isPending);
   useEffect(() => {
     const dock = composerDock.current;
     if (!dock) return;

@@ -1160,6 +1160,8 @@ it("holds a Send later message until its time, sends it now on request, and keep
   expect(saved.scheduled?.[0]).toMatchObject({ input: { id: soon.id } });
   expect(saved.scheduled?.[0].input.sendAt).toBeUndefined();
   expect(chats.list(projectId)[0].nextSend).toBe(saved.scheduled?.[0].at);
+  // A thread started with Send later stays in the sidebar while it waits.
+  expect(chats.list(projectId)[0].empty).toBe(false);
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([
       soon.id,

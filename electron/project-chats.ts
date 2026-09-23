@@ -573,7 +573,7 @@ export class ProjectChats {
       ...summary,
       ...(provider ? { provider } : {}),
       ...(nextSend ? { nextSend } : {}),
-      empty: !messages.length,
+      empty: !messages.length && !scheduled?.length,
     };
   }
   async get(id: string): Promise<ProjectChat> {
