@@ -33,7 +33,7 @@ const setup = () =>
         canChoosePR={false}
         busy={false}
         checkoutDisabled={false}
-        onStart={async () => {}}
+        onStart={async () => true}
       />
     </QueryClientProvider>,
   );

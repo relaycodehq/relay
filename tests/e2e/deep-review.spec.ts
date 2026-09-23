@@ -160,6 +160,15 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
     ).toBeVisible();
     await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
     await page.screenshot({ path: "test-results/deep-review-fixed.png" });
+    // The next review starts without this one's focus.
+    await page
+      .getByRole("button", { name: "New thread", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await expect(page.getByLabel("What to focus on")).toHaveValue("");
 
     const records = (await readFile(capture, "utf8"))
       .trim()

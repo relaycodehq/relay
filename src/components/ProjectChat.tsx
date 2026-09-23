@@ -717,7 +717,7 @@ export function ProjectChat({
   // `created`, so a message sent from this draft instead gets a thread of its own.
   const reviewThread = useRef<ChatSummary | undefined>(undefined);
   async function startReview(config: DeepReviewStart) {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     setError(undefined);
     try {
@@ -736,8 +736,10 @@ export function ProjectChat({
       follow.current = true;
       await onCreated(target);
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
+      return true;
     } catch (e) {
       setError(e);
+      return false;
     } finally {
       setBusy(false);
     }

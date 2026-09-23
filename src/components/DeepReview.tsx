@@ -110,6 +110,7 @@ interface Setup {
   runChecks: boolean;
 }
 const setupKey = (projectId: string) => "deep-review-setup:" + projectId;
+const focusKey = (projectId: string) => "deep-review-focus:" + projectId;
 // The start schema is strict, so the saved target has to be part of it.
 const setupSchema = deepReviewStartSchema
   .pick({ reviewers: true, lead: true, runChecks: true })
@@ -149,7 +150,8 @@ export function DeepReviewSetup({
   canChoosePR: boolean;
   busy: boolean;
   checkoutDisabled: boolean;
-  onStart: (config: DeepReviewStart) => Promise<void>;
+  /** Resolves true once the review has started. */
+  onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const claudeModels = useClaudeModels();
   const [setup, setSetup] = useState<Setup>(
@@ -166,7 +168,7 @@ export function DeepReviewSetup({
   const [pull, setPull] = useState<PullRef | null>(null);
   const [commit, setCommit] = useState("");
   const [focus, setFocus] = useState(
-    () => localStorage.getItem("deep-review-focus:" + project.id) ?? "",
+    () => localStorage.getItem(focusKey(project.id)) ?? "",
   );
   const update = (patch: Partial<Setup>) => {
     setTouched(true);
@@ -177,7 +179,7 @@ export function DeepReviewSetup({
       localStorage.setItem(setupKey(project.id), JSON.stringify(setup));
   }, [project.id, setup, touched]);
   useEffect(() => {
-    localStorage.setItem("deep-review-focus:" + project.id, focus);
+    localStorage.setItem(focusKey(project.id), focus);
   }, [project.id, focus]);
   // Until someone picks otherwise, Claude reviews and leads with Opus.
   useEffect(() => {
@@ -241,7 +243,7 @@ export function DeepReviewSetup({
     } catch {
       // Keep the default.
     }
-    await onStart({
+    const started = await onStart({
       target,
       reviewers: setup.reviewers,
       lead: setup.lead,
@@ -249,6 +251,8 @@ export function DeepReviewSetup({
       focus: focus.trim(),
       runtimeMode,
     });
+    // Like a sent message, the note goes with this review only.
+    if (started) localStorage.removeItem(focusKey(project.id));
   }
   const targets: {
     kind: ReviewTarget["kind"];
