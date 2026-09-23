@@ -92,20 +92,22 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - name: Write update feed
+      - name: Release notes
         env:
-          NOTES: ${{ github.event.head_commit.message }}
-        run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$NOTES"
+          MESSAGE: ${{ github.event.head_commit.message }}
+        # The commit message without trailers like Co-Authored-By.
+        run: printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
+      - name: Write update feed
+        run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
-          NOTES: ${{ github.event.head_commit.message }}
         run: |
           tag="v$VERSION"
           if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
             gh release upload "$tag" out/* --repo "$RELEASES_REPO" --clobber
           else
             gh release create "$tag" out/* --repo "$RELEASES_REPO" \
-              --title "Relay $VERSION" --notes "${NOTES:-Relay $VERSION}" --latest
+              --title "Relay $VERSION" --notes-file notes.md --latest
           fi
