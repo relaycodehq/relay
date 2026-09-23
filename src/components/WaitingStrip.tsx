@@ -35,15 +35,14 @@ function lower(text: string) {
     : text;
 }
 
+const clock = (at: number) =>
+  new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
 function title(item: ChatPending) {
   if (item.kind === "task")
     return `Claude is waiting on ${lower(item.description)}`;
   if (!item.at) return "Claude checks back on a schedule";
-  const time = new Date(item.at).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `Claude will check back at ${time}`;
+  return `Claude will check back at ${clock(item.at)}`;
 }
 
 function timing(item: ChatPending, now: number) {
@@ -52,11 +51,6 @@ function timing(item: ChatPending, now: number) {
   return item.at > now ? `in ${span(item.at - now)}` : "any moment";
 }
 
-/**
- * Claude ended its turn but left work running that will start the next one:
- * a background command, a subagent, a scheduled wake-up. Docked on the
- * composer so it can't scroll away. Still, because nothing is working yet.
- */
 /** Stays pressed until the work leaves the list; the SDK confirms by dropping it. */
 function StopButton({
   item,
@@ -87,6 +81,11 @@ function StopButton({
   );
 }
 
+/**
+ * Claude ended its turn but left work running that will start the next one:
+ * a background command, a subagent, a scheduled wake-up. Docked on the
+ * composer so it can't scroll away. Still, because nothing is working yet.
+ */
 export function WaitingStrip({
   pending,
   onStop,
@@ -118,10 +117,7 @@ export function WaitingStrip({
               </span>
               <span className="waiting-strip-when">
                 {item.kind === "wakeup" && item.at
-                  ? new Date(item.at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }) + " · "
+                  ? `${clock(item.at)} · `
                   : ""}
                 {timing(item, now) ?? "repeats"}
               </span>
