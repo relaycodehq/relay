@@ -33,7 +33,6 @@ export interface PullInfo {
 
 export interface DeepReviewHost {
   load(id: string): Promise<ProjectChat>;
-  save(chat: ProjectChat): Promise<void>;
   project(id: string): Project;
   root(projectId: string): Promise<string>;
   /** A hidden thread for one reviewer. */
@@ -49,7 +48,7 @@ export interface DeepReviewHost {
   stop(chatId: string): void;
   /** Ends a thread's agent processes; it resumes their sessions if it runs again. */
   close(chatId: string): void;
-  /** Tells the renderer this message, and so the review, changed. */
+  /** Saves the thread and tells the renderer this message, and so the review, changed. */
   touch(chat: ProjectChat, messageId: string): Promise<void>;
   summary(chat: ProjectChat): Promise<void>;
 }
@@ -108,9 +107,8 @@ export class DeepReviews {
       });
       state.reviewers.push({ ...reviewer, chatId: child.id });
     }
-    await this.host.save(chat);
-    await this.host.summary(chat);
     await this.host.touch(chat, request.id);
+    await this.host.summary(chat);
     await this.sendReviewers(chat, [...state.reviewers.keys()]);
   }
 
@@ -131,7 +129,6 @@ export class DeepReviews {
       if ((await this.lastAnswer(r.chatId))?.status !== "complete")
         unfinished.push(slot);
     state.status = "reviewing";
-    await this.host.save(chat);
     await this.host.touch(chat, state.request);
     if (unfinished.length) await this.sendReviewers(chat, unfinished);
     else await this.reviewerDone(chat.id);
@@ -143,7 +140,6 @@ export class DeepReviews {
     if (state?.status !== "reviewing") return;
     state.status = "stopped";
     for (const r of state.reviewers) this.host.stop(r.chatId);
-    await this.host.save(chat);
     await this.host.touch(chat, state.request);
   }
 
@@ -176,7 +172,6 @@ export class DeepReviews {
     if (statuses[findingId] === "fixing")
       throw new Error("The lead is fixing this one right now.");
     statuses[findingId] = status;
-    await this.host.save(chat);
     await this.host.touch(chat, report.messageId);
   }
 
@@ -228,10 +223,7 @@ export class DeepReviews {
         state.status = answer.status === "cancelled" ? "stopped" : "failed";
       changed = answer.id;
     }
-    if (changed) {
-      await this.host.save(chat);
-      await this.host.touch(chat, changed);
-    }
+    if (changed) await this.host.touch(chat, changed);
   }
 
   private async sendReviewers(chat: ProjectChat, slots: number[]) {
@@ -287,11 +279,9 @@ export class DeepReviews {
     const stopped = reports.some((r) => r.answer?.status === "cancelled");
     if (stopped || !reports.some((r) => r.answer?.status === "complete")) {
       state.status = stopped ? "stopped" : "failed";
-      await this.host.save(chat);
       await this.host.touch(chat, state.request);
       return;
     }
-    await this.host.save(chat);
     try {
       await this.host.lead(
         chat,
@@ -308,7 +298,6 @@ export class DeepReviews {
     } catch (e) {
       // The lead never started; Resume tries again.
       state.status = "stopped";
-      await this.host.save(chat);
       throw e;
     } finally {
       await this.host.touch(chat, state.request);

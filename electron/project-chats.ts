@@ -134,7 +134,6 @@ export class ProjectChats {
   }
   private reviews = new DeepReviews({
     load: (id) => this.load(id),
-    save: (chat) => this.save(chat),
     project: (id) => this.projects.get(id),
     root: (projectId) => this.projects.root(projectId),
     createReviewer: (parent, task) => this.createReviewer(parent, task),
@@ -152,10 +151,10 @@ export class ProjectChats {
     },
     touch: async (chat, messageId) => {
       const message = chat.messages.find((m) => m.id === messageId);
-      if (!message) return;
-      message.version++;
+      if (message) message.version++;
       await this.save(chat);
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
+      if (message)
+        this.emit({ chatId: chat.id, message: structuredClone(message) });
     },
     summary: (chat) => this.updateSummary(chat),
   });
