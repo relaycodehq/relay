@@ -1428,7 +1428,6 @@ body.resizing-table-column {
     .spinner-arc,
     .spin,
     .running-tasks-list li.restart .running-task-buttons button:first-child svg,
-    .shimmer,
     .room-thinking,
     .context-meter-trigger[data-compacting] > svg,
     .cache-tongue,

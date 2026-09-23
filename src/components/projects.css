@@ -87,80 +87,6 @@
     transition: none;
   }
 }
-.projects-sidebar > header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 17px 17px 10px;
-}
-.projects-sidebar > header strong {
-  font-size: 12px;
-}
-.projects-list {
-  overflow: auto;
-  flex: 1;
-  padding: 3px 8px;
-}
-.projects-list button {
-  border: 0;
-  background: transparent;
-  justify-content: flex-start;
-  text-align: left;
-  width: 100%;
-  color: var(--text);
-}
-.projects-list button.selected {
-  background: var(--selected);
-}
-.project-select {
-  padding: 11px 10px;
-}
-.project-select span {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-chat-list {
-  padding: 4px 0 12px 21px;
-}
-.project-chat-list button {
-  font-size: 11px;
-  padding: 8px;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-.project-chat-list button > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-chat-list svg {
-  flex-shrink: 0;
-  color: var(--muted);
-}
-.project-chat-list .new-project-chat {
-  color: var(--muted);
-}
-.projects-sidebar footer {
-  padding: 12px;
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 5px;
-}
-.projects-sidebar footer button {
-  border: 0;
-  background: transparent;
-  justify-content: flex-start;
-  color: var(--muted);
-  font-size: 11px;
-}
-.project-sidebar-note {
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--muted);
-  padding: 10px;
-}
 .project-empty {
   display: flex;
   flex: 1;
@@ -200,63 +126,12 @@
   min-width: 0;
   min-height: 0;
 }
-.project-chat-heading {
-  padding: 18px 20px;
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  gap: 10px;
-}
-.project-chat-heading > div {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.project-chat-heading strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-.project-chat-heading span {
-  font-size: 11px;
-  color: var(--muted);
-}
 .project-messages {
   flex: 1;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 10px 20px;
-}
-.chat-welcome {
-  flex: 1;
-  margin: auto;
-  padding: 45px 25px;
-  max-width: 450px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
-}
-.chat-welcome > svg {
-  color: var(--accent);
-}
-.chat-welcome h2 {
-  font-size: 21px;
-  font-weight: 600;
-  margin: 0;
-}
-.chat-welcome p {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-  margin: 0;
-}
-.chat-welcome small {
-  color: var(--muted);
-  font-size: 10px;
 }
 .project-message {
   padding: 16px 0;
@@ -298,11 +173,6 @@
   border-radius: 7px;
   padding: 12px;
 }
-.streaming-indicator {
-  font-size: 10px;
-  color: var(--muted);
-  margin-left: auto;
-}
 .chat-message-error {
   font-size: 11px;
   color: #c78073;
@@ -334,15 +204,6 @@
 }
 .spacer {
   flex: 1;
-}
-.composer-note {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 9px;
-  gap: 8px;
-  border-top: 1px solid var(--border);
-  padding: 8px 11px;
 }
 .project-file-list {
   width: 215px;
@@ -617,9 +478,6 @@
 .project-signin .welcome-main > .titlebar {
   display: none;
 }
-.project-signin .welcome-main .welcome-content {
-  padding: 15px;
-}
 @media (max-width: 1200px) {
   .project-chat-pane {
     width: 330px;
@@ -640,20 +498,6 @@
 .project-message:hover .message-reply,
 .message-reply:focus-visible {
   opacity: 1;
-}
-.project-chat-reply {
-  margin-left: 16px;
-  border-left: 2px solid var(--border);
-  padding-left: 12px;
-}
-.reply-reference {
-  display: block;
-  color: var(--muted);
-  font-size: 10px;
-  padding-top: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .composer-reply {
   display: flex;
@@ -809,131 +653,6 @@
   font-size: 11px;
   background: transparent;
   padding: 6px 9px;
-}
-.sidebar-search {
-  margin: 17px 15px 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-}
-.sidebar-search input {
-  border: 0;
-  padding: 5px 0;
-  width: 100%;
-  min-width: 0;
-  background: transparent;
-  font-size: 12px;
-  outline-offset: 4px;
-}
-.projects-list {
-  padding: 0 10px 12px;
-}
-.projects-list h2 {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.recent-threads {
-  padding-bottom: 20px;
-}
-.recent-threads > h2 {
-  margin: 8px 9px 9px;
-}
-.sidebar-section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 0 8px 7px;
-}
-.sidebar-section-heading .icon-button {
-  width: 25px;
-}
-.projects-list .thread-nav-row {
-  display: flex;
-  gap: 8px;
-  padding: 8px 9px;
-  font-size: 11px;
-  border-radius: 6px;
-  min-width: 0;
-}
-.thread-nav-row > svg {
-  flex-shrink: 0;
-  color: var(--muted);
-}
-.thread-nav-row > span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-.thread-nav-row > small {
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 9px;
-}
-.sidebar-empty-note {
-  font-size: 11px;
-  color: var(--muted);
-  padding: 0 9px;
-  line-height: 1.6;
-}
-.sidebar-project {
-  margin: 3px 0 10px;
-}
-.project-nav-heading {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-}
-.project-nav-heading .project-expand {
-  width: 21px;
-  flex-shrink: 0;
-  padding: 4px;
-  color: var(--muted);
-}
-.project-expand[aria-expanded="true"] svg {
-  transform: rotate(90deg);
-}
-.project-nav-heading .project-select {
-  width: auto;
-  flex: 1;
-  min-width: 0;
-  padding: 7px 2px;
-  font-size: 12px;
-  gap: 7px;
-}
-.project-nav-heading > .icon-button {
-  width: 25px;
-  padding: 4px;
-}
-.project-chat-list {
-  padding: 4px 0 0 22px;
-}
-.project-chat-list .new-project-chat {
-  font-size: 10px;
-  opacity: 0.8;
-}
-.projects-list button:hover {
-  background: var(--hover);
-}
-.sidebar-account {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.sidebar-account > button:first-child {
-  flex: 1;
-  min-width: 0;
-}
-.projects-sidebar footer {
-  border-top: 0;
 }
 .project-chat-pane {
   flex: 1;
@@ -1250,8 +969,7 @@
   gap: 5px;
   flex-wrap: wrap;
 }
-.composer-tools select,
-.composer-tools .composer-model {
+.composer-tools select {
   font: inherit;
   font-size: 11px;
   padding: 5px 6px;
@@ -1264,13 +982,7 @@
 .composer-tools select:first-child {
   color: var(--text);
 }
-.composer-tools .composer-model {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.composer-tools select:hover,
-.composer-tools .composer-model:hover {
+.composer-tools select:hover {
   background: var(--hover);
 }
 .composer-tools .send-message {
@@ -1448,40 +1160,6 @@
 .agent-commentary .markdown > :last-child {
   margin-bottom: 0;
 }
-.shimmer {
-  background: linear-gradient(
-      90deg,
-      var(--muted) 0%,
-      var(--muted) 40%,
-      var(--text) 50%,
-      var(--muted) 60%,
-      var(--muted) 100%
-    )
-    0 0 / 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  /* A text-clipped background can't animate on the compositor. Its own layer
-     keeps each repaint small, and 20 steps a second instead of every frame
-     keep it from repainting at the display's full rate while an answer streams. */
-  will-change: transform;
-  animation: agent-shimmer 2s steps(40) infinite;
-}
-@keyframes agent-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -150% 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .shimmer {
-    animation: none;
-    color: var(--muted);
-    background: none;
-  }
-}
 /* T3 Code's file chip: a faintly tinted pill whose metrics are in em, so it
    sits the same in 14px answers and 12px trace notes. */
 .chat-file-link {
@@ -1585,11 +1263,6 @@ details.agent-step > .agent-step-heading:hover {
 }
 .agent-group-rows {
   margin: 0 0 4px 21px;
-}
-.streaming-indicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
 }
 .project-chat .project-chat-sharing {
   background: var(--toolbar);
@@ -1872,27 +1545,6 @@ details.agent-step > .agent-step-heading:hover {
   height: 16px;
   margin: 0;
   flex: 0 0 16px;
-}
-/* Keep icon targets square; the general sidebar button rule adds asymmetric padding. */
-.projects-list .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  padding: 0;
-}
-.projects-list .icon-button svg {
-  flex: none;
-}
-.sidebar-section-heading {
-  margin-right: 0;
-}
-.sidebar-heading-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 .headline-project-name {
   display: block;
