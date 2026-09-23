@@ -236,6 +236,24 @@ test("restores per-project composer settings, answers native approvals, and impl
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
+    // Codex answered last, so the switch warns and Codex writes a handoff note.
+    const switching = page.getByRole("dialog", {
+      name: "Switch to Claude?",
+      exact: true,
+    });
+    await expect(switching).toBeVisible();
+    await page.screenshot({ path: "test-results/agent-switch-dialog.png" });
+    await switching.getByLabel("Don’t show this again").check();
+    await switching
+      .getByRole("button", { name: "Switch to Claude", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Switched from Codex to Claude",
+      }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Show note", exact: true }).click();
+    await page.screenshot({ path: "test-results/agent-handoff-row.png" });
     const claude = page.getByRole("region", { name: "Allow Bash?" });
     await expect(claude).toBeVisible();
     await claude.getByRole("button", { name: "Decline", exact: true }).click();

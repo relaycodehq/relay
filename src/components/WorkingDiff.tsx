@@ -6,7 +6,7 @@ import type {
   FileDiffMetadata,
   SelectedLineRange,
 } from "@pierre/diffs";
-import { MessageSquare, X } from "lucide-react";
+import { Columns2, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import DiffWorker from "../lib/diff.worker?worker";
@@ -21,13 +21,42 @@ export interface WorkingLineTarget {
   /** The selected source lines, from the side they were picked on. */
   code: string;
 }
+/** Side-by-side or inline diffs, remembered across diff panes. */
+export function useSplitDiff() {
+  const [split, setSplit] = useState(
+    () => localStorage.getItem("relay-diff-split") !== "false",
+  );
+  useEffect(() => {
+    localStorage.setItem("relay-diff-split", String(split));
+  }, [split]);
+  return [split, setSplit] as const;
+}
+export function SplitDiffToggle({
+  split,
+  onChange,
+}: {
+  split: boolean;
+  onChange: (split: boolean) => void;
+}) {
+  return (
+    <IconButton
+      label="Side-by-side diff"
+      active={split}
+      onClick={() => onChange(!split)}
+    >
+      <Columns2 size={14} />
+    </IconButton>
+  );
+}
 export function WorkingDiff({
   pair,
   sideLabels,
+  split = true,
   onAsk,
 }: {
   pair: FilePair;
   sideLabels?: Record<Side, string>;
+  split?: boolean;
   onAsk?: (target: WorkingLineTarget) => void;
 }) {
   const syntaxThemes = useSyntaxThemes();
@@ -135,7 +164,7 @@ export function WorkingDiff({
           theme: syntaxThemes,
           themeType: theme,
           preferredHighlighter: "shiki-js",
-          diffStyle: width && width < 480 ? "unified" : "split",
+          diffStyle: split && !(width && width < 480) ? "split" : "unified",
           disableFileHeader: true,
           hunkSeparators: "line-info",
           expansionLineCount: 20,

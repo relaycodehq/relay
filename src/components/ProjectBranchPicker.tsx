@@ -10,9 +10,9 @@ import {
   Plus,
   ArrowDown,
   ArrowUp,
-  LoaderCircle,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { Spinner } from "./ui";
 import type { BranchAction } from "../../shared/branches";
 import type { WorkingTree } from "../../shared/working-tree";
 export function ProjectBranchPicker({
@@ -285,7 +285,7 @@ export function ProjectBranchPicker({
           onClick={() => void runSync()}
         >
           {syncing ? (
-            <LoaderCircle size={12} className="spin" />
+            <Spinner size={12} />
           ) : (
             <>
               {t.behind > 0 && (

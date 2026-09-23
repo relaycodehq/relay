@@ -339,6 +339,17 @@
 .composer-select-item[data-highlighted] {
   background: var(--hover);
 }
+.composer-menu-label {
+  padding: 6px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.composer-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
 
 .model-picker-row[data-default] {
   min-height: 36px;
@@ -395,8 +406,9 @@
 
 /*
  * Prompt cache heat: flames rising off the ring while the cache is fresh, an
- * ice cube once it has expired, nothing in between. The flames keep burning;
- * the ice only moves when it arrives, leaves or is hovered.
+ * ice cube once it has expired, nothing in between. The flames flicker for a
+ * few seconds and then hold still, like the ice, which only moves when it
+ * arrives, leaves or is hovered.
  */
 .cache-heat {
   position: absolute;
@@ -514,7 +526,24 @@
   animation-duration: 2.7s;
   animation-delay: 1.5s;
 }
+/* A few seconds of flicker when the fire catches or the chat opens, then a
+   still flame: the loop kept renderer and GPU at ~30% of a core for as long
+   as the cache stayed fresh, time spent idle. Counts end each part near 5s. */
+.cache-fire:not([data-phase="leave"]) .cache-tongue {
+  animation-iteration-count: 3;
+}
+.cache-fire:not([data-phase="leave"]) .cache-core {
+  animation-iteration-count: 5;
+}
+.cache-fire:not([data-phase="leave"]) :is(.cache-glow, .cache-ember) {
+  animation-iteration-count: 2;
+}
 /* Hovering stokes it. */
+.context-meter-trigger:hover
+  .cache-fire:not([data-phase="leave"])
+  :is(.cache-tongue, .cache-core, .cache-glow, .cache-ember) {
+  animation-iteration-count: infinite;
+}
 .context-meter-trigger:hover
   .cache-fire:not([data-phase="leave"])
   .cache-flame {
@@ -695,11 +724,11 @@
     display: none;
   }
 }
-.context-meter-popup .cache-meter {
-  margin-top: 10px;
-  padding-top: 9px;
+.context-meter-popup .usage-meter.cache-meter {
+  /* Edge to edge, like the dividers above the actions. */
+  margin: 12px -5px 0;
+  padding: 11px 12px 0;
   border-top: 1px solid var(--border);
-  gap: 3px;
 }
 .cache-meter .usage-fill {
   background: var(--muted);
@@ -715,9 +744,9 @@
   color: #4fa6de;
 }
 .cache-meter-note {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -727,22 +756,22 @@
 }
 .context-meter-popup {
   width: 236px;
-  padding: 10px 5px 5px;
+  padding: 11px 5px 5px;
 }
 .context-meter-popup .usage-meter {
   padding: 0 7px;
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
 .context-meter-note {
-  margin: 8px 7px 0;
+  margin: 12px 7px 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.4;
 }
 .context-compact {
   width: calc(100% + 10px);
-  margin: 10px -5px -5px;
+  margin: 12px -5px -5px;
   padding: 9px 12px;
   border: 0;
   border-top: 1px solid var(--border);
@@ -763,6 +792,12 @@
   cursor: default;
   color: var(--muted);
 }
+.context-compact:has(+ .context-heat-toggle) {
+  margin-bottom: 0;
+}
+.context-heat-toggle {
+  margin-top: 0;
+}
 
 /* The composer's controls as a standalone toolbar, e.g. in settings. */
 .composer-tools.model-field {
@@ -779,9 +814,13 @@
   min-width: 0;
   max-width: 200px;
 }
-/* Usage rings beside the context meter: outer week, inner session. */
+/* Usage rings beside the send button: outer week, inner session. */
 .composer-tools .usage-ring-trigger {
   position: relative;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
   padding: 6px;
   --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
   --usage-ring-session: var(--accent);

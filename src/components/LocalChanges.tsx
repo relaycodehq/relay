@@ -16,7 +16,7 @@ import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
-import { WorkingDiff } from "./WorkingDiff";
+import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
 import type { PaneSlots } from "./WorkspacePanes";
 import "./working-tree.css";
 export function LocalChanges({
@@ -41,6 +41,7 @@ export function LocalChanges({
       ? ["working-tree", "project", projectId]
       : ["working-tree", pull!.owner, pull!.name];
   const storageKey = projectId ? "relay-project-changes:" + projectId : null;
+  const [split, setSplit] = useSplitDiff();
   const [saved] = useState(() => {
     try {
       return storageKey
@@ -360,6 +361,7 @@ export function LocalChanges({
                         ? "HEAD → Index"
                         : "Index → Working file"}
                     </span>
+                    <SplitDiffToggle split={split} onChange={setSplit} />
                     {onOpenFile && (
                       <IconButton
                         label="Open in editor"
@@ -379,6 +381,7 @@ export function LocalChanges({
                     <WorkingDiff
                       pair={diff.data}
                       sideLabels={sideLabels(selected.area)}
+                      split={split}
                       onAsk={
                         onAsk &&
                         ((t) =>

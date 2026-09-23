@@ -5,7 +5,9 @@ import { ErrorBoundary } from "./components/ui";
 import App from "./App";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
+import { initWindowFocus } from "./lib/window-focus";
 initAppearance();
+initWindowFocus();
 const client = new QueryClient({
   defaultOptions: {
     queries: {

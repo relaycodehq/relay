@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { PaneResizer } from "./PaneResizer";
 import { LocalChanges } from "./LocalChanges";
+import { TurnChanges, type TurnDiffTarget } from "./TurnChanges";
 import type { CodeReference } from "../../shared/code-references";
 import { ErrorBox, Loading } from "./ui";
 import type { PaneSlots } from "./WorkspacePanes";
@@ -20,20 +21,37 @@ export type FileTarget = ProjectFileLink & {
   projectId: string;
 };
 
-/** Uncommitted work in the project folder. Files open in the Files pane. */
+/**
+ * Uncommitted work in the project folder, or what one agent turn changed
+ * while a turn is open. Files open in the Files pane.
+ */
 export function ProjectChanges({
   project,
   slots,
   onViewing,
   onOpenFile,
   onAsk,
+  turn,
+  onCloseTurn,
 }: {
   project: Project;
   slots: PaneSlots;
   onViewing: (v: Viewing) => void;
   onOpenFile: (path: string) => void;
   onAsk: (ref: CodeReference) => void;
+  turn?: (TurnDiffTarget & { request: number }) | null;
+  onCloseTurn: () => void;
 }) {
+  if (turn)
+    return (
+      <TurnChanges
+        key={turn.request}
+        target={turn}
+        slots={slots}
+        onClose={onCloseTurn}
+        onOpenFile={onOpenFile}
+      />
+    );
   return (
     <LocalChanges
       projectId={project.id}

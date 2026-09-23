@@ -8,6 +8,7 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Copy,
   Ellipsis,
   Folder,
   FolderInput,
@@ -25,7 +26,12 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { Project, ChatSummary, ChatTriage } from "../../shared/projects";
+import {
+  projectNameSchema,
+  type Project,
+  type ChatSummary,
+  type ChatTriage,
+} from "../../shared/projects";
 import {
   chatActivitySection,
   chatIsEmpty,
@@ -34,8 +40,9 @@ import {
   wakeLabel,
 } from "../../shared/chat-activity";
 import { api } from "../lib/api";
-import { IconButton } from "./ui";
+import { IconButton, Spinner } from "./ui";
 import { ProviderIcon } from "./ComposerModelPicker";
+import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import {
   joinGroup,
   moveProjectInList,
@@ -105,23 +112,10 @@ function useNow(interval = 30_000) {
   return now;
 }
 
-/** Stable hue per project so the activity cards are scannable by colour. */
-function projectHue(name: string) {
-  let hash = 0;
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return Math.abs(hash) % 360;
-}
-
-function ProjectBadge({ name }: { name: string }) {
-  return (
-    <span
-      className="sb-project-badge"
-      style={{ "--hue": projectHue(name) } as React.CSSProperties}
-      aria-hidden
-    >
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  );
+function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
+  const icon = useProjectIcon(id);
+  if (icon) return <img className="sb-project-icon" src={icon} alt="" />;
+  return open ? <FolderOpen size={15} /> : <Folder size={15} />;
 }
 
 function StatusMark({
@@ -142,7 +136,7 @@ function StatusMark({
   if (chat.running)
     return (
       <span className="sb-status running" title="Working">
-        <i />
+        <Spinner size={11} />
       </span>
     );
   if (unread)
@@ -152,10 +146,6 @@ function StatusMark({
       </span>
     );
   return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
-}
-
-function scopeLabel(chat: ChatSummary) {
-  return chat.scope.kind === "pr" ? `PR #${chat.scope.ref.number}` : "Project";
 }
 
 function SnoozeMenu({
@@ -200,21 +190,117 @@ function SnoozeMenu({
   );
 }
 
-/** Inline name field for creating or renaming a group in place. */
+/** Right side of a card's top row: live state, else the age. */
+function CardState({
+  chat,
+  unread,
+  now,
+}: {
+  chat: ChatSummary;
+  unread: boolean;
+  now: number;
+}) {
+  if (chat.waiting)
+    return (
+      <span className="sb-card-state waiting">
+        <i />
+        Needs input
+      </span>
+    );
+  if (chat.running)
+    return (
+      <span className="sb-card-state running">
+        <Spinner size={11} />
+        Working
+        {chat.runningSince && <Elapsed since={chat.runningSince} />}
+      </span>
+    );
+  if (chat.snoozedUntil && chat.snoozedUntil <= now)
+    return <span className="sb-card-state unread">Woke up</span>;
+  return (
+    <time className={`sb-card-state ${unread ? "unread" : ""}`}>
+      {unread && <i />}
+      {shortAge(chat.updated, now)}
+    </time>
+  );
+}
+
+/** "26s", "4m 12s", "1h 3m" — ticks on its own so only this label re-renders. */
+function Elapsed({ since }: { since: number }) {
+  const now = useNow(1000);
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  const text =
+    seconds < 60
+      ? `${seconds}s`
+      : seconds < 3600
+        ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+        : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m`;
+  return <span className="sb-elapsed">{text}</span>;
+}
+
+interface ComposerDraft {
+  key: string;
+  text: string;
+  chatId?: string;
+  projectId?: string;
+}
+
+/**
+ * Unsent composer text from ProjectChat's `chat-draft:<chat>[:<reply>]` and
+ * `chat-draft:new:<project>` keys. The open thread's own draft is already on
+ * screen, so it is left out.
+ */
+function composerDrafts(
+  chatId: string | undefined,
+  projectId: string | undefined,
+  inChat: boolean,
+): ComposerDraft[] {
+  const drafts: ComposerDraft[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith("chat-draft:")) continue;
+      const text = localStorage.getItem(key)?.replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const rest = key.slice("chat-draft:".length);
+      if (rest.startsWith("new:")) {
+        const project = rest.slice(4);
+        if (!inChat && project === projectId) continue;
+        drafts.push({ key, text, projectId: project });
+      } else {
+        const chat = rest.split(":")[0];
+        // One card per thread, even with reply drafts alongside the main one.
+        if (chat === chatId || drafts.some((d) => d.chatId === chat)) continue;
+        drafts.push({ key, text, chatId: chat });
+      }
+    }
+  } catch {
+    // Storage is a convenience here.
+  }
+  return drafts.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Inline name field for naming a group, or renaming a project, in place. */
 function GroupNameInput({
   label,
   initial = "",
+  schema = projectGroupNameSchema,
+  placeholder = "Group name",
+  className = "sb-group-input",
   onSubmit,
   onCancel,
 }: {
   label: string;
   initial?: string;
+  schema?: typeof projectGroupNameSchema | typeof projectNameSchema;
+  placeholder?: string;
+  className?: string;
   onSubmit: (name: string) => void;
   onCancel: () => void;
 }) {
   const [value, setValue] = useState(initial);
   const done = useRef(false);
-  const parsed = projectGroupNameSchema.safeParse(value);
+  const parsed = schema.safeParse(value);
   const invalid = !!value.trim() && !parsed.success;
   const finish = (commit: boolean) => {
     if (done.current) return;
@@ -227,12 +313,12 @@ function GroupNameInput({
     }
   };
   return (
-    <div className="sb-group-input">
+    <div className={className}>
       <input
         autoFocus
         aria-label={label}
-        placeholder="Group name"
-        maxLength={60}
+        placeholder={placeholder}
+        maxLength={schema === projectNameSchema ? 80 : 60}
         value={value}
         aria-invalid={invalid}
         title={invalid ? parsed.error?.issues[0].message : undefined}
@@ -309,6 +395,7 @@ export function ProjectSidebar({
   /** Where a new group's name is being typed, and a project to move into it. */
   const [draft, setDraft] = useState<{ parent: string; project?: string }>();
   const [renaming, setRenaming] = useState<string>();
+  const [renamingProject, setRenamingProject] = useState<string>();
   const [groupError, setGroupError] = useState<string>();
   const refreshGroups = () =>
     Promise.all([
@@ -342,6 +429,14 @@ export function ProjectSidebar({
           : api.createProjectGroup(path),
       (list) => [...list, path],
     );
+  };
+  const renameProject = (id: string, name: string) => {
+    qc.setQueriesData<Project[]>({ queryKey: ["projects"] }, (list) =>
+      list?.map((p) => (p.id === id ? { ...p, name } : p)),
+    );
+    void changeGroups(async () => {
+      await api.renameProject(id, name);
+    });
   };
   const startGroup = (parent: string, project?: string) => {
     setRenaming(undefined);
@@ -510,6 +605,10 @@ export function ProjectSidebar({
     if (!dirty) onChat(c);
   };
   const shortcuts = view === "activity" && !query;
+  // Re-read on every render: drafts live in localStorage and the sidebar
+  // re-renders on its clock and chat refetches anyway.
+  const drafts =
+    view === "activity" ? composerDrafts(chatId, projectId, !!chatId) : [];
   jumpTo.current = (index) => {
     const c = sections.active[index];
     if (!shortcuts || !c) return false;
@@ -588,60 +687,101 @@ export function ProjectSidebar({
         }}
         onDrop={(e) => drop?.kind === "project" && dropOn(e, drop)}
       >
-        <ContextMenu.Root>
-          <ContextMenu.Trigger
-            className="sb-project-row"
-            draggable={!dirty}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(PROJECT_DRAG, p.id);
-              e.dataTransfer.effectAllowed = "move";
-              setDragging(p.id);
-            }}
-            onDragEnd={clearDrag}
-          >
-            <button
-              className="sb-project-expand"
-              aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
-              aria-expanded={isOpen}
-              onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
-            >
-              {isOpen ? <FolderOpen size={15} /> : <Folder size={15} />}
-            </button>
-            <button
-              className="sb-project-name"
-              disabled={dirty}
-              title={p.path}
-              onClick={() => {
-                onProject(p);
-                setExpanded((s) => ({ ...s, [p.id]: true }));
+        {renamingProject === p.id ? (
+          <div className="sb-project-row">
+            <span className="sb-project-expand">
+              <ProjectFolderIcon id={p.id} open={isOpen} />
+            </span>
+            <GroupNameInput
+              label="Project name"
+              initial={p.name}
+              schema={projectNameSchema}
+              placeholder="Project name"
+              className="sb-group-input sb-project-input"
+              onCancel={() => setRenamingProject(undefined)}
+              onSubmit={(name) => {
+                setRenamingProject(undefined);
+                renameProject(p.id, name);
               }}
+            />
+          </div>
+        ) : (
+          <ContextMenu.Root>
+            <ContextMenu.Trigger
+              className="sb-project-row"
+              draggable={!dirty}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(PROJECT_DRAG, p.id);
+                e.dataTransfer.effectAllowed = "move";
+                setDragging(p.id);
+              }}
+              onDragEnd={clearDrag}
             >
-              <span>{p.name}</span>
-              {busy && !isOpen && (
-                <span className="sb-status running" title="Working">
-                  <i />
-                </span>
-              )}
-            </button>
-            <div className="sb-row-actions">
-              <IconButton
-                label={`Shared conversations in ${p.name}`}
-                disabled={dirty}
-                onClick={() => onShared(p)}
+              <button
+                className="sb-project-expand"
+                aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
+                aria-expanded={isOpen}
+                onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
               >
-                <Users size={13} />
-              </IconButton>
-              <IconButton
-                label={`New thread in ${p.name}`}
+                <ProjectFolderIcon id={p.id} open={isOpen} />
+              </button>
+              <button
+                className="sb-project-name"
                 disabled={dirty}
-                onClick={() => onNew(p)}
-              >
-                <Plus size={14} />
-              </IconButton>
-            </div>
-          </ContextMenu.Trigger>
-          {moveMenu(p)}
-        </ContextMenu.Root>
+                title={p.path}
+                onClick={() => {
+                  onProject(p);
+                  setExpanded((s) => ({ ...s, [p.id]: true }));
+                }}
+                >
+                <span>{p.name}</span>
+                {/* The folder icon is the accessible toggle; this mirrors groups. */}
+                <ChevronRight
+                  size={11}
+                  className="sb-project-chevron"
+                  data-open={isOpen || undefined}
+                  aria-hidden
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded((s) => ({ ...s, [p.id]: !isOpen }));
+                  }}
+                />
+                {busy && !isOpen && (
+                  <span className="sb-status running" title="Working">
+                    <Spinner size={11} />
+                  </span>
+                )}
+              </button>
+              <div className="sb-row-actions">
+                <Menu.Root>
+                  <Menu.Trigger
+                    className="icon-button"
+                    aria-label={`Project actions for ${p.name}`}
+                    title="Project actions"
+                  >
+                    <Ellipsis size={13} />
+                  </Menu.Trigger>
+                  {projectMenu(p)}
+                </Menu.Root>
+                <IconButton
+                  label={`Shared conversations in ${p.name}`}
+                  disabled={dirty}
+                  onClick={() => onShared(p)}
+                >
+                  <Users size={13} />
+                </IconButton>
+                <IconButton
+                  label={`New thread in ${p.name}`}
+                  disabled={dirty}
+                  onClick={() => onNew(p)}
+                >
+                  <Plus size={14} />
+                </IconButton>
+              </div>
+            </ContextMenu.Trigger>
+            {projectMenu(p)}
+          </ContextMenu.Root>
+        )}
         {isOpen && (
           <div className="sb-thread-list">
             {visible.map((c) => threadRow(c))}
@@ -681,11 +821,84 @@ export function ProjectSidebar({
     }
   })(tree);
 
+  const projectMenu = (p: Project) => (
+    <Menu.Portal>
+      <Menu.Positioner
+        side="bottom"
+        align="end"
+        className="sb-menu-positioner"
+        sideOffset={4}
+      >
+        <Menu.Popup className="sb-menu">
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => setRenamingProject(p.id)}
+          >
+            <span className="sb-menu-label">
+              <Pencil size={13} />
+              Rename
+            </span>
+          </Menu.Item>
+          <Menu.Item
+            className="sb-menu-item"
+            disabled={dirty}
+            onClick={() => onNew(p)}
+          >
+            <span className="sb-menu-label">
+              <SquarePen size={13} />
+              New thread
+            </span>
+          </Menu.Item>
+          <Menu.Separator className="sb-menu-separator" />
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() =>
+              void api
+                .revealProject(p.id)
+                .catch((e) =>
+                  setGroupError(e instanceof Error ? e.message : String(e)),
+                )
+            }
+          >
+            <span className="sb-menu-label">
+              <FolderOpen size={13} />
+              Open in Finder
+            </span>
+          </Menu.Item>
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => void navigator.clipboard.writeText(p.path)}
+          >
+            <span className="sb-menu-label">
+              <Copy size={13} />
+              Copy path
+            </span>
+          </Menu.Item>
+          <Menu.Separator className="sb-menu-separator" />
+          <Menu.SubmenuRoot>
+            <Menu.SubmenuTrigger className="sb-menu-item">
+              <span className="sb-menu-label">
+                <FolderInput size={13} />
+                Move to group
+              </span>
+              <ChevronRight size={12} />
+            </Menu.SubmenuTrigger>
+            {moveMenu(p)}
+          </Menu.SubmenuRoot>
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Portal>
+  );
+
   const moveMenu = (p: Project) => (
     <Menu.Portal>
-      <Menu.Positioner sideOffset={4}>
+      <Menu.Positioner
+        side="right"
+        align="start"
+        className="sb-menu-positioner"
+        sideOffset={4}
+      >
         <Menu.Popup className="sb-menu">
-          <div className="sb-menu-heading">Move {p.name} to…</div>
           {groupPaths.map((path) => (
             <Menu.Item
               key={path}
@@ -895,22 +1108,23 @@ export function ProjectSidebar({
     const p = byId.get(c.projectId);
     const shortcut = shortcuts && cmdHeld && index < 9 ? index + 1 : undefined;
     const isUnread = unread(c);
-    const state = c.waiting
-      ? { text: "Needs your input", tone: "waiting" }
-      : c.running
-        ? { text: "Working…", tone: "running" }
-        : c.snoozedUntil && c.snoozedUntil <= now
-          ? { text: "Woke up", tone: "unread" }
-          : isUnread
-            ? { text: "New reply", tone: "unread" }
-            : { text: shortAge(c.updated, now) + " ago", tone: "" };
+    const selected = chatId === c.id;
     return (
       <div
         key={c.id}
         role="button"
         tabIndex={0}
         aria-disabled={dirty}
-        className={`sb-card ${chatId === c.id ? "selected" : ""} ${isUnread ? "unread" : ""}`}
+        className={[
+          "sb-card",
+          selected && "selected",
+          isUnread && "unread",
+          // Only the open thread, finished-but-unread ones and open
+          // questions stay bright; everything else, running included, dims.
+          !selected && !isUnread && !c.waiting && "dim",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         onClick={() => open(c)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -920,13 +1134,14 @@ export function ProjectSidebar({
         }}
       >
         <div className="sb-card-top">
-          <ProjectBadge name={p?.name ?? "?"} />
+          <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
           <span className="sb-card-project">{p?.name}</span>
           {shortcut && (
             <kbd className="sb-card-shortcut" aria-hidden>
               ⌘{shortcut}
             </kbd>
           )}
+          <CardState chat={c} unread={isUnread} now={now} />
           <div className="sb-card-actions">
             {!c.waiting && (
               <SnoozeMenu
@@ -951,20 +1166,53 @@ export function ProjectSidebar({
         </div>
         <div className="sb-card-title">{c.title}</div>
         <div className="sb-card-meta">
-          <span className="sb-card-scope">
-            {c.scope.kind === "pr" && <GitPullRequest size={11} />}
-            {scopeLabel(c)}
-          </span>
-          <span className={`sb-card-state ${state.tone}`}>
-            {state.tone && <i />}
-            {state.text}
-          </span>
+          {c.scope.kind === "pr" && (
+            <span className="sb-card-scope">
+              <GitPullRequest size={11} />#{c.scope.ref.number}
+            </span>
+          )}
+          <span className="sb-card-branch">{c.branch}</span>
           {c.provider && (
             <span className="sb-card-provider">
               <ProviderIcon provider={c.provider} />
             </span>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const draftCard = (d: ComposerDraft) => {
+    const chat = d.chatId ? all.find((c) => c.id === d.chatId) : undefined;
+    const p = byId.get(chat?.projectId ?? d.projectId ?? "");
+    if (!p || (d.chatId && !chat)) return null;
+    const resume = () => {
+      if (dirty) return;
+      if (chat) onChat(chat);
+      else onNew(p);
+    };
+    return (
+      <div
+        key={d.key}
+        role="button"
+        tabIndex={0}
+        aria-disabled={dirty}
+        className="sb-card draft"
+        title={chat ? `Draft in ${chat.title}` : `New thread in ${p.name}`}
+        onClick={resume}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            resume();
+          }
+        }}
+      >
+        <div className="sb-card-top">
+          <SquarePen size={14} className="sb-draft-icon" aria-label="Draft" />
+          <ProjectBadge id={p.id} name={p.name} />
+          <span className="sb-card-project">{p.name}</span>
+        </div>
+        <div className="sb-draft-text">{d.text}</div>
       </div>
     );
   };
@@ -982,7 +1230,7 @@ export function ProjectSidebar({
           if (e.key === "Enter") open(c);
         }}
       >
-        <ProjectBadge name={p?.name ?? "?"} />
+        <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
         <span className="sb-compact-title">{c.title}</span>
         <small>
           {kind === "snoozed"
@@ -1041,9 +1289,10 @@ export function ProjectSidebar({
         </small>
       </div>
       <div className={`sb-cards ${shortcuts && cmdHeld ? "shortcuts" : ""}`}>
+        {drafts.map(draftCard)}
         {sections.active.map(card)}
       </div>
-      {!sections.active.length && (
+      {!sections.active.length && !drafts.length && (
         <div className="sb-empty">
           <span className="sb-empty-icon">
             <Check size={18} />

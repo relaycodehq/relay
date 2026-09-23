@@ -43,7 +43,27 @@ export type ClaudeModel = {
   name: string;
   description: string;
   efforts: ReasoningEffort[];
+  /** Whether the model also runs with a 1M-token context window. */
+  longContext: boolean;
 };
+/** Claude Code switches to the 1M context window with a `[1m]` model suffix. */
+export type ClaudeContextWindow = "200k" | "1m";
+export const claudeContextWindow = (model: string): ClaudeContextWindow =>
+  model.endsWith("[1m]") ? "1m" : "200k";
+export const withClaudeContextWindow = (
+  model: string,
+  contextWindow: ClaudeContextWindow,
+) => model.replace(/\[1m\]$/, "") + (contextWindow === "1m" ? "[1m]" : "");
+/** The listed model an id refers to, whichever context window it asks for. */
+export const findClaudeModel = (
+  models: ClaudeModel[] | undefined,
+  id: string,
+) =>
+  models?.find(
+    (m) =>
+      withClaudeContextWindow(m.id, "200k") ===
+      withClaudeContextWindow(id, "200k"),
+  );
 /** Levels accepted by `claude --effort` and the Agent SDK. */
 export const claudeEfforts: ReasoningEffort[] = [
   "low",

@@ -157,6 +157,94 @@ it("generates a separate title when Codex sends no thread name and persists it",
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
 }, 12000);
+it("keeps a user's thread name over the prompt excerpt and generated titles", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await expect(chats.rename(chat.id, "  \n ")).rejects.toThrow("thread name");
+  expect(await chats.rename(chat.id, " Cache\n  work ")).toMatchObject({
+    title: "Cache work",
+    renamed: true,
+  });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 8000 },
+  );
+  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(requests.filter((r) => r.turn)).toHaveLength(1);
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  expect((await chats.list(projectId))[0].title).toBe("Cache work");
+}, 12000);
+it("asks the outgoing agent for a handoff note before another agent takes over", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  await chats.send(chat.id, {
+    ...input("@claude Now fix it"),
+    provider: "claude",
+  });
+  await vi.waitFor(
+    async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages).toHaveLength(5);
+      expect(messages.at(-1)?.status).toBe("complete");
+    },
+    { timeout: 10000 },
+  );
+  const after = await chats.get(chat.id);
+  const note = after.messages[3]!;
+  expect(note).toMatchObject({
+    role: "assistant",
+    provider: "codex",
+    handoff: { from: "codex", to: "claude" },
+    status: "complete",
+    body: "The cache guard prevents duplicate requests.",
+  });
+  expect(after.messages[4]).toMatchObject({
+    role: "assistant",
+    provider: "claude",
+    status: "complete",
+  });
+  // The note is a hidden turn: not a queue pause, not the last real input.
+  expect(after.queuePaused).toBeFalsy();
+  expect(after.lastInput?.body).toBe("@claude Now fix it");
+  expect(after.providerThrough).toBe(note.id);
+  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const turns = calls.filter(
+    (c) => c.turn && !c.turn.input[0].text.startsWith("Generate a short title"),
+  );
+  expect(turns).toHaveLength(2);
+  expect(turns[1].turn.input[0].text).toContain(
+    "Claude is taking over this conversation",
+  );
+  const claudePrompt = JSON.parse(
+    calls.find((c) => c.provider === "claude").prompt,
+  ).message.content.find((p: { type: string }) => p.type === "text")
+    .text as string;
+  expect(claudePrompt).toContain("Handoff note from Codex");
+  expect(claudePrompt).toContain(
+    "The cache guard prevents duplicate requests.",
+  );
+  // The history slice carries the earlier exchange, not the note again.
+  expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
+  expect(claudePrompt).toContain("Explain the cache guard");
+}, 20000);
 it("generates a title for Claude conversations, which have no thread-name event", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -175,6 +263,128 @@ it("generates a title for Claude conversations, which have no thread-name event"
   expect(requests.filter((r) => r.provider === "claude")).toHaveLength(2);
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
 }, 12000);
+it("shows a turn Claude starts by itself as its own answer, so later answers stay under their questions", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(
+    chat.id,
+    claude("@claude Start the fixture background task"),
+  );
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.status,
+      ).toBe("complete"),
+    { timeout: 8000 },
+  );
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  await chats.send(chat.id, claude("@claude Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 8000 },
+  );
+  expect(
+    (await chats.get(chat.id)).messages.map((m) => [
+      m.role,
+      !!m.unprompted,
+      m.body,
+    ]),
+  ).toEqual([
+    ["user", false, "@claude Start the fixture background task"],
+    ["assistant", false, "Started the background task."],
+    ["assistant", true, "The background task finished."],
+    ["user", false, "@claude Explain the cache guard"],
+    ["assistant", false, "Claude found the same cache guard."],
+  ]);
+}, 15000);
+it.each([
+  ["reads it mid-turn", "fixture wait for steer", "Looking into it."],
+  ["reads it after finishing", "fixture late steer", "Done before your note."],
+])(
+  "continues Claude's answer below a steering message once Claude %s",
+  async (_, prompt, earlier) => {
+    const chat = await chats.create(projectId, { kind: "project" });
+    const claude = (body: string) => ({
+      ...input(body),
+      provider: "claude" as const,
+    });
+    await chats.send(chat.id, claude(`@claude ${prompt}`));
+    await vi.waitFor(
+      async () =>
+        expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+          "Looking into it.",
+        ),
+      { timeout: 8000 },
+    );
+    await chats.send(chat.id, {
+      ...claude("@claude Use the blue one"),
+      delivery: "steer",
+    });
+    await vi.waitFor(
+      async () => {
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+        expect((await chats.get(chat.id)).messages).toHaveLength(4);
+      },
+      { timeout: 8000 },
+    );
+    const messages = (await chats.get(chat.id)).messages;
+    expect(
+      messages.map((m) => [m.role, m.body, m.status, !!m.steered]),
+    ).toEqual([
+      ["user", `@claude ${prompt}`, "complete", false],
+      ["assistant", earlier, "complete", false],
+      ["user", "@claude Use the blue one", "complete", true],
+      ["assistant", "Noted: Use the blue one", "complete", false],
+    ]);
+    expect(messages[3]!.created).toBeGreaterThan(messages[2]!.created);
+    expect((await chats.get(chat.id)).claudeThrough).toBe(messages[3]!.id);
+  },
+  15000,
+);
+it("keeps a question's answer under it when Claude's own turn follows it", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(
+    chat.id,
+    claude("@claude Start the fixture background task"),
+  );
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 8000 },
+  );
+  // Sent before the task ends, so Claude's own turn arrives after this answer.
+  await chats.send(chat.id, claude("@claude Explain the cache guard"));
+  await vi.waitFor(
+    async () => {
+      const messages = (await chats.get(chat.id)).messages;
+      expect(messages.find((m) => m.unprompted)?.status).toBe("complete");
+      expect(messages.every((m) => m.status === "complete")).toBe(true);
+    },
+    { timeout: 8000 },
+  );
+  const messages = (await chats.get(chat.id)).messages;
+  const question = messages.findIndex(
+    (m) => m.body === "@claude Explain the cache guard",
+  );
+  expect(messages.find((m, i) => i > question && !m.unprompted)?.body).toBe(
+    "Claude found the same cache guard.",
+  );
+  expect(messages.filter((m) => m.unprompted).map((m) => m.body)).toEqual([
+    "The background task finished.",
+  ]);
+}, 15000);
 const tinyPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
 it("saves a pasted screenshot outside chat JSON and sends a local image to Codex", async () => {
@@ -312,6 +522,21 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
   );
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
   expect((await chats.get(chat.id)).queuePaused).toBe(true);
+  // Asking again by hand lets the paused queue follow that answer.
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  await chats.send(chat.id, input("@codex Asked by hand"));
+  await vi.waitFor(
+    async () => {
+      const saved = await chats.get(chat.id);
+      expect(saved.queue ?? []).toHaveLength(0);
+      expect(
+        saved.messages.filter((m) => m.role === "user").map((m) => m.body),
+      ).toEqual(
+        expect.arrayContaining(["@codex Asked by hand", "@codex Another"]),
+      );
+    },
+    { timeout: 15000 },
+  );
 });
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -603,7 +828,7 @@ it("stops during provider initialization without waiting for the RPC timeout", a
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
 });
 
-it("retains incompatible steering in a paused queue without changing permissions", async () => {
+it("queues incompatible steering first without pausing or changing permissions", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
   await vi.waitFor(async () =>
@@ -616,12 +841,12 @@ it("retains incompatible steering in a paused queue without changing permissions
     runtimeMode: "auto-accept-edits" as const,
     delivery: "steer" as const,
   };
+  await chats.send(chat.id, input("@codex Earlier"));
   await chats.send(chat.id, followup);
   const saved = await chats.get(chat.id);
-  expect(saved.queuePaused).toBe(true);
-  expect(saved.queue?.[0].error).toContain(
-    "Model, mode, and reply context must match",
-  );
+  expect(saved.queuePaused).toBeFalsy();
+  expect(saved.queue?.map((q) => q.input.id)[0]).toBe(followup.id);
+  expect(saved.queue?.[0].error).toBeUndefined();
   expect(saved.messages.some((m) => m.id === followup.id)).toBe(false);
   expect(await readFile(join(root, "capture.jsonl"), "utf8")).not.toContain(
     '"steer"',
@@ -629,8 +854,13 @@ it("retains incompatible steering in a paused queue without changing permissions
   await expect(chats.setScope(chat.id, { kind: "project" })).rejects.toThrow(
     "queued messages",
   );
+  await chats.queueAction(chat.id, "move", followup.id, 1);
+  expect((await chats.get(chat.id)).queue?.map((q) => q.input.body)).toEqual([
+    "@codex Earlier",
+    "@codex Change the cache",
+  ]);
   await chats.queueAction(chat.id, "remove", followup.id);
-  expect((await chats.get(chat.id)).queue).toHaveLength(0);
+  expect((await chats.get(chat.id)).queue).toHaveLength(1);
 });
 
 it.each(["accept", "decline", "acceptForSession"] as const)(

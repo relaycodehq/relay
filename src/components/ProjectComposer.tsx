@@ -36,6 +36,9 @@ import {
   codexQuestionChoice,
   claudeEfforts,
   type ClaudeModel,
+  claudeContextWindow,
+  findClaudeModel,
+  withClaudeContextWindow,
   modelSchema,
   reasoningEffortSchema,
 } from "../../shared/settings";
@@ -48,12 +51,15 @@ import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ComposerSelect } from "./ComposerSelect";
+import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import {
   loadDraftImages,
   prepareScreenshot,
   saveDraftImages,
   type DraftImage,
 } from "../lib/draft-images";
+import { flattenSketch, type Sketch } from "../lib/sketch";
+import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -157,9 +163,9 @@ export function ProjectComposer({
       composerLive.current = false;
     };
   }, [loadClaudeModels]);
+  const claudeListed = findClaudeModel(claudeModels, claude.model);
   // Unknown models (list failed or a custom id) offer every Claude level.
-  const claudeModelEfforts =
-    claudeModels?.find((m) => m.id === claude.model)?.efforts ?? claudeEfforts;
+  const claudeModelEfforts = claudeListed?.efforts ?? claudeEfforts;
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>(() =>
     savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
   );
@@ -194,6 +200,8 @@ export function ProjectComposer({
   const preparation = useRef(false);
   const sending = useRef(false);
   const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
+  const [sketching, setSketching] = useState<string>();
+  const sketchHistories = useRef(new Map<string, SketchHistory>());
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(draftKey);
@@ -405,6 +413,31 @@ export function ProjectComposer({
         return next;
       });
   }
+  function finishSketch(
+    id: string,
+    history: SketchHistory,
+    size: Pick<Sketch, "width" | "height">,
+  ) {
+    sketchHistories.current.set(id, history);
+    setSketching(undefined);
+    const next = images.map((image) =>
+      image.id === id
+        ? {
+            ...image,
+            sketch: history.present.length
+              ? { ...size, strokes: history.present }
+              : undefined,
+          }
+        : image,
+    );
+    setImages(next);
+    imageQueue.current = saveDraftImages(draftKey, next)
+      .then(() => next)
+      .catch(() => {
+        setImageError("Could not save the drawing to the draft.");
+        return next;
+      });
+  }
   async function send(steer = false) {
     if (busy || commands.interceptSend()) return;
     if (
@@ -423,6 +456,13 @@ export function ProjectComposer({
           (images.length ? "Describe the attached screenshot." : "");
     sending.current = true;
     try {
+      let attached: DraftImage[];
+      try {
+        attached = await Promise.all(images.map(flattenSketch));
+      } catch {
+        setImageError("Could not apply the drawing to the screenshot.");
+        return;
+      }
       const sent = await onSend({
         ...(running
           ? { delivery: steer ? ("steer" as const) : ("queue" as const) }
@@ -435,9 +475,9 @@ export function ProjectComposer({
         provider: recipient === "claude" ? "claude" : "codex",
         runtimeMode,
         interactionMode,
-        ...(images.length
+        ...(attached.length
           ? {
-              images: images.map(({ name, mimeType, dataUrl }) => ({
+              images: attached.map(({ name, mimeType, dataUrl }) => ({
                 name,
                 mimeType,
                 dataUrl,
@@ -450,6 +490,7 @@ export function ProjectComposer({
           await saveDraftImages(draftKey, []);
           imageQueue.current = Promise.resolve([]);
           setImages([]);
+          sketchHistories.current.clear();
         } catch {
           setImageError(
             "Screenshot was sent, but its draft copy could not be cleared.",
@@ -519,9 +560,19 @@ export function ProjectComposer({
           <div className="composer-images" aria-label="Attached screenshots">
             {images.map((image) => (
               <div className="composer-image" key={image.id}>
-                <img src={image.dataUrl} alt={image.name} />
                 <button
                   type="button"
+                  className="composer-image-open"
+                  aria-label={`Draw on ${image.name}`}
+                  title="Draw on screenshot"
+                  onClick={() => setSketching(image.id)}
+                >
+                  <img src={image.dataUrl} alt={image.name} />
+                  {image.sketch && <SketchOverlay sketch={image.sketch} />}
+                </button>
+                <button
+                  type="button"
+                  className="composer-image-remove"
                   disabled={preparing}
                   aria-label={`Remove ${image.name}`}
                   onClick={() => removeImage(image.id)}
@@ -593,7 +644,7 @@ export function ProjectComposer({
           <ComposerModelPicker
             provider={recipient}
             choice={selected}
-            claudeModel={claude.model}
+            claudeModel={claudeListed?.id ?? claude.model}
             claudeModels={claudeModels}
             onOpen={() => {
               // A failed first probe leaves the list empty; ask again.
@@ -634,25 +685,63 @@ export function ProjectComposer({
           )}
           {recipient === "claude" &&
             selected &&
-            claudeModelEfforts.length > 0 && (
+            (claudeModelEfforts.length > 0 || claudeListed?.longContext) && (
               <>
                 <span className="composer-divider" aria-hidden />
-                <ComposerSelect<ReasoningEffort>
-                  label="Reasoning effort"
-                  value={claude.reasoningEffort}
-                  options={[
-                    { value: "", label: "Default" },
-                    ...claudeModelEfforts.map((value) => ({
-                      value,
-                      label: effortLabels[value],
-                    })),
+                <ComposerTraitsMenu
+                  label="Reasoning effort and context window"
+                  sections={[
+                    ...(claudeModelEfforts.length > 0
+                      ? [
+                          {
+                            label: "Reasoning",
+                            value: claude.reasoningEffort,
+                            options: [
+                              { value: "", label: "Default" },
+                              ...claudeModelEfforts.map((value) => ({
+                                value,
+                                label: effortLabels[value],
+                              })),
+                            ],
+                            onChange: (value: string) =>
+                              setClaude((c) => ({
+                                ...c,
+                                reasoningEffort:
+                                  reasoningEffortSchema.parse(value),
+                              })),
+                          },
+                        ]
+                      : []),
+                    ...(claudeListed?.longContext
+                      ? [
+                          {
+                            label: "Context window",
+                            value: claudeContextWindow(claude.model),
+                            options: [
+                              { value: "200k", label: "200k" },
+                              { value: "1m", label: "1M" },
+                            ],
+                            onChange: (value: string) =>
+                              setClaude((c) => ({
+                                ...c,
+                                model: withClaudeContextWindow(
+                                  c.model,
+                                  value === "1m" ? "1m" : "200k",
+                                ),
+                              })),
+                          },
+                        ]
+                      : []),
                   ]}
-                  onChange={(reasoningEffort) =>
-                    setClaude((c) => ({ ...c, reasoningEffort }))
-                  }
                 />
               </>
             )}
+          {contextMeter && (
+            <>
+              <span className="composer-divider" aria-hidden />
+              {contextMeter}
+            </>
+          )}
           {recipient !== "message" && (
             <ComposerModeControls
               runtimeMode={runtimeMode}
@@ -690,7 +779,6 @@ export function ProjectComposer({
           {showUsage && recipient !== "message" && (
             <UsageRing provider={recipient} />
           )}
-          {contextMeter}
           {running && (
             <button
               type="button"
@@ -732,6 +820,22 @@ export function ProjectComposer({
           )}
         </div>
       </form>
+      {images
+        .filter((image) => image.id === sketching)
+        .map((image) => (
+          <SketchEditor
+            key={image.id}
+            image={image}
+            history={
+              sketchHistories.current.get(image.id) ?? {
+                past: [],
+                present: image.sketch?.strokes ?? [],
+                future: [],
+              }
+            }
+            onClose={(history, size) => finishSketch(image.id, history, size)}
+          />
+        ))}
     </div>
   );
 }

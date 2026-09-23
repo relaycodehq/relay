@@ -41,10 +41,12 @@ export function ringState(
 }
 
 // Outer ring is the week, inner ring the session, so the two limits read at
-// a glance and the icon differs from the single-ring context meter.
+// a glance and the icon differs from the single-ring context meter. A pixel
+// larger than the context meter's so the button matches the send button's
+// height with the same padding around the rings.
 const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
-  weekly: { radius: RING_RADIUS },
-  session: { radius: 4 },
+  weekly: { radius: RING_RADIUS + 1 },
+  session: { radius: 5 },
 };
 
 /**
@@ -97,7 +99,7 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
           state ? `${agent} usage: ${state.label}` : `${agent} usage, checking…`
         }
       >
-        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
           {(["weekly", "session"] as const).map((kind) => {
             const { radius } = RINGS[kind];
             const circumference = 2 * Math.PI * radius;
@@ -106,12 +108,12 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
             const left = meter?.leftPercent ?? 0;
             return (
               <g key={kind} className="usage-ring" data-kind={kind}>
-                <circle className="usage-ring-track" cx="9" cy="9" r={radius} />
+                <circle className="usage-ring-track" cx="10" cy="10" r={radius} />
                 <circle
                   className="usage-ring-fill"
                   data-pace={meter?.pace ?? "ok"}
-                  cx="9"
-                  cy="9"
+                  cx="10"
+                  cy="10"
                   r={radius}
                   strokeDasharray={circumference}
                   strokeDashoffset={circumference * (1 - left / 100)}

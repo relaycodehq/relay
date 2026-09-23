@@ -2,7 +2,15 @@ import { AgentRequestCard } from "./AgentRequestCard";
 import type { RelayCommand } from "../../shared/commands";
 import { agentMention } from "../../shared/rooms";
 import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LockKeyhole,
@@ -25,6 +33,8 @@ import {
   type ChatScope,
   type ProjectChatSend,
   type ChatImage,
+  type AgentProvider,
+  type ProjectChat as ProjectChatData,
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
@@ -32,6 +42,11 @@ import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
+import {
+  AgentSwitchDialog,
+  agentName,
+  agentSwitchNoticeHidden,
+} from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
@@ -47,6 +62,8 @@ import {
   type CodeReference,
 } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
+import { ChangedFilesCard } from "./ChangedFilesCard";
+import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import type { PullRef } from "../../shared/types";
 function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
@@ -107,11 +124,67 @@ function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
     </div>
   );
 }
+/** One-line divider where another agent took over, with the outgoing agent's note behind it. */
+function HandoffRow({
+  message: m,
+  projectRoot,
+  onOpenFile,
+}: {
+  message: ChatMessage;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { from, to } = m.handoff!;
+  const switched = `Switched from ${agentName(from)} to ${agentName(to)}`;
+  const note = m.status === "complete" && m.body.trim();
+  return (
+    <div
+      className="agent-handoff"
+      data-message-id={m.id}
+      data-status={m.status}
+      role="status"
+    >
+      <div className="context-compaction">
+        <span>
+          {m.status === "streaming"
+            ? `${agentName(from)} is writing a handoff note for ${agentName(to)}…`
+            : note
+              ? switched
+              : `${switched} · no handoff note`}
+        </span>
+        {note && (
+          <button
+            type="button"
+            className="text-button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? "Hide note" : "Show note"}
+          </button>
+        )}
+      </div>
+      {note && open && (
+        <div className="agent-handoff-note">
+          <RichText
+            text={m.body}
+            projectRoot={projectRoot}
+            onOpenFile={onOpenFile}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+/** Drag type for reordering queued messages, so other drops are ignored. */
+const QUEUED_DRAG = "application/x-relay-queued-message";
 const Message = memo(function Message({
   message: m,
   chatId,
   onReply,
   onChanges,
+  onTurnDiff,
+  onRewind,
   projectRoot,
   onOpenFile,
   replyCount = 0,
@@ -120,6 +193,13 @@ const Message = memo(function Message({
   chatId: string;
   onReply: (m: ChatMessage) => void;
   onChanges: () => void;
+  onTurnDiff: (m: ChatMessage, path?: string) => void;
+  onRewind: (
+    m: ChatMessage,
+    paths: string[] | null,
+    mode: "revert" | "redo",
+    force: boolean,
+  ) => Promise<{ conflicts: string[] }>;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
@@ -131,6 +211,14 @@ const Message = memo(function Message({
         : { refs: [], body: m.body },
     [m.role, m.body],
   );
+  if (m.handoff)
+    return (
+      <HandoffRow
+        message={m}
+        projectRoot={projectRoot}
+        onOpenFile={onOpenFile}
+      />
+    );
   if (m.compaction)
     return (
       <div
@@ -173,6 +261,14 @@ const Message = memo(function Message({
         {m.author && m.role === "assistant" && (
           <span className="muted">via {m.author}</span>
         )}
+        {m.unprompted && (
+          <span
+            className="muted"
+            title="Claude started this turn itself, for example when a background task finished."
+          >
+            started on its own
+          </span>
+        )}
         <button
           className="message-reply"
           aria-label="Reply to message"
@@ -209,6 +305,17 @@ const Message = memo(function Message({
           onOpenFile={m.role === "assistant" ? onOpenFile : undefined}
         />
       ) : null}
+      {!!m.changes?.length && m.status !== "streaming" && (
+        <ChangedFilesCard
+          files={m.changes}
+          onOpen={(path) => onTurnDiff(m, path)}
+          onRewind={
+            chatId
+              ? (paths, mode, force) => onRewind(m, paths, mode, force)
+              : undefined
+          }
+        />
+      )}
       {!!m.images?.length && (
         <div className="message-images">
           {m.images.map((image) => (
@@ -257,6 +364,7 @@ export function ProjectChat({
   dirty,
   onOpenCode,
   onOpenFile,
+  onOpenTurnDiff,
   viewing,
 }: {
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -282,6 +390,7 @@ export function ProjectChat({
   dirty: boolean;
   onOpenCode: (mode: "changes" | "files" | "pulls") => void;
   onOpenFile: (target: ProjectFileLink) => void;
+  onOpenTurnDiff: (target: TurnDiffTarget) => void;
   viewing: { path: string | null; viewed: number; total: number };
 }) {
   const qc = useQueryClient(),
@@ -353,6 +462,9 @@ export function ProjectChat({
   const scroll = useRef<HTMLDivElement>(null),
     follow = useRef(true);
   const composer = useRef<ComposerHandle>(null);
+  const composerDock = useRef<HTMLDivElement>(null);
+  const [scrolledUp, setScrolledUp] = useState(false);
+  const [dockHeight, setDockHeight] = useState(0);
   const presence = useQuery({
     queryKey: ["chat-presence", chat?.id, sharePresence, viewing],
     queryFn: () =>
@@ -446,6 +558,22 @@ export function ProjectChat({
     (m) => m.compaction && m.status === "streaming",
   );
   const [showContext, setShowContext] = useState(0);
+  const [agentSwitch, setAgentSwitch] = useState<{
+    from: AgentProvider;
+    to: AgentProvider;
+    resolve: (proceed: boolean) => void;
+  }>();
+  // Which agent answered last on this branch, and so holds its working context.
+  // A side conversation's root belongs to the main session, so it does not count.
+  const activeAgent = [...shown]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "assistant" &&
+        !m.compaction &&
+        !m.handoff &&
+        m.id !== root?.id,
+    )?.provider;
   function compact(instructions?: string) {
     if (!chat) return;
     setError(undefined);
@@ -521,6 +649,17 @@ export function ProjectChat({
     >,
   ): Promise<boolean> {
     if (busy) return false;
+    const to = agentMention(value.body)?.provider;
+    if (
+      to &&
+      activeAgent &&
+      to !== activeAgent &&
+      !agentSwitchNoticeHidden() &&
+      !(await new Promise<boolean>((resolve) =>
+        setAgentSwitch({ from: activeAgent, to, resolve }),
+      ))
+    )
+      return false;
     setBusy(true);
     setError(undefined);
     try {
@@ -638,12 +777,16 @@ export function ProjectChat({
       setBusy(false);
     }
   }
-  async function queueAction(action: "remove" | "steer", messageId: string) {
+  async function queueAction(
+    action: "remove" | "steer" | "move",
+    messageId: string,
+    index?: number,
+  ) {
     if (!chat || busy) return;
     setBusy(true);
     setError(undefined);
     try {
-      await api.projectChatQueueAction(chat.id, action, messageId);
+      await api.projectChatQueueAction(chat.id, action, messageId, index);
       await history.refetch();
     } catch (e) {
       setError(e);
@@ -651,9 +794,56 @@ export function ProjectChat({
       setBusy(false);
     }
   }
+  const [draggingQueued, setDraggingQueued] = useState<string | null>(null);
+  const [queueDrop, setQueueDrop] = useState<{
+    id: string;
+    where: "before" | "after";
+  } | null>(null);
+  const clearQueueDrag = () => {
+    setDraggingQueued(null);
+    setQueueDrop(null);
+  };
+  function dropQueued() {
+    const queue = history.data?.queue,
+      moving = draggingQueued,
+      target = queueDrop;
+    clearQueueDrag();
+    if (!chat || !queue || !moving || !target || target.id === moving) return;
+    const rest = queue.filter((q) => q.input.id !== moving),
+      index =
+        rest.findIndex((q) => q.input.id === target.id) +
+        (target.where === "after" ? 1 : 0);
+    if (queue.findIndex((q) => q.input.id === moving) === index) return;
+    // Reorder right away; the refetch after the move confirms it.
+    qc.setQueryData<ProjectChatData>(["project-chat", chat.id], (data) =>
+      data?.queue
+        ? {
+            ...data,
+            queue: [
+              ...rest.slice(0, index),
+              queue.find((q) => q.input.id === moving)!,
+              ...rest.slice(index),
+            ],
+          }
+        : data,
+    );
+    void queueAction("move", moving, index);
+  }
   // Stable handlers let memoized messages skip re-rendering while typing.
-  const latest = useRef({ messages, onOpenCode, onOpenFile });
-  latest.current = { messages, onOpenCode, onOpenFile };
+  const latest = useRef({
+    messages,
+    onOpenCode,
+    onOpenFile,
+    onOpenTurnDiff,
+    chatId: chat?.id,
+  });
+  latest.current = {
+    messages,
+    onOpenCode,
+    onOpenFile,
+    onOpenTurnDiff,
+    chatId: chat?.id,
+  };
   const openReply = useCallback((m: ChatMessage) => {
     setRootId(replyRoot(latest.current.messages, m.id).id);
   }, []);
@@ -665,14 +855,56 @@ export function ProjectChat({
     (target: ProjectFileLink) => latest.current.onOpenFile(target),
     [],
   );
+  const openTurnDiff = useCallback((m: ChatMessage, path?: string) => {
+    const { chatId, onOpenTurnDiff } = latest.current;
+    if (!chatId || !m.changes?.length) return;
+    onOpenTurnDiff({
+      chatId,
+      messageId: m.id,
+      files: m.changes,
+      path,
+      label: `${m.provider === "codex" ? "Codex" : "Claude"} · ${new Date(
+        m.created,
+      ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    });
+  }, []);
+  const rewindTurn = useCallback(
+    (
+      m: ChatMessage,
+      paths: string[] | null,
+      mode: "revert" | "redo",
+      force: boolean,
+    ) => {
+      const { chatId } = latest.current;
+      if (!chatId) return Promise.resolve({ conflicts: [] });
+      return api.rewindProjectTurn(chatId, m.id, paths, mode, force);
+    },
+    [],
+  );
   const isEmpty =
     !messages.length && !history.error && (!chat || !history.isPending);
+  useEffect(() => {
+    const dock = composerDock.current;
+    if (!dock) return;
+    // Messages scroll underneath the composer, so they need bottom padding as
+    // tall as it. Only measure while expanded: shrinking the padding when the
+    // composer collapses would pull the reader back toward the bottom.
+    const observer = new ResizeObserver(() => {
+      if (dock.classList.contains("collapsed")) return;
+      setDockHeight(dock.offsetHeight);
+      if (follow.current && scroll.current)
+        scroll.current.scrollTop = scroll.current.scrollHeight;
+    });
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [isEmpty]);
   const peers =
     presence.data?.filter((p) => p.userId !== chat?.shared?.memberId) ?? [];
   return (
     <section
       className={`project-chat ${isEmpty ? "empty-thread" : ""}`}
       aria-label="Project chat"
+      style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
       <div className="thread-subheader">
         {root ? (
@@ -748,7 +980,9 @@ export function ProjectChat({
           ref={scroll}
           onScroll={() => {
             const e = scroll.current!;
-            follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 80;
+            const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
+            follow.current = distance < 80;
+            setScrolledUp(distance > 160);
           }}
         >
           {chat && history.isPending && (
@@ -777,16 +1011,23 @@ export function ProjectChat({
                 chatId={chat?.id ?? ""}
                 onReply={openReply}
                 onChanges={openChanges}
+                onTurnDiff={openTurnDiff}
+                onRewind={rewindTurn}
                 projectRoot={project.path}
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
               />
             ))}
             {!running &&
-              shown.some((m) => m.role === "assistant" && !m.compaction) &&
+              shown.some(
+                (m) => m.role === "assistant" && !m.compaction && !m.handoff,
+              ) &&
               ["cancelled", "failed"].includes(
                 shown
-                  .filter((m) => m.role === "assistant" && !m.compaction)
+                  .filter(
+                    (m) =>
+                      m.role === "assistant" && !m.compaction && !m.handoff,
+                  )
                   .at(-1)!.status,
               ) &&
               history.data?.lastInput &&
@@ -811,8 +1052,51 @@ export function ProjectChat({
               )}
             {!!history.data?.queue?.length && (
               <section className="chat-queue" aria-label="Queued messages">
-                {history.data.queue.map((queued, index) => (
-                  <div className="queued-message" key={queued.input.id}>
+                {history.data.queue.map((queued, index, queue) => (
+                  <div
+                    key={queued.input.id}
+                    className={[
+                      "queued-message",
+                      draggingQueued === queued.input.id && "dragging",
+                      queueDrop?.id === queued.input.id &&
+                        draggingQueued !== queued.input.id &&
+                        `drop-${queueDrop.where}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    draggable={queue.length > 1 && !busy}
+                    title={queue.length > 1 ? "Drag to reorder" : undefined}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(QUEUED_DRAG, queued.input.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDraggingQueued(queued.input.id);
+                    }}
+                    onDragEnd={clearQueueDrag}
+                    onDragOver={(e) => {
+                      if (
+                        !draggingQueued ||
+                        !e.dataTransfer.types.includes(QUEUED_DRAG)
+                      )
+                        return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      const box = e.currentTarget.getBoundingClientRect(),
+                        where =
+                          e.clientY < box.top + box.height / 2
+                            ? "before"
+                            : "after";
+                      setQueueDrop((current) =>
+                        current?.id === queued.input.id &&
+                        current.where === where
+                          ? current
+                          : { id: queued.input.id, where },
+                      );
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropQueued();
+                    }}
+                  >
                     <p>
                       {queued.input.body.replace(/^@(codex|claude)\s+/i, "")}
                     </p>
@@ -824,7 +1108,7 @@ export function ProjectChat({
                         className="queued-status"
                         title={
                           history.data?.queuePaused
-                            ? "Waits for Send now"
+                            ? (queued.error ?? "Waits for Send now")
                             : index === 0
                               ? "Sends when the current answer finishes"
                               : "Sends after the messages above it"
@@ -840,7 +1124,7 @@ export function ProjectChat({
                           aria-label={running ? "Steer now" : "Send now"}
                           title={
                             running
-                              ? "Steer the current answer with this message"
+                              ? "Steer the current answer, or send this next when it can't be steered"
                               : "Send now"
                           }
                           onPointerDown={(e) => e.preventDefault()}
@@ -862,9 +1146,6 @@ export function ProjectChat({
                         </button>
                       </span>
                     </footer>
-                    {queued.error && (
-                      <p className="chat-message-error">{queued.error}</p>
-                    )}
                   </div>
                 ))}
                 {running && (
@@ -887,7 +1168,14 @@ export function ProjectChat({
         container={scroll}
         onQuote={(text) => composer.current?.insertQuote(text)}
       />
-      <div className={isEmpty ? "thread-start" : "thread-bottom-composer"}>
+      <div
+        ref={composerDock}
+        className={
+          isEmpty
+            ? "thread-start"
+            : `thread-bottom-composer${scrolledUp ? " collapsed" : ""}`
+        }
+      >
         {history.data?.requests?.slice(0, 1).map((request) => (
           <AgentRequestCard
             key={request.id}
@@ -961,6 +1249,7 @@ export function ProjectChat({
             chat &&
             context && (
               <ContextWindowMeter
+                chatId={chat.id}
                 usage={context.usage}
                 provider={context.provider}
                 compacting={compacting}
@@ -1065,6 +1354,16 @@ export function ProjectChat({
           />
         )}
       </div>
+      {agentSwitch && (
+        <AgentSwitchDialog
+          from={agentSwitch.from}
+          to={agentSwitch.to}
+          onDecide={(proceed) => {
+            setAgentSwitch(undefined);
+            agentSwitch.resolve(proceed);
+          }}
+        />
+      )}
     </section>
   );
 }

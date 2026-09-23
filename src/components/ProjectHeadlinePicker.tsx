@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
-import { Check, FolderGit2, FolderPlus, Search } from "lucide-react";
+import { Check, FolderPlus, Search } from "lucide-react";
+import { ProjectBadge } from "./ProjectBadge";
 import { ProjectRibbon } from "./ProjectRibbon";
 import type { Project } from "../../shared/projects";
 
@@ -141,7 +142,7 @@ export function ProjectHeadlinePicker({
                           if (item.id === project.id) select(item);
                         }}
                       >
-                        <FolderGit2 size={15} aria-hidden />
+                        <ProjectBadge id={item.id} name={item.name} />
                         <span className="headline-project-row-label">
                           <strong>{item.name}</strong>
                           <small>{item.path}</small>

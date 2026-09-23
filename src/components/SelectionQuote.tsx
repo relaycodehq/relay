@@ -13,7 +13,11 @@ interface Offer {
 }
 
 /** Room the button needs so it stays inside the window. */
-const WIDTH = 140;
+const WIDTH = 170;
+const mod =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac")
+    ? "⌘"
+    : "Ctrl";
 
 export function SelectionQuote({
   container,
@@ -90,6 +94,27 @@ export function SelectionQuote({
       window.removeEventListener("resize", onSelectionChange);
     };
   }, [container]);
+  const quote = (text: string) => {
+    setOffer(null);
+    document.getSelection()?.removeAllRanges();
+    onQuote(text);
+  };
+  useEffect(() => {
+    if (!offer) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "l"
+      ) {
+        event.preventDefault();
+        quote(offer.text);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
   if (!offer) return null;
   const above = offer.top > 96;
   const keep = (event: { preventDefault: () => void }) =>
@@ -99,6 +124,7 @@ export function SelectionQuote({
       type="button"
       className="chat-quote-popup"
       title="Quote the selection in your message"
+      aria-keyshortcuts="Meta+L Control+L"
       style={{
         left: offer.x,
         top: above ? offer.top : offer.bottom,
@@ -108,15 +134,14 @@ export function SelectionQuote({
       }}
       onMouseDown={keep}
       onPointerDown={keep}
-      onClick={() => {
-        const text = offer.text;
-        setOffer(null);
-        document.getSelection()?.removeAllRanges();
-        onQuote(text);
-      }}
+      onClick={() => quote(offer.text)}
     >
-      <TextQuote size={13} aria-hidden="true" />
+      <TextQuote size={14} aria-hidden="true" />
       Add to chat
+      <span className="chat-quote-keys" aria-hidden="true">
+        <kbd>{mod}</kbd>
+        <kbd>L</kbd>
+      </span>
     </button>,
     document.body,
   );

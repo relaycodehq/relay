@@ -1,6 +1,7 @@
 import { BranchPullRequest } from "./BranchPullRequest";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
+import type { TurnDiffTarget } from "./TurnChanges";
 import {
   NO_SLOTS,
   Pane,
@@ -25,6 +26,7 @@ import {
   Settings2,
   GitPullRequest,
   GitCompareArrows,
+  Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
 import type { Account, PullRef } from "../../shared/types";
@@ -44,6 +46,7 @@ import { ProjectSidebar } from "./ProjectSidebar";
 import { RelayMark } from "./RelayMark";
 import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
+import { RunningTasks } from "./RunningTasks";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
@@ -103,6 +106,9 @@ export default function ProjectShell() {
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
     [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
+    [turnDiff, setTurnDiff] = useState<
+      (TurnDiffTarget & { request: number }) | null
+    >(null),
     [viewing, setViewing] = useState<{
       path: string | null;
       viewed: number;
@@ -164,6 +170,7 @@ export default function ProjectShell() {
         setDraftScope({ kind: "project" });
       }
       panes.closeCode();
+      setTurnDiff(null);
       setRestoredProject(project.id);
       setDirty(false);
     }
@@ -313,6 +320,13 @@ export default function ProjectShell() {
     panes.setOpen(id, !open);
     if (open && id !== "chat") setViewing(NO_VIEWING);
   }
+  function openTurnDiff(target: TurnDiffTarget) {
+    setTurnDiff((previous) => ({
+      ...target,
+      request: (previous?.request ?? 0) + 1,
+    }));
+    panes.show("changes");
+  }
   function openChatFile(target: ProjectFileLink) {
     if (dirty) {
       setError(
@@ -335,6 +349,7 @@ export default function ProjectShell() {
     if (next || fresh) setChatId(next?.id ?? null);
     setLegacy(false);
     panes.closeCode();
+    setTurnDiff(null);
     setContextText(undefined);
     setViewing(NO_VIEWING);
     if (fresh) setDraftScope({ kind: "project" });
@@ -455,7 +470,29 @@ export default function ProjectShell() {
             <FolderGit2 size={14} />
             <span>{project?.name ?? "Workspace"}</span>
             <span className="breadcrumb-slash">/</span>
-            <strong>{chat?.title ?? "New thread"}</strong>
+            {chat ? (
+              <ThreadTitle
+                key={chat.id}
+                title={chat.title}
+                onRename={async (title) => {
+                  const key = ["project-chats", chat.projectId];
+                  qc.setQueryData<ChatSummary[]>(key, (list) =>
+                    list?.map((c) =>
+                      c.id === chat.id ? { ...c, title, renamed: true } : c,
+                    ),
+                  );
+                  try {
+                    await api.renameProjectChat(chat.id, title);
+                  } catch (e) {
+                    setError(e);
+                  } finally {
+                    void qc.invalidateQueries({ queryKey: key });
+                  }
+                }}
+              />
+            ) : (
+              <strong>New thread</strong>
+            )}
           </div>
         )}
         <span className="spacer" />
@@ -624,6 +661,13 @@ export default function ProjectShell() {
                 dirty={dirty}
                 onOpenCode={openCode}
                 onOpenFile={openChatFile}
+                onOpenTurnDiff={openTurnDiff}
+              />
+              <RunningTasks
+                key={project.id}
+                project={project}
+                chats={chats.data ?? []}
+                onOpenChat={(c) => navigate(project, c)}
               />
             </Pane>
             <Pane id="changes" label="Changes" {...paneProps("changes")}>
@@ -712,6 +756,8 @@ export default function ProjectShell() {
                       onOpenFile={(path) =>
                         openChatFile({ path, directory: false })
                       }
+                      turn={turnDiff}
+                      onCloseTurn={() => setTurnDiff(null)}
                       onAsk={(code) => {
                         setContextText({
                           id: crypto.randomUUID(),
@@ -850,5 +896,65 @@ export default function ProjectShell() {
         />
       )}
     </div>
+  );
+}
+
+/** The header's thread name; double-click or use the pencil to rename it. */
+function ThreadTitle({
+  title,
+  onRename,
+}: {
+  title: string;
+  onRename: (title: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(title);
+  const done = useRef(false);
+  const finish = (commit: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    setEditing(false);
+    const next = value.replace(/\s+/g, " ").trim();
+    if (commit && next && next !== title) onRename(next);
+  };
+  const edit = () => {
+    done.current = false;
+    setValue(title);
+    setEditing(true);
+  };
+  if (!editing)
+    return (
+      <div className="thread-title">
+        <strong title="Double-click to rename" onDoubleClick={edit}>
+          {title}
+        </strong>
+        <button
+          type="button"
+          className="icon-button thread-title-edit"
+          title="Rename thread"
+          aria-label="Rename thread"
+          onClick={edit}
+        >
+          <Pencil size={12} />
+        </button>
+      </div>
+    );
+  return (
+    <input
+      autoFocus
+      className="thread-title-input"
+      aria-label="Thread name"
+      maxLength={120}
+      value={value}
+      size={Math.max(value.length, 8)}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === "Enter") finish(true);
+        if (e.key === "Escape") finish(false);
+      }}
+      onBlur={() => finish(true)}
+    />
   );
 }

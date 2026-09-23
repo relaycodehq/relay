@@ -1,10 +1,16 @@
 import { useId } from "react";
 
-/** A curved stroke tapered at both ends in the same lavender palette as Relay's mark. */
+/**
+ * A marker underline in the palette of Relay's mark: one gently arched stroke
+ * with rounded ends and a darker lower lip, easing off at the tail.
+ */
 export function ProjectRibbon() {
   const id = useId();
   const sweep =
-    "M5 15.5 C62 10 148 9 234 5.5 C239 5.3 240 10.2 235.5 11 C150 15 72 19.5 7 20.5 C2 20.8 1 16 5 15.5 Z";
+    "M6 15.2 C78 7.6 160 7 234.5 12.6 C237.8 12.9 237.6 16.2 234.2 16 C160 11.8 78 12.8 6.4 20.2 C2.2 20.4 2 15.6 6 15.2 Z";
+  // The darker lower lip, like the underside showing on the mark's folds.
+  const underside =
+    "M6.4 20.2 C78 12.8 160 11.8 234.2 16 C160 10.2 78 11.2 6.4 18.4 Z";
   return (
     <svg
       className="project-name-ribbon"
@@ -14,10 +20,30 @@ export function ProjectRibbon() {
       focusable="false"
     >
       <defs>
-        <linearGradient id={`${id}-face`} x1="0" y1="0" x2="1" y2="0.6">
-          <stop offset="0" className="ribbon-stop-light" />
-          <stop offset="0.46" className="ribbon-stop-mid" />
+        <linearGradient
+          id={`${id}-face`}
+          gradientUnits="userSpaceOnUse"
+          x1="4"
+          y1="18"
+          x2="238"
+          y2="12"
+        >
+          <stop offset="0" className="ribbon-stop-mid" />
+          <stop offset="0.3" className="ribbon-stop-light" />
+          <stop offset="0.75" className="ribbon-stop-mid" />
           <stop offset="1" className="ribbon-stop-end" />
+        </linearGradient>
+        <linearGradient
+          id={`${id}-under`}
+          gradientUnits="userSpaceOnUse"
+          x1="10"
+          y1="0"
+          x2="232"
+          y2="0"
+        >
+          <stop offset="0" className="ribbon-stop-back" stopOpacity="0" />
+          <stop offset="0.5" className="ribbon-stop-back" stopOpacity="0.8" />
+          <stop offset="1" className="ribbon-stop-back" stopOpacity="0" />
         </linearGradient>
         <linearGradient id={`${id}-light`}>
           <stop stopColor="white" stopOpacity="0" />
@@ -30,6 +56,7 @@ export function ProjectRibbon() {
       </defs>
       <g className="project-ribbon-wave">
         <path d={sweep} fill={`url(#${id}-face)`} />
+        <path d={underside} fill={`url(#${id}-under)`} />
         <g clipPath={`url(#${id}-clip)`}>
           <rect
             className="project-ribbon-sheen"

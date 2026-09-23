@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -39,20 +40,34 @@ const fields = [
 const itemsTtl = 2 * 60_000;
 /** Keeps each Jev request well inside its 64k-token budget. */
 const filterBatch = 80;
+/** Filter answers for projects or hints unused this long are dropped. */
+const relevanceTtl = 30 * 24 * 60 * 60_000;
+
+const sha = (value: unknown) =>
+  createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+interface RelevanceCache {
+  /** Filter cache key → last use and question hash → yes-probability. */
+  [key: string]: { at: number; answers: Record<string, number> };
+}
 
 export class DevOps {
   /** Secrets that could not be encrypted live for this session only. */
   private session: { pat?: string; openRouterKey?: string } = {};
   private cliToken?: { value: string; expires: number };
   private items?: { key: string; at: number; items: WorkItem[] };
-  /** Filter cache key → `id:changed` → yes-probability. */
-  private relevance = new Map<string, Map<string, number>>();
+  /** Loaded from `cacheFile` on first use, so answers outlive restarts. */
+  private relevance?: Promise<RelevanceCache>;
+  /** One filter run per cache key at a time, so overlaps never ask twice. */
+  private filtering = new Map<string, Promise<unknown>>();
+  private saving = Promise.resolve();
 
   constructor(
     private store: Store,
     private fetch: Fetch,
     private encrypt: Encrypt,
     private decrypt: Decrypt,
+    private cacheFile?: string,
   ) {}
 
   settings(): DevOpsSettings {
@@ -290,7 +305,11 @@ export class DevOps {
     return (await res.json()) as T;
   }
 
-  /** Asks the System One model one yes/no question per work item. */
+  /**
+   * Asks the System One model one yes/no question per work item. Answers are
+   * keyed on exactly what Jev sees, so comments, state changes and other
+   * edits outside the prompt never ask again.
+   */
   private async filter(
     settings: DevOpsSettings,
     project: Project,
@@ -311,55 +330,111 @@ export class DevOps {
         ...(keywords ? { keywords } : {}),
       },
     };
-    const cacheKey = createHash("sha256")
-      .update(JSON.stringify([settings.filter.model, state]))
-      .digest("hex");
-    let cache = this.relevance.get(cacheKey);
-    if (!cache) this.relevance.set(cacheKey, (cache = new Map()));
-    const revision = (w: WorkItem) => `${w.id}:${w.changed}`;
-    const missing = items.filter((w) => !cache.has(revision(w)));
-    for (let i = 0; i < missing.length; i += filterBatch) {
-      const batch = missing.slice(i, i + filterBatch);
-      const answers = await this.decide(key, settings.filter.model, state, {
-        ...Object.fromEntries(
-          batch.map((w) => [
-            `wi_${w.id}`,
-            {
-              type: "noul",
-              instructions: {
-                work_item: {
-                  title: w.title,
-                  type: w.type,
-                  area_path: w.areaPath,
-                  team_project: w.project,
-                  ...(w.tags.length ? { tags: w.tags } : {}),
-                  ...(w.description
-                    ? { description: w.description.slice(0, 400) }
-                    : {}),
-                },
-                question: keywords
-                  ? "`work_item` is work on the software project in `project`: it matches the project's name, repository, folder or `project.keywords`."
-                  : "`work_item` is work on the software project in `project`: it matches the project's name, repository or folder.",
-              },
-              criteria: {
-                true: "The work item is about this project's product, codebase or features.",
-                false:
-                  "The work item is about a different product, app, device or component.",
-              },
+    const cacheKey = sha([settings.filter.model, state]);
+    const questions = new Map(
+      items.map((w) => {
+        const question = {
+          type: "noul",
+          instructions: {
+            work_item: {
+              title: w.title,
+              type: w.type,
+              area_path: w.areaPath,
+              team_project: w.project,
+              ...(w.tags.length ? { tags: w.tags } : {}),
+              ...(w.description
+                ? { description: w.description.slice(0, 400) }
+                : {}),
             },
-          ]),
-        ),
-      });
-      for (const w of batch) {
-        const p = answers[`wi_${w.id}`];
-        if (typeof p === "number") cache.set(revision(w), p);
-      }
-    }
-    return Object.fromEntries(
-      items
-        .filter((w) => cache.has(revision(w)))
-        .map((w) => [w.id, cache.get(revision(w))!]),
+            question: keywords
+              ? "`work_item` is work on the software project in `project`: it matches the project's name, repository, folder or `project.keywords`."
+              : "`work_item` is work on the software project in `project`: it matches the project's name, repository or folder.",
+          },
+          criteria: {
+            true: "The work item is about this project's product, codebase or features.",
+            false:
+              "The work item is about a different product, app, device or component.",
+          },
+        };
+        return [w.id, { question, hash: sha(question) }];
+      }),
     );
+    const run = (this.filtering.get(cacheKey) ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => {
+        const cache = await this.relevanceCache();
+        const entry = (cache[cacheKey] ??= { at: 0, answers: {} });
+        entry.at = Date.now();
+        const missing = items.filter(
+          (w) => !(questions.get(w.id)!.hash in entry.answers),
+        );
+        try {
+          for (let i = 0; i < missing.length; i += filterBatch) {
+            const batch = missing.slice(i, i + filterBatch);
+            const answers = await this.decide(
+              key,
+              settings.filter.model,
+              state,
+              Object.fromEntries(
+                batch.map((w) => [`wi_${w.id}`, questions.get(w.id)!.question]),
+              ),
+            );
+            for (const w of batch) {
+              const p = answers[`wi_${w.id}`];
+              if (typeof p === "number")
+                entry.answers[questions.get(w.id)!.hash] = p;
+            }
+          }
+        } finally {
+          // Keep only questions about items still assigned, answered or not.
+          const current = new Set([...questions.values()].map((q) => q.hash));
+          for (const hash of Object.keys(entry.answers))
+            if (!current.has(hash)) delete entry.answers[hash];
+          await this.saveRelevance(cache);
+        }
+        return entry.answers;
+      });
+    this.filtering.set(cacheKey, run);
+    try {
+      const answers = await run;
+      return Object.fromEntries(
+        items
+          .filter((w) => questions.get(w.id)!.hash in answers)
+          .map((w) => [w.id, answers[questions.get(w.id)!.hash]]),
+      );
+    } finally {
+      if (this.filtering.get(cacheKey) === run) this.filtering.delete(cacheKey);
+    }
+  }
+
+  private relevanceCache() {
+    return (this.relevance ??= (async () => {
+      if (!this.cacheFile) return {};
+      try {
+        const saved = JSON.parse(await readFile(this.cacheFile, "utf8"));
+        return saved?.version === 1 && saved.keys ? saved.keys : {};
+      } catch {
+        // A missing or damaged cache only costs a few questions.
+        return {};
+      }
+    })());
+  }
+
+  private saveRelevance(cache: RelevanceCache) {
+    for (const [key, entry] of Object.entries(cache))
+      if (Date.now() - entry.at > relevanceTtl) delete cache[key];
+    const file = this.cacheFile;
+    if (!file) return;
+    const text = JSON.stringify({ version: 1, keys: cache });
+    // Writes queue up so runs for different projects never share the temp file.
+    return (this.saving = this.saving.then(async () => {
+      try {
+        await writeFile(`${file}.tmp`, text, { mode: 0o600 });
+        await rename(`${file}.tmp`, file);
+      } catch {
+        // The answers stay cached in memory for this session.
+      }
+    }));
   }
 
   private async decide(

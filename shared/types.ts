@@ -1,6 +1,7 @@
 import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
 import type { LiveSyncApi } from "./live-sync";
+import type { TaskApi } from "./tasks";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel } from "./settings";
@@ -197,7 +198,13 @@ export interface LocalFile {
   version: string;
 }
 export interface Api
-  extends importRoomApi, WorkingTreeApi, LiveSyncApi, ProjectApi, DevOpsApi {
+  extends
+    importRoomApi,
+    WorkingTreeApi,
+    LiveSyncApi,
+    ProjectApi,
+    DevOpsApi,
+    TaskApi {
   inspectSymbol(
     ref: PullRef,
     head: string,

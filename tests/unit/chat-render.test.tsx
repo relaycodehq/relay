@@ -30,6 +30,24 @@ it("renders source links as local code chips and refuses out-of-project file lin
   expect(fenced).not.toContain("chat-file-link");
 });
 
+it("labels file chips T3-style: type icon, file name, line, and parents only on a clash", () => {
+  const html = renderToStaticMarkup(
+    <RichText
+      text={
+        "[Source](src/main.ts#L9) `src/components/AgentTurn.tsx` `electron/rooms/index.ts` `src/lib/index.ts:4`"
+      }
+      projectRoot="/Users/test/workspace"
+      onOpenFile={() => {}}
+    />,
+  );
+  expect(html).toContain(">main.ts · L9</span>");
+  expect(html).not.toContain(">Source<");
+  expect(html).toContain('href="#file-tree-builtin-react"');
+  expect(html).toContain(">AgentTurn.tsx</span>");
+  expect(html).toContain(">index.ts · electron/rooms</span>");
+  expect(html).toContain(">index.ts · src/lib · L4</span>");
+});
+
 it("splits Markdown into blocks that render exactly like the whole document", () => {
   const render = (text: string) =>
     renderToStaticMarkup(
@@ -95,6 +113,8 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
   };
   const live = renderToStaticMarkup(<AgentTurn message={message} {...props} />);
   expect(live).toContain("Thinking");
+  expect(live).toContain("Working for");
+  expect(live).toContain("I will inspect the repository.");
   const running = renderToStaticMarkup(
     <AgentTurn
       message={{
@@ -117,6 +137,35 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
     />,
   );
   expect(running).toContain("Reading cache.ts");
+  const command = (id: string) => ({
+    kind: "activity" as const,
+    id,
+    activity: {
+      id,
+      kind: "command" as const,
+      label: `echo ${id}`,
+      status: "complete" as const,
+    },
+  });
+  const grouped = renderToStaticMarkup(
+    <AgentTurn
+      message={{
+        ...message,
+        trace: [
+          ...message.trace!,
+          command("two"),
+          { kind: "commentary", id: "next", text: "Now the tests." },
+          command("three"),
+        ],
+      }}
+      {...props}
+    />,
+  );
+  expect(grouped).toContain("Ran 2 commands");
+  expect(grouped.indexOf("Ran 2 commands")).toBeLessThan(
+    grouped.indexOf("Now the tests."),
+  );
+  expect(grouped).toContain("echo three");
   const done = renderToStaticMarkup(
     <AgentTurn
       message={{

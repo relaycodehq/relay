@@ -1,11 +1,17 @@
 import { useEffect, useId, useReducer, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { Minimize2 } from "lucide-react";
+import { Eye, EyeOff, Minimize2 } from "lucide-react";
 import type {
   ChatMessage,
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
+import {
+  setCacheHeat,
+  setCacheHeatHidden,
+  useCacheHeat,
+  useCacheHeatHidden,
+} from "../lib/cache-heat";
 
 /** The newest reported usage on this branch, unless a compaction reset it since. */
 export function latestContext(
@@ -34,6 +40,10 @@ export function contextPace(percent: number) {
 
 /** Shared with the usage ring so both outer rings match. */
 export const RING_RADIUS = 7;
+
+// Scales the fire up from the top of the ring and lifts it a little clear of
+// it, leaving the mask where it is so the ring still hides the flame's base.
+const FLAME_LIFT = "translate(9 0.8) scale(1.3) translate(-9 -2)";
 
 export type CacheHeat = "fire" | "warm" | "ice";
 
@@ -148,41 +158,45 @@ function HeatDecoration({
             </mask>
           </defs>
           <g mask={`url(#${id}-out)`}>
-            <ellipse className="cache-glow" cx="9" cy="0.5" rx="6" ry="3.5" />
-            <g className="cache-flame">
-              <path
-                className="cache-tongue"
-                data-side="left"
-                fill={`url(#${id}-outer)`}
-                d="M3.2-1.5C4.2-.3 6 .9 6 2.8c0 1.6-1 2.6-1.8 2.6-1.2 0-2-1-2-2.4 0-1.6.6-2.8 1-4.5Z"
-              />
-              <path
-                className="cache-tongue"
-                data-side="right"
-                fill={`url(#${id}-outer)`}
-                d="M14.8-1.5c-1 1.2-2.8 2.4-2.8 4.3 0 1.6 1 2.6 1.8 2.6 1.2 0 2-1 2-2.4 0-1.6-.6-2.8-1-4.5Z"
-              />
-              <g className="cache-tongue" data-side="centre">
+            <g transform={FLAME_LIFT}>
+              <ellipse className="cache-glow" cx="9" cy="0.5" rx="6" ry="3.5" />
+              <g className="cache-flame">
                 <path
+                  className="cache-tongue"
+                  data-side="left"
                   fill={`url(#${id}-outer)`}
-                  d="M9-5c.9 1.8 3.2 3.4 3.2 6.2C12.2 3.6 10.8 5 9 5S5.8 3.6 5.8 1.2c0-1.6.8-2.7 1.5-3.4.1 1.2.5 1.9 1.1 2.2C8.1-1.8 8.3-3.5 9-5Z"
+                  d="M3.2-1.5C4.2-.3 6 .9 6 2.8c0 1.6-1 2.6-1.8 2.6-1.2 0-2-1-2-2.4 0-1.6.6-2.8 1-4.5Z"
                 />
                 <path
-                  className="cache-core"
-                  fill={`url(#${id}-core)`}
-                  d="M9-2.2c.9 1.1 1.7 2.2 1.7 3.4a1.7 1.7 0 0 1-3.4 0c0-1.2.8-2.3 1.7-3.4Z"
+                  className="cache-tongue"
+                  data-side="right"
+                  fill={`url(#${id}-outer)`}
+                  d="M14.8-1.5c-1 1.2-2.8 2.4-2.8 4.3 0 1.6 1 2.6 1.8 2.6 1.2 0 2-1 2-2.4 0-1.6-.6-2.8-1-4.5Z"
                 />
+                <g className="cache-tongue" data-side="centre">
+                  <path
+                    fill={`url(#${id}-outer)`}
+                    d="M9-5c.9 1.8 3.2 3.4 3.2 6.2C12.2 3.6 10.8 5 9 5S5.8 3.6 5.8 1.2c0-1.6.8-2.7 1.5-3.4.1 1.2.5 1.9 1.1 2.2C8.1-1.8 8.3-3.5 9-5Z"
+                  />
+                  <path
+                    className="cache-core"
+                    fill={`url(#${id}-core)`}
+                    d="M9-2.2c.9 1.1 1.7 2.2 1.7 3.4a1.7 1.7 0 0 1-3.4 0c0-1.2.8-2.3 1.7-3.4Z"
+                  />
+                </g>
               </g>
             </g>
           </g>
-          <circle className="cache-ember" cx="7.6" cy="-1" r="0.6" />
-          <circle className="cache-ember" cx="10.6" cy="-1.5" r="0.5" />
-          <circle className="cache-ember" cx="9" cy="-3" r="0.45" />
-          <path
-            className="cache-smoke"
-            pathLength={6}
-            d="M9-3.5c-1.2-1.5 1.2-2.7 0-4.5"
-          />
+          <g transform={FLAME_LIFT}>
+            <circle className="cache-ember" cx="7.6" cy="-1" r="0.6" />
+            <circle className="cache-ember" cx="10.6" cy="-1.5" r="0.5" />
+            <circle className="cache-ember" cx="9" cy="-3" r="0.45" />
+            <path
+              className="cache-smoke"
+              pathLength={6}
+              d="M9-3.5c-1.2-1.5 1.2-2.7 0-4.5"
+            />
+          </g>
         </>
       ) : (
         <>
@@ -293,6 +307,7 @@ function CacheMeter({
 }
 
 export function ContextWindowMeter({
+  chatId,
   usage,
   provider,
   compacting,
@@ -300,6 +315,8 @@ export function ContextWindowMeter({
   onCompact,
   openSignal,
 }: {
+  /** Right-clicking puts the fire or ice out for this chat. */
+  chatId?: string;
   usage: ContextUsage;
   provider: ChatMessage["provider"];
   compacting: boolean;
@@ -332,8 +349,13 @@ export function ContextWindowMeter({
   const cache = usage.cache;
   const now = useCacheClock(cache, open);
   const heat = cache && cacheHeat(cache, now);
-  const [motion, left] = useHeatMotion(heat);
-  const shown = decoration(heat);
+  const heatOn = useCacheHeat();
+  const heatHidden = useCacheHeatHidden(chatId);
+  const heatVisible = heatOn && !heatHidden;
+  // The ring's decoration and colour; the popover still reports the cache.
+  const worn = heatVisible ? heat : undefined;
+  const [motion, left] = useHeatMotion(worn);
+  const shown = decoration(worn);
   const heatLabel =
     heat === "fire" ? "fresh" : heat === "warm" ? "warm" : "cold";
   return (
@@ -346,8 +368,13 @@ export function ContextWindowMeter({
         className="composer-control context-meter-trigger"
         data-pace={pace}
         data-compacting={compacting || undefined}
-        data-cache={heat}
+        data-cache={worn}
         aria-label={heat ? `${label}, prompt cache ${heatLabel}` : label}
+        onContextMenu={(event) => {
+          if (!shown || !chatId) return;
+          event.preventDefault();
+          setCacheHeatHidden(chatId, true);
+        }}
       >
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
           <circle className="context-ring-track" cx="9" cy="9" r={radius} />
@@ -439,6 +466,31 @@ export function ContextWindowMeter({
                 {compacting ? "Compacting…" : "Compact context"}
               </span>
             </button>
+            {cache && heat && (
+              <button
+                type="button"
+                className="composer-select-item context-compact context-heat-toggle"
+                title={
+                  heatVisible
+                    ? "Right-click the ring to put it out for this chat only"
+                    : undefined
+                }
+                onClick={() => {
+                  if (heatVisible) return setCacheHeat(false);
+                  setCacheHeat(true);
+                  if (chatId) setCacheHeatHidden(chatId, false);
+                }}
+              >
+                <span className="composer-option-label">
+                  {heatVisible ? (
+                    <EyeOff size={13} aria-hidden />
+                  ) : (
+                    <Eye size={13} aria-hidden />
+                  )}
+                  {heatVisible ? "Turn off fire and ice" : "Show fire and ice"}
+                </span>
+              </button>
+            )}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

@@ -107,7 +107,7 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     const queue = page.getByRole("region", { name: "Queued messages" });
     await expect(queue).toContainText("Check the cache key first");
     await prompt.fill("Then explain the invalidation");
-    await prompt.press("ControlOrMeta+Enter");
+    await prompt.press("Enter");
     await expect(queue.locator(".queued-message")).toHaveCount(2);
     await prompt.fill("Keep this draft too");
     await queue
@@ -122,6 +122,22 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
       .getByRole("button", { name: "Send message", exact: true })
       .click();
     await expect(queue.locator(".queued-message")).toHaveCount(2);
+    // Dragging reorders the queue, both below and above another message.
+    const order = () => queue.locator(".queued-message > p").allTextContents();
+    const queued = queue.locator(".queued-message");
+    const below = (await queued.last().boundingBox())!.height - 4;
+    await queued.first().dragTo(queued.last(), {
+      targetPosition: { x: 20, y: below },
+    });
+    await expect
+      .poll(order)
+      .toEqual(["Then explain the invalidation", "Check the cache key first"]);
+    await queued.last().dragTo(queued.first(), {
+      targetPosition: { x: 20, y: 4 },
+    });
+    await expect
+      .poll(order)
+      .toEqual(["Check the cache key first", "Then explain the invalidation"]);
     await expect(page.getByLabel("Follow-up delivery")).toHaveCount(0);
     await page.screenshot({ path: "test-results/chat-queued.png" });
     await queue.screenshot({ path: "test-results/chat-queue-detail.png" });

@@ -46,6 +46,14 @@ export class Projects {
         s.projectGroups = unique([...(s.projectGroups ?? []), folder]);
     });
   }
+  /** Renames a project in the sidebar; its folder on disk stays as it is. */
+  async rename(id: string, name: string) {
+    this.get(id);
+    await this.store.update((s) => {
+      s.projects!.find((p) => p.id === id)!.name = name;
+    });
+    return this.get(id);
+  }
   groups() {
     return this.store.get().projectGroups ?? [];
   }

@@ -54,6 +54,7 @@ const fields = (
 
 async function setup(
   fetch: (url: string, init?: RequestInit) => Promise<Response>,
+  cacheFile?: string,
 ) {
   const store = new Store(await mkdtemp(join(tmpdir(), "relay-devops-")));
   await store.load();
@@ -62,6 +63,7 @@ async function setup(
     fetch,
     async (v) => `sealed:${v}`,
     async (v) => v.replace(/^sealed:/, ""),
+    cacheFile,
   );
   await devops.save(settings, { pat: "secret-pat", openRouterKey: "sk-or-1" });
   return { store, devops };
@@ -155,6 +157,65 @@ it("loads assigned items, asks Jev one question per item and caches answers", as
   // A refresh reloads items, but unchanged items keep their answers.
   await devops.workItems(project, true);
   expect(fetch).toHaveBeenCalledTimes(5);
+});
+
+it("asks Jev again only when what it sees changes, even after a restart", async () => {
+  let listed = [fields(1, "Licensing: search"), fields(2, "Port Kiosk")];
+  const asked: string[][] = [];
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("wiql"))
+      return json({ workItems: listed.map((w) => ({ id: w.id })) });
+    if (url.includes("workitemsbatch")) return json({ value: listed });
+    const keys = Object.keys(JSON.parse(String(init?.body)).questions);
+    asked.push(keys);
+    return json({
+      answers: Object.fromEntries(
+        keys.map((k) => [k, { type: "noul", noul: 0.9 }]),
+      ),
+    });
+  });
+  const cacheFile = join(
+    await mkdtemp(join(tmpdir(), "relay-relevance-")),
+    "relevance.json",
+  );
+  const { devops } = await setup(fetch, cacheFile);
+  // Overlapping loads share one question.
+  await Promise.all([
+    devops.workItems(project, true),
+    devops.workItems(project, true),
+  ]);
+  expect(asked).toEqual([["wi_1", "wi_2"]]);
+
+  // A comment or state change bumps ChangedDate but not the question.
+  listed = [
+    {
+      ...fields(1, "Licensing: search", "2026-09-23T08:00:00Z"),
+      fields: {
+        ...fields(1, "Licensing: search").fields,
+        "System.State": "Resolved",
+      },
+    },
+    fields(2, "Port Kiosk to Windows", "2026-09-23T08:00:00Z"),
+  ];
+  const next = await devops.workItems(project, true);
+  expect(asked).toEqual([["wi_1", "wi_2"], ["wi_2"]]);
+  expect(next.relevance).toEqual({ 1: 0.9, 2: 0.9 });
+
+  // A fresh start reads the answers back from disk.
+  const restarted = await setup(fetch, cacheFile);
+  const again = await restarted.devops.workItems(project);
+  expect(asked).toHaveLength(2);
+  expect(again.relevance).toEqual({ 1: 0.9, 2: 0.9 });
+  // New hints are a new question for every item.
+  await restarted.devops.save(
+    {
+      ...settings,
+      filter: { ...settings.filter, keywords: { p1: "Licensing, BM" } },
+    },
+    {},
+  );
+  await restarted.devops.workItems(project);
+  expect(asked.at(-1)).toEqual(["wi_1", "wi_2"]);
 });
 
 it("keeps the list when the filter fails and explains rejected tokens", async () => {

@@ -34,6 +34,7 @@ import {
 import { api } from "../lib/api";
 import { useAISettings } from "../lib/useAISettings";
 import { setAppearance, useAppearance } from "../lib/appearance";
+import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import { setUsageRing, useUsageRing } from "../lib/usage-ring";
 import {
   setSendKey,
@@ -244,6 +245,7 @@ export function Settings({
 
   const appearance = useAppearance();
   const usageRing = useUsageRing();
+  const cacheHeat = useCacheHeat();
   const sendKey = useSendKey();
   const activeTheme = appearance.theme;
   const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
@@ -399,6 +401,21 @@ export function Settings({
           label="Show usage limits in the composer"
           checked={usageRing}
           onChange={setUsageRing}
+        />
+      ),
+    },
+    {
+      id: "cache-heat",
+      category: "appearance",
+      title: "Prompt cache fire and ice",
+      description:
+        "Flames on the context meter while the prompt cache is fresh, an ice cube once it has expired. Right-click the ring to put it out for one chat.",
+      keywords: "prompt cache fire flame ice cold fresh context meter ring",
+      render: () => (
+        <Switch
+          label="Show prompt cache fire and ice"
+          checked={cacheHeat}
+          onChange={setCacheHeat}
         />
       ),
     },

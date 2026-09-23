@@ -11,7 +11,8 @@ function record(data) {
     );
 }
 if (args.includes("--permission-prompt-tool")) {
-  let approvalGranted = false;
+  let approvalGranted = false,
+    lateSteer = false;
   const rl = require("node:readline").createInterface({ input: process.stdin });
   const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
   function finish(answer) {
@@ -64,6 +65,33 @@ if (args.includes("--permission-prompt-tool")) {
           },
         },
       });
+    }
+    if (m.type === "user" && m.priority === "next") {
+      record({ provider: "claude", prompt: JSON.stringify(m) });
+      // Like Claude Code: queue the steer, read it at the next step, answer it.
+      const lifecycle = (state) =>
+        emit({
+          type: "command_lifecycle",
+          command_uuid: m.uuid,
+          state,
+          uuid: `fixture-lifecycle-${state}`,
+          session_id: "fixture-claude",
+        });
+      lifecycle("queued");
+      // A steer that arrives after the last step runs as a turn of its own.
+      if (lateSteer) finish("Done before your note.");
+      setTimeout(() => {
+        lifecycle("started");
+        emit({
+          type: "stream_event",
+          uuid: "fixture-event",
+          session_id: "fixture-claude",
+          event: { type: "message_start", message: { id: "fixture-steered" } },
+        });
+        lifecycle("completed");
+        finish(`Noted: ${m.message.content}`);
+      }, 100);
+      return;
     }
     if (m.type === "user") {
       record({ provider: "claude", prompt: JSON.stringify(m) });
@@ -119,6 +147,26 @@ if (args.includes("--permission-prompt-tool")) {
             ],
           },
         });
+      } else if (
+        text.includes("fixture wait for steer") ||
+        text.includes("fixture late steer")
+      ) {
+        // Keeps working until a steer arrives.
+        lateSteer = text.includes("fixture late steer");
+        emit({
+          type: "stream_event",
+          uuid: "fixture-event",
+          session_id: "fixture-claude",
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "Looking into it." },
+          },
+        });
+      } else if (text.includes("fixture background task")) {
+        finish("Started the background task.");
+        // Claude Code starts a turn by itself when the task ends; no user message comes first.
+        setTimeout(() => finish("The background task finished."), 300);
       } else finish("Claude found the same cache guard.");
     }
   });
@@ -350,6 +398,20 @@ if (args.includes("--permission-prompt-tool")) {
           },
         });
         return;
+      }
+      // Edits the checkout mid-turn, so Relay's turn snapshots see changes.
+      if (m.params.input[0].text.includes("fixture edit files")) {
+        const fs = require("node:fs"),
+          path = require("node:path");
+        fs.appendFileSync(
+          path.join(m.params.cwd, "README.md"),
+          "Edited by the agent.\n",
+        );
+        fs.mkdirSync(path.join(m.params.cwd, "src"), { recursive: true });
+        fs.writeFileSync(
+          path.join(m.params.cwd, "src", "guard.ts"),
+          "export const guard = true;\n",
+        );
       }
       if (!process.env.RELAY_AGENT_NO_TITLE)
         send({

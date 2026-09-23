@@ -20,6 +20,13 @@ export interface Project {
   repository: ({ server: string } & Repo) | null;
   added: number;
 }
+/** A project's sidebar name, typed in place. */
+export const projectNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name the project.")
+  .max(80)
+  .refine((value) => !/[\x00-\x1f]/.test(value), "Use a plain name.");
 export const chatScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project") }).strict(),
   z.object({ kind: z.literal("pr"), ref: refSchema }).strict(),
@@ -29,6 +36,8 @@ export interface ChatSummary {
   id: string;
   projectId: string;
   title: string;
+  /** Named by the user; the prompt excerpt and generated titles never replace it. */
+  renamed?: boolean;
   scope: ChatScope;
   created: number;
   updated: number;
@@ -43,8 +52,11 @@ export interface ChatSummary {
   snoozedUntil?: number;
   /** Archived threads are hidden from the sidebar. */
   archivedAt?: number;
+  /** Branch checked out when the latest message was sent. */
+  branch?: string;
   /** Live state added by list(); never persisted. */
   running?: boolean;
+  runningSince?: number;
   waiting?: boolean;
 }
 export const chatTriageSchema = z.discriminatedUnion("kind", [
@@ -74,9 +86,18 @@ export interface PromptCache {
   at: number;
   ttlMs: number;
 }
+export type AgentProvider = "codex" | "claude";
+/** Local marker: the outgoing agent wrote this note for the one taking over. */
+export interface AgentHandoff {
+  from: AgentProvider;
+  to: AgentProvider;
+}
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
+  handoff?: AgentHandoff;
+  /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
+  unprompted?: boolean;
   context?: ContextUsage;
   /** Local proposed-plan action; shared chats receive the final text only. */
   proposedPlan?: boolean;
@@ -85,6 +106,8 @@ export interface ChatMessage {
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
+  /** Local: files this turn changed in the checkout, from snapshots before and after it. */
+  changes?: TurnFileChange[];
   ended?: number;
   author?: string;
   authorId?: string;
@@ -99,6 +122,14 @@ export interface ChatMessage {
   provider: "codex" | "claude";
   error?: string;
   version: number;
+}
+export interface TurnFileChange {
+  path: string;
+  additions: number;
+  deletions: number;
+  binary?: boolean;
+  /** Local: rolled back by this snapshot, which redo restores from. */
+  revertedBy?: string;
 }
 export interface ChatImage {
   id: string;
@@ -156,6 +187,8 @@ export interface ProjectChat extends ChatSummary {
   providerThread?: string;
   providerThrough?: string;
   sharedCursor?: number;
+  /** Local: checkout rollbacks the next agent turn should hear about. */
+  checkoutNotes?: string[];
   replySessions?: Record<
     string,
     {
@@ -188,10 +221,12 @@ export interface ProjectApi {
     requestId: string,
     response: AgentResponse,
   ): Promise<void>;
+  /** `move` puts the message at `index` in the queue. */
   projectChatQueueAction(
     id: string,
-    action: "remove" | "steer",
+    action: "remove" | "steer" | "move",
     messageId: string,
+    index?: number,
   ): Promise<void>;
   resumeProjectChat(id: string): Promise<void>;
   /** Claude also takes instructions for what the summary should keep. */
@@ -200,13 +235,19 @@ export interface ProjectApi {
     parentId?: string | null,
     instructions?: string,
   ): Promise<void>;
+  /** The project's own icon as a data URL, or null to keep the folder icon. */
+  projectIcon(id: string): Promise<string | null>;
   projectGroups(): Promise<string[]>;
   createProjectGroup(path: string): Promise<void>;
   renameProjectGroup(from: string, to: string): Promise<void>;
   removeProjectGroup(path: string): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
+  renameProject(id: string, name: string): Promise<Project>;
+  /** Opens the project's folder in Finder. */
+  revealProject(id: string): Promise<void>;
   setProjectChatScope(id: string, scope: ChatScope): Promise<ChatSummary>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
+  renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   projectCommands(
     id: string,
     provider: "codex" | "claude",
@@ -293,6 +334,23 @@ export interface ProjectApi {
     area: ChangeArea,
   ): Promise<FilePair>;
   projectGitAction(id: string, action: GitAction): Promise<WorkingTree>;
+  /** One file as an agent turn left it, against how the turn found it. */
+  projectTurnDiff(
+    chatId: string,
+    messageId: string,
+    path: string,
+  ): Promise<FilePair>;
+  /**
+   * Rolls a turn's files back, or redoes that rollback; all of them when
+   * `paths` is null. Conflicts come back unwritten unless `force`.
+   */
+  rewindProjectTurn(
+    chatId: string,
+    messageId: string,
+    paths: string[] | null,
+    mode: "revert" | "redo",
+    force: boolean,
+  ): Promise<{ conflicts: string[] }>;
   projectPulls(id: string, state: string, page: number): Promise<Page<Issue>>;
   projectChats(id: string): Promise<ChatSummary[]>;
   createProjectChat(id: string, scope: ChatScope): Promise<ChatSummary>;

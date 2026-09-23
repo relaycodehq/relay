@@ -1,6 +1,7 @@
 import { useAISettings } from "../lib/useAISettings";
 import { choiceLabel } from "../../shared/settings";
-import { Layers3, LoaderCircle, RotateCcw, Pause, Play } from "lucide-react";
+import { Layers3, RotateCcw, Pause, Play } from "lucide-react";
+import { Spinner } from "./ui";
 import { isAnalyzing, type TriageState } from "../../shared/triage";
 interface Props {
   state?: TriageState | null;
@@ -51,7 +52,7 @@ export function TriageControls({
           title={`Find repeated whole-file changes. Analyzes this PR in small batches with ${activeChoice ? choiceLabel(activeChoice, activeChoice.provider) : agent}. Source changes are sent to your signed-in ${agent} account.`}
         >
           {running ? (
-            <LoaderCircle size={14} className="spin" />
+            <Spinner size={14} />
           ) : resume ? (
             <Play size={14} />
           ) : result ? (

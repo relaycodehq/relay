@@ -71,6 +71,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await row("web-store").dragTo(page.locator(".sb-group-empty"));
     await expect.poll(() => folderOf("web-store")).toBe("Work/Frontend");
     await row("acme-service").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Move to group" }).click();
     await page.getByRole("menuitem", { name: "Work", exact: true }).click();
     await expect.poll(() => folderOf("acme-service")).toBe("Work");
     await page.screenshot({
@@ -146,6 +147,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await page.getByRole("menuitem", { name: /Remove group/ }).click();
     await expect.poll(() => folderOf("web-store")).toBe("Clients");
     await row("web-store").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Move to group" }).click();
     await page.getByRole("menuitem", { name: "Remove from group" }).click();
     await expect.poll(() => folderOf("web-store")).toBeUndefined();
     await expect(
@@ -154,6 +156,24 @@ test("organizes project groups, preserves child expansion across restart, and ce
         exact: true,
       }),
     ).not.toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Project actions for acme-service",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: "Rename" }).click();
+    await page.getByLabel("Project name").fill("Services");
+    await page.getByLabel("Project name").press("Enter");
+    await expect
+      .poll(async () =>
+        (await page.evaluate(() => window.relay.projects())).map((p) => p.name),
+      )
+      .toContain("Services");
+    await row("Services").locator(".sb-project-chevron").click();
+    await expect(
+      page.getByRole("button", { name: "Expand Services", exact: true }),
+    ).toBeVisible();
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });

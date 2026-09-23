@@ -1,8 +1,12 @@
+import type { Sketch } from "./sketch";
+
 export interface DraftImage {
   id: string;
   name: string;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   dataUrl: string;
+  /** Ink drawn over the screenshot, burned in only when the message is sent. */
+  sketch?: Sketch;
 }
 
 function database(): Promise<IDBDatabase> {

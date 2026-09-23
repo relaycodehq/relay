@@ -9,13 +9,15 @@ import {
   type ReactNode,
   Component,
   Fragment,
+  createContext,
+  useContext,
+  useInsertionEffect,
+  type CSSProperties,
   type ErrorInfo,
 } from "react";
 import {
   X,
   AlertCircle,
-  LoaderCircle,
-  FileCode2,
   Folder,
   Copy,
   Check,
@@ -24,10 +26,16 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
+import { CodeBlock } from "./CodeBlock";
 import {
   projectFileLink,
   type ProjectFileLink,
 } from "../lib/project-file-links";
+import {
+  ensureFileIconSprite,
+  fileIcon,
+  parentSuffixes,
+} from "../lib/file-icons";
 export function IconButton({
   label,
   children,
@@ -120,10 +128,31 @@ export function ErrorBox({
     </div>
   );
 }
+// The one spinner: an arc that breathes as it turns, over a faint track.
+export function Spinner({
+  size = 14,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className ? `spinner ${className}` : "spinner"}
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    >
+      <circle className="spinner-track" cx="8" cy="8" r="6.25" />
+      <circle className="spinner-arc" cx="8" cy="8" r="6.25" pathLength={100} />
+    </svg>
+  );
+}
 export function Loading({ text = "Loading…" }: { text?: string }) {
   return (
     <div className="empty small" role="status">
-      <LoaderCircle size={20} className="spin" />
+      <Spinner size={18} />
       {text}
     </div>
   );
@@ -135,6 +164,17 @@ function markdownNodeText(node: unknown): string {
   return Array.isArray(value.children)
     ? value.children.map(markdownNodeText).join("")
     : "";
+}
+/** The fence language of a `pre` node, from its `language-*` code class. */
+function markdownCodeLanguage(node: unknown): string | undefined {
+  const code = (node as { children?: unknown[] } | undefined)?.children?.[0] as
+    | { properties?: { className?: unknown } }
+    | undefined;
+  const classes = code?.properties?.className;
+  const match = (Array.isArray(classes) ? classes : [])
+    .map(String)
+    .find((name) => name.startsWith("language-"));
+  return match?.slice("language-".length).toLowerCase() || undefined;
 }
 const MIN_TABLE_COLUMN_WIDTH = 60;
 // Columns size themselves until the first drag; after that the table switches to
@@ -271,6 +311,82 @@ export function markdownBlocks(text: string): string[] {
   blocks.push(lines.slice(start).join("\n"));
   return blocks;
 }
+/** Parent folders for file names the message links under several paths. */
+const FileLinkSuffixes = createContext<ReadonlyMap<string, string>>(new Map());
+
+/** Every in-project file a message links or names in inline code. */
+function linkedProjectFiles(text: string, root: string): string[] {
+  const paths = new Set<string>();
+  // Fenced code never becomes a chip; the odd segments are the fences.
+  text.split(/(```[\s\S]*?(?:```|$))/).forEach((segment, index) => {
+    if (index % 2) return;
+    for (const [, href] of segment.matchAll(/\]\(<?([^)\s>]+)/g))
+      if (href) {
+        const target = projectFileLink(href, root);
+        if (target) paths.add(target.path);
+      }
+    for (const [, code] of segment.matchAll(/`([^`\n]+)`/g))
+      if (code) {
+        const target = projectFileLink(code.trim(), root, true);
+        if (target) paths.add(target.path);
+      }
+  });
+  return [...paths];
+}
+
+export function FileEntryIcon({
+  path,
+  directory,
+}: {
+  path: string;
+  directory: boolean;
+}) {
+  useInsertionEffect(ensureFileIconSprite, []);
+  if (directory) return <Folder className="file-entry-icon" aria-hidden />;
+  const icon = fileIcon(path);
+  return (
+    <svg
+      aria-hidden
+      className="file-entry-icon"
+      viewBox="0 0 16 16"
+      style={
+        {
+          "--file-icon-light": icon.colors[0],
+          "--file-icon-dark": icon.colors[1],
+        } as CSSProperties
+      }
+    >
+      <use href={`#${icon.name}`} />
+    </svg>
+  );
+}
+
+/** T3-style file chip: type icon, file name, and a line when there is one. */
+function FileLinkChip({
+  target,
+  onOpen,
+}: {
+  target: ProjectFileLink;
+  onOpen: (target: ProjectFileLink) => void;
+}) {
+  const suffix = useContext(FileLinkSuffixes).get(target.path);
+  const label = [
+    target.path.split("/").at(-1) || target.path,
+    ...(suffix ? [suffix] : []),
+    ...(target.line ? [`L${target.line}`] : []),
+  ].join(" · ");
+  return (
+    <button
+      type="button"
+      className="chat-file-link"
+      title={`${target.path}${target.line ? `:${target.line}` : ""}`}
+      onClick={() => onOpen(target)}
+    >
+      <FileEntryIcon path={target.path} directory={target.directory} />
+      <span className="chat-file-link-label">{label}</span>
+    </button>
+  );
+}
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   components,
@@ -318,9 +434,10 @@ export const RichText = memo(function RichText({
         </th>
       ),
       pre: ({ node }) => (
-        <pre>
-          <code>{markdownNodeText(node)}</code>
-        </pre>
+        <CodeBlock
+          code={markdownNodeText(node).replace(/\n$/, "")}
+          lang={markdownCodeLanguage(node)}
+        />
       ),
       a: ({ href, children }) => {
         const target =
@@ -328,15 +445,10 @@ export const RichText = memo(function RichText({
             ? projectFileLink(href, projectRoot)
             : null;
         return target ? (
-          <button
-            type="button"
-            className="chat-file-link"
-            title={`${target.path}${target.line ? `:${target.line}` : ""}`}
-            onClick={() => openFile.current?.(target)}
-          >
-            {target.directory ? <Folder size={12} /> : <FileCode2 size={12} />}
-            {children}
-          </button>
+          <FileLinkChip
+            target={target}
+            onOpen={(target) => openFile.current?.(target)}
+          />
         ) : href && /^(https?:|mailto:)/i.test(href) ? (
           <a
             href={href}
@@ -358,15 +470,10 @@ export const RichText = memo(function RichText({
             ? projectFileLink(value, projectRoot, true)
             : null;
         return target ? (
-          <button
-            type="button"
-            className="chat-file-link"
-            title={`${target.path}${target.line ? `:${target.line}` : ""}`}
-            onClick={() => openFile.current?.(target)}
-          >
-            {target.directory ? <Folder size={12} /> : <FileCode2 size={12} />}
-            <span>{children}</span>
-          </button>
+          <FileLinkChip
+            target={target}
+            onOpen={(target) => openFile.current?.(target)}
+          />
         ) : (
           <code className={className}>{children}</code>
         );
@@ -376,15 +483,33 @@ export const RichText = memo(function RichText({
     [projectRoot, linksFiles],
   );
   const blocks = useMemo(() => markdownBlocks(text), [text]);
+  // Streaming changes the text every token; keep the map (and the chips
+  // reading it) unchanged until a clash actually appears.
+  const lastSuffixes = useRef<ReadonlyMap<string, string>>(new Map());
+  const suffixes = useMemo(() => {
+    const next =
+      projectRoot && linksFiles
+        ? parentSuffixes(linkedProjectFiles(text, projectRoot))
+        : new Map<string, string>();
+    const last = lastSuffixes.current;
+    if (
+      next.size !== last.size ||
+      [...next].some(([path, suffix]) => last.get(path) !== suffix)
+    )
+      lastSuffixes.current = next;
+    return lastSuffixes.current;
+  }, [text, projectRoot, linksFiles]);
   return (
-    <div className="markdown">
-      {blocks.map((block, index) => (
-        <Fragment key={index}>
-          {index > 0 && "\n"}
-          <MarkdownBlock text={block} components={components} />
-        </Fragment>
-      ))}
-    </div>
+    <FileLinkSuffixes.Provider value={suffixes}>
+      <div className="markdown">
+        {blocks.map((block, index) => (
+          <Fragment key={index}>
+            {index > 0 && "\n"}
+            <MarkdownBlock text={block} components={components} />
+          </Fragment>
+        ))}
+      </div>
+    </FileLinkSuffixes.Provider>
   );
 });
 export function Avatar({ name }: { name: string }) {

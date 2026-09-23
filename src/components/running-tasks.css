@@ -1,0 +1,181 @@
+/* Floats in the chat pane's top-right corner, just below the thread subheader. */
+.running-tasks {
+  position: absolute;
+  top: 44px;
+  right: 14px;
+  z-index: 45;
+  width: 280px;
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 140px);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--inbox);
+  color: var(--text);
+  box-shadow: 0 8px 24px -12px #0006;
+  overflow: hidden;
+}
+.running-tasks.collapsed {
+  width: auto;
+}
+.running-tasks-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.running-tasks.collapsed .running-tasks-header {
+  padding-bottom: 4px;
+}
+.running-tasks-header:hover {
+  background: transparent;
+  color: var(--text);
+}
+.running-tasks.collapsed .spacer {
+  flex: 0 0 2px;
+}
+.running-tasks-count {
+  font-variant-numeric: tabular-nums;
+}
+.running-tasks-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.running-tasks.collapsed .running-tasks-chevron {
+  transform: rotate(-90deg);
+}
+.running-tasks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.running-tasks-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 6px 0 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: opacity 0.2s;
+}
+.running-tasks-list li:hover {
+  background: var(--hover);
+}
+.running-tasks-list li.busy {
+  opacity: 0.45;
+}
+.running-task-icon {
+  flex-shrink: 0;
+}
+.running-task-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.running-task-title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.running-task-title > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+button.running-task-title {
+  cursor: pointer;
+}
+button.running-task-title:hover {
+  background: none;
+}
+button.running-task-title:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+button.running-task-title:hover > svg {
+  color: var(--text);
+}
+.running-task-end {
+  display: grid;
+  flex-shrink: 0;
+  margin-left: auto;
+  min-width: 42px;
+  align-items: center;
+  justify-items: end;
+}
+.running-task-end > * {
+  grid-area: 1 / 1;
+}
+.running-task-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.running-task-buttons {
+  display: flex;
+  gap: 2px;
+  margin-right: -2px;
+  visibility: hidden;
+}
+.running-task-buttons button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.running-task-buttons button:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.running-task-buttons .running-task-stop:hover {
+  color: #d9534f;
+}
+.running-task-buttons button:disabled {
+  background: transparent;
+  cursor: default;
+}
+.running-tasks-list li:hover .running-task-time,
+.running-tasks-list li:focus-within .running-task-time {
+  visibility: hidden;
+}
+.running-tasks-list li:hover .running-task-buttons,
+.running-tasks-list li:focus-within .running-task-buttons {
+  visibility: visible;
+}
+.running-tasks-list li.restart .running-task-buttons button:first-child svg {
+  animation: running-task-spin 0.8s linear infinite;
+}
+@keyframes running-task-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.running-tasks-error {
+  margin: 0;
+  padding: 6px 8px 2px;
+  color: #c78073;
+  font-size: 11px;
+}

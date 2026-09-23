@@ -14,6 +14,7 @@ import {
   chatScopeSchema,
   chatTriageSchema,
   projectChatSendSchema,
+  projectNameSchema,
 } from "../shared/projects";
 import { LiveSync } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
@@ -46,6 +47,7 @@ import { readProviderUsage } from "./provider-usage";
 import { ProjectChecks } from "./checks/service";
 import { BlameService } from "./blame";
 import { detectProject } from "./checks/detect";
+import { projectIcon } from "./project-icon";
 import { TriageService } from "./triage/service";
 import {
   app,
@@ -71,6 +73,7 @@ import {
 } from "./login-profile";
 import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
+import { projectTasks } from "./tasks";
 import { inspectFolder } from "./repository";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
@@ -414,6 +417,16 @@ async function dispatch(method: string, args: unknown[]) {
         null,
         blameQuerySchema.parse(args[1]),
       );
+    case "projectIcon":
+      return projectIcon(
+        await projects.root(idSchema.parse(args[0])),
+        (path) => {
+          const image = nativeImage.createFromPath(path);
+          return image.isEmpty()
+            ? null
+            : image.resize({ width: 128, quality: "best" }).toDataURL();
+        },
+      );
     case "projectGroups":
       return projects.groups();
     case "createProjectGroup":
@@ -431,6 +444,18 @@ async function dispatch(method: string, args: unknown[]) {
         projectFolderSchema.parse(args[1]),
         idSchema.nullable().parse(args[2]),
       );
+    case "renameProject":
+      return projects.rename(
+        idSchema.parse(args[0]),
+        projectNameSchema.parse(args[1]),
+      );
+    case "revealProject": {
+      const error = await shell.openPath(
+        await projects.root(idSchema.parse(args[0])),
+      );
+      if (error) throw new Error(error);
+      return;
+    }
     case "projects":
       return projects.list(client);
     case "addProject": {
@@ -451,6 +476,11 @@ async function dispatch(method: string, args: unknown[]) {
       return projectChats.triage(
         idSchema.parse(args[0]),
         chatTriageSchema.parse(args[1]),
+      );
+    case "renameProjectChat":
+      return projectChats.rename(
+        idSchema.parse(args[0]),
+        z.string().parse(args[1]),
       );
     case "projectCommands": {
       const root = await projects.root(idSchema.parse(args[0]));
@@ -524,6 +554,18 @@ async function dispatch(method: string, args: unknown[]) {
           .max(2 * 1024 * 1024)
           .parse(args[4]),
       );
+    case "projectTasks":
+      return projectTasks.list(await projects.root(idSchema.parse(args[0])));
+    case "stopProjectTask":
+      return projectTasks.stop(
+        await projects.root(idSchema.parse(args[0])),
+        z.string().max(64).parse(args[1]),
+      );
+    case "restartProjectTask":
+      return projectTasks.restart(
+        await projects.root(idSchema.parse(args[0])),
+        z.string().max(64).parse(args[1]),
+      );
     case "projectWorkingTree":
       return workingTree(await projects.root(idSchema.parse(args[0])));
     case "projectWorkingDiff":
@@ -531,6 +573,20 @@ async function dispatch(method: string, args: unknown[]) {
         await projects.root(idSchema.parse(args[0])),
         workingPathSchema.parse(args[1]),
         z.enum(["staged", "unstaged"]).parse(args[2]),
+      );
+    case "projectTurnDiff":
+      return projectChats.turnDiff(
+        idSchema.parse(args[0]),
+        idSchema.parse(args[1]),
+        workingPathSchema.parse(args[2]),
+      );
+    case "rewindProjectTurn":
+      return projectChats.rewindTurn(
+        idSchema.parse(args[0]),
+        idSchema.parse(args[1]),
+        z.array(workingPathSchema).max(1000).nullable().parse(args[2]),
+        z.enum(["revert", "redo"]).parse(args[3]),
+        z.boolean().parse(args[4]),
       );
     case "projectGitAction":
       return performGitAction(
@@ -618,8 +674,9 @@ async function dispatch(method: string, args: unknown[]) {
     case "projectChatQueueAction":
       return projectChats.queueAction(
         idSchema.parse(args[0]),
-        z.enum(["remove", "steer"]).parse(args[1]),
+        z.enum(["remove", "steer", "move"]).parse(args[1]),
         idSchema.parse(args[2]),
+        z.number().int().min(0).max(20).optional().parse(args[3]),
       );
     case "respondProjectChat":
       return projectChats.respond(
@@ -1331,6 +1388,7 @@ app
       async (value) =>
         (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
           .result,
+      join(app.getPath("userData"), "devops-relevance.json"),
     );
     projectChats = new ProjectChats(
       store,

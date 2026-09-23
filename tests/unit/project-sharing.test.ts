@@ -214,7 +214,10 @@ it("shares private history, streams only to the requester, runs each participant
       ...send("@codex What about the edge case?"),
       parentId: delivered.messages[0].id,
     });
-    expect(vi.mocked(runCodex).mock.calls[1][0].cwd).toBe(bob.dir);
+    // The agent starts once Relay has snapshotted the checkout for the turn.
+    await vi.waitFor(() =>
+      expect(vi.mocked(runCodex).mock.calls[1]?.[0].cwd).toBe(bob.dir),
+    );
     await vi.waitFor(() =>
       expect(
         bob.events.some(

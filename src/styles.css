@@ -1109,7 +1109,15 @@ small {
 .markdown-quote {
   position: relative;
 }
-.markdown-quote-copy {
+.markdown-code {
+  position: relative;
+  margin: 10px 0;
+}
+.markdown-code > pre {
+  margin: 0;
+}
+.markdown-quote-copy,
+.markdown-code-copy {
   position: absolute;
   top: 2px;
   right: 2px;
@@ -1126,11 +1134,18 @@ small {
   opacity: 0;
   transition: opacity 120ms ease;
 }
+.markdown-code-copy {
+  top: 6px;
+  right: 6px;
+}
 .markdown-quote:hover > .markdown-quote-copy,
-.markdown-quote-copy:focus-visible {
+.markdown-quote-copy:focus-visible,
+.markdown-code:hover > .markdown-code-copy,
+.markdown-code-copy:focus-visible {
   opacity: 1;
 }
-.markdown-quote-copy:hover {
+.markdown-quote-copy:hover,
+.markdown-code-copy:hover {
   color: var(--text);
 }
 .markdown ul,
@@ -1389,6 +1404,67 @@ body.resizing-table-column {
   to {
     transform: rotate(360deg);
   }
+}
+/* Spinner: the svg turns at a steady pace while the arc stretches and draws
+   back on an eased, offset beat, so the head and tail glide instead of tick.
+   Unequal periods keep the loop from looking mechanical. */
+.spinner {
+  flex: none;
+  overflow: visible;
+  animation: spin 1.6s linear infinite;
+}
+.spinner circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.spinner-track {
+  opacity: 0.16;
+}
+.spinner-arc {
+  stroke-linecap: round;
+  stroke-dasharray: 30 150;
+  animation: spinner-arc 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+/* In pathLength units (100 = full turn): a short dash grows to a half-ring,
+   then its tail sweeps round to meet the head. The dash left over at the end
+   lines up with the start, so the loop has no seam. */
+@keyframes spinner-arc {
+  0% {
+    stroke-dasharray: 5 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 55 150;
+    stroke-dashoffset: -18;
+  }
+  100% {
+    stroke-dasharray: 55 150;
+    stroke-dashoffset: -95;
+  }
+}
+/* Loops hold still while the window is unfocused: even visible, each one
+   costs a frame per display refresh (one spinner measured ~18% of a core,
+   paused ~0%). Only endless loops are listed, so an entrance or exit that
+   starts while unfocused still finishes. */
+:root[data-inactive]
+  :is(
+    .spinner,
+    .spinner-arc,
+    .spin,
+    .shimmer,
+    .room-thinking,
+    .context-meter-trigger[data-compacting] > svg,
+    .cache-tongue,
+    .cache-core,
+    .cache-glow,
+    .cache-ember,
+    .project-ribbon-wave,
+    .project-ribbon-sheen
+  ),
+:root[data-inactive] .sb-status.waiting i::after {
+  animation-play-state: paused;
 }
 .modal {
   width: 490px;
