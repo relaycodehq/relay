@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Zap } from "lucide-react";
 import {
-  claudeEfforts,
+  claudeEffortsFor,
   effortLabels,
   reasoningEffortsFor,
   supportsEffort,
@@ -50,11 +50,9 @@ export function ModelField({
   // A failed probe lists no CLI models rather than loading forever.
   const claudeModels = claude.isError ? [] : claude.data;
   const codex = useCodexModels();
-  const claudeEffortsFor = (model: string) =>
-    claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
   const efforts =
     agent === "claude"
-      ? claudeEffortsFor(value.model)
+      ? claudeEffortsFor(claudeModels, value.model)
       : reasoningEffortsFor(value.model, codex.models);
   return (
     <div
@@ -84,7 +82,9 @@ export function ModelField({
           // Like the composer, an effort the new model lacks falls back to default.
           const keep =
             next === "claude"
-              ? claudeEffortsFor(model).includes(choice.reasoningEffort)
+              ? claudeEffortsFor(claudeModels, model).includes(
+                  choice.reasoningEffort,
+                )
               : supportsEffort(choice, codex.models);
           onChange(
             {

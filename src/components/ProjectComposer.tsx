@@ -29,7 +29,7 @@ import {
   effortLabels,
   type ReasoningEffort,
   codexQuestionChoice,
-  claudeEfforts,
+  claudeEffortsFor,
   type ClaudeModel,
   claudeContextWindow,
   findClaudeModel,
@@ -161,8 +161,7 @@ export function ProjectComposer({
   const codex = useCodexModels();
   const codexModels = codex.models;
   const claudeListed = findClaudeModel(claudeModels, claude.model);
-  // Unknown models (list failed or a custom id) offer every Claude level.
-  const claudeModelEfforts = claudeListed?.efforts ?? claudeEfforts;
+  const claudeModelEfforts = claudeEffortsFor(claudeModels, claude.model);
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
   useEffect(() => {
@@ -231,8 +230,7 @@ export function ProjectComposer({
   function applyModel(next: "codex" | "claude" | "message", model: string) {
     setProvider(next);
     if (next === "claude") {
-      const efforts =
-        claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
+      const efforts = claudeEffortsFor(claudeModels, model);
       setClaude((c) => ({
         model,
         reasoningEffort: efforts.includes(c.reasoningEffort)

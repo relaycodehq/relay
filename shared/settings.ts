@@ -89,6 +89,11 @@ export const claudeEfforts: ReasoningEffort[] = [
   "xhigh",
   "max",
 ];
+/** A model the CLI didn't list (custom, or the list failed) offers every level. */
+export const claudeEffortsFor = (
+  models: ClaudeModel[] | undefined,
+  id: string,
+) => findClaudeModel(models, id)?.efforts ?? claudeEfforts;
 /** Only efforts Claude accepts; Codex-only levels fall back to its default. */
 export const claudeArgs = (choice: {
   model: string;
