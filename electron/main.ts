@@ -312,9 +312,13 @@ app.on("before-quit", (event) => {
       })
       .then(({ response }) => {
         askingToQuit = false;
-        if (response !== 0) return;
-        quitConfirmed = true;
-        app.quit();
+        if (response === 0) {
+          quitConfirmed = true;
+          return app.quit();
+        }
+        // Closing the last window quits on Windows and Linux: bring it back
+        // rather than keep the work running with no window to watch it from.
+        if (!win && windowReady) createWindow();
       });
     return;
   }
