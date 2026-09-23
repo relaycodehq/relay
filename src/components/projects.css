@@ -1665,7 +1665,9 @@ details.agent-step > .agent-step-heading:hover {
 .composer-prompt-input p {
   margin: 0;
 }
-.composer-prompt-input:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before {
+.composer-prompt-input:has(
+    > p:only-child > br.ProseMirror-trailingBreak:only-child
+  )::before {
   content: attr(data-placeholder);
   pointer-events: none;
   color: var(--muted);

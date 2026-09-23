@@ -34,7 +34,11 @@ export function PastedTextDialog({
 }) {
   const [copied, setCopied] = useState(false);
   return (
-    <Modal title={label(paste)} onClose={onClose} className="pasted-text-dialog">
+    <Modal
+      title={label(paste)}
+      onClose={onClose}
+      className="pasted-text-dialog"
+    >
       <p className="pasted-text-meta">
         {lineCount(paste)} · {paste.text.length.toLocaleString()} characters
       </p>
