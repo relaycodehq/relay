@@ -1,4 +1,8 @@
-import { closeClaudeSession } from "./rooms/claude-project";
+import {
+  claudePending,
+  closeClaudeSession,
+  stopClaudeTask,
+} from "./rooms/claude-project";
 import { closeCodexConnection } from "./rooms/codex-connection";
 import { AgentRequests } from "./agent-requests";
 import { savedRuntimeMode, type AgentResponse } from "../shared/agent-modes";
@@ -12,7 +16,9 @@ import type { Projects } from "./projects";
 import type {
   ProjectChat,
   ChatScope,
+  ChatPending,
   ChatSummary,
+  HeldWakeup,
   ChatTriage,
   ChatMessage,
   ProjectChatSend,
@@ -81,6 +87,8 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
+  /** Timers for wake-ups Relay sends itself, by chat and wake-up id. */
+  private wakeTimers = new Map<string, NodeJS.Timeout>();
   private cache = new Map<string, ProjectChat>();
   private loading = new Map<string, Promise<void>>();
   private writes = new Map<string, Promise<void>>();
@@ -112,15 +120,173 @@ export class ProjectChats {
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
         const active = this.active.get(c.id);
-        return active
+        const pending = [
+          ...this.pending(c.id),
+          ...(c.heldWakeups ?? []).map((w): ChatPending => ({
+            kind: "wakeup",
+            id: w.id,
+            prompt: w.prompt,
+            recurring: false,
+            at: w.at,
+            held: true,
+          })),
+        ];
+        return active || pending.length
           ? {
               ...c,
-              running: true,
-              runningSince: active.started,
-              waiting: active.requests.list().length > 0,
+              ...(active
+                ? {
+                    running: true,
+                    runningSince: active.started,
+                    waiting: active.requests.list().length > 0,
+                  }
+                : {}),
+              ...(pending.length ? { pending } : {}),
             }
           : c;
       });
+  }
+  /**
+   * Stops a background task Claude left running, or cancels a wake-up it
+   * scheduled. The SDK can't delete wake-ups, so Claude is asked to, in the open.
+   */
+  async stopPending(id: string, pendingId: string) {
+    const chat = await this.load(id);
+    if (chat.heldWakeups?.some((w) => w.id === pendingId)) {
+      clearTimeout(this.wakeTimers.get(id + ":" + pendingId));
+      this.wakeTimers.delete(id + ":" + pendingId);
+      return this.dropWakeup(chat, pendingId);
+    }
+    for (const key of this.providerSessions) {
+      const [, chatId, branch] = JSON.parse(key) as string[];
+      if (chatId !== id) continue;
+      const item = claudePending(key).find((p) => p.id === pendingId);
+      if (!item) continue;
+      if (item.kind === "task") return stopClaudeTask(key, pendingId);
+      return this.send(id, {
+        ...this.sessionInput(
+          chat,
+          "claude",
+          branch === "main" ? undefined : branch,
+        ),
+        body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
+      });
+    }
+    throw new Error("That work has already finished.");
+  }
+  /** Background commands and agents still running, across every thread. */
+  runningTasks() {
+    return [...this.providerSessions].flatMap((key) =>
+      claudePending(key).filter((p) => p.kind === "task"),
+    );
+  }
+  /** Arms the wake-ups kept when Relay last closed. */
+  armWakeups() {
+    for (const chat of this.store.get().chats ?? []) {
+      for (const wakeup of chat.heldWakeups ?? []) this.arm(chat.id, wakeup);
+    }
+  }
+  private arm(chatId: string, wakeup: HeldWakeup) {
+    const key = chatId + ":" + wakeup.id;
+    clearTimeout(this.wakeTimers.get(key));
+    // One that came due while Relay was closed goes out shortly after launch.
+    const delay = Math.min(
+      Math.max(wakeup.at - Date.now(), 15_000),
+      2 ** 31 - 1,
+    );
+    this.wakeTimers.set(
+      key,
+      setTimeout(() => {
+        this.wakeTimers.delete(key);
+        void this.fireWakeup(chatId, wakeup.id).catch((e) =>
+          console.warn("Could not send Claude's wake-up:", e),
+        );
+      }, delay),
+    );
+  }
+  private async dropWakeup(chat: ProjectChat, id: string) {
+    chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
+    if (!chat.heldWakeups?.length) delete chat.heldWakeups;
+    await this.save(chat);
+    await this.updateSummary(chat);
+  }
+  private async fireWakeup(chatId: string, id: string) {
+    if (this.disposing) return;
+    const chat = await this.load(chatId);
+    const wakeup = chat.heldWakeups?.find((w) => w.id === id);
+    if (!wakeup) return;
+    await this.dropWakeup(chat, id);
+    await this.send(chatId, {
+      ...this.sessionInput(chat, "claude", wakeup.parentId),
+      body: `@claude Relay restarted before your scheduled wake-up, so it's sending it for you:\n\n${wakeup.prompt}`,
+    });
+  }
+  /**
+   * Relay is closing, and Claude's sessions with it. Background work dies
+   * with them: remember it, so the thread can offer to pick it back up.
+   * One-shot wake-ups carry their prompt and time, so Relay sends those itself.
+   */
+  private async keepPending() {
+    const now = Date.now();
+    const left = new Map<string, { parentId?: string; item: ChatPending }[]>();
+    for (const key of this.providerSessions) {
+      const [, chatId, branch] = JSON.parse(key) as string[];
+      for (const item of claudePending(key))
+        left
+          .set(chatId, left.get(chatId) ?? [])
+          .get(chatId)!
+          .push({
+            item,
+            ...(branch === "main" ? {} : { parentId: branch }),
+          });
+    }
+    for (const [chatId, entries] of left) {
+      const chat = await this.load(chatId).catch(() => undefined);
+      if (!chat) continue;
+      const stopped: ChatPending[] = [];
+      for (const { item, parentId } of entries)
+        if (item.kind === "wakeup" && !item.recurring && item.at)
+          (chat.heldWakeups ??= []).push({
+            id: item.id,
+            prompt: item.prompt,
+            at: item.at,
+            ...(parentId ? { parentId } : {}),
+          });
+        else stopped.push(item);
+      if (stopped.length)
+        chat.stopped = {
+          at: now,
+          items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
+        };
+      await this.save(chat);
+      await this.updateSummary(chat);
+    }
+  }
+  async resolveStoppedWork(id: string, action: "resume" | "dismiss") {
+    const chat = await this.load(id);
+    const stopped = chat.stopped;
+    if (!stopped) return;
+    delete chat.stopped;
+    await this.save(chat);
+    await this.updateSummary(chat);
+    if (action === "dismiss") return;
+    const lines = stopped.items.map((item) =>
+      item.kind === "task"
+        ? `- Background work: ${item.description}`
+        : `- Recurring wake-up: ${item.prompt}`,
+    );
+    await this.send(id, {
+      ...this.sessionInput(chat, "claude"),
+      body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
+    });
+  }
+  /** Background work and wake-ups in the thread's live Claude sessions, replies included. */
+  private pending(chatId: string) {
+    const pending: ChatPending[] = [];
+    for (const key of this.providerSessions)
+      if ((JSON.parse(key) as string[])[1] === chatId)
+        pending.push(...claudePending(key));
+    return pending;
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
@@ -1675,6 +1841,10 @@ export class ProjectChats {
     return chat ? this.save(chat) : Promise.resolve();
   }
   async dispose() {
+    await this.keepPending().catch((e) =>
+      console.warn("Could not keep Claude's background work:", e),
+    );
+    for (const timer of this.wakeTimers.values()) clearTimeout(timer);
     this.disposing = true;
     for (const a of this.active.values()) a.abort.abort();
     for (const a of this.titleJobs.values()) a.abort.abort();

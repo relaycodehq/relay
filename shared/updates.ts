@@ -62,6 +62,8 @@ export type UpdateState =
       progress: number;
     }
   | { status: "ready"; current: string; version: string }
+  /** Restart asked for, held until Claude's background work finishes. */
+  | { status: "waiting"; current: string; version: string; tasks: number }
   | { status: "installing"; current: string; version: string }
   | { status: "error"; current: string; version?: string; message: string };
 

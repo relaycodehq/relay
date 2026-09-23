@@ -54,11 +54,36 @@ export interface ChatSummary {
   archivedAt?: number;
   /** Branch checked out when the latest message was sent. */
   branch?: string;
+  /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
+  heldWakeups?: HeldWakeup[];
+  /** Work that ended when Relay closed, until picked back up or dismissed. */
+  stopped?: { at: number; items: ChatPending[] };
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
   waiting?: boolean;
+  /** Work Claude left running that will start its next turn by itself. */
+  pending?: ChatPending[];
 }
+export interface HeldWakeup {
+  id: string;
+  prompt: string;
+  at: number;
+  /** The reply thread whose Claude session scheduled it. */
+  parentId?: string;
+}
+export type ChatPending =
+  | { kind: "task"; id: string; description: string; since: number }
+  | {
+      kind: "wakeup";
+      id: string;
+      prompt: string;
+      recurring: boolean;
+      /** When a one-shot wake-up fires. */
+      at?: number;
+      /** Relay sends it, because Claude's session ended since. */
+      held?: boolean;
+    };
 export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("settle") }).strict(),
   z.object({ kind: z.literal("unsettle") }).strict(),
@@ -305,6 +330,10 @@ export interface ProjectApi {
     id: string,
     action: import("./branches").BranchAction,
   ): Promise<import("./branches").BranchList>;
+  /** Sends Claude what stopped when Relay closed, or forgets it. */
+  resolveStoppedWork(id: string, action: "resume" | "dismiss"): Promise<void>;
+  /** Stops a background task Claude left running, or cancels its wake-up. */
+  stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   projectChatPresence(
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,

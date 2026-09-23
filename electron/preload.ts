@@ -12,6 +12,8 @@ const methods = [
   "roomAccessInfo",
   "allowRoomAccess",
   "projectChatPresence",
+  "stopProjectChatPending",
+  "resolveStoppedWork",
   "projectChatShareInfo",
   "shareProjectChat",
   "syncProjectChat",

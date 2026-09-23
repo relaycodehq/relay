@@ -92,6 +92,8 @@ export function ProjectComposer({
   onStop,
   planProvider,
   contextMeter,
+  notice,
+  placeholder,
   inherit,
 }: {
   handleRef?: Ref<ComposerHandle>;
@@ -127,6 +129,9 @@ export function ProjectComposer({
   onStop: () => void;
   planProvider?: "codex" | "claude";
   contextMeter?: ReactNode;
+  /** Sits on top of the input, attached to it. */
+  notice?: ReactNode;
+  placeholder?: string;
 }) {
   const settings = useAISettings();
   const [saved] = useState(() => {
@@ -661,6 +666,7 @@ export function ProjectComposer({
           disabled={checkoutDisabled || running || busy}
         />
       </div>
+      {notice}
       <form
         className="project-composer"
         onSubmit={(e) => {
@@ -729,7 +735,8 @@ export function ProjectComposer({
           placeholder={
             recipient === "message"
               ? "Leave a note or message your colleague…"
-              : "Ask about the code, plan a change, or build something…"
+              : (placeholder ??
+                "Ask about the code, plan a change, or build something…")
           }
           onKeyDownCapture={(e) => {
             if (commands.onKeyDown(e)) return;

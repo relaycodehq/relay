@@ -1,0 +1,100 @@
+/* A tab on top of the composer: Claude left work running that will start
+   its next turn. Deliberately still; nothing is working yet. */
+.waiting-strip {
+  position: relative;
+  margin: 0 18px -1px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--accent) 12%, var(--toolbar));
+  font-size: 13px;
+  color: var(--text);
+}
+.waiting-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 4px 8px 4px 14px;
+}
+.waiting-strip-head > svg {
+  flex: none;
+  color: var(--accent);
+}
+.waiting-strip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.waiting-strip-text b {
+  font-weight: 550;
+}
+.waiting-strip-text > span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.waiting-strip button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.waiting-strip button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.waiting-strip button:disabled {
+  opacity: 0.6;
+}
+.waiting-strip-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.waiting-strip-list {
+  margin: 0;
+  padding: 6px 0 2px;
+  list-style: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.waiting-strip-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 8px 2px 14px;
+}
+.waiting-strip-list svg {
+  flex: none;
+  color: var(--muted);
+}
+.waiting-strip-what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.waiting-strip-when {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.waiting-strip button.primary-action {
+  color: var(--accent);
+  font-weight: 600;
+}
+/* Nothing will come of it without you: muted instead of accent. */
+.waiting-strip.stopped {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 8%, var(--toolbar));
+}
+.waiting-strip.stopped .waiting-strip-head > svg {
+  color: var(--muted);
+}

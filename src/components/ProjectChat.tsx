@@ -73,6 +73,7 @@ import {
 } from "../../shared/pasted-texts";
 import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
+import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import type { PullRef } from "../../shared/types";
@@ -556,8 +557,11 @@ export function ProjectChat({
       api.onProjectChat((e) => {
         if (e.chatId === chat?.id) {
           setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-          if (e.message.status !== "streaming")
+          if (e.message.status !== "streaming") {
             void qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
+            // What Claude left running rides on the summary.
+            void qc.invalidateQueries({ queryKey: ["project-chats"] });
+          }
         }
       }),
     [chat?.id, qc],
@@ -623,6 +627,9 @@ export function ProjectChat({
     );
   }, [messages, parentIds, root]);
   const running = messages.some((m) => m.status === "streaming");
+  // Once Claude picks its work back up, its turn shows that instead.
+  const pending = !running && chat?.pending?.length ? chat.pending : undefined;
+  const stopped = !running && !pending ? chat?.stopped?.items : undefined;
   const sendKey = useSendKey();
   const context = latestContext(shown);
   const compacting = shown.some(
@@ -1330,6 +1337,52 @@ export function ProjectChat({
           projectId={project.id}
           checkoutDisabled={dirty}
           onSend={send}
+          notice={
+            stopped?.length ? (
+              <StoppedStrip
+                items={stopped}
+                onResolve={async (action) => {
+                  if (!chat) return;
+                  try {
+                    await api.resolveStoppedWork(chat.id, action);
+                  } catch (e) {
+                    setError(e);
+                    throw e;
+                  } finally {
+                    void qc.invalidateQueries({
+                      queryKey: ["project-chats"],
+                    });
+                  }
+                }}
+              />
+            ) : (
+              pending && (
+                <WaitingStrip
+                  pending={pending}
+                  onStop={async (item) => {
+                    if (!chat) return;
+                    try {
+                      await api.stopProjectChatPending(chat.id, item.id);
+                    } catch (e) {
+                      setError(e);
+                      throw e;
+                    } finally {
+                      void qc.invalidateQueries({
+                        queryKey: ["project-chats"],
+                      });
+                    }
+                  }}
+                />
+              )
+            )
+          }
+          placeholder={
+            pending?.some((p) => p.kind === "task")
+              ? "Message Claude, its background work keeps going…"
+              : pending
+                ? "Message Claude now, or wait for it to check back…"
+                : undefined
+          }
           planProvider={
             !running &&
             shown.at(-1)?.status === "complete" &&

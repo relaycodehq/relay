@@ -86,7 +86,16 @@ export class Updater {
   private timer?: NodeJS.Timeout;
   private readonly feed: string;
 
-  constructor(private readonly emit: (state: UpdateState) => void) {
+  private waiting?: NodeJS.Timeout;
+
+  constructor(
+    private readonly emit: (state: UpdateState) => void,
+    private readonly hooks: {
+      /** Claude's background work still running; the restart waits for it. */
+      runningTasks: () => number;
+      beforeQuit: () => void;
+    } = { runningTasks: () => 0, beforeQuit: () => {} },
+  ) {
     const current = app.getVersion();
     // Development builds stay quiet unless a feed is set to exercise the UI.
     const override = process.env.RELAY_UPDATE_FEED;
@@ -121,7 +130,11 @@ export class Updater {
     const current = app.getVersion();
     if (this.state.status === "off" || this.busy) return this.state;
     // A download in progress or waiting for restart shouldn't be reset by a timer.
-    if (["downloading", "ready", "installing"].includes(this.state.status))
+    if (
+      ["downloading", "ready", "waiting", "installing"].includes(
+        this.state.status,
+      )
+    )
       return this.state;
     this.install ??= await detectInstall();
     if (!this.install) {
@@ -254,14 +267,49 @@ export class Updater {
     return path;
   }
 
-  /** Hands off to the platform installer, then quits; the new version starts by itself. */
+  /**
+   * Hands off to the platform installer, then quits; the new version starts by
+   * itself. While Claude has background work running, waits for it first;
+   * asking again while waiting restarts right away.
+   */
   async installAndRestart() {
     const { staged, install } = this;
-    if (this.state.status !== "ready" || !staged || !install) return this.state;
+    if (
+      !["ready", "waiting"].includes(this.state.status) ||
+      !staged ||
+      !install
+    )
+      return this.state;
+    const current = app.getVersion();
+    const tasks = this.hooks.runningTasks();
+    if (this.state.status === "ready" && tasks > 0) {
+      this.set({ status: "waiting", current, version: staged.version, tasks });
+      this.waiting = setInterval(() => {
+        const left = this.hooks.runningTasks();
+        if (left > 0) {
+          if (this.state.status === "waiting" && this.state.tasks !== left)
+            this.set({ ...this.state, tasks: left });
+          return;
+        }
+        void this.restart(staged, install);
+      }, 5000);
+      return this.state;
+    }
+    return this.restart(staged, install);
+  }
+
+  private async restart(
+    staged: NonNullable<Updater["staged"]>,
+    install: Install,
+  ) {
+    clearInterval(this.waiting);
+    this.waiting = undefined;
+    if (this.state.status === "installing") return this.state;
     const current = app.getVersion();
     this.set({ status: "installing", current, version: staged.version });
     try {
       await apply(install.target, staged.path);
+      this.hooks.beforeQuit();
       app.quit();
     } catch (error) {
       this.set({

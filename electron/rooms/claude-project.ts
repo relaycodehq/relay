@@ -13,6 +13,7 @@ import { claudeActivity, claudeEditedPaths } from "./activity";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
   AgentActivity,
+  ChatPending,
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
@@ -135,6 +136,10 @@ type ClaudeSession = {
   /** The cache lifetime Claude last reported writing with. */
   cacheTtl?: number;
   busy: boolean;
+  /** Background work that starts Claude's next turn when it ends, by task id. */
+  tasks: Map<string, Extract<ChatPending, { kind: "task" }>>;
+  /** Wake-ups Claude scheduled for itself, as of the end of its last turn. */
+  wakeups: Extract<ChatPending, { kind: "wakeup" }>[];
 };
 const sessions = new Map<string, ClaudeSession>();
 function closeSession(session: ClaudeSession) {
@@ -161,6 +166,11 @@ async function pump(
   }
 }
 function receive(session: ClaudeSession, message: SDKMessage) {
+  if (
+    message.type === "system" &&
+    message.subtype === "background_tasks_changed"
+  )
+    trackTasks(session, message.tasks);
   if (session.turn) return session.frames.push(message);
   // Between turns, only Claude's own output matters. Init, status and late
   // results have nothing to show, and subagents report through their parent.
@@ -186,6 +196,50 @@ function receive(session: ClaudeSession, message: SDKMessage) {
       if (session.unprompted === done) session.unprompted = undefined;
     });
   session.unprompted = done;
+}
+/** Replaces the live task set; the SDK sends all of it on every change. */
+function trackTasks(
+  session: ClaudeSession,
+  tasks: { task_id: string; description: string; ambient?: boolean }[],
+) {
+  const previous = session.tasks;
+  session.tasks = new Map();
+  for (const task of tasks)
+    // Watchers and housekeeping never wake Claude.
+    if (!task.ambient)
+      session.tasks.set(task.task_id, {
+        kind: "task",
+        id: task.task_id,
+        description: task.description.slice(0, 300),
+        // The SDK sends no start time; the first sighting is close enough.
+        since: previous.get(task.task_id)?.since ?? Date.now(),
+      });
+}
+/** When a one-shot wake-up fires: its cron pins minute, hour, day and month, in local time. */
+export function wakeupTime(schedule: string, now = Date.now()) {
+  const fields = schedule.trim().split(/\s+/);
+  if (fields.length !== 5) return undefined;
+  const [minute, hour, day, month] = fields.slice(0, 4).map(Number);
+  if (![minute, hour, day, month].every(Number.isInteger)) return undefined;
+  const year = new Date(now).getFullYear();
+  const at = new Date(year, month - 1, day, hour, minute).getTime();
+  // A date already behind us by more than a day is next year's.
+  return at < now - 86_400_000
+    ? new Date(year + 1, month - 1, day, hour, minute).getTime()
+    : at;
+}
+/** What Claude left running that will start its next turn, while its session lives. */
+export function claudePending(key: string): ChatPending[] {
+  const session = sessions.get(key);
+  if (!session || session.frames.ended) return [];
+  return [...session.tasks.values(), ...session.wakeups];
+}
+/** Stops a background task; Claude hears it stopped and usually says so. */
+export async function stopClaudeTask(key: string, taskId: string) {
+  const session = sessions.get(key);
+  if (!session?.tasks.has(taskId) || session.frames.ended)
+    throw new Error("That work has already finished.");
+  await session.stream.stopTask(taskId);
 }
 /** Ends the current turn. Frames it didn't consume belong to whatever Claude does next. */
 function release(session: ClaudeSession) {
@@ -443,6 +497,8 @@ export async function runClaudeProject(
         controller,
         plan: "",
         busy: true,
+        tasks: new Map(),
+        wakeups: [] as ClaudeSession["wakeups"],
       } as ClaudeSession;
       const permissions = claudePermissionMode(options);
       const config: Options = {
@@ -473,6 +529,27 @@ export async function runClaudeProject(
           ? { effort: options.effort as NonNullable<Options["effort"]> }
           : {}),
         hooks: {
+          // Scheduled wake-ups send no stream events; the end of each turn lists them.
+          Stop: [
+            {
+              hooks: [
+                async (input) => {
+                  const crons =
+                    "session_crons" in input ? (input.session_crons ?? []) : [];
+                  holder.wakeups = crons.slice(0, 20).map((cron) => ({
+                    kind: "wakeup" as const,
+                    id: cron.id,
+                    prompt: cron.prompt.slice(0, 1000),
+                    recurring: cron.recurring,
+                    ...(cron.recurring
+                      ? {}
+                      : { at: wakeupTime(cron.schedule) }),
+                  }));
+                  return {};
+                },
+              ],
+            },
+          ],
           // Relay's private environment note reaches Claude without entering the transcript.
           UserPromptSubmit: [
             {

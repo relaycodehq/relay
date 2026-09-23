@@ -1,6 +1,11 @@
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { runClaudeProject } from "../../electron/rooms/claude-project";
+import {
+  claudePending,
+  runClaudeProject,
+  stopClaudeTask,
+  wakeupTime,
+} from "../../electron/rooms/claude-project";
 import type { AgentActivity } from "../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
@@ -92,6 +97,109 @@ it("still reports an empty answer to the prompt itself", async () => {
     result(""),
   ]);
   await expect(run()).rejects.toThrow("Claude returned an empty answer.");
+});
+
+it("lists the background work and wake-ups Claude leaves running", async () => {
+  const stopTask = vi.fn(async () => {});
+  let finish!: () => void;
+  const finished = new Promise<void>((resolve) => (finish = resolve));
+  let options!: NonNullable<Parameters<typeof query>[0]["options"]>;
+  const tasks = (...list: object[]) => ({
+    type: "system",
+    subtype: "background_tasks_changed",
+    tasks: list,
+    session_id,
+  });
+  vi.mocked(query).mockImplementation((params) => {
+    options = params.options!;
+    const input = (params.prompt as AsyncIterable<{ uuid: string }>)[
+      Symbol.asyncIterator
+    ]();
+    return Object.assign(
+      (async function* () {
+        const sent = await input.next();
+        yield lifecycle(sent.value.uuid, "started");
+        yield tasks(
+          { task_id: "ab", task_type: "local_bash", description: "Run A/B" },
+          {
+            task_id: "watch",
+            task_type: "monitor",
+            description: "Watch logs",
+            ambient: true,
+          },
+        );
+        await options.hooks!.Stop![0].hooks[0](
+          {
+            hook_event_name: "Stop",
+            session_crons: [
+              {
+                id: "later",
+                schedule: "30 19 23 9 *",
+                recurring: false,
+                prompt: "Compare the runs",
+              },
+            ],
+          } as never,
+          undefined,
+          { signal: new AbortController().signal },
+        );
+        yield answer("Running it.");
+        yield result("Running it.");
+        await finished;
+        // The command ended; Claude's next turn starts from here.
+        yield tasks();
+        await new Promise(() => {});
+      })(),
+      { close() {}, stopTask },
+    ) as unknown as ReturnType<typeof query>;
+  });
+  const key = crypto.randomUUID();
+  await runClaudeProject({
+    cwd: "/project",
+    prompt: "Run the A/B.",
+    choice: {} as never,
+    model: "",
+    effort: "",
+    signal: new AbortController().signal,
+    onText() {},
+    session: { key, id: session_id, async onId() {} },
+  });
+  expect(claudePending(key)).toEqual([
+    {
+      kind: "task",
+      id: "ab",
+      description: "Run A/B",
+      since: expect.any(Number),
+    },
+    {
+      kind: "wakeup",
+      id: "later",
+      prompt: "Compare the runs",
+      recurring: false,
+      at: wakeupTime("30 19 23 9 *"),
+    },
+  ]);
+  await stopClaudeTask(key, "ab");
+  expect(stopTask).toHaveBeenCalledWith("ab");
+  await expect(stopClaudeTask(key, "later")).rejects.toThrow(
+    "That work has already finished.",
+  );
+  finish();
+  await vi.waitFor(() =>
+    expect(claudePending(key).map((p) => p.id)).toEqual(["later"]),
+  );
+});
+
+it("reads a one-shot wake-up's fire time from its cron", () => {
+  const now = new Date(2026, 8, 23, 19, 11).getTime();
+  expect(wakeupTime("30 19 23 9 *", now)).toBe(
+    new Date(2026, 8, 23, 19, 30).getTime(),
+  );
+  // Early January, scheduled in late December: next year.
+  expect(wakeupTime("5 0 2 1 *", new Date(2026, 11, 31).getTime())).toBe(
+    new Date(2027, 0, 2, 0, 5).getTime(),
+  );
+  expect(wakeupTime("*/5 * * * *", now)).toBeUndefined();
 });
 
 it("nests a subagent's calls under its agent call and reports its progress", async () => {

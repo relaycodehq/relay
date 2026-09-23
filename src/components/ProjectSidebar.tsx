@@ -154,6 +154,15 @@ function StatusMark({
         <i />
       </span>
     );
+  if (chat.pending?.length)
+    return (
+      <span
+        className="sb-status pending"
+        title="Claude will continue on its own"
+      >
+        <i />
+      </span>
+    );
   return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
 }
 

@@ -130,9 +130,16 @@ let devops: DevOps;
 let projects: Projects;
 let projectChats: ProjectChats;
 const pullRequestCreation = new PullRequestCreation();
-const updater = new Updater((state) => {
-  if (win && !win.isDestroyed()) win.webContents.send("relay:update", state);
-});
+const updater = new Updater(
+  (state) => {
+    if (win && !win.isDestroyed()) win.webContents.send("relay:update", state);
+  },
+  {
+    runningTasks: () => projectChats?.runningTasks().length ?? 0,
+    // Restarting for an update was the user's call, tasks or not.
+    beforeQuit: () => (quitConfirmed = true),
+  },
+);
 const liveSyncs = new Map<string, LiveSync>();
 const startingLiveSyncRoots = new Set<string>();
 async function stopSyncs() {
@@ -267,7 +274,9 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 let quitReady = false,
-  flushing = false;
+  flushing = false,
+  quitConfirmed = false,
+  askingToQuit = false;
 app.on("before-quit", (event) => {
   if (quitReady || !store) {
     blame.dispose();
@@ -275,6 +284,37 @@ app.on("before-quit", (event) => {
     return;
   }
   event.preventDefault();
+  // Quitting ends Claude's sessions, and the background work they run.
+  const tasks = quitConfirmed ? [] : (projectChats?.runningTasks() ?? []);
+  if (tasks.length) {
+    if (askingToQuit) return;
+    askingToQuit = true;
+    void dialog
+      .showMessageBox({
+        type: "warning",
+        message:
+          tasks.length === 1
+            ? "Claude is still running something in the background."
+            : `Claude is still running ${tasks.length} things in the background.`,
+        detail: [
+          ...tasks
+            .slice(0, 5)
+            .map((t) => `• ${t.kind === "task" ? t.description : ""}`),
+          "",
+          "Quitting stops it. Relay will offer to pick it back up next time.",
+        ].join("\n"),
+        buttons: ["Quit Anyway", "Keep Running"],
+        defaultId: 1,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        askingToQuit = false;
+        if (response !== 0) return;
+        quitConfirmed = true;
+        app.quit();
+      });
+    return;
+  }
   triage?.cancel();
   if (flushing) return;
   flushing = true;
@@ -675,6 +715,16 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         })),
       };
     }
+    case "resolveStoppedWork":
+      return projectChats.resolveStoppedWork(
+        idSchema.parse(args[0]),
+        z.enum(["resume", "dismiss"]).parse(args[1]),
+      );
+    case "stopProjectChatPending":
+      return projectChats.stopPending(
+        idSchema.parse(args[0]),
+        z.string().min(1).max(200).parse(args[1]),
+      );
     case "projectChatPresence":
       return projectChats.presence(
         idSchema.parse(args[0]),
@@ -1483,6 +1533,7 @@ app
         };
       }
     });
+    projectChats.armWakeups();
     updater.start();
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([

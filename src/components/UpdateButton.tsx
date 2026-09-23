@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowDownToLine, RotateCw } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Clock, RotateCw } from "lucide-react";
 import { api } from "../lib/api";
 import { releasesPage, type UpdateState } from "../../shared/updates";
 import { Spinner } from "./ui";
@@ -65,6 +65,18 @@ export function UpdateButton() {
         >
           <RotateCw size={13} />
           Restart
+        </button>
+      );
+    case "waiting":
+      return (
+        <button
+          type="button"
+          className="sb-update"
+          title={`Relay ${state.version} restarts once Claude's background work finishes (${state.tasks} running). Click to restart now; that work stops.`}
+          onClick={() => void api.installUpdate()}
+        >
+          <Clock size={13} />
+          After tasks
         </button>
       );
     case "installing":

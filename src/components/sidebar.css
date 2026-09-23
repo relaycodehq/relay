@@ -600,6 +600,11 @@
 .sb-status.running {
   color: var(--accent);
 }
+/* Claude left work running that will start its next turn: hollow, still. */
+.sb-status.pending i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
 .sb-status.waiting i {
   position: relative;
   background: var(--sb-waiting);

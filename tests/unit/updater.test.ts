@@ -80,3 +80,40 @@ it("gives up on a stalled connection", async () => {
   await vi.advanceTimersByTimeAsync(60_000);
   await settled;
 });
+
+/** An updater with a download staged, whose install fails harmlessly. */
+function staged(runningTasks: () => number) {
+  process.env.APPIMAGE = join(tmpdir(), "relay-missing-dir", "Relay.AppImage");
+  const updater = new Updater(() => {}, { runningTasks, beforeQuit() {} });
+  Object.assign(updater as any, {
+    state: { status: "ready", current: "0.1.0", version: "0.2.0" },
+    staged: { version: "0.2.0", path: join(tmpdir(), "relay-missing-update") },
+    install: { target: "linux-x64-appimage" },
+  });
+  return updater;
+}
+
+it("holds the restart until Claude's background work finishes", async () => {
+  vi.useFakeTimers();
+  let tasks = 2;
+  const updater = staged(() => tasks);
+  expect(await updater.installAndRestart()).toMatchObject({
+    status: "waiting",
+    tasks: 2,
+  });
+  tasks = 1;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(updater.current).toMatchObject({ status: "waiting", tasks: 1 });
+  tasks = 0;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(updater.current.status).toBe("installing");
+  vi.useRealTimers();
+  // The staged file is missing, so the install itself fails.
+  await vi.waitFor(() => expect(updater.current.status).toBe("error"));
+});
+
+it("restarts right away when asked again while waiting", async () => {
+  const updater = staged(() => 1);
+  await updater.installAndRestart();
+  expect((await updater.installAndRestart()).status).toBe("error");
+});

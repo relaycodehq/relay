@@ -1,0 +1,120 @@
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { Store } from "../../electron/store";
+import { Projects } from "../../electron/projects";
+import { ProjectChats } from "../../electron/project-chats";
+import { claudePending } from "../../electron/rooms/claude-project";
+import type { ChatPending } from "../../shared/projects";
+
+vi.mock("../../electron/rooms/claude-project", async (actual) => ({
+  ...(await actual<typeof import("../../electron/rooms/claude-project")>()),
+  claudePending: vi.fn(() => []),
+  closeClaudeSession: vi.fn(),
+}));
+
+let root: string, store: Store, projects: Projects, chats: ProjectChats;
+let projectId: string;
+beforeEach(async () => {
+  root = await realpath(await mkdtemp(join(tmpdir(), "relay-pending-")));
+  const repo = join(root, "repo");
+  await mkdir(repo);
+  execFileSync("git", ["init", "--quiet", repo]);
+  store = new Store(join(root, "state"));
+  await store.load();
+  projects = new Projects(store);
+  projectId = (await projects.add(repo, null)).id;
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+});
+afterEach(async () => {
+  vi.useRealTimers();
+  vi.mocked(claudePending).mockReset().mockReturnValue([]);
+  await chats.dispose();
+  await rm(root, { recursive: true, force: true });
+});
+
+/** A live Claude session for the thread, with this work outstanding. */
+function leave(chatId: string, items: ChatPending[]) {
+  const key = JSON.stringify([join(root, "chats"), chatId, "main"]);
+  (chats as unknown as { providerSessions: Set<string> }).providerSessions.add(
+    key,
+  );
+  vi.mocked(claudePending).mockImplementation((k) => (k === key ? items : []));
+}
+
+const task: ChatPending = {
+  kind: "task",
+  id: "ab",
+  description: "Run A/B",
+  since: 1,
+};
+const loop: ChatPending = {
+  kind: "wakeup",
+  id: "loop",
+  prompt: "Check CI",
+  recurring: true,
+};
+
+it("keeps what Claude was waiting on when Relay closes", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const at = Date.now() + 60_000;
+  leave(chat.id, [
+    task,
+    loop,
+    { kind: "wakeup", id: "later", prompt: "Compare", recurring: false, at },
+  ]);
+  expect(chats.runningTasks()).toEqual([task]);
+  await chats.dispose();
+  vi.mocked(claudePending).mockReturnValue([]);
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  const [summary] = chats.list(projectId);
+  expect(summary.stopped?.items).toEqual([task, loop]);
+  // Relay sends the one-shot wake-up itself; it shows as still pending.
+  expect(summary.pending).toEqual([
+    {
+      kind: "wakeup",
+      id: "later",
+      prompt: "Compare",
+      recurring: false,
+      at,
+      held: true,
+    },
+  ]);
+  await chats.resolveStoppedWork(chat.id, "dismiss");
+  expect(chats.list(projectId)[0].stopped).toBeUndefined();
+  // Cancelling a held wake-up just forgets it.
+  await chats.stopPending(chat.id, "later");
+  expect(chats.list(projectId)[0].pending).toBeUndefined();
+});
+
+it("sends a kept wake-up itself once it comes due", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  leave(chat.id, [
+    {
+      kind: "wakeup",
+      id: "due",
+      prompt: "Compare the runs",
+      recurring: false,
+      at: Date.now() - 1000,
+    },
+  ]);
+  await chats.dispose();
+  vi.mocked(claudePending).mockReturnValue([]);
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  const send = vi.spyOn(chats, "send").mockResolvedValue(undefined);
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  chats.armWakeups();
+  // Missed while closed: it goes out shortly after launch, not at once.
+  await vi.advanceTimersByTimeAsync(14_000);
+  expect(send).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1_000);
+  vi.useRealTimers();
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(send.mock.calls[0][1]).toMatchObject({
+    provider: "claude",
+    body: expect.stringContaining("Compare the runs"),
+  });
+  expect(chats.list(projectId)[0].heldWakeups).toBeUndefined();
+});
