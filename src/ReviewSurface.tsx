@@ -13,7 +13,7 @@ import {
   type FileSelection,
 } from "./components/GroupedFileList";
 import { TriageControls } from "./components/TriageControls";
-import { isAnalyzing } from "../shared/triage";
+import { isAnalyzing, notedPaths } from "../shared/triage";
 import { useEffect, useRef, useState, useMemo, lazy, Suspense } from "react";
 import {
   useInfiniteQuery,
@@ -415,8 +415,7 @@ export function Connected({
   const reviewGroups = useMemo(() => {
     const excluded = new Set([
       ...commentPaths,
-      ...progress.drafts.map((d) => d.path),
-      ...progress.marks.map((m) => m.path),
+      ...notedPaths(progress, revision),
     ]);
     return (analysisResult?.groups ?? [])
       .map((group) => ({
@@ -424,7 +423,7 @@ export function Connected({
         paths: group.paths.filter((path) => !excluded.has(path)),
       }))
       .filter((group) => group.paths.length >= 2);
-  }, [analysisResult, commentPaths, progress.drafts, progress.marks]);
+  }, [analysisResult, commentPaths, progress.drafts, progress.marks, revision]);
   useEffect(() => {
     setCommentPaths([]);
     setAnalysisError(undefined);
@@ -935,8 +934,7 @@ export function Connected({
                     );
                   const next = progressController.update((p) => {
                     const protectedPaths = new Set([
-                      ...p.drafts.map((d) => d.path),
-                      ...p.marks.map((m) => m.path),
+                      ...notedPaths(p, revision),
                       ...commentPaths,
                     ]);
                     const read = { ...p.read };

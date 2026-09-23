@@ -1,5 +1,5 @@
 import type { AgentProvider, ReasoningEffort } from "./settings";
-import type { ChangedFile } from "./types";
+import type { ChangedFile, Progress } from "./types";
 export const TRIAGE_VERSION = 2;
 export const TRIAGE_MODEL = "gpt-5.6-luna";
 export interface ChangeGroup {
@@ -61,3 +61,14 @@ export const isAnalyzing = (state?: TriageState | null) =>
   state?.status === "scanning" ||
   state?.status === "classifying" ||
   state?.status === "matching";
+/** Files with the reader's own drafts or bookmarks stay out of groups. A
+ * bookmark shows only on the revision it was made on, so only there does it count. */
+export const notedPaths = (
+  progress: Progress | undefined,
+  revision: string,
+) => [
+  ...(progress?.drafts.map((d) => d.path) ?? []),
+  ...(progress?.marks
+    .filter((m) => m.revision === revision)
+    .map((m) => m.path) ?? []),
+];

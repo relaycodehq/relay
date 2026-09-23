@@ -637,6 +637,38 @@ describe("Analysis lifecycle and durable groups", () => {
       ),
     ).rejects.toThrow("discussions");
   });
+  it("groups a file whose only bookmark is on an earlier revision, where it no longer shows", async () => {
+    const f = await fixture();
+    await f.store.update((s) => {
+      s.progress.key = {
+        read: {},
+        drafts: [],
+        marks: [
+          {
+            id: "m",
+            path: "one.ts",
+            start: 1,
+            end: 1,
+            side: "additions",
+            revision: `${base}:${"c".repeat(40)}`,
+          },
+        ],
+      };
+    });
+    await f.service.start(f.client, ref, "key", head, base);
+    const state = await finish(f);
+    expect(state.result!.groups[0]?.paths).toEqual(["one.ts", "two.ts"]);
+    expect(
+      await f.service.groupPaths(
+        f.client,
+        ref,
+        "key",
+        head,
+        base,
+        state.result!.groups[0].id,
+      ),
+    ).toEqual(["one.ts", "two.ts"]);
+  });
   it("pauses a running request with a durable retry queue", async () => {
     const f = await fixture(
       vi.fn(

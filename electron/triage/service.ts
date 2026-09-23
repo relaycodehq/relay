@@ -12,6 +12,7 @@ import type {
 import { revisionOf } from "../../shared/types";
 import {
   TRIAGE_VERSION,
+  notedPaths,
   type TriageState,
   type TriageResult,
 } from "../../shared/triage";
@@ -139,13 +140,12 @@ export class TriageService {
     client: Gitea,
     ref: PullRef,
     key: string,
+    revision: string,
     signal?: AbortSignal,
   ) {
-    const progress = this.store.get().progress[key];
-    const protectedPaths = new Set([
-      ...(progress?.drafts.map((d) => d.path) ?? []),
-      ...(progress?.marks.map((m) => m.path) ?? []),
-    ]);
+    const protectedPaths = new Set(
+      notedPaths(this.store.get().progress[key], revision),
+    );
     for (let page: number | null = 1, count = 0; page !== null;) {
       signal?.throwIfAborted();
       if (++count > 40)
@@ -195,7 +195,12 @@ export class TriageService {
       throw new Error(
         "This PR has new commits. Refresh before marking a group viewed.",
       );
-    const protectedPaths = await this.protectedPaths(client, ref, key);
+    const protectedPaths = await this.protectedPaths(
+      client,
+      ref,
+      key,
+      revision,
+    );
     const paths = group.paths.filter((p) => !protectedPaths.has(p));
     if (!paths.length)
       throw new Error(
@@ -264,7 +269,13 @@ export class TriageService {
     }
     const checkpoint =
       previous?.checkpoint ?? freshCheckpoint(files.map((f) => f.filename));
-    let protectedPaths = await this.protectedPaths(client, ref, key, signal);
+    let protectedPaths = await this.protectedPaths(
+      client,
+      ref,
+      key,
+      state.revision,
+      signal,
+    );
     const usage = { ...(previous?.result.usage ?? freshUsage()) };
     const startedUsage = { ...usage };
     const candidates = new Map(checkpoint.candidates.map((c) => [c.path, c]));
@@ -437,7 +448,13 @@ export class TriageService {
       }
       signal.throwIfAborted();
       await verifyRevision();
-      protectedPaths = await this.protectedPaths(client, ref, key, signal);
+      protectedPaths = await this.protectedPaths(
+        client,
+        ref,
+        key,
+        state.revision,
+        signal,
+      );
       await publish(
         remainingPaths(checkpoint).length
           ? budgetReached
