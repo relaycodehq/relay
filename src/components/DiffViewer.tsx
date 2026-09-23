@@ -15,7 +15,6 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   CodeViewDiffItem,
   DiffLineAnnotation,
-  FileDiffMetadata,
   SelectedLineRange,
   CodeViewLineSelection,
 } from "@pierre/diffs";
@@ -42,7 +41,7 @@ import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
-import DiffWorker from "../lib/diff.worker?worker";
+import { useFileDiff } from "../lib/useFileDiff";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 interface Props {
   checks?: ProjectCheckState | null;
@@ -163,14 +162,13 @@ export function DiffViewer({
         : [],
     [checks, file.filename],
   );
-  const [diff, setDiff] = useState<FileDiffMetadata>(),
-    [diffError, setDiffError] = useState<unknown>(),
-    [selection, setSelection] = useState<CodeViewLineSelection | null>(null),
-    [composer, setComposer] = useState<{
+  const { diff, error: diffError } = useFileDiff(contents.data);
+  const [composer, setComposer] = useState<{
       id: string;
       line: number;
       side: Side;
-    } | null>(null);
+    } | null>(null),
+    [selection, setSelection] = useState<CodeViewLineSelection | null>(null);
   const revision = revisionOf(pull);
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
@@ -178,36 +176,6 @@ export function DiffViewer({
   const isLarge =
     !!diff &&
     Math.max(diff.additionLines.length, diff.deletionLines.length) > 5000;
-  useEffect(() => {
-    if (!contents.data || contents.data.binary) return;
-    setDiff(undefined);
-    setDiffError(undefined);
-    const worker = new DiffWorker();
-    const timer = setTimeout(() => {
-      worker.terminate();
-      setDiffError(
-        new Error(
-          "This diff took too long to compute. Open the file in your local editor.",
-        ),
-      );
-    }, 12000);
-    worker.onmessage = (e) => {
-      clearTimeout(timer);
-      if (e.data.error) setDiffError(new Error(e.data.error));
-      else setDiff(e.data.value);
-      worker.terminate();
-    };
-    worker.onerror = () => {
-      clearTimeout(timer);
-      setDiffError(new Error("Could not compute this diff. Refresh to retry."));
-      worker.terminate();
-    };
-    worker.postMessage(contents.data);
-    return () => {
-      clearTimeout(timer);
-      worker.terminate();
-    };
-  }, [contents.data]);
   const annotations = useMemo(() => {
     const map = new Map<string, DiffLineAnnotation<Annotation>>();
     const get = (line: number, side: Side) => {

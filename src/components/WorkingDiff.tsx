@@ -3,14 +3,13 @@ import { useElementWidth } from "../lib/useElementWidth";
 import type {
   CodeViewDiffItem,
   CodeViewLineSelection,
-  FileDiffMetadata,
   SelectedLineRange,
 } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { Columns2, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
-import DiffWorker from "../lib/diff.worker?worker";
+import { useFileDiff } from "../lib/useFileDiff";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { labelDiffGapControls } from "../lib/diffGapControls";
@@ -68,8 +67,7 @@ export function WorkingDiff({
 }) {
   const syntaxThemes = useSyntaxThemes();
   const theme = useTheme(),
-    [diff, setDiff] = useState<FileDiffMetadata | null>(null),
-    [error, setError] = useState<unknown>(),
+    { diff, error } = useFileDiff(pair),
     [selection, setSelection] = useState<CodeViewLineSelection | null>(null),
     [selectionError, setSelectionError] = useState("");
   // Side-by-side needs room; narrow panes read better as a unified diff.
@@ -77,20 +75,7 @@ export function WorkingDiff({
     width = useElementWidth(frame);
   // The viewer mounts once the syntax workers are ready, after the diff.
   const [viewer, setViewer] = useState<Viewer | null>(null);
-  useEffect(() => {
-    setDiff(null);
-    setError(undefined);
-    setSelection(null);
-    if (pair.binary) return;
-    const worker = new DiffWorker();
-    worker.onmessage = (e) => {
-      if (e.data.error) setError(e.data.error);
-      else setDiff(e.data.value);
-    };
-    worker.onerror = (e) => setError(e.message);
-    worker.postMessage(pair);
-    return () => worker.terminate();
-  }, [pair]);
+  useEffect(() => setSelection(null), [pair]);
   const items = useMemo<CodeViewDiffItem[]>(
     () => (diff ? [{ id: "working", type: "diff", fileDiff: diff }] : []),
     [diff],

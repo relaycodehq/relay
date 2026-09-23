@@ -32,7 +32,7 @@ import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
-import DiffWorker from "../lib/diff.worker?worker";
+import { useFileDiff } from "../lib/useFileDiff";
 
 const keymap: EditorKeymap = [
   {
@@ -74,7 +74,6 @@ export default function LocalFileEditor({
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
   const [source, setSource] = useState<LocalFile>();
-  const [diff, setDiff] = useState<FileDiffMetadata>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const [needsFolder, setNeedsFolder] = useState(false);
@@ -99,6 +98,27 @@ export default function LocalFileEditor({
     head: { sha: source?.head ?? project!.head },
   };
   const revision = pull?.head.sha ?? source?.head ?? project!.head;
+  const compared = useFileDiff(
+    useMemo(
+      () =>
+        source && {
+          editable: true,
+          old: {
+            name: path,
+            contents: source.original,
+            cacheKey: `${revision}:${path}`,
+          },
+          next: {
+            name: path,
+            contents: source.contents,
+            cacheKey: `local:${source.version}`,
+          },
+          binary: false,
+        },
+      [source],
+    ),
+  );
+  const diff = compared.diff;
   useEffect(
     () => onDirtyChange?.(dirty || saving),
     [dirty, saving, onDirtyChange],
@@ -232,7 +252,6 @@ export default function LocalFileEditor({
       version.current = file.version;
       setDirty(false);
       setSaved(false);
-      setDiff(undefined);
       setSource(file);
     } catch (error) {
       if (isCurrent()) setError(error);
@@ -248,47 +267,6 @@ export default function LocalFileEditor({
       loadGeneration.current++;
     };
   }, []);
-  useEffect(() => {
-    if (!source) return;
-    const worker = new DiffWorker();
-    const timer = setTimeout(() => {
-      worker.terminate();
-      setError(
-        new Error(
-          "This file took too long to compare. Use your IDE for this file.",
-        ),
-      );
-    }, 12000);
-    worker.onmessage = (event) => {
-      clearTimeout(timer);
-      if (event.data.error) setError(new Error(event.data.error));
-      else setDiff(event.data.value);
-      worker.terminate();
-    };
-    worker.onerror = () => {
-      clearTimeout(timer);
-      setError(new Error("The editor could not compare this file."));
-      worker.terminate();
-    };
-    worker.postMessage({
-      editable: true,
-      old: {
-        name: path,
-        contents: source.original,
-        cacheKey: `${revision}:${path}`,
-      },
-      next: {
-        name: path,
-        contents: source.contents,
-        cacheKey: `local:${source.version}`,
-      },
-      binary: false,
-    });
-    return () => {
-      clearTimeout(timer);
-      worker.terminate();
-    };
-  }, [source]);
   const items = useMemo<CodeViewDiffItem[]>(
     () =>
       diff
@@ -450,7 +428,9 @@ export default function LocalFileEditor({
         </span>
         {source && <small>{source.branch}</small>}
       </div>
-      {!!error && <ErrorBox error={error} />}
+      {!!(error || compared.error) && (
+        <ErrorBox error={error || compared.error} />
+      )}
       {confirmation && (
         <div className="editor-confirmation" role="alert">
           <strong>Keep your unsaved edits?</strong>
