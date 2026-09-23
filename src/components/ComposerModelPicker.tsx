@@ -14,6 +14,7 @@ import {
 import {
   modelSchema,
   type ClaudeModel,
+  type CodexModel,
   type ModelChoice,
 } from "../../shared/settings";
 import type { ProviderUsage } from "../../shared/provider-usage";
@@ -34,17 +35,10 @@ type Model = {
   description?: string;
 };
 const models: Model[] = [
-  { provider: "codex", id: "gpt-6-astra", name: "GPT-6-Astra" },
-  { provider: "codex", id: "gpt-5.6-sol", name: "GPT-5.6-Sol" },
-  { provider: "codex", id: "gpt-5.6-terra", name: "GPT-5.6-Terra" },
-  { provider: "codex", id: "gpt-5.6-luna", name: "GPT-5.6-Luna" },
-  { provider: "codex", id: "gpt-5.5", name: "GPT-5.5", legacy: true },
   { provider: "codex", id: "", name: "Codex default" },
   { provider: "claude", id: "", name: "Claude default" },
   { provider: "message", id: "", name: "Message only" },
 ];
-/** Named Codex models, for commands that set one without opening the picker. */
-export const codexModels = models.filter((m) => m.provider === "codex" && m.id);
 const providerNames = { codex: "Codex", claude: "Claude", message: "No agent" };
 const modelKey = (m: Model) => JSON.stringify([m.provider, m.id]);
 const favoritesKey = "relay-model-favorites";
@@ -75,6 +69,7 @@ export function ComposerModelPicker({
   choice,
   claudeModel,
   claudeModels,
+  codexModels,
   onOpen,
   onSelect,
   providers,
@@ -88,6 +83,8 @@ export function ComposerModelPicker({
   claudeModel: string;
   /** Listed by the installed Claude CLI; undefined while loading. */
   claudeModels: ClaudeModel[] | undefined;
+  /** Listed by the installed Codex CLI, or its built-in stand-in. */
+  codexModels: CodexModel[];
   onOpen?: () => void;
   onSelect: (provider: MessageProvider, model: string) => void;
   /** Limits the rail to these agents, without favorites or message-only. */
@@ -122,20 +119,32 @@ export function ComposerModelPicker({
         ? claudeModel
         : "",
   ]);
-  // CLI-listed Claude models sit above "Claude default", like Codex presets.
+  // CLI-listed models sit above each agent's default.
   const catalog = models.flatMap((m): Model[] =>
-    m.provider === "claude"
+    m.provider === "codex"
       ? [
-          ...(claudeModels ?? []).map((c) => ({
-            provider: "claude" as const,
+          ...codexModels.map((c) => ({
+            provider: "codex" as const,
             id: c.id,
             name: c.name,
             description: c.description,
+            legacy: c.legacy,
           })),
           m,
         ]
-      : [m],
+      : m.provider === "claude"
+        ? [
+            ...(claudeModels ?? []).map((c) => ({
+              provider: "claude" as const,
+              id: c.id,
+              name: c.name,
+              description: c.description,
+            })),
+            m,
+          ]
+        : [m],
   );
+  const legacyCount = codexModels.filter((m) => m.legacy).length;
   if (
     claudeModel &&
     !catalog.some((m) => m.provider === "claude" && m.id === claudeModel)
@@ -252,7 +261,10 @@ export function ComposerModelPicker({
       onClick={() => setLegacy((v) => !v)}
     >
       <span>
-        Legacy models<small>1 model</small>
+        Legacy models
+        <small>
+          {legacyCount} model{legacyCount === 1 ? "" : "s"}
+        </small>
       </span>
       <ChevronRight size={15} className={legacy ? "expanded" : ""} />
     </button>
@@ -417,7 +429,8 @@ export function ComposerModelPicker({
                                         ? m.id
                                           ? m.description || "Claude"
                                           : "Claude · CLI default"
-                                        : providerNames[m.provider]}
+                                        : m.description ||
+                                          providerNames[m.provider]}
                                   </span>
                                 </small>
                               </div>
@@ -480,6 +493,7 @@ export function ComposerModelPicker({
                     {category === "codex" &&
                       !query.trim() &&
                       !legacy &&
+                      legacyCount > 0 &&
                       legacyToggle}
                   </div>
                 </Combobox.Root>

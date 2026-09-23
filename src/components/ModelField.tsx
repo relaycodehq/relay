@@ -11,6 +11,7 @@ import {
   type ModelChoice,
 } from "../../shared/settings";
 import { api } from "../lib/api";
+import { useCodexModels } from "../lib/useCodexModels";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { ComposerSelect } from "./ComposerSelect";
 import "./composer-model-picker.css";
@@ -48,12 +49,13 @@ export function ModelField({
   });
   // A failed probe lists no CLI models rather than loading forever.
   const claudeModels = claude.isError ? [] : claude.data;
+  const codex = useCodexModels();
   const claudeEffortsFor = (model: string) =>
     claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
   const efforts =
     agent === "claude"
       ? claudeEffortsFor(value.model)
-      : reasoningEffortsFor(value.model);
+      : reasoningEffortsFor(value.model, codex.models);
   return (
     <div
       ref={ref}
@@ -71,8 +73,10 @@ export function ModelField({
         choice={agent === "codex" ? value : { ...value, model: "" }}
         claudeModel={agent === "claude" ? value.model : ""}
         claudeModels={claudeModels}
+        codexModels={codex.models}
         onOpen={() => {
           if (provider && !claude.data?.length) void claude.refetch();
+          codex.retry();
         }}
         onSelect={(next, model) => {
           if (next === "message") return;
@@ -81,7 +85,7 @@ export function ModelField({
           const keep =
             next === "claude"
               ? claudeEffortsFor(model).includes(choice.reasoningEffort)
-              : supportsEffort(choice);
+              : supportsEffort(choice, codex.models);
           onChange(
             {
               ...choice,

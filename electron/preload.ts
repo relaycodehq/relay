@@ -128,6 +128,7 @@ const methods = [
   "devopsWorkItems",
   "providerUsage",
   "claudeModels",
+  "codexModels",
   "openExternal",
   "updateState",
   "checkForUpdates",

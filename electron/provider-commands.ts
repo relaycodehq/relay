@@ -1,7 +1,16 @@
+import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { findExecutable, spawnExecutable } from "./executables";
-import { withCodexTransport } from "./rooms/codex-transport";
+import {
+  withCodexTransport,
+  type CodexTransport,
+} from "./rooms/codex-transport";
+import {
+  modelSchema,
+  reasoningEffortSchema,
+  type CodexModel,
+} from "../shared/settings";
 const skillSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_.:-]+$/),
   path: z.string().refine(isAbsolute),
@@ -33,9 +42,93 @@ export function codexSkills(root: string): Promise<CodexSkill[]> {
   cache.set(root, { expires: Date.now() + 60000, result });
   return result;
 }
-async function discover(root: string): Promise<CodexSkill[]> {
+function discover(root: string): Promise<CodexSkill[]> {
+  return withAppServer(root, "loading skills", async (wire) => {
+    const response = await wire.request("skills/list", { cwds: [root] });
+    const entries = z
+      .object({
+        data: z
+          .array(
+            z.object({
+              cwd: z.string(),
+              skills: z.array(z.unknown()).max(5000),
+            }),
+          )
+          .max(100),
+      })
+      .parse(response).data;
+    return (entries.find((e) => e.cwd === root)?.skills ?? []).flatMap(
+      (value) => {
+        const parsed = skillSchema.safeParse(value);
+        return parsed.success && parsed.data.enabled !== false
+          ? [parsed.data]
+          : [];
+      },
+    );
+  });
+}
+const modelEntrySchema = z.object({
+  id: z.string(),
+  model: z.string().optional(),
+  displayName: z.string().nullish(),
+  description: z.string().nullish(),
+  hidden: z.boolean().nullish(),
+  upgrade: z.unknown().optional(),
+  supportedReasoningEfforts: z
+    .array(z.object({ reasoningEffort: z.string() }))
+    .max(20)
+    .nullish(),
+});
+const modelPageSchema = z.object({
+  data: z.array(z.unknown()).max(500),
+  nextCursor: z.string().nullish(),
+});
+let modelList: Promise<CodexModel[]> | undefined;
+/** Asks the installed CLI which models this account can use, once per launch. */
+export function codexModels(): Promise<CodexModel[]> {
+  modelList ??= withAppServer(homedir(), "listing models", async (wire) => {
+    const models: CodexModel[] = [];
+    let cursor: string | null | undefined;
+    for (let page = 0; page < 10; page++) {
+      const response = modelPageSchema.parse(
+        await wire.request("model/list", cursor ? { cursor } : {}),
+      );
+      for (const value of response.data) {
+        const entry = modelEntrySchema.safeParse(value).data;
+        const id = modelSchema.safeParse(entry?.model ?? entry?.id).data;
+        if (!entry || !id || entry.hidden) continue;
+        models.push({
+          id,
+          name: entry.displayName || id,
+          description: entry.description ?? "",
+          efforts: (entry.supportedReasoningEfforts ?? []).flatMap(
+            ({ reasoningEffort }) => {
+              const effort = reasoningEffortSchema.safeParse(reasoningEffort);
+              return effort.success && effort.data ? [effort.data] : [];
+            },
+          ),
+          legacy: entry.upgrade != null,
+        });
+      }
+      cursor = response.nextCursor;
+      if (!cursor) break;
+    }
+    return models;
+  }).catch((e) => {
+    // Let the next caller ask again, e.g. after signing in.
+    modelList = undefined;
+    throw e;
+  });
+  return modelList;
+}
+/** Runs one exchange with a short-lived `codex app-server`. */
+async function withAppServer<T>(
+  cwd: string,
+  task: string,
+  run: (wire: CodexTransport) => Promise<T>,
+): Promise<T> {
   const child = spawnExecutable(await findExecutable("codex"), ["app-server"], {
-    cwd: root,
+    cwd,
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stderr.resume();
@@ -45,11 +138,9 @@ async function discover(root: string): Promise<CodexSkill[]> {
   });
   void failed.catch(() => {});
   child.on("error", fail);
-  child.on("close", () =>
-    fail(new Error("Codex stopped while loading skills.")),
-  );
+  child.on("close", () => fail(new Error(`Codex stopped while ${task}.`)));
   const timer = setTimeout(
-    () => fail(new Error("Codex skill discovery timed out.")),
+    () => fail(new Error(`Codex timed out while ${task}.`)),
     12000,
   );
   try {
@@ -69,27 +160,7 @@ async function discover(root: string): Promise<CodexSkill[]> {
             capabilities: { experimentalApi: true },
           });
           await wire.notify("initialized");
-          const response = await wire.request("skills/list", { cwds: [root] });
-          const entries = z
-            .object({
-              data: z
-                .array(
-                  z.object({
-                    cwd: z.string(),
-                    skills: z.array(z.unknown()).max(5000),
-                  }),
-                )
-                .max(100),
-            })
-            .parse(response).data;
-          return (entries.find((e) => e.cwd === root)?.skills ?? []).flatMap(
-            (value) => {
-              const parsed = skillSchema.safeParse(value);
-              return parsed.success && parsed.data.enabled !== false
-                ? [parsed.data]
-                : [];
-            },
-          );
+          return run(wire);
         },
       ),
     ]);

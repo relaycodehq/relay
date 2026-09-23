@@ -46,7 +46,8 @@ import type { ProjectChatSend } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import { api } from "../lib/api";
-import { ComposerModelPicker, codexModels } from "./ComposerModelPicker";
+import { ComposerModelPicker } from "./ComposerModelPicker";
+import { useCodexModels } from "../lib/useCodexModels";
 import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
@@ -171,6 +172,8 @@ export function ProjectComposer({
       composerLive.current = false;
     };
   }, [loadClaudeModels]);
+  const codex = useCodexModels();
+  const codexModels = codex.models;
   const claudeListed = findClaudeModel(claudeModels, claude.model);
   // Unknown models (list failed or a custom id) offer every Claude level.
   const claudeModelEfforts = claudeListed?.efforts ?? claudeEfforts;
@@ -261,7 +264,7 @@ export function ProjectComposer({
       const candidate = { ...selected, model };
       setChoice({
         ...candidate,
-        reasoningEffort: supportsEffort(candidate)
+        reasoningEffort: supportsEffort(candidate, codexModels)
           ? candidate.reasoningEffort
           : "",
       });
@@ -279,7 +282,7 @@ export function ProjectComposer({
         recipient === "claude"
           ? claudeModelEfforts
           : selected
-            ? reasoningEffortsFor(selected.model)
+            ? reasoningEffortsFor(selected.model, codexModels)
             : [];
       return [
         { value: "default", label: "default", description: "Model default" },
@@ -479,7 +482,7 @@ export function ProjectComposer({
       busy ||
       preparing ||
       sending.current ||
-      (recipient === "codex" && !supportsEffort(selected))
+      (recipient === "codex" && !supportsEffort(selected, codexModels))
     )
       return;
     const screenshotsOnly = images.length > 0 && !pastes.length;
@@ -707,9 +710,11 @@ export function ProjectComposer({
             choice={selected}
             claudeModel={claudeListed?.id ?? claude.model}
             claudeModels={claudeModels}
+            codexModels={codexModels}
             onOpen={() => {
               // A failed first probe leaves the list empty; ask again.
               if (!claudeModels?.length) loadClaudeModels();
+              codex.retry();
             }}
             openSignal={pickModel}
             onSelect={selectModel}
@@ -722,10 +727,12 @@ export function ProjectComposer({
                 value={selected.reasoningEffort}
                 options={[
                   { value: "", label: "Default" },
-                  ...reasoningEffortsFor(selected.model).map((value) => ({
-                    value,
-                    label: effortLabels[value],
-                  })),
+                  ...reasoningEffortsFor(selected.model, codexModels).map(
+                    (value) => ({
+                      value,
+                      label: effortLabels[value],
+                    }),
+                  ),
                 ]}
                 onChange={(reasoningEffort) =>
                   setChoice({ ...selected, reasoningEffort })

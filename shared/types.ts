@@ -4,7 +4,7 @@ import type { LiveSyncApi } from "./live-sync";
 import type { TaskApi } from "./tasks";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
-import type { AISettings, ClaudeModel } from "./settings";
+import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { UpdateState } from "./updates";
 import type { LineQuestion } from "./questions";
@@ -246,6 +246,7 @@ export interface Api
   saveAISettings(settings: AISettings): Promise<AISettings>;
   providerUsage(provider: "claude" | "codex"): Promise<ProviderUsage>;
   claudeModels(): Promise<ClaudeModel[]>;
+  codexModels(): Promise<CodexModel[]>;
   askCodex(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   retryLoginRestore(): Promise<void>;

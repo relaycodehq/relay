@@ -29,15 +29,32 @@ export const effortLabels: Record<ReasoningEffort, string> = {
   max: "Max",
   ultra: "Ultra",
 };
-// Preset capabilities verified against the signed-in Codex model catalog.
-const commonEfforts: ReasoningEffort[] = ["low", "medium", "high", "xhigh"];
-const presetEfforts: Record<string, ReasoningEffort[]> = {
-  "gpt-5.5": commonEfforts,
-  "gpt-5.6-luna": [...commonEfforts, "max"],
-  "gpt-5.6-sol": [...commonEfforts, "max", "ultra"],
-  "gpt-5.6-terra": [...commonEfforts, "max", "ultra"],
-  "gpt-6-astra": [...commonEfforts, "max", "ultra"],
+/** A Codex model, as the signed-in `codex app-server` lists it. */
+export type CodexModel = {
+  id: string;
+  name: string;
+  description: string;
+  efforts: ReasoningEffort[];
+  /** Codex suggests moving from it to a newer model. */
+  legacy: boolean;
 };
+const commonEfforts: ReasoningEffort[] = ["low", "medium", "high", "xhigh"];
+const preset = (
+  id: string,
+  name: string,
+  efforts: ReasoningEffort[],
+  legacy = false,
+): CodexModel => ({ id, name, description: "", efforts, legacy });
+/** Offered until Codex lists its models, and whenever it can't. */
+export const fallbackCodexModels: CodexModel[] = [
+  preset("gpt-6-astra", "GPT-6-Astra", [...commonEfforts, "max", "ultra"]),
+  preset("gpt-6-sol", "GPT-6-Sol", [...commonEfforts, "max", "ultra"]),
+  preset("gpt-6-luna", "GPT-6-Luna", [...commonEfforts, "max"]),
+  preset("gpt-5.6-sol", "GPT-5.6-Sol", [...commonEfforts, "max", "ultra"]),
+  preset("gpt-5.6-terra", "GPT-5.6-Terra", [...commonEfforts, "max", "ultra"]),
+  preset("gpt-5.6-luna", "GPT-5.6-Luna", [...commonEfforts, "max"]),
+  preset("gpt-5.5", "GPT-5.5", commonEfforts, true),
+];
 export type ClaudeModel = {
   id: string;
   name: string;
@@ -82,14 +99,21 @@ export const claudeArgs = (choice: {
     ? choice.reasoningEffort
     : "",
 });
-export const reasoningEffortsFor = (model: string): ReasoningEffort[] =>
-  presetEfforts[model] ?? reasoningEffortSchema.options.filter((e) => e !== "");
-export const supportsEffort = (choice: {
-  model: string;
-  reasoningEffort: ReasoningEffort;
-}) =>
+/** A model Codex didn't list (custom, or the list failed) offers every level. */
+export const reasoningEffortsFor = (
+  model: string,
+  listed: CodexModel[] = fallbackCodexModels,
+): ReasoningEffort[] =>
+  (
+    listed.find((m) => m.id === model) ??
+    fallbackCodexModels.find((m) => m.id === model)
+  )?.efforts ?? reasoningEffortSchema.options.filter((e) => e !== "");
+export const supportsEffort = (
+  choice: { model: string; reasoningEffort: ReasoningEffort },
+  listed?: CodexModel[],
+) =>
   !choice.reasoningEffort ||
-  reasoningEffortsFor(choice.model).includes(choice.reasoningEffort);
+  reasoningEffortsFor(choice.model, listed).includes(choice.reasoningEffort);
 const choiceSchema = z
   .object({
     model: modelSchema,
@@ -103,7 +127,7 @@ const effortCheck = {
   path: ["reasoningEffort"],
 };
 export const modelChoiceSchema = choiceSchema.refine(
-  supportsEffort,
+  (choice) => supportsEffort(choice),
   effortCheck,
 );
 const questionChoiceSchema = choiceSchema
@@ -112,7 +136,7 @@ const questionChoiceSchema = choiceSchema
     // Existing question sessions inherited the user's CLI reasoning setting.
     reasoningEffort: reasoningEffortSchema.default(""),
   })
-  .refine(supportsEffort, effortCheck);
+  .refine((choice) => supportsEffort(choice), effortCheck);
 /** Which signed-in CLI runs grouping or line questions. */
 export const agentProviderSchema = z.enum(["codex", "claude"]);
 export type AgentProvider = z.infer<typeof agentProviderSchema>;

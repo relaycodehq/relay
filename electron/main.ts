@@ -1,7 +1,7 @@
 import { agentResponseSchema } from "../shared/agent-modes";
 import { presentSkill } from "./skill-presentation";
 import { projectFolderSchema } from "../shared/project-folders";
-import { codexSkills } from "./provider-commands";
+import { codexModels, codexSkills } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import { createPullRequestSchema } from "../shared/pull-request-create";
 import { branches, changeBranch } from "./branches";
@@ -1308,6 +1308,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     }
     case "claudeModels":
       return listClaudeModels();
+    case "codexModels":
+      return codexModels();
     case "providerUsage":
       return readProviderUsage(z.enum(["claude", "codex"]).parse(args[0]));
     case "askCodex": {
