@@ -17,12 +17,39 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 
+/** Relay with fake Codex and Claude on its PATH. */
+async function launch(root: string) {
+  const bin = join(root, "bin");
+  await mkdir(bin);
+  const agent =
+    `#!${process.execPath}\n` +
+    (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+  for (const name of ["codex", "claude"])
+    await writeFile(join(bin, name), agent, { mode: 0o700 });
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  return electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: {
+      ...env,
+      PATH: bin + ":" + env.PATH,
+      RELAY_TEST_DATA: join(root, "data"),
+      RELAY_TEST_HEADED: "0",
+      RELAY_TEST_NATIVE_STORAGE: "0",
+      RELAY_AGENT_CAPTURE: join(root, "agent.jsonl"),
+      RELAY_AGENT_NO_TITLE: "1",
+    },
+  });
+}
+
 test("reviews uncommitted changes with two agents, then fixes a finding with the lead", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-deep-review-")),
   );
   const repo = join(root, "project"),
-    bin = join(root, "bin"),
     capture = join(root, "agent.jsonl");
   const fixture = await fixtureServer();
   const git = (...args: string[]) =>
@@ -30,7 +57,6 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
   let app: ElectronApplication | undefined;
   try {
     await mkdir(join(repo, "src"), { recursive: true });
-    await mkdir(bin);
     git("init", "-q", "-b", "main");
     git("config", "user.name", "Fixture");
     git("config", "user.email", "fixture@example.invalid");
@@ -45,28 +71,7 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       join(repo, "src", "queue.ts"),
       "export const queue = [1];\n",
     );
-    const agent =
-      `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
-    for (const name of ["codex", "claude"])
-      await writeFile(join(bin, name), agent, { mode: 0o700 });
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
-    app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
-      env: {
-        ...env,
-        PATH: bin + ":" + env.PATH,
-        RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
-        RELAY_AGENT_CAPTURE: capture,
-        RELAY_AGENT_NO_TITLE: "1",
-      },
-    });
+    app = await launch(root);
     const page = await app.firstWindow();
     await app.evaluate(({ dialog }, repo) => {
       dialog.showOpenDialog = async () => ({
@@ -156,6 +161,68 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
   } finally {
     await app?.close();
     await fixture.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a message sent after a deep review failed to start gets a thread of its own", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-deep-review-")),
+  );
+  const repo = join(root, "project");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(repo);
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "README.md"), "# Queue\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  // main has no commits that aren't on other, so its review can't start.
+  git("branch", "other");
+  const app = await launch(root);
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page
+      .getByRole("button", { name: "Add project folder", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page.getByRole("radio", { name: "Branch" }).click();
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+    await expect(
+      page.getByText("main has no commits that aren't on other."),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Repository", exact: true }).click();
+    await page.getByLabel("Message project").fill("Explain this project");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(
+      page.getByText("The cache guard prevents duplicate requests.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    // The question went to a Repository thread, not the review's.
+    const scopes = await page.evaluate(async () => {
+      const [project] = await window.relay.projects();
+      const chats = await window.relay.projectChats(project!.id);
+      return chats.filter((c) => !c.empty).map((c) => c.scope.kind);
+    });
+    expect(scopes).toEqual(["project"]);
+  } finally {
+    await app.close();
     await rm(root, { recursive: true, force: true });
   }
 });

@@ -708,15 +708,18 @@ export function ProjectChat({
     () => (chat && review?.report ? findingCode(chat.id, review) : undefined),
     [chat?.id, review],
   );
+  // A start that failed leaves its thread for the next try. Kept apart from
+  // `created`, so a message sent from this draft instead gets a thread of its own.
+  const reviewThread = useRef<ChatSummary | undefined>(undefined);
   async function startReview(config: DeepReviewStart) {
     if (busy) return;
     setBusy(true);
     setError(undefined);
     try {
       const target =
-        created.current ??
+        reviewThread.current ??
         (await api.createProjectChat(project.id, { kind: "review" }));
-      created.current = target;
+      reviewThread.current = target;
       // Messages in the thread go to the lead, with the lead's settings.
       const { lead } = config;
       saveSentSettings(target.id, lead.provider, {
