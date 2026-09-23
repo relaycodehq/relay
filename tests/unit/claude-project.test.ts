@@ -334,3 +334,59 @@ it("asks Claude for its models again once the user signs in", async () => {
     "claude-opus-5",
   ]);
 });
+
+it("moves a session with background work to new settings instead of ending it", async () => {
+  const close = vi.fn();
+  const live = {
+    setModel: vi.fn(async () => {}),
+    applyFlagSettings: vi.fn(async () => {}),
+    setPermissionMode: vi.fn(async () => {}),
+  };
+  vi.mocked(query).mockImplementation(({ prompt }) => {
+    const input = (prompt as AsyncIterable<{ uuid: string }>)[
+      Symbol.asyncIterator
+    ]();
+    return Object.assign(
+      (async function* () {
+        for (;;) {
+          const sent = await input.next();
+          if (sent.done) return;
+          yield lifecycle(sent.value.uuid, "started");
+          yield {
+            type: "system",
+            subtype: "background_tasks_changed",
+            tasks: [{ task_id: "dev", description: "npm run dev" }],
+            session_id,
+          };
+          yield answer("ok");
+          yield result("ok");
+        }
+      })(),
+      { close, getContextUsage: async () => ({}), ...live },
+    ) as unknown as ReturnType<typeof query>;
+  });
+  const key = crypto.randomUUID();
+  const turn = (patch: Partial<Parameters<typeof runClaudeProject>[0]> = {}) =>
+    runClaudeProject({
+      cwd: "/project",
+      prompt: "Start the dev server.",
+      choice: {} as never,
+      model: "",
+      effort: "high",
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+      signal: new AbortController().signal,
+      onText() {},
+      session: { key, id: session_id, async onId() {} },
+      ...patch,
+    });
+  await turn();
+  await turn({ effort: "max", interactionMode: "plan" });
+  expect(close).not.toHaveBeenCalled();
+  expect(live.applyFlagSettings).toHaveBeenCalledWith({ effortLevel: "max" });
+  expect(live.setPermissionMode).toHaveBeenCalledWith("plan");
+  expect(claudePending(key).map((p) => p.id)).toEqual(["dev"]);
+  // Full access needs a session launched with it: that one still restarts.
+  await turn({ effort: "max", runtimeMode: "full-access" });
+  expect(close).toHaveBeenCalledTimes(1);
+});

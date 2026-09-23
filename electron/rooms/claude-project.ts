@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type {
+  EffortLevel,
   Options,
   PermissionMode,
   SDKUserMessage,
@@ -122,6 +123,8 @@ type ClaudeTurn = { unprompted: boolean; adopted?: boolean };
 type ClaudeSession = {
   options: AgentOptions & { model: string; effort: string };
   signature: string;
+  /** Launched in full access: only then can it switch into it later. */
+  skipsPermissions: boolean;
   input: ClaudeInput;
   controller: AbortController;
   stream: ClaudeStream;
@@ -146,6 +149,38 @@ const sessions = new Map<string, ClaudeSession>();
 function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();
+}
+/**
+ * Moves a live session to new settings instead of restarting it, which
+ * would end the background work and wake-ups it holds. False when it can't:
+ * another folder, or full access for a session launched without it. Unlike
+ * a restart, a model or effort put back to default takes Claude Code's own
+ * default rather than one in the user's settings file.
+ */
+async function retune(
+  session: ClaudeSession,
+  options: AgentOptions & { model: string; effort: string },
+) {
+  const before = session.options;
+  const mode = claudePermissionMode(options);
+  if (
+    options.cwd !== before.cwd ||
+    (mode === "bypassPermissions" && !session.skipsPermissions)
+  )
+    return false;
+  try {
+    if (options.model !== before.model)
+      await session.stream.setModel(options.model || undefined);
+    if (options.effort !== before.effort)
+      await session.stream.applyFlagSettings({
+        effortLevel: (options.effort as EffortLevel) || null,
+      });
+    if (mode !== claudePermissionMode(before))
+      await session.stream.setPermissionMode(mode);
+    return true;
+  } catch {
+    return false;
+  }
 }
 /** Reads the stream for the session's lifetime, not only while a turn is waiting. */
 async function pump(
@@ -459,6 +494,18 @@ export async function runClaudeProject(
     }
     if (session?.busy)
       throw new Error("This Claude session is already running a turn.");
+    // New settings mean a new session, unless Claude still has work running
+    // in this one that a restart would end.
+    const working =
+      !!session && (session.tasks.size > 0 || session.wakeups.length > 0);
+    if (
+      session &&
+      !session.frames.ended &&
+      session.signature !== signature &&
+      working &&
+      (await retune(session, options))
+    )
+      session.signature = signature;
     if (session && (session.signature !== signature || session.frames.ended)) {
       closeSession(session);
       sessions.delete(key!);
@@ -503,6 +550,7 @@ export async function runClaudeProject(
       const holder = {
         options,
         signature,
+        skipsPermissions: options.runtimeMode === "full-access",
         input: new ClaudeInput(),
         frames: new ClaudeFrames(),
         controller,
@@ -517,7 +565,7 @@ export async function runClaudeProject(
         pathToClaudeCodeExecutable: executable,
         abortController: controller,
         permissionMode: permissions,
-        allowDangerouslySkipPermissions: options.runtimeMode === "full-access",
+        allowDangerouslySkipPermissions: holder.skipsPermissions,
         includePartialMessages: true,
         // A one-line "what it's doing" for each running subagent, every ~30s.
         agentProgressSummaries: true,
