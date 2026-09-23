@@ -1115,7 +1115,7 @@ export class ProjectChats {
             active,
           )
         : undefined;
-      let answer: ChatMessage = {
+      const answer: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
         body: "",
@@ -1201,33 +1201,51 @@ export class ProjectChats {
       const prompt = command
         ? mention.question
         : `My request: ${mention.question}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}`;
-      active.job = this.answer(
-        chat,
-        answer,
-        root,
-        prompt,
-        input,
-        active.abort,
+      this.reply(chat, active, answer, root, prompt, input, {
+        skills,
         // What a command couldn't carry, the session hears next turn.
-        { skills, caughtUp: !command || !updates.length },
-      )
-        .then((last) => {
-          answer = last;
-        })
-        .finally(() => {
-          active.requests.close();
-          this.active.delete(id);
-          this.reviewStep(id, { request: input.id, answer: answer.id });
-          // The finished answer moved `updated`; refresh the sidebar summary
-          // only after the thread stops counting as active.
-          void this.updateSummary(chat).catch(() => {});
-          void this.control(id, () => this.drain(id)).catch(() => {});
-        });
-      void active.job.catch(() => {});
+        caughtUp: !command || !updates.length,
+      });
     } catch (e) {
       this.active.delete(id);
       throw e;
     }
+  }
+  /**
+   * Runs `answer` as the thread's reply to `input`. When it ends the thread
+   * goes idle, a deep review moves on, and queued messages go out.
+   */
+  private reply(
+    chat: ProjectChat,
+    active: ActiveChat,
+    answer: ChatMessage,
+    root: string,
+    prompt: string,
+    input: ProjectChatSend,
+    options?: { skills?: CodexSkill[]; caughtUp?: boolean },
+  ) {
+    active.job = this.answer(
+      chat,
+      answer,
+      root,
+      prompt,
+      input,
+      active.abort,
+      options,
+    )
+      .then((last) => {
+        answer = last;
+      })
+      .finally(() => {
+        active.requests.close();
+        this.active.delete(chat.id);
+        this.reviewStep(chat.id, { request: input.id, answer: answer.id });
+        // The finished answer moved `updated`; refresh the sidebar summary
+        // only after the thread stops counting as active.
+        void this.updateSummary(chat).catch(() => {});
+        void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+      });
+    void active.job.catch(() => {});
   }
   /**
    * A side conversation's first turn with the agent that wrote its message
@@ -1379,7 +1397,7 @@ export class ProjectChats {
       requests: new AgentRequests(abort.signal),
     };
     this.active.set(chat.id, active);
-    let message: ChatMessage = {
+    const message: ChatMessage = {
       id: randomUUID(),
       role: "assistant",
       body: "",
@@ -1396,18 +1414,7 @@ export class ProjectChats {
       await this.save(chat);
       await this.updateSummary(chat);
       this.emit({ chatId: chat.id, message: structuredClone(message) });
-      active.job = this.answer(chat, message, root, prompt, input, abort)
-        .then((last) => {
-          message = last;
-        })
-        .finally(() => {
-          active.requests.close();
-          this.active.delete(chat.id);
-          void this.updateSummary(chat).catch(() => {});
-          this.reviewStep(chat.id, { answer: message.id });
-          void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
-        });
-      void active.job.catch(() => {});
+      this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
       this.active.delete(chat.id);
       throw e;
