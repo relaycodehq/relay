@@ -605,7 +605,8 @@ export function ProjectChat({
     follow = useRef(true),
     returning = useRef<{ id: string; offset: number } | undefined>(undefined),
     // Where holding that message left the scroll; a scroll elsewhere is the reader's.
-    placed = useRef(0);
+    placed = useRef(0),
+    oldest = useRef<string | undefined>(undefined);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
   const composerDock = useRef<HTMLDivElement>(null);
@@ -850,6 +851,7 @@ export function ProjectChat({
     else localStorage.removeItem("chat-reply:" + id);
     returning.current = readingPlaces.get(place);
     follow.current = !returning.current;
+    oldest.current = undefined;
     setVisible(80);
   }, [place]);
   useEffect(() => {
@@ -896,6 +898,16 @@ export function ProjectChat({
     returning.current = undefined;
     if (follow.current) el.scrollTop = el.scrollHeight;
   }, [messages, rootId, visible]);
+  // Up the thread, new messages would push the oldest ones shown out from
+  // under the reader: keep showing from the same message until they follow.
+  useLayoutEffect(() => {
+    const index = shown.findIndex((m) => m.id === oldest.current);
+    if (!follow.current && index >= 0 && shown.length - index > visible) {
+      setVisible(shown.length - index);
+      return;
+    }
+    oldest.current = shown[Math.max(0, shown.length - visible)]?.id;
+  }, [shown, visible]);
   async function send(
     value: Pick<
       ProjectChatSend,
