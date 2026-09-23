@@ -83,7 +83,6 @@ export class Updater {
   private manifest?: UpdateManifest;
   private staged?: { version: string; path: string };
   private busy = false;
-  private timer?: NodeJS.Timeout;
   private readonly feed: string;
 
   private waiting?: NodeJS.Timeout;
@@ -113,12 +112,7 @@ export class Updater {
   start() {
     if (this.state.status === "off") return;
     setTimeout(() => void this.check(), 15_000).unref();
-    this.timer = setInterval(() => void this.check(), checkEvery);
-    this.timer.unref();
-  }
-
-  stop() {
-    if (this.timer) clearInterval(this.timer);
+    setInterval(() => void this.check(), checkEvery).unref();
   }
 
   private set(state: UpdateState) {
