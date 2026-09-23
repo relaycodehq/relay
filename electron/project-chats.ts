@@ -1820,7 +1820,6 @@ export class ProjectChats {
     })().finally(() => this.titleJobs.delete(chat.id));
     this.titleJobs.set(chat.id, { abort: titleAbort, job });
   }
-  /** Retries titles for threads whose first title run failed earlier. */
   async turnDiff(chatId: string, messageId: string, path: string) {
     const chat = await this.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
@@ -1914,6 +1913,7 @@ export class ProjectChats {
       return { conflicts: [] };
     });
   }
+  /** Retries titles for threads whose first title run failed earlier. */
   ensureTitle(id: string) {
     const chat = this.cache.get(id);
     if (!chat || this.active.has(id) || chat.shared) return;
@@ -1922,9 +1922,7 @@ export class ProjectChats {
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
     );
     if (!firstUser || !answer) return;
-    // lastInput is cleared once a turn finishes; the default question model
-    // is the closest stand-in for the original choice.
-    const choice = chat.lastInput?.choice ?? this.codexChoice();
+    const { choice } = this.sessionInput(chat, answer.provider);
     this.generateTitle(chat, answer, choice);
   }
   /** Codex's saved question model, for turns and titles that run Codex. */

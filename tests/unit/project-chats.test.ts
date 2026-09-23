@@ -204,6 +204,44 @@ it("retries a missing title once, not every time the thread is read", async () =
   expect(await titleRuns()).toBe(1);
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
 }, 15000);
+it("retries a title with the answering agent's own model after another agent took over", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  for (const [body, count] of [
+    ["@codex Cache guard behavior", 2],
+    ["@claude Now fix it", 5],
+  ] as const) {
+    const provider = body.startsWith("@claude") ? "claude" : "codex";
+    await chats.send(chat.id, {
+      ...input(body),
+      provider,
+      choice: { ...input(body).choice, model: `${provider}-model` },
+    });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  await chats.get(chat.id);
+  chats.ensureTitle(chat.id);
+  const models = async () =>
+    (await readFile(join(root, "capture.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((r) => r.turn?.input[0].text.startsWith("Generate a short"))
+      .map((r) => r.turn.model);
+  await vi.waitFor(async () => expect(await models()).toHaveLength(2));
+  // Codex can't run Claude's model; it retries with its own settings.
+  expect(await models()).not.toContain("claude-model");
+}, 20000);
 it("keeps a user's thread name over the prompt excerpt and generated titles", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
