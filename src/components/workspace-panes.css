@@ -175,11 +175,19 @@
   background: var(--hover);
 }
 .pane-toggle.active {
-  color: var(--text);
-  background: var(--surface);
+  color: var(--accent);
+  background: var(--accent-soft);
   box-shadow:
-    0 0 0 1px var(--border),
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
     0 1px 2px rgb(0 0 0 / 6%);
+}
+/* The last open pane can't be hidden, but it's still the active one. */
+.pane-toggle.active:disabled {
+  opacity: 1;
+}
+.pane-toggle.active:hover:not(:disabled) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
 .pane-toggle.drop-before::before,
 .pane-toggle.drop-after::before {

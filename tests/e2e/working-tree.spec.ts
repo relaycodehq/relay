@@ -160,7 +160,7 @@ test("reviews local diffs, stages, commits and pushes only on explicit click", a
     view.getByText("Working changes", { exact: false }),
   ).toBeVisible();
   await view
-    .getByRole("button", { name: /M src\/hooks\/useReview.ts/ })
+    .getByRole("button", { name: /Modified src\/hooks\/useReview.ts/ })
     .click();
   await expect(view.locator("diffs-container")).toBeVisible();
   await expect(
@@ -171,7 +171,7 @@ test("reviews local diffs, stages, commits and pushes only on explicit click", a
     path: resolve("test-results/screenshots/30-local-changes.png"),
   });
   await view
-    .getByRole("button", { name: `Stage ${path}`, exact: true })
+    .getByRole("checkbox", { name: `Stage ${path}`, exact: true })
     .click();
   await view.getByLabel("Commit message").fill("Fix from the review");
   await view

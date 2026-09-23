@@ -4,9 +4,8 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
+  ChevronRight,
   GitBranch,
-  Plus,
-  Minus,
   RefreshCw,
   SquarePen,
 } from "lucide-react";
@@ -14,7 +13,7 @@ import type { Pull } from "../../shared/types";
 import type { ChangeArea, GitAction } from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
-import { ErrorBox, IconButton, Loading, Modal } from "./ui";
+import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
 import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
 import type { PaneSlots } from "./WorkspacePanes";
@@ -66,7 +65,8 @@ export function LocalChanges({
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),
     [notice, setNotice] = useState(""),
-    [push, setPush] = useState(false);
+    [push, setPush] = useState(false),
+    [collapsed, setCollapsed] = useState<ChangeArea[]>([]);
   useEffect(() => {
     if (storageKey)
       localStorage.setItem(storageKey, JSON.stringify({ selected, message }));
@@ -250,67 +250,94 @@ export function LocalChanges({
                 max={600}
               />
               <div className="working-file-list">
-                {sections.map((s) => (
-                  <section key={s.area}>
-                    <header>
-                      <strong>
-                        {s.title} <span>{s.files.length}</span>
-                      </strong>
-                      <button
-                        disabled={busy || !s.files.length}
-                        onClick={() =>
-                          void act({
-                            kind: s.kind,
-                            revision: tree.revision,
-                            paths: s.files.map((c) => c.path),
-                          })
-                        }
-                      >
-                        {s.kind === "stage" ? "Stage all" : "Unstage all"}
-                      </button>
-                    </header>
-                    {s.files.map((c) => (
-                      <div
-                        className={`working-file ${selected?.path === c.path && selected.area === s.area ? "selected" : ""}`}
-                        key={c.path}
-                      >
+                {sections.map((s) => {
+                  const open = !collapsed.includes(s.area),
+                    staged = s.area === "staged";
+                  return (
+                    <section key={s.area}>
+                      <header>
                         <button
-                          className="working-select"
-                          title={c.path}
+                          className="change-section-toggle"
+                          aria-expanded={open}
                           onClick={() =>
-                            setSelected({ path: c.path, area: s.area })
+                            setCollapsed((c) =>
+                              open
+                                ? [...c, s.area]
+                                : c.filter((a) => a !== s.area),
+                            )
                           }
                         >
-                          <span className={c.conflict ? "deletions" : "muted"}>
-                            {c.conflict
-                              ? "!"
-                              : s.area === "staged"
-                                ? c.index
-                                : c.worktree}
-                          </span>
-                          <span>{c.path}</span>
+                          <ChevronRight size={13} />
                         </button>
-                        <IconButton
-                          label={`${s.kind === "stage" ? "Stage" : "Unstage"} ${c.path}`}
-                          disabled={busy}
-                          onClick={() =>
+                        <input
+                          type="checkbox"
+                          aria-label={staged ? "Unstage all" : "Stage all"}
+                          checked={staged && !!s.files.length}
+                          disabled={busy || !s.files.length}
+                          onChange={() =>
                             void act({
                               kind: s.kind,
                               revision: tree.revision,
-                              paths: [c.path],
+                              paths: s.files.map((c) => c.path),
                             })
                           }
-                        >
-                          {s.kind === "stage" ? (
-                            <Plus size={14} />
-                          ) : (
-                            <Minus size={14} />
-                          )}
-                        </IconButton>
-                      </div>
-                    ))}
-                  </section>
-                ))}
+                        />
+                        <strong>{s.title}</strong>
+                        <span>
+                          {s.files.length}{" "}
+                          {s.files.length === 1 ? "file" : "files"}
+                        </span>
+                      </header>
+                      {open &&
+                        s.files.map((c) => {
+                          const code = staged ? c.index : c.worktree,
+                            kind = changeKind(code, c.conflict),
+                            slash = c.path.lastIndexOf("/");
+                          return (
+                            <div
+                              className={`working-file ${selected?.path === c.path && selected.area === s.area ? "selected" : ""}`}
+                              key={c.path}
+                            >
+                              <input
+                                type="checkbox"
+                                aria-label={`${staged ? "Unstage" : "Stage"} ${c.path}`}
+                                checked={staged}
+                                disabled={busy}
+                                onChange={() =>
+                                  void act({
+                                    kind: s.kind,
+                                    revision: tree.revision,
+                                    paths: [c.path],
+                                  })
+                                }
+                              />
+                              <button
+                                className="change-select"
+                                aria-label={`${changeLabels[kind]} ${c.path}`}
+                                title={`${changeLabels[kind]}: ${c.previousPath ? `${c.previousPath} → ` : ""}${c.path}`}
+                                onClick={() =>
+                                  setSelected({ path: c.path, area: s.area })
+                                }
+                              >
+                                <FileEntryIcon
+                                  path={c.path}
+                                  directory={false}
+                                />
+                                <span className={`change-name ${kind}`}>
+                                  {c.path.slice(slash + 1)}
+                                </span>
+                                {slash > 0 && (
+                                  <span className="change-dir">
+                                    {c.path.slice(0, slash)}
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </section>
+                  );
+                })}
               </div>
               <form
                 className="working-commit"
@@ -448,6 +475,23 @@ export function LocalChanges({
       )}
     </section>
   );
+}
+
+type ChangeKind = "added" | "deleted" | "modified" | "conflict";
+
+const changeLabels: Record<ChangeKind, string> = {
+  added: "Added",
+  deleted: "Deleted",
+  modified: "Modified",
+  conflict: "Conflict",
+};
+
+/** Porcelain status letter → how the file name is coloured. */
+function changeKind(code: string, conflict: boolean): ChangeKind {
+  if (conflict) return "conflict";
+  if (code === "A" || code === "?") return "added";
+  if (code === "D") return "deleted";
+  return "modified";
 }
 
 function sideLabels(area: ChangeArea) {

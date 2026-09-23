@@ -21,10 +21,22 @@ const client = new QueryClient({
 });
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={client}>
-        <App />
-      </QueryClientProvider>
-    </ErrorBoundary>
+    {/* The preload bridge only exists in the desktop app; a browser tab on
+        the dev server would otherwise crash on the first API call. */}
+    {window.relay ? (
+      <ErrorBoundary>
+        <QueryClientProvider client={client}>
+          <App />
+        </QueryClientProvider>
+      </ErrorBoundary>
+    ) : (
+      <div className="empty">
+        <h2>Relay runs in its desktop app</h2>
+        <p>
+          This is the renderer dev server. Start Relay with{" "}
+          <code>npm run dev</code> to open it in Electron.
+        </p>
+      </div>
+    )}
   </StrictMode>,
 );

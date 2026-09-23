@@ -1896,43 +1896,37 @@ details.agent-step > .agent-step-heading:hover {
   overflow: visible;
   animation: project-ribbon-reveal 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.ribbon-stop-light {
-  stop-color: #a297c8;
+/* Shades of the theme accent, lighter toward the highlight and darker on
+   the underside, in the same proportions as the original lavender. */
+.project-name-ribbon {
+  --ribbon-light: color-mix(in srgb, var(--accent) 60%, white);
+  --ribbon-mid: color-mix(in srgb, var(--accent) 70%, white);
+  --ribbon-back: color-mix(in srgb, var(--accent) 78%, black);
 }
-.ribbon-stop-mid {
-  stop-color: #9987cf;
-}
-.ribbon-stop-end {
-  stop-color: #7561b3;
-}
-.ribbon-stop-back {
-  stop-color: #58487f;
-}
-:root[data-theme="dark"] .ribbon-stop-light {
-  stop-color: #f3f0ff;
-}
-:root[data-theme="dark"] .ribbon-stop-mid {
-  stop-color: #dcd5fa;
-}
-:root[data-theme="dark"] .ribbon-stop-end {
-  stop-color: #a495e4;
-}
-:root[data-theme="dark"] .ribbon-stop-back {
-  stop-color: #766e96;
+:root[data-theme="dark"] .project-name-ribbon {
+  --ribbon-light: color-mix(in srgb, var(--accent) 15%, white);
+  --ribbon-mid: color-mix(in srgb, var(--accent) 45%, white);
+  --ribbon-back: color-mix(in srgb, var(--accent) 67%, black);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="dark"]) .ribbon-stop-light {
-    stop-color: #f3f0ff;
+  :root:not([data-theme="light"]):not([data-theme="dark"])
+    .project-name-ribbon {
+    --ribbon-light: color-mix(in srgb, var(--accent) 15%, white);
+    --ribbon-mid: color-mix(in srgb, var(--accent) 45%, white);
+    --ribbon-back: color-mix(in srgb, var(--accent) 67%, black);
   }
-  :root:not([data-theme="light"]):not([data-theme="dark"]) .ribbon-stop-mid {
-    stop-color: #dcd5fa;
-  }
-  :root:not([data-theme="light"]):not([data-theme="dark"]) .ribbon-stop-end {
-    stop-color: #a495e4;
-  }
-  :root:not([data-theme="light"]):not([data-theme="dark"]) .ribbon-stop-back {
-    stop-color: #766e96;
-  }
+}
+.ribbon-stop-light {
+  stop-color: var(--ribbon-light);
+}
+.ribbon-stop-mid {
+  stop-color: var(--ribbon-mid);
+}
+.ribbon-stop-end {
+  stop-color: var(--accent);
+}
+.ribbon-stop-back {
+  stop-color: var(--ribbon-back);
 }
 .project-ribbon-wave {
   transform-origin: center;

@@ -101,6 +101,82 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Local changes: a checkbox stages a file, its name is coloured by status. */
+.local-changes .working-file-list section > header {
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 10px 12px 4px 4px;
+  font-size: 12px;
+}
+.local-changes .working-file-list section > header strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.local-changes input[type="checkbox"] {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.change-section-toggle {
+  display: flex;
+  color: var(--muted);
+}
+.change-section-toggle svg {
+  transition: transform 120ms ease;
+}
+.change-section-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.local-changes .working-file {
+  margin: 1px 6px;
+  padding-left: 23px;
+  gap: 0;
+}
+.change-select {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px 5px 7px;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.change-select .file-entry-icon {
+  width: 14px;
+  height: 14px;
+}
+.change-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.change-name.modified {
+  color: var(--accent);
+}
+.change-name.added {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.change-name.deleted,
+.change-name.conflict {
+  color: light-dark(#c4323f, #f0707a);
+}
+.change-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .change-section-toggle svg {
+    transition: none;
+  }
+}
 .working-commit {
   padding: 12px;
   display: flex;
