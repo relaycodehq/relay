@@ -442,6 +442,38 @@ it("stops its reviewers with the review, and picks up where it stopped", async (
   );
 });
 
+it("stays resumable when the agent answers a question after a stop", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ reviewers: [{ provider: "codex", choice }] }),
+  );
+  await chats.cancel(chat.id);
+  await vi.waitFor(
+    () => expect(chats.list(projectId)[0]?.running).toBeFalsy(),
+    { timeout: 10000 },
+  );
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    body: "@codex What did the reviewers look at so far?",
+    provider: "codex",
+    choice,
+    runtimeMode: "full-access",
+    interactionMode: "default",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+        role: "assistant",
+        status: "complete",
+      }),
+    { timeout: 15000 },
+  );
+  // Only the lead's first answer settles the review.
+  expect((await chats.get(chat.id)).deepReview?.status).toBe("stopped");
+});
+
 describe("what a review covers", () => {
   const project = {
     id: "p",

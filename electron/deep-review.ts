@@ -202,10 +202,12 @@ export class DeepReviews {
       delete state.fixing![turn.request!];
       changed = state.report?.messageId;
     }
+    // Only the lead's first answer settles the review. Another answer while
+    // it's stopped, like a question asked meanwhile, leaves it resumable.
     if (
       answer?.role === "assistant" &&
       !state.report &&
-      state.status !== "reviewing"
+      state.status === "leading"
     ) {
       if (answer.status === "complete") {
         const { body, report } = extractFindings(answer.body);
@@ -219,7 +221,7 @@ export class DeepReviews {
           state.statuses = {};
         }
         state.status = "done";
-      } else if (state.status === "leading")
+      } else
         state.status = answer.status === "cancelled" ? "stopped" : "failed";
       changed = answer.id;
     }
