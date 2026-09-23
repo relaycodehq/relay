@@ -355,10 +355,21 @@ export default function ProjectShell() {
     setTurnDiff(null);
     panes.show("changes");
   }
-  function navigate(p: Project, next?: ChatSummary, fresh = false) {
+  /**
+   * Opens `next`, or with `fresh` the project's new thread: a fresh one on
+   * the repository, or with "draft" the unsent one in the scope it was
+   * written for.
+   */
+  function navigate(
+    p: Project,
+    next?: ChatSummary,
+    fresh: boolean | "draft" = false,
+  ) {
     if (dirty) return;
     if (fresh || next)
       localStorage.setItem("relay-project-chat:" + p.id, next?.id ?? "");
+    // Switching projects restores the saved scope, so a fresh thread drops it.
+    if (fresh === true) localStorage.removeItem("relay-draft-scope:" + p.id);
     setSelected(p.id);
     if (next || fresh) setChatId(next?.id ?? null);
     setLegacy(false);
@@ -366,7 +377,7 @@ export default function ProjectShell() {
     setTurnDiff(null);
     setContextText(undefined);
     setViewing(NO_VIEWING);
-    if (fresh) setDraftScope({ kind: "project" });
+    if (fresh === true) setDraftScope({ kind: "project" });
   }
   async function reviewBranchPr(ref: PullRef) {
     if (!project || dirty) return;
@@ -597,6 +608,7 @@ export default function ProjectShell() {
               if (p) navigate(p, c);
             }}
             onNew={(p) => navigate(p, undefined, true)}
+            onDraft={(p) => navigate(p, undefined, "draft")}
             onAdd={() => void add()}
             onShared={(p) => {
               navigate(p);

@@ -387,6 +387,7 @@ export function ProjectSidebar({
   account,
   onChat,
   onNew,
+  onDraft,
   onAdd,
   onShared,
   onSettings,
@@ -401,6 +402,8 @@ export function ProjectSidebar({
   account?: string;
   onChat: (c: ChatSummary) => void;
   onNew: (p: Project) => void;
+  /** Back to a project's unsent new thread. */
+  onDraft: (p: Project) => void;
   onAdd: () => void;
   onShared: (p: Project) => void;
   onSettings: () => void;
@@ -1239,7 +1242,7 @@ export function ProjectSidebar({
     const resume = () => {
       if (dirty) return;
       if (chat) onChat(chat);
-      else onNew(p);
+      else onDraft(p);
     };
     return (
       <div
