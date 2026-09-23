@@ -321,9 +321,10 @@ export function GroupedFileList({
         >
           <p className="group-description">{inspect.description}</p>
           <p className="field-note">
-            Codex suggests these files contain only this repeated change.
-            Inspect any file, then mark the group viewed for this PR revision.
-            Files with extra edits stay in Individual changes.
+            {result?.provider === "claude" ? "Claude" : "Codex"} suggests these
+            files contain only this repeated change. Inspect any file, then mark
+            the group viewed for this PR revision. Files with extra edits stay
+            in Individual changes.
           </p>
           <div className="group-inspect-files">
             {inspect.paths.map((path) => (
