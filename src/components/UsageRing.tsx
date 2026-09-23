@@ -67,9 +67,9 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
           setUsage(value);
           setNow(Date.now());
         })
+        // Unreadable usage hides the ring, like an account without limits.
         .catch(() => {
-          if (!cancel)
-            setUsage({ provider, windows: [], message: "Couldn't read usage" });
+          if (!cancel) setUsage({ provider, windows: [], message: null });
         });
     void load();
     const refresh = setInterval(() => void load(), REFRESH_MS);
@@ -149,9 +149,7 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
                 <UsageRow key={meter.kind} meter={meter} />
               ))
             ) : (
-              <p className="usage-ring-status">
-                {usage?.message ?? "Checking usage…"}
-              </p>
+              <p className="usage-ring-status">Checking usage…</p>
             )}
           </Popover.Popup>
         </Popover.Positioner>
