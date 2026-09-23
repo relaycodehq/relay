@@ -973,8 +973,9 @@ export function ProjectChat({
       // Persist the complete draft before removing the durable queue entry.
       await saveDraftImages(key, restored);
       onDraft(body, key);
+      // A reply goes back to its side conversation, which keeps its own settings.
       saveSentSettings(
-        id,
+        parent ? `${id}:${parent}` : id,
         agentMention(input.body)?.provider ?? "message",
         input,
       );
