@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { stat, readFile, writeFile, rename } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import {
   mapClaudeUsage,
@@ -607,7 +607,7 @@ async function readText(path: string) {
 }
 
 async function writeText(path: string, text: string) {
-  if (!path.endsWith("/auth.json") && !path.endsWith("/.credentials.json")) {
+  if (!["auth.json", ".credentials.json"].includes(basename(path))) {
     throw new Error("refusing credential write");
   }
   const mode = await stat(path)
