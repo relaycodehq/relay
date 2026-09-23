@@ -88,7 +88,7 @@ interface ActiveChat {
   started: number;
   requests: AgentRequests;
   abort: AbortController;
-  job?: Promise<void>;
+  job?: Promise<unknown>;
   input?: ProjectChatSend;
   steer?: (text: string, id?: string) => Promise<void>;
 }
@@ -1116,7 +1116,7 @@ export class ProjectChats {
             active,
           )
         : undefined;
-      const answer: ChatMessage = {
+      let answer: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
         body: "",
@@ -1211,15 +1211,19 @@ export class ProjectChats {
         active.abort,
         // What a command couldn't carry, the session hears next turn.
         { skills, caughtUp: !command || !updates.length },
-      ).finally(() => {
-        active.requests.close();
-        this.active.delete(id);
-        this.reviewStep(id, { request: input.id, answer: answer.id });
-        // The finished answer moved `updated`; refresh the sidebar summary
-        // only after the thread stops counting as active.
-        void this.updateSummary(chat).catch(() => {});
-        void this.control(id, () => this.drain(id)).catch(() => {});
-      });
+      )
+        .then((last) => {
+          answer = last;
+        })
+        .finally(() => {
+          active.requests.close();
+          this.active.delete(id);
+          this.reviewStep(id, { request: input.id, answer: answer.id });
+          // The finished answer moved `updated`; refresh the sidebar summary
+          // only after the thread stops counting as active.
+          void this.updateSummary(chat).catch(() => {});
+          void this.control(id, () => this.drain(id)).catch(() => {});
+        });
       void active.job.catch(() => {});
     } catch (e) {
       this.active.delete(id);
@@ -1376,7 +1380,7 @@ export class ProjectChats {
       requests: new AgentRequests(abort.signal),
     };
     this.active.set(chat.id, active);
-    const message: ChatMessage = {
+    let message: ChatMessage = {
       id: randomUUID(),
       role: "assistant",
       body: "",
@@ -1393,20 +1397,17 @@ export class ProjectChats {
       await this.save(chat);
       await this.updateSummary(chat);
       this.emit({ chatId: chat.id, message: structuredClone(message) });
-      active.job = this.answer(
-        chat,
-        message,
-        root,
-        prompt,
-        input,
-        abort,
-      ).finally(() => {
-        active.requests.close();
-        this.active.delete(chat.id);
-        void this.updateSummary(chat).catch(() => {});
-        this.reviewStep(chat.id, { answer: message.id });
-        void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
-      });
+      active.job = this.answer(chat, message, root, prompt, input, abort)
+        .then((last) => {
+          message = last;
+        })
+        .finally(() => {
+          active.requests.close();
+          this.active.delete(chat.id);
+          void this.updateSummary(chat).catch(() => {});
+          this.reviewStep(chat.id, { answer: message.id });
+          void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+        });
       void active.job.catch(() => {});
     } catch (e) {
       this.active.delete(chat.id);
@@ -1778,6 +1779,8 @@ export class ProjectChats {
       )
         this.generateTitle(chat, message, input.choice);
     }
+    // A steer moves the rest of the answer to a message of its own.
+    return message;
   }
   /** Generated once per thread; the prompt excerpt stays until one lands. */
   private generateTitle(

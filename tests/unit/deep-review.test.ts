@@ -622,3 +622,45 @@ it("frees the findings a fix was on when Relay died mid-fix", async () => {
     await crashed.dispose();
   }
 });
+
+it("lists the lead's findings when the user steered its first answer", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  const setup = config({
+    reviewers: [{ provider: "codex", choice }],
+    // The fixture's lead keeps checking until it's steered.
+    focus: "fixture wait for steer",
+  });
+  await chats.startDeepReview(chat.id, setup);
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.body).toBe(
+        "Checking the reports.",
+      ),
+    { timeout: 15000 },
+  );
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    body: "@claude Also check the tests.",
+    provider: "claude",
+    choice: setup.lead.choice,
+    runtimeMode: setup.runtimeMode,
+    interactionMode: "default",
+    delivery: "steer",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 15000 },
+  );
+  const done = await chats.get(chat.id);
+  // The answer went on below the steer, and that's where the findings are.
+  expect(done.messages.map((m) => m.role)).toEqual([
+    "user",
+    "assistant",
+    "user",
+    "assistant",
+  ]);
+  expect(done.deepReview?.report?.messageId).toBe(done.messages[3]!.id);
+  expect(done.deepReview?.report?.findings.map((f) => f.id)).toEqual(["F1"]);
+});

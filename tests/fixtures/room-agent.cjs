@@ -34,7 +34,9 @@ function record(data) {
 }
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,
-    lateSteer = false;
+    lateSteer = false,
+    // A lead that waits for a steer, then reports its findings.
+    leading = false;
   const rl = require("node:readline").createInterface({ input: process.stdin });
   const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
   function finish(answer) {
@@ -123,7 +125,7 @@ if (args.includes("--permission-prompt-tool")) {
           event: { type: "message_start", message: { id: "fixture-steered" } },
         });
         lifecycle("completed");
-        finish(`Noted: ${m.message.content}`);
+        finish(leading ? leadAnswer : `Noted: ${m.message.content}`);
       }, 100);
       return;
     }
@@ -200,7 +202,19 @@ if (args.includes("--permission-prompt-tool")) {
       } else if (text.startsWith("/code-review")) {
         finish("- **[P1] Queue reorder can drop a message** `src/queue.ts:3`");
       } else if (text.startsWith("You lead a deep review")) {
-        finish(leadAnswer);
+        leading = m.message.content[0].text.includes("fixture wait for steer");
+        if (leading)
+          emit({
+            type: "stream_event",
+            uuid: "fixture-event",
+            session_id: "fixture-claude",
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "Checking the reports." },
+            },
+          });
+        else finish(leadAnswer);
       } else if (text.includes("fixture background task")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.
