@@ -669,7 +669,42 @@ it("tells a Claude session begun with a command what the thread is about on its 
     .map((r) => JSON.parse(r.prompt).message.content[0].text as string);
   expect(prompts[0]).toBe("/security-review");
   expect(prompts[1]).toContain("This discussion concerns PR #7 in Web/portal");
+  // Nothing came before the command, so its session has heard it all.
+  expect(prompts[1]).not.toContain("Conversation updates");
 }, 15000);
+it("tells Claude on its next turn what a command it began with couldn't carry", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  for (const body of [
+    "@codex Explain the cache guard",
+    "@claude /security-review",
+    "@claude Fix the first",
+  ]) {
+    const provider = body.startsWith("@claude") ? "claude" : "codex";
+    await chats.send(chat.id, { ...input(body), provider });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages.at(-1)?.role).toBe("assistant");
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((r) => r.provider === "claude" && !r.args.includes("--print"))
+    .map((r) => JSON.parse(r.prompt).message.content[0].text as string)
+    .find((text) => text.startsWith("My request: Fix the first"))!;
+  expect(prompt).toContain("Explain the cache guard");
+  expect(prompt).toContain("The cache guard prevents duplicate requests.");
+  // A note Claude couldn't be given isn't asked of Codex.
+  expect((await chats.get(chat.id)).messages.some((m) => m.handoff)).toBe(
+    false,
+  );
+}, 30000);
 it("keeps ordinary notes local, cancels a partial answer, and does not duplicate retried messages", async () => {
   const chat = await chats.create(projectId, { kind: "project" }),
     note = input("Consider a cache here.");
