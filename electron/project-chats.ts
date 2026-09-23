@@ -198,7 +198,6 @@ export class ProjectChats {
             prompt: w.prompt,
             recurring: false,
             at: w.at,
-            held: true,
           })),
         ];
         return active || pending.length

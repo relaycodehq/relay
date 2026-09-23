@@ -75,14 +75,7 @@ it("keeps what Claude was waiting on when Relay closes", async () => {
   expect(summary.stopped?.items).toEqual([task, loop]);
   // Relay sends the one-shot wake-up itself; it shows as still pending.
   expect(summary.pending).toEqual([
-    {
-      kind: "wakeup",
-      id: "later",
-      prompt: "Compare",
-      recurring: false,
-      at,
-      held: true,
-    },
+    { kind: "wakeup", id: "later", prompt: "Compare", recurring: false, at },
   ]);
   await chats.resolveStoppedWork(chat.id, "dismiss");
   expect(chats.list(projectId)[0].stopped).toBeUndefined();

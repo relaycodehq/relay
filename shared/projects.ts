@@ -95,8 +95,6 @@ export type ChatPending =
       recurring: boolean;
       /** When a one-shot wake-up fires. */
       at?: number;
-      /** Relay sends it, because Claude's session ended since. */
-      held?: boolean;
     };
 export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("settle") }).strict(),
