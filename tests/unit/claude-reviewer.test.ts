@@ -34,7 +34,7 @@ it("keeps a deep review's Claude reviewer from changing the checkout", async () 
         };
         await new Promise(() => {});
       })(),
-      { close() {} },
+      { close() {}, getContextUsage: async () => ({}) },
     ) as unknown as ReturnType<typeof query>;
   });
   await runClaudeProject({

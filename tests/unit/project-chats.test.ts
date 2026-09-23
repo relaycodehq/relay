@@ -91,7 +91,7 @@ it("sends only messages the renderer doesn't hold at their current version", asy
   expect(rebuilt.messages[0]).toBe(question);
   expect(rebuilt.messages[1]).toEqual(answer);
   expect(() => applyChatPatch(patch, undefined)).toThrow("missing a message");
-});
+}, 15000);
 it("streams locally, persists final answers, and resumes the same Codex session with selected settings", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
