@@ -592,7 +592,6 @@ export default function ProjectShell() {
             chatId={chat?.id}
             dirty={dirty}
             account={account?.user.login}
-            onProject={(p) => navigate(p)}
             onChat={(c) => {
               const p = projects.data?.find((p) => p.id === c.projectId);
               if (p) navigate(p, c);

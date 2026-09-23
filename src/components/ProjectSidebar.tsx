@@ -353,7 +353,6 @@ export function ProjectSidebar({
   chatId,
   dirty,
   account,
-  onProject,
   onChat,
   onNew,
   onAdd,
@@ -368,7 +367,6 @@ export function ProjectSidebar({
   chatId?: string;
   dirty: boolean;
   account?: string;
-  onProject: (p: Project) => void;
   onChat: (c: ChatSummary) => void;
   onNew: (p: Project) => void;
   onAdd: () => void;
@@ -747,26 +745,19 @@ export function ProjectSidebar({
               >
                 <ProjectFolderIcon id={p.id} open={isOpen} />
               </button>
+              {/* Like a group label, the whole row toggles; only its actions don't. */}
               <button
                 className="sb-project-name"
-                disabled={dirty}
                 title={p.path}
-                onClick={() => {
-                  onProject(p);
-                  setExpanded((s) => ({ ...s, [p.id]: true }));
-                }}
-                >
+                aria-expanded={isOpen}
+                onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
+              >
                 <span>{p.name}</span>
-                {/* The folder icon is the accessible toggle; this mirrors groups. */}
                 <ChevronRight
                   size={11}
                   className="sb-project-chevron"
                   data-open={isOpen || undefined}
                   aria-hidden
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpanded((s) => ({ ...s, [p.id]: !isOpen }));
-                  }}
                 />
                 {busy && !isOpen && (
                   <span className="sb-status running" title="Working">
