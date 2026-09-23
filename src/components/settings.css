@@ -437,8 +437,7 @@
   overflow: hidden;
 }
 .settings-card + .settings-card,
-.settings-card + .error-box,
-.settings-card-group + .settings-card-group {
+.settings-card + .error-box {
   margin-top: 12px;
 }
 .settings-row {
