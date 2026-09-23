@@ -343,9 +343,12 @@ export function ContextWindowMeter({
       : `Context window, ${rounded}% used`;
   const agent = provider === "codex" ? "Codex" : "Claude";
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (openSignal) setOpen(true);
-  }, [openSignal]);
+  // Only a signal sent while mounted: the composer remounts the meter.
+  const [signal, setSignal] = useState(openSignal);
+  if (signal !== openSignal) {
+    setSignal(openSignal);
+    setOpen(true);
+  }
   const cache = usage.cache;
   const now = useCacheClock(cache, open);
   const heat = cache && cacheHeat(cache, now);
