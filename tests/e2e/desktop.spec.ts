@@ -187,7 +187,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     page.getByRole("heading", { name: "Binary or Git LFS file" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "dark", exact: true }).click();
+  await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Current file" })

@@ -86,9 +86,9 @@ test("restores per-project composer settings, answers native approvals, and impl
     await page.evaluate(() => {
       document.documentElement.dataset.theme = "dark";
     });
+    // A project's name only folds its row; its new thread opens it.
     await page
-      .locator(".sb-project-row")
-      .getByRole("button", { name: "web-store", exact: true })
+      .getByRole("button", { name: "New thread in web-store", exact: true })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
@@ -110,9 +110,12 @@ test("restores per-project composer settings, answers native approvals, and impl
       .getByRole("combobox", { name: "Reasoning effort", exact: true })
       .click();
     await page.getByRole("option", { name: "High", exact: true }).click();
+    // A project's name only folds its row; its new thread opens it.
     await page
-      .locator(".sb-project-row")
-      .getByRole("button", { name: "personal-project", exact: true })
+      .getByRole("button", {
+        name: "New thread in personal-project",
+        exact: true,
+      })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
@@ -123,9 +126,9 @@ test("restores per-project composer settings, answers native approvals, and impl
         exact: true,
       }),
     ).toBeVisible();
+    // A project's name only folds its row; its new thread opens it.
     await page
-      .locator(".sb-project-row")
-      .getByRole("button", { name: "web-store", exact: true })
+      .getByRole("button", { name: "New thread in web-store", exact: true })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
