@@ -1125,11 +1125,12 @@ export class ProjectChats {
             : fork
               ? previous.indexOf(parent!)
               : -1;
+      // A steering message went straight into the session of the agent it steered.
+      const heard = (m: ChatMessage) =>
+        known >= 0 && m.steered && m.provider === mention.provider;
       const updates = previous
         .slice(known + 1)
-        .filter(
-          (m) => !(known >= 0 && m.steered) && !m.compaction && !m.handoff,
-        );
+        .filter((m) => !heard(m) && !m.compaction && !m.handoff);
       // A side conversation told as text keeps its message in view, with a little of what led to it.
       const focus = parent ? updates.indexOf(parent) : -1;
       const context =

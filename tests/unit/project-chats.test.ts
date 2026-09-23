@@ -976,6 +976,51 @@ it("steers an active Codex turn natively and resumes its saved session after sto
   ]);
 }, 15000);
 
+it("tells an agent about steering that went to the other agent", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const idle = () =>
+    vi.waitFor(
+      async () => {
+        expect((await chats.get(chat.id)).messages.at(-1)?.status).not.toBe(
+          "streaming",
+        );
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(chat.id, claude("@claude Explain the cache guard"));
+  await idle();
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+        "cache guard",
+      ),
+    { timeout: 6000 },
+  );
+  await chats.send(chat.id, {
+    ...input("@codex Focus only on the cache key"),
+    delivery: "steer",
+  });
+  expect((await chats.get(chat.id)).messages.at(-1)?.steered).toBe(true);
+  await chats.cancel(chat.id);
+  await idle();
+  await chats.send(chat.id, claude("@claude Carry on"));
+  await idle();
+  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((c) => c.provider === "claude" && !c.args.includes("--print"))
+    .map((c) => JSON.parse(c.prompt).message.content[0].text as string)
+    .find((text) => text.startsWith("My request: Carry on"))!;
+  expect(prompt).toContain("Focus only on the cache key");
+}, 30000);
+
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex First"));
