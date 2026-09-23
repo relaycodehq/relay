@@ -108,10 +108,8 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
-  /** Timers for wake-ups Relay sends itself, by chat and wake-up id. */
-  private wakeTimers = new Map<string, NodeJS.Timeout>();
-  /** One timer per chat, for its earliest Send later message. */
-  private sendTimers = new Map<string, NodeJS.Timeout>();
+  /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
+  private timers = new Map<string, NodeJS.Timeout>();
   private cache = new Map<string, ProjectChat>();
   private loading = new Map<string, Promise<void>>();
   private writes = new Map<string, Promise<void>>();
@@ -223,11 +221,9 @@ export class ProjectChats {
    */
   async stopPending(id: string, pendingId: string) {
     const chat = await this.load(id);
-    if (chat.heldWakeups?.some((w) => w.id === pendingId)) {
-      clearTimeout(this.wakeTimers.get(id + ":" + pendingId));
-      this.wakeTimers.delete(id + ":" + pendingId);
+    // Its timer finds it gone and sends nothing.
+    if (chat.heldWakeups?.some((w) => w.id === pendingId))
       return this.dropWakeup(chat, pendingId);
-    }
     for (const key of this.providerSessions) {
       const [, chatId, branch] = JSON.parse(key) as string[];
       if (chatId !== id) continue;
@@ -258,21 +254,33 @@ export class ProjectChats {
       if (chat.nextSend) this.armSend(chat.id, chat.nextSend);
     }
   }
-  private armSend(chatId: string, at: number | undefined) {
-    clearTimeout(this.sendTimers.get(chatId));
-    this.sendTimers.delete(chatId);
+  /**
+   * Runs `due` at `at`, replacing the key's timer; no `at` just clears it. A
+   * timer waits at most about 24.8 days, so a later one re-arms when it fires.
+   */
+  private armTimer(
+    key: string,
+    at: number | undefined,
+    due: () => Promise<void>,
+  ) {
+    clearTimeout(this.timers.get(key));
+    this.timers.delete(key);
     if (!at || this.disposing) return;
-    // One that came due while Relay was closed goes out shortly after launch.
     const delay = Math.min(Math.max(at - Date.now(), 0), 2 ** 31 - 1);
-    this.sendTimers.set(
-      chatId,
+    this.timers.set(
+      key,
       setTimeout(() => {
-        this.sendTimers.delete(chatId);
-        void this.sendScheduled(chatId).catch((e) =>
+        this.timers.delete(key);
+        if (Date.now() < at) return this.armTimer(key, at, due);
+        void due().catch((e) =>
           console.warn("Could not send a scheduled message:", e),
         );
       }, delay),
     );
+  }
+  /** One that came due while Relay was closed goes out right after launch. */
+  private armSend(chatId: string, at: number | undefined) {
+    this.armTimer("send:" + chatId, at, () => this.sendScheduled(chatId));
   }
   /** The earliest scheduled message still waiting to go out on its own. */
   private nextSend(chat: ProjectChat) {
@@ -318,21 +326,11 @@ export class ProjectChats {
     }
   }
   private arm(chatId: string, wakeup: HeldWakeup) {
-    const key = chatId + ":" + wakeup.id;
-    clearTimeout(this.wakeTimers.get(key));
     // One that came due while Relay was closed goes out shortly after launch.
-    const delay = Math.min(
-      Math.max(wakeup.at - Date.now(), 15_000),
-      2 ** 31 - 1,
-    );
-    this.wakeTimers.set(
-      key,
-      setTimeout(() => {
-        this.wakeTimers.delete(key);
-        void this.fireWakeup(chatId, wakeup.id).catch((e) =>
-          console.warn("Could not send Claude's wake-up:", e),
-        );
-      }, delay),
+    this.armTimer(
+      `wake:${chatId}:${wakeup.id}`,
+      Math.max(wakeup.at, Date.now() + 15_000),
+      () => this.fireWakeup(chatId, wakeup.id),
     );
   }
   private async dropWakeup(chat: ProjectChat, id: string) {
@@ -2168,8 +2166,7 @@ export class ProjectChats {
     await this.keepPending().catch((e) =>
       console.warn("Could not keep Claude's background work:", e),
     );
-    for (const timer of this.wakeTimers.values()) clearTimeout(timer);
-    for (const timer of this.sendTimers.values()) clearTimeout(timer);
+    for (const timer of this.timers.values()) clearTimeout(timer);
     this.disposing = true;
     for (const a of this.active.values()) a.abort.abort();
     for (const a of this.titleJobs.values()) a.abort.abort();

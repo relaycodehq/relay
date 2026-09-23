@@ -106,7 +106,7 @@ it("sends a kept wake-up itself once it comes due", async () => {
   vi.mocked(claudePending).mockReturnValue([]);
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   const send = vi.spyOn(chats, "send").mockResolvedValue(undefined);
-  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   chats.armWakeups();
   // Missed while closed: it goes out shortly after launch, not at once.
   await vi.advanceTimersByTimeAsync(14_000);
@@ -119,6 +119,33 @@ it("sends a kept wake-up itself once it comes due", async () => {
     body: expect.stringContaining("Compare the runs"),
   });
   expect(chats.list(projectId)[0].heldWakeups).toBeUndefined();
+});
+
+it("holds a kept wake-up weeks away past the longest timer", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  leave(chat.id, [
+    {
+      kind: "wakeup",
+      id: "far",
+      prompt: "Renew the certificate",
+      recurring: false,
+      at: Date.now() + 30 * 86_400_000,
+    },
+  ]);
+  await chats.dispose();
+  vi.mocked(claudePending).mockReturnValue([]);
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  const send = vi.spyOn(chats, "send").mockResolvedValue(undefined);
+  await chats.get(chat.id);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  chats.armWakeups();
+  // A timer fires after at most 2^31 - 1 ms, about 24.8 days. Sending drops
+  // the held copy first, before anything waits on the disk.
+  await vi.advanceTimersByTimeAsync(29 * 86_400_000);
+  expect((await chats.get(chat.id)).heldWakeups).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(86_400_000);
+  vi.useRealTimers();
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
 });
 
 it("won't archive a thread with work still to run in it", async () => {
