@@ -1186,7 +1186,7 @@ export class ProjectChats {
         prompt,
         input,
         active.abort,
-        skills,
+        { skills },
       ).finally(() => {
         active.requests.close();
         this.active.delete(id);
@@ -1326,7 +1326,7 @@ export class ProjectChats {
       chat.messages.push(message);
       await this.save(chat);
       this.emit({ chatId: chat.id, message: structuredClone(message) });
-      await this.answer(chat, message, root, "", input, abort, [], false, true);
+      await this.answer(chat, message, root, "", input, abort, { adopt: true });
     } finally {
       if (idle) {
         active.requests.close();
@@ -1459,8 +1459,7 @@ export class ProjectChats {
         instructions ?? "",
         input,
         abort,
-        [],
-        true,
+        { compact: true },
       ).finally(() => {
         active.requests.close();
         this.active.delete(id);
@@ -1476,9 +1475,11 @@ export class ProjectChats {
     prompt: string,
     input: ProjectChatSend,
     abort: AbortController,
-    skills: CodexSkill[] = [],
-    compact = false,
-    adopt = false,
+    {
+      skills = [],
+      compact = false,
+      adopt = false,
+    }: { skills?: CodexSkill[]; compact?: boolean; adopt?: boolean } = {},
   ) {
     let flush: ReturnType<typeof setTimeout> | null = null,
       checkpoint: ReturnType<typeof setTimeout> | null = null;
