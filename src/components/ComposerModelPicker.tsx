@@ -44,9 +44,7 @@ const models: Model[] = [
   { provider: "message", id: "", name: "Message only" },
 ];
 /** Named Codex models, for commands that set one without opening the picker. */
-export const codexModels = models.filter(
-  (m) => m.provider === "codex" && m.id,
-);
+export const codexModels = models.filter((m) => m.provider === "codex" && m.id);
 const providerNames = { codex: "Codex", claude: "Claude", message: "No agent" };
 const modelKey = (m: Model) => JSON.stringify([m.provider, m.id]);
 const favoritesKey = "relay-model-favorites";

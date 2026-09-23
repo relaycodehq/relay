@@ -1339,7 +1339,11 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: agent-shimmer 2s linear infinite;
+  /* A text-clipped background can't animate on the compositor. Its own layer
+     keeps each repaint small, and 20 steps a second instead of every frame
+     keep it from repainting at the display's full rate while an answer streams. */
+  will-change: transform;
+  animation: agent-shimmer 2s steps(40) infinite;
 }
 @keyframes agent-shimmer {
   from {
@@ -2069,6 +2073,15 @@ details.agent-step > .agent-step-heading:hover {
 .queued-actions button:hover {
   color: var(--text);
   background: var(--hover);
+}
+.chat-queue-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.chat-queue-hint kbd {
+  font: inherit;
+  color: var(--text);
 }
 .resume-answer {
   display: inline-flex;

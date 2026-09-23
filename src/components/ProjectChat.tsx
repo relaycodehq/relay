@@ -28,6 +28,7 @@ import {
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
+import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
@@ -439,6 +440,7 @@ export function ProjectChat({
     );
   }, [messages, parentIds, root]);
   const running = messages.some((m) => m.status === "streaming");
+  const sendKey = useSendKey();
   const context = latestContext(shown);
   const compacting = shown.some(
     (m) => m.compaction && m.status === "streaming",
@@ -835,8 +837,12 @@ export function ProjectChat({
                         <button
                           type="button"
                           disabled={busy}
-                          aria-label="Send now"
-                          title="Send now"
+                          aria-label={running ? "Steer now" : "Send now"}
+                          title={
+                            running
+                              ? "Steer the current answer with this message"
+                              : "Send now"
+                          }
                           onPointerDown={(e) => e.preventDefault()}
                           onClick={() =>
                             void queueAction("steer", queued.input.id)
@@ -861,6 +867,12 @@ export function ProjectChat({
                     )}
                   </div>
                 ))}
+                {running && (
+                  <p className="chat-queue-hint">
+                    <kbd>{sendKeyLabel(sendKey)}</kbd> to queue ·{" "}
+                    <kbd>{steerKeyLabel(sendKey)}</kbd> to steer
+                  </p>
+                )}
               </section>
             )}
             {root && shown.length === 1 && (

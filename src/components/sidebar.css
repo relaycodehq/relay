@@ -538,8 +538,17 @@
   animation: sb-spin 0.8s linear infinite;
 }
 .sb-status.waiting i {
+  position: relative;
   background: var(--sb-waiting);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--sb-waiting) 60%, transparent);
+}
+/* The ring scales and fades on the compositor; an animated box-shadow would
+   repaint every frame for as long as the thread waits. */
+.sb-status.waiting i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--sb-waiting) 55%, transparent);
   animation: sb-pulse 1.6s ease-out infinite;
 }
 
@@ -956,11 +965,9 @@
   }
 }
 @keyframes sb-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--sb-waiting) 55%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 6px transparent;
+  to {
+    transform: scale(2.7);
+    opacity: 0;
   }
 }
 @keyframes sb-breathe {
@@ -981,6 +988,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sb *,
+  .sb *::after,
   .sb-menu {
     animation: none !important;
     transition: none !important;

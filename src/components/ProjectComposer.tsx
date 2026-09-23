@@ -46,7 +46,7 @@ import { api } from "../lib/api";
 import { ComposerModelPicker, codexModels } from "./ComposerModelPicker";
 import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
-import { sendsMessage, useSendKey } from "../lib/send-key";
+import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ComposerSelect } from "./ComposerSelect";
 import {
   loadDraftImages,
@@ -299,7 +299,11 @@ export function ProjectComposer({
     if (recipient === "message")
       return "Choose Codex or Claude before changing agent settings.";
     const value = args.toLowerCase();
-    if (args && ["plan", "fast"].includes(command) && !["on", "off"].includes(value))
+    if (
+      args &&
+      ["plan", "fast"].includes(command) &&
+      !["on", "off"].includes(value)
+    )
       return `Use /${command} on or /${command} off.`;
     if (command === "model") {
       if (!args) {
@@ -320,9 +324,7 @@ export function ProjectComposer({
     }
     if (command === "effort") {
       const effort = value === "default" ? "" : value;
-      const allowed = commandOptions("effort")?.some(
-        (o) => o.value === value,
-      );
+      const allowed = commandOptions("effort")?.some((o) => o.value === value);
       if (!allowed)
         return `Choose one of: ${commandOptions("effort")
           ?.map((o) => o.value)
@@ -403,7 +405,7 @@ export function ProjectComposer({
         return next;
       });
   }
-  async function send() {
+  async function send(steer = false) {
     if (busy || commands.interceptSend()) return;
     if (
       !selected ||
@@ -422,7 +424,9 @@ export function ProjectComposer({
     sending.current = true;
     try {
       const sent = await onSend({
-        ...(running ? { delivery: "queue" as const } : {}),
+        ...(running
+          ? { delivery: steer ? ("steer" as const) : ("queue" as const) }
+          : {}),
         body:
           mention || recipient === "message"
             ? body
@@ -556,9 +560,10 @@ export function ProjectComposer({
           }
           onKeyDownCapture={(e) => {
             if (commands.onKeyDown(e)) return;
-            if (sendsMessage(e, sendKey)) {
+            const action = sendAction(e, sendKey);
+            if (action) {
               e.preventDefault();
-              send();
+              send(action === "steer");
             }
           }}
           onPasteCapture={(event) => {
@@ -709,7 +714,11 @@ export function ProjectComposer({
             <button
               className="primary send-message"
               aria-label="Send message"
-              title={running ? "Queue message" : "Send message"}
+              title={
+                running
+                  ? `Queue message · ${steerKeyLabel(sendKey)} to steer`
+                  : "Send message"
+              }
               disabled={
                 busy ||
                 (!draft.trim() && !images.length && !allowEmpty) ||

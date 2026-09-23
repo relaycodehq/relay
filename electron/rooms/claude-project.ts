@@ -74,6 +74,10 @@ type ClaudeSession = {
   controller: AbortController;
   stream: ClaudeStream;
   iterator: AsyncIterator<import("@anthropic-ai/claude-agent-sdk").SDKMessage>;
+  /** A read started while checking for a follow-up turn; the next reader takes it. */
+  pending?: Promise<
+    IteratorResult<import("@anthropic-ai/claude-agent-sdk").SDKMessage>
+  >;
   plan: string;
   threadId?: string;
   /** Learned from the first result; the SDK only reports it per finished turn. */
@@ -270,7 +274,11 @@ export async function runClaudeProject(
   let answer = "",
     currentText = "",
     currentMessage = "",
-    succeeded = false;
+    succeeded = false,
+    // Earlier answers in this turn, when a late steer ran as a follow-up turn.
+    before = "",
+    steers = 0,
+    steerable = true;
   // Text followed by a tool call is commentary, not the answer. Keep it out of the body.
   const commentary = new Set<string>();
   // A tool result only carries the call id; keep the call's label for the finished row.
@@ -278,7 +286,7 @@ export async function runClaudeProject(
   const publish = (text: string) => {
     if (text.length > 100000) throw new Error("Answer size limit reached.");
     answer = text;
-    options.onText(text);
+    options.onText(before + text);
   };
   const controller = session?.controller ?? new AbortController();
   const abort = () => controller.abort();
@@ -439,6 +447,24 @@ export async function runClaudeProject(
           : [{ type: "text", text: options.prompt }, ...images],
       },
     });
+    if (!options.compact)
+      options.onControl?.({
+        steer: async (text) => {
+          if (!steerable || options.signal.aborted)
+            throw new Error(
+              "This turn has finished. Send the queued message as a new turn.",
+            );
+          steers++;
+          // "next" folds the message into the running turn at its next step.
+          session!.input.push({
+            type: "user",
+            session_id: session!.threadId ?? "",
+            parent_tool_use_id: null,
+            message: { role: "user", content: text },
+            priority: "next",
+          });
+        },
+      });
     let context: ContextUsage | undefined;
     let cache: PromptCache | undefined;
     // The cache is read when a request starts, not when its reply arrives.
@@ -455,7 +481,9 @@ export async function runClaudeProject(
       options.onContext?.(context);
     };
     while (true) {
-      const next = await session.iterator.next();
+      const pending = session.pending;
+      session.pending = undefined;
+      const next = await (pending ?? session.iterator.next());
       if (next.done)
         throw new Error("Claude stopped before completing this turn.");
       const message = next.value;
@@ -554,6 +582,7 @@ export async function runClaudeProject(
           }
       }
       if (message.type === "result") {
+        steerable = false;
         if (message.is_error || message.subtype !== "success")
           throw new Error("Claude could not complete this turn.");
         const windows = Object.values(message.modelUsage ?? {})
@@ -569,8 +598,18 @@ export async function runClaudeProject(
         }
         publish(session.plan || message.result || answer);
         if (!answer.trim()) throw new Error("Claude returned an empty answer.");
+        if (steers) {
+          steers = 0;
+          session.pending = session.iterator.next();
+          if (await startsFollowUp(session.pending)) {
+            before += answer + "\n\n";
+            answer = "";
+            steerable = true;
+            continue;
+          }
+        }
         succeeded = true;
-        return answer;
+        return before + answer;
       }
     }
   } finally {
@@ -584,6 +623,31 @@ export async function runClaudeProject(
       }
     }
   }
+}
+
+/**
+ * A steer that arrives after Claude's last step can't fold into the turn, so
+ * Claude runs it as its own turn right after the result. That turn opens with
+ * an init frame at once; a quiet stream means every steer was folded in.
+ */
+async function startsFollowUp(
+  next: Promise<
+    IteratorResult<import("@anthropic-ai/claude-agent-sdk").SDKMessage>
+  >,
+) {
+  let quiet = () => {};
+  const timer = setTimeout(() => quiet(), 2000);
+  const first = await Promise.race([
+    next.catch(() => undefined),
+    new Promise<undefined>((resolve) => (quiet = () => resolve(undefined))),
+  ]);
+  clearTimeout(timer);
+  return (
+    !!first &&
+    !first.done &&
+    first.value.type === "system" &&
+    first.value.subtype === "init"
+  );
 }
 
 const CACHE_5M = 5 * 60_000;

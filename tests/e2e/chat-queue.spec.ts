@@ -125,8 +125,9 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect(page.getByLabel("Follow-up delivery")).toHaveCount(0);
     await page.screenshot({ path: "test-results/chat-queued.png" });
     await queue.screenshot({ path: "test-results/chat-queue-detail.png" });
+    await expect(queue.locator(".chat-queue-hint")).toBeVisible();
     await queue
-      .getByRole("button", { name: "Send now", exact: true })
+      .getByRole("button", { name: "Steer now", exact: true })
       .first()
       .click();
     await expect(queue.locator(".queued-message")).toHaveCount(1);

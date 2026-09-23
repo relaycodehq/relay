@@ -35,7 +35,12 @@ import { api } from "../lib/api";
 import { useAISettings } from "../lib/useAISettings";
 import { setAppearance, useAppearance } from "../lib/appearance";
 import { setUsageRing, useUsageRing } from "../lib/usage-ring";
-import { setSendKey, useSendKey, type SendKey } from "../lib/send-key";
+import {
+  setSendKey,
+  steerKeyLabel,
+  useSendKey,
+  type SendKey,
+} from "../lib/send-key";
 import {
   resolvePalette,
   themes,
@@ -598,15 +603,21 @@ export function Settings({
       category: "shortcuts",
       title: "Send messages with",
       description:
-        sendKey === "enter"
-          ? "Enter sends the message. Shift+Enter adds a new line."
-          : "⌘/Ctrl+Enter sends the message. Enter adds a new line.",
-      keywords: "enter return send submit message newline composer chat",
+        {
+          enter: "Enter sends the message. Shift+Enter adds a new line.",
+          "shift-enter":
+            "Shift+Enter sends the message. Enter adds a new line.",
+          "mod-enter": "⌘/Ctrl+Enter sends the message. Enter adds a new line.",
+        }[sendKey] +
+        ` While an agent is working, this queues the message and ${steerKeyLabel(sendKey)} steers the current answer instead.`,
+      keywords:
+        "enter return send submit message newline composer chat queue steer",
       render: () => (
         <div className="segmented settings-segmented">
           {(
             [
               ["enter", "Enter"],
+              ["shift-enter", "Shift Enter"],
               ["mod-enter", "⌘ / Ctrl Enter"],
             ] as [SendKey, string][]
           ).map(([value, label]) => (

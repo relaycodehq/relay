@@ -36,13 +36,7 @@ export const composerCommands: readonly RelayCommand[] = [
 export interface ProviderCommand {
   displayName?: string;
   source?:
-    | "app"
-    | "repo"
-    | "project"
-    | "personal"
-    | "system"
-    | "claude"
-    | "other";
+    "app" | "repo" | "project" | "personal" | "system" | "claude" | "other";
   name: string;
   description: string;
   argumentHint?: string;

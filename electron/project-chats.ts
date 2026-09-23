@@ -30,6 +30,8 @@ import {
   codexQuestionChoice,
   defaultAISettings,
 } from "../shared/settings";
+const agentName = (provider: "codex" | "claude") =>
+  provider === "claude" ? "Claude" : "Codex";
 interface ActiveChat {
   requests: AgentRequests;
   abort: AbortController;
@@ -381,15 +383,19 @@ export class ProjectChats {
     }
     try {
       const mention = agentMention(next.input.body),
-        prior = active.input;
-      if (
-        !active.steer ||
-        !prior ||
-        mention?.provider !== "codex" ||
-        agentMention(prior.body)?.provider !== "codex"
-      )
+        prior = active.input,
+        running = prior && agentMention(prior.body)?.provider;
+      if (!mention || !running)
         throw new Error(
-          "Steering is available once Codex starts working. This message stays queued.",
+          "Only agent messages can steer an agent's answer. This message stays queued.",
+        );
+      if (mention.provider !== running)
+        throw new Error(
+          `${agentName(running)} is answering, so this ${agentName(mention.provider)} message stays queued for its own turn.`,
+        );
+      if (!active.steer)
+        throw new Error(
+          `Steering is available once ${agentName(running)} starts working. This message stays queued.`,
         );
       if (
         next.input.parentId !== prior.parentId ||
@@ -403,10 +409,11 @@ export class ProjectChats {
       if (
         next.input.images?.length ||
         next.input.selection ||
-        /(?:^|\s)(?:\$|\/skill:)/.test(mention.question)
+        /(?:^|\s)(?:\$|\/skill:)/.test(mention.question) ||
+        /^\s*\//.test(mention.question)
       )
         throw new Error(
-          "Skills, screenshots and selected code need their own turn. This message stays queued.",
+          "Skills, commands, screenshots and selected code need their own turn. This message stays queued.",
         );
       await active.steer(
         mention.question +
@@ -419,7 +426,7 @@ export class ProjectChats {
         steered: true,
         role: "user",
         body: next.input.body,
-        provider: "codex",
+        provider: mention.provider,
         status: "complete",
         created: Date.now(),
         version: 1,

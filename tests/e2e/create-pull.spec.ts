@@ -84,6 +84,15 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
       path: "test-results/screenshots/55-slash-commands.png",
       animations: "disabled",
     });
+    await input.fill("/effort hi");
+    await expect(
+      page.getByRole("option", { name: /\/effort high/ }),
+    ).toBeVisible();
+    await input.press("Enter");
+    await expect(input).toHaveText("");
+    await expect(
+      page.getByRole("combobox", { name: "Reasoning effort" }),
+    ).toContainText("High");
     await input.fill("Please use $exp");
     await expect(page.getByRole("option", { name: /Explain/ })).toBeVisible();
     await input.press("Tab");
