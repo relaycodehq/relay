@@ -945,8 +945,9 @@ export function ProjectChat({
           : {}),
       });
       onDraft("");
-      setSelection(undefined);
+      // A side conversation leaves the thread's attachments waiting.
       if (!root) {
+        setSelection(undefined);
         setWorkItem(undefined);
         setCodeRefs([]);
       }
