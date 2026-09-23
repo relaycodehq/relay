@@ -1098,6 +1098,13 @@ export class ProjectChats {
             id: activity.id,
             activity,
           };
+          // A busy subagent mustn't crowd out Claude's own later calls.
+          if (traceIndex < 0 && trace.length >= 100 && !activity.parentId) {
+            const nested = trace.findIndex(
+              (e) => e.kind === "activity" && e.activity.parentId,
+            );
+            if (nested >= 0) trace.splice(nested, 1);
+          }
           if (traceIndex >= 0) trace[traceIndex] = entry;
           else if (trace.length < 100) trace.push(entry);
           changed();

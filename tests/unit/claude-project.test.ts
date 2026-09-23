@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { runClaudeProject } from "../../electron/rooms/claude-project";
+import type { AgentActivity } from "../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 vi.mock("../../electron/executables", () => ({
@@ -91,4 +92,79 @@ it("still reports an empty answer to the prompt itself", async () => {
     result(""),
   ]);
   await expect(run()).rejects.toThrow("Claude returned an empty answer.");
+});
+
+it("nests a subagent's calls under its agent call and reports its progress", async () => {
+  const call = (
+    id: string,
+    name: string,
+    input: object,
+    parent: string | null,
+  ) => ({
+    type: "assistant",
+    parent_tool_use_id: parent,
+    session_id,
+    message: {
+      id: `msg-${id}`,
+      content: [{ type: "tool_use", id, name, input }],
+      usage: {},
+    },
+  });
+  const done = (id: string, text: string, parent: string | null) => ({
+    type: "user",
+    parent_tool_use_id: parent,
+    session_id,
+    message: {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: id, content: text }],
+    },
+  });
+  const progress = (summary?: string) => ({
+    type: "system",
+    subtype: "task_progress",
+    task_id: "task",
+    tool_use_id: "agent",
+    description: "Explore auth",
+    usage: { total_tokens: 10, tool_uses: 1, duration_ms: 5 },
+    last_tool_name: "Read",
+    ...(summary ? { summary } : {}),
+    session_id,
+  });
+  claude((uuid) => [
+    lifecycle(uuid, "started"),
+    call("agent", "Agent", { description: "Explore auth" }, null),
+    call("read", "Read", { file_path: "/project/auth.ts" }, "agent"),
+    progress(),
+    progress("Reading the auth module"),
+    done("read", "export {}", "agent"),
+    done("agent", "Auth lives in auth.ts.", null),
+    progress("Too late"),
+    answer("banana"),
+    result("banana"),
+  ]);
+  const seen: AgentActivity[] = [];
+  await runClaudeProject({
+    cwd: "/project",
+    prompt: "Where is auth?",
+    choice: {} as never,
+    model: "",
+    effort: "",
+    signal: new AbortController().signal,
+    onText() {},
+    onActivity: (a) => seen.push({ ...a }),
+    session: { key: crypto.randomUUID(), id: session_id, async onId() {} },
+  });
+  expect(seen.filter((a) => a.id === "read").map((a) => a.parentId)).toEqual([
+    "agent",
+    "agent",
+  ]);
+  const agent = seen.filter((a) => a.id === "agent");
+  expect(agent.map((a) => [a.status, a.progress])).toEqual([
+    ["running", undefined],
+    ["running", "Using Read · 1 tool"],
+    ["running", "Reading the auth module · 1 tool"],
+    ["complete", undefined],
+  ]);
+  expect(agent.at(-1)).toMatchObject({ detail: "Auth lives in auth.ts." });
+  expect(agent.every((a) => !a.parentId)).toBe(true);
 });

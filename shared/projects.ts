@@ -154,6 +154,10 @@ export interface AgentActivity {
   label: string;
   status: "running" | "complete" | "failed";
   detail?: string;
+  /** The agent call this one ran inside, when a subagent made it. */
+  parentId?: string;
+  /** A running agent's latest status line, e.g. "Reading auth.ts · 12 tools". */
+  progress?: string;
 }
 /** Private turn events. Sharing serializes only the final answer body. */
 export type AgentTrace =

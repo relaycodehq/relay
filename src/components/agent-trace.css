@@ -197,3 +197,13 @@
     animation: none;
   }
 }
+
+/* A running subagent's status after its name: dimmed, and first to give way. */
+.agent-step-heading > .agent-step-progress,
+.agent-batch-row > .agent-step-progress {
+  flex: 0 1000 auto;
+  opacity: 0.6;
+}
+.agent-step-progress::before {
+  content: "· ";
+}

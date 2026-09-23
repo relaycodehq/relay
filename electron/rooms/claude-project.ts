@@ -452,6 +452,8 @@ export async function runClaudeProject(
         permissionMode: permissions,
         allowDangerouslySkipPermissions: options.runtimeMode === "full-access",
         includePartialMessages: true,
+        // A one-line "what it's doing" for each running subagent, every ~30s.
+        agentProgressSummaries: true,
         persistSession: true,
         ...(options.session?.id ? { resume: options.session.id } : {}),
         settingSources: ["user", "project", "local"],
@@ -751,6 +753,9 @@ export async function runClaudeProject(
         }
         for (const tool of tools) {
           const activity = claudeActivity(tool.id, tool.name, tool.input);
+          // A subagent's calls fold under the agent call that started it.
+          if (message.parent_tool_use_id)
+            activity.parentId = message.parent_tool_use_id.slice(0, 180);
           toolCalls.set(tool.id, activity);
           options.onActivity?.(activity);
           const edited = claudeEditedPaths(tool.name, tool.input);
@@ -778,12 +783,40 @@ export async function runClaudeProject(
                       )
                       .join("\n")
                   : "";
-            options.onActivity?.({
+            const finished: AgentActivity = {
               ...(call ?? claudeActivity(result.tool_use_id, "Tool", {})),
+              progress: undefined,
+              ...(!call && message.parent_tool_use_id
+                ? { parentId: message.parent_tool_use_id.slice(0, 180) }
+                : {}),
               status: result.is_error ? "failed" : "complete",
               ...(output ? { detail: output.slice(-8000) } : {}),
-            });
+            };
+            toolCalls.set(result.tool_use_id, finished);
+            options.onActivity?.(finished);
           }
+      }
+      if (message.type === "system" && message.subtype === "task_progress") {
+        // A running subagent's row says what it is doing now.
+        const call = toolCalls.get(message.tool_use_id ?? "");
+        if (call?.kind === "agent" && call.status === "running") {
+          const doing =
+            message.summary?.trim() ||
+            (message.last_tool_name && `Using ${message.last_tool_name}`);
+          const uses = message.usage.tool_uses;
+          const progress = [
+            doing,
+            uses && `${uses} tool${uses === 1 ? "" : "s"}`,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 300);
+          if (progress && progress !== call.progress) {
+            const updated = { ...call, progress };
+            toolCalls.set(updated.id, updated);
+            options.onActivity?.(updated);
+          }
+        }
       }
       if (message.type === "result") {
         // Claude finishes what it queued before the prompt first: resuming a

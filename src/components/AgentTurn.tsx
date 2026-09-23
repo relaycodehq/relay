@@ -1,6 +1,13 @@
 // Adapted from T3 Code's MessagesTimeline activity group: one summary line per turn,
 // and a flat list of tool rows named by what they touched.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Bot,
   Brain,
@@ -165,6 +172,18 @@ function liveLabel(a: AgentActivity) {
   }
 }
 
+/** Each agent call's own tool calls, by the agent call's id, and how to show their paths. */
+const Subagents = createContext({
+  calls: new Map<string, AgentActivity[]>(),
+  display: (text: string) => text,
+});
+
+/** A running agent's status after its name, dimmed so the name leads. */
+function Progress({ activity: a }: { activity: AgentActivity }) {
+  if (a.status !== "running" || !a.progress) return null;
+  return <span className="agent-step-progress">{a.progress}</span>;
+}
+
 /** A fold that builds its body the first time it opens; a long run keeps hundreds closed. */
 function Fold({
   className,
@@ -200,11 +219,13 @@ function ToolRow({
 }) {
   // A failed call looks like any other: commands fail as part of the work.
   const Icon = icons[a.kind];
-  const expandable = Boolean(a.detail) || a.kind === "file";
+  const calls = useContext(Subagents).calls.get(a.id) ?? [];
+  const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
   const heading = (
     <>
       {a.status === "running" ? <Spinner size={14} /> : <Icon size={14} />}
       <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
+      <Progress activity={a} />
     </>
   );
   if (!expandable)
@@ -218,11 +239,37 @@ function ToolRow({
       className={`agent-step ${a.status}`}
       summary={<summary className="agent-step-heading">{heading}</summary>}
     >
+      {calls.length > 0 && (
+        <SubagentRows calls={calls} onChanges={onChanges} />
+      )}
       {a.detail && <pre>{a.detail}</pre>}
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
       )}
     </Fold>
+  );
+}
+
+/** What a subagent did, under its agent row. */
+function SubagentRows({
+  calls,
+  onChanges,
+}: {
+  calls: AgentActivity[];
+  onChanges: () => void;
+}) {
+  const { display } = useContext(Subagents);
+  return (
+    <div className="agent-group-rows">
+      {calls.map((c) => (
+        <ToolRow
+          key={c.id}
+          activity={c}
+          label={display(c.label)}
+          onChanges={onChanges}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -288,7 +335,9 @@ export function AgentTurn({
   if (!live && !entries.length) return null;
   const root = projectRoot.replace(/\/+$/, "") + "/";
   const display = (text: string) => text.split(root).join("");
-  const activity = entries.flatMap((e) =>
+  const { shown, calls } = nestSubagents(entries);
+  // Claude's own calls; a subagent's are counted by its agent row.
+  const activity = shown.flatMap((e) =>
     e.kind === "activity" ? [e.activity] : [],
   );
   const current = live
@@ -356,57 +405,74 @@ export function AgentTurn({
         <ChevronRight size={13} className="agent-run-chevron" />
       </summary>
       {expanded && (entries.length > 0 || thinking) && (
-        <div className="agent-trace" aria-label="Local agent activity">
-          {groupTrace(entries).map((part, index, parts) =>
-            part.kind === "commentary" ? (
-              <div className="agent-commentary" key={part.id}>
-                <RichText
-                  text={part.text}
-                  projectRoot={projectRoot}
-                  onOpenFile={onOpenFile}
+        <Subagents.Provider value={{ calls, display }}>
+          <div className="agent-trace" aria-label="Local agent activity">
+            {groupTrace(shown).map((part, index, parts) =>
+              part.kind === "commentary" ? (
+                <div className="agent-commentary" key={part.id}>
+                  <RichText
+                    text={part.text}
+                    projectRoot={projectRoot}
+                    onOpenFile={onOpenFile}
+                  />
+                </div>
+              ) : live && index === parts.length - 1 ? (
+                <OpenBatch
+                  key={part.id}
+                  activity={part.activity}
+                  display={display}
+                  onChanges={onChanges}
                 />
+              ) : part.activity.length === 1 ? (
+                <ToolRow
+                  key={part.id}
+                  activity={part.activity[0]!}
+                  label={display(part.activity[0]!.label)}
+                  onChanges={onChanges}
+                />
+              ) : (
+                <ActivityGroup
+                  key={part.id}
+                  activity={part.activity}
+                  display={display}
+                  onChanges={onChanges}
+                />
+              ),
+            )}
+            {/* The line keeps its height while a call runs, so each call
+                doesn't shrink the trace and jolt the thread pinned below. */}
+            {live && !message.body && (
+              <div className="agent-step agent-thinking">
+                <div className="agent-step-heading">
+                  {thinking && (
+                    <>
+                      <ThinkingGlyph provider={message.provider} />
+                      <ThinkingWord seed={message.id} />
+                    </>
+                  )}
+                </div>
               </div>
-            ) : live && index === parts.length - 1 ? (
-              <OpenBatch
-                key={part.id}
-                activity={part.activity}
-                display={display}
-                onChanges={onChanges}
-              />
-            ) : part.activity.length === 1 ? (
-              <ToolRow
-                key={part.id}
-                activity={part.activity[0]!}
-                label={display(part.activity[0]!.label)}
-                onChanges={onChanges}
-              />
-            ) : (
-              <ActivityGroup
-                key={part.id}
-                activity={part.activity}
-                display={display}
-                onChanges={onChanges}
-              />
-            ),
-          )}
-          {/* The line keeps its height while a call runs, so each call
-              doesn't shrink the trace and jolt the thread pinned below. */}
-          {live && !message.body && (
-            <div className="agent-step agent-thinking">
-              <div className="agent-step-heading">
-                {thinking && (
-                  <>
-                    <ThinkingGlyph provider={message.provider} />
-                    <ThinkingWord seed={message.id} />
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Subagents.Provider>
       )}
     </details>
   );
+}
+
+/** Takes the calls subagents made out of the trace, keyed by the agent call that ran them. */
+function nestSubagents(entries: AgentTrace[]) {
+  const ids = new Set(entries.map((e) => e.id));
+  const calls = new Map<string, AgentActivity[]>();
+  const shown = entries.filter((e) => {
+    if (e.kind !== "activity") return true;
+    const parent = e.activity.parentId;
+    // An orphan, its agent row dropped from a full trace, stays in line.
+    if (!parent || !ids.has(parent)) return true;
+    calls.set(parent, [...(calls.get(parent) ?? []), e.activity]);
+    return false;
+  });
+  return { shown, calls };
 }
 
 type TracePart =
@@ -504,13 +570,15 @@ function OpenBatch({
   const earlier = activity.filter((a) => a !== head);
   const running = head.status === "running";
   const Icon = icons[head.kind];
+  const calls = useContext(Subagents).calls.get(head.id) ?? [];
+  const folded = earlier.length > 0 || calls.length > 0;
   return (
     <div className={`agent-batch ${head.status}`}>
       <button
         type="button"
         className="agent-step-heading agent-batch-head"
-        aria-expanded={earlier.length ? open : undefined}
-        disabled={!earlier.length}
+        aria-expanded={folded ? open : undefined}
+        disabled={!folded}
         onClick={() => setOpen(!open)}
       >
         <span className="agent-batch-row" title={display(head.label)}>
@@ -518,12 +586,17 @@ function OpenBatch({
           <span className={running ? "live-shine" : undefined}>
             {display(running ? liveLabel(head) : doneLabel(head))}
           </span>
+          <Progress activity={head} />
         </span>
-        {earlier.length > 0 && (
+        {folded && (
           <ChevronRight size={13} className="agent-batch-chevron" />
         )}
       </button>
-      {open && (
+      {/* The live agent's own calls first; the batch's earlier calls fold behind it. */}
+      {open && calls.length > 0 && (
+        <SubagentRows calls={calls} onChanges={onChanges} />
+      )}
+      {open && earlier.length > 0 && (
         <div className="agent-group-rows">
           {earlier.map((a) => (
             <ToolRow
