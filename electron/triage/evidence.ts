@@ -62,7 +62,7 @@ export function prepareCandidate(
         ),
       ].map((m) => m[1]),
     ),
-  ];
+  ].slice(0, 2500); // The saved checkpoint accepts no more.
   return {
     path: file.filename,
     hunks: patch.hunks.length,

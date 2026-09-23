@@ -855,6 +855,25 @@ describe("Analysis lifecycle and durable groups", () => {
     expect(downloads).toHaveBeenCalledTimes(calls + 1);
     expect(downloads.mock.calls.at(-1)![1].filename).toBe("one.ts");
   });
+  it("reopens a checkpoint for a file that mentions thousands of paths", async () => {
+    const f = await fixture();
+    const digits =
+      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    // One line of 3,000 short paths, as in a minified manifest.
+    const manifest = Array.from(
+      { length: 3000 },
+      (_, i) => `"a/${digits[i % 62]}${digits[Math.floor(i / 62)]}"`,
+    ).join(",");
+    vi.spyOn(f.client, "contentsAt").mockImplementation(async () =>
+      pair(`old\n${manifest}\n`, `new\n${manifest}\n`),
+    );
+    await f.service.start(f.client, ref, "key", head, base);
+    await finish(f);
+    const reopened = new TriageService(f.store, f.dir, f.classify);
+    expect((await reopened.state("key", `${base}:${head}`))?.status).toBe(
+      "complete",
+    );
+  });
   it("keeps a file too large to fetch in individual review instead of retrying it", async () => {
     const f = await fixture();
     const original = f.client.contentsAt.bind(f.client);
