@@ -43,6 +43,10 @@ const models: Model[] = [
   { provider: "claude", id: "", name: "Claude default" },
   { provider: "message", id: "", name: "Message only" },
 ];
+/** Named Codex models, for commands that set one without opening the picker. */
+export const codexModels = models.filter(
+  (m) => m.provider === "codex" && m.id,
+);
 const providerNames = { codex: "Codex", claude: "Claude", message: "No agent" };
 const modelKey = (m: Model) => JSON.stringify([m.provider, m.id]);
 const favoritesKey = "relay-model-favorites";
@@ -73,14 +77,31 @@ export function ComposerModelPicker({
   choice,
   claudeModel,
   claudeModels,
+  onOpen,
   onSelect,
+  providers,
+  allowDefault = true,
+  label,
+  container,
+  openSignal,
 }: {
   provider: MessageProvider;
   choice: ModelChoice | undefined;
   claudeModel: string;
   /** Listed by the installed Claude CLI; undefined while loading. */
   claudeModels: ClaudeModel[] | undefined;
+  onOpen?: () => void;
   onSelect: (provider: MessageProvider, model: string) => void;
+  /** Limits the rail to these agents, without favorites or message-only. */
+  providers?: ("codex" | "claude")[];
+  /** Offers the "Codex default" row. */
+  allowDefault?: boolean;
+  /** Names the trigger, e.g. "Grouping" gives "Grouping model". */
+  label?: string;
+  /** Portal target, needed inside a modal <dialog>'s top layer. */
+  container?: HTMLElement;
+  /** Opens the picker whenever this changes, e.g. from a /model command. */
+  openSignal?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -130,6 +151,7 @@ export function ComposerModelPicker({
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
   const rows = catalog
+    .filter((m) => allowDefault || m.provider === "message" || m.id)
     .filter((m) => {
       if (category === "favorites") return favorites.includes(modelKey(m));
       return m.provider === category && (!m.legacy || legacy || query.trim());
@@ -209,6 +231,15 @@ export function ComposerModelPicker({
       clearInterval(tick);
     };
   }, [open]);
+  useEffect(() => {
+    if (!openSignal) return;
+    setOpen(true);
+    onOpen?.();
+    setCategory(provider);
+    setQuery("");
+    setLegacy(false);
+    // Only a new signal opens the picker, not a changed provider.
+  }, [openSignal]);
   function changeCategory(next: Category) {
     setCategory(next);
     setQuery("");
@@ -234,6 +265,7 @@ export function ComposerModelPicker({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
+          onOpen?.();
           setCategory(provider);
           setQuery("");
           setLegacy(false);
@@ -243,7 +275,7 @@ export function ComposerModelPicker({
       <Popover.Trigger
         type="button"
         className="composer-control composer-model-trigger"
-        aria-label="Choose model and provider"
+        aria-label={label ? `${label} model` : "Choose model and provider"}
         title={current.name}
         disabled={!choice}
       >
@@ -251,16 +283,17 @@ export function ComposerModelPicker({
         <span>{current.name}</span>
         <ChevronDown size={12} />
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container}>
         <Popover.Positioner
           className="composer-popup-positioner"
           align="start"
           sideOffset={6}
           collisionPadding={12}
+          positionMethod={container ? "fixed" : "absolute"}
         >
           <Popover.Popup
             className="model-picker-popup"
-            aria-label="Choose model and provider"
+            aria-label={label ? `${label} model` : "Choose model and provider"}
             initialFocus={search}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
@@ -271,19 +304,22 @@ export function ComposerModelPicker({
               }
             }}
           >
-            <Toolbar.Root
-              className="model-picker-rail"
-              orientation="vertical"
-              aria-label="Model providers"
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  search.current?.focus();
-                }
-              }}
-            >
-              {(["favorites", "codex", "claude", "message"] as const).map(
-                (tab) => (
+            {(providers?.length ?? 2) > 1 && (
+              <Toolbar.Root
+                className="model-picker-rail"
+                orientation="vertical"
+                aria-label="Model providers"
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    search.current?.focus();
+                  }
+                }}
+              >
+                {(
+                  providers ??
+                  (["favorites", "codex", "claude", "message"] as const)
+                ).map((tab) => (
                   <Toolbar.Button
                     type="button"
                     key={tab}
@@ -311,9 +347,9 @@ export function ComposerModelPicker({
                       <ProviderIcon provider={tab} />
                     )}
                   </Toolbar.Button>
-                ),
-              )}
-            </Toolbar.Root>
+                ))}
+              </Toolbar.Root>
+            )}
             <div className="model-picker-content">
               <div className="model-picker-list">
                 <Combobox.Root<string>

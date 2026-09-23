@@ -17,7 +17,15 @@ import {
   type Marker,
 } from "@pierre/diffs/edit";
 import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
-import { FolderGit2, Save, Undo2, Redo2, RotateCw } from "lucide-react";
+import {
+  Columns2,
+  FolderGit2,
+  Save,
+  Undo2,
+  Redo2,
+  RotateCw,
+  X,
+} from "lucide-react";
 import type { LocalFile, Pull } from "../../shared/types";
 import { api } from "../lib/api";
 import { useTheme } from "../lib/useTheme";
@@ -77,6 +85,14 @@ export default function LocalFileEditor({
     null,
   );
   const [bufferText, setBufferText] = useState<string>();
+  // Inline, the editor reads like a plain file with change bars; the
+  // side-by-side comparison with HEAD is one click away.
+  const [compare, setCompare] = useState(
+    () => !inline || localStorage.getItem("relay-editor-compare") === "true",
+  );
+  useEffect(() => {
+    if (inline) localStorage.setItem("relay-editor-compare", String(compare));
+  }, [inline, compare]);
   const bufferHash = useContentHash(bufferText);
   const target = pull ?? {
     projectId: project!.id,
@@ -108,7 +124,7 @@ export default function LocalFileEditor({
           : {}),
       },
     },
-    "split",
+    compare ? "split" : "unified",
   );
   const checkState = checks.state;
   const checked =
@@ -352,7 +368,81 @@ export default function LocalFileEditor({
       onClose={requestClose}
     >
       {symbols.overlay}
-      <div className="local-editor-path" title={source?.path ?? path}>
+      {inline && (
+        <div className="editor-bar">
+          <div className="editor-bar-path" title={source?.path ?? path}>
+            {path.includes("/") && (
+              <span className="editor-bar-dir">
+                <bdi dir="ltr">{path.slice(0, path.lastIndexOf("/") + 1)}</bdi>
+              </span>
+            )}
+            <strong>{path.split("/").pop()}</strong>
+            <span
+              className={`editor-bar-state ${dirty ? "dirty" : ""}`}
+              role="status"
+            >
+              {saving
+                ? "Saving…"
+                : dirty
+                  ? "Unsaved changes"
+                  : saved
+                    ? "Saved"
+                    : ""}
+            </span>
+          </div>
+          {source && symbols.controls}
+          <span className="divider" />
+          <IconButton
+            label="Undo code edit"
+            onClick={() => viewer.current?.getEditor(path)?.undo()}
+          >
+            <Undo2 size={15} />
+          </IconButton>
+          <IconButton
+            label="Redo code edit"
+            onClick={() => viewer.current?.getEditor(path)?.redo()}
+          >
+            <Redo2 size={15} />
+          </IconButton>
+          <IconButton
+            label="Reload local file"
+            disabled={saving || loading}
+            onClick={() =>
+              snapshotDirty() ? setConfirmation("reload") : void load()
+            }
+          >
+            <RotateCw size={15} />
+          </IconButton>
+          <IconButton
+            label={`Compare with ${project ? "HEAD" : "PR head"}`}
+            active={compare}
+            onClick={() => setCompare((v) => !v)}
+          >
+            <Columns2 size={15} />
+          </IconButton>
+          <button
+            className="primary"
+            aria-label="Save locally"
+            title="Save to the local folder (⌘/Ctrl S)"
+            disabled={!dirty || saving || loading}
+            onClick={() => void save()}
+          >
+            Save
+          </button>
+          <IconButton
+            label="Close file"
+            disabled={saving}
+            onClick={requestClose}
+          >
+            <X size={15} />
+          </IconButton>
+        </div>
+      )}
+      <div
+        className="local-editor-path"
+        hidden={inline}
+        title={source?.path ?? path}
+      >
         <FolderGit2 size={14} />
         <span>
           {source?.path ??
@@ -456,9 +546,9 @@ export default function LocalFileEditor({
               )}
             </div>
           ) : null}
-          {symbols.controls}
+          {!inline && symbols.controls}
           {blame.overlay}
-          <div className="editor-versions">
+          <div className="editor-versions" hidden={!compare}>
             <span>{project ? "HEAD" : "PR head"} · read-only</span>
             <span>Local working tree · editable</span>
           </div>
@@ -574,7 +664,7 @@ export default function LocalFileEditor({
                     useTokenTransformer: true,
                     theme: syntaxThemes,
                     themeType: theme,
-                    diffStyle: "split",
+                    diffStyle: compare ? "split" : "unified",
                     expandUnchanged: true,
                     disableFileHeader: true,
                     diffIndicators: "bars",
@@ -589,55 +679,59 @@ export default function LocalFileEditor({
               </EditProvider>
             )}
           </div>
-          <div className="local-editor-footer">
-            <span role="status">
-              {saving
-                ? "Saving…"
-                : dirty
-                  ? "Unsaved changes"
-                  : saved
-                    ? "Saved to local folder"
-                    : "Editing local checkout"}
-            </span>
-            <span className="editor-shortcuts">
-              ⌘ / Ctrl S · Save{large ? " · Large file, plain text" : ""}
-            </span>
-            <IconButton
-              label="Undo code edit"
-              onClick={() => viewer.current?.getEditor(path)?.undo()}
-            >
-              <Undo2 size={16} />
-            </IconButton>
-            <IconButton
-              label="Redo code edit"
-              onClick={() => viewer.current?.getEditor(path)?.redo()}
-            >
-              <Redo2 size={16} />
-            </IconButton>
-            <IconButton
-              label="Reload local file"
-              disabled={saving || loading}
-              onClick={() =>
-                snapshotDirty() ? setConfirmation("reload") : void load()
-              }
-            >
-              <RotateCw size={16} />
-            </IconButton>
-            <button onClick={requestClose} disabled={saving}>
-              Done
-            </button>
-            <button
-              className="primary"
-              disabled={!dirty || saving || loading}
-              onClick={() => void save()}
-            >
-              <Save size={14} /> Save locally
-            </button>
-          </div>
-          <p className="local-editor-note">
-            Changes stay in your checkout. Commit and push separately to update
-            the PR.
-          </p>
+          {!inline && (
+            <div className="local-editor-footer">
+              <span role="status">
+                {saving
+                  ? "Saving…"
+                  : dirty
+                    ? "Unsaved changes"
+                    : saved
+                      ? "Saved to local folder"
+                      : "Editing local checkout"}
+              </span>
+              <span className="editor-shortcuts">
+                ⌘ / Ctrl S · Save{large ? " · Large file, plain text" : ""}
+              </span>
+              <IconButton
+                label="Undo code edit"
+                onClick={() => viewer.current?.getEditor(path)?.undo()}
+              >
+                <Undo2 size={16} />
+              </IconButton>
+              <IconButton
+                label="Redo code edit"
+                onClick={() => viewer.current?.getEditor(path)?.redo()}
+              >
+                <Redo2 size={16} />
+              </IconButton>
+              <IconButton
+                label="Reload local file"
+                disabled={saving || loading}
+                onClick={() =>
+                  snapshotDirty() ? setConfirmation("reload") : void load()
+                }
+              >
+                <RotateCw size={16} />
+              </IconButton>
+              <button onClick={requestClose} disabled={saving}>
+                Done
+              </button>
+              <button
+                className="primary"
+                disabled={!dirty || saving || loading}
+                onClick={() => void save()}
+              >
+                <Save size={14} /> Save locally
+              </button>
+            </div>
+          )}
+          {!inline && (
+            <p className="local-editor-note">
+              Changes stay in your checkout. Commit and push separately to
+              update the PR.
+            </p>
+          )}
         </>
       )}
     </EditorFrame>

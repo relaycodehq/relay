@@ -2,7 +2,7 @@ import { AgentRequestCard } from "./AgentRequestCard";
 import type { RelayCommand } from "../../shared/commands";
 import { agentMention } from "../../shared/rooms";
 import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LockKeyhole,
@@ -30,11 +30,22 @@ import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
-import { ProjectComposer } from "./ProjectComposer";
+import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
+import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
+import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
+import { workItemMessage, type WorkItem } from "../../shared/devops";
+import {
+  codeReferenceMessage,
+  isCodeReference,
+  parseCodeReferences,
+  sameCodeReference,
+  type CodeReference,
+} from "../../shared/code-references";
+import { CodeReferenceList } from "./CodeReferenceChip";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import type { PullRef } from "../../shared/types";
 function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
@@ -112,6 +123,13 @@ const Message = memo(function Message({
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
 }) {
+  const parsed = useMemo(
+    () =>
+      m.role === "user" && m.body
+        ? parseCodeReferences(m.body)
+        : { refs: [], body: m.body },
+    [m.role, m.body],
+  );
   if (m.compaction)
     return (
       <div
@@ -171,12 +189,20 @@ const Message = memo(function Message({
           onChanges={onChanges}
         />
       )}
-      {m.body ? (
+      {!!parsed.refs.length && (
+        <CodeReferenceList
+          references={parsed.refs}
+          onOpen={(ref) =>
+            onOpenFile({ path: ref.path, line: ref.start, directory: false })
+          }
+        />
+      )}
+      {parsed.body?.trim() ? (
         <RichText
           text={
             m.role === "user"
-              ? m.body.replace(/^@(codex|claude)\s+/i, "")
-              : m.body
+              ? parsed.body.replace(/^@(codex|claude)\s+/i, "")
+              : parsed.body
           }
           projectRoot={m.role === "assistant" ? projectRoot : undefined}
           onOpenFile={m.role === "assistant" ? onOpenFile : undefined}
@@ -232,12 +258,17 @@ export function ProjectChat({
   onOpenFile,
   viewing,
 }: {
-  onCommand: (command: RelayCommand) => boolean;
+  onCommand: (command: RelayCommand, args: string) => boolean | string;
   project: Project;
   projects: Project[];
   chat?: ChatSummary;
   draftScope: ChatScope;
-  contextText?: { id: string; text: string; selection?: LineQuestion };
+  contextText?: {
+    id: string;
+    text: string;
+    selection?: LineQuestion;
+    code?: CodeReference;
+  };
   onContextUsed: () => void;
   onShare: () => void;
   onCreated: (c: ChatSummary) => Promise<void>;
@@ -268,10 +299,10 @@ export function ProjectChat({
           ? 1000
           : false,
   });
+  // Refreshed by the shell's working-tree poll.
   const checkout = useQuery({
     queryKey: ["working-tree", "project", project.id],
     queryFn: () => api.projectWorkingTree(project.id),
-    refetchInterval: 5000,
   });
   const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -294,10 +325,33 @@ export function ProjectChat({
       return undefined;
     }
   });
+  const [workItem, setWorkItem] = useState<WorkItem | undefined>(() => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem("chat-work-item:" + id) || "null",
+      );
+      return typeof saved?.id === "number" && typeof saved.title === "string"
+        ? saved
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const [codeRefs, setCodeRefs] = useState<CodeReference[]>(() => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem("chat-code-refs:" + id) || "[]",
+      );
+      return Array.isArray(saved) ? saved.filter(isCodeReference) : [];
+    } catch {
+      return [];
+    }
+  });
   const created = useRef<ChatSummary | undefined>(undefined);
   const [visible, setVisible] = useState(80);
   const scroll = useRef<HTMLDivElement>(null),
     follow = useRef(true);
+  const composer = useRef<ComposerHandle>(null);
   const presence = useQuery({
     queryKey: ["chat-presence", chat?.id, sharePresence, viewing],
     queryFn: () =>
@@ -329,6 +383,16 @@ export function ProjectChat({
       localStorage.setItem("chat-selection:" + id, JSON.stringify(selection));
     else localStorage.removeItem("chat-selection:" + id);
   }, [id, selection]);
+  useEffect(() => {
+    if (workItem)
+      localStorage.setItem("chat-work-item:" + id, JSON.stringify(workItem));
+    else localStorage.removeItem("chat-work-item:" + id);
+  }, [id, workItem]);
+  useEffect(() => {
+    if (codeRefs.length)
+      localStorage.setItem("chat-code-refs:" + id, JSON.stringify(codeRefs));
+    else localStorage.removeItem("chat-code-refs:" + id);
+  }, [id, codeRefs]);
   const messages = useMemo(() => {
     const byId = new Map((history.data?.messages ?? []).map((m) => [m.id, m]));
     for (const m of Object.values(updates))
@@ -360,16 +424,53 @@ export function ProjectChat({
       ),
     [messages],
   );
-  const shown = messages.filter((m) =>
-    root
-      ? m.id === root.id || parentIds.get(m.id) === root.id
-      : !m.parentId || !messages.some((p) => p.id === m.parentId),
-  );
+  const replyCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const id of parentIds.values())
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    return counts;
+  }, [parentIds]);
+  const shown = useMemo(() => {
+    const ids = new Set(messages.map((m) => m.id));
+    return messages.filter((m) =>
+      root
+        ? m.id === root.id || parentIds.get(m.id) === root.id
+        : !m.parentId || !ids.has(m.parentId),
+    );
+  }, [messages, parentIds, root]);
   const running = messages.some((m) => m.status === "streaming");
   const context = latestContext(shown);
   const compacting = shown.some(
     (m) => m.compaction && m.status === "streaming",
   );
+  const [showContext, setShowContext] = useState(0);
+  function compact(instructions?: string) {
+    if (!chat) return;
+    setError(undefined);
+    void api
+      .compactProjectChat(chat.id, root?.id ?? null, instructions)
+      .then(() => history.refetch())
+      .catch(setError);
+  }
+  // Session commands need this thread; the rest belong to the workspace.
+  function runCommand(command: RelayCommand, args: string): boolean | string {
+    if (command === "compact") {
+      if (!chat || !context) return "There is no agent session to compact yet.";
+      if (running || busy || compacting)
+        return "Wait for the current answer before compacting.";
+      if (args && context.provider === "codex")
+        return "Codex compacts without custom instructions.";
+      compact(args || undefined);
+      return true;
+    }
+    if (command === "context") {
+      if (!chat || !context)
+        return "Context usage appears after the first answer.";
+      setShowContext((n) => n + 1);
+      return true;
+    }
+    return onCommand(command, args);
+  }
   const draftKey = `chat-draft:${id}${root ? ":" + root.id : ""}`;
   const draft = drafts[draftKey] ?? localStorage.getItem(draftKey) ?? "";
   const onDraft = (v: string, key = draftKey) => {
@@ -385,10 +486,19 @@ export function ProjectChat({
   useEffect(() => {
     if (contextText) {
       setRootId(null);
-      setSelection(contextText.selection);
-      const key = "chat-draft:" + id,
-        old = localStorage.getItem(key) || "";
-      onDraft(`${old}${old ? "\n\n" : ""}${contextText.text}`, key);
+      const { code, text } = contextText;
+      if (code)
+        setCodeRefs((refs) =>
+          refs.some((ref) => sameCodeReference(ref, code))
+            ? refs
+            : [...refs, code],
+        );
+      else setSelection(contextText.selection);
+      if (text) {
+        const key = "chat-draft:" + id,
+          old = localStorage.getItem(key) || "";
+        onDraft(`${old}${old ? "\n\n" : ""}${text}`, key);
+      }
       onContextUsed();
     }
   }, [contextText?.id]);
@@ -417,8 +527,14 @@ export function ProjectChat({
         created.current ??
         (await api.createProjectChat(project.id, scope));
       created.current = target;
+      const attached = !root && workItem,
+        refs = root ? [] : codeRefs;
+      const body = attached
+        ? workItemMessage(attached, value.body)
+        : value.body;
       await api.sendProjectChat(target.id, {
         ...value,
+        body: codeReferenceMessage(refs, body),
         id: crypto.randomUUID(),
         ...(root ? { parentId: root.id } : {}),
         ...(viewing.path ? { viewing: viewing.path } : {}),
@@ -428,6 +544,10 @@ export function ProjectChat({
       });
       onDraft("");
       setSelection(undefined);
+      if (!root) {
+        setWorkItem(undefined);
+        setCodeRefs([]);
+      }
       follow.current = true;
       if (!chat) {
         const preferences = localStorage.getItem("composer-settings:" + id);
@@ -454,7 +574,12 @@ export function ProjectChat({
         : null;
       const key = `chat-draft:${id}${parent ? ":" + parent : ""}`;
       const old = drafts[key] ?? localStorage.getItem(key) ?? "";
-      const body = [old.trim(), input.body].filter(Boolean).join("\n\n");
+      const restoredCode = parent
+        ? { refs: [], body: input.body }
+        : parseCodeReferences(input.body);
+      const body = [old.trim(), restoredCode.body.trim()]
+        .filter(Boolean)
+        .join("\n\n");
       if (body.length > 32000)
         throw new Error(
           "Send or shorten the current draft before restoring this message.",
@@ -487,6 +612,13 @@ export function ProjectChat({
           interactionMode: input.interactionMode,
         }),
       );
+      if (restoredCode.refs.length)
+        setCodeRefs((refs) => [
+          ...refs,
+          ...restoredCode.refs.filter(
+            (next) => !refs.some((ref) => sameCodeReference(ref, next)),
+          ),
+        ]);
       if (input.selection) {
         localStorage.setItem(
           "chat-selection:" + id,
@@ -517,9 +649,20 @@ export function ProjectChat({
       setBusy(false);
     }
   }
-  const openReply = (m: ChatMessage) => {
-    setRootId(replyRoot(messages, m.id).id);
-  };
+  // Stable handlers let memoized messages skip re-rendering while typing.
+  const latest = useRef({ messages, onOpenCode, onOpenFile });
+  latest.current = { messages, onOpenCode, onOpenFile };
+  const openReply = useCallback((m: ChatMessage) => {
+    setRootId(replyRoot(latest.current.messages, m.id).id);
+  }, []);
+  const openChanges = useCallback(
+    () => latest.current.onOpenCode("changes"),
+    [],
+  );
+  const openFile = useCallback(
+    (target: ProjectFileLink) => latest.current.onOpenFile(target),
+    [],
+  );
   const isEmpty =
     !messages.length && !history.error && (!chat || !history.isPending);
   const peers =
@@ -631,15 +774,10 @@ export function ProjectChat({
                 message={m}
                 chatId={chat?.id ?? ""}
                 onReply={openReply}
-                onChanges={() => onOpenCode("changes")}
+                onChanges={openChanges}
                 projectRoot={project.path}
-                onOpenFile={onOpenFile}
-                replyCount={
-                  root
-                    ? 0
-                    : messages.filter((x) => parentIds.get(x.id) === m.id)
-                        .length
-                }
+                onOpenFile={openFile}
+                replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
               />
             ))}
             {!running &&
@@ -733,6 +871,10 @@ export function ProjectChat({
           </div>
         </div>
       )}
+      <SelectionQuote
+        container={scroll}
+        onQuote={(text) => composer.current?.insertQuote(text)}
+      />
       <div className={isEmpty ? "thread-start" : "thread-bottom-composer"}>
         {history.data?.requests?.slice(0, 1).map((request) => (
           <AgentRequestCard
@@ -780,7 +922,8 @@ export function ProjectChat({
         {!!error && <ErrorBox error={error} />}
         <ProjectComposer
           key={`${id}:${root?.id ?? "main"}:${composerRevision}`}
-          onCommand={onCommand}
+          handleRef={composer}
+          onCommand={runCommand}
           settingsKey={id}
           draftKey={draftKey}
           draft={draft}
@@ -810,13 +953,8 @@ export function ProjectChat({
                 provider={context.provider}
                 compacting={compacting}
                 compactDisabled={running || busy}
-                onCompact={() => {
-                  setError(undefined);
-                  void api
-                    .compactProjectChat(chat.id, root?.id ?? null)
-                    .then(() => history.refetch())
-                    .catch(setError);
-                }}
+                openSignal={showContext}
+                onCompact={() => compact()}
               />
             )
           }
@@ -860,27 +998,60 @@ export function ProjectChat({
               )}
             </>
           }
+          allowEmpty={!root && (!!workItem || !!codeRefs.length)}
           attachment={
-            !root && selection ? (
-              <div className="composer-reply">
-                <span>
-                  {selection.side === "deletions" ? "Before PR" : "PR head"} ·{" "}
-                  {selection.path}:{selection.start} ·{" "}
-                  {(selection.side === "deletions"
-                    ? selection.base
-                    : selection.head
-                  ).slice(0, 8)}
-                </span>
-                <IconButton
-                  label="Remove selected code"
-                  onClick={() => setSelection(undefined)}
-                >
-                  <X size={13} />
-                </IconButton>
-              </div>
+            !root && (selection || workItem || codeRefs.length) ? (
+              <>
+                {!!codeRefs.length && (
+                  <CodeReferenceList
+                    references={codeRefs}
+                    onRemove={(index) =>
+                      setCodeRefs((refs) => refs.filter((_, i) => i !== index))
+                    }
+                  />
+                )}
+                {workItem && (
+                  <WorkItemChip
+                    item={workItem}
+                    onRemove={() => setWorkItem(undefined)}
+                  />
+                )}
+                {selection && (
+                  <div className="composer-reply">
+                    <span>
+                      {selection.side === "deletions" ? "Before PR" : "PR head"}{" "}
+                      · {selection.path}:{selection.start} ·{" "}
+                      {(selection.side === "deletions"
+                        ? selection.base
+                        : selection.head
+                      ).slice(0, 8)}
+                    </span>
+                    <IconButton
+                      label="Remove selected code"
+                      onClick={() => setSelection(undefined)}
+                    >
+                      <X size={13} />
+                    </IconButton>
+                  </div>
+                )}
+              </>
             ) : undefined
           }
         />
+        {isEmpty && scope.kind === "project" && !root && (
+          <WorkItemCards
+            project={project}
+            selected={workItem?.id}
+            onPick={(item) => {
+              setWorkItem(workItem?.id === item.id ? undefined : item);
+              requestAnimationFrame(() =>
+                document
+                  .querySelector<HTMLElement>(".thread-start .ProseMirror")
+                  ?.focus(),
+              );
+            }}
+          />
+        )}
       </div>
     </section>
   );

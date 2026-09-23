@@ -1,6 +1,8 @@
 import {
+  claudeArgs,
   codexModelArgs,
   modelChoiceSchema,
+  type AgentProvider,
   type ModelChoice,
 } from "../../shared/settings";
 import { spawn } from "node:child_process";
@@ -8,7 +10,9 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
+import { sdk as claudeSdk } from "../rooms/claude-project";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
 import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";
 
@@ -151,6 +155,98 @@ Discover a provisional pattern even from one file when it describes a concrete r
 Return exactly one decision per candidate path. A group decision must list EVERY hunk number from the supplied requiredHunks list in coveredHunks, including supporting import changes. A hunk containing a mixture of the pattern and an unrelated change forces normal. Path-only renames have zero hunks; account for both paths and use an empty coverage list. For normal, use pattern="" and coveredHunks=[]. Include definitions only for NEW patterns used by a group decision, exactly once. Reused known patterns need only their identifier in the file decision; do not repeat their definitions. Provide a concise reason per file. Group names and descriptions should tell the reviewer exactly what changed. Grouping suggests what can be reviewed together; it never approves a PR or marks anything viewed.
 No Markdown, code fences or commentary outside the required JSON.`;
 
+type Classification = {
+  result: ClassificationResult;
+  usage: TriageUsage;
+  rejectedFiles: string[];
+};
+
+/**
+ * One tool-less Claude turn whose final answer must match the batch schema.
+ * Claude uses its own sign-in, so its environment is left as the CLI expects.
+ */
+async function classifyWithClaude(
+  prompt: string,
+  schema: Record<string, unknown>,
+  choice: ModelChoice,
+  cwd: string,
+  signal: AbortSignal,
+): Promise<{ output: unknown; usage: TriageUsage }> {
+  const [{ query }, executable] = await Promise.all([
+    claudeSdk(),
+    findExecutable("claude"),
+  ]);
+  const { model, effort } = claudeArgs(choice);
+  const controller = new AbortController();
+  let failure: Error | undefined;
+  const stop = (error: Error) => {
+    failure ??= error;
+    controller.abort();
+  };
+  const aborted = () => stop(new Error("Analysis cancelled."));
+  signal.addEventListener("abort", aborted, { once: true });
+  if (signal.aborted) aborted();
+  const timer = setTimeout(
+    () =>
+      stop(
+        new Error(
+          "Claude timed out. This batch is saved for retry; earlier decisions are kept.",
+        ),
+      ),
+    180_000,
+  );
+  const stream = query({
+    prompt,
+    options: {
+      cwd,
+      pathToClaudeCodeExecutable: executable,
+      abortController: controller,
+      systemPrompt,
+      tools: [],
+      settingSources: ["user"],
+      strictMcpConfig: true,
+      mcpServers: {},
+      persistSession: false,
+      outputFormat: { type: "json_schema", schema },
+      ...(model ? { model } : {}),
+      ...(effort ? { effort: effort as NonNullable<Options["effort"]> } : {}),
+    },
+  });
+  try {
+    for await (const m of stream) {
+      if (m.type !== "result") continue;
+      if (m.subtype !== "success" || m.is_error)
+        throw new Error(
+          "Claude could not complete the analysis. Check its sign-in, the selected model and usage limits, then retry.",
+        );
+      const u = m.usage;
+      return {
+        output: m.structured_output,
+        usage: {
+          inputTokens:
+            u.input_tokens +
+            u.cache_read_input_tokens +
+            u.cache_creation_input_tokens,
+          outputTokens: u.output_tokens,
+          batches: 1,
+        },
+      };
+    }
+    throw new Error("Claude stopped before finishing the analysis.");
+  } catch (error) {
+    if (failure) throw failure;
+    throw error instanceof Error && /spawn|ENOENT/.test(error.message)
+      ? new Error(
+          "Claude could not start. Install or update Claude Code and sign in.",
+        )
+      : error;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", aborted);
+    stream.close();
+  }
+}
+
 export async function classifyChanges(
   candidates: Candidate[],
   names: ClassificationResult["groups"],
@@ -161,14 +257,10 @@ export async function classifyChanges(
     fast: false,
     reasoningEffort: "medium",
   },
-): Promise<{
-  result: ClassificationResult;
-  usage: TriageUsage;
-  rejectedFiles: string[];
-}> {
+  provider: AgentProvider = "codex",
+): Promise<Classification> {
   modelChoiceSchema.parse(choice);
   signal.throwIfAborted();
-  const executable = await findExecutable("codex");
   const dir = await mkdtemp(join(tmpdir(), "review-relay-grouping-"));
   try {
     const schemaPath = join(dir, "schema.json");
@@ -243,6 +335,55 @@ export async function classifyChanges(
       JSON.stringify(newIds) +
       "\n\nChange evidence:\n" +
       serializeBatch(candidates);
+    const decide = (
+      read: () => unknown,
+      usage: TriageUsage,
+    ): Classification => {
+      try {
+        const result = validateResponse(read(), candidates, names, mode);
+        return { result, usage, rejectedFiles: result.rejectedFiles };
+      } catch (error) {
+        const detail =
+          error instanceof z.ZodError
+            ? error.issues
+                .map((issue) => `${issue.path.join(".")}: ${issue.code}`)
+                .slice(0, 3)
+                .join("; ")
+            : error instanceof SyntaxError
+              ? "The final response was not JSON."
+              : error instanceof Error
+                ? error.message
+                : "The response could not be checked.";
+        const reason = `${INVALID_BATCH_PREFIX} ${detail}`.slice(0, 1000);
+        return {
+          result: {
+            groups: [],
+            files: candidates.map((c) => ({
+              path: c.path,
+              decision: "normal",
+              pattern: "",
+              coveredHunks: [],
+              reason,
+            })),
+          },
+          usage,
+          rejectedFiles: candidates.map((c) => c.path),
+        };
+      }
+    };
+    if (provider === "claude") {
+      // Claude Code's validator rejects zod's draft 2020-12 $schema tag.
+      const { $schema: _, ...schema } = z.toJSONSchema(batchSchema);
+      const { output, usage } = await classifyWithClaude(
+        prompt,
+        schema,
+        choice,
+        dir,
+        signal,
+      );
+      return decide(() => output, usage);
+    }
+    const executable = await findExecutable("codex");
     // Use Codex's signed-in account. Do not pass unrelated application credentials to it.
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -377,46 +518,7 @@ export async function classifyChanges(
           );
           return;
         }
-        try {
-          const result = validateResponse(
-            JSON.parse(message),
-            candidates,
-            names,
-            mode,
-          );
-          resolve({
-            result,
-            usage,
-            rejectedFiles: result.rejectedFiles,
-          });
-        } catch (error) {
-          const detail =
-            error instanceof z.ZodError
-              ? error.issues
-                  .map((issue) => `${issue.path.join(".")}: ${issue.code}`)
-                  .slice(0, 3)
-                  .join("; ")
-              : error instanceof SyntaxError
-                ? "The final response was not JSON."
-                : error instanceof Error
-                  ? error.message
-                  : "The response could not be checked.";
-          const reason = `${INVALID_BATCH_PREFIX} ${detail}`.slice(0, 1000);
-          resolve({
-            result: {
-              groups: [],
-              files: candidates.map((c) => ({
-                path: c.path,
-                decision: "normal",
-                pattern: "",
-                coveredHunks: [],
-                reason,
-              })),
-            },
-            usage,
-            rejectedFiles: candidates.map((c) => c.path),
-          });
-        }
+        resolve(decide(() => JSON.parse(message), usage));
       });
       child.stdin.end(prompt);
     });

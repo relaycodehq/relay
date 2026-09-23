@@ -179,7 +179,7 @@ test("two desktops join by invitation; ordinary messages and replies never launc
     .getByRole("button", { name: "Save hosting access", exact: true })
     .click();
   await expect(
-    alice.getByText(`Ready to create invitations using ${serverUrl}.`),
+    alice.getByText(`Invitations you create use ${serverUrl}.`),
   ).toBeVisible();
   await alice
     .getByRole("button", { name: "Close dialog", exact: true })
@@ -253,14 +253,18 @@ test("only the sender's agent starts, shares its completed answer, and receives 
     .click();
   await alice.getByRole("button", { name: "Room agent settings" }).click();
   await alice
-    .getByRole("combobox", { name: "Room questions model", exact: true })
-    .selectOption("gpt-5.6-luna");
+    .getByRole("button", { name: "Room questions model", exact: true })
+    .click();
+  await alice
+    .getByRole("option", { name: "GPT-5.6-Luna", exact: true })
+    .click();
   await alice
     .getByRole("combobox", {
       name: "Room questions reasoning effort",
       exact: true,
     })
-    .selectOption("low");
+    .click();
+  await alice.getByRole("option", { name: "Low", exact: true }).click();
   await alice
     .getByRole("button", { name: "Save settings", exact: true })
     .click();

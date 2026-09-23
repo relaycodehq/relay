@@ -7,12 +7,15 @@
 }
 
 .relay-brand-toggle {
-  display: grid;
-  place-items: center;
-  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   height: 32px;
   flex-shrink: 0;
-  padding: 0;
+  padding: 0 8px 0 0;
+  color: inherit;
+  font: inherit;
+  cursor: default;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -22,6 +25,7 @@
   background: transparent;
 }
 
-.relay-brand-toggle:hover .relay-mark {
+.relay-brand-toggle:hover .relay-mark,
+.relay-brand-toggle:hover strong {
   opacity: 0.8;
 }

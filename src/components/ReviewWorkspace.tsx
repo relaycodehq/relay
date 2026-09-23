@@ -61,6 +61,9 @@ import {
   relativeDate,
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
+import { useElementWidth } from "../lib/useElementWidth";
+import { createPortal } from "react-dom";
+import type { PaneSlots } from "./WorkspacePanes";
 interface Props {
   onSettings: () => void;
   onDiscuss: (target: QuestionTarget) => void;
@@ -76,6 +79,8 @@ interface Props {
   paneControls: ReactNode;
   onEditFile: (path: string, line?: number) => void;
   onFileViewed: (path: string, progress: Progress) => void;
+  /** Embedded in a workspace pane: controls move into the pane header. */
+  slots?: PaneSlots;
 }
 export function ReviewWorkspace({
   onSettings,
@@ -92,6 +97,7 @@ export function ReviewWorkspace({
   paneControls,
   onEditFile,
   onFileViewed,
+  slots,
 }: Props) {
   const [question, setQuestion] = useState<{
     pull: Pull;
@@ -99,7 +105,7 @@ export function ReviewWorkspace({
     target: QuestionTarget;
   } | null>(null);
   const [tab, setTab] = useState<"files" | "conversation" | "local">("files"),
-    [layout, setLayout] = useState<"split" | "unified">("split"),
+    [chosenLayout, setLayout] = useState<"split" | "unified">("split"),
     [wrap, setWrap] = useState(false),
     [fullContext, setFullContext] = useState(false),
     [reviewOpen, setReviewOpen] = useState(false),
@@ -118,6 +124,11 @@ export function ReviewWorkspace({
   current.current = progress;
   const qc = useQueryClient();
   const revision = revisionOf(pull);
+  // Side-by-side needs room; a narrow pane falls back to a unified diff.
+  const tabsRef = useRef<HTMLDivElement>(null),
+    width = useElementWidth(tabsRef),
+    narrow = !!width && width < 480,
+    layout = narrow ? "unified" : chosenLayout;
   useEffect(() => setExpandedRead(null), [file?.filename]);
   const reviews = useInfiniteQuery({
     queryKey: ["reviews", pull.owner, pull.name, pull.number, pull.head.sha],
@@ -259,66 +270,111 @@ export function ReviewWorkspace({
   };
   return (
     <>
-      <header className="titlebar review-titlebar">
-        <div className="breadcrumb">
-          <span>{pull.owner}</span>
-          <ChevronRight size={13} />
-          <strong>{pull.name}</strong>
-          <span className="pr-number">#{pull.number}</span>
-        </div>
-        <div className="toolbar-actions">
-          {paneControls}
-          <ProjectChecksButton checks={checks} onOpenFile={onEditFile} />
-          <IconButton
-            label="Open pull request in Gitea"
-            onClick={() => void api.openExternal(pull.html_url).catch(onError)}
-          >
-            <ArrowUpRight size={18} />
-          </IconButton>
-          <button
-            className="primary review-button"
-            onClick={() => setReviewOpen(true)}
-            disabled={!initial.isSuccess}
-          >
-            Finish review{draftCount > 0 && <span>{draftCount}</span>}
-            <ChevronDown size={13} />
-          </button>
-          <IconButton label="Open settings" onClick={onSettings}>
-            <Settings2 size={16} />
-          </IconButton>
-        </div>
-      </header>
-      <section className="pr-heading">
-        <div className="pr-heading-top">
-          <span className={`state-badge ${pull.state}`}>
-            <GitPullRequest size={13} />
-            {pull.merged
-              ? "Merged"
-              : pull.draft
-                ? "Draft"
-                : pull.state === "open"
-                  ? "Open"
-                  : "Closed"}
-          </span>
-          <span className="muted">
-            #{pull.number} opened by <strong>{pull.user.login}</strong>
-          </span>
-        </div>
-        <h1>{pull.title}</h1>
-        <div className="branch-line">
-          <GitBranch size={14} />
-          <code>{pull.head.ref}</code>
-          <span>→</span>
-          <code>{pull.base.ref}</code>
-          <span className="branch-divider" />
-          <span className="additions">+{pull.additions ?? 0}</span>
-          <span className="deletions">−{pull.deletions ?? 0}</span>
-          <span className="push-date">
-            Updated {relativeDate(pull.updated_at)} ago
-          </span>
-        </div>
-      </section>
-      <div className="review-tabs">
+      {slots ? (
+        <>
+          {slots.title &&
+            createPortal(
+              <span className="pane-subtitle" title={pull.title}>
+                #{pull.number} · {pull.title}
+              </span>,
+              slots.title,
+            )}
+          {slots.actions &&
+            createPortal(
+              <>
+                {paneControls}
+                <ProjectChecksButton
+                  quiet
+                  checks={checks}
+                  onOpenFile={onEditFile}
+                />
+                <IconButton
+                  label="Open pull request in Gitea"
+                  onClick={() =>
+                    void api.openExternal(pull.html_url).catch(onError)
+                  }
+                >
+                  <ArrowUpRight size={16} />
+                </IconButton>
+                <button
+                  className="primary review-button"
+                  onClick={() => setReviewOpen(true)}
+                  disabled={!initial.isSuccess}
+                >
+                  Finish review{draftCount > 0 && <span>{draftCount}</span>}
+                  <ChevronDown size={13} />
+                </button>
+              </>,
+              slots.actions,
+            )}
+        </>
+      ) : (
+        <>
+          <header className="titlebar review-titlebar">
+            <div className="breadcrumb">
+              <span>{pull.owner}</span>
+              <ChevronRight size={13} />
+              <strong>{pull.name}</strong>
+              <span className="pr-number">#{pull.number}</span>
+            </div>
+            <div className="toolbar-actions">
+              {paneControls}
+              <ProjectChecksButton checks={checks} onOpenFile={onEditFile} />
+              <IconButton
+                label="Open pull request in Gitea"
+                onClick={() =>
+                  void api.openExternal(pull.html_url).catch(onError)
+                }
+              >
+                <ArrowUpRight size={18} />
+              </IconButton>
+              <button
+                className="primary review-button"
+                onClick={() => setReviewOpen(true)}
+                disabled={!initial.isSuccess}
+              >
+                Finish review{draftCount > 0 && <span>{draftCount}</span>}
+                <ChevronDown size={13} />
+              </button>
+              <IconButton label="Open settings" onClick={onSettings}>
+                <Settings2 size={16} />
+              </IconButton>
+            </div>
+          </header>
+
+          <section className="pr-heading">
+            <div className="pr-heading-top">
+              <span className={`state-badge ${pull.state}`}>
+                <GitPullRequest size={13} />
+                {pull.merged
+                  ? "Merged"
+                  : pull.draft
+                    ? "Draft"
+                    : pull.state === "open"
+                      ? "Open"
+                      : "Closed"}
+              </span>
+              <span className="muted">
+                #{pull.number} opened by <strong>{pull.user.login}</strong>
+              </span>
+            </div>
+            <h1>{pull.title}</h1>
+            <div className="branch-line">
+              <GitBranch size={14} />
+              <code>{pull.head.ref}</code>
+              <span>→</span>
+              <code>{pull.base.ref}</code>
+              <span className="branch-divider" />
+              <span className="additions">+{pull.additions ?? 0}</span>
+              <span className="deletions">−{pull.deletions ?? 0}</span>
+              <span className="push-date">
+                Updated {relativeDate(pull.updated_at)} ago
+              </span>
+            </div>
+          </section>
+        </>
+      )}
+      <div className="review-tabs" ref={tabsRef}>
         <div className="tab-buttons">
           <button
             className={tab === "files" ? "active" : ""}
@@ -387,6 +443,12 @@ export function ReviewWorkspace({
                 <button
                   aria-label="Side by side diff"
                   className={layout === "split" ? "active" : ""}
+                  disabled={narrow}
+                  title={
+                    narrow
+                      ? "Widen this pane for a side-by-side diff"
+                      : undefined
+                  }
                   onClick={() => setLayout("split")}
                 >
                   Split
@@ -660,8 +722,8 @@ export function ReviewWorkspace({
               {folder.data.head !== pull.head.sha && (
                 <p className="warning-note">
                   Check out PR commit {pull.head.sha.slice(0, 8)} before
-                  launching Codex. Relay never switches branches or
-                  overwrites your work.
+                  launching Codex. Relay never switches branches or overwrites
+                  your work.
                 </p>
               )}
             </div>

@@ -1,107 +1,130 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Zap } from "lucide-react";
 import {
-  modelChoices,
+  claudeEfforts,
   effortLabels,
   reasoningEffortsFor,
   supportsEffort,
+  type AgentProvider,
   type ReasoningEffort,
   type ModelChoice,
 } from "../../shared/settings";
+import { api } from "../lib/api";
+import { ComposerModelPicker } from "./ComposerModelPicker";
+import { ComposerSelect } from "./ComposerSelect";
+import "./composer-model-picker.css";
+
+/**
+ * The chat composer's model, effort and Fast controls for a saved choice.
+ * Passing `provider` also offers Claude; its model then lives in `value.model`.
+ */
 export function ModelField({
   label,
   value,
   allowDefault,
+  provider,
   onChange,
 }: {
   label: string;
   value: ModelChoice;
   allowDefault?: boolean;
-  onChange: (choice: ModelChoice) => void;
+  provider?: AgentProvider;
+  onChange: (choice: ModelChoice, provider: AgentProvider) => void;
 }) {
-  const [custom, setCustom] = useState(
-    !!value.model && !modelChoices.some(([id]) => id === value.model),
+  const agent = provider ?? "codex";
+  // Popups must render inside a modal <dialog> to sit in its top layer.
+  const [container, setContainer] = useState<HTMLElement>();
+  const ref = useCallback(
+    (el: HTMLElement | null) =>
+      setContainer(el?.closest("dialog") ?? undefined),
+    [],
   );
-  const efforts = reasoningEffortsFor(value.model);
-  const supported = supportsEffort(value);
+  const claude = useQuery({
+    queryKey: ["claude-models"],
+    queryFn: () => api.claudeModels(),
+    enabled: !!provider,
+    staleTime: Infinity,
+  });
+  // A failed probe lists no CLI models rather than loading forever.
+  const claudeModels = claude.isError ? [] : claude.data;
+  const claudeEffortsFor = (model: string) =>
+    claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
+  const efforts =
+    agent === "claude"
+      ? claudeEffortsFor(value.model)
+      : reasoningEffortsFor(value.model);
   return (
-    <fieldset className="model-field">
-      <legend>{label}</legend>
-      <label className="model-select">
-        Model
-        <select
-          aria-label={`${label} model`}
-          value={custom ? "custom" : value.model}
-          onChange={(event) => {
-            const model = event.target.value;
-            setCustom(model === "custom");
-            if (model !== "custom") onChange({ ...value, model });
-          }}
-        >
-          {allowDefault && <option value="">Use Codex default</option>}
-          {modelChoices.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name} · {id}
-            </option>
-          ))}
-          <option value="custom">Custom model…</option>
-        </select>
-      </label>
-      {custom && (
-        <label>
-          Model ID
-          <input
-            aria-label={`${label} custom model`}
-            value={value.model}
-            spellCheck={false}
-            autoComplete="off"
-            maxLength={160}
-            placeholder="Codex model ID"
-            onChange={(e) => onChange({ ...value, model: e.target.value })}
+    <div
+      ref={ref}
+      className="composer-tools model-field"
+      role="group"
+      aria-label={label}
+    >
+      <ComposerModelPicker
+        providers={provider ? ["codex", "claude"] : ["codex"]}
+        label={label}
+        allowDefault={allowDefault}
+        container={container}
+        provider={agent}
+        // A Claude model id would otherwise be listed as a custom Codex model.
+        choice={agent === "codex" ? value : { ...value, model: "" }}
+        claudeModel={agent === "claude" ? value.model : ""}
+        claudeModels={claudeModels}
+        onOpen={() => {
+          if (provider && !claude.data?.length) void claude.refetch();
+        }}
+        onSelect={(next, model) => {
+          if (next === "message") return;
+          const choice = { ...value, model };
+          // Like the composer, an effort the new model lacks falls back to default.
+          const keep =
+            next === "claude"
+              ? claudeEffortsFor(model).includes(choice.reasoningEffort)
+              : supportsEffort(choice);
+          onChange(
+            {
+              ...choice,
+              reasoningEffort: keep ? choice.reasoningEffort : "",
+              fast: next === "codex" && choice.fast,
+            },
+            next,
+          );
+        }}
+      />
+      {efforts.length > 0 && (
+        <>
+          <span className="composer-divider" aria-hidden />
+          <ComposerSelect<ReasoningEffort>
+            label={`${label} reasoning effort`}
+            container={container}
+            value={value.reasoningEffort}
+            options={[
+              { value: "", label: "Default effort" },
+              ...efforts.map((effort) => ({
+                value: effort,
+                label: effortLabels[effort],
+              })),
+            ]}
+            onChange={(reasoningEffort) =>
+              onChange({ ...value, reasoningEffort }, agent)
+            }
           />
-        </label>
+        </>
       )}
-      <label className="model-select">
-        Reasoning effort
-        <select
-          aria-label={`${label} reasoning effort`}
-          value={value.reasoningEffort}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              reasoningEffort: event.target.value as ReasoningEffort,
-            })
-          }
-          aria-invalid={!supported}
-        >
-          <option value="">
-            {allowDefault ? "Use Codex default" : "Use model default"}
-          </option>
-          {!supported && (
-            <option value={value.reasoningEffort} disabled>
-              {effortLabels[value.reasoningEffort]} — unavailable for this model
-            </option>
-          )}
-          {efforts.map((effort) => (
-            <option key={effort} value={effort}>
-              {effortLabels[effort]}
-            </option>
-          ))}
-        </select>
-      </label>
-      {!supported && (
-        <p className="field-note" role="alert">
-          Choose a supported reasoning effort for this model.
-        </p>
-      )}
-      <label className="fast-setting">
-        <span>Fast mode</span>
-        <input
-          type="checkbox"
+      {agent === "codex" && (
+        <button
+          type="button"
+          className="composer-control composer-fast"
           aria-label={`${label} Fast mode`}
-          checked={value.fast}
-          onChange={(e) => onChange({ ...value, fast: e.target.checked })}
-        />
-      </label>
-    </fieldset>
+          aria-pressed={value.fast}
+          title={value.fast ? "Fast mode enabled" : "Enable Fast mode"}
+          onClick={() => onChange({ ...value, fast: !value.fast }, agent)}
+        >
+          <Zap size={14} />
+          Fast
+        </button>
+      )}
+    </div>
   );
 }

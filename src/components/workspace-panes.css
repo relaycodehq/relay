@@ -1,0 +1,412 @@
+/* Chat, changes and files are peer panes: ordered with CSS `order` (so React
+   never remounts an editor when panes are rearranged) and sized by flex-grow. */
+.workspace-panes {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.workspace-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-basis: 0;
+  min-width: 300px;
+  min-height: 0;
+  background: var(--surface);
+  overflow: hidden;
+  container-type: inline-size;
+}
+.workspace-pane:has(> .pane-splitter) {
+  border-left: 1px solid var(--border);
+}
+.workspace-pane.drop-before::after,
+.workspace-pane.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  z-index: 40;
+  pointer-events: none;
+}
+.workspace-pane.drop-before::after {
+  left: 0;
+}
+.workspace-pane.drop-after::after {
+  right: 0;
+}
+.workspace-pane[data-pane="chat"] {
+  min-width: 320px;
+}
+.workspace-pane[data-pane="chat"] > .project-chat {
+  flex: 1;
+  min-height: 0;
+}
+
+.pane-splitter {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 30;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pane-splitter:hover,
+.pane-splitter:focus-visible,
+.pane-splitter.dragging {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  outline: none;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 8px 0 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+.pane-header-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  cursor: grab;
+  color: var(--text);
+  padding: 4px 2px;
+  border-radius: 6px;
+}
+.pane-header-title:active {
+  cursor: grabbing;
+}
+.pane-header-title > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.pane-header-title > .pane-grip {
+  opacity: 0;
+  margin-right: -4px;
+  transition: opacity 120ms;
+}
+.pane-header:hover .pane-grip {
+  opacity: 0.7;
+}
+.pane-header-title > strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pane-title-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+}
+.pane-title-slot > * {
+  min-width: 0;
+}
+.pane-title-slot .pane-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pane-title-slot .pane-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.pane-header-actions:empty {
+  display: none;
+}
+.pane-header-actions > button:not(.icon-button),
+.pane-header .checks-button {
+  font-size: 11px;
+  padding: 4px 9px;
+  min-height: 26px;
+}
+.pane-header .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+/* Header toggle group */
+.pane-toggles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--toolbar);
+}
+.pane-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  min-height: 0;
+  cursor: pointer;
+}
+.pane-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+.pane-toggle.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 1px 2px rgb(0 0 0 / 6%);
+}
+.pane-toggle.drop-before::before,
+.pane-toggle.drop-after::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.pane-toggle.drop-before::before {
+  left: -2px;
+}
+.pane-toggle.drop-after::before {
+  right: -2px;
+}
+
+/* Files pane */
+.files-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.files-workspace .project-file-list {
+  position: relative;
+  width: var(--files-width, 210px);
+  max-width: 60%;
+}
+.files-workspace .project-file-list > .pane-resizer {
+  top: 0;
+}
+.files-workspace .project-file-scroll button {
+  padding: 0 12px;
+  gap: 8px;
+  height: 28px;
+  align-items: center;
+}
+.files-workspace .project-file-scroll button > span {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+.files-workspace .project-file-scroll button > svg {
+  width: 14px;
+  height: 14px;
+}
+.files-workspace .project-file-scroll strong {
+  font-size: 12px;
+  font-weight: 400;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+.files-workspace .project-file-scroll small {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.files-workspace .project-file-list > .search-field {
+  margin: 8px;
+}
+
+/* Inline editor: a single toolbar row, then code. */
+.editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--toolbar);
+  font-size: 12px;
+}
+.editor-bar-path {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.editor-bar-path > .editor-bar-dir {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Truncate the directory from the left so the nearest folder stays visible. */
+  direction: rtl;
+  text-align: left;
+}
+.editor-bar-path > strong {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.editor-bar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.editor-bar-state.dirty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.editor-bar .divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.editor-bar .icon-button {
+  width: 28px;
+  height: 28px;
+}
+.editor-bar .symbol-actions {
+  display: flex;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.editor-bar .symbol-actions > span {
+  display: none;
+}
+.editor-bar .symbol-actions button {
+  font-size: 11px;
+  padding: 4px 7px;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.editor-bar .symbol-actions button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+.editor-bar .symbol-actions button:disabled {
+  opacity: 0.45;
+}
+.editor-bar > .primary {
+  font-size: 11px;
+  padding: 4px 10px;
+  min-height: 26px;
+}
+.project-inline-editor .editor-versions {
+  font-size: 10px;
+}
+
+/* Changes pane */
+.workspace-pane .local-changes {
+  flex: 1;
+  min-height: 0;
+}
+.pane-empty {
+  flex: 1;
+}
+
+@media (max-width: 1100px) {
+  .pane-toggle > span {
+    display: none;
+  }
+}
+
+/* Each pane adapts to its own width, not the window's. */
+@container (max-width: 640px) {
+  .editor-bar .symbol-actions button {
+    font-size: 0;
+    gap: 0;
+    padding: 6px;
+  }
+  .editor-bar [aria-label="Undo code edit"],
+  .editor-bar [aria-label="Redo code edit"],
+  .editor-bar .divider {
+    display: none;
+  }
+  .working-sidebar {
+    width: 180px;
+    min-width: 160px;
+  }
+  .workspace-pane .project-review .files-pane {
+    width: 180px;
+    min-width: 160px;
+  }
+  .workspace-pane .composer-tools {
+    gap: 3px;
+  }
+  .workspace-pane .composer-tools .composer-divider {
+    display: none;
+  }
+  .workspace-pane .composer-tools .composer-fast,
+  .workspace-pane .composer-tools .composer-interaction,
+  .workspace-pane .composer-tools .composer-control[aria-label="Runtime mode"] {
+    font-size: 0;
+    gap: 2px;
+  }
+  .working-commit small {
+    display: none;
+  }
+}
+@container (max-width: 460px) {
+  .editor-bar .symbol-actions,
+  .editor-bar-state {
+    display: none;
+  }
+}
+
+.working-file-list section > header strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.working-commit .primary {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container (max-width: 720px) {
+  .workspace-pane .review-progress > span {
+    display: none;
+  }
+  .workspace-pane .review-tabs .tab-buttons button > svg {
+    display: none;
+  }
+}

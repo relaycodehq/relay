@@ -129,3 +129,27 @@ it("rejects stale state and non-fast-forward pushes without changing the working
   ).rejects.toThrow(/rejected|fetch first/);
   expect(git("rev-parse", "HEAD")).toBe(tree.head);
 });
+it("changes its revision when only the staged part of a changed file moves", async () => {
+  await writeFile(join(root, "untouched.ts"), "export const u = 1;\n");
+  git("add", "untouched.ts");
+  git("commit", "-qm", "Second file");
+  await writeFile(join(root, "code.ts"), "export const a = 3;\n");
+  const stage = (text: string) => {
+    const blob = execFileSync(
+      "git",
+      ["-C", root, "hash-object", "-w", "--stdin"],
+      { input: text, encoding: "utf8" },
+    ).trim();
+    git("update-index", "--cacheinfo", `100644,${blob},code.ts`);
+  };
+  stage("export const a = 2;\n");
+  const before = await workingTree(root);
+  // Same status line (MM) and the same working file; only the index differs.
+  stage("export const a = 4;\n");
+  const after = await workingTree(root);
+  expect(after.changes).toEqual(before.changes);
+  expect(after.revision).not.toBe(before.revision);
+  // Refreshing unchanged files' index stat data is not a change.
+  git("update-index", "-q", "--really-refresh");
+  expect((await workingTree(root)).revision).toBe(after.revision);
+});

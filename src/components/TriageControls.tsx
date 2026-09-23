@@ -31,8 +31,13 @@ export function TriageControls({
           model: state.model,
           fast: state.fast ?? false,
           reasoningEffort: state.reasoningEffort ?? "medium",
+          provider: state.provider ?? "codex",
         }
-      : settings.data?.grouping;
+      : settings.data && {
+          ...settings.data.grouping,
+          provider: settings.data.groupingProvider,
+        };
+  const agent = activeChoice?.provider === "claude" ? "Claude" : "Codex";
   const running = isAnalyzing(state),
     result = state?.result,
     resume = state?.resume;
@@ -43,7 +48,7 @@ export function TriageControls({
           className="triage-start"
           disabled={busy || running || !settings.data}
           onClick={onStart}
-          title={`Analyze this PR in small batches with ${activeChoice ? choiceLabel(activeChoice) : "Codex"}. Source changes are sent to your signed-in Codex account.`}
+          title={`Find repeated whole-file changes. Analyzes this PR in small batches with ${activeChoice ? choiceLabel(activeChoice, activeChoice.provider) : agent}. Source changes are sent to your signed-in ${agent} account.`}
         >
           {running ? (
             <LoaderCircle size={14} className="spin" />
@@ -76,9 +81,9 @@ export function TriageControls({
           </button>
         ) : null}
       </div>
-      {activeChoice && (
+      {activeChoice && (running || resume) && (
         <small className="triage-model">
-          {choiceLabel(activeChoice)}
+          {choiceLabel(activeChoice, activeChoice.provider)}
           {resume ? " · saved checkpoint" : ""}
         </small>
       )}
@@ -98,7 +103,7 @@ export function TriageControls({
               ? "Cancelled · all files remain available"
               : state?.error
                 ? "Analysis stopped · files remain available"
-                : "Find repeated whole-file changes"}
+                : ""}
       </div>
       {(error || state?.error) && (
         <p className="triage-error" role="alert">

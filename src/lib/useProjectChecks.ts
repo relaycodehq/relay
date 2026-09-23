@@ -4,11 +4,28 @@ import type { Pull } from "../../shared/types";
 import type { ProjectCheckState } from "../../shared/checks";
 import { api } from "./api";
 
+function useWindowHidden() {
+  const [hidden, setHidden] = useState(() => document.hidden);
+  useEffect(() => {
+    const update = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+  return hidden;
+}
+
+/**
+ * `busy` pauses rechecking (e.g. while an agent is editing the tree); so does a
+ * hidden window. The language service stays loaded and checks once on resume.
+ */
 export function useProjectChecks(
   pull?: Pull,
   local?: { id: string; head: string },
+  busy = false,
 ) {
   const qc = useQueryClient();
+  const hidden = useWindowHidden(),
+    paused = busy || hidden;
   const identity = local
     ? `${local.id}:${local.head}`
     : pull
@@ -46,7 +63,7 @@ export function useProjectChecks(
         ? api.localCheckState(local.id, local.head)
         : api.projectCheckState(pull!, pull!.head.sha),
     enabled: !!(pull || local),
-    refetchInterval: enabled ? 1000 : false,
+    refetchInterval: enabled ? (paused ? 5000 : 1000) : false,
     retry: false,
   });
   const target =
@@ -74,6 +91,16 @@ export function useProjectChecks(
       qc.setQueryData(queryKey, null);
     };
   }, [identity, target?.id, enabled, retry]);
+  useEffect(() => {
+    if ((!pull && !local) || !enabled) return;
+    void (
+      local
+        ? api.pauseLocalChecks(local.id, paused)
+        : api.pauseProjectChecks(pull!, paused)
+    )
+      .then(() => qc.invalidateQueries({ queryKey }))
+      .catch(() => {});
+  }, [identity, enabled, paused]);
   const toggle = (value: boolean) => {
     localStorage.setItem(preference, value ? "on" : "off");
     setPreferenceVersion((n) => n + 1);
@@ -98,6 +125,8 @@ export function useProjectChecks(
     info: info.data,
     state: state.data,
     enabled,
+    paused,
+    busy,
     error: error ?? info.error ?? state.error,
     toggle,
     choose,

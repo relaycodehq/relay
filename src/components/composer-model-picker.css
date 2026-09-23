@@ -348,6 +348,7 @@
 }
 
 .composer-tools .context-meter-trigger {
+  position: relative;
   padding: 6px;
   --context-ring: color-mix(in srgb, var(--muted) 80%, transparent);
 }
@@ -357,13 +358,13 @@
 .context-meter-trigger[data-pace="hot"] {
   --context-ring: #ef6a5a;
 }
-.context-meter-trigger svg {
+.context-meter-trigger > svg {
   transform: rotate(-90deg);
 }
 .context-ring-track,
 .context-ring-fill {
   fill: none;
-  stroke-width: 2.25;
+  stroke-width: 2;
 }
 .context-ring-track {
   stroke: color-mix(in srgb, var(--muted) 28%, transparent);
@@ -375,7 +376,7 @@
     stroke-dashoffset 0.5s ease-out,
     stroke 0.3s;
 }
-.context-meter-trigger[data-compacting] svg {
+.context-meter-trigger[data-compacting] > svg {
   animation: context-compacting 1.2s ease-in-out infinite;
 }
 @keyframes context-compacting {
@@ -387,8 +388,341 @@
   .context-ring-fill {
     transition: none;
   }
-  .context-meter-trigger[data-compacting] svg {
+  .context-meter-trigger[data-compacting] > svg {
     animation: none;
+  }
+}
+
+/*
+ * Prompt cache heat: flames rising off the ring while the cache is fresh, an
+ * ice cube once it has expired, nothing in between. The flames keep burning;
+ * the ice only moves when it arrives, leaves or is hovered.
+ */
+.cache-heat {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  /* Fixed tracks, so decorations larger than the button overflow evenly. */
+  grid-template: 100% / 100%;
+  place-items: center;
+  pointer-events: none;
+}
+.cache-heat > svg {
+  grid-area: 1 / 1;
+  overflow: visible;
+}
+.cache-flame,
+.cache-tongue {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.cache-cube,
+.cache-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.context-meter-trigger[data-cache="ice"][data-pace="ok"] {
+  --context-ring: #6cb8ea;
+}
+.context-meter-trigger[data-cache="fire"][data-pace="ok"] {
+  --context-ring: #f08a3a;
+}
+.cache-glow {
+  fill: #ff8a3d;
+  opacity: 0.4;
+  filter: blur(2px);
+}
+.cache-tongue[data-side="left"],
+.cache-tongue[data-side="right"] {
+  opacity: 0.85;
+}
+.cache-core {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.cache-ember {
+  fill: #ffc04d;
+  opacity: 0;
+}
+.cache-smoke {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-dasharray: 6;
+  opacity: 0;
+}
+.cache-cube-body {
+  stroke: #7cc4f0;
+  stroke-width: 1.1;
+}
+.cache-cube-shine {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.cache-cube-shine.dim {
+  opacity: 0.45;
+}
+.cache-glint,
+.cache-glint-hover {
+  fill: #fff;
+  opacity: 0;
+}
+.cache-sparkle {
+  fill: #d9f1ff;
+  stroke: #7cc4f0;
+  stroke-width: 0.4;
+  opacity: 0;
+}
+
+.cache-fire[data-phase="enter"] .cache-flame {
+  animation: cache-ignite 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+/* Each tongue on its own period so the fire never visibly repeats. */
+.cache-fire:not([data-phase="leave"]) .cache-tongue {
+  animation: cache-dance 1.7s ease-in-out infinite;
+}
+.cache-fire:not([data-phase="leave"]) .cache-tongue[data-side="left"] {
+  animation-duration: 1.3s;
+  animation-delay: -0.4s;
+}
+.cache-fire:not([data-phase="leave"]) .cache-tongue[data-side="right"] {
+  animation-duration: 1.45s;
+  animation-delay: -0.9s;
+  animation-direction: reverse;
+}
+.cache-fire:not([data-phase="leave"]) .cache-core {
+  animation: cache-core 0.9s ease-in-out infinite alternate;
+}
+.cache-fire:not([data-phase="leave"]) .cache-glow {
+  animation: cache-glow 2.2s ease-in-out infinite alternate;
+}
+.cache-fire:not([data-phase="leave"]) .cache-ember {
+  --drift: -1.5px;
+  animation: cache-ember 2.4s ease-out infinite;
+}
+.cache-fire:not([data-phase="leave"]) .cache-ember:nth-of-type(2) {
+  --drift: 1.8px;
+  animation-duration: 2.1s;
+  animation-delay: 0.8s;
+}
+.cache-fire:not([data-phase="leave"]) .cache-ember:nth-of-type(3) {
+  --drift: 0.4px;
+  animation-duration: 2.7s;
+  animation-delay: 1.5s;
+}
+/* Hovering stokes it. */
+.context-meter-trigger:hover
+  .cache-fire:not([data-phase="leave"])
+  .cache-flame {
+  transform: scale(1.12);
+  transition: transform 0.3s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.cache-flame {
+  transition: transform 0.4s ease-out;
+}
+.cache-fire[data-phase="leave"] {
+  animation: cache-fade 1s ease-in forwards;
+}
+.cache-fire[data-phase="leave"] .cache-flame {
+  animation: cache-douse 0.45s ease-in forwards;
+}
+.cache-fire[data-phase="leave"] .cache-smoke {
+  animation: cache-smoke 0.8s ease-out 0.15s both;
+}
+
+.cache-ice[data-phase="enter"] .cache-cube {
+  animation: cache-freeze 0.7s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+.cache-ice[data-phase="enter"] .cache-glint {
+  animation: cache-glint 0.6s ease-in-out 0.5s;
+}
+.cache-ice[data-phase="enter"] .cache-sparkle {
+  animation: cache-sparkle 0.6s ease-out 0.75s;
+}
+.context-meter-trigger:hover
+  .cache-ice:not([data-phase="leave"])
+  .cache-glint-hover {
+  animation: cache-glint 0.6s ease-in-out;
+}
+.cache-ice[data-phase="leave"] {
+  transform-origin: 50% 100%;
+  animation: cache-melt 0.6s ease-in forwards;
+}
+
+@keyframes cache-ignite {
+  0% {
+    transform: scale(0.3, 0);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.08, 1.3);
+    opacity: 1;
+  }
+  65% {
+    transform: scale(0.96, 0.9);
+  }
+  82% {
+    transform: scale(1.02, 1.05);
+  }
+}
+@keyframes cache-glow {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+@keyframes cache-dance {
+  0%,
+  100% {
+    transform: scale(1, 1) skewX(0deg);
+  }
+  25% {
+    transform: scale(0.93, 1.1) skewX(-4deg);
+  }
+  50% {
+    transform: scale(1.04, 0.92) skewX(2deg);
+  }
+  75% {
+    transform: scale(0.96, 1.06) skewX(3deg);
+  }
+}
+@keyframes cache-core {
+  from {
+    opacity: 0.75;
+    transform: scale(0.9, 0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.05, 1.1);
+  }
+}
+@keyframes cache-ember {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(1);
+  }
+  15% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), -8px) scale(0.3);
+  }
+}
+@keyframes cache-douse {
+  to {
+    transform: scale(0.4, 0);
+    opacity: 0;
+  }
+}
+@keyframes cache-smoke {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 6;
+  }
+  30% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes cache-fade {
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes cache-freeze {
+  0% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(0.94);
+    opacity: 1;
+  }
+  78% {
+    transform: scale(1.03);
+  }
+}
+@keyframes cache-glint {
+  0% {
+    opacity: 0.6;
+    transform: translateX(-12px);
+  }
+  100% {
+    opacity: 0.6;
+    transform: translateX(20px);
+  }
+}
+@keyframes cache-sparkle {
+  0% {
+    transform: scale(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1) rotate(45deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6) rotate(90deg);
+  }
+}
+@keyframes cache-melt {
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.9, 0.75);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cache-heat svg,
+  .cache-heat svg * {
+    animation: none !important;
+  }
+  .cache-heat > [data-phase="leave"] {
+    display: none;
+  }
+}
+.context-meter-popup .cache-meter {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  gap: 3px;
+}
+.cache-meter .usage-fill {
+  background: var(--muted);
+  transition: width 1s linear;
+}
+.cache-meter[data-heat="fire"] .usage-fill {
+  background: linear-gradient(90deg, #f0441c, #ffa42b);
+}
+.cache-meter[data-heat="fire"] .usage-limit {
+  color: #f07a2a;
+}
+.cache-meter[data-heat="ice"] .usage-limit {
+  color: #4fa6de;
+}
+.cache-meter-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cache-meter .usage-fill {
+    transition: none;
   }
 }
 .context-meter-popup {
@@ -428,4 +762,149 @@
 .context-compact:disabled {
   cursor: default;
   color: var(--muted);
+}
+
+/* The composer's controls as a standalone toolbar, e.g. in settings. */
+.composer-tools.model-field {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  max-width: 100%;
+}
+.composer-tools.model-field .composer-model-trigger {
+  min-width: 0;
+  max-width: 200px;
+}
+/* Usage rings beside the context meter: outer week, inner session. */
+.composer-tools .usage-ring-trigger {
+  position: relative;
+  padding: 6px;
+  --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  --usage-ring-session: var(--accent);
+}
+.usage-ring-trigger svg {
+  transform: rotate(-90deg);
+}
+.usage-ring-track,
+.usage-ring-fill {
+  fill: none;
+  stroke-width: 2;
+}
+.usage-ring-track {
+  stroke: color-mix(in srgb, var(--muted) 24%, transparent);
+}
+.usage-ring[data-kind="weekly"] .usage-ring-fill {
+  stroke: var(--usage-ring-weekly);
+}
+.usage-ring[data-kind="session"] .usage-ring-fill {
+  stroke: var(--usage-ring-session);
+}
+.usage-ring .usage-ring-fill[data-pace="warn"] {
+  stroke: #e3a23a;
+}
+.usage-ring .usage-ring-fill[data-pace="hot"],
+.usage-ring .usage-ring-fill[data-pace="spent"] {
+  stroke: #ef6a5a;
+}
+.usage-ring-fill {
+  transition: stroke-dashoffset 400ms ease;
+}
+.usage-ring-trigger[data-loading] svg {
+  opacity: 0.45;
+}
+.usage-ring-flame {
+  position: absolute;
+  right: 0;
+  top: 0;
+  color: #ef6a5a;
+}
+.usage-ring-popup {
+  width: 232px;
+  padding: 10px 12px 11px;
+  display: grid;
+  gap: 10px;
+}
+.usage-ring-heading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+.usage-ring-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.usage-row {
+  display: grid;
+  gap: 4px;
+  --usage-row-color: var(--usage-ring-session, var(--accent));
+}
+.usage-row[data-kind="weekly"] {
+  --usage-row-color: color-mix(in srgb, var(--accent) 55%, var(--muted));
+}
+.usage-row[data-pace="warn"] {
+  --usage-row-color: #e3a23a;
+}
+.usage-row[data-pace="hot"],
+.usage-row[data-pace="spent"] {
+  --usage-row-color: #ef6a5a;
+}
+.usage-row-top,
+.usage-row-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.usage-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+.usage-row-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--usage-row-color);
+}
+.usage-row-left {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.usage-row-track {
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  overflow: hidden;
+}
+.usage-row-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--usage-row-color);
+}
+.usage-row-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.usage-row[data-pace="hot"] .usage-row-limit,
+.usage-row[data-pace="spent"] .usage-row-limit {
+  color: #e36a5c;
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-ring-fill {
+    transition: none;
+  }
 }

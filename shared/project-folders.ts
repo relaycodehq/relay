@@ -23,25 +23,55 @@ export const projectFolderSchema = z
               part !== ".." &&
               !/[\\\x00-\x1f]/.test(part),
           )),
-    "Use folder names separated by / (up to eight levels).",
+    "Use group names separated by / (up to eight levels).",
   );
+/** One group name typed in the sidebar; nesting comes from where it's created. */
+export const projectGroupNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name the group.")
+  .max(60)
+  .refine(
+    (value) => value !== "." && value !== ".." && !/[/\\\x00-\x1f]/.test(value),
+    "Group names can't contain slashes.",
+  );
+export function joinGroup(parent: string, name: string) {
+  return parent ? `${parent}/${name}` : name;
+}
+export function parentGroup(path: string) {
+  const slash = path.lastIndexOf("/");
+  return slash < 0 ? "" : path.slice(0, slash);
+}
+/**
+ * Moves `path` along with group `from` when that group becomes `to`:
+ * renaming passes the new path, ungrouping passes the parent.
+ */
+export function rebaseGroup(path: string, from: string, to: string) {
+  if (path !== from && !path.startsWith(from + "/")) return path;
+  const rest = path.slice(from.length + 1);
+  return rest ? joinGroup(to, rest) : to;
+}
 export interface ProjectFolderNode {
   name: string;
   path: string;
   folders: ProjectFolderNode[];
   projects: Project[];
 }
-export function projectFolderTree(projects: Project[]): ProjectFolderNode {
+/** Builds the sidebar tree; `groups` adds groups that have no projects yet. */
+export function projectFolderTree(
+  projects: Project[],
+  groups: string[] = [],
+): ProjectFolderNode {
   const root: ProjectFolderNode = {
     name: "",
     path: "",
     folders: [],
     projects: [],
   };
-  for (const project of projects) {
+  const reach = (folder: string) => {
     let node = root;
-    for (const name of project.folder?.split("/").filter(Boolean) ?? []) {
-      const path = node.path ? `${node.path}/${name}` : name;
+    for (const name of folder.split("/").filter(Boolean)) {
+      const path = joinGroup(node.path, name);
       let child = node.folders.find((f) => f.path === path);
       if (!child) {
         child = { name, path, folders: [], projects: [] };
@@ -49,8 +79,11 @@ export function projectFolderTree(projects: Project[]): ProjectFolderNode {
       }
       node = child;
     }
-    node.projects.push(project);
-  }
+    return node;
+  };
+  for (const group of groups) reach(group);
+  for (const project of projects)
+    reach(project.folder ?? "").projects.push(project);
   const sort = (node: ProjectFolderNode) => {
     node.folders.sort((a, b) => a.name.localeCompare(b.name));
     node.folders.forEach(sort);

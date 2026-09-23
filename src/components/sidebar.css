@@ -193,15 +193,34 @@
   opacity: 1;
 }
 
-/* Virtual folders: a quiet label instead of another tree level. */
+/* Groups: a quiet label; their contents step in slightly so membership
+   stays readable next to ungrouped projects. */
 .sb-folder {
   margin-top: 8px;
+}
+.sb-folder-body {
+  margin-left: 8px;
+}
+.sb-folder-row {
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+  padding-right: 4px;
+}
+.sb-folder-row:hover .sb-row-actions,
+.sb-folder-row[data-popup-open] .sb-row-actions {
+  opacity: 1;
+}
+.sb-folder-row .icon-button {
+  width: 22px;
+  height: 22px;
 }
 .sb .sb-folder-toggle {
   display: flex;
   justify-content: flex-start;
   gap: 5px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 5px 10px;
   font-size: 10.5px;
   font-weight: 600;
@@ -209,7 +228,13 @@
   text-transform: uppercase;
   color: var(--muted);
 }
+.sb .sb-folder-toggle > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sb .sb-folder-toggle > svg {
+  flex: none;
   opacity: 0;
   transition:
     transform 0.15s,
@@ -221,6 +246,66 @@
 }
 .sb .sb-folder-toggle[aria-expanded="true"] > svg {
   transform: rotate(90deg);
+}
+
+/* Naming a group happens in place, styled like the label it becomes. */
+.sb-group-input {
+  padding: 2px 4px;
+  margin-top: 8px;
+}
+.sb-folder > .sb-group-input {
+  margin-top: 0;
+}
+.sb-group-input input {
+  width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 6px;
+  outline: none;
+  background: var(--accent-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  animation: sb-appear 0.14s ease-out;
+}
+.sb-group-input input::placeholder {
+  color: var(--muted);
+}
+.sb-group-input input[aria-invalid="true"] {
+  border-color: var(--danger, #e46b73);
+}
+
+/* An empty group invites a drop instead of disappearing. */
+.sb-group-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  margin: 1px 4px 2px;
+  padding: 0 10px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 35%, transparent);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+.sb-group-empty.drop-into {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@keyframes sb-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
 }
 
 /* Projects and threads (Codex-like: title-only rows, aligned to the name). */
@@ -311,6 +396,41 @@
   white-space: nowrap;
   text-align: left;
 }
+.sb-thread-row {
+  position: relative;
+}
+.sb-thread-row.stale .sb-thread {
+  opacity: 0.55;
+}
+.sb-thread-row.stale:hover .sb-thread {
+  opacity: 1;
+}
+.sb .sb-thread-archive {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+.sb .sb-thread-archive:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.sb-thread-row:hover .sb-thread-archive,
+.sb .sb-thread-archive:focus-visible {
+  display: flex;
+}
+.sb-thread-row:hover .sb-thread > .sb-age,
+.sb-thread-row:hover .sb-thread > .sb-status {
+  visibility: hidden;
+}
 .sb .sb-thread.sb-ghost {
   color: var(--muted);
 }
@@ -376,13 +496,14 @@
 .sb-project.drop-after::after {
   animation: sb-line 0.12s ease-out;
 }
-.sb .sb-folder-toggle.drop-into,
+.sb-folder-row.drop-into,
 .sb-section-heading.drop-into {
   color: var(--accent);
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
   border-radius: 7px;
 }
+.sb-folder-row.drop-into .sb-folder-toggle,
 .sb-section-heading.drop-into h2 {
   color: var(--accent);
 }
@@ -710,6 +831,9 @@
 .sb-note {
   padding: 6px 10px;
 }
+.sb-note.error {
+  color: var(--danger, #e46b73);
+}
 
 /* Snooze menu. */
 .sb-menu {
@@ -753,6 +877,38 @@
 }
 .sb-menu-item[data-highlighted] {
   background: var(--hover);
+}
+.sb-menu-item[data-disabled] {
+  cursor: default;
+}
+.sb-menu-item > svg {
+  color: var(--muted);
+}
+.sb-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-menu-label > svg {
+  color: var(--muted);
+}
+.sb-menu-group {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+}
+.sb-menu-group > .parent {
+  color: var(--muted);
+}
+.sb-menu-group > .parent::after {
+  content: "/";
+  margin-left: 5px;
+  opacity: 0.6;
+}
+.sb-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
 }
 
 /* Footer. */

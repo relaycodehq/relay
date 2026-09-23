@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu } from "@base-ui/react/menu";
+import { ContextMenu } from "@base-ui/react/context-menu";
 import {
+  Archive,
   Bell,
   Check,
   ChevronRight,
   Clock,
+  Ellipsis,
   Folder,
+  FolderInput,
+  FolderMinus,
   FolderOpen,
-  FolderTree,
+  FolderPlus,
+  Pencil,
   GitPullRequest,
   Plus,
   RotateCcw,
@@ -30,15 +36,18 @@ import {
 import { api } from "../lib/api";
 import { IconButton } from "./ui";
 import { ProviderIcon } from "./ComposerModelPicker";
-import { ProjectFolderDialog } from "./ProjectFolderDialog";
 import {
+  joinGroup,
   moveProjectInList,
+  parentGroup,
   projectFolderTree,
+  projectGroupNameSchema,
   type ProjectFolderNode,
 } from "../../shared/project-folders";
 import "./sidebar.css";
 
 const THREADS_PER_PROJECT = 5;
+const STALE_AFTER = 24 * 60 * 60 * 1000;
 const PROJECT_DRAG = "application/x-relay-project";
 
 type DropTarget =
@@ -191,6 +200,58 @@ function SnoozeMenu({
   );
 }
 
+/** Inline name field for creating or renaming a group in place. */
+function GroupNameInput({
+  label,
+  initial = "",
+  onSubmit,
+  onCancel,
+}: {
+  label: string;
+  initial?: string;
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const done = useRef(false);
+  const parsed = projectGroupNameSchema.safeParse(value);
+  const invalid = !!value.trim() && !parsed.success;
+  const finish = (commit: boolean) => {
+    if (done.current) return;
+    if (commit && parsed.success && parsed.data !== initial) {
+      done.current = true;
+      onSubmit(parsed.data);
+    } else if (!commit || !invalid) {
+      done.current = true;
+      onCancel();
+    }
+  };
+  return (
+    <div className="sb-group-input">
+      <input
+        autoFocus
+        aria-label={label}
+        placeholder="Group name"
+        maxLength={60}
+        value={value}
+        aria-invalid={invalid}
+        title={invalid ? parsed.error?.issues[0].message : undefined}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish(true);
+          if (e.key === "Escape") finish(false);
+        }}
+        onBlur={() => {
+          if (!invalid) return finish(true);
+          done.current = true;
+          onCancel();
+        }}
+      />
+    </div>
+  );
+}
+
 export function ProjectSidebar({
   projects,
   projectId,
@@ -241,7 +302,53 @@ export function ProjectSidebar({
   useEffect(() => writeJson("relay-project-expansion", expanded), [expanded]);
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [shelves, setShelves] = useState({ snoozed: false, settled: false });
-  const [organizing, setOrganizing] = useState<string | null>(null);
+  const groups = useQuery({
+    queryKey: ["project-groups"],
+    queryFn: () => api.projectGroups(),
+  }).data;
+  /** Where a new group's name is being typed, and a project to move into it. */
+  const [draft, setDraft] = useState<{ parent: string; project?: string }>();
+  const [renaming, setRenaming] = useState<string>();
+  const [groupError, setGroupError] = useState<string>();
+  const refreshGroups = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ["projects"] }),
+      qc.invalidateQueries({ queryKey: ["project-groups"] }),
+    ]);
+  const changeGroups = async (
+    change: () => Promise<void>,
+    optimistic?: (groups: string[]) => string[],
+  ) => {
+    setGroupError(undefined);
+    if (optimistic)
+      qc.setQueryData<string[]>(["project-groups"], (list) =>
+        optimistic(list ?? []),
+      );
+    try {
+      await change();
+    } catch (e) {
+      setGroupError(e instanceof Error ? e.message : String(e));
+    } finally {
+      void refreshGroups();
+    }
+  };
+  const createGroup = (parent: string, name: string, project?: string) => {
+    const path = joinGroup(parent, name);
+    setExpanded((state) => ({ ...state, ["folder:" + path]: true }));
+    void changeGroups(
+      () =>
+        project
+          ? moveProject(project, { kind: "folder", path })
+          : api.createProjectGroup(path),
+      (list) => [...list, path],
+    );
+  };
+  const startGroup = (parent: string, project?: string) => {
+    setRenaming(undefined);
+    if (parent)
+      setExpanded((state) => ({ ...state, ["folder:" + parent]: true }));
+    setDraft({ parent, project });
+  };
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
   const expandTimer = useRef<{ key: string; timer: number } | null>(null);
@@ -272,7 +379,7 @@ export function ProjectSidebar({
     try {
       await api.moveProject(id, folder, before);
     } finally {
-      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void refreshGroups();
     }
   };
   /** Shared dragover handling: accept only project drags, mark the target. */
@@ -338,20 +445,22 @@ export function ProjectSidebar({
   const byId = new Map(projects.map((p) => [p.id, p]));
   const all = lists
     .flatMap((q) => q.data ?? [])
-    .filter((c) => c.id === chatId || !chatIsEmpty(c))
+    .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
     .sort((a, b) => b.updated - a.updated);
   const unread = useSeen(chatId, all);
   const triage = async (c: ChatSummary, action: ChatTriage) => {
     qc.setQueryData<ChatSummary[]>(["project-chats", c.projectId], (list) =>
       list?.map((entry) =>
-        entry.id === c.id
-          ? {
+        entry.id !== c.id
+          ? entry
+          : action.kind === "archive"
+            ? { ...entry, archivedAt: Date.now() }
+            : {
               ...entry,
               settledAt: action.kind === "settle" ? Date.now() : undefined,
               snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
               snoozedUntil: action.kind === "snooze" ? action.until : undefined,
-            }
-          : entry,
+            },
       ),
     );
     try {
@@ -378,26 +487,45 @@ export function ProjectSidebar({
     if (!dirty) onChat(c);
   };
 
-  const threadRow = (c: ChatSummary, withProject = false) => (
-    <button
-      key={c.id}
-      className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
-      disabled={dirty}
-      title={c.title}
-      onClick={() => open(c)}
-    >
-      <span className="sb-thread-title">{c.title}</span>
-      {withProject && (
-        <small className="sb-thread-project">
-          {byId.get(c.projectId)?.name}
-        </small>
-      )}
-      {c.scope.kind === "pr" && !withProject && (
-        <small className="sb-thread-pr">#{c.scope.ref.number}</small>
-      )}
-      <StatusMark chat={c} unread={unread(c)} now={now} />
-    </button>
-  );
+  const threadRow = (c: ChatSummary, withProject = false) => {
+    const stale =
+      now - c.updated > STALE_AFTER &&
+      chatId !== c.id &&
+      !c.running &&
+      !c.waiting &&
+      !unread(c);
+    return (
+      <div key={c.id} className={`sb-thread-row ${stale ? "stale" : ""}`}>
+        <button
+          className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
+          disabled={dirty}
+          title={c.title}
+          onClick={() => open(c)}
+        >
+          <span className="sb-thread-title">{c.title}</span>
+          {withProject && (
+            <small className="sb-thread-project">
+              {byId.get(c.projectId)?.name}
+            </small>
+          )}
+          {c.scope.kind === "pr" && !withProject && (
+            <small className="sb-thread-pr">#{c.scope.ref.number}</small>
+          )}
+          <StatusMark chat={c} unread={unread(c)} now={now} />
+        </button>
+        {!c.running && (
+          <button
+            className="sb-thread-archive"
+            title="Archive"
+            aria-label={`Archive ${c.title}`}
+            onClick={() => void triage(c, { kind: "archive" })}
+          >
+            <Archive size={13} />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const renderProject = (p: Project) => {
     const chats = all.filter((c) => c.projectId === p.id);
@@ -430,61 +558,60 @@ export function ProjectSidebar({
         }}
         onDrop={(e) => drop?.kind === "project" && dropOn(e, drop)}
       >
-        <div
-          className="sb-project-row"
-          draggable={!dirty}
-          onDragStart={(e) => {
-            e.dataTransfer.setData(PROJECT_DRAG, p.id);
-            e.dataTransfer.effectAllowed = "move";
-            setDragging(p.id);
-          }}
-          onDragEnd={clearDrag}
-        >
-          <button
-            className="sb-project-expand"
-            aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
-            aria-expanded={isOpen}
-            onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
-          >
-            {isOpen ? <FolderOpen size={15} /> : <Folder size={15} />}
-          </button>
-          <button
-            className="sb-project-name"
-            disabled={dirty}
-            title={`${p.path} · Right-click to organize`}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setOrganizing(p.id);
+        <ContextMenu.Root>
+          <ContextMenu.Trigger
+            className="sb-project-row"
+            draggable={!dirty}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(PROJECT_DRAG, p.id);
+              e.dataTransfer.effectAllowed = "move";
+              setDragging(p.id);
             }}
-            onClick={() => {
-              onProject(p);
-              setExpanded((s) => ({ ...s, [p.id]: true }));
-            }}
+            onDragEnd={clearDrag}
           >
-            <span>{p.name}</span>
-            {busy && !isOpen && (
-              <span className="sb-status running" title="Working">
-                <i />
-              </span>
-            )}
-          </button>
-          <div className="sb-row-actions">
-            <IconButton
-              label={`Shared conversations in ${p.name}`}
-              disabled={dirty}
-              onClick={() => onShared(p)}
+            <button
+              className="sb-project-expand"
+              aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
+              aria-expanded={isOpen}
+              onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
             >
-              <Users size={13} />
-            </IconButton>
-            <IconButton
-              label={`New thread in ${p.name}`}
+              {isOpen ? <FolderOpen size={15} /> : <Folder size={15} />}
+            </button>
+            <button
+              className="sb-project-name"
               disabled={dirty}
-              onClick={() => onNew(p)}
+              title={p.path}
+              onClick={() => {
+                onProject(p);
+                setExpanded((s) => ({ ...s, [p.id]: true }));
+              }}
             >
-              <Plus size={14} />
-            </IconButton>
-          </div>
-        </div>
+              <span>{p.name}</span>
+              {busy && !isOpen && (
+                <span className="sb-status running" title="Working">
+                  <i />
+                </span>
+              )}
+            </button>
+            <div className="sb-row-actions">
+              <IconButton
+                label={`Shared conversations in ${p.name}`}
+                disabled={dirty}
+                onClick={() => onShared(p)}
+              >
+                <Users size={13} />
+              </IconButton>
+              <IconButton
+                label={`New thread in ${p.name}`}
+                disabled={dirty}
+                onClick={() => onNew(p)}
+              >
+                <Plus size={14} />
+              </IconButton>
+            </div>
+          </ContextMenu.Trigger>
+          {moveMenu(p)}
+        </ContextMenu.Root>
         {isOpen && (
           <div className="sb-thread-list">
             {visible.map((c) => threadRow(c))}
@@ -515,39 +642,217 @@ export function ProjectSidebar({
     );
   };
 
+  const groupPaths: string[] = [];
+  const tree = projectFolderTree(projects, groups);
+  (function collect(node: ProjectFolderNode) {
+    for (const folder of node.folders) {
+      groupPaths.push(folder.path);
+      collect(folder);
+    }
+  })(tree);
+
+  const moveMenu = (p: Project) => (
+    <Menu.Portal>
+      <Menu.Positioner sideOffset={4}>
+        <Menu.Popup className="sb-menu">
+          <div className="sb-menu-heading">Move {p.name} to…</div>
+          {groupPaths.map((path) => (
+            <Menu.Item
+              key={path}
+              className="sb-menu-item"
+              disabled={path === (p.folder ?? "")}
+              onClick={() => void moveProject(p.id, { kind: "folder", path })}
+            >
+              <span className="sb-menu-group">
+                {path.split("/").map((name, i, parts) => (
+                  <span
+                    key={i}
+                    className={i < parts.length - 1 ? "parent" : ""}
+                  >
+                    {name}
+                  </span>
+                ))}
+              </span>
+              {path === p.folder && <Check size={13} />}
+            </Menu.Item>
+          ))}
+          {p.folder && (
+            <Menu.Item
+              className="sb-menu-item"
+              onClick={() =>
+                void moveProject(p.id, { kind: "folder", path: "" })
+              }
+            >
+              <span className="sb-menu-label">
+                <FolderMinus size={13} />
+                Remove from group
+              </span>
+            </Menu.Item>
+          )}
+          {groupPaths.length > 0 && (
+            <Menu.Separator className="sb-menu-separator" />
+          )}
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => startGroup("", p.id)}
+          >
+            <span className="sb-menu-label">
+              <FolderPlus size={13} />
+              New group…
+            </span>
+          </Menu.Item>
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Portal>
+  );
+
+  const groupMenu = (folder: ProjectFolderNode) => (
+    <Menu.Portal>
+      <Menu.Positioner side="bottom" align="end" sideOffset={4}>
+        <Menu.Popup className="sb-menu">
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => {
+              setDraft(undefined);
+              setRenaming(folder.path);
+            }}
+          >
+            <span className="sb-menu-label">
+              <Pencil size={13} />
+              Rename
+            </span>
+          </Menu.Item>
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => startGroup(folder.path)}
+          >
+            <span className="sb-menu-label">
+              <FolderPlus size={13} />
+              New group inside
+            </span>
+          </Menu.Item>
+          <Menu.Separator className="sb-menu-separator" />
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() =>
+              void changeGroups(() => api.removeProjectGroup(folder.path))
+            }
+          >
+            <span className="sb-menu-label">
+              <FolderMinus size={13} />
+              Remove group
+            </span>
+            <small>Projects stay</small>
+          </Menu.Item>
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Portal>
+  );
+
   function renderFolder(node: ProjectFolderNode): React.ReactNode {
     return (
       <>
+        {draft?.parent === node.path && (
+          <GroupNameInput
+            label="New group name"
+            onCancel={() => setDraft(undefined)}
+            onSubmit={(name) => {
+              setDraft(undefined);
+              createGroup(node.path, name, draft.project);
+            }}
+          />
+        )}
         {node.folders.map((folder) => {
           const key = "folder:" + folder.path;
           const isOpen = expanded[key] ?? true;
+          const into = drop?.kind === "folder" && drop.path === folder.path;
+          const empty =
+            !folder.folders.length &&
+            !folder.projects.length &&
+            draft?.parent !== folder.path;
           return (
             <section
               key={folder.path}
               className="sb-folder"
-              aria-label={`Folder ${folder.path}`}
+              aria-label={`Group ${folder.path}`}
             >
-              <button
-                onDragOver={(e) => {
-                  dragOver(e, { kind: "folder", path: folder.path });
-                  openWhileDragging(key, isOpen);
-                }}
-                onDrop={(e) => dropOn(e, { kind: "folder", path: folder.path })}
-                className={`sb-folder-toggle ${
-                  drop?.kind === "folder" && drop.path === folder.path
-                    ? "drop-into"
-                    : ""
-                }`}
-                aria-label={`${isOpen ? "Collapse" : "Expand"} folder ${folder.path}`}
-                aria-expanded={isOpen}
-                onClick={() =>
-                  setExpanded((state) => ({ ...state, [key]: !isOpen }))
-                }
-              >
-                <span>{folder.name}</span>
-                <ChevronRight size={11} />
-              </button>
-              {isOpen && renderFolder(folder)}
+              {renaming === folder.path ? (
+                <GroupNameInput
+                  label="Group name"
+                  initial={folder.name}
+                  onCancel={() => setRenaming(undefined)}
+                  onSubmit={(name) => {
+                    setRenaming(undefined);
+                    const to = joinGroup(parentGroup(folder.path), name);
+                    setExpanded((state) => ({
+                      ...state,
+                      ["folder:" + to]: isOpen,
+                    }));
+                    void changeGroups(() =>
+                      api.renameProjectGroup(folder.path, to),
+                    );
+                  }}
+                />
+              ) : (
+                <ContextMenu.Root>
+                  <ContextMenu.Trigger
+                    className={`sb-folder-row ${into ? "drop-into" : ""}`}
+                    onDragOver={(e) => {
+                      dragOver(e, { kind: "folder", path: folder.path });
+                      openWhileDragging(key, isOpen);
+                    }}
+                    onDrop={(e) =>
+                      dropOn(e, { kind: "folder", path: folder.path })
+                    }
+                  >
+                    <button
+                      className="sb-folder-toggle"
+                      aria-label={`${isOpen ? "Collapse" : "Expand"} group ${folder.path}`}
+                      aria-expanded={isOpen}
+                      title="Double-click to rename"
+                      onClick={() =>
+                        setExpanded((state) => ({ ...state, [key]: !isOpen }))
+                      }
+                      onDoubleClick={() => setRenaming(folder.path)}
+                    >
+                      <span>{folder.name}</span>
+                      <ChevronRight size={11} />
+                    </button>
+                    <div className="sb-row-actions">
+                      <Menu.Root>
+                        <Menu.Trigger
+                          className="icon-button"
+                          aria-label={`Group actions for ${folder.path}`}
+                          title="Group actions"
+                        >
+                          <Ellipsis size={13} />
+                        </Menu.Trigger>
+                        {groupMenu(folder)}
+                      </Menu.Root>
+                    </div>
+                  </ContextMenu.Trigger>
+                  {groupMenu(folder)}
+                </ContextMenu.Root>
+              )}
+              {isOpen && (
+                <div className="sb-folder-body">
+                  {renderFolder(folder)}
+                  {empty && (
+                    <div
+                      className={`sb-group-empty ${into ? "drop-into" : ""}`}
+                      onDragOver={(e) =>
+                        dragOver(e, { kind: "folder", path: folder.path })
+                      }
+                      onDrop={(e) =>
+                        dropOn(e, { kind: "folder", path: folder.path })
+                      }
+                    >
+                      <FolderInput size={13} />
+                      {dragging ? "Drop here" : "Drag projects here"}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           );
         })}
@@ -737,25 +1042,22 @@ export function ProjectSidebar({
         className={`sb-section-heading ${
           drop?.kind === "folder" && drop.path === "" ? "drop-into" : ""
         }`}
-        title={dragging ? "Drop to move out of folders" : undefined}
+        title={dragging ? "Drop to move out of groups" : undefined}
         onDragOver={(e) => dragOver(e, { kind: "folder", path: "" })}
         onDrop={(e) => dropOn(e, { kind: "folder", path: "" })}
       >
         <h2>Projects</h2>
         <div className="sb-row-actions">
-          <IconButton
-            label="Organize projects"
-            disabled={!projects.length}
-            onClick={() => setOrganizing(projectId ?? projects[0]?.id ?? "")}
-          >
-            <FolderTree size={13} />
+          <IconButton label="New group" onClick={() => startGroup("")}>
+            <FolderPlus size={13} />
           </IconButton>
           <IconButton label="Add project" disabled={dirty} onClick={onAdd}>
             <Plus size={14} />
           </IconButton>
         </div>
       </div>
-      {renderFolder(projectFolderTree(projects))}
+      {groupError && <p className="sb-note error">{groupError}</p>}
+      {renderFolder(tree)}
       {!projects.length && (
         <p className="sb-note">Add a local Git folder to get started.</p>
       )}
@@ -778,13 +1080,6 @@ export function ProjectSidebar({
 
   return (
     <div className="sb">
-      {organizing !== null && (
-        <ProjectFolderDialog
-          projects={projects}
-          initial={organizing}
-          onClose={() => setOrganizing(null)}
-        />
-      )}
       <div className="sb-top">
         <div className="sb-search">
           <Search size={13} />

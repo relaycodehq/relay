@@ -10,6 +10,7 @@ import {
   Blocks,
   Folder,
   Settings,
+  SquareTerminal,
   UserRound,
   Package,
   Zap,
@@ -20,6 +21,8 @@ import {
   relayCommands,
   relayCommand,
   commandTrigger,
+  argumentTrigger,
+  type CommandOption,
   type RelayCommand,
 } from "../../shared/commands";
 import type { SkillPick } from "./ComposerPromptInput";
@@ -30,17 +33,23 @@ export function useComposerCommands({
   projectId,
   provider,
   onCommand,
+  options,
   input,
   onSkillPick,
+  onFill,
   disabled,
 }: {
   draft: string;
   onDraft: (text: string) => void;
   projectId: string;
   provider: "codex" | "claude" | "message";
-  onCommand: (command: RelayCommand) => boolean;
+  /** False leaves the draft alone; a string explains why it did not run. */
+  onCommand: (command: RelayCommand, args: string) => boolean | string;
+  /** Values offered after a command name, e.g. effort levels. */
+  options: (command: RelayCommand) => CommandOption[] | undefined;
   input: RefObject<HTMLElement | null>;
   onSkillPick: (skill: SkillPick) => void;
+  onFill: (range: { start: number; end: number; text: string }) => void;
   disabled: boolean;
 }) {
   const id = useId();
@@ -48,11 +57,13 @@ export function useComposerCommands({
   const [dismissed, setDismissed] = useState<string>();
   const [error, setError] = useState<string>();
   const [cursor, setCursor] = useState<number>();
-  const trigger = commandTrigger(
-    draft,
-    Math.min(cursor ?? draft.length, draft.length),
-  );
-  const visible = !!trigger && dismissed !== draft && !disabled;
+  const at = Math.min(cursor ?? draft.length, draft.length);
+  const trigger = commandTrigger(draft, at);
+  const argument = argumentTrigger(draft, at);
+  const argCommand = relayCommands.find((c) => c.name === argument?.name);
+  const argOptions = argCommand ? options(argCommand.name) : undefined;
+  const visible =
+    (!!trigger || !!argOptions?.length) && dismissed !== draft && !disabled;
   const providerCommands = useQuery({
     queryKey: ["provider-commands", projectId, provider],
     queryFn: () =>
@@ -60,48 +71,87 @@ export function useComposerCommands({
         projectId,
         provider === "claude" ? "claude" : "codex",
       ),
-    enabled: visible && provider !== "message",
+    enabled: (visible || draft.startsWith("/")) && provider !== "message",
     staleTime: 60000,
     retry: false,
   });
-  const query = trigger?.query.toLowerCase() ?? "";
+  const query = (argument?.query ?? trigger?.query ?? "").toLowerCase();
   const prefix = trigger?.prefix ?? "/";
-  const items = [
-    ...(prefix === "/"
-      ? relayCommands.map((c) => ({
-          ...c,
-          label: "/" + c.name,
+  type Item = {
+    kind: "relay" | "argument" | "claude" | "skill";
+    name: string;
+    label: string;
+    description: string;
+    source: string;
+    Icon: typeof Zap;
+  };
+  const items: Item[] = (
+    argCommand && argOptions
+      ? argOptions.map((o) => ({
+          kind: "argument" as const,
+          name: o.value,
+          label: `/${argCommand.name} ${o.label}`,
+          description: o.description ?? "",
           source: "Relay",
           Icon: Zap,
         }))
-      : []),
-    ...(provider !== "message" ? (providerCommands.data ?? []) : []).map(
-      (c) => ({
-        ...c,
-        name: prefix === "$" ? c.name.replace(/^skill:/, "") : c.name,
-        label:
-          (prefix === "/" ? "/skill:" : "") +
-          (c.displayName || c.name.replace(/^skill:/, "")),
-        source:
-          {
-            app: "App",
-            repo: "Repo",
-            project: "Project",
-            personal: "Personal",
-            system: "System",
-            other: "Provider",
-          }[c.source ?? "other"] + " Skill",
-        Icon: {
-          app: Blocks,
-          repo: Folder,
-          project: Folder,
-          personal: UserRound,
-          system: Settings,
-          other: Package,
-        }[c.source ?? "other"],
-      }),
-    ),
-  ]
+      : [
+          ...(prefix === "/"
+            ? relayCommands.map((c) => ({
+                kind: "relay" as const,
+                name: c.name,
+                label: "/" + c.name + ("args" in c ? " " + c.args : ""),
+                description: c.description,
+                source: "Relay",
+                Icon: Zap,
+              }))
+            : []),
+          ...(provider !== "message" ? (providerCommands.data ?? []) : [])
+            .filter((c) => prefix === "/" || c.source !== "claude")
+            .map((c) =>
+              c.source === "claude"
+                ? {
+                    kind: "claude" as const,
+                    name: c.name,
+                    label:
+                      "/" +
+                      c.name +
+                      (c.argumentHint ? " " + c.argumentHint : ""),
+                    description: c.description,
+                    source: "Claude",
+                    Icon: SquareTerminal,
+                  }
+                : {
+                    kind: "skill" as const,
+                    name:
+                      prefix === "$" ? c.name.replace(/^skill:/, "") : c.name,
+                    label:
+                      (prefix === "/" ? "/skill:" : "") +
+                      (c.displayName || c.name.replace(/^skill:/, "")),
+                    description: c.description,
+                    source:
+                      {
+                        app: "App",
+                        repo: "Repo",
+                        project: "Project",
+                        personal: "Personal",
+                        system: "System",
+                        claude: "Claude",
+                        other: "Provider",
+                      }[c.source ?? "other"] + " Skill",
+                    Icon: {
+                      app: Blocks,
+                      repo: Folder,
+                      project: Folder,
+                      personal: UserRound,
+                      system: Settings,
+                      claude: Package,
+                      other: Package,
+                    }[c.source ?? "other"],
+                  },
+            ),
+        ]
+  )
     .filter((c) => `${c.name} ${c.label}`.toLowerCase().includes(query))
     .slice(0, 60);
   const [bounds, setBounds] = useState({
@@ -145,33 +195,56 @@ export function useComposerCommands({
       window.removeEventListener("scroll", measure, true);
     };
   }, [visible, items.length, input]);
+  function run(command: RelayCommand, args: string) {
+    const result = onCommand(command, args);
+    if (typeof result === "string") setError(result);
+    else if (result) onDraft("");
+  }
   function choose(index: number) {
     const item = items[index];
     if (!item) return;
-    const action =
-      item.source === "Relay" ? relayCommand("/" + item.name) : null;
-    if (action) {
-      if (onCommand(action)) onDraft("");
-    } else {
+    if (item.kind === "argument") run(argCommand!.name, item.name);
+    else if (item.kind === "relay") {
+      const command = relayCommands.find((c) => c.name === item.name)!;
+      // Required values are picked from the follow-up list.
+      if ("args" in command && command.args.startsWith("<"))
+        onFill({ start: 0, end: at, text: `/${command.name} ` });
+      else run(command.name, "");
+    } else if (item.kind === "claude")
+      onFill({ start: 0, end: at, text: `/${item.name} ` });
+    else
       onSkillPick({
         token: `${prefix}${item.name}`,
         label: item.label.replace(/^\/skill:/, ""),
         start: trigger?.start ?? 0,
         end: trigger?.end ?? draft.length,
       });
-    }
+  }
+  /** Claude runs its own commands when the message starts with one. */
+  function claudeCommand(text: string) {
+    const name = /^\/([^\s]+)/.exec(text.trim())?.[1];
+    return (
+      provider === "claude" &&
+      !!name &&
+      !!providerCommands.data?.some(
+        (c) => c.source === "claude" && c.name === name,
+      )
+    );
   }
   function interceptSend() {
     if (!draft.trim().startsWith("/")) return false;
     const action = relayCommand(draft);
     if (action) {
-      if (onCommand(action)) onDraft("");
+      run(action.name, action.args);
       return true;
     }
+    if (claudeCommand(draft)) return false;
     if (provider === "codex" && /^\/skill:[^\s]+(?:\s|$)/.test(draft.trim()))
       return false;
     setError(
-      "Choose a command from the menu. Relay actions run on their own; add instructions after a Codex skill.",
+      provider === "claude" && providerCommands.isFetching
+        ? "Loading Claude commands… try again in a moment."
+        : "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or Claude command.",
     );
     return true;
   }

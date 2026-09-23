@@ -1,21 +1,40 @@
 import { LiveSyncControls } from "./LiveSyncControls";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, GitBranch, Plus, Minus, RefreshCw } from "lucide-react";
+import {
+  ArrowUp,
+  GitBranch,
+  Plus,
+  Minus,
+  RefreshCw,
+  SquarePen,
+} from "lucide-react";
 import type { Pull } from "../../shared/types";
 import type { ChangeArea, GitAction } from "../../shared/working-tree";
+import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
+import { PaneResizer } from "./PaneResizer";
 import { WorkingDiff } from "./WorkingDiff";
+import type { PaneSlots } from "./WorkspacePanes";
 import "./working-tree.css";
 export function LocalChanges({
   pull,
   projectId,
   onSelection,
+  slots,
+  onOpenFile,
+  onAsk,
 }: {
   pull?: Pull;
   projectId?: string;
   onSelection?: (path: string | null) => void;
+  /** When hosted in a workspace pane, the toolbar lives in the pane header. */
+  slots?: PaneSlots;
+  onOpenFile?: (path: string) => void;
+  /** Attaches selected diff lines to the project chat composer. */
+  onAsk?: (ref: CodeReference) => void;
 }) {
   const qc = useQueryClient(),
     key = projectId
@@ -58,7 +77,8 @@ export function LocalChanges({
     queryKey: key,
     queryFn: () =>
       projectId ? api.projectWorkingTree(projectId) : api.workingTree(pull!),
-    refetchInterval: busy ? false : 3000,
+    // A project's tree is polled by the shell; a PR checkout polls here.
+    refetchInterval: busy || projectId ? false : 3000,
   });
   const tree = state.data;
   const diff = useQuery({
@@ -131,35 +151,61 @@ export function LocalChanges({
         },
       ]
     : [];
+  const actions = (
+    <>
+      <IconButton
+        label="Refresh local changes"
+        disabled={busy}
+        onClick={() => void state.refetch()}
+      >
+        <RefreshCw size={15} />
+      </IconButton>
+      <button
+        disabled={busy || !tree?.pushTarget || !!tree.operation || !tree.branch}
+        onClick={() => setPush(true)}
+      >
+        <ArrowUp size={15} />
+        Push…
+      </button>
+    </>
+  );
   return (
     <section className="local-changes" aria-label="Local changes">
-      <header className="working-toolbar">
-        <GitBranch size={15} />
-        <strong>{tree?.branch || "Local checkout"}</strong>
-        {tree?.upstream && (
-          <span className="muted">
-            {tree.ahead} ahead · {tree.behind} behind
-          </span>
-        )}
-        <span className="spacer" />
-        {pull && <LiveSyncControls pull={pull} />}
-        <IconButton
-          label="Refresh local changes"
-          disabled={busy}
-          onClick={() => void state.refetch()}
-        >
-          <RefreshCw size={15} />
-        </IconButton>
-        <button
-          disabled={
-            busy || !tree?.pushTarget || !!tree.operation || !tree.branch
-          }
-          onClick={() => setPush(true)}
-        >
-          <ArrowUp size={15} />
-          Push…
-        </button>
-      </header>
+      {slots ? (
+        <>
+          {slots.title &&
+            createPortal(
+              <>
+                <span className="pane-chip">
+                  <GitBranch size={12} />
+                  {tree?.branch || "Local checkout"}
+                </span>
+                {tree?.upstream && (tree.ahead > 0 || tree.behind > 0) && (
+                  <span className="pane-chip">
+                    {tree.ahead > 0 && `↑${tree.ahead}`}
+                    {tree.ahead > 0 && tree.behind > 0 && " "}
+                    {tree.behind > 0 && `↓${tree.behind}`}
+                  </span>
+                )}
+              </>,
+              slots.title,
+            )}
+          {slots.actions && createPortal(actions, slots.actions)}
+        </>
+      ) : (
+        <header className="working-toolbar">
+          <GitBranch size={15} />
+          <strong>{tree?.branch || "Local checkout"}</strong>
+          {tree?.upstream && (
+            <span className="muted">
+              {tree.ahead} ahead · {tree.behind} behind
+            </span>
+          )}
+          <span className="spacer" />
+          {pull && <LiveSyncControls pull={pull} />}
+          {actions}
+        </header>
+      )}
       {state.error && (
         <>
           <ErrorBox error={state.error} />
@@ -195,6 +241,13 @@ export function LocalChanges({
         tree && (
           <div className="working-content">
             <aside className="working-sidebar">
+              <PaneResizer
+                pane="changes"
+                label="Resize changed files"
+                initial={250}
+                min={200}
+                max={600}
+              />
               <div className="working-file-list">
                 {sections.map((s) => (
                   <section key={s.area}>
@@ -279,6 +332,7 @@ export function LocalChanges({
                 />
                 <button
                   className="primary"
+                  aria-label="Commit staged changes"
                   disabled={
                     busy ||
                     !message.trim() ||
@@ -288,7 +342,7 @@ export function LocalChanges({
                     !tree.branch
                   }
                 >
-                  {busy ? "Working…" : "Commit staged changes"}
+                  {busy ? "Working…" : "Commit staged"}
                 </button>
                 <small>
                   Commits contain staged changes only. Unsaved editor buffers
@@ -306,11 +360,37 @@ export function LocalChanges({
                         ? "HEAD → Index"
                         : "Index → Working file"}
                     </span>
+                    {onOpenFile && (
+                      <IconButton
+                        label="Open in editor"
+                        disabled={
+                          tree.changes.find((c) => c.path === selected.path)
+                            ?.worktree === "D"
+                        }
+                        onClick={() => onOpenFile(selected.path)}
+                      >
+                        <SquarePen size={14} />
+                      </IconButton>
+                    )}
                   </header>
                   {diff.error ? (
                     <ErrorBox error={diff.error} />
                   ) : diff.data ? (
-                    <WorkingDiff pair={diff.data} />
+                    <WorkingDiff
+                      pair={diff.data}
+                      sideLabels={sideLabels(selected.area)}
+                      onAsk={
+                        onAsk &&
+                        ((t) =>
+                          onAsk({
+                            path: selected.path,
+                            start: t.start,
+                            end: t.end,
+                            label: sideLabels(selected.area)[t.side],
+                            code: t.code,
+                          }))
+                      }
+                    />
                   ) : (
                     <Loading text="Loading local diff…" />
                   )}
@@ -365,4 +445,10 @@ export function LocalChanges({
       )}
     </section>
   );
+}
+
+function sideLabels(area: ChangeArea) {
+  return area === "staged"
+    ? { deletions: "HEAD", additions: "Index" }
+    : { deletions: "Index", additions: "Working file" };
 }

@@ -260,6 +260,30 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
 }, 10000);
+it("sends a Claude slash command as the whole prompt so Claude runs it", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@claude /security-review focus on auth"),
+    provider: "claude",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const message = JSON.parse(
+    requests.find((r) => r.provider === "claude").prompt,
+  );
+  expect(message.message.content[0].text).toBe(
+    "/security-review focus on auth",
+  );
+}, 10000);
 it("keeps ordinary notes local, cancels a partial answer, and does not duplicate retried messages", async () => {
   const chat = await chats.create(projectId, { kind: "project" }),
     note = input("Consider a cache here.");

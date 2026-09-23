@@ -149,16 +149,38 @@ async function pushDestination(root: string, branch: string) {
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref: merge, label: `${remote}/${merge.slice(11)}` };
 }
+async function fetchUpstream(root: string, branch: string) {
+  // Detached or local-only branches have nothing to fetch.
+  const remote = branch
+    ? (
+        await git(root, ["config", "--get", `branch.${branch}.remote`]).catch(
+          () => "",
+        )
+      ).trim()
+    : "";
+  if (!remote || remote === ".") return;
+  await git(root, ["fetch", "--prune", "--quiet", remote], 60000);
+}
 export async function workingTree(root: string): Promise<WorkingTree> {
-  const [headRaw, branchRaw, raw, index] = await Promise.all([
+  const [headRaw, branchRaw, raw] = await Promise.all([
     git(root, ["rev-parse", "HEAD"]),
     git(root, ["branch", "--show-current"]),
     git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
-    git(root, ["ls-files", "--stage", "-z"]),
   ]);
   const head = headRaw.trim(),
     branch = branchRaw.trim(),
     changes = parseStatus(raw);
+  // Staging the status line doesn't show (such as `git add -p`) only happens
+  // on changed paths. The whole index is megabytes in a large repository.
+  const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
+  const index = tracked.length
+    ? await git(root, [
+        "ls-files",
+        "--stage",
+        "-z",
+        ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
+      ])
+    : "";
   const stamps = [];
   for (const c of changes) {
     workingPathSchema.parse(c.path);
@@ -251,6 +273,12 @@ export async function serializeRepo<T>(
 export async function performGitAction(root: string, action: GitAction) {
   return serializeRepo(root, async () => {
     const state = await workingTree(root);
+    if (action.kind === "fetch") {
+      // Background refresh of the upstream so "behind" reflects the remote.
+      if (!state.upstream) return state;
+      await fetchUpstream(root, state.branch);
+      return workingTree(root);
+    }
     if (action.revision !== state.revision)
       throw new Error(
         "Your checkout changed. Review the refreshed changes and try again.",
@@ -290,6 +318,31 @@ export async function performGitAction(root: string, action: GitAction) {
         if (!state.changes.some((c) => c.index !== " " && c.index !== "?"))
           throw new Error("Stage the changes you want to commit first.");
         await git(root, ["commit", "-m", action.message], 120000);
+      } else if (action.kind === "pull") {
+        if (!state.upstream)
+          throw new Error("This branch has no upstream to pull from.");
+        await fetchUpstream(root, state.branch);
+        const [, ahead] = (
+          await git(root, [
+            "rev-list",
+            "--left-right",
+            "--count",
+            "@{upstream}...HEAD",
+          ])
+        )
+          .trim()
+          .split(/\s+/)
+          .map(Number);
+        if (ahead > 0)
+          throw new Error(
+            "This branch has diverged from its upstream. Rebase or merge it yourself first.",
+          );
+        // Fast-forward only: never create a merge commit or rebase behind the user's back.
+        await git(
+          root,
+          ["merge", "--ff-only", "--quiet", "@{upstream}"],
+          120000,
+        );
       } else {
         const target = await pushDestination(root, state.branch);
         if (!target)

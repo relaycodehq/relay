@@ -33,6 +33,10 @@ let seq = 0,
   ng,
   closed = false,
   checking = false,
+  // While paused (an agent is editing, or the window is hidden) changes only
+  // mark the results stale; one check runs on resume.
+  paused = process.argv[4] === "paused",
+  pending = false,
   configurationReads,
   configurationKey;
 function read(path) {
@@ -49,6 +53,10 @@ function read(path) {
 function schedule() {
   if (closed) return;
   clearTimeout(timer);
+  if (paused) {
+    pending = true;
+    return;
+  }
   timer = setTimeout(check, 450);
 }
 function changed() {
@@ -162,6 +170,7 @@ function serializeDiagnostic(d) {
 }
 function check() {
   if (closed) return;
+  timer = undefined;
   checking = true;
   send({ type: "checking", seq });
   try {
@@ -491,6 +500,20 @@ try {
   const input = createInterface({ input: process.stdin });
   input.on("line", (line) => {
     const m = JSON.parse(line);
+    if (typeof m.pause === "boolean") {
+      paused = m.pause;
+      if (paused && timer) {
+        // A recheck was already queued; hold it until resume.
+        clearTimeout(timer);
+        timer = undefined;
+        pending = true;
+      } else if (!paused && pending) {
+        pending = false;
+        send({ type: "invalidated", seq });
+        schedule();
+      }
+      return;
+    }
     if (m.kind) {
       symbol(m);
       return;
@@ -525,7 +548,8 @@ try {
     for (const watcher of configurationWatches.values()) watcher.close();
     process.exit(0);
   });
-  check();
+  if (paused) pending = true;
+  else check();
 } catch (e) {
   send({
     type: "failure",

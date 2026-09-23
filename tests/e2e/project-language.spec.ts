@@ -31,7 +31,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    await page.getByRole("button", { name: "Files", exact: true }).click();
     await expect(page.locator(".checks-button")).toContainText("2 errors", {
       timeout: 30000,
     });
@@ -44,8 +44,10 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
     await page
       .getByRole("button", { name: "Close dialog", exact: true })
       .click();
-    await page.getByRole("tab", { name: "Files", exact: true }).click();
-    await page.getByRole("button", { name: /useReview.ts/ }).click();
+    await page
+      .locator(".project-file-list")
+      .getByRole("button", { name: /useReview.ts/ })
+      .click();
     const editor = page.getByRole("textbox", { name: reviewPath, exact: true });
     await expect(editor).toBeVisible();
     const call = editor
@@ -67,8 +69,9 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
       (process.platform === "darwin" ? "Meta" : "Control") + "+End",
     );
     await editor.pressSequentially("// Keep my unsaved edit");
+    // An unsaved buffer keeps the Files pane open.
     await expect(
-      page.getByRole("tab", { name: "Changes", exact: true }),
+      page.getByRole("button", { name: "Files", exact: true }),
     ).toBeDisabled();
     await app.evaluate(({ app }) =>
       app.emit(

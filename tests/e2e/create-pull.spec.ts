@@ -156,7 +156,9 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await expect(
       page.getByRole("button", { name: "PR #8 ↗", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".project-code-pane")).toBeVisible();
+    await expect(
+      page.locator('[data-pane="changes"] .pane-header'),
+    ).toBeVisible();
     const chats = await page.evaluate(
       (id) => window.relay.projectChats(id),
       selected.id,

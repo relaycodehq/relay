@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  PauseCircle,
   RefreshCw,
 } from "lucide-react";
 import type { ChecksController } from "../lib/useProjectChecks";
@@ -57,15 +58,19 @@ export function DiagnosticMessage({
 export function ProjectChecksButton({
   checks,
   onOpenFile,
+  quiet,
 }: {
   checks: ChecksController;
   onOpenFile: (path: string, line?: number) => void;
+  /** Hide the button entirely when this project has nothing to check. */
+  quiet?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [filter, setFilter] = useState(""),
     [limit, setLimit] = useState(50);
   const s = checks.state,
-    running = s?.status === "checking";
+    running = s?.status === "checking",
+    paused = s?.status === "paused";
   const problems =
     s?.diagnostics.filter(
       (d) =>
@@ -83,20 +88,32 @@ export function ProjectChecksButton({
           ? "No supported checks"
           : !checks.enabled
             ? "Live checks off"
-            : running
-              ? "Checking…"
-              : s?.status === "ready"
-                ? diagnosticSummary(s)
-                : "Live checks";
+            : paused
+              ? checks.busy
+                ? "Checks paused · agent working"
+                : "Checks paused"
+              : running
+                ? "Checking…"
+                : s?.status === "ready"
+                  ? diagnosticSummary(s)
+                  : "Live checks";
+  if (quiet && !checks.error && !checks.info?.targets.length && !open)
+    return null;
   return (
     <>
       <button
         className={`checks-button ${s?.errors && s.status === "ready" ? "has-errors" : ""}`}
-        title="Live diagnostics for the linked local project"
+        title={
+          paused
+            ? "Live checks resume once the agent finishes and the window is visible"
+            : "Live diagnostics for the linked local project"
+        }
         onClick={() => setOpen(true)}
       >
         {s?.status === "ready" && checks.enabled && !checks.error ? (
           <DiagnosticIcon severity={diagnosticSeverity(s)} />
+        ) : paused ? (
+          <PauseCircle size={15} />
         ) : (
           <Activity size={15} />
         )}
@@ -111,7 +128,8 @@ export function ProjectChecksButton({
           <p className="field-note">
             Diagnostics appear while reviewing and update as you type. Checks
             use the linked working tree and unsaved editor buffer. Only matching
-            file contents get inline diagnostics in the PR.
+            file contents get inline diagnostics in the PR. Rechecking pauses
+            while an agent is working or the window is hidden, then runs once.
           </p>
           {!!checks.error && <ErrorBox error={checks.error} />}
           {!checks.info ? (
@@ -162,7 +180,7 @@ export function ProjectChecksButton({
                 )}
                 <strong>{title}</strong>
                 <button
-                  disabled={!checks.enabled || !checks.target}
+                  disabled={!checks.enabled || !checks.target || paused}
                   onClick={checks.restart}
                 >
                   <RefreshCw size={13} /> Recheck

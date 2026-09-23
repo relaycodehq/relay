@@ -1,4 +1,8 @@
-import { modelSchema, reasoningEffortSchema } from "../../shared/settings";
+import {
+  agentProviderSchema,
+  modelSchema,
+  reasoningEffortSchema,
+} from "../../shared/settings";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -30,6 +34,7 @@ const resultSchema = z.object({
   model: modelSchema,
   fast: z.boolean().optional(),
   reasoningEffort: reasoningEffortSchema.default("medium"),
+  provider: agentProviderSchema.default("codex"),
   createdAt: z.string(),
   files: z
     .array(
@@ -158,6 +163,7 @@ export function restoreState(saved: SavedAnalysis): TriageState {
     model: result.model,
     fast: result.fast ?? false,
     reasoningEffort: result.reasoningEffort ?? "medium",
+    provider: result.provider ?? "codex",
     revision: result.revision,
     status: resume ? "paused" : "complete",
     scanned: result.files.length - checkpoint.scanPending.length,

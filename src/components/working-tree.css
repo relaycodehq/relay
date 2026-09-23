@@ -28,12 +28,17 @@
   min-height: 0;
 }
 .working-sidebar {
-  width: 275px;
-  min-width: 220px;
-  max-width: 36%;
+  position: relative;
+  width: var(--changes-width, 250px);
+  min-width: 200px;
+  max-width: 70%;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
+}
+.working-sidebar > .pane-resizer {
+  top: 0;
 }
 .working-file-list {
   flex: 1;
@@ -43,7 +48,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 12px 6px;
+  padding: 12px 12px 4px 14px;
   font-size: 11px;
   color: var(--muted);
 }
@@ -69,12 +74,27 @@
 }
 .working-select {
   display: flex;
-  gap: 7px;
+  justify-content: flex-start;
+  gap: 8px;
   min-width: 0;
   flex: 1;
   text-align: left;
-  padding: 8px;
-  font-size: 11px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.working-select span:first-child {
+  width: 10px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.working-file > .icon-button {
+  opacity: 0;
+}
+.working-file:hover > .icon-button,
+.working-file.selected > .icon-button,
+.working-file > .icon-button:focus-visible {
+  opacity: 1;
 }
 .working-select span:last-child {
   overflow: hidden;
@@ -107,12 +127,17 @@
 }
 .working-review > header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: space-between;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  background: var(--toolbar);
+  font-size: 12px;
+}
+.working-review > header strong {
+  flex: 1;
+  font-weight: 500;
 }
 .working-review > header strong {
   overflow: hidden;
@@ -188,4 +213,11 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+.working-diff-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
 }

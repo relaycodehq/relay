@@ -1,13 +1,18 @@
-// Adapted from T3 Code's MessagesTimeline turn fold and activity group behavior.
+// Adapted from T3 Code's MessagesTimeline activity group: one summary line per turn,
+// and a flat list of tool rows named by what they touched.
 import { useEffect, useState } from "react";
 import {
+  Bot,
   Brain,
-  Check,
-  ChevronDown,
-  FileCode2,
+  ChevronRight,
+  CircleAlert,
+  FilePen,
+  FileText,
+  Globe,
   LoaderCircle,
+  Search,
   Terminal,
-  X,
+  Wrench,
 } from "lucide-react";
 import type {
   AgentActivity,
@@ -35,29 +40,100 @@ function WorkingTimer({ started }: { started: number }) {
   return <>{duration(now - started)}</>;
 }
 
-function ToolStep({
+const icons = {
+  command: Terminal,
+  read: FileText,
+  file: FilePen,
+  search: Search,
+  web: Globe,
+  agent: Bot,
+  tool: Wrench,
+} satisfies Record<AgentActivity["kind"], unknown>;
+
+const plural = (count: number, one: string, many = `${one}s`) =>
+  `${count} ${count === 1 ? one : many}`;
+
+const summaries: Record<AgentActivity["kind"], (count: number) => string> = {
+  read: (n) => `Read ${plural(n, "file")}`,
+  file: (n) => `Edited ${plural(n, "file")}`,
+  command: (n) => `Ran ${plural(n, "command")}`,
+  search: (n) => `Searched code ${plural(n, "time")}`,
+  web: (n) => `Searched the web ${plural(n, "time")}`,
+  agent: (n) => `Ran ${plural(n, "agent")}`,
+  tool: (n) => `Used ${plural(n, "tool")}`,
+};
+
+/** "Read 3 files, ran 2 commands, and edited 1 file" */
+export function summarizeActivity(activity: AgentActivity[]) {
+  const groups = new Map<AgentActivity["kind"], Set<string>>();
+  for (const a of activity) {
+    const seen = groups.get(a.kind) ?? new Set();
+    // Repeated reads or edits of one file count once; commands and tools count every call.
+    seen.add(a.kind === "read" || a.kind === "file" ? a.label : a.id);
+    groups.set(a.kind, seen);
+  }
+  const parts = [...groups].map(([kind, seen], index) => {
+    const text = summaries[kind](seen.size);
+    return index === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
+  });
+  if (parts.length < 3) return parts.join(" and ");
+  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
+}
+
+const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
+
+/** The present-tense line shown while a call runs, e.g. "Reading AgentTurn.tsx". */
+function liveLabel(a: AgentActivity) {
+  switch (a.kind) {
+    case "command":
+      return `Running ${a.label.trim().split(/\s+/)[0] ?? "command"}`;
+    case "read":
+      return `Reading ${baseName(a.label)}`;
+    case "file":
+      return `Editing ${baseName(a.label)}`;
+    case "search":
+      return `Searching for ${a.label}`;
+    case "web":
+      return "Searching the web";
+    case "agent":
+      return a.label;
+    case "tool":
+      return a.label;
+  }
+}
+
+function ToolRow({
   activity: a,
+  label,
   onChanges,
 }: {
   activity: AgentActivity;
+  label: string;
   onChanges: () => void;
 }) {
+  const Icon =
+    a.status === "failed"
+      ? CircleAlert
+      : a.status === "running"
+        ? LoaderCircle
+        : icons[a.kind];
+  const expandable = Boolean(a.detail) || a.kind === "file";
+  const heading = (
+    <>
+      <Icon size={14} className={a.status === "running" ? "spin" : undefined} />
+      <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
+    </>
+  );
+  if (!expandable)
+    return (
+      <div className={`agent-step ${a.status}`}>
+        <div className="agent-step-heading">{heading}</div>
+      </div>
+    );
   return (
     <details className={`agent-step ${a.status}`}>
-      <summary>
-        {a.kind === "command" ? (
-          <Terminal size={14} />
-        ) : (
-          <FileCode2 size={14} />
-        )}
-        <span>{a.label}</span>
-        {a.status === "running" ? (
-          <LoaderCircle size={12} className="spin" />
-        ) : a.status === "complete" ? (
-          <Check size={12} />
-        ) : (
-          <X size={12} />
-        )}
+      <summary className="agent-step-heading">
+        {heading}
       </summary>
       {a.detail && <pre>{a.detail}</pre>}
       {a.kind === "file" && (
@@ -79,8 +155,7 @@ export function AgentTurn({
   onChanges: () => void;
 }) {
   const live = message.status === "streaming";
-  const [expanded, setExpanded] = useState(live);
-  useEffect(() => setExpanded(live), [live]);
+  const [expanded, setExpanded] = useState(false);
   const entries: AgentTrace[] =
     message.trace ??
     (message.activity ?? []).map((activity) => ({
@@ -89,39 +164,60 @@ export function AgentTurn({
       activity,
     }));
   if (!live && !entries.length) return null;
+  const root = projectRoot.replace(/\/+$/, "") + "/";
+  const display = (text: string) => text.split(root).join("");
+  const activity = entries.flatMap((e) =>
+    e.kind === "activity" ? [e.activity] : [],
+  );
+  const last = entries.at(-1);
+  const current =
+    live && last?.kind === "activity" && last.activity.status === "running"
+      ? last.activity
+      : undefined;
+  const thinking = live && !current && !message.body;
+  const failed = activity.some((a) => a.status === "failed");
   const ended = message.ended ?? message.created;
+  const label = live
+    ? current
+      ? display(liveLabel(current))
+      : message.body
+        ? "Writing"
+        : "Thinking"
+    : summarizeActivity(activity) || "Thought";
+  const HeaderIcon = live
+    ? current
+      ? icons[current.kind]
+      : Brain
+    : failed
+      ? CircleAlert
+      : (icons[activity.at(-1)?.kind ?? "tool"] ?? Brain);
   return (
     <details
-      className="agent-activity"
+      className={`agent-activity${live ? " live" : ""}`}
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary className="agent-run-heading">
-        <span>
+        <HeaderIcon size={14} className={failed ? "failed" : undefined} />
+        <span className={live ? "shimmer" : undefined}>
+          {label}
+        </span>
+        <span className="agent-run-time">
           {live ? (
-            <>
-              Working for <WorkingTimer started={message.created} />
-            </>
+            <WorkingTimer started={message.created} />
           ) : message.ended ? (
             <>
-              {message.status === "cancelled" ? "Stopped after" : "Worked for"}{" "}
+              {message.status === "cancelled" ? "Stopped after " : ""}
               {duration(ended - message.created)}
             </>
-          ) : (
-            <>Worked in the project</>
-          )}
+          ) : null}
         </span>
-        <ChevronDown size={14} />
+        <ChevronRight size={13} className="agent-run-chevron" />
       </summary>
-      <div className="agent-trace" aria-label="Local agent activity">
-        {entries.length === 0 && (
-          <div className="agent-thinking">
-            <Brain size={15} /> Thinking
-          </div>
-        )}
-        {entries.map((entry, index) => {
-          if (entry.kind === "commentary")
-            return (
+      {expanded && (
+        <div className="agent-trace" aria-label="Local agent activity">
+          {entries.map((entry) =>
+            entry.kind === "commentary" ? (
               <div className="agent-commentary" key={entry.id}>
                 <RichText
                   text={entry.text}
@@ -129,53 +225,25 @@ export function AgentTurn({
                   onOpenFile={onOpenFile}
                 />
               </div>
-            );
-          if (entry.activity.kind !== "command")
-            return (
-              <ToolStep
+            ) : (
+              <ToolRow
                 key={entry.id}
                 activity={entry.activity}
+                label={display(entry.activity.label)}
                 onChanges={onChanges}
               />
-            );
-          const previous = entries[index - 1];
-          if (
-            previous?.kind === "activity" &&
-            previous.activity.kind === "command"
-          )
-            return null;
-          const commands: AgentActivity[] = [];
-          for (let i = index; i < entries.length; i++) {
-            const next = entries[i];
-            if (next.kind !== "activity" || next.activity.kind !== "command")
-              break;
-            commands.push(next.activity);
-          }
-          return (
-            <details className="agent-command-group" key={entry.id}>
-              <summary>
-                <Terminal size={15} /> Ran {commands.length}{" "}
-                {commands.length === 1 ? "command" : "commands"}
-              </summary>
-              {commands.map((a) => (
-                <ToolStep key={a.id} activity={a} onChanges={onChanges} />
-              ))}
-            </details>
-          );
-        })}
-        {live &&
-          entries.length > 0 &&
-          !message.body &&
-          (() => {
-            const last = entries.at(-1);
-            return last?.kind === "activity" &&
-              last.activity.status !== "running" ? (
-              <div className="agent-thinking">
-                <Brain size={15} /> Thinking
+            ),
+          )}
+          {thinking && entries.length > 0 && (
+            <div className="agent-step">
+              <div className="agent-step-heading">
+                <Brain size={14} />
+                <span className="shimmer">Thinking</span>
               </div>
-            ) : null;
-          })()}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </details>
   );
 }

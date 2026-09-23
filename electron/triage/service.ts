@@ -91,9 +91,13 @@ export class TriageService {
       );
     this.starting = true;
     try {
-      const choice = aiSettingsSchema.parse(
+      const settings = aiSettingsSchema.parse(
         this.store.get().aiSettings ?? defaultAISettings,
-      ).grouping;
+      );
+      const choice = {
+        ...settings.grouping,
+        provider: settings.groupingProvider,
+      };
       const revision = `${base}:${head}`;
       const previous = await readAnalysis(this.dataDir, key, revision);
       const saved =
@@ -281,6 +285,7 @@ export class TriageService {
         state.model!,
         state.fast ?? false,
         state.reasoningEffort ?? "medium",
+        state.provider ?? "codex",
       );
       await saveAnalysis(this.dataDir, key, { result, checkpoint });
       state.result = result;
@@ -382,6 +387,7 @@ export class TriageService {
                 fast: state.fast ?? false,
                 reasoningEffort: state.reasoningEffort ?? "medium",
               },
+              state.provider ?? "codex",
             );
           } catch (e) {
             signal.throwIfAborted();
@@ -464,6 +470,7 @@ export class TriageService {
     model: string,
     fast: boolean,
     reasoningEffort: NonNullable<TriageResult["reasoningEffort"]>,
+    provider: NonNullable<TriageResult["provider"]>,
   ): TriageResult {
     const ordinary: Record<string, string> = {
       ...c.preservedOrdinary,
@@ -526,6 +533,7 @@ export class TriageService {
       model,
       fast,
       reasoningEffort,
+      provider,
       createdAt: new Date().toISOString(),
       files,
       groups,

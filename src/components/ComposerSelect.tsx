@@ -8,6 +8,7 @@ export function ComposerSelect<T extends string>({
   options,
   onChange,
   icon,
+  container,
 }: {
   label: string;
   value: T;
@@ -19,6 +20,8 @@ export function ComposerSelect<T extends string>({
   }[];
   onChange: (value: T) => void;
   icon?: ReactNode;
+  /** Portal target, needed inside a modal <dialog>'s top layer. */
+  container?: HTMLElement;
 }) {
   return (
     <Select.Root
@@ -37,12 +40,13 @@ export function ComposerSelect<T extends string>({
         <Select.Value />
         <ChevronDown size={12} />
       </Select.Trigger>
-      <Select.Portal>
+      <Select.Portal container={container}>
         <Select.Positioner
           className="composer-popup-positioner"
           align="start"
           sideOffset={6}
           alignItemWithTrigger={false}
+          positionMethod={container ? "fixed" : "absolute"}
         >
           <Select.Popup
             className={`composer-select-popup ${options.some((o) => o.description) ? "composer-runtime-popup" : ""}`}

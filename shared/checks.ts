@@ -51,7 +51,7 @@ export interface ProjectCheckState extends DiagnosticCounts {
   id: string;
   head: string;
   target: CheckTarget;
-  status: "checking" | "ready" | "failed" | "stopped";
+  status: "checking" | "ready" | "paused" | "failed" | "stopped";
   startedAt: number;
   checkedAt?: number;
   diagnostics: ProjectDiagnostic[];

@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { codexActivity } from "../../electron/rooms/activity";
+import { claudeActivity, codexActivity } from "../../electron/rooms/activity";
 import { publicMessage } from "../../electron/project-sharing";
 it("caps retained output, represents failures, and excludes local execution traces when sharing", () => {
   const activity = codexActivity("item/completed", {
@@ -47,7 +47,7 @@ it("caps retained output, represents failures, and excludes local execution trac
   ).toEqual({
     id: "b",
     kind: "file",
-    label: "Changed 1 file",
+    label: "src/cache.ts",
     status: "running",
     detail: "src/cache.ts",
   });
@@ -58,5 +58,14 @@ it("caps retained output, represents failures, and excludes local execution trac
       summary: ["internal"],
     }),
   ).toBeUndefined();
+  expect(
+    claudeActivity("t", "Read", { file_path: "/repo/src/a.ts", limit: 4 }),
+  ).toEqual({ id: "t", kind: "read", label: "/repo/src/a.ts", status: "running" });
+  expect(
+    claudeActivity("g", "Grep", { pattern: "useState", path: "src" }).label,
+  ).toBe("useState in src");
+  expect(claudeActivity("m", "mcp__linear__get_issue", { id: "x" }).label).toBe(
+    "linear: get_issue",
+  );
   expect(codexActivity("item/started", null)).toBeUndefined();
 });

@@ -1,13 +1,21 @@
 import { BranchPullRequest } from "./BranchPullRequest";
 import type { RelayCommand } from "../../shared/commands";
-import { ProjectLocal, ProjectPulls } from "./ProjectViews";
+import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
+import {
+  NO_SLOTS,
+  Pane,
+  PaneHeader,
+  PaneToggles,
+  type PaneSlots,
+} from "./WorkspacePanes";
+import { useWorkspacePanes, type PaneId } from "../lib/workspace-panes";
 import {
   ShareConversation,
   JoinConversation,
   BrowseShared,
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -16,9 +24,7 @@ import {
   Files,
   Settings2,
   GitPullRequest,
-  ChevronDown,
-  PanelRight,
-  LogIn,
+  GitCompareArrows,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
 import type { Account, PullRef } from "../../shared/types";
@@ -32,11 +38,15 @@ import { Connected, SignIn } from "../ReviewSurface";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
+import type { CodeReference } from "../../shared/code-references";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { RelayMark } from "./RelayMark";
 import { PaneResizer } from "./PaneResizer";
+import { ProjectChecksButton } from "./ProjectChecks";
+import { useProjectChecks } from "../lib/useProjectChecks";
 import "./projects.css";
+const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 export default function ProjectShell() {
   const qc = useQueryClient();
   const boot = useQuery({
@@ -59,9 +69,7 @@ export default function ProjectShell() {
   const [selected, setSelected] = useState(() =>
       localStorage.getItem("relay-project-id"),
     ),
-    [chatId, setChatId] = useState<string | null>(null),
-    [mode, setMode] = useState<"changes" | "files" | "pulls">("changes"),
-    [pull, setPull] = useState<PullRef | null>(null);
+    [chatId, setChatId] = useState<string | null>(null);
   const [draftScope, setDraftScope] = useState<ChatSummary["scope"]>({
     kind: "project",
   });
@@ -77,14 +85,24 @@ export default function ProjectShell() {
     [incoming, setIncoming] = useState<{ url: string }>(),
     [queuedUrl, setQueuedUrl] = useState<string>();
   const [projectsHidden, setProjectsHidden] = useState(
-      () => localStorage.getItem("relay-projects-hidden") === "true",
-    ),
-    [chatHidden, setChatHidden] = useState(false),
-    [filesHidden, setFilesHidden] = useState(true);
+    () => localStorage.getItem("relay-projects-hidden") === "true",
+  );
+  // While the sidebar is hidden, hovering the brand toggle peeks it as an overlay.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<number | undefined>(undefined);
+  const peekOpen = () => {
+    window.clearTimeout(peekTimer.current);
+    if (projectsHidden) setPeek(true);
+  };
+  const peekClose = () => {
+    window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeek(false), 250);
+  };
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  const panes = useWorkspacePanes();
+  const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
-    [openFileTarget, setOpenFileTarget] = useState<
-      (ProjectFileLink & { request: number; projectId: string }) | null
-    >(null),
+    [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
     [viewing, setViewing] = useState<{
       path: string | null;
       viewed: number;
@@ -94,6 +112,7 @@ export default function ProjectShell() {
       id: string;
       text: string;
       selection?: LineQuestion;
+      code?: CodeReference;
     }>(),
     [share, setShare] = useState<ChatSummary>(),
     [invitation, setInvitation] = useState<string>(),
@@ -107,6 +126,28 @@ export default function ProjectShell() {
     enabled: !!project,
   });
   const chat = chats.data?.find((c) => c.id === chatId);
+  // A PR thread reviews its PR; any other thread shows the working tree.
+  const scope = chat?.scope ?? draftScope;
+  const pull = scope.kind === "pr" ? scope.ref : null;
+  const codeOpen = panes.layout.open.changes || panes.layout.open.files;
+  // The one poller for the working tree: panes, pickers and the chat read this
+  // cache. Every polling observer would run its own round of Git commands.
+  const tree = useQuery({
+    queryKey: ["working-tree", "project", project?.id],
+    queryFn: () => api.projectWorkingTree(project!.id),
+    enabled: !!project && !legacy,
+    refetchInterval: 3000,
+  });
+  // Live checks for the working tree. A PR thread's review runs its own checks
+  // (one session at a time), so the working-tree checks stand aside there.
+  const checks = useProjectChecks(
+    undefined,
+    project && tree.data && !legacy && !pull
+      ? { id: project.id, head: tree.data.head }
+      : undefined,
+    // An agent rewriting files would trigger a recheck on every save.
+    !!chats.data?.some((c) => c.running),
+  );
   useEffect(() => {
     if (project) {
       localStorage.setItem("relay-project-id", project.id);
@@ -122,28 +163,7 @@ export default function ProjectShell() {
       } catch {
         setDraftScope({ kind: "project" });
       }
-      setFilesHidden(true);
-      setChatHidden(false);
-      try {
-        const savedView = JSON.parse(
-          localStorage.getItem("relay-project-view:" + project.id) || "null",
-        );
-        setMode(
-          ["changes", "files", "pulls"].includes(savedView?.mode)
-            ? savedView.mode
-            : "changes",
-        );
-        setPull(
-          savedView?.pull?.owner === project.repository?.owner &&
-            savedView?.pull?.name === project.repository?.name &&
-            Number.isSafeInteger(savedView?.pull?.number)
-            ? savedView.pull
-            : null,
-        );
-      } catch {
-        setMode("changes");
-        setPull(null);
-      }
+      panes.closeCode();
       setRestoredProject(project.id);
       setDirty(false);
     }
@@ -160,20 +180,11 @@ export default function ProjectShell() {
   }, [legacy]);
   useEffect(() => {
     if (project && project.id === restoredProject)
-      localStorage.setItem(
-        "relay-project-view:" + project.id,
-        JSON.stringify({ mode, pull }),
-      );
-  }, [project?.id, restoredProject, mode, pull]);
-  useEffect(() => {
-    if (project && project.id === restoredProject)
       localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
   }, [project?.id, chatId, restoredProject]);
   useEffect(() => {
     localStorage.setItem("relay-projects-hidden", String(projectsHidden));
-    localStorage.setItem("relay-chat-hidden", String(chatHidden));
-    localStorage.setItem("relay-code-hidden", String(filesHidden));
-  }, [projectsHidden, chatHidden, filesHidden]);
+  }, [projectsHidden]);
   function openUrl(url: string) {
     if (dirty) {
       setQueuedUrl(url);
@@ -279,26 +290,28 @@ export default function ProjectShell() {
       const next = await api.createProjectChat(project.id, scope);
       await chats.refetch();
       setChatId(next.id);
-      setChatHidden(false);
+      panes.show("chat");
       return next;
     } catch (e) {
       setError(e);
     }
   }
   async function discuss(ref: PullRef) {
-    setPull(ref);
     const existing = chats.data?.find(
       (c) => c.scope.kind === "pr" && c.scope.ref.number === ref.number,
     );
     if (existing) setChatId(existing.id);
     else await newChat({ kind: "pr", ref });
-    setChatHidden(false);
+    panes.show("chat");
   }
   function openCode(next: "changes" | "files" | "pulls") {
-    if (dirty && next !== mode) return;
-    setMode(next);
-    setFilesHidden(false);
-    if (next === "pulls" && chat?.scope.kind === "pr") setPull(chat.scope.ref);
+    panes.show(next === "files" ? "files" : "changes");
+  }
+  function togglePane(id: PaneId) {
+    const open = panes.layout.open[id];
+    if (open && id === "files" && dirty) return;
+    panes.setOpen(id, !open);
+    if (open && id !== "chat") setViewing(NO_VIEWING);
   }
   function openChatFile(target: ProjectFileLink) {
     if (dirty) {
@@ -312,8 +325,7 @@ export default function ProjectShell() {
       projectId: project!.id,
       request: (previous?.request ?? 0) + 1,
     }));
-    setMode("files");
-    setFilesHidden(false);
+    panes.show("files");
   }
   function navigate(p: Project, next?: ChatSummary, fresh = false) {
     if (dirty) return;
@@ -322,18 +334,9 @@ export default function ProjectShell() {
     setSelected(p.id);
     if (next || fresh) setChatId(next?.id ?? null);
     setLegacy(false);
-    setChatHidden(false);
-    setFilesHidden(true);
+    panes.closeCode();
     setContextText(undefined);
-    setViewing({ path: null, viewed: 0, total: 0 });
-    if (next?.scope.kind === "pr") {
-      setPull(next.scope.ref);
-      setMode("pulls");
-    }
-    if (!next || next.scope.kind !== "pr") {
-      setPull(null);
-      setMode("changes");
-    }
+    setViewing(NO_VIEWING);
     if (fresh) setDraftScope({ kind: "project" });
   }
   async function reviewBranchPr(ref: PullRef) {
@@ -348,10 +351,8 @@ export default function ProjectShell() {
       await qc.invalidateQueries({ queryKey: ["project-chat", target.id] });
       setChatId(target.id);
       setDraftScope(scope);
-      setPull(ref);
-      setMode("pulls");
-      setFilesHidden(false);
-      setChatHidden(false);
+      panes.show("changes");
+      panes.show("chat");
     } catch (e) {
       setError(e);
     }
@@ -362,8 +363,10 @@ export default function ProjectShell() {
       return false;
     }
     if (command === "openpr") setOpenPrRequest((n) => n + 1);
-    else if (command === "new" && project) navigate(project, undefined, true);
-    else openCode(command === "files" ? "files" : "changes");
+    else if ((command === "new" || command === "clear") && project)
+      navigate(project, undefined, true);
+    else if (command === "files" || command === "changes") openCode(command);
+    else return false;
     return true;
   }
   async function linked() {
@@ -390,6 +393,26 @@ export default function ProjectShell() {
     qc.setQueryData(["bootstrap"], { ...next, account });
     setSignin(false);
   };
+  const paneProps = (id: PaneId) => {
+    const index = panes.visible.indexOf(id);
+    const previous = index > 0 ? panes.visible[index - 1] : undefined;
+    const total = panes.visible.reduce(
+      (sum, pane) => sum + panes.layout.weights[pane],
+      0,
+    );
+    return {
+      open: panes.layout.open[id],
+      order: panes.layout.order.indexOf(id),
+      weight: panes.layout.weights[id],
+      grow: panes.layout.weights[id] / (total || 1),
+      previous: previous && {
+        id: previous,
+        weight: panes.layout.weights[previous],
+      },
+      onResize: panes.resize,
+      onMove: panes.move,
+    };
+  };
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
@@ -406,11 +429,17 @@ export default function ProjectShell() {
             title="Toggle projects"
             aria-label="Toggle projects"
             aria-pressed={!projectsHidden}
-            onClick={() => setProjectsHidden((v) => !v)}
+            onClick={() => {
+              window.clearTimeout(peekTimer.current);
+              setPeek(false);
+              setProjectsHidden((v) => !v);
+            }}
+            onMouseEnter={peekOpen}
+            onMouseLeave={peekClose}
           >
             <RelayMark />
+            <strong>Relay</strong>
           </button>
-          <strong>Relay</strong>
         </div>
         {legacy ? (
           <button
@@ -432,6 +461,13 @@ export default function ProjectShell() {
         <span className="spacer" />
         {!legacy && project && (
           <div className="thread-header-actions">
+            <ProjectChecksButton
+              quiet
+              checks={checks}
+              onOpenFile={(path, line) =>
+                openChatFile({ path, line, directory: false })
+              }
+            />
             <BranchPullRequest
               key={project.id}
               project={project}
@@ -442,49 +478,30 @@ export default function ProjectShell() {
               onReview={(ref) => void reviewBranchPr(ref)}
               onChanges={() => openCode("changes")}
             />
-            <button
-              disabled={dirty && mode !== "changes"}
-              onClick={() =>
-                openCode(
-                  (chat?.scope ?? draftScope).kind === "pr"
-                    ? "pulls"
-                    : "changes",
-                )
-              }
-            >
-              <GitPullRequest size={14} />
-              {(chat?.scope ?? draftScope).kind === "pr"
-                ? "PR changes"
-                : "Changes"}
-            </button>
-            <button
-              disabled={dirty && mode !== "files"}
-              onClick={() => openCode("files")}
-            >
-              <Files size={14} />
-              Files
-            </button>
-            {!filesHidden && (
-              <IconButton
-                label="Toggle chat"
-                active={!chatHidden}
-                onClick={() => setChatHidden((v) => !v)}
-              >
-                <MessageSquare size={16} />
-              </IconButton>
-            )}
-            <IconButton
-              label="Toggle code"
-              active={!filesHidden}
-              disabled={dirty}
-              onClick={() => {
-                setFilesHidden((v) => !v);
-                setChatHidden(false);
-                setViewing({ path: null, viewed: 0, total: 0 });
-              }}
-            >
-              <PanelRight size={16} />
-            </IconButton>
+            <PaneToggles
+              onToggle={togglePane}
+              onMove={panes.move}
+              panes={panes.layout.order.map((id) => ({
+                id,
+                open: panes.layout.open[id],
+                disabled:
+                  (id === "files" && dirty && panes.layout.open.files) ||
+                  (panes.layout.open[id] && panes.visible.length === 1),
+                ...(id === "chat"
+                  ? { label: "Chat", icon: <MessageSquare size={14} /> }
+                  : id === "files"
+                    ? { label: "Files", icon: <Files size={14} /> }
+                    : pull
+                      ? {
+                          label: `PR #${pull.number}`,
+                          icon: <GitPullRequest size={14} />,
+                        }
+                      : {
+                          label: "Changes",
+                          icon: <GitCompareArrows size={14} />,
+                        }),
+              }))}
+            />
           </div>
         )}
         {projectsHidden && !legacy && (
@@ -495,9 +512,13 @@ export default function ProjectShell() {
       </header>
       <div className="project-layout">
         <aside
-          className="projects-sidebar"
+          className={`projects-sidebar ${projectsHidden ? "overlay" : ""} ${peek ? "peek" : ""}`}
           aria-label="Projects"
-          hidden={projectsHidden || legacy}
+          aria-hidden={projectsHidden && !peek ? true : undefined}
+          inert={projectsHidden && !peek ? true : undefined}
+          hidden={legacy}
+          onMouseEnter={projectsHidden ? peekOpen : undefined}
+          onMouseLeave={projectsHidden ? peekClose : undefined}
         >
           <PaneResizer pane="sidebar" initial={250} min={210} max={360} />
           <ProjectSidebar
@@ -557,17 +578,13 @@ export default function ProjectShell() {
             </button>
           </main>
         ) : (
-          <>
-            <div className="project-chat-pane" hidden={chatHidden}>
-              {!filesHidden && (
-                <PaneResizer
-                  pane="room"
-                  label="Resize project chat"
-                  initial={420}
-                  min={310}
-                  max={750}
-                />
-              )}
+          <div className="workspace-panes">
+            <Pane
+              id="chat"
+              label="Chat"
+              {...paneProps("chat")}
+              className="project-chat-pane"
+            >
               <ProjectChat
                 key={chat?.id ?? `new:${project.id}`}
                 project={project}
@@ -575,9 +592,7 @@ export default function ProjectShell() {
                 projects={projects.data ?? []}
                 chat={chat}
                 draftScope={draftScope}
-                viewing={
-                  filesHidden ? { path: null, viewed: 0, total: 0 } : viewing
-                }
+                viewing={codeOpen ? viewing : NO_VIEWING}
                 contextText={contextText}
                 onContextUsed={() => setContextText(undefined)}
                 onShare={() => {
@@ -591,8 +606,6 @@ export default function ProjectShell() {
                   if (dirty) return;
                   if (!chat) {
                     setDraftScope({ kind: "project" });
-                    setPull(null);
-                    setMode("changes");
                     return;
                   }
                   if (chat.scope.kind === "pr")
@@ -604,10 +617,6 @@ export default function ProjectShell() {
                 onSelectPR={(ref) => {
                   setChatId(null);
                   setDraftScope({ kind: "pr", ref });
-                  setPull(ref);
-                  setMode("pulls");
-                  setFilesHidden(true);
-                  setChatHidden(false);
                 }}
                 onSwitchProject={(next) => navigate(next, undefined, true)}
                 onAddProject={() => void add()}
@@ -616,137 +625,130 @@ export default function ProjectShell() {
                 onOpenCode={openCode}
                 onOpenFile={openChatFile}
               />
-            </div>
-            {!filesHidden && (
-              <main className="project-code-pane">
-                <header className="project-code-heading">
-                  <div
-                    className="project-view-tabs"
-                    role="tablist"
-                    aria-label="Project view"
-                  >
-                    {(["changes", "files", "pulls"] as const).map((v) => (
-                      <button
-                        key={v}
-                        role="tab"
-                        aria-selected={mode === v}
-                        disabled={dirty}
-                        className={mode === v ? "selected" : ""}
-                        onClick={() => setMode(v)}
-                      >
-                        {v === "changes"
-                          ? "Changes"
-                          : v === "files"
-                            ? "Files"
-                            : "Pull requests"}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="spacer" />
-                  <IconButton
-                    label="Close code panel"
-                    disabled={dirty}
-                    onClick={() => {
-                      setFilesHidden(true);
-                      setChatHidden(false);
-                      setViewing({ path: null, viewed: 0, total: 0 });
-                    }}
-                  >
-                    <ChevronDown size={16} />
-                  </IconButton>
-                  <button className="text-button" onClick={() => void linked()}>
-                    {project.repository
-                      ? `${project.repository.owner}/${project.repository.name}`
-                      : "Connect repository"}
-                  </button>
-                </header>
-                {dirty && (
-                  <div className="project-buffer-note">
-                    Save or close this file before switching projects or views.
-                  </div>
-                )}
-                {mode === "pulls" ? (
-                  account && project.repository ? (
-                    <ProjectPulls
-                      project={project}
-                      selected={pull}
-                      onSelect={(ref) => void discuss(ref)}
-                      disabled={dirty}
-                    >
-                      {pull && (
-                        <div className="project-review">
-                          <Connected
-                            onDirtyChange={setDirty}
-                            key={`${project.id}:${pull.number}`}
-                            embedded={{
-                              ref: pull,
-                              onPresence: (next) => {
-                                setViewing(next);
-                                if (next.path)
-                                  localStorage.setItem(
-                                    `relay-project-review-file:${project.id}:${pull.number}`,
-                                    next.path,
-                                  );
-                              },
-                              onDiscuss: (target, selectedPull) => {
-                                void discuss(selectedPull)
-                                  .then(() => {
-                                    setContextText({
-                                      id: crypto.randomUUID(),
-                                      text: `@codex About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
-                                      selection: {
-                                        ...target,
-                                        head: selectedPull.head.sha,
-                                        base: selectedPull.merge_base,
-                                        question: "Explain this code.",
-                                      },
-                                    });
-                                    setChatHidden(false);
-                                  })
-                                  .catch(setError);
-                              },
-                            }}
-                            account={account}
-                            initialWorkspace={{
-                              ...boot.data.workspace,
-                              pull,
-                              file: localStorage.getItem(
-                                `relay-project-review-file:${project.id}:${pull.number}`,
-                              ),
-                            }}
-                            onSettings={() => setSettings(true)}
-                          />
-                        </div>
-                      )}
-                    </ProjectPulls>
+            </Pane>
+            <Pane id="changes" label="Changes" {...paneProps("changes")}>
+              {panes.layout.open.changes && (
+                <>
+                  <PaneHeader
+                    id="changes"
+                    icon={
+                      pull ? (
+                        <GitPullRequest size={14} />
+                      ) : (
+                        <GitCompareArrows size={14} />
+                      )
+                    }
+                    title={pull ? "Review" : "Changes"}
+                    onSlots={setChangesSlots}
+                    onClose={() => togglePane("changes")}
+                  />
+                  {pull ? (
+                    account && project.repository ? (
+                      <div className="project-review">
+                        <Connected
+                          onDirtyChange={setDirty}
+                          key={`${project.id}:${pull.number}`}
+                          embedded={{
+                            ref: pull,
+                            slots: changesSlots,
+                            onEditFile: (path, line) =>
+                              openChatFile({ path, line, directory: false }),
+                            onPresence: (next) => {
+                              setViewing(next);
+                              if (next.path)
+                                localStorage.setItem(
+                                  `relay-project-review-file:${project.id}:${pull.number}`,
+                                  next.path,
+                                );
+                            },
+                            onDiscuss: (target, selectedPull) => {
+                              void discuss(selectedPull)
+                                .then(() => {
+                                  setContextText({
+                                    id: crypto.randomUUID(),
+                                    text: `@codex About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
+                                    selection: {
+                                      ...target,
+                                      head: selectedPull.head.sha,
+                                      base: selectedPull.merge_base,
+                                      question: "Explain this code.",
+                                    },
+                                  });
+                                  panes.show("chat");
+                                })
+                                .catch(setError);
+                            },
+                          }}
+                          account={account}
+                          initialWorkspace={{
+                            ...boot.data.workspace,
+                            pull,
+                            file: localStorage.getItem(
+                              `relay-project-review-file:${project.id}:${pull.number}`,
+                            ),
+                          }}
+                          onSettings={() => setSettings(true)}
+                        />
+                      </div>
+                    ) : (
+                      <div className="empty pane-empty">
+                        <GitPullRequest size={28} />
+                        <h2>Connect your Git host</h2>
+                        <p>
+                          We’ll match the repository using this folder’s Git
+                          remote.
+                        </p>
+                        <button onClick={() => void linked()}>
+                          Connect Gitea
+                        </button>
+                      </div>
+                    )
                   ) : (
-                    <div className="empty">
-                      <GitPullRequest size={30} />
-                      <h2>Connect your Git host</h2>
-                      <p>
-                        We’ll match the repository using this folder’s Git
-                        remote.
-                      </p>
-                      <button onClick={() => void linked()}>
-                        Connect Gitea
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  <ProjectLocal
+                    <ProjectChanges
+                      key={project.id}
+                      project={project}
+                      slots={changesSlots}
+                      onViewing={setViewing}
+                      onOpenFile={(path) =>
+                        openChatFile({ path, directory: false })
+                      }
+                      onAsk={(code) => {
+                        setContextText({
+                          id: crypto.randomUUID(),
+                          text: "",
+                          code,
+                        });
+                        panes.show("chat");
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </Pane>
+            <Pane id="files" label="Files" {...paneProps("files")}>
+              {panes.layout.open.files && (
+                <>
+                  <PaneHeader
+                    id="files"
+                    icon={<Files size={14} />}
+                    title="Files"
+                    closeDisabled={dirty}
+                    onClose={() => togglePane("files")}
+                  />
+                  <ProjectFiles
                     key={project.id}
                     project={project}
-                    mode={mode}
+                    checks={checks}
                     dirty={dirty}
                     onDirtyChange={setDirty}
                     onViewing={setViewing}
                     openTarget={openFileTarget}
                     onOpenTargetConsumed={() => setOpenFileTarget(null)}
                   />
-                )}
-              </main>
-            )}
-          </>
+                </>
+              )}
+            </Pane>
+          </div>
         )}
       </div>
       {!!error && (
@@ -820,7 +822,7 @@ export default function ProjectShell() {
             await chats.refetch();
             if (c) setChatId(c.id);
             setLegacy(false);
-            setChatHidden(false);
+            panes.show("chat");
             setInvitation(undefined);
           }}
         />
@@ -832,7 +834,7 @@ export default function ProjectShell() {
           onOpen={async (c) => {
             await chats.refetch();
             setChatId(c.id);
-            setChatHidden(false);
+            panes.show("chat");
             setBrowseShared(false);
           }}
         />

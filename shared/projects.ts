@@ -41,6 +41,8 @@ export interface ChatSummary {
   settledAt?: number;
   snoozedAt?: number;
   snoozedUntil?: number;
+  /** Archived threads are hidden from the sidebar. */
+  archivedAt?: number;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   waiting?: boolean;
@@ -55,6 +57,7 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("wake") }).strict(),
+  z.object({ kind: z.literal("archive") }).strict(),
 ]);
 export type ChatTriage = z.infer<typeof chatTriageSchema>;
 /** How full the provider session's context window was after this answer. */
@@ -63,6 +66,13 @@ export interface ContextUsage {
   maxTokens?: number;
   /** Tokens processed across the whole session, when the provider reports it. */
   totalTokens?: number;
+  /** When the newest request last touched the provider's prompt cache. */
+  cache?: PromptCache;
+}
+/** Each cache hit restarts the entry's lifetime, so it goes cold `ttlMs` after `at`. */
+export interface PromptCache {
+  at: number;
+  ttlMs: number;
 }
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
@@ -109,7 +119,7 @@ const pastedImageSchema = z
   .strict();
 export interface AgentActivity {
   id: string;
-  kind: "command" | "file" | "tool";
+  kind: "command" | "file" | "read" | "search" | "web" | "agent" | "tool";
   label: string;
   status: "running" | "complete" | "failed";
   detail?: string;
@@ -184,8 +194,16 @@ export interface ProjectApi {
     messageId: string,
   ): Promise<void>;
   resumeProjectChat(id: string): Promise<void>;
-  compactProjectChat(id: string, parentId?: string | null): Promise<void>;
-  setProjectFolder(id: string, folder: string): Promise<void>;
+  /** Claude also takes instructions for what the summary should keep. */
+  compactProjectChat(
+    id: string,
+    parentId?: string | null,
+    instructions?: string,
+  ): Promise<void>;
+  projectGroups(): Promise<string[]>;
+  createProjectGroup(path: string): Promise<void>;
+  renameProjectGroup(from: string, to: string): Promise<void>;
+  removeProjectGroup(path: string): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
   setProjectChatScope(id: string, scope: ChatScope): Promise<ChatSummary>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
@@ -239,6 +257,7 @@ export interface ProjectApi {
     target: string,
   ): Promise<import("./checks").ProjectCheckState>;
   stopLocalChecks(id: string): Promise<void>;
+  pauseLocalChecks(id: string, paused: boolean): Promise<void>;
   updateLocalCheckBuffer(
     id: string,
     head: string,

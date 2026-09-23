@@ -1,3 +1,4 @@
+import type { PaneSlots } from "./components/WorkspacePanes";
 import { RoomPanel } from "./components/RoomPanel";
 import { RelayMark } from "./components/RelayMark";
 import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
@@ -281,6 +282,10 @@ export function Connected({
       total: number;
     }) => void;
     onDiscuss?: (target: QuestionTarget, pull: Pull) => void;
+    /** Pane header slots for the review's toolbar. */
+    slots?: PaneSlots;
+    /** Open a file in the host's editor instead of a modal. */
+    onEditFile?: (path: string, line?: number) => void;
   };
   account: Account;
   onSettings: (category?: SettingsCategory) => void;
@@ -812,7 +817,7 @@ export function Connected({
           min={230}
           max={410}
         />
-        <header className="titlebar files-titlebar">
+        <header className="titlebar files-titlebar" hidden={!!embedded}>
           <strong>Changed files</strong>
           {selected && (
             <span className="file-total">
@@ -856,7 +861,7 @@ export function Connected({
                 )}
               />
             )}
-            <div className="files-context">
+            <div className="files-context" hidden={!!embedded}>
               <span title={`${selected.owner}/${selected.name}`}>
                 {selected.owner}/{selected.name}
               </span>
@@ -941,7 +946,7 @@ export function Connected({
             <span>Its changed files will appear here.</span>
           </div>
         )}
-        <footer className="files-footer">
+        <footer className="files-footer" hidden={!!embedded}>
           <span className="dot green" />
           Connected to Gitea
           <IconButton
@@ -1059,8 +1064,11 @@ export function Connected({
             onSelectFile={selectFile}
             onFileViewed={advanceUnread}
             paneControls={paneControls}
+            slots={embedded?.slots}
             onEditFile={(path, line) =>
-              setEditing({ pull: pull.data!, path, line })
+              embedded?.onEditFile
+                ? embedded.onEditFile(path, line)
+                : setEditing({ pull: pull.data!, path, line })
             }
           />
         )}

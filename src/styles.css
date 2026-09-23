@@ -1,4 +1,6 @@
 :root {
+  /* Reading column shared by the thread, its composer and new-thread cards. */
+  --thread-width: 1040px;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: #303237;
@@ -1104,9 +1106,120 @@ small {
   color: var(--muted);
   margin: 10px 0;
 }
+.markdown-quote {
+  position: relative;
+}
+.markdown-quote-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--inbox);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.markdown-quote:hover > .markdown-quote-copy,
+.markdown-quote-copy:focus-visible {
+  opacity: 1;
+}
+.markdown-quote-copy:hover {
+  color: var(--text);
+}
 .markdown ul,
 .markdown ol {
   padding-left: 20px;
+}
+.markdown .contains-task-list {
+  list-style: none;
+  padding-left: 4px;
+}
+.markdown .task-list-item input {
+  margin: 0 6px 0 0;
+  vertical-align: -1px;
+}
+.markdown-table {
+  margin: 10px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.markdown-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-table th,
+.markdown-table td {
+  min-width: 110px;
+  max-width: 360px;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-table th + th,
+.markdown-table td + td {
+  border-left: 1px solid var(--border);
+}
+.markdown-table th {
+  position: relative;
+  font-weight: 600;
+  background: var(--toolbar);
+}
+.markdown-table.resized {
+  width: fit-content;
+}
+.markdown-table table.resized {
+  table-layout: fixed;
+}
+.markdown-table table.resized th,
+.markdown-table table.resized td {
+  min-width: 0;
+  max-width: none;
+  overflow-wrap: anywhere;
+}
+.markdown-table-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  z-index: 1;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.markdown-table-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.markdown-table-resizer:hover::after {
+  background: var(--accent);
+}
+.markdown-table th:last-child .markdown-table-resizer {
+  right: 0;
+}
+body.resizing-table-column {
+  cursor: col-resize;
+  user-select: none;
+}
+.markdown-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 .markdown h1,
 .markdown h2,
@@ -2665,63 +2778,6 @@ html {
 
 .settings-modal {
   max-width: 650px;
-}
-.ai-settings {
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-.ai-settings h3 {
-  font-size: 14px;
-  margin: 0 0 7px;
-}
-.model-field {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 12px 14px;
-  margin: 16px 0;
-  min-width: 0;
-}
-.model-field legend {
-  color: var(--text);
-  padding: 0 5px;
-  font-weight: 600;
-}
-.model-field label {
-  margin: 0 0 10px;
-}
-.model-field select {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-.model-field .fast-setting {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0;
-}
-.fast-setting input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex: none;
-}
-.settings-save {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.settings-save [role="status"] {
-  font-size: 12px;
-  color: var(--muted);
 }
 .triage-model {
   color: var(--muted);

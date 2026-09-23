@@ -1,0 +1,124 @@
+/* Code lines attached to a chat message, in the composer and in history. */
+.code-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 8px 10px 0;
+}
+.project-message .code-refs {
+  margin: 4px 0 6px;
+}
+.code-ref {
+  min-width: 0;
+  max-width: 100%;
+}
+.code-ref.open {
+  flex-basis: 100%;
+}
+.code-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: 11.5px;
+}
+.code-ref-chip button {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.code-ref-chip button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.code-ref-chip .code-ref-toggle {
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 6px;
+  color: var(--text);
+}
+.code-ref-toggle > svg:first-child {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.code-ref-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.code-ref-lines {
+  margin-left: -5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.code-ref-label {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.code-ref-caret {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.code-ref.open .code-ref-caret {
+  transform: rotate(180deg);
+}
+.code-ref-preview {
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.code-ref-path {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-ref-preview pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.code-ref-preview pre > div {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+}
+.code-ref-preview pre span {
+  flex-shrink: 0;
+  width: 3.5em;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.code-ref-preview pre code {
+  padding-right: 12px;
+  white-space: pre;
+}

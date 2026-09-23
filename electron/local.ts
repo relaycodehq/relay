@@ -6,7 +6,11 @@ import { shell } from "electron";
 import type { PullRef, Side } from "../shared/types";
 import { shellQuote } from "../shared/validation";
 import { inspectFolder } from "./repository";
-import { codexModelArgs, type ModelChoice } from "../shared/settings";
+import {
+  claudeArgs,
+  codexModelArgs,
+  type ModelChoice,
+} from "../shared/settings";
 import { openLinuxTerminal } from "./terminal";
 export async function launchCodex(
   dir: string,
@@ -40,6 +44,47 @@ export async function openCodexTerminal(
   choice?: ModelChoice,
 ) {
   const codex = await findExecutable("codex");
+  const modelArgs = choice
+    ? codexModelArgs(choice).map(shellQuote).join(" ")
+    : "";
+  await openTerminal(
+    dir,
+    dataDir,
+    prompt,
+    `${shellQuote(codex)} --sandbox ${sandbox} --ask-for-approval on-request --cd ${shellQuote(dir)} ${modelArgs}`,
+  );
+}
+
+/** Claude Code without its file-editing tools, for question-only sessions. */
+export async function openClaudeQuestionTerminal(
+  dir: string,
+  dataDir: string,
+  prompt: string,
+  choice: ModelChoice,
+) {
+  const claude = await findExecutable("claude");
+  const { model, effort } = claudeArgs(choice);
+  const args = [
+    "--disallowedTools",
+    "Edit,Write,NotebookEdit",
+    ...(model ? ["--model", model] : []),
+    ...(effort ? ["--effort", effort] : []),
+  ];
+  await openTerminal(
+    dir,
+    dataDir,
+    prompt,
+    `${shellQuote(claude)} ${args.map(shellQuote).join(" ")}`,
+  );
+}
+
+/** Runs `command "<prompt>"` in a new terminal window at dir. */
+async function openTerminal(
+  dir: string,
+  dataDir: string,
+  prompt: string,
+  command: string,
+) {
   const taskDir = join(dataDir, "handoffs");
   await mkdir(taskDir, { recursive: true, mode: 0o700 });
   const id = randomUUID(),
@@ -47,10 +92,7 @@ export async function openCodexTerminal(
     scriptPath = join(taskDir, `${id}.command`);
   await writeFile(promptPath, prompt, { mode: 0o600 });
   const cleanupCommand = `rm -f -- ${shellQuote(promptPath)} ${shellQuote(scriptPath)}`;
-  const modelArgs = choice
-    ? codexModelArgs(choice).map(shellQuote).join(" ")
-    : "";
-  const script = `#!/bin/sh\ntrap ${shellQuote(cleanupCommand)} EXIT\ncd -- ${shellQuote(dir)} || exit 1\n${shellQuote(codex)} --sandbox ${sandbox} --ask-for-approval on-request --cd ${shellQuote(dir)} ${modelArgs} "$(cat -- ${shellQuote(promptPath)})"\n`;
+  const script = `#!/bin/sh\ntrap ${shellQuote(cleanupCommand)} EXIT\ncd -- ${shellQuote(dir)} || exit 1\n${command} "$(cat -- ${shellQuote(promptPath)})"\n`;
   await writeFile(scriptPath, script, { mode: 0o700 });
   await chmod(scriptPath, 0o700);
   if (process.platform === "darwin") {

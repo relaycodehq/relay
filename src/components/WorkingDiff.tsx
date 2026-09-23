@@ -1,20 +1,48 @@
-import { useEffect, useMemo, useState } from "react";
-import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
-import type { FilePair } from "../../shared/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useElementWidth } from "../lib/useElementWidth";
+import type {
+  CodeViewDiffItem,
+  CodeViewLineSelection,
+  FileDiffMetadata,
+  SelectedLineRange,
+} from "@pierre/diffs";
+import { MessageSquare, X } from "lucide-react";
+import type { FilePair, Side } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import DiffWorker from "../lib/diff.worker?worker";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { labelDiffGapControls } from "../lib/diffGapControls";
-import { ErrorBox, Loading } from "./ui";
-export function WorkingDiff({ pair }: { pair: FilePair }) {
+import { ErrorBox, IconButton, Loading } from "./ui";
+export interface WorkingLineTarget {
+  side: Side;
+  start: number;
+  end: number;
+  /** The selected source lines, from the side they were picked on. */
+  code: string;
+}
+export function WorkingDiff({
+  pair,
+  sideLabels,
+  onAsk,
+}: {
+  pair: FilePair;
+  sideLabels?: Record<Side, string>;
+  onAsk?: (target: WorkingLineTarget) => void;
+}) {
   const syntaxThemes = useSyntaxThemes();
   const theme = useTheme(),
     [diff, setDiff] = useState<FileDiffMetadata | null>(null),
-    [error, setError] = useState<unknown>();
+    [error, setError] = useState<unknown>(),
+    [selection, setSelection] = useState<CodeViewLineSelection | null>(null),
+    [selectionError, setSelectionError] = useState("");
+  // Side-by-side needs room; narrow panes read better as a unified diff.
+  const frame = useRef<HTMLDivElement>(null),
+    width = useElementWidth(frame);
   useEffect(() => {
     setDiff(null);
     setError(undefined);
+    setSelection(null);
     if (pair.binary) return;
     const worker = new DiffWorker();
     worker.onmessage = (e) => {
@@ -29,40 +57,123 @@ export function WorkingDiff({ pair }: { pair: FilePair }) {
     () => (diff ? [{ id: "working", type: "diff", fileDiff: diff }] : []),
     [diff],
   );
-  if (pair.binary)
+  const ask = (range: SelectedLineRange | null) => {
+    if (!range || !onAsk) return;
+    const side = range.side ?? "additions";
+    if (range.endSide && range.endSide !== side) {
+      setSelectionError("Select lines on one side to ask about them.");
+      return;
+    }
+    const start = Math.min(range.start, range.end),
+      end = Math.max(range.start, range.end);
+    if (end - start >= 200) {
+      setSelectionError("Select up to 200 lines to ask about them.");
+      return;
+    }
+    const source = side === "deletions" ? pair.old : pair.next;
+    const code = (source?.contents ?? "")
+      .split(/\r?\n/)
+      .slice(start - 1, end)
+      .join("\n");
+    onAsk({ side, start, end, code });
+    setSelection(null);
+  };
+  const body = (() => {
+    if (pair.binary)
+      return (
+        <div className="empty small">
+          Binary file. Review it in its native application.
+        </div>
+      );
+    if (error) return <ErrorBox error={error} />;
+    if (!diff) return <Loading text="Loading local diff…" />;
+    if (!diff.hunks.length)
+      return (
+        <div className="empty small">
+          No text changes. This may be a file mode change or an empty file.
+        </div>
+      );
     return (
-      <div className="empty small">
-        Binary file. Review it in its native application.
-      </div>
+      <StyledDiffCodeView
+        className="working-diff"
+        items={items}
+        selectedLines={onAsk ? selection : undefined}
+        onSelectedLinesChange={(next) => {
+          setSelectionError("");
+          setSelection(next);
+        }}
+        options={{
+          ...(onAsk && {
+            enableLineSelection: true,
+            enableGutterUtility: true,
+            onGutterUtilityClick: ask,
+            onLineClick: (line) => {
+              const event = line.event;
+              if (
+                line.numberColumn ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.defaultPrevented ||
+                !window.getSelection()?.isCollapsed
+              )
+                return;
+              setSelectionError("");
+              setSelection({
+                id: "working",
+                range: {
+                  start: line.lineNumber,
+                  end: line.lineNumber,
+                  side:
+                    "annotationSide" in line
+                      ? line.annotationSide
+                      : "additions",
+                },
+              });
+            },
+          }),
+          theme: syntaxThemes,
+          themeType: theme,
+          preferredHighlighter: "shiki-js",
+          diffStyle: width && width < 480 ? "unified" : "split",
+          disableFileHeader: true,
+          hunkSeparators: "line-info",
+          expansionLineCount: 20,
+          tokenizeMaxLength: 5000,
+          tokenizeMaxLineLength: 1000,
+          maxLineDiffLength: 1000,
+          overflow: "scroll",
+          onPostRender: (node, _instance, phase) => {
+            if (phase !== "unmount") labelDiffGapControls(node);
+          },
+        }}
+      />
     );
-  if (error) return <ErrorBox error={error} />;
-  if (!diff) return <Loading text="Loading local diff…" />;
-  if (!diff.hunks.length)
-    return (
-      <div className="empty small">
-        No text changes. This may be a file mode change or an empty file.
-      </div>
-    );
+  })();
   return (
-    <StyledDiffCodeView
-      className="working-diff"
-      items={items}
-      options={{
-        theme: syntaxThemes,
-        themeType: theme,
-        preferredHighlighter: "shiki-js",
-        diffStyle: "split",
-        disableFileHeader: true,
-        hunkSeparators: "line-info",
-        expansionLineCount: 20,
-        tokenizeMaxLength: 5000,
-        tokenizeMaxLineLength: 1000,
-        maxLineDiffLength: 1000,
-        overflow: "scroll",
-        onPostRender: (node, _instance, phase) => {
-          if (phase !== "unmount") labelDiffGapControls(node);
-        },
-      }}
-    />
+    <div className="working-diff-frame" ref={frame}>
+      {onAsk && selection && (
+        <div className="selection-toolbar">
+          <span>
+            {selectionError ||
+              `${sideLabels?.[selection.range.side ?? "additions"] ?? ""} · ${
+                selection.range.start === selection.range.end
+                  ? `line ${selection.range.start}`
+                  : `lines ${Math.min(selection.range.start, selection.range.end)}–${Math.max(selection.range.start, selection.range.end)}`
+              }`}
+          </span>
+          <button onClick={() => ask(selection.range)}>
+            <MessageSquare size={13} /> Ask in chat
+          </button>
+          <IconButton
+            label="Clear selected lines"
+            onClick={() => setSelection(null)}
+          >
+            <X size={14} />
+          </IconButton>
+        </div>
+      )}
+      {body}
+    </div>
   );
 }

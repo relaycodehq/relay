@@ -1,4 +1,5 @@
 import {
+  runtimeModes,
   savedRuntimeMode,
   type RuntimeMode,
   type InteractionMode,
@@ -9,9 +10,21 @@ import {
   type PromptInputHandle,
 } from "./ComposerPromptInput";
 import { useComposerCommands } from "./ComposerCommands";
-import type { RelayCommand } from "../../shared/commands";
+import {
+  composerCommands,
+  type CommandOption,
+  type RelayCommand,
+} from "../../shared/commands";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { ArrowUp, Zap, Paperclip, X } from "lucide-react";
 import {
   type ModelChoice,
@@ -20,6 +33,7 @@ import {
   effortLabels,
   type ReasoningEffort,
   aiSettingsSchema,
+  codexQuestionChoice,
   claudeEfforts,
   type ClaudeModel,
   modelSchema,
@@ -29,7 +43,10 @@ import type { ProjectChatSend } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import { api } from "../lib/api";
-import { ComposerModelPicker } from "./ComposerModelPicker";
+import { ComposerModelPicker, codexModels } from "./ComposerModelPicker";
+import { UsageRing } from "./UsageRing";
+import { useUsageRing } from "../lib/usage-ring";
+import { sendsMessage, useSendKey } from "../lib/send-key";
 import { ComposerSelect } from "./ComposerSelect";
 import {
   loadDraftImages,
@@ -37,7 +54,12 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "../lib/draft-images";
+export interface ComposerHandle {
+  /** Adds a quote pill from the conversation to the draft and focuses it. */
+  insertQuote: (text: string) => void;
+}
 export function ProjectComposer({
+  handleRef,
   onCommand,
   draftKey,
   settingsKey,
@@ -51,12 +73,14 @@ export function ProjectComposer({
   checkoutDisabled,
   context,
   attachment,
+  allowEmpty,
   onSend,
   onStop,
   planProvider,
   contextMeter,
 }: {
-  onCommand: (command: RelayCommand) => boolean;
+  handleRef?: Ref<ComposerHandle>;
+  onCommand: (command: RelayCommand, args: string) => boolean | string;
   draftKey: string;
   settingsKey: string;
   draft: string;
@@ -69,6 +93,8 @@ export function ProjectComposer({
   checkoutDisabled: boolean;
   context: ReactNode;
   attachment?: ReactNode;
+  /** The attachment alone is a complete message. */
+  allowEmpty?: boolean;
   onSend: (
     value: Pick<
       ProjectChatSend,
@@ -115,18 +141,22 @@ export function ProjectComposer({
       : "",
   }));
   const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
-  useEffect(() => {
-    let live = true;
+  const composerLive = useRef(true);
+  const loadClaudeModels = useCallback(() => {
     void api
       .claudeModels()
       .catch(() => [])
       .then((models) => {
-        if (live) setClaudeModels(models);
+        if (composerLive.current) setClaudeModels(models);
       });
-    return () => {
-      live = false;
-    };
   }, []);
+  useEffect(() => {
+    composerLive.current = true;
+    loadClaudeModels();
+    return () => {
+      composerLive.current = false;
+    };
+  }, [loadClaudeModels]);
   // Unknown models (list failed or a custom id) offer every Claude level.
   const claudeModelEfforts =
     claudeModels?.find((m) => m.id === claude.model)?.efforts ?? claudeEfforts;
@@ -150,6 +180,13 @@ export function ProjectComposer({
   }, [settingsKey, provider, choice, claude, runtimeMode, interactionMode]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      insertQuote: (text) => promptInput.current?.insertQuote(text),
+    }),
+    [],
+  );
   const filePick = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<DraftImage[]>([]);
   const [imageError, setImageError] = useState<string>();
@@ -172,22 +209,158 @@ export function ProjectComposer({
       live = false;
     };
   }, [draftKey]);
-  const selected = choice ?? settings.data?.questions;
+  const selected =
+    choice ?? (settings.data && codexQuestionChoice(settings.data));
   const mention = agentMention(draft);
   const recipient = mention?.provider ?? provider;
+  const showUsage = useUsageRing();
+  const sendKey = useSendKey();
   // Claude keeps its own model and effort; Codex-only settings never reach it.
   const choiceFor = (to: string): ModelChoice | undefined =>
     selected && to === "claude"
       ? { ...selected, ...claude, fast: false }
       : selected;
+  const [pickModel, setPickModel] = useState(0);
+  function selectModel(next: "codex" | "claude" | "message", model: string) {
+    setProvider(next);
+    if (mention) onDraft(mention.question);
+    if (next === "claude") {
+      const efforts =
+        claudeModels?.find((m) => m.id === model)?.efforts ?? claudeEfforts;
+      setClaude((c) => ({
+        model,
+        reasoningEffort: efforts.includes(c.reasoningEffort)
+          ? c.reasoningEffort
+          : "",
+      }));
+    }
+    if (next === "codex" && selected) {
+      const candidate = { ...selected, model };
+      setChoice({
+        ...candidate,
+        reasoningEffort: supportsEffort(candidate)
+          ? candidate.reasoningEffort
+          : "",
+      });
+    }
+  }
+  const toggles: CommandOption[] = [
+    { value: "on", label: "on" },
+    { value: "off", label: "off" },
+  ];
+  // Values offered after a composer command, for the current agent.
+  function commandOptions(command: RelayCommand): CommandOption[] | undefined {
+    if (recipient === "message") return undefined;
+    if (command === "effort") {
+      const efforts =
+        recipient === "claude"
+          ? claudeModelEfforts
+          : selected
+            ? reasoningEffortsFor(selected.model)
+            : [];
+      return [
+        { value: "default", label: "default", description: "Model default" },
+        ...efforts.map((e) => ({
+          value: e,
+          label: e,
+          description: effortLabels[e],
+        })),
+      ];
+    }
+    if (command === "model")
+      return recipient === "claude"
+        ? (claudeModels ?? []).map((m) => ({
+            value: m.id,
+            label: m.id,
+            description: m.name,
+          }))
+        : codexModels.map((m) => ({
+            value: m.id,
+            label: m.id,
+            description: m.name,
+          }));
+    if (command === "permissions")
+      return runtimeModes.map((m) => ({
+        value: m.value,
+        label: m.value,
+        description: `${m.label} · ${m.description}`,
+      }));
+    if (command === "plan" || (command === "fast" && recipient === "codex"))
+      return toggles;
+    return undefined;
+  }
+  function toggle(args: string, current: boolean) {
+    const value = args.toLowerCase();
+    return value === "on" ? true : value === "off" ? false : !current;
+  }
+  // Applies a settings command to this composer; anything else goes up.
+  function runCommand(command: RelayCommand, args: string): boolean | string {
+    if (!composerCommands.includes(command)) return onCommand(command, args);
+    if (recipient === "message")
+      return "Choose Codex or Claude before changing agent settings.";
+    const value = args.toLowerCase();
+    if (args && ["plan", "fast"].includes(command) && !["on", "off"].includes(value))
+      return `Use /${command} on or /${command} off.`;
+    if (command === "model") {
+      if (!args) {
+        setPickModel((n) => n + 1);
+        return true;
+      }
+      const model =
+        value === "default"
+          ? ""
+          : (commandOptions("model")?.find(
+              (o) =>
+                o.value.toLowerCase() === value ||
+                o.description?.toLowerCase() === value,
+            )?.value ?? modelSchema.safeParse(args).data);
+      if (model === undefined) return "Enter a valid model ID.";
+      selectModel(recipient, model);
+      return true;
+    }
+    if (command === "effort") {
+      const effort = value === "default" ? "" : value;
+      const allowed = commandOptions("effort")?.some(
+        (o) => o.value === value,
+      );
+      if (!allowed)
+        return `Choose one of: ${commandOptions("effort")
+          ?.map((o) => o.value)
+          .join(", ")}.`;
+      const reasoningEffort = reasoningEffortSchema.parse(effort);
+      if (recipient === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
+      else if (selected) setChoice({ ...selected, reasoningEffort });
+      return true;
+    }
+    if (command === "permissions") {
+      const mode = runtimeModes.find(
+        (m) => m.value === value || m.label.toLowerCase() === value,
+      );
+      if (!mode)
+        return `Choose one of: ${runtimeModes.map((m) => m.value).join(", ")}.`;
+      setRuntimeMode(mode.value);
+      return true;
+    }
+    if (command === "plan") {
+      setInteractionMode(
+        toggle(args, interactionMode === "plan") ? "plan" : "default",
+      );
+      return true;
+    }
+    if (recipient !== "codex") return "Fast mode is only available for Codex.";
+    if (selected) setChoice({ ...selected, fast: toggle(args, selected.fast) });
+    return true;
+  }
   const commands = useComposerCommands({
     draft,
     onDraft,
     projectId,
     provider: recipient,
-    onCommand,
+    onCommand: runCommand,
+    options: commandOptions,
     input,
     onSkillPick: (skill) => promptInput.current?.insertSkill(skill),
+    onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
   async function addImages(files: File[]) {
@@ -234,7 +407,7 @@ export function ProjectComposer({
     if (busy || commands.interceptSend()) return;
     if (
       !selected ||
-      (!draft.trim() && !images.length) ||
+      (!draft.trim() && !images.length && !allowEmpty) ||
       busy ||
       preparing ||
       sending.current ||
@@ -244,13 +417,16 @@ export function ProjectComposer({
     const body =
       mention && !mention.question && images.length
         ? `@${mention.provider} Describe the attached screenshot.`
-        : draft.trim() || "Describe the attached screenshot.";
+        : draft.trim() ||
+          (images.length ? "Describe the attached screenshot." : "");
     sending.current = true;
     try {
       const sent = await onSend({
         ...(running ? { delivery: "queue" as const } : {}),
         body:
-          mention || recipient === "message" ? body : `@${recipient} ${body}`,
+          mention || recipient === "message"
+            ? body
+            : `@${recipient} ${body}`.trim(),
         choice: choiceFor(recipient)!,
         provider: recipient === "claude" ? "claude" : "codex",
         runtimeMode,
@@ -380,7 +556,7 @@ export function ProjectComposer({
           }
           onKeyDownCapture={(e) => {
             if (commands.onKeyDown(e)) return;
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            if (sendsMessage(e, sendKey)) {
               e.preventDefault();
               send();
             }
@@ -414,30 +590,12 @@ export function ProjectComposer({
             choice={selected}
             claudeModel={claude.model}
             claudeModels={claudeModels}
-            onSelect={(next, model) => {
-              setProvider(next);
-              if (mention) onDraft(mention.question);
-              if (next === "claude") {
-                const efforts =
-                  claudeModels?.find((m) => m.id === model)?.efforts ??
-                  claudeEfforts;
-                setClaude((c) => ({
-                  model,
-                  reasoningEffort: efforts.includes(c.reasoningEffort)
-                    ? c.reasoningEffort
-                    : "",
-                }));
-              }
-              if (next === "codex" && selected) {
-                const candidate = { ...selected, model };
-                setChoice({
-                  ...candidate,
-                  reasoningEffort: supportsEffort(candidate)
-                    ? candidate.reasoningEffort
-                    : "",
-                });
-              }
+            onOpen={() => {
+              // A failed first probe leaves the list empty; ask again.
+              if (!claudeModels?.length) loadClaudeModels();
             }}
+            openSignal={pickModel}
+            onSelect={selectModel}
           />
           {recipient === "codex" && selected && (
             <>
@@ -524,6 +682,9 @@ export function ProjectComposer({
             <Paperclip size={15} />
           </button>
           <span className="spacer" />
+          {showUsage && recipient !== "message" && (
+            <UsageRing provider={recipient} />
+          )}
           {contextMeter}
           {running && (
             <button
@@ -551,7 +712,7 @@ export function ProjectComposer({
               title={running ? "Queue message" : "Send message"}
               disabled={
                 busy ||
-                (!draft.trim() && !images.length) ||
+                (!draft.trim() && !images.length && !allowEmpty) ||
                 preparing ||
                 !selected ||
                 (recipient === "codex" && !supportsEffort(selected))

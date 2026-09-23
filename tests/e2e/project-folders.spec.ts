@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-test("organizes virtual folders, preserves child expansion across restart, and centers add icons", async () => {
+test("organizes project groups, preserves child expansion across restart, and centers add icons", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-folders-")));
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -50,28 +50,33 @@ test("organizes virtual folders, preserves child expansion across restart, and c
     }
     await page.reload();
     await page.emulateMedia({ colorScheme: "dark" });
-    const projects = await page.evaluate(() => window.relay.projects());
-    async function move(name: string, folder: string) {
-      await page
-        .getByRole("button", { name: "Organize projects", exact: true })
-        .click();
-      const dialog = page.getByRole("dialog", { name: "Organize projects" });
-      await dialog
-        .getByLabel("Project to organize")
-        .selectOption(projects.find((p) => p.name === name)!.id);
-      await dialog.getByLabel("Virtual folder", { exact: true }).fill(folder);
-      if (folder === "Work/Frontend")
-        await page.screenshot({
-          path: "test-results/screenshots/59-organize-projects.png",
-          animations: "disabled",
-        });
-      await dialog
-        .getByRole("button", { name: "Move project", exact: true })
-        .click();
-      await expect(dialog).not.toBeVisible();
-    }
-    await move("web-store", "Work/Frontend");
-    await move("acme-service", "Work");
+    const folderOf = async (name: string) =>
+      (await page.evaluate(() => window.relay.projects())).find(
+        (p) => p.name === name,
+      )?.folder;
+    const row = (name: string) =>
+      page.locator(".sb-project-row").filter({ hasText: name });
+    await page.getByRole("button", { name: "New group", exact: true }).click();
+    await page.getByLabel("New group name").fill("Work");
+    await page.getByLabel("New group name").press("Enter");
+    await expect(page.locator(".sb-group-empty")).toHaveText(
+      "Drag projects here",
+    );
+    await page
+      .getByRole("button", { name: "Group actions for Work", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "New group inside" }).click();
+    await page.getByLabel("New group name").fill("Frontend");
+    await page.getByLabel("New group name").press("Enter");
+    await row("web-store").dragTo(page.locator(".sb-group-empty"));
+    await expect.poll(() => folderOf("web-store")).toBe("Work/Frontend");
+    await row("acme-service").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Work", exact: true }).click();
+    await expect.poll(() => folderOf("acme-service")).toBe("Work");
+    await page.screenshot({
+      path: "test-results/screenshots/59-organize-projects.png",
+      animations: "disabled",
+    });
     await page
       .locator(".sb-project-name")
       .filter({ hasText: "web-store" })
@@ -84,12 +89,12 @@ test("organizes virtual folders, preserves child expansion across restart, and c
       .click();
     await page
       .getByRole("button", {
-        name: "Collapse folder Work/Frontend",
+        name: "Collapse group Work/Frontend",
         exact: true,
       })
       .click();
     await page
-      .getByRole("button", { name: "Collapse folder Work", exact: true })
+      .getByRole("button", { name: "Collapse group Work", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: "acme-service", exact: true }),
@@ -98,13 +103,13 @@ test("organizes virtual folders, preserves child expansion across restart, and c
     app = await launch();
     page = await app.firstWindow();
     await page
-      .getByRole("button", { name: "Expand folder Work", exact: true })
+      .getByRole("button", { name: "Expand group Work", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: "Collapse acme-service", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Expand folder Work/Frontend", exact: true })
+      .getByRole("button", { name: "Expand group Work/Frontend", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: "Expand web-store", exact: true }),
@@ -129,15 +134,23 @@ test("organizes virtual folders, preserves child expansion across restart, and c
       path: "test-results/screenshots/58-project-folders.png",
       animations: "disabled",
     });
-    await move("web-store", "");
-    expect(
-      (await page.evaluate(() => window.relay.projects())).find(
-        (p) => p.name === "web-store",
-      )?.folder,
-    ).toBeUndefined();
+    await page
+      .getByRole("button", { name: "Collapse group Work", exact: true })
+      .dblclick();
+    await page.getByLabel("Group name", { exact: true }).fill("Clients");
+    await page.getByLabel("Group name", { exact: true }).press("Enter");
+    await expect.poll(() => folderOf("web-store")).toBe("Clients/Frontend");
+    await page
+      .getByRole("button", { name: "Collapse group Clients/Frontend" })
+      .click({ button: "right" });
+    await page.getByRole("menuitem", { name: /Remove group/ }).click();
+    await expect.poll(() => folderOf("web-store")).toBe("Clients");
+    await row("web-store").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Remove from group" }).click();
+    await expect.poll(() => folderOf("web-store")).toBeUndefined();
     await expect(
       page.getByRole("button", {
-        name: "Collapse folder Work/Frontend",
+        name: "Collapse group Clients/Frontend",
         exact: true,
       }),
     ).not.toBeVisible();

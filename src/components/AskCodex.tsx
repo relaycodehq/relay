@@ -24,6 +24,9 @@ export function AskCodex({
   onClose: () => void;
 }) {
   const settings = useAISettings();
+  const claude = settings.data?.questionsProvider === "claude";
+  const name = claude ? "Claude" : "Codex",
+    agent = claude ? "Claude Code" : "Codex CLI";
   const [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
@@ -58,7 +61,7 @@ export function AskCodex({
       ? file.previous_filename || file.filename
       : file.filename;
   return (
-    <Modal title="Ask Codex" className="ask-codex-modal" onClose={onClose}>
+    <Modal title={`Ask ${name}`} className="ask-codex-modal" onClose={onClose}>
       <div className="codex-target">
         <MessageSquare size={20} />
         <div>
@@ -99,14 +102,17 @@ export function AskCodex({
       <div className="question-session">
         <span>
           {settings.data
-            ? choiceLabel(settings.data.questions)
+            ? choiceLabel(
+                settings.data.questions,
+                settings.data.questionsProvider,
+              )
             : "Loading model…"}
         </span>
         <span>Read-only session</span>
       </div>
       <p className="field-note">
-        Opens Codex CLI at your linked repository’s root. Includes these lines
-        and nearby code from this PR revision; Codex can inspect the project for
+        Opens {agent} at your linked repository’s root. Includes these lines and
+        nearby code from this PR revision; {agent} can inspect the project for
         more context. Ask follow-up questions in the terminal.
       </p>
       {folder && (
@@ -116,7 +122,7 @@ export function AskCodex({
       )}
       {folder && (folder.dirty || folder.head !== pull.head.sha) && (
         <p className="field-note">
-          Your checkout differs from the PR snapshot. Codex receives the exact
+          Your checkout differs from the PR snapshot. {name} receives the exact
           PR code and a note about the local version.
         </p>
       )}
@@ -158,7 +164,7 @@ export function AskCodex({
             }}
           >
             <Terminal size={15} />
-            {busy ? "Opening terminal…" : "Ask in Codex"}
+            {busy ? "Opening terminal…" : `Ask in ${name}`}
           </button>
         )}
       </div>

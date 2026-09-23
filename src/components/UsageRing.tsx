@@ -1,0 +1,185 @@
+import { useEffect, useState } from "react";
+import { Popover } from "@base-ui/react/popover";
+import { Flame } from "lucide-react";
+import {
+  presentWindow,
+  type MeterPace,
+  type ProviderUsage,
+  type UsageMeter,
+} from "../../shared/provider-usage";
+import { api } from "../lib/api";
+import { RING_RADIUS } from "./ContextWindowMeter";
+import "./composer-model-picker.css";
+
+const REFRESH_MS = 60_000;
+const PACE_RANK: Record<MeterPace, number> = {
+  ok: 0,
+  warn: 1,
+  hot: 2,
+  spent: 3,
+};
+
+/** Both windows as meters, plus the worst pace for the trigger's colour. */
+export function ringState(
+  usage: ProviderUsage | undefined,
+  now: number,
+): { meters: UsageMeter[]; pace: MeterPace; label: string } | null {
+  if (!usage?.windows.length) return null;
+  const meters = usage.windows.map((window) => presentWindow(window, now));
+  const pace = meters.reduce<MeterPace>(
+    (worst, m) => (PACE_RANK[m.pace] > PACE_RANK[worst] ? m.pace : worst),
+    "ok",
+  );
+  const label = meters
+    .map((m) =>
+      [`${m.label} ${m.leftPercent}% left`, m.limitLabel, m.resetLabel]
+        .filter(Boolean)
+        .join(", "),
+    )
+    .join("; ");
+  return { meters, pace, label };
+}
+
+// Outer ring is the week, inner ring the session, so the two limits read at
+// a glance and the icon differs from the single-ring context meter.
+const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
+  weekly: { radius: RING_RADIUS },
+  session: { radius: 4 },
+};
+
+/**
+ * A double ring beside the context meter with the signed-in provider's
+ * session and weekly limits. Hovering shows each one in full.
+ */
+export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
+  const [usage, setUsage] = useState<ProviderUsage>();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    let cancel = false;
+    setUsage(undefined);
+    const load = () =>
+      api
+        .providerUsage(provider)
+        .then((value) => {
+          if (cancel) return;
+          setUsage(value);
+          setNow(Date.now());
+        })
+        .catch(() => {
+          if (!cancel)
+            setUsage({ provider, windows: [], message: "Couldn't read usage" });
+        });
+    void load();
+    const refresh = setInterval(() => void load(), REFRESH_MS);
+    const tick = setInterval(() => setNow(Date.now()), 20_000);
+    return () => {
+      cancel = true;
+      clearInterval(refresh);
+      clearInterval(tick);
+    };
+  }, [provider]);
+  const agent = provider === "codex" ? "Codex" : "Claude";
+  const state = ringState(usage, now);
+  // Nothing to show when the provider reports no limits at all.
+  if (usage && !usage.windows.length) return null;
+  const hot = state?.pace === "hot" || state?.pace === "spent";
+  return (
+    <Popover.Root>
+      <Popover.Trigger
+        openOnHover
+        delay={150}
+        closeDelay={150}
+        type="button"
+        className="composer-control usage-ring-trigger"
+        data-pace={state?.pace ?? "ok"}
+        data-loading={state ? undefined : true}
+        aria-label={
+          state ? `${agent} usage: ${state.label}` : `${agent} usage, checking…`
+        }
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+          {(["weekly", "session"] as const).map((kind) => {
+            const { radius } = RINGS[kind];
+            const circumference = 2 * Math.PI * radius;
+            const meter = state?.meters.find((m) => m.kind === kind);
+            // Full while the limit is untouched, draining as it's used.
+            const left = meter?.leftPercent ?? 0;
+            return (
+              <g key={kind} className="usage-ring" data-kind={kind}>
+                <circle className="usage-ring-track" cx="9" cy="9" r={radius} />
+                <circle
+                  className="usage-ring-fill"
+                  data-pace={meter?.pace ?? "ok"}
+                  cx="9"
+                  cy="9"
+                  r={radius}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference * (1 - left / 100)}
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {hot && <Flame size={8} className="usage-ring-flame" aria-hidden />}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner
+          className="composer-popup-positioner"
+          side="top"
+          align="end"
+          sideOffset={6}
+        >
+          <Popover.Popup className="composer-select-popup usage-ring-popup">
+            <p className="usage-ring-heading">{agent} usage</p>
+            {state ? (
+              state.meters.map((meter) => (
+                <UsageRow key={meter.kind} meter={meter} />
+              ))
+            ) : (
+              <p className="usage-ring-status">
+                {usage?.message ?? "Checking usage…"}
+              </p>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function UsageRow({ meter }: { meter: UsageMeter }) {
+  const hot = meter.pace === "hot" || meter.pace === "spent";
+  return (
+    <div className="usage-row" data-kind={meter.kind} data-pace={meter.pace}>
+      <div className="usage-row-top">
+        <span className="usage-row-label">
+          <span className="usage-row-dot" aria-hidden />
+          {meter.label}
+        </span>
+        <span className="usage-row-left">{meter.leftPercent}% left</span>
+      </div>
+      <div
+        className="usage-row-track"
+        role="progressbar"
+        aria-label={`${meter.label} usage left`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={meter.leftPercent}
+      >
+        <span
+          className="usage-row-fill"
+          style={{ width: `${meter.leftPercent}%` }}
+        />
+      </div>
+      <div className="usage-row-bottom">
+        <span>{meter.resetLabel ?? ""}</span>
+        {meter.limitLabel && (
+          <span className="usage-row-limit">
+            {hot && <Flame size={10} aria-hidden />}
+            {meter.limitLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}

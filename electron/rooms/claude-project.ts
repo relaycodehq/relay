@@ -8,11 +8,19 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
+import { claudeActivity } from "./activity";
 import type { AgentQuestion } from "../../shared/agent-modes";
-import type { ContextUsage } from "../../shared/projects";
+import type {
+  AgentActivity,
+  ContextUsage,
+  PromptCache,
+} from "../../shared/projects";
 import type { ClaudeModel } from "../../shared/settings";
+import type { ProviderCommand } from "../../shared/commands";
 
-async function sdk(): Promise<typeof import("@anthropic-ai/claude-agent-sdk")> {
+export async function sdk(): Promise<
+  typeof import("@anthropic-ai/claude-agent-sdk")
+> {
   // Keep the SDK's ESM runtime intact inside Electron's CommonJS main bundle.
   const specifier =
     typeof __dirname !== "undefined" && __dirname.endsWith("dist-electron")
@@ -70,6 +78,8 @@ type ClaudeSession = {
   threadId?: string;
   /** Learned from the first result; the SDK only reports it per finished turn. */
   contextWindow?: number;
+  /** The cache lifetime Claude last reported writing with. */
+  cacheTtl?: number;
   busy: boolean;
 };
 const sessions = new Map<string, ClaudeSession>();
@@ -107,13 +117,19 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
       ]);
       return (models ?? [])
         .filter((m) => m.value !== "default")
-        .map((m) => ({
-          id: m.value,
-          name: m.displayName || m.value,
-          description: m.description,
-          efforts:
-            m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
-        }));
+        .map((m) => {
+          // The CLI names aliases briefly ("Opus"); its description leads with
+          // the full name ("Opus 5.5 · Best for…"), so show that instead.
+          const [lead, ...rest] = (m.description ?? "").split(" · ");
+          const full = lead && m.displayName && lead.startsWith(m.displayName);
+          return {
+            id: m.value,
+            name: full ? lead : m.displayName || m.value,
+            description: full ? rest.join(" · ") : m.description,
+            efforts:
+              m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
+          };
+        });
     } finally {
       input.close();
       stream.close();
@@ -122,6 +138,108 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
   // A failed probe (CLI missing, signed out) should be retried on next open.
   modelList.catch(() => (modelList = undefined));
   return modelList;
+}
+// Relay owns these (model, effort, threads, context), or they need the
+// terminal, a long-lived loop, or account setup that the app doesn't offer.
+const hiddenCommands = new Set([
+  "advisor",
+  "agents",
+  "auto-mode-setup",
+  "autocompact",
+  "clear",
+  "color",
+  "compact",
+  "config",
+  "context",
+  "design-consent",
+  "design-revoke",
+  "doctor",
+  "effort",
+  "extra-usage",
+  "fast",
+  "goal",
+  "heapdump",
+  "import",
+  "list-agents",
+  "loop",
+  "mcp",
+  "model",
+  "output-style",
+  "reload-plugins",
+  "reload-skills",
+  "rename",
+  "schedule",
+  "skill-doctor",
+  "team-onboarding",
+  "ultrareview",
+  "usage",
+  "usage-credits",
+  "workflow-launch-exec",
+]);
+const commandLists = new Map<
+  string,
+  { expires: number; result: Promise<ProviderCommand[]> }
+>();
+/** Claude's commands and skills for this checkout, as the SDK resolves them. */
+export function listClaudeCommands(root: string): Promise<ProviderCommand[]> {
+  const previous = commandLists.get(root);
+  if (previous && previous.expires > Date.now()) return previous.result;
+  const result = (async () => {
+    const [{ query }, executable] = await Promise.all([
+      sdk(),
+      findExecutable("claude"),
+    ]);
+    const input = new ClaudeInput();
+    const stream = query({
+      prompt: input.read(),
+      options: {
+        cwd: root,
+        pathToClaudeCodeExecutable: executable,
+        settingSources: ["user", "project", "local"],
+        strictMcpConfig: true,
+        mcpServers: {},
+      },
+    });
+    try {
+      const commands = await Promise.race([
+        stream.supportedCommands(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Claude did not list commands.")),
+            20000,
+          ),
+        ),
+      ]);
+      return (commands ?? [])
+        .filter(
+          (c) =>
+            /^[a-zA-Z0-9_.:-]+$/.test(c.name) &&
+            !c.name.startsWith("_") &&
+            !hiddenCommands.has(c.name) &&
+            !c.description.startsWith("(removed)") &&
+            !c.description.startsWith("Renamed to"),
+        )
+        .slice(0, 500)
+        .map((c) => ({
+          name: c.name,
+          source: "claude" as const,
+          description: c.description.slice(0, 300),
+          ...(c.argumentHint
+            ? { argumentHint: c.argumentHint.slice(0, 80) }
+            : {}),
+        }));
+    } finally {
+      input.close();
+      stream.close();
+    }
+  })().catch((e) => {
+    commandLists.delete(root);
+    throw e;
+  });
+  if (commandLists.size >= 30)
+    commandLists.delete(commandLists.keys().next().value!);
+  commandLists.set(root, { expires: Date.now() + 60000, result });
+  return result;
 }
 export function closeClaudeSession(key: string) {
   const session = sessions.get(key);
@@ -151,7 +269,12 @@ export async function runClaudeProject(
   }
   let answer = "",
     currentText = "",
+    currentMessage = "",
     succeeded = false;
+  // Text followed by a tool call is commentary, not the answer. Keep it out of the body.
+  const commentary = new Set<string>();
+  // A tool result only carries the call id; keep the call's label for the finished row.
+  const toolCalls = new Map<string, AgentActivity>();
   const publish = (text: string) => {
     if (text.length > 100000) throw new Error("Answer size limit reached.");
     answer = text;
@@ -312,11 +435,14 @@ export async function runClaudeProject(
       message: {
         role: "user",
         content: options.compact
-          ? "/compact"
+          ? `/compact ${options.prompt}`.trim()
           : [{ type: "text", text: options.prompt }, ...images],
       },
     });
     let context: ContextUsage | undefined;
+    let cache: PromptCache | undefined;
+    // The cache is read when a request starts, not when its reply arrives.
+    let request: { id: string; at: number } | undefined;
     const report = (usedTokens: number) => {
       if (!(usedTokens > 0)) return;
       context = {
@@ -324,6 +450,7 @@ export async function runClaudeProject(
         ...(session!.contextWindow
           ? { maxTokens: session!.contextWindow }
           : {}),
+        ...(cache ? { cache } : {}),
       };
       options.onContext?.(context);
     };
@@ -340,10 +467,22 @@ export async function runClaudeProject(
         session.threadId = message.session_id;
         await options.session?.onId(message.session_id);
       }
-      if (message.type === "stream_event") {
+      if (message.type === "stream_event" && !message.parent_tool_use_id) {
         const event = message.event;
         if (event.type === "message_start") {
           currentText = "";
+          currentMessage = event.message.id;
+          request = { id: event.message.id, at: Date.now() };
+        }
+        if (
+          event.type === "content_block_start" &&
+          event.content_block.type === "tool_use" &&
+          currentText.trim()
+        ) {
+          commentary.add(currentMessage);
+          options.onCommentary?.(currentMessage, currentText);
+          currentText = "";
+          publish("");
         }
         if (
           event.type === "content_block_delta" &&
@@ -353,11 +492,22 @@ export async function runClaudeProject(
           publish(currentText);
         }
       }
-      if (message.type === "system" && message.subtype === "compact_boundary")
+      if (message.type === "system" && message.subtype === "compact_boundary") {
+        // The summary replaces the conversation the cache held.
+        cache = undefined;
         report(message.compact_metadata.post_tokens ?? 0);
+      }
       if (message.type === "assistant") {
-        if (!message.parent_tool_use_id)
-          report(claudeContextTokens(message.message.usage));
+        if (!message.parent_tool_use_id) {
+          const usage = message.message.usage;
+          session.cacheTtl = claudeCacheTtl(usage, session.cacheTtl);
+          if (session.cacheTtl)
+            cache = {
+              at: request?.id === message.message.id ? request.at : Date.now(),
+              ttlMs: session.cacheTtl,
+            };
+          report(claudeContextTokens(usage));
+        }
         const text = message.message.content
           .filter((p) => p.type === "text")
           .map((p) => p.text)
@@ -365,30 +515,43 @@ export async function runClaudeProject(
         const tools = message.message.content.filter(
           (p) => p.type === "tool_use",
         );
-        if (tools.length && text) options.onCommentary?.(message.uuid, text);
-        for (const tool of tools)
-          options.onActivity?.({
-            id: tool.id,
-            kind: "tool",
-            label: tool.name,
-            status: "running",
-            detail: JSON.stringify(tool.input).slice(0, 12000),
-          });
-        if (text && !tools.length) publish(text);
+        if (tools.length && text && !message.parent_tool_use_id) {
+          commentary.add(message.message.id);
+          options.onCommentary?.(message.message.id, text);
+        }
+        for (const tool of tools) {
+          const activity = claudeActivity(tool.id, tool.name, tool.input);
+          toolCalls.set(tool.id, activity);
+          options.onActivity?.(activity);
+        }
+        if (
+          text &&
+          !tools.length &&
+          !message.parent_tool_use_id &&
+          !commentary.has(message.message.id)
+        )
+          publish(text);
       }
       if (message.type === "user" && Array.isArray(message.message.content)) {
         for (const result of message.message.content)
-          if (result.type === "tool_result")
+          if (result.type === "tool_result") {
+            const call = toolCalls.get(result.tool_use_id);
+            const output =
+              typeof result.content === "string"
+                ? result.content
+                : Array.isArray(result.content)
+                  ? result.content
+                      .flatMap((part) =>
+                        part.type === "text" ? [part.text] : [],
+                      )
+                      .join("\n")
+                  : "";
             options.onActivity?.({
-              id: result.tool_use_id,
-              kind: "tool",
-              label: "Tool result",
+              ...(call ?? claudeActivity(result.tool_use_id, "Tool", {})),
               status: result.is_error ? "failed" : "complete",
-              detail:
-                typeof result.content === "string"
-                  ? result.content.slice(0, 12000)
-                  : (JSON.stringify(result.content) ?? "").slice(0, 12000),
+              ...(output ? { detail: output.slice(-8000) } : {}),
             });
+          }
       }
       if (message.type === "result") {
         if (message.is_error || message.subtype !== "success")
@@ -421,6 +584,27 @@ export async function runClaudeProject(
       }
     }
   }
+}
+
+const CACHE_5M = 5 * 60_000;
+const CACHE_1H = 60 * 60_000;
+
+/**
+ * How long the conversation stays cached after this request: five minutes by
+ * default, an hour when Claude Code asks for it. Requests that only read the
+ * cache don't say, so they keep the lifetime the session already wrote with.
+ */
+export function claudeCacheTtl(
+  usage: unknown,
+  known?: number,
+): number | undefined {
+  if (!usage || typeof usage !== "object") return known;
+  const u = usage as Record<string, any>;
+  if (u.cache_creation?.ephemeral_1h_input_tokens > 0) return CACHE_1H;
+  if (u.cache_creation?.ephemeral_5m_input_tokens > 0) return CACHE_5M;
+  if (known) return known;
+  if (u.cache_creation_input_tokens > 0 || u.cache_read_input_tokens > 0)
+    return CACHE_5M;
 }
 
 /** A request's prompt plus its reply is what the next request carries forward. */

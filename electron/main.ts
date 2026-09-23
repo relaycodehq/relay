@@ -39,7 +39,9 @@ import {
 import { launchLineQuestion } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
-import { listClaudeModels } from "./rooms/claude-project";
+import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
+import { DevOps } from "./devops";
+import { listClaudeCommands, listClaudeModels } from "./rooms/claude-project";
 import { readProviderUsage } from "./provider-usage";
 import { ProjectChecks } from "./checks/service";
 import { BlameService } from "./blame";
@@ -116,6 +118,7 @@ if (process.platform === "darwin") {
   }
 }
 let rooms: RoomService;
+let devops: DevOps;
 let projects: Projects;
 let projectChats: ProjectChats;
 const pullRequestCreation = new PullRequestCreation();
@@ -308,7 +311,15 @@ function createWindow() {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  // Reloading Relay itself counts as a navigation too: Vite's full reload
+  // after re-bundling dependencies and the error screen's button need it.
+  // Every other destination stays blocked.
+  win.webContents.on("will-navigate", (e) => {
+    const target = URL.parse(e.url);
+    if (target) target.hash = "";
+    const page = dev && !app.isPackaged ? `${dev}/` : pathToFileURL(root).href;
+    if (target?.href !== page) e.preventDefault();
+  });
   win.webContents.session.setPermissionRequestHandler(
     (_wc, _permission, callback) => callback(false),
   );
@@ -373,6 +384,12 @@ async function dispatch(method: string, args: unknown[]) {
     case "stopLocalChecks":
       projectChecks.stop("project:" + idSchema.parse(args[0]));
       return;
+    case "pauseLocalChecks":
+      projectChecks.pause(
+        "project:" + idSchema.parse(args[0]),
+        z.boolean().parse(args[1]),
+      );
+      return;
     case "updateLocalCheckBuffer":
       return projectChecks.update(
         "project:" + idSchema.parse(args[0]),
@@ -397,11 +414,17 @@ async function dispatch(method: string, args: unknown[]) {
         null,
         blameQuerySchema.parse(args[1]),
       );
-    case "setProjectFolder":
-      return projects.setFolder(
-        idSchema.parse(args[0]),
+    case "projectGroups":
+      return projects.groups();
+    case "createProjectGroup":
+      return projects.createGroup(projectFolderSchema.parse(args[0]));
+    case "renameProjectGroup":
+      return projects.renameGroup(
+        projectFolderSchema.parse(args[0]),
         projectFolderSchema.parse(args[1]),
       );
+    case "removeProjectGroup":
+      return projects.removeGroup(projectFolderSchema.parse(args[0]));
     case "moveProject":
       return projects.move(
         idSchema.parse(args[0]),
@@ -434,7 +457,7 @@ async function dispatch(method: string, args: unknown[]) {
       const provider = z.enum(["codex", "claude"]).parse(args[1]);
       return provider === "codex"
         ? (await codexSkills(root)).map(presentSkill)
-        : [];
+        : listClaudeCommands(root);
     }
     case "projectBranchPulls":
     case "projectPreparePull":
@@ -590,6 +613,7 @@ async function dispatch(method: string, args: unknown[]) {
       return projectChats.compact(
         idSchema.parse(args[0]),
         args[1] == null ? undefined : idSchema.parse(args[1]),
+        z.string().trim().max(4000).optional().parse(args[2]) || undefined,
       );
     case "projectChatQueueAction":
       return projectChats.queueAction(
@@ -1088,6 +1112,12 @@ async function dispatch(method: string, args: unknown[]) {
     case "stopProjectChecks":
       projectChecks.stop(prKey(refSchema.parse(args[0])));
       return;
+    case "pauseProjectChecks":
+      projectChecks.pause(
+        prKey(refSchema.parse(args[0])),
+        z.boolean().parse(args[1]),
+      );
+      return;
     case "startProjectChecks": {
       const r = refSchema.parse(args[0]),
         head = shaSchema.parse(args[1]);
@@ -1161,6 +1191,20 @@ async function dispatch(method: string, args: unknown[]) {
       });
       return settings;
     }
+    case "devopsStatus":
+      return devops.status();
+    case "saveDevOpsSettings":
+      return devops.save(
+        devopsSettingsSchema.parse(args[0]),
+        devopsSecretsSchema.parse(args[1] ?? {}),
+      );
+    case "devopsWorkItems": {
+      const id = z.string().max(200).nullable().parse(args[0]);
+      return devops.workItems(
+        id ? projects.get(id) : null,
+        z.boolean().optional().parse(args[1]),
+      );
+    }
     case "claudeModels":
       return listClaudeModels();
     case "providerUsage":
@@ -1170,16 +1214,17 @@ async function dispatch(method: string, args: unknown[]) {
         question = lineQuestionSchema.parse(args[1]);
       const dir = store.get().folders[repoKey(ref)];
       if (!dir) throw new Error("Link a local repository folder first.");
-      const choice = aiSettingsSchema.parse(
+      const settings = aiSettingsSchema.parse(
         store.get().aiSettings ?? defaultAISettings,
-      ).questions;
+      );
       await launchLineQuestion(
         requireClient(),
         dir,
         app.getPath("userData"),
         ref,
         question,
-        choice,
+        settings.questions,
+        settings.questionsProvider,
       );
       return;
     }
@@ -1254,6 +1299,23 @@ app
     projects = new Projects(store);
 
     rooms = new RoomService(
+      store,
+      (url, init) => net.fetch(url, init),
+      async (value) => {
+        const available =
+          process.platform === "linux"
+            ? safeStorage.isEncryptionAvailable() &&
+              safeStorage.getSelectedStorageBackend() !== "basic_text"
+            : await safeStorage.isAsyncEncryptionAvailable();
+        return available
+          ? (await safeStorage.encryptStringAsync(value)).toString("base64")
+          : null;
+      },
+      async (value) =>
+        (await safeStorage.decryptStringAsync(Buffer.from(value, "base64")))
+          .result,
+    );
+    devops = new DevOps(
       store,
       (url, init) => net.fetch(url, init),
       async (value) => {

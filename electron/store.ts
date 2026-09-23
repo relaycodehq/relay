@@ -2,16 +2,22 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Account, Progress, WorkspaceState } from "../shared/types";
-import type { AISettings } from "../shared/settings";
+import type { StoredAISettings } from "../shared/settings";
 interface State {
   roomAccessConsents?: Record<string, boolean>;
   projects?: import("../shared/projects").Project[];
+  /** Sidebar group paths, kept even while no project is in them. */
+  projectGroups?: string[];
   chats?: import("../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;
   roomJoins?: Record<string, string>;
   roomDeliveries?: Record<string, import("./rooms/service").RoomDelivery>;
-  aiSettings?: AISettings;
+  aiSettings?: StoredAISettings;
+  devops?: import("../shared/devops").DevOpsSettings;
+  /** Encrypted with the OS credential store, like `encryptedToken`. */
+  devopsPat?: string;
+  devopsOpenRouterKey?: string;
   version: 1;
   account?: Account;
   encryptedToken?: string;

@@ -1,4 +1,5 @@
 import type { ProjectApi } from "./projects";
+import type { DevOpsApi } from "./devops";
 import type { LiveSyncApi } from "./live-sync";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
@@ -196,7 +197,7 @@ export interface LocalFile {
   version: string;
 }
 export interface Api
-  extends importRoomApi, WorkingTreeApi, LiveSyncApi, ProjectApi {
+  extends importRoomApi, WorkingTreeApi, LiveSyncApi, ProjectApi, DevOpsApi {
   inspectSymbol(
     ref: PullRef,
     head: string,
@@ -213,6 +214,7 @@ export interface Api
     targetId: string,
   ): Promise<ProjectCheckState>;
   stopProjectChecks(ref: PullRef): Promise<void>;
+  pauseProjectChecks(ref: PullRef, paused: boolean): Promise<void>;
   updateCheckBuffer(
     ref: PullRef,
     head: string,

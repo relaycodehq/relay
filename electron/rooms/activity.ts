@@ -37,7 +37,10 @@ export function codexActivity(
     return {
       ...base,
       kind: "file",
-      label: `Changed ${paths.length} file${paths.length === 1 ? "" : "s"}`,
+      label:
+        paths.length > 1
+          ? `${paths[0]} +${paths.length - 1} more`
+          : (paths[0] ?? "Changed files"),
       detail: paths.join("\n"),
     };
   }
@@ -46,4 +49,53 @@ export function codexActivity(
     typeof item.tool === "string"
   )
     return { ...base, kind: "tool", label: item.tool.slice(0, 500) };
+}
+
+/** Name a Claude tool call by what it touched, not by the tool or its raw input. */
+export function claudeActivity(
+  id: string,
+  name: string,
+  value: unknown,
+): AgentActivity {
+  const input =
+    value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const text = (key: string) =>
+    typeof input[key] === "string" ? (input[key] as string).trim() : "";
+  const call = (kind: AgentActivity["kind"], label: string) => ({
+    id: id.slice(0, 180),
+    status: "running" as const,
+    kind,
+    label: (label || name).slice(0, 500),
+  });
+  switch (name) {
+    case "Bash":
+      return call("command", text("command"));
+    case "Read":
+      return call("read", text("file_path"));
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+      return call("file", text("file_path"));
+    case "NotebookEdit":
+      return call("file", text("notebook_path"));
+    case "Grep":
+    case "Glob":
+      return call(
+        "search",
+        [text("pattern"), text("path") && `in ${text("path")}`]
+          .filter(Boolean)
+          .join(" "),
+      );
+    case "WebSearch":
+      return call("web", text("query"));
+    case "WebFetch":
+      return call("web", text("url"));
+    case "Task":
+    case "Agent":
+      return call("agent", text("description"));
+    case "TodoWrite":
+      return call("tool", "Updated the plan");
+  }
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
+  return call("tool", mcp ? `${mcp[1]}: ${mcp[2]}` : name);
 }

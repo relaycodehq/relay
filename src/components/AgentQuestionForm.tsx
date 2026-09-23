@@ -75,10 +75,12 @@ export function AgentQuestionForm({
         aria-expanded={!collapsed}
         onClick={() => setCollapsed(!collapsed)}
       >
-        <span>{question.header || "Question"}</span>
+        <span className="agent-question-topic">
+          {question.header || "Question"}
+        </span>
         {questions.length > 1 && (
           <small>
-            {index + 1}/{questions.length}
+            Question {index + 1} of {questions.length}
           </small>
         )}
         {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
@@ -86,31 +88,40 @@ export function AgentQuestionForm({
       {!collapsed && (
         <fieldset disabled={busy}>
           <legend>{question.question}</legend>
-          <div className="agent-question-options">
-            {question.options?.map((option, i) => {
-              const checked =
-                answers[question.id]?.includes(option.label) ?? false;
-              return (
-                <button
-                  type="button"
-                  className="agent-question-option"
-                  key={option.label}
-                  aria-pressed={checked}
-                  onClick={() => select(option.label)}
-                >
-                  <span>
-                    {option.label}
-                    {option.description && <small>{option.description}</small>}
-                  </span>
-                  {checked ? (
-                    <Check size={14} />
-                  ) : i < 9 ? (
-                    <kbd>{i + 1}</kbd>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          {question.options?.length ? (
+            <div
+              className="agent-question-options"
+              role={question.multiple ? "group" : "radiogroup"}
+            >
+              {question.options.map((option, i) => {
+                const checked =
+                  answers[question.id]?.includes(option.label) ?? false;
+                return (
+                  <button
+                    type="button"
+                    className="agent-question-option"
+                    key={option.label}
+                    aria-pressed={checked}
+                    onClick={() => select(option.label)}
+                  >
+                    <span className="agent-question-option-key" aria-hidden>
+                      {checked ? (
+                        <Check size={13} strokeWidth={2.5} />
+                      ) : i < 9 ? (
+                        <kbd>{i + 1}</kbd>
+                      ) : null}
+                    </span>
+                    <span className="agent-question-option-text">
+                      {option.label}
+                      {option.description && (
+                        <small>{option.description}</small>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           <input
             type={question.isSecret ? "password" : "text"}
             maxLength={16000}
@@ -132,6 +143,13 @@ export function AgentQuestionForm({
             }}
           />
           <footer>
+            {question.options?.length ? (
+              <span className="agent-question-hint">
+                {question.multiple
+                  ? "Pick any that apply"
+                  : `Press 1–${Math.min(question.options.length, 9)} to pick`}
+              </span>
+            ) : null}
             {index > 0 && (
               <button
                 type="button"

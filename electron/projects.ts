@@ -4,7 +4,11 @@ import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import type { Gitea } from "./gitea";
 import type { Project } from "../shared/projects";
-import { moveProjectInList } from "../shared/project-folders";
+import {
+  moveProjectInList,
+  parentGroup,
+  rebaseGroup,
+} from "../shared/project-folders";
 import { git, gitBytes, digest, workingTree } from "./working-tree";
 import { inspectRepository } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
@@ -30,21 +34,50 @@ export function repositoryFromRemote(
     return null;
   }
 }
+const unique = (values: string[]) => [...new Set(values)];
 export class Projects {
-  async setFolder(id: string, folder: string) {
-    this.get(id);
-    await this.store.update((s) => {
-      const project = s.projects!.find((p) => p.id === id)!;
-      if (folder) project.folder = folder;
-      else delete project.folder;
-    });
-  }
   /** Moves a project into `folder`, before `before` (or last in that folder). */
   async move(id: string, folder: string, before: string | null) {
     this.get(id);
     if (before === id) return;
     await this.store.update((s) => {
       s.projects = moveProjectInList(s.projects!, id, folder, before);
+      if (folder)
+        s.projectGroups = unique([...(s.projectGroups ?? []), folder]);
+    });
+  }
+  groups() {
+    return this.store.get().projectGroups ?? [];
+  }
+  async createGroup(path: string) {
+    if (!path) throw new Error("Name the group.");
+    await this.store.update((s) => {
+      s.projectGroups = unique([...(s.projectGroups ?? []), path]);
+    });
+  }
+  /** Renames a group; its subgroups and projects move with it. */
+  renameGroup(from: string, to: string) {
+    if (!to) throw new Error("Name the group.");
+    return this.rebaseGroup(from, to);
+  }
+  /** Removes a group; what was inside moves up one level. */
+  removeGroup(path: string) {
+    return this.rebaseGroup(path, parentGroup(path));
+  }
+  private async rebaseGroup(from: string, to: string) {
+    if (!from) throw new Error("Choose a group.");
+    await this.store.update((s) => {
+      for (const project of s.projects ?? []) {
+        if (!project.folder) continue;
+        const folder = rebaseGroup(project.folder, from, to);
+        if (folder) project.folder = folder;
+        else delete project.folder;
+      }
+      s.projectGroups = unique(
+        (s.projectGroups ?? [])
+          .map((group) => rebaseGroup(group, from, to))
+          .filter(Boolean),
+      );
     });
   }
   private linkAttempts = new Set<string>();

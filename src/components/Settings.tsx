@@ -11,6 +11,7 @@ import {
   Check,
   Info,
   Keyboard,
+  ListTodo,
   LogIn,
   LogOut,
   Monitor,
@@ -25,10 +26,16 @@ import {
   X,
 } from "lucide-react";
 import type { Account } from "../../shared/types";
-import { aiSettingsSchema, type AISettings } from "../../shared/settings";
+import {
+  aiSettingsSchema,
+  type AgentProvider,
+  type AISettings,
+} from "../../shared/settings";
 import { api } from "../lib/api";
 import { useAISettings } from "../lib/useAISettings";
 import { setAppearance, useAppearance } from "../lib/appearance";
+import { setUsageRing, useUsageRing } from "../lib/usage-ring";
+import { setSendKey, useSendKey, type SendKey } from "../lib/send-key";
 import {
   resolvePalette,
   themes,
@@ -38,13 +45,30 @@ import {
 import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
 import { Avatar, ErrorBox, IconButton } from "./ui";
 import { ModelField } from "./ModelField";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+  Switch,
+} from "./SettingsCard";
 import { RelayMark } from "./RelayMark";
 import { RoomHostingSettings } from "./RoomHostingSettings";
+import {
+  DevOpsConnectionSettings,
+  DevOpsFilterSettings,
+  DevOpsProjectSettings,
+} from "./DevOpsSettings";
 import "./settings.css";
 
 export type SettingsCategory = CategoryId;
 type CategoryId =
-  "appearance" | "account" | "models" | "rooms" | "shortcuts" | "about";
+  | "appearance"
+  | "account"
+  | "models"
+  | "integrations"
+  | "rooms"
+  | "shortcuts"
+  | "about";
 
 const categories: {
   id: CategoryId;
@@ -67,8 +91,14 @@ const categories: {
   {
     id: "models",
     label: "AI models",
-    description: "Codex models used for grouping and line questions.",
+    description: "Codex or Claude models used for grouping and line questions.",
     icon: Sparkles,
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    description: "Bring your Azure DevOps work items into new threads.",
+    icon: ListTodo,
   },
   {
     id: "rooms",
@@ -196,14 +226,20 @@ export function Settings({
   const [saving, setSaving] = useState(false),
     [saved, setSaved] = useState(false);
   const values = draft ?? settings.data;
-  const change = (kind: keyof AISettings, value: AISettings["questions"]) => {
+  const change = (
+    kind: "grouping" | "questions",
+    value: AISettings["questions"],
+    provider: AgentProvider,
+  ) => {
     if (values) {
-      setDraft({ ...values, [kind]: value });
+      setDraft({ ...values, [kind]: value, [`${kind}Provider`]: provider });
       setSaved(false);
     }
   };
 
   const appearance = useAppearance();
+  const usageRing = useUsageRing();
+  const sendKey = useSendKey();
   const activeTheme = appearance.theme;
   const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
   const iconSrc = useMemo(
@@ -347,6 +383,21 @@ export function Settings({
       ),
     },
     {
+      id: "usage-ring",
+      category: "appearance",
+      title: "Usage limits",
+      description:
+        "A ring in the composer, next to the context meter, with the session and weekly limits of the selected agent.",
+      keywords: "usage limit quota session weekly meter ring composer",
+      render: () => (
+        <Switch
+          label="Show usage limits in the composer"
+          checked={usageRing}
+          onChange={setUsageRing}
+        />
+      ),
+    },
+    {
       id: "icon",
       category: "appearance",
       title: "App icon",
@@ -424,32 +475,51 @@ export function Settings({
     {
       id: "codex-models",
       category: "models",
-      title: "Codex models",
+      title: "Agents",
       description:
-        "Uses your signed-in Codex CLI. Model availability depends on your account.",
+        "Uses your signed-in Codex CLI or Claude Code. Model availability depends on your account.",
       keywords:
-        "grouping line questions reasoning effort fast mode model codex ai",
+        "grouping line questions reasoning effort fast mode model codex claude ai",
       block: true,
       render: () =>
         values ? (
-          <div className="ai-settings">
-            <ModelField
+          <SettingsCard>
+            <SettingsRow
               label="Grouping"
-              value={values.grouping}
-              onChange={(value) => change("grouping", value)}
-            />
-            <ModelField
+              hint="Splits a pull request into reviewable steps."
+            >
+              <ModelField
+                label="Grouping"
+                value={values.grouping}
+                provider={values.groupingProvider}
+                onChange={(value, provider) =>
+                  change("grouping", value, provider)
+                }
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Line questions"
-              value={values.questions}
-              allowDefault
-              onChange={(value) => change("questions", value)}
-            />
-            <p className="field-note">
-              Fast mode uses more credits where available. Existing grouping
-              checkpoints keep their saved model, reasoning effort and speed;
-              these settings apply to new analyses and questions.
-            </p>
-            <div className="settings-save">
+              hint="Answers what you ask about a line of code."
+            >
+              <ModelField
+                label="Line questions"
+                value={values.questions}
+                provider={values.questionsProvider}
+                allowDefault
+                onChange={(value, provider) =>
+                  change("questions", value, provider)
+                }
+              />
+            </SettingsRow>
+            <SettingsFooter
+              note={
+                saved ? (
+                  <span role="status">Settings saved</span>
+                ) : (
+                  "Fast mode uses more credits where available. Existing grouping checkpoints keep their saved model, reasoning effort and speed."
+                )
+              }
+            >
               <button
                 className="primary"
                 disabled={
@@ -474,9 +544,8 @@ export function Settings({
               >
                 {saving ? "Saving…" : "Save AI settings"}
               </button>
-              {saved && <span role="status">Settings saved</span>}
-            </div>
-          </div>
+            </SettingsFooter>
+          </SettingsCard>
         ) : settings.error ? (
           <ErrorBox
             error={settings.error}
@@ -487,12 +556,71 @@ export function Settings({
         ),
     },
     {
+      id: "devops",
+      category: "integrations",
+      title: "Azure DevOps",
+      description:
+        "Open work items assigned to you appear as cards below the composer of a new thread.",
+      keywords: "azure devops boards work items tasks bugs tickets token pat",
+      block: true,
+      render: () => <DevOpsConnectionSettings />,
+    },
+    {
+      id: "devops-projects",
+      category: "integrations",
+      title: "Projects",
+      description:
+        "Turn work items off for projects that are not tracked in Azure DevOps.",
+      keywords: "azure devops work items cards hide projects hints keywords",
+      block: true,
+      render: () => <DevOpsProjectSettings />,
+    },
+    {
+      id: "devops-filter",
+      category: "integrations",
+      title: "Project filter",
+      description:
+        "Jev, a decision model on OpenRouter, decides which work items belong to the project you are in.",
+      keywords: "jev openrouter typesafe filter classify ai",
+      block: true,
+      render: () => <DevOpsFilterSettings />,
+    },
+    {
       id: "room-hosting",
       category: "rooms",
       title: "Room hosting",
       keywords: "server share invitation setup key host",
       block: true,
       render: () => <RoomHostingSettings />,
+    },
+    {
+      id: "send-key",
+      category: "shortcuts",
+      title: "Send messages with",
+      description:
+        sendKey === "enter"
+          ? "Enter sends the message. Shift+Enter adds a new line."
+          : "⌘/Ctrl+Enter sends the message. Enter adds a new line.",
+      keywords: "enter return send submit message newline composer chat",
+      render: () => (
+        <div className="segmented settings-segmented">
+          {(
+            [
+              ["enter", "Enter"],
+              ["mod-enter", "⌘ / Ctrl Enter"],
+            ] as [SendKey, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              className={sendKey === value ? "active" : ""}
+              aria-pressed={sendKey === value}
+              onClick={() => setSendKey(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ),
     },
     ...shortcuts.map(([name, keys]) => ({
       id: "shortcut:" + name,

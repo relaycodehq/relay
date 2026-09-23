@@ -1,7 +1,9 @@
 import { expect, it, vi } from "vitest";
 vi.mock("../../src/lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
-import { RichText } from "../../src/components/ui";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { markdownBlocks, RichText } from "../../src/components/ui";
 import { AgentTurn } from "../../src/components/AgentTurn";
 import type { ChatMessage } from "../../shared/projects";
 
@@ -26,6 +28,37 @@ it("renders source links as local code chips and refuses out-of-project file lin
     />,
   );
   expect(fenced).not.toContain("chat-file-link");
+});
+
+it("splits Markdown into blocks that render exactly like the whole document", () => {
+  const render = (text: string) =>
+    renderToStaticMarkup(
+      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>,
+    );
+  const samples = [
+    "# Title\n\nIntro paragraph.\n\n## Next\n\nMore text.",
+    "- a\n- b\n\n- loose c\n\n  continued c\n\nAfter the list.",
+    "1. one\n\n2. two\n\n10) ten\n\nDone.",
+    "```ts\nconst a = 1;\n\nNot a paragraph\n```\n\nAfter code.",
+    "~~~~\n```\n\nstill code\n~~~~\n\ntext",
+    "Para\n\n    indented code\n\n    more code\n\nback",
+    "| a | b |\n| - | - |\n| 1 | 2 |\n\nTable done.",
+    "> quote\n\n> another\n\nplain",
+    "Text\n\n---\n\n* * *\n\nEnd",
+    "See [docs][ref].\n\n[ref]: https://example.com",
+    "Footnote[^1].\n\n[^1]: The note.",
+    "<!-- hidden\n\nstill hidden -->\n\nShown",
+    "Term  \nbreak\n\n\n\nAfter blank lines\n",
+    "- [ ] task\n- [x] done\n\n~~strike~~ and https://example.com",
+    "\n\n\nLeading blank lines\n\nthen text",
+  ];
+  for (const text of samples) {
+    const blocks = markdownBlocks(text);
+    expect(blocks.join("\n")).toBe(text);
+    expect(blocks.map(render).join("\n")).toBe(render(text));
+  }
+  expect(markdownBlocks(samples[0]!)).toHaveLength(4);
+  expect(markdownBlocks(samples[3]!)).toHaveLength(2);
 });
 
 it("renders an active T3-style turn, then folds its trace after completion", () => {
@@ -61,10 +94,29 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
     onChanges: () => {},
   };
   const live = renderToStaticMarkup(<AgentTurn message={message} {...props} />);
-  expect(live).toContain("Working for");
-  expect(live).toContain("I will inspect the repository.");
-  expect(live).toContain("Ran 1 command");
   expect(live).toContain("Thinking");
+  const running = renderToStaticMarkup(
+    <AgentTurn
+      message={{
+        ...message,
+        trace: [
+          ...message.trace!,
+          {
+            kind: "activity",
+            id: "read",
+            activity: {
+              id: "read",
+              kind: "read",
+              label: "/Users/test/workspace/src/cache.ts",
+              status: "running",
+            },
+          },
+        ],
+      }}
+      {...props}
+    />,
+  );
+  expect(running).toContain("Reading cache.ts");
   const done = renderToStaticMarkup(
     <AgentTurn
       message={{
@@ -76,6 +128,32 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
       {...props}
     />,
   );
-  expect(done).toContain("Worked for 5.0s");
+  expect(done).toContain("Ran 1 command");
+  expect(done).toContain("5.0s");
   expect(done).not.toContain('<details class="agent-activity" open=""');
+});
+
+it("renders GFM tables, task lists and strikethrough, including a table still streaming", () => {
+  const html = renderToStaticMarkup(
+    <RichText
+      text={[
+        "| Requirement | WIP status | Gap |",
+        "|---|---|---|",
+        "| Sites: search by `licenseID` | ✅ UI done | Backend change needed. |",
+        "",
+        "- [x] done",
+        "- [ ] ~~dropped~~",
+      ].join("\n")}
+    />,
+  );
+  expect(html).toContain('<div class="markdown-table"><table>');
+  expect(html).toContain('<th>Requirement<span class="markdown-table-resizer"');
+  expect(html).toContain("<code>licenseID</code>");
+  expect(html).not.toContain("|---|");
+  expect(html).toContain('type="checkbox"');
+  expect(html).toContain("<del>dropped</del>");
+  const partial = renderToStaticMarkup(
+    <RichText text={"| A | B |\n|---|---|\n| 1 | 2"} />,
+  );
+  expect(partial).toContain("<td>2</td>");
 });

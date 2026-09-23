@@ -51,6 +51,8 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("push"), revision: z.string() }).strict(),
+  z.object({ kind: z.literal("pull"), revision: z.string() }).strict(),
+  z.object({ kind: z.literal("fetch") }).strict(),
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
 export interface WorkingTreeApi {

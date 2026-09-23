@@ -93,15 +93,48 @@ const questionChoiceSchema = choiceSchema
     reasoningEffort: reasoningEffortSchema.default(""),
   })
   .refine(supportsEffort, effortCheck);
+/** Which signed-in CLI runs grouping or line questions. */
+export const agentProviderSchema = z.enum(["codex", "claude"]);
+export type AgentProvider = z.infer<typeof agentProviderSchema>;
+const claudeEffortCheck = (
+  provider: AgentProvider,
+  choice: { reasoningEffort: ReasoningEffort },
+) =>
+  provider === "codex" ||
+  !choice.reasoningEffort ||
+  claudeEfforts.includes(choice.reasoningEffort);
+// Settings saved before Claude was offered used Codex for both.
 export const aiSettingsSchema = z
-  .object({ grouping: modelChoiceSchema, questions: questionChoiceSchema })
-  .strict();
+  .object({
+    grouping: modelChoiceSchema,
+    questions: questionChoiceSchema,
+    groupingProvider: agentProviderSchema.default("codex"),
+    questionsProvider: agentProviderSchema.default("codex"),
+  })
+  .strict()
+  .refine((s) => claudeEffortCheck(s.groupingProvider, s.grouping), {
+    ...effortCheck,
+    path: ["grouping", "reasoningEffort"],
+  })
+  .refine((s) => claudeEffortCheck(s.questionsProvider, s.questions), {
+    ...effortCheck,
+    path: ["questions", "reasoningEffort"],
+  });
 export type ModelChoice = z.infer<typeof modelChoiceSchema>;
 export type AISettings = z.infer<typeof aiSettingsSchema>;
+/** As persisted, possibly from before a field existed; parse before use. */
+export type StoredAISettings = z.input<typeof aiSettingsSchema>;
 export const defaultAISettings: AISettings = {
   grouping: { model: "gpt-5.6-luna", fast: false, reasoningEffort: "medium" },
   questions: { model: "", fast: false, reasoningEffort: "" },
+  groupingProvider: "codex",
+  questionsProvider: "codex",
 };
+/** Codex's line-question choice, or its defaults when questions go to Claude. */
+export const codexQuestionChoice = (settings: AISettings): ModelChoice =>
+  settings.questionsProvider === "codex"
+    ? settings.questions
+    : defaultAISettings.questions;
 export const modelChoices = [
   ["gpt-5.6-luna", "Luna"],
   ["gpt-5.6-sol", "Sol"],
@@ -111,8 +144,13 @@ export const modelChoices = [
 ] as const;
 export const modelName = (id: string) =>
   modelChoices.find(([value]) => value === id)?.[1] ?? (id || "Codex default");
-export const choiceLabel = (choice: ModelChoice) =>
-  `${modelName(choice.model)}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} reasoning` : ""} · ${choice.fast ? "Fast" : "Standard"}`;
+export const choiceLabel = (
+  choice: ModelChoice,
+  provider: AgentProvider = "codex",
+) =>
+  provider === "claude"
+    ? `Claude · ${choice.model || "default model"}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} effort` : ""}`
+    : `${modelName(choice.model)}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} reasoning` : ""} · ${choice.fast ? "Fast" : "Standard"}`;
 
 /** Explicit standard overrides any Fast preference inherited from Codex config. */
 export const codexModelArgs = (choice: ModelChoice): string[] => [

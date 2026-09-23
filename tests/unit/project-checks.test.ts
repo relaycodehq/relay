@@ -196,6 +196,24 @@ describe("project language support", () => {
         s.files[reviewPath]?.hash ===
           hash(reviewCode.replace("= 42", '= "Disk"')) && s.errors === 1,
     );
+    // Paused: disk changes only mark results stale until resume.
+    service.pause("pr", true);
+    await writeFile(
+      join(root, reviewPath),
+      reviewCode.replace("= 42", '= "Paused"'),
+    );
+    await new Promise((r) => setTimeout(r, 1500));
+    s = (await service.state("pr", head))!;
+    expect(s.status).toBe("paused");
+    expect(s.errors).toBe(1);
+    service.pause("pr", false);
+    await ready(
+      service,
+      head,
+      (s) =>
+        s.files[reviewPath]?.hash ===
+        hash(reviewCode.replace("= 42", '= "Paused"')),
+    );
     service.stop("pr");
     expect((await service.state("pr", head))?.status).toBe("stopped");
   }, 60000);

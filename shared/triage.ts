@@ -1,4 +1,4 @@
-import type { ReasoningEffort } from "./settings";
+import type { AgentProvider, ReasoningEffort } from "./settings";
 import type { ChangedFile } from "./types";
 export const TRIAGE_VERSION = 2;
 export const TRIAGE_MODEL = "gpt-5.6-luna";
@@ -19,6 +19,8 @@ export interface TriageResult {
   model: string;
   fast?: boolean;
   reasoningEffort?: ReasoningEffort;
+  /** Absent in analyses from before Claude grouping, which used Codex. */
+  provider?: AgentProvider;
   createdAt: string;
   files: ChangedFile[];
   groups: ChangeGroup[];
@@ -32,6 +34,7 @@ export interface TriageState {
   model?: string;
   fast?: boolean;
   reasoningEffort?: ReasoningEffort;
+  provider?: AgentProvider;
   id: string;
   revision: string;
   status:

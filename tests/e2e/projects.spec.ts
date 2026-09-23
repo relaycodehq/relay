@@ -101,11 +101,18 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await page
       .getByRole("button", { name: "Edit locally", exact: true })
       .click();
-    const editor = page.getByRole("dialog");
+    // Editing opens the inline Files pane, never a modal.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const editor = page.locator(".project-inline-editor");
     await expect(
       editor.getByRole("textbox", { name: path, exact: true }),
     ).toBeVisible();
-    await editor.getByRole("button", { name: "Done", exact: true }).click();
+    await editor
+      .getByRole("button", { name: "Close file", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Close files", exact: true })
+      .click();
     await page
       .locator('.diff-wrapper [data-additions] [data-line="13"]')
       .click({ position: { x: 60, y: 8 } });
@@ -116,7 +123,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       /@codex About src\/hooks\/useReview.ts:13/,
     );
     await page.reload();
-    await expect(page.locator(".project-code-pane")).toHaveCount(0);
+    await expect(page.locator(".pane-header")).toHaveCount(0);
     await expect(
       page
         .locator(".thread-context-controls")
@@ -226,7 +233,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await expect(page.locator(".project-code-pane")).toHaveCount(0);
+    await expect(page.locator(".pane-header")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: /What should we work on/ }),
     ).toBeVisible();
@@ -255,8 +262,11 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByText("export const answer = 43;", { exact: false }),
     ).toBeVisible();
-    await page.getByRole("tab", { name: "Files", exact: true }).click();
-    await page.getByRole("button", { name: /example.ts/ }).click();
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await page
+      .locator(".project-file-list")
+      .getByRole("button", { name: /example.ts/ })
+      .click();
     const surface = page
       .locator('.project-inline-editor [contenteditable="true"]')
       .last();
@@ -274,8 +284,11 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .poll(() => readFile(join(repo, "example.ts"), "utf8"))
       .toContain("edited in Review Relay");
     await page
-      .getByRole("button", { name: "Close code panel", exact: true })
+      .getByRole("button", { name: "Close files", exact: true })
       .click();
+    await expect(page.locator('[data-pane="files"] .pane-header')).toHaveCount(
+      0,
+    );
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await expect(
       page.locator('.project-inline-editor [contenteditable="true"]').last(),
@@ -447,14 +460,67 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(page.getByRole("button", { name: "Stop answer" })).toHaveCount(
       0,
     );
+    // Selecting answer text offers a quote; the pill lands in the composer.
+    await page
+      .getByText("The cache guard prevents duplicate requests.", {
+        exact: true,
+      })
+      .evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+    const quoteOffer = page.getByRole("button", { name: "Add to chat" });
+    await expect(quoteOffer).toBeVisible();
+    await page.screenshot({
+      path: "test-results/screenshots/48-quote-offer.png",
+      animations: "disabled",
+    });
+    await quoteOffer.click();
+    const composerInput = page.getByLabel("Message project");
+    await expect(composerInput.locator(".composer-quote-chip")).toContainText(
+      "The cache guard prevents",
+    );
+    await expect(composerInput).toBeFocused();
+    await expect(quoteOffer).toHaveCount(0);
+    await page.keyboard.type("Why is it needed?");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Object.entries(localStorage)
+            .filter(([key]) => key.startsWith("chat-draft:"))
+            .map(([, value]) => value),
+        ),
+      )
+      .toContain(
+        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?",
+      );
+    const quotePill = composerInput.locator(".composer-quote-chip");
+    await expect(quotePill).toHaveText(
+      '"The cache guard prevents duplicate requ…"',
+    );
+    await quotePill.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      '"The cache guard prevents duplicate requests."',
+    );
+    await page.screenshot({
+      path: "test-results/screenshots/57-quote-pill.png",
+      animations: "disabled",
+    });
+    await quotePill.locator(".composer-quote-remove").click();
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await expect(composerInput.locator(".composer-quote-chip")).toHaveCount(0);
+    await expect(composerInput).toHaveText("Why is it needed?");
+    await composerInput.fill("");
     await expect(page.locator(".agent-run-heading")).toContainText(
-      "Worked for",
+      "Ran 1 command",
     );
     await page.locator(".agent-run-heading").click();
     await expect(page.locator(".agent-commentary")).toContainText(
       "inspect the cache guard",
     );
-    await page.getByText("Ran 1 command", { exact: true }).click();
     await expect(
       page.getByText("git diff --stat", { exact: true }),
     ).toBeVisible();
@@ -569,7 +635,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".project-code-pane")).toHaveCount(0);
+    await expect(page.locator(".pane-header")).toHaveCount(0);
     await page.getByLabel("Search threads").fill("does not exist");
     await expect(
       page.getByText("No matching threads.", { exact: true }),

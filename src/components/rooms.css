@@ -273,10 +273,6 @@
 .room-message .markdown code {
   font-size: 11px;
 }
-.room-message .markdown table {
-  display: block;
-  overflow: auto;
-}
 .room-message-meta {
   display: flex;
   gap: 8px;

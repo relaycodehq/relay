@@ -25,10 +25,10 @@ export function BranchPullRequest({
 }) {
   const [open, setOpen] = useState(false);
   const seen = useRef(request);
+  // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
     queryKey: ["working-tree", "project", project.id],
     queryFn: () => api.projectWorkingTree(project.id),
-    refetchInterval: 5000,
   });
   const existing = useQuery({
     queryKey: ["branch-pulls", project.id, tree.data?.branch, connected],

@@ -3,9 +3,18 @@ import { useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, ChevronDown, Search, Plus } from "lucide-react";
+import {
+  GitBranch,
+  ChevronDown,
+  Search,
+  Plus,
+  ArrowDown,
+  ArrowUp,
+  LoaderCircle,
+} from "lucide-react";
 import { api } from "../lib/api";
 import type { BranchAction } from "../../shared/branches";
+import type { WorkingTree } from "../../shared/working-tree";
 export function ProjectBranchPicker({
   projectId,
   branch,
@@ -27,6 +36,58 @@ export function ProjectBranchPicker({
     enabled: open,
     staleTime: 0,
   });
+  const treeKey = ["working-tree", "project", projectId];
+  const tree = useQuery({
+    queryKey: treeKey,
+    queryFn: () => api.projectWorkingTree(projectId),
+  });
+  // Keep "behind" honest: refresh the upstream on focus and every few minutes.
+  const remote = useQuery({
+    queryKey: ["project-fetch", projectId],
+    queryFn: async () => {
+      qc.setQueryData<WorkingTree>(
+        treeKey,
+        await api.projectGitAction(projectId, { kind: "fetch" }),
+      );
+      return Date.now();
+    },
+    enabled: !!tree.data?.upstream,
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string>();
+  const t = tree.data;
+  const sync =
+    !t?.upstream || !t.branch || t.operation || (!t.ahead && !t.behind)
+      ? null
+      : t.ahead && t.behind
+        ? "diverged"
+        : t.behind
+          ? "pull"
+          : "push";
+  async function runSync() {
+    if (!t || syncing || (sync !== "pull" && sync !== "push")) return;
+    setSyncing(true);
+    setSyncError(undefined);
+    try {
+      qc.setQueryData<WorkingTree>(
+        treeKey,
+        await api.projectGitAction(projectId, {
+          kind: sync,
+          revision: t.revision,
+        }),
+      );
+      await qc.invalidateQueries();
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : String(e));
+      await tree.refetch();
+    } finally {
+      setSyncing(false);
+    }
+  }
   const query = search.trim();
   const allMatches =
     refs.data?.branches.filter((b) =>
@@ -64,135 +125,190 @@ export function ProjectBranchPicker({
     }
   }
   return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (pending) return;
-        setOpen(next);
-        if (next) {
-          setSearch("");
-          setError(undefined);
-        }
-      }}
-    >
-      <Popover.Trigger
-        className="composer-branch-trigger"
-        disabled={disabled}
-        title={
-          disabled
-            ? "Save your edits and wait for the agent before switching branches"
-            : "Switch or create a branch"
-        }
+    <>
+      <Popover.Root
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          setOpen(next);
+          if (next) {
+            setSearch("");
+            setError(undefined);
+          }
+        }}
       >
-        <GitBranch size={13} />
-        <span>
-          {branch === undefined ? "Loading branch…" : branch || "Detached HEAD"}
-        </span>
-        <ChevronDown size={12} />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          className="headline-project-positioner"
-          side="top"
-          align="start"
-          sideOffset={8}
-          collisionPadding={12}
+        <Popover.Trigger
+          className="composer-branch-trigger"
+          disabled={disabled}
+          title={
+            disabled
+              ? "Save your edits and wait for the agent before switching branches"
+              : "Switch or create a branch"
+          }
         >
-          <Popover.Popup
-            className="headline-project-popup branch-picker-popup"
-            aria-label="Switch branch"
-            initialFocus={input}
+          <GitBranch size={13} />
+          <span>
+            {branch === undefined
+              ? "Loading branch…"
+              : branch || "Detached HEAD"}
+          </span>
+          <ChevronDown size={12} />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner
+            className="headline-project-positioner"
+            side="top"
+            align="start"
+            sideOffset={8}
+            collisionPadding={12}
           >
-            <Combobox.Root<string>
-              inline
-              open
-              autoHighlight
-              items={items}
-              filter={null}
-              inputValue={search}
-              onInputValueChange={setSearch}
-              value={null}
-              onValueChange={(value) => {
-                if (value) void choose(value);
-              }}
+            <Popover.Popup
+              className="headline-project-popup branch-picker-popup"
+              aria-label="Switch branch"
+              initialFocus={input}
             >
-              <div className="headline-project-search">
-                <Search size={15} />
-                <Combobox.Input
-                  ref={input}
-                  aria-label="Search branches"
-                  placeholder="Search branches…"
-                  disabled={pending}
-                  spellCheck={false}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape" && !pending) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setOpen(false);
-                    }
-                  }}
-                />
-              </div>
-              <div className="headline-project-scroll">
-                <Combobox.List aria-label="Branches">
-                  {matches.map((b, index) => (
-                    <Combobox.Item
-                      key={b.ref}
-                      value={b.ref}
-                      index={index}
-                      disabled={pending || (b.worktree && !b.current)}
-                      className="branch-picker-row"
-                      data-current={b.current ? "" : undefined}
-                    >
-                      <span>{b.name}</span>
-                      <small>
-                        {b.current
-                          ? "current"
-                          : b.worktree
-                            ? "worktree"
-                            : b.remote
-                              ? "remote"
-                              : ""}
-                      </small>
-                    </Combobox.Item>
-                  ))}
-                  {create && (
-                    <Combobox.Item
-                      value="create"
-                      index={matches.length}
-                      disabled={pending}
-                      className="branch-picker-row"
-                    >
-                      <Plus size={14} />
-                      <span>Create branch “{query}”</span>
-                    </Combobox.Item>
+              <Combobox.Root<string>
+                inline
+                open
+                autoHighlight
+                items={items}
+                filter={null}
+                inputValue={search}
+                onInputValueChange={setSearch}
+                value={null}
+                onValueChange={(value) => {
+                  if (value) void choose(value);
+                }}
+              >
+                <div className="headline-project-search">
+                  <Search size={15} />
+                  <Combobox.Input
+                    ref={input}
+                    aria-label="Search branches"
+                    placeholder="Search branches…"
+                    disabled={pending}
+                    spellCheck={false}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && !pending) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpen(false);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="headline-project-scroll">
+                  <Combobox.List aria-label="Branches">
+                    {matches.map((b, index) => (
+                      <Combobox.Item
+                        key={b.ref}
+                        value={b.ref}
+                        index={index}
+                        disabled={pending || (b.worktree && !b.current)}
+                        className="branch-picker-row"
+                        data-current={b.current ? "" : undefined}
+                      >
+                        <span>{b.name}</span>
+                        <small>
+                          {b.current
+                            ? "current"
+                            : b.worktree
+                              ? "worktree"
+                              : b.remote
+                                ? "remote"
+                                : ""}
+                        </small>
+                      </Combobox.Item>
+                    ))}
+                    {create && (
+                      <Combobox.Item
+                        value="create"
+                        index={matches.length}
+                        disabled={pending}
+                        className="branch-picker-row"
+                      >
+                        <Plus size={14} />
+                        <span>Create branch “{query}”</span>
+                      </Combobox.Item>
+                    )}
+                  </Combobox.List>
+                  {refs.isPending && (
+                    <p className="headline-project-empty">Loading branches…</p>
                   )}
-                </Combobox.List>
-                {refs.isPending && (
-                  <p className="headline-project-empty">Loading branches…</p>
-                )}
-                {allMatches.length > 100 && (
-                  <p className="headline-project-empty">
-                    Type to narrow down {allMatches.length} branches.
-                  </p>
-                )}
-              </div>
-            </Combobox.Root>
-            {(error || refs.error) && (
-              <p role="alert" className="branch-picker-error">
-                {error || refs.error?.message}
+                  {allMatches.length > 100 && (
+                    <p className="headline-project-empty">
+                      Type to narrow down {allMatches.length} branches.
+                    </p>
+                  )}
+                </div>
+              </Combobox.Root>
+              {(error || refs.error) && (
+                <p role="alert" className="branch-picker-error">
+                  {error || refs.error?.message}
+                </p>
+              )}
+              <p className="branch-picker-hint">
+                {pending
+                  ? "Switching branch…"
+                  : create
+                    ? "New branch starts from the current checkout. Local edits are kept."
+                    : "Switches this project’s local checkout. Conflicting edits stay safe."}
               </p>
-            )}
-            <p className="branch-picker-hint">
-              {pending
-                ? "Switching branch…"
-                : create
-                  ? "New branch starts from the current checkout. Local edits are kept."
-                  : "Switches this project’s local checkout. Conflicting edits stay safe."}
-            </p>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+      {sync && t && (
+        <button
+          type="button"
+          className="composer-branch-sync"
+          data-state={sync}
+          disabled={
+            syncing || sync === "diverged" || (sync === "pull" && disabled)
+          }
+          aria-label={
+            sync === "pull"
+              ? `Pull ${t.behind} commit${t.behind === 1 ? "" : "s"} from ${t.upstream}`
+              : sync === "push"
+                ? `Push ${t.ahead} commit${t.ahead === 1 ? "" : "s"} to ${t.pushTarget ?? t.upstream}`
+                : `${t.ahead} ahead, ${t.behind} behind ${t.upstream}`
+          }
+          title={
+            sync === "diverged"
+              ? `Diverged from ${t.upstream}: rebase or merge before syncing`
+              : sync === "pull" && disabled
+                ? "Save your edits and wait for the agent before pulling"
+                : remote.error
+                  ? `Couldn’t fetch ${t.upstream}: ${remote.error.message}`
+                  : undefined
+          }
+          onClick={() => void runSync()}
+        >
+          {syncing ? (
+            <LoaderCircle size={12} className="spin" />
+          ) : (
+            <>
+              {t.behind > 0 && (
+                <span>
+                  <ArrowDown size={12} />
+                  {t.behind}
+                </span>
+              )}
+              {t.ahead > 0 && (
+                <span>
+                  <ArrowUp size={12} />
+                  {t.ahead}
+                </span>
+              )}
+            </>
+          )}
+        </button>
+      )}
+      {syncError && (
+        <span role="alert" className="composer-branch-error" title={syncError}>
+          {syncError}
+        </span>
+      )}
+    </>
   );
 }

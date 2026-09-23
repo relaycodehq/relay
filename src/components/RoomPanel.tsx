@@ -32,11 +32,13 @@ import {
 } from "../../shared/rooms";
 import {
   choiceLabel,
+  codexQuestionChoice,
   defaultAISettings,
   modelName,
   effortLabels,
 } from "../../shared/settings";
 import { api } from "../lib/api";
+import { sendsMessage, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Modal, Loading } from "./ui";
 import { RoomAvatar, RoomTranscript } from "./RoomTranscript";
 import { PaneResizer } from "./PaneResizer";
@@ -77,6 +79,7 @@ export function RoomPanel({
 }: Props) {
   const key = JSON.stringify([accountId, pull.owner, pull.name, pull.number]);
   const storageKey = `relay-room-draft:${key}`;
+  const sendKey = useSendKey();
   const [draft, setDraft] = useState<Draft>(() => {
     try {
       return (
@@ -142,7 +145,7 @@ export function RoomPanel({
   useEffect(() => {
     void api
       .aiSettings()
-      .then((s) => setChoice(s.questions))
+      .then((s) => setChoice(codexQuestionChoice(s)))
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -603,7 +606,7 @@ export function RoomPanel({
                 disabled={busy}
                 onChange={(e) => updateText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  if (sendsMessage(e, sendKey)) {
                     e.preventDefault();
                     void send();
                   }
@@ -785,7 +788,12 @@ export function RoomPanel({
                     void api
                       .aiSettings()
                       .then((s) =>
-                        api.saveAISettings({ ...s, questions: choice }),
+                        // Room questions run Codex, so line questions follow.
+                        api.saveAISettings({
+                          ...s,
+                          questions: choice,
+                          questionsProvider: "codex",
+                        }),
                       )
                       .then(() => setSettings(false))
                       .catch(setError);

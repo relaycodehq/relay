@@ -62,6 +62,11 @@ test.beforeAll(async () => {
     `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(join(bin, "invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
     { mode: 0o700 },
   );
+  await writeFile(
+    join(bin, "claude"),
+    `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(join(bin, "claude-invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
+    { mode: 0o700 },
+  );
   env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -95,38 +100,45 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("button", { name: "AI models", exact: true }).click();
+  const pick = async (control: string, option: string) => {
+    await page.getByRole("button", { name: control, exact: true }).click();
+    await page.getByRole("option", { name: option, exact: true }).click();
+  };
+  await pick("Grouping model", "GPT-5.6-Sol");
   await page
-    .getByLabel("Grouping model", { exact: true })
-    .selectOption("gpt-5.6-sol");
-  await page
-    .getByLabel("Grouping reasoning effort", { exact: true })
-    .selectOption("ultra");
-  await page
-    .getByLabel("Grouping model", { exact: true })
-    .selectOption("gpt-5.6-luna");
+    .getByRole("combobox", { name: "Grouping reasoning effort", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Ultra", exact: true }).click();
+  // Luna has no Ultra effort, so switching falls back to the default.
+  await pick("Grouping model", "GPT-5.6-Luna");
   await expect(
-    page.getByRole("button", { name: "Save AI settings" }),
-  ).toBeDisabled();
-  await expect(page.getByRole("alert")).toContainText(
-    "supported reasoning effort",
-  );
+    page.getByRole("combobox", {
+      name: "Grouping reasoning effort",
+      exact: true,
+    }),
+  ).toHaveText("Default effort");
+  await pick("Grouping model", "GPT-5.6-Sol");
   await page
-    .getByLabel("Grouping model", { exact: true })
-    .selectOption("gpt-5.6-sol");
-  await page.getByLabel("Grouping Fast mode", { exact: true }).check();
+    .getByRole("combobox", { name: "Grouping reasoning effort", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Ultra", exact: true }).click();
   await page
-    .getByLabel("Line questions model", { exact: true })
-    .selectOption("custom");
-  await page.getByLabel("Line questions custom model").fill("gpt-5.6-luna");
+    .getByRole("button", { name: "Grouping Fast mode", exact: true })
+    .click();
+  await pick("Line questions model", "GPT-5.6-Luna");
   await page
-    .getByLabel("Line questions reasoning effort", { exact: true })
-    .selectOption("max");
+    .getByRole("combobox", {
+      name: "Line questions reasoning effort",
+      exact: true,
+    })
+    .click();
   await expect(
-    page
-      .getByLabel("Line questions reasoning effort")
-      .locator('option[value="ultra"]'),
+    page.getByRole("option", { name: "Ultra", exact: true }),
   ).toHaveCount(0);
-  await page.getByLabel("Line questions Fast mode", { exact: true }).check();
+  await page.getByRole("option", { name: "Max", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Line questions Fast mode", exact: true })
+    .click();
   await page.getByRole("button", { name: "Save AI settings" }).click();
   await expect(
     page
@@ -167,24 +179,30 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("button", { name: "AI models", exact: true }).click();
-  await expect(page.getByLabel("Grouping model", { exact: true })).toHaveValue(
-    "gpt-5.6-sol",
-  );
   await expect(
-    page.getByLabel("Grouping Fast mode", { exact: true }),
-  ).toBeChecked();
+    page.getByRole("button", { name: "Grouping model", exact: true }),
+  ).toContainText("GPT-5.6-Sol");
   await expect(
-    page.getByLabel("Line questions model", { exact: true }),
-  ).toHaveValue("gpt-5.6-luna");
+    page.getByRole("button", { name: "Grouping Fast mode", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(
-    page.getByLabel("Grouping reasoning effort", { exact: true }),
-  ).toHaveValue("ultra");
+    page.getByRole("button", { name: "Line questions model", exact: true }),
+  ).toContainText("GPT-5.6-Luna");
   await expect(
-    page.getByLabel("Line questions reasoning effort", { exact: true }),
-  ).toHaveValue("max");
+    page.getByRole("combobox", {
+      name: "Grouping reasoning effort",
+      exact: true,
+    }),
+  ).toHaveText("Ultra");
   await expect(
-    page.getByLabel("Line questions Fast mode", { exact: true }),
-  ).toBeChecked();
+    page.getByRole("combobox", {
+      name: "Line questions reasoning effort",
+      exact: true,
+    }),
+  ).toHaveText("Max");
+  await expect(
+    page.getByRole("button", { name: "Line questions Fast mode", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.keyboard.press(
     process.platform === "darwin" ? "Meta+," : "Control+,",
@@ -300,4 +318,64 @@ test("row questions launch safely at the root with old/new revision context and 
     newCode + "\n// local work in progress\n",
   );
   expect(fixture.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
+});
+
+test("line questions can run in a read-only Claude Code session", async () => {
+  test.skip(
+    process.platform !== "darwin",
+    "Terminal interception in this test uses macOS openPath",
+  );
+  await page
+    .getByRole("button", { name: "Open settings", exact: true })
+    .click();
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Line questions model", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Claude", exact: true }).click();
+  await page
+    .getByRole("option", { name: "Claude default", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Line questions model", exact: true }),
+  ).toContainText("Claude default");
+  // Codex's Fast mode does not apply to Claude.
+  await expect(
+    page.getByRole("button", { name: "Line questions Fast mode", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Save AI settings" }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByRole("status"),
+  ).toContainText("Settings saved");
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Clear selected lines" }).click();
+  await page
+    .locator('.diff-wrapper [data-additions] [data-line="13"]')
+    .click({ position: { x: 60, y: 8 } });
+  await page.getByRole("button", { name: "Ask Codex", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Ask Claude", exact: true });
+  await expect(dialog).toContainText("Claude · default model");
+  await page.getByLabel("Question about selected code").fill("Who calls this?");
+  await page
+    .getByRole("button", { name: "Ask in Claude", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const command = await app.evaluate(
+    () => (globalThis as any).questionTerminal as string,
+  );
+  execFileSync("/bin/sh", [command], { env });
+  const captured = JSON.parse(
+    await readFile(join(bin, "claude-invocation.json"), "utf8"),
+  );
+  expect(captured.cwd).toBe(await realpath(root));
+  // Max effort carries over from Codex because Claude supports it too.
+  expect(captured.args.slice(0, -1)).toEqual([
+    "--disallowedTools",
+    "Edit,Write,NotebookEdit",
+    "--effort",
+    "max",
+  ]);
+  expect(captured.args.at(-1)).toContain("Who calls this?");
 });

@@ -81,6 +81,7 @@ type Session = {
   process: ChildProcessWithoutNullStreams;
   state: ProjectCheckState;
   lastValidated: number;
+  paused: boolean;
   requests: Map<
     string,
     {
@@ -95,6 +96,7 @@ export class ProjectChecks {
   private session?: Session;
   private generation = 0;
   private pendingKey?: string;
+  private pausedKeys = new Set<string>();
   constructor(private worker: string) {}
   stop(key?: string) {
     const s = this.session;
@@ -117,6 +119,27 @@ export class ProjectChecks {
       if (s.process.exitCode === null) s.process.kill("SIGKILL");
     }, 1500);
     hard.unref();
+  }
+  /** Hold rechecks (the language service stays warm) until resumed. */
+  pause(key: string, paused: boolean) {
+    if (paused) this.pausedKeys.add(key);
+    else this.pausedKeys.delete(key);
+    const s = this.session;
+    if (
+      !s ||
+      s.key !== key ||
+      s.paused === paused ||
+      ["stopped", "failed"].includes(s.state.status)
+    )
+      return;
+    s.paused = paused;
+    s.process.stdin.write(JSON.stringify({ pause: paused }) + "\n");
+    if (paused) {
+      clearTimeout(s.timer);
+      s.state.status = "paused";
+    } else if (s.state.status === "paused")
+      // The worker reports "invalidated" next if anything changed meanwhile.
+      s.state.status = s.state.checkedAt ? "ready" : "checking";
   }
   async state(key: string, head: string) {
     const s = this.session;
@@ -204,9 +227,16 @@ export class ProjectChecks {
           ),
       ),
     );
+    const paused = this.pausedKeys.has(key);
     const child = spawn(
       node,
-      ["--max-old-space-size=768", worker, local.path, JSON.stringify(target)],
+      [
+        "--max-old-space-size=768",
+        worker,
+        local.path,
+        JSON.stringify(target),
+        paused ? "paused" : "",
+      ],
       { cwd: local.path, env, stdio: ["pipe", "pipe", "pipe"] },
     );
     const s: Session = {
@@ -218,12 +248,13 @@ export class ProjectChecks {
       updates: new Map(),
       process: child,
       lastValidated: Date.now(),
+      paused,
       requests: new Map(),
       state: {
         id: randomUUID(),
         head,
         target,
-        status: "checking",
+        status: paused ? "paused" : "checking",
         startedAt: Date.now(),
         diagnostics: [],
         files: {},
@@ -253,7 +284,7 @@ export class ProjectChecks {
     };
     let buffer = "",
       stderr = "";
-    deadline();
+    if (!paused) deadline();
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
       buffer += chunk;
       if (Buffer.byteLength(buffer) > 8 * 1024 * 1024) {
@@ -299,17 +330,19 @@ export class ProjectChecks {
           }
           if (value.seq !== s.seq) continue;
           if (value.type === "checking" || value.type === "invalidated") {
-            s.state.status = "checking";
             // Do not show stale line positions while buffers or files change.
             s.state.files = {};
             s.state.diagnostics = [];
-            deadline();
+            if (!s.paused) {
+              s.state.status = "checking";
+              deadline();
+            }
           } else if (value.type === "result") {
             const r = resultSchema.parse(value);
             clearTimeout(s.timer);
             Object.assign(s.state, {
               ...r,
-              status: "ready",
+              status: s.paused ? "paused" : "ready",
               checkedAt: Date.now(),
               message: r.message,
             });
@@ -349,7 +382,7 @@ export class ProjectChecks {
       !s ||
       s.key !== key ||
       s.state.head !== head ||
-      s.state.status !== "ready"
+      !["ready", "paused"].includes(s.state.status)
     )
       throw new Error(
         "Wait for live checks to finish before navigating symbols.",
@@ -357,7 +390,7 @@ export class ProjectChecks {
     if (s.requests.size >= 32)
       throw new Error("Too many symbol lookups. Please retry.");
     await configPath(s.root, query.path);
-    if (this.session !== s || s.state.status !== "ready")
+    if (this.session !== s || !["ready", "paused"].includes(s.state.status))
       throw new Error("The active project changed. Wait for checks and retry.");
     const requestId = randomUUID();
     return new Promise((resolve, reject) => {
@@ -390,7 +423,7 @@ export class ProjectChecks {
     )
       return;
     s.seq++;
-    s.state.status = "checking";
+    if (!s.paused) s.state.status = "checking";
     s.state.files = {};
     s.state.diagnostics = [];
     s.process.stdin.write(JSON.stringify({ seq: s.seq, path, text }) + "\n");
