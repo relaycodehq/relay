@@ -65,6 +65,20 @@ const currentBranch = (root: string) =>
 
 const agentName = (provider: "codex" | "claude") =>
   provider === "claude" ? "Claude" : "Codex";
+/** An agent's session and the last message it heard, on the main conversation or a side one. */
+function agentSession(
+  chat: ProjectChat,
+  provider: AgentProvider,
+  parentId?: string | null,
+) {
+  const side = parentId ? chat.replySessions?.[parentId] : undefined;
+  const where = parentId ? side : chat;
+  return provider === "claude"
+    ? { thread: where?.claudeThread, through: where?.claudeThrough }
+    : parentId
+      ? { thread: side?.thread, through: side?.through }
+      : { thread: chat.providerThread, through: chat.providerThrough };
+}
 /** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
 const HANDOFF_TIMEOUT = 120000;
 /** Asked of the agent whose session ends here, in that session, so it can draw on everything it did. */
@@ -1030,9 +1044,6 @@ export class ProjectChats {
         this.active.delete(id);
         return;
       }
-      const session = parent
-        ? (chat.replySessions ??= {})[parent.id]
-        : undefined;
       // A side conversation continues the main one as it stood at its message.
       const upToParent = new Set(
         parent
@@ -1066,13 +1077,7 @@ export class ProjectChats {
         outgoing &&
         outgoing.provider !== mention.provider &&
         outgoing.status !== "failed" &&
-        (outgoing.provider === "claude"
-          ? parent
-            ? session?.claudeThread
-            : chat.claudeThread
-          : parent
-            ? session?.thread
-            : chat.providerThread)
+        agentSession(chat, outgoing.provider, parent?.id).thread
           ? outgoing.provider
           : undefined;
       const note = handoffFrom
@@ -1111,22 +1116,11 @@ export class ProjectChats {
       const previous = chat.messages.filter(
           (m) => m.id !== user.id && m.id !== answer.id && onBranch(m),
         ),
-        providerThread =
-          mention.provider === "claude"
-            ? parent
-              ? session?.claudeThread
-              : chat.claudeThread
-            : parent
-              ? session?.thread
-              : chat.providerThread,
-        providerThrough =
-          mention.provider === "claude"
-            ? parent
-              ? session?.claudeThrough
-              : chat.claudeThrough
-            : parent
-              ? session?.through
-              : chat.providerThrough,
+        { thread: providerThread, through: providerThrough } = agentSession(
+          chat,
+          mention.provider,
+          parent?.id,
+        ),
         fork = this.forkFor(chat, mention.provider, parent?.id),
         // A forked session already holds everything up to its message.
         known =
@@ -1217,9 +1211,7 @@ export class ProjectChats {
     provider: AgentProvider,
     parentId?: string,
   ) {
-    if (!parentId) return;
-    const branch = chat.replySessions?.[parentId];
-    if (provider === "claude" ? branch?.claudeThread : branch?.thread) return;
+    if (!parentId || agentSession(chat, provider, parentId).thread) return;
     const parent = chat.messages.find((m) => m.id === parentId);
     return parent?.role === "assistant" && parent.provider === provider
       ? parent.forkPoint
@@ -1408,7 +1400,6 @@ export class ProjectChats {
       await this.load(id);
       const chat = this.cache.get(id)!;
       const root = await this.projects.root(chat.projectId);
-      const branch = parentId ? chat.replySessions?.[parentId] : undefined;
       const latest = [...chat.messages]
         .reverse()
         .find(
@@ -1416,15 +1407,7 @@ export class ProjectChats {
             m.role === "assistant" && (m.parentId ?? undefined) === parentId,
         );
       const provider = latest?.provider;
-      const session =
-        provider === "claude"
-          ? parentId
-            ? branch?.claudeThread
-            : chat.claudeThread
-          : parentId
-            ? branch?.thread
-            : chat.providerThread;
-      if (!provider || !session)
+      if (!provider || !agentSession(chat, provider, parentId).thread)
         throw new Error("There is no agent session to compact yet.");
       if (instructions && provider !== "claude")
         throw new Error("Codex compacts without custom instructions.");
@@ -1555,14 +1538,7 @@ export class ProjectChats {
     ]);
     this.providerSessions.add(sessionKey);
     const provider = message.provider;
-    const sessionId =
-      provider === "claude"
-        ? branch
-          ? branch.claudeThread
-          : chat.claudeThread
-        : branch
-          ? branch.thread
-          : chat.providerThread;
+    const sessionId = agentSession(chat, provider, input.parentId).thread;
     const fork = compact
       ? undefined
       : this.forkFor(chat, provider, input.parentId ?? undefined);
@@ -1711,14 +1687,7 @@ export class ProjectChats {
       }
       if (compact) message.body = "";
       message.status = abort.signal.aborted ? "cancelled" : "complete";
-      const thread =
-        provider === "claude"
-          ? branch
-            ? branch.claudeThread
-            : chat.claudeThread
-          : branch
-            ? branch.thread
-            : chat.providerThread;
+      const { thread } = agentSession(chat, provider, input.parentId);
       if (message.status === "complete" && point && thread)
         message.forkPoint = { thread, at: point };
     } catch (e) {
