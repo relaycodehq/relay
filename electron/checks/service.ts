@@ -378,12 +378,20 @@ export class ProjectChecks {
     query: SymbolQuery,
   ): Promise<SymbolResult> {
     const s = this.session;
-    if (
-      !s ||
-      s.key !== key ||
-      s.state.head !== head ||
-      !["ready", "paused"].includes(s.state.status)
+    if (!s || s.key !== key || s.state.head !== head)
+      throw new Error(
+        "Wait for live checks to finish before navigating symbols.",
+      );
+    // Opening or editing a file starts a recheck; a lookup made meanwhile
+    // waits for it instead of failing.
+    const until = Date.now() + 15000;
+    while (
+      this.session === s &&
+      s.state.status === "checking" &&
+      Date.now() < until
     )
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    if (this.session !== s || !["ready", "paused"].includes(s.state.status))
       throw new Error(
         "Wait for live checks to finish before navigating symbols.",
       );

@@ -399,8 +399,9 @@ test("Codex handoff validates the checkout and safely carries the comment", asyn
       .at(-1)!;
   }
   const script = await readFile(commandPath, "utf8");
-  expect(script).toContain("--sandbox workspace-write");
-  expect(script).toContain("--ask-for-approval on-request");
+  // Every argument is shell-quoted, the executable path included.
+  expect(script).toContain("'--sandbox' 'workspace-write'");
+  expect(script).toContain("'--ask-for-approval' 'on-request'");
   expect(script).not.toContain(comment);
   execFileSync("/bin/sh", ["-n", commandPath]);
   const prompt = await readFile(
