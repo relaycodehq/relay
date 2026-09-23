@@ -129,6 +129,27 @@ describe("Network failures", () => {
     await expect(client).rejects.toThrow(expected);
     await expect(client).rejects.not.toThrow("private-token");
   });
+  it("reports a caller's cancellation as cancelled, not as a network failure", async () => {
+    const client = new Gitea(
+      {
+        id: "a",
+        server: "https://git.example.com",
+        user: { id: 1, login: "a" },
+        persistent: false,
+      },
+      "private-token",
+      (_url, init) =>
+        new Promise((_, reject) =>
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          ),
+        ),
+    );
+    const cancel = new AbortController();
+    const request = client.request("/user", { signal: cancel.signal });
+    cancel.abort();
+    await expect(request).rejects.toThrow("Request cancelled");
+  });
 });
 describe("Durable local state", () => {
   it("serializes concurrent updates and survives restart", async () => {

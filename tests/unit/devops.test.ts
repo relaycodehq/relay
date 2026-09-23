@@ -86,6 +86,9 @@ it("turns work item HTML into plain text", () => {
   expect(
     plainText("<p>One&nbsp;&lt;two&gt;</p><ul><li>a</li><li>b</li></ul>"),
   ).toBe("One <two>\n- a\n- b");
+  expect(plainText("&#x1F600; &#99999999; &#xFFFFFFF;")).toBe(
+    "😀 &#99999999; &#xFFFFFFF;",
+  );
 });
 
 it("loads assigned items, asks Jev one question per item and caches answers", async () => {

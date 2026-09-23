@@ -114,7 +114,8 @@ export class Gitea {
         headers: response.headers,
       };
     } catch (e) {
-      if (controller.signal.aborted)
+      // A caller's cancellation would otherwise read as a network failure.
+      if (controller.signal.aborted || options.signal?.aborted)
         throw new Error("Request cancelled or timed out. Please retry.");
       throw e;
     } finally {

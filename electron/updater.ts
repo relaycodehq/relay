@@ -15,6 +15,7 @@ import {
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import {
   manifestSchema,
@@ -28,6 +29,7 @@ import {
 
 const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;
+const stallTimeout = 60_000;
 
 interface Install {
   target: UpdateTarget;
@@ -198,32 +200,54 @@ export class Updater {
     dir: string,
     progress: (fraction: number) => void,
   ) {
-    const response = await net.fetch(file.url, { cache: "no-store" });
-    if (!response.ok || !response.body)
-      throw new Error(`The download answered ${response.status}.`);
     const path = join(dir, file.name),
-      hash = createHash("sha512"),
-      output = createWriteStream(path, { mode: 0o600 });
+      hash = createHash("sha512");
     let received = 0,
       reported = 0;
-    progress(0);
+    // A stalled connection would otherwise stay "downloading" until a restart.
+    const stalled = new AbortController();
+    let idle = setTimeout(() => stalled.abort(), stallTimeout);
     try {
-      const reader = response.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        hash.update(value);
-        received += value.byteLength;
-        if (!output.write(value))
-          await new Promise<void>((r) => output.once("drain", () => r()));
-        const fraction = Math.min(received / file.size, 1);
-        if (fraction - reported >= 0.01) {
-          reported = fraction;
-          progress(fraction);
-        }
-      }
+      const response = await net.fetch(file.url, {
+        cache: "no-store",
+        signal: stalled.signal,
+      });
+      const body = response.body;
+      if (!response.ok || !body)
+        throw new Error(`The download answered ${response.status}.`);
+      progress(0);
+      // pipeline reports disk errors (a full disk, say) instead of leaving an
+      // unhandled stream "error" event to take down the main process.
+      await pipeline(
+        async function* () {
+          const reader = body.getReader();
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) return;
+              clearTimeout(idle);
+              idle = setTimeout(() => stalled.abort(), stallTimeout);
+              hash.update(value);
+              received += value.byteLength;
+              const fraction = Math.min(received / file.size, 1);
+              if (fraction - reported >= 0.01) {
+                reported = fraction;
+                progress(fraction);
+              }
+              yield value;
+            }
+          } finally {
+            await reader.cancel().catch(() => {});
+          }
+        },
+        createWriteStream(path, { mode: 0o600 }),
+      );
+    } catch (error) {
+      if (stalled.signal.aborted)
+        throw new Error("The download stalled. Try again.");
+      throw error;
     } finally {
-      await new Promise<void>((r) => output.end(() => r()));
+      clearTimeout(idle);
     }
     if (received !== file.size || hash.digest("base64") !== file.sha512)
       throw new Error("The download didn't match the release. Try again.");

@@ -24,7 +24,7 @@ type Decrypt = (value: string) => Promise<string>;
 
 /** The Azure DevOps application id, used as the token resource for `az`. */
 const devopsResource = "499b84ac-1321-427f-aa17-267ca6975798";
-const openStates = ["Closed", "Done", "Removed", "Resolved", "Completed"];
+const closedStates = ["Closed", "Done", "Removed", "Resolved", "Completed"];
 const fields = [
   "System.Id",
   "System.Title",
@@ -162,7 +162,7 @@ export class DevOps {
         query: [
           "SELECT [System.Id] FROM WorkItems",
           "WHERE [System.AssignedTo] = @Me",
-          `AND [System.State] NOT IN (${openStates.map((s) => `'${s}'`).join(", ")})`,
+          `AND [System.State] NOT IN (${closedStates.map((s) => `'${s}'`).join(", ")})`,
           settings.project ? "AND [System.TeamProject] = @project" : "",
           "ORDER BY [System.ChangedDate] DESC",
         ]
@@ -524,15 +524,15 @@ export function plainText(html: string) {
     .replace(/<(br|\/p|\/div|\/li|\/h\d)[^>]*>/gi, "\n")
     .replace(/<li[^>]*>/gi, "- ")
     .replace(/<[^>]+>/g, "")
-    .replace(/&(#\d+|#x[\da-f]+|\w+);/gi, (m, e: string) =>
-      e[0] === "#"
-        ? String.fromCodePoint(
-            e[1] === "x" || e[1] === "X"
-              ? parseInt(e.slice(2), 16)
-              : parseInt(e.slice(1), 10),
-          )
-        : (entities[e.toLowerCase()] ?? m),
-    )
+    .replace(/&(#\d+|#x[\da-f]+|\w+);/gi, (m, e: string) => {
+      if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
+      const code =
+        e[1] === "x" || e[1] === "X"
+          ? parseInt(e.slice(2), 16)
+          : parseInt(e.slice(1), 10);
+      // fromCodePoint throws on values past U+10FFFF.
+      return code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    })
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n\s*/g, "\n\n")
     .trim();

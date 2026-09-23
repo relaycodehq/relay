@@ -85,7 +85,9 @@ export async function runClaude(
     child.on("error", (e) =>
       finish(new Error(`Could not start Claude: ${e.message}`)),
     );
-    child.on("exit", () =>
+    // "close", not "exit": stdout may still hold the final result line when
+    // the process exits.
+    child.on("close", () =>
       finish(
         new Error(
           "Claude stopped before finishing. Check your Claude Code sign-in and version (2.1.248 or newer).",

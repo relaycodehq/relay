@@ -45,7 +45,7 @@ async function discover(root: string): Promise<CodexSkill[]> {
   });
   void failed.catch(() => {});
   child.on("error", fail);
-  child.on("exit", () =>
+  child.on("close", () =>
     fail(new Error("Codex stopped while loading skills.")),
   );
   const timer = setTimeout(

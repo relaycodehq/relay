@@ -9,7 +9,7 @@ import {
   parentGroup,
   rebaseGroup,
 } from "../shared/project-folders";
-import { git, gitBytes, digest, workingTree } from "./working-tree";
+import { git, gitBytes, digest } from "./working-tree";
 import { inspectRepository } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
 export function repositoryFromRemote(
@@ -230,18 +230,24 @@ export class Projects {
     const root = await this.root(id),
       file = await readWorkingFile(root, path);
     if (!file) throw new Error("This file no longer exists.");
-    const state = await workingTree(root),
-      entry = await git(root, ["ls-tree", "-z", state.head, "--", path]);
+    // Only HEAD and the branch are needed, not a full status scan.
+    const [head, branch] = (
+      await Promise.all([
+        git(root, ["rev-parse", "HEAD"]),
+        git(root, ["branch", "--show-current"]),
+      ])
+    ).map((out) => out.trim());
+    const entry = await git(root, ["ls-tree", "-z", head, "--", path]);
     const original = entry
-      ? decodeText(await gitBytes(root, ["show", `${state.head}:${path}`]))
+      ? decodeText(await gitBytes(root, ["show", `${head}:${path}`]))
       : "";
     return {
       path,
       contents: file.contents,
       version: file.hash,
       original,
-      head: state.head,
-      branch: state.branch,
+      head,
+      branch,
     };
   }
   async save(
