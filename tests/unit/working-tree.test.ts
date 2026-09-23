@@ -130,6 +130,26 @@ it("rejects stale state and non-fast-forward pushes without changing the working
   ).rejects.toThrow(/rejected|fetch first/);
   expect(git("rev-parse", "HEAD")).toBe(tree.head);
 });
+it("hides a token kept in the push remote's address", async () => {
+  // Gitea and GitHub both accept a token in place of the user name.
+  for (const [url, shown] of [
+    [
+      "https://s3cret-token@git.example.invalid/team/repo.git",
+      "https://[redacted]@git.example.invalid/team/repo.git",
+    ],
+    [
+      "https://oauth2:s3cret-token@git.example.invalid/team/repo.git",
+      "https://[redacted]@git.example.invalid/team/repo.git",
+    ],
+    [
+      "ssh://git@git.example.invalid/team/repo.git",
+      "ssh://git@git.example.invalid/team/repo.git",
+    ],
+  ]) {
+    git("remote", "set-url", "--push", "origin", url);
+    expect((await workingTree(root)).pushUrl).toBe(shown);
+  }
+});
 it("changes its revision when only the staged part of a changed file moves", async () => {
   await writeFile(join(root, "untouched.ts"), "export const u = 1;\n");
   git("add", "untouched.ts");

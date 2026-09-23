@@ -12,7 +12,8 @@ export const gitEnv = (extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
 });
 /** Git may include credential-bearing remote URLs in output and failures. */
 export const redactCredentials = (text: string) =>
-  text.replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/g, "$1[redacted]@");
+  // A token often stands alone in the user name.
+  text.replace(/(https?:\/\/)[^\s/@]+@/g, "$1[redacted]@");
 export async function git(
   root: string,
   args: string[],
