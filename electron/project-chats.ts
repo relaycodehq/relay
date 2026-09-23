@@ -2155,6 +2155,8 @@ export class ProjectChats {
       ...this.loading.values(),
     ]);
     await Promise.all([...this.writes.values()]);
+    // A finished answer refreshes its sidebar summary without waiting for it.
+    await this.store.flush();
     await Promise.all([...this.providerSessions].map(closeCodexConnection));
     for (const key of this.providerSessions) closeClaudeSession(key);
     this.providerSessions.clear();

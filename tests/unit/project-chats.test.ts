@@ -989,6 +989,24 @@ it("stops during provider initialization without waiting for the RPC timeout", a
   expect((await chats.get(chat.id)).messages.at(-1)?.error).toBeUndefined();
 });
 
+it("has saved the stopped answer and its sidebar summary once dispose returns", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  await chats.dispose();
+  const saved = JSON.parse(
+    await readFile(join(root, "chats", chat.id + ".json"), "utf8"),
+  );
+  expect(saved.messages.at(-1).status).toBe("cancelled");
+  expect(store.get().chats?.find((c) => c.id === chat.id)?.updated).toBe(
+    saved.updated,
+  );
+});
+
 it("queues incompatible steering first without pausing or changing permissions", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
