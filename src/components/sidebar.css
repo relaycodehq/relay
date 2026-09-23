@@ -633,6 +633,19 @@
     opacity 0.12s,
     transform 0.12s;
 }
+.sb-card-shortcut {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font: 600 10.5px/1.4 var(--font-mono);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: sb-enter 0.12s ease-out;
+}
+.sb-cards.shortcuts .sb-card-actions {
+  display: none;
+}
 .sb-card:hover .sb-card-actions,
 .sb-card:focus-within .sb-card-actions,
 .sb-card-actions:has([data-popup-open]) {

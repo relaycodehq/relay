@@ -442,6 +442,29 @@ export function ProjectSidebar({
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
+  /** Holding ⌘ on the activity view shows ⌘1–⌘9 on the first nine cards. */
+  const [cmdHeld, setCmdHeld] = useState(false);
+  const jumpTo = useRef<(index: number) => boolean>(() => false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      setCmdHeld(e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey);
+      if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return;
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (digit && jumpTo.current(Number(digit[1]) - 1)) e.preventDefault();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (!e.metaKey) setCmdHeld(false);
+    };
+    const release = () => setCmdHeld(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
   const byId = new Map(projects.map((p) => [p.id, p]));
   const all = lists
     .flatMap((q) => q.data ?? [])
@@ -485,6 +508,13 @@ export function ProjectSidebar({
       .includes(query);
   const open = (c: ChatSummary) => {
     if (!dirty) onChat(c);
+  };
+  const shortcuts = view === "activity" && !query;
+  jumpTo.current = (index) => {
+    const c = sections.active[index];
+    if (!shortcuts || !c) return false;
+    open(c);
+    return true;
   };
 
   const threadRow = (c: ChatSummary, withProject = false) => {
@@ -861,8 +891,9 @@ export function ProjectSidebar({
     );
   }
 
-  const card = (c: ChatSummary) => {
+  const card = (c: ChatSummary, index: number) => {
     const p = byId.get(c.projectId);
+    const shortcut = shortcuts && cmdHeld && index < 9 ? index + 1 : undefined;
     const isUnread = unread(c);
     const state = c.waiting
       ? { text: "Needs your input", tone: "waiting" }
@@ -891,6 +922,11 @@ export function ProjectSidebar({
         <div className="sb-card-top">
           <ProjectBadge name={p?.name ?? "?"} />
           <span className="sb-card-project">{p?.name}</span>
+          {shortcut && (
+            <kbd className="sb-card-shortcut" aria-hidden>
+              ⌘{shortcut}
+            </kbd>
+          )}
           <div className="sb-card-actions">
             {!c.waiting && (
               <SnoozeMenu
@@ -1004,7 +1040,9 @@ export function ProjectSidebar({
             : "All settled"}
         </small>
       </div>
-      <div className="sb-cards">{sections.active.map(card)}</div>
+      <div className={`sb-cards ${shortcuts && cmdHeld ? "shortcuts" : ""}`}>
+        {sections.active.map(card)}
+      </div>
       {!sections.active.length && (
         <div className="sb-empty">
           <span className="sb-empty-icon">
