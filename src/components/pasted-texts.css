@@ -92,3 +92,59 @@
   tab-size: 4;
   white-space: pre;
 }
+
+/* The pill standing in for a paste: in the composer where it was pasted, and
+   in the sent message where it went. */
+.paste-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: baseline;
+  max-width: 100%;
+  margin: 0 4px 0 0;
+  padding: 1px 8px 1px 7px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.45;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+.paste-pill:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.paste-pill.ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+.paste-pill-icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M11 14h10"/%3E%3Cpath d="M16 4h2a2 2 0 0 1 2 2v1.344"/%3E%3Cpath d="m17 18 4-4-4-4"/%3E%3Cpath d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/%3E%3Crect x="8" y="2" width="8" height="4" rx="1"/%3E%3C/svg%3E')
+    center/12px no-repeat;
+}
+.paste-pill-lines {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+}
+.paste-pill:hover .composer-quote-remove {
+  width: 14px;
+  margin-right: 2px;
+  opacity: 0.8;
+}
+.paste-pill .composer-quote-remove:hover {
+  opacity: 1;
+}
+/* A pill on its own line in a sent message keeps the paragraph rhythm. */
+.project-message .message-paste {
+  margin: 6px 0;
+}

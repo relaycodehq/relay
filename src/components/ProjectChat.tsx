@@ -64,9 +64,14 @@ import {
   type CodeReference,
 } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
-import { parsePastedTexts, pastedTextMessage } from "../../shared/pasted-texts";
-import { loadDraftPastes, saveDraftPastes } from "../lib/draft-pastes";
-import { PastedTextCard } from "./PastedTextCard";
+import {
+  pasteBlock,
+  pasteMarkdown,
+  pastedTexts,
+  replacePastedTexts,
+  type PastedText,
+} from "../../shared/pasted-texts";
+import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../lib/project-file-links";
@@ -183,7 +188,8 @@ function HandoffRow({
 }
 /** A queued message's text, with its attachments counted rather than shown. */
 function QueuedBody({ input }: { input: ProjectChatSend }) {
-  const { body, pastes } = parsePastedTexts(input.body);
+  const pastes = pastedTexts(input.body);
+  const body = replacePastedTexts(input.body, () => "\n\n").trim();
   return (
     <>
       <p>{body.replace(/^@(codex|claude)\s+/i, "")}</p>
@@ -191,6 +197,35 @@ function QueuedBody({ input }: { input: ProjectChatSend }) {
         <small>{input.images.length} screenshot(s)</small>
       )}
       {!!pastes.length && <small>{pastes.length} pasted text(s)</small>}
+    </>
+  );
+}
+/** A sent message's text, with each paste shown as a pill where it went. */
+function UserText({ text }: { text: string }) {
+  const parts = useMemo(() => {
+    const parts: (string | PastedText)[] = [];
+    let last = 0;
+    for (const m of text.matchAll(pasteBlock)) {
+      parts.push(text.slice(last, m.index));
+      parts.push({ n: Number(m[1]), text: m[3] });
+      last = m.index! + m[0].length;
+    }
+    parts.push(text.slice(last));
+    return parts;
+  }, [text]);
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === "string" ? (
+          part.trim() ? (
+            <RichText key={i} text={part} />
+          ) : null
+        ) : (
+          <p key={i} className="message-paste">
+            <PastedTextPill paste={part} />
+          </p>
+        ),
+      )}
     </>
   );
 }
@@ -223,10 +258,9 @@ const Message = memo(function Message({
   replyCount?: number;
 }) {
   const parsed = useMemo(() => {
-    if (m.role !== "user" || !m.body)
-      return { refs: [], pastes: [], body: m.body };
+    if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
     const code = parseCodeReferences(m.body);
-    return { refs: code.refs, ...parsePastedTexts(code.body) };
+    return { refs: code.refs, body: code.body };
   }, [m.role, m.body]);
   // A message of only attachments leaves just the agent mention behind.
   const text =
@@ -318,11 +352,15 @@ const Message = memo(function Message({
         />
       )}
       {text?.trim() ? (
-        <RichText
-          text={text}
-          projectRoot={m.role === "assistant" ? projectRoot : undefined}
-          onOpenFile={m.role === "assistant" ? onOpenFile : undefined}
-        />
+        m.role === "user" ? (
+          <UserText text={text} />
+        ) : (
+          <RichText
+            text={text}
+            projectRoot={projectRoot}
+            onOpenFile={onOpenFile}
+          />
+        )
       ) : null}
       {!!m.changes?.length && m.status !== "streaming" && (
         <ChangedFilesCard
@@ -335,13 +373,10 @@ const Message = memo(function Message({
           }
         />
       )}
-      {(!!m.images?.length || !!parsed.pastes.length) && (
+      {!!m.images?.length && (
         <div className="message-images">
           {m.images?.map((image) => (
             <MessageImage key={image.id} chatId={chatId} image={image} />
-          ))}
-          {parsed.pastes.map((paste, i) => (
-            <PastedTextCard key={i} paste={paste} />
           ))}
         </div>
       )}
@@ -754,20 +789,17 @@ export function ProjectChat({
       const restoredCode = parent
         ? { refs: [], body: input.body }
         : parseCodeReferences(input.body);
-      const restoredText = parsePastedTexts(restoredCode.body);
-      const held = loadDraftPastes(key),
-        top = Math.max(0, ...held.map((p) => p.n));
       // Pastes keep their numbers unless the draft already holds some.
-      const pastes = [
-        ...held,
-        ...restoredText.pastes.map((p, i) =>
-          held.length ? { ...p, n: top + i + 1 } : p,
-        ),
-      ];
-      const body = [old.trim(), restoredText.body.trim()]
+      const top = Math.max(0, ...pastedTexts(old).map((p) => p.n));
+      const restoredText = top
+        ? replacePastedTexts(restoredCode.body, ({ text }, i) =>
+            pasteMarkdown({ n: top + i + 1, text }),
+          )
+        : restoredCode.body;
+      const body = [old.trim(), restoredText.trim()]
         .filter(Boolean)
         .join("\n\n");
-      if (pastedTextMessage(pastes, body).length > 32000)
+      if (body.length > 32000)
         throw new Error(
           "Send or shorten the current draft before restoring this message.",
         );
@@ -789,7 +821,6 @@ export function ProjectChat({
         );
       // Persist the complete draft before removing the durable queue entry.
       await saveDraftImages(key, restored);
-      saveDraftPastes(key, pastes);
       onDraft(body, key);
       localStorage.setItem(
         "composer-settings:" + id,

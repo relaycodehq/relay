@@ -41,7 +41,7 @@ function paste(page: Page, text: string) {
   }, text);
 }
 
-test("keeps a long paste as an attachment beside the message and sends it to the agent", async () => {
+test("keeps a long paste as a pill in the message and sends it to the agent", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-paste-")));
   const fixture = await fixtureServer();
   const bin = join(root, "bin"),
@@ -114,15 +114,21 @@ test("keeps a long paste as an attachment beside the message and sends it to the
       name: "Show Pasted text #1, 24 lines",
     });
     await expect(card).toBeVisible();
-    await expect(input).toHaveText("Why does the table crash? inline bit");
+    await expect(input).toContainText("Why does the table crash? inline bit");
+    await expect(input.locator(".paste-pill")).toHaveCount(1);
     await paste(page, "\r\n" + trace.replaceAll("\n", "\r\n") + "\r\n");
     await expect(
       page.getByRole("button", { name: "Show Pasted text #2, 24 lines" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Remove Pasted text #2" }).click();
+    // The pill in the editor and its card both offer removal; use the card.
+    await page
+      .getByLabel("Attachments")
+      .getByRole("button", { name: "Remove Pasted text #2" })
+      .click();
     await page.reload();
     await expect(card).toBeVisible();
-    await expect(input).toHaveText("Why does the table crash? inline bit");
+    await expect(input).toContainText("Why does the table crash? inline bit");
+    await expect(input.locator(".paste-pill")).toHaveCount(1);
     await page
       .locator(".project-composer")
       .screenshot({ path: "test-results/pasted-text-composer.png" });
@@ -151,12 +157,16 @@ test("keeps a long paste as an attachment beside the message and sends it to the
     ).toBeVisible();
     const sent = page.locator(".project-message.user").last();
     await expect(sent).toContainText("Why does the table crash? inline bit");
-    // Only the card's opening lines show; the rest waits behind it.
-    await expect(sent).toContainText("frame 5");
-    await expect(sent).not.toContainText("frame 22");
-    await expect(
-      sent.getByRole("button", { name: "Show Pasted text #1, 24 lines" }),
-    ).toBeVisible();
+    // The paste shows as a pill where it went; its text waits behind it.
+    await expect(sent).not.toContainText("frame 5");
+    const pill = sent.getByRole("button", {
+      name: "Show Pasted text #1, 24 lines",
+    });
+    await expect(pill).toBeVisible();
+    await pill.click();
+    const shown = page.getByRole("dialog", { name: "Pasted text #1" });
+    await expect(shown.locator("pre")).toHaveText(trace);
+    await shown.getByRole("button", { name: "Close dialog" }).click();
     await expect(page.getByLabel("Attachments")).toHaveCount(0);
     await page.screenshot({ path: "test-results/pasted-text-thread.png" });
     const prompts = (await readFile(capture, "utf8"))

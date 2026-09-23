@@ -78,3 +78,31 @@ it("round-trips quotes and line breaks through the editor document", () => {
   // A queued body comes back trimmed; the pill regains its blank line.
   expect(roundTrip("> only a quote", quotes)).toBe("> only a quote\n\n");
 });
+
+it("starts a quote after text on its own line without adding a line break", () => {
+  const inline = schema.nodeFromJSON({
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          { type: "relayQuote", attrs: { text: "first" } },
+          { type: "text", text: "Compare with" },
+          { type: "relayQuote", attrs: { text: "second" } },
+          { type: "text", text: "please" },
+        ],
+      },
+    ],
+  });
+  const draft = "> first\n\nCompare with\n> second\n\nplease";
+  expect(promptText(inline)).toBe(draft);
+  expect(promptContent(draft, {}, ["first", "second"])).toEqual(
+    inline.toJSON(),
+  );
+  // Before the quote is registered it stays hand-typed text on its own line.
+  expect(
+    promptContent(draft, {}, ["first"]).content![0].content!.filter(
+      (n) => n.type === "hardBreak",
+    ),
+  ).toHaveLength(3);
+});

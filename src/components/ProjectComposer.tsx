@@ -20,6 +20,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -64,11 +65,9 @@ import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
 import {
   cleanPaste,
   isLongPaste,
-  pastedTextMessage,
-  type PastedText,
+  pastedTexts,
 } from "../../shared/pasted-texts";
-import { loadDraftPastes, saveDraftPastes } from "../lib/draft-pastes";
-import { PastedTextCard } from "./PastedTextCard";
+import { PastedTextCard, PastedTextDialog } from "./PastedTextCard";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -213,13 +212,9 @@ export function ProjectComposer({
   const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
   const [sketching, setSketching] = useState<string>();
   const sketchHistories = useRef(new Map<string, SketchHistory>());
-  const [pastes, setPastes] = useState<PastedText[]>(() =>
-    loadDraftPastes(draftKey),
-  );
-  function updatePastes(next: PastedText[]) {
-    setPastes(next);
-    saveDraftPastes(draftKey, next);
-  }
+  // Paste pills live in the draft text; their cards mirror them in order.
+  const pastes = useMemo(() => pastedTexts(draft), [draft]);
+  const [viewingPaste, setViewingPaste] = useState<number>();
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(draftKey);
@@ -547,49 +542,22 @@ export function ProjectComposer({
         return next;
       });
   }
-  function attachPaste(text: string) {
-    const next = [
-      ...pastes,
-      { n: Math.max(0, ...pastes.map((p) => p.n)) + 1, text },
-    ];
-    if (pastedTextMessage(next, draft).length > 32000) {
-      setImageError(
-        "That paste is too long. A message holds up to 32,000 characters.",
-      );
-      return;
-    }
-    setImageError(undefined);
-    updatePastes(next);
-  }
-  function inlinePaste(paste: PastedText) {
-    updatePastes(pastes.filter((p) => p.n !== paste.n));
-    onDraft([draft.trimEnd(), paste.text].filter(Boolean).join("\n\n"));
-  }
   async function send(steer = false) {
     if (busy || commands.interceptSend()) return;
     if (
       !selected ||
-      (!draft.trim() && !images.length && !pastes.length && !allowEmpty) ||
+      (!draft.trim() && !images.length && !allowEmpty) ||
       busy ||
       preparing ||
       sending.current ||
       (recipient === "codex" && !supportsEffort(selected, codexModels))
     )
       return;
-    const screenshotsOnly = images.length > 0 && !pastes.length;
-    const body = pastedTextMessage(
-      pastes,
-      mention && !mention.question && screenshotsOnly
+    const body =
+      mention && !mention.question && images.length
         ? `@${mention.provider} Describe the attached screenshot.`
         : draft.trim() ||
-            (screenshotsOnly ? "Describe the attached screenshot." : ""),
-    );
-    if (body.length > 32000) {
-      setImageError(
-        "This message is too long. Shorten it or remove a pasted text.",
-      );
-      return;
-    }
+          (images.length ? "Describe the attached screenshot." : "");
     sending.current = true;
     try {
       let attached: DraftImage[];
@@ -621,7 +589,6 @@ export function ProjectComposer({
             }
           : {}),
       });
-      if (sent && pastes.length) updatePastes([]);
       if (sent && images.length) {
         try {
           await saveDraftImages(draftKey, []);
@@ -718,14 +685,12 @@ export function ProjectComposer({
                 </button>
               </div>
             ))}
-            {pastes.map((paste) => (
+            {pastes.map((paste, index) => (
               <PastedTextCard
-                key={paste.n}
+                key={index}
                 paste={paste}
-                onRemove={() =>
-                  updatePastes(pastes.filter((p) => p.n !== paste.n))
-                }
-                onInline={() => inlinePaste(paste)}
+                onRemove={() => promptInput.current?.removePaste(index)}
+                onInline={() => promptInput.current?.inlinePaste(index)}
               />
             ))}
           </div>
@@ -751,6 +716,7 @@ export function ProjectComposer({
           value={draft}
           onChange={onDraft}
           onCursor={commands.setCursor}
+          onOpenPaste={setViewingPaste}
           placeholder={
             recipient === "message"
               ? "Leave a note or message your colleague…"
@@ -776,12 +742,17 @@ export function ProjectComposer({
               void addImages(files);
               return;
             }
-            // Long pastes ride along as attachments instead of flooding the draft.
+            // A long paste becomes a pill at the caret instead of flooding the draft.
             const text = cleanPaste(event.clipboardData.getData("text/plain"));
-            if (!isLongPaste(text)) return;
+            if (!isLongPaste(text) || pastedTexts(text).length) return;
             event.preventDefault();
             event.stopPropagation();
-            attachPaste(text);
+            if (promptInput.current?.insertPaste(text))
+              setImageError(undefined);
+            else
+              setImageError(
+                "That paste is too long. A message holds up to 32,000 characters.",
+              );
           }}
           onDrop={(event) => {
             const files = Array.from(event.dataTransfer.files);
@@ -957,10 +928,7 @@ export function ProjectComposer({
               </svg>
             </button>
           )}
-          {(!running ||
-            !!draft.trim() ||
-            !!images.length ||
-            !!pastes.length) && (
+          {(!running || !!draft.trim() || !!images.length) && (
             <button
               className="primary send-message"
               aria-label="Send message"
@@ -973,7 +941,6 @@ export function ProjectComposer({
                 busy ||
                 (!draft.trim() &&
                   !images.length &&
-                  !pastes.length &&
                   !allowEmpty) ||
                 preparing ||
                 !selected ||
@@ -1001,6 +968,13 @@ export function ProjectComposer({
             onClose={(history, size) => finishSketch(image.id, history, size)}
           />
         ))}
+      {viewingPaste !== undefined && pastes[viewingPaste] && (
+        <PastedTextDialog
+          paste={pastes[viewingPaste]}
+          onClose={() => setViewingPaste(undefined)}
+          onInline={() => promptInput.current?.inlinePaste(viewingPaste)}
+        />
+      )}
     </div>
   );
 }

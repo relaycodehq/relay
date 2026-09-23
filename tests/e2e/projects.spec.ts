@@ -497,6 +497,33 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .toContain(
         "> The cache guard prevents duplicate requests.\n\nWhy is it needed?",
       );
+    // A later quote lands at the caret, after what was typed.
+    await page
+      .getByText("The cache guard prevents duplicate requests.", {
+        exact: true,
+      })
+      .evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+    await quoteOffer.click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Object.entries(localStorage)
+            .filter(([key]) => key.startsWith("chat-draft:"))
+            .map(([, value]) => value),
+        ),
+      )
+      .toContain(
+        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?\n> The cache guard prevents duplicate requests.\n\n",
+      );
+    const laterPill = composerInput.locator(".composer-quote-chip").last();
+    await laterPill.hover();
+    await laterPill.locator(".composer-quote-remove").click();
     const quotePill = composerInput.locator(".composer-quote-chip");
     await expect(quotePill).toHaveText(
       '"The cache guard prevents duplicate requ…"',

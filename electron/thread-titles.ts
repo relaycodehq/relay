@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelChoice } from "../shared/settings";
-import { parsePastedTexts } from "../shared/pasted-texts";
+import { pastedTexts, replacePastedTexts } from "../shared/pasted-texts";
 import { runCodex } from "./rooms/codex";
 import { runClaude } from "./rooms/claude";
 
@@ -10,7 +10,8 @@ import { runClaude } from "./rooms/claude";
 // when the provider never supplies it. Keep the title task independent of the
 // answer session so its JSON cannot appear in the user's conversation.
 export function promptTitle(body: string): string {
-  const { body: text, pastes } = parsePastedTexts(body);
+  const pastes = pastedTexts(body);
+  const text = replacePastedTexts(body, () => "\n\n");
   // A message that is only a paste is named after the paste's first line.
   return (
     text.replace(/^@(codex|claude)\s*/i, "").trim() ||

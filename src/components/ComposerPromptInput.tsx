@@ -3,7 +3,7 @@ import { Extension, Node, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
-import { Slice, type Node as PMNode } from "@tiptap/pm/model";
+import { Slice, type Fragment, type Node as PMNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin } from "@tiptap/pm/state";
 import {
@@ -21,6 +21,12 @@ import {
   quoteMarkdown,
   unquote,
 } from "../lib/composer-quotes";
+import {
+  pasteBlock,
+  pastedLines,
+  pasteMarkdown,
+  type PastedText,
+} from "../../shared/pasted-texts";
 export interface SkillPick {
   token: string;
   label: string;
@@ -31,8 +37,14 @@ export interface PromptInputHandle {
   insertSkill: (skill: SkillPick) => void;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
   insertText: (range: { start: number; end: number; text: string }) => void;
-  /** Adds a quoted passage as a pill ahead of anything already typed. */
+  /** Puts a quoted passage at the caret as a pill. */
   insertQuote: (text: string) => void;
+  /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
+  insertPaste: (text: string) => boolean;
+  /** Drops the nth paste pill. */
+  removePaste: (index: number) => void;
+  /** Swaps the nth paste pill for its text. */
+  inlinePaste: (index: number) => void;
 }
 const Skill = Node.create({
   name: "relaySkill",
@@ -104,16 +116,80 @@ export const Quote = Node.create({
     return quoteMarkdown(node.attrs.text);
   },
 });
+// A long paste, kept where it was pasted; sent as its fenced text.
+const Paste = Node.create({
+  name: "relayPaste",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { n: { default: 1 }, text: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-relay-paste]" }];
+  },
+  renderHTML({ node }) {
+    const lines = pastedLines(node.attrs.text);
+    return [
+      "span",
+      {
+        "data-relay-paste": "",
+        class: "paste-pill",
+        title: "Show pasted text",
+        contenteditable: "false",
+      },
+      [
+        "span",
+        {
+          class: "composer-quote-remove",
+          role: "button",
+          "aria-label": `Remove Pasted text #${node.attrs.n}`,
+        },
+      ],
+      ["span", { class: "paste-pill-icon", "aria-hidden": "true" }],
+      ["span", {}, `Pasted text #${node.attrs.n}`],
+      [
+        "span",
+        { class: "paste-pill-lines" },
+        `${lines} ${lines === 1 ? "line" : "lines"}`,
+      ],
+    ];
+  },
+  renderText({ node }) {
+    return pasteMarkdown(node.attrs as PastedText);
+  },
+});
 const leaf = (node: PMNode) =>
   node.type.name === "relaySkill"
     ? node.attrs.token
     : node.type.name === "relayQuote"
       ? quoteMarkdown(node.attrs.text)
-      : node.type.name === "hardBreak"
-        ? "\n"
-        : "";
+      : node.type.name === "relayPaste"
+        ? pasteMarkdown(node.attrs as PastedText)
+        : node.type.name === "hardBreak"
+          ? "\n"
+          : "";
+// A quote is a Markdown blockquote, so one that follows text on the same line
+// starts a line of its own; promptContent drops that break again.
+function serialize(content: Fragment, end = content.size) {
+  let out = "",
+    first = true;
+  content.nodesBetween(0, end, (node, pos) => {
+    if (node.isTextblock) {
+      if (!first) out += "\n";
+      first = false;
+    } else if (node.isText) out += node.text!.slice(0, end - pos);
+    else if (node.isLeaf) {
+      if (node.type.name === "relayQuote" && out && !out.endsWith("\n"))
+        out += "\n";
+      out += leaf(node);
+    }
+  });
+  return out;
+}
 export const promptText = (doc: PMNode, end = doc.content.size) =>
-  doc.textBetween(0, end, "\n", leaf);
+  serialize(doc.content, end);
 const text = promptText;
 function position(doc: PMNode, offset: number) {
   let result = 1,
@@ -134,7 +210,7 @@ function position(doc: PMNode, offset: number) {
 /**
  * Rebuilds the editor document from the draft text. Skill tokens and
  * blockquotes only become pills when this draft registered them, so text the
- * user typed by hand stays text.
+ * user typed by hand stays text. Fenced pastes always do; nobody types those.
  */
 export function promptContent(
   value: string,
@@ -163,16 +239,41 @@ export function promptContent(
     if (last < chunk.length)
       nodes.push({ type: "text", text: chunk.slice(last) });
   };
+  const quoted = (chunk: string) => {
+    let last = 0;
+    for (const m of chunk.matchAll(quoteBlock)) {
+      const quote = unquote(m[0]);
+      if (!quotes.includes(quote)) continue;
+      // The break promptText puts before a quote that follows text.
+      const joined = m.index! > 1 && chunk[m.index! - 2] !== "\n";
+      plain(chunk.slice(last, m.index! - (joined ? 1 : 0)));
+      nodes.push({ type: "relayQuote", attrs: { text: quote } });
+      last = m.index! + m[0].length;
+    }
+    plain(chunk.slice(last));
+  };
   let last = 0;
-  for (const m of value.matchAll(quoteBlock)) {
-    const quote = unquote(m[0]);
-    if (!quotes.includes(quote)) continue;
-    plain(value.slice(last, m.index));
-    nodes.push({ type: "relayQuote", attrs: { text: quote } });
+  for (const m of value.matchAll(pasteBlock)) {
+    quoted(value.slice(last, m.index));
+    nodes.push({
+      type: "relayPaste",
+      attrs: { n: Number(m[1]), text: m[3] },
+    });
     last = m.index! + m[0].length;
   }
-  plain(value.slice(last));
+  quoted(value.slice(last));
   return { type: "doc", content: [{ type: "paragraph", content: nodes }] };
+}
+/** The nth paste pill and where it sits. */
+function pasteAt(doc: PMNode, index: number) {
+  let found: { node: PMNode; pos: number } | undefined,
+    seen = 0;
+  doc.descendants((node, pos) => {
+    if (found) return false;
+    if (node.type.name === "relayPaste" && seen++ === index)
+      found = { node, pos };
+  });
+  return found;
 }
 const content = promptContent;
 /** The full passage shown while a quote pill is hovered. */
@@ -194,6 +295,7 @@ export function ComposerPromptInput({
   value,
   onChange,
   onCursor,
+  onOpenPaste,
   placeholder,
   inputRef,
   handleRef,
@@ -208,13 +310,15 @@ export function ComposerPromptInput({
   value: string;
   onChange: (v: string) => void;
   onCursor: (pos: number) => void;
+  /** Opens the nth paste pill's text. */
+  onOpenPaste?: (index: number) => void;
   placeholder: string;
   inputRef: RefObject<HTMLElement | null>;
   handleRef: Ref<PromptInputHandle>;
   draftKey: string;
 } & Omit<HTMLAttributes<HTMLDivElement>, "onChange">) {
-  const callbacks = useRef({ onChange, onCursor });
-  callbacks.current = { onChange, onCursor };
+  const callbacks = useRef({ onChange, onCursor, onOpenPaste });
+  callbacks.current = { onChange, onCursor, onOpenPaste };
   const [tip, setTip] = useState<QuoteTip | null>(null);
   const labels = useRef<Record<string, string>>(
     stored(
@@ -264,6 +368,7 @@ export function ComposerPromptInput({
       }),
       Skill,
       Quote,
+      Paste,
     ],
     content: content(value, labels.current, quotes.current),
     editorProps: {
@@ -288,12 +393,25 @@ export function ComposerPromptInput({
         );
         return true;
       },
-      clipboardTextSerializer: (slice) =>
-        slice.content.textBetween(0, slice.content.size, "\n", leaf),
-      // The × inside a quote pill removes it; the pill itself stays an atom.
+      clipboardTextSerializer: (slice) => serialize(slice.content),
+      // The × inside a quote or paste pill removes it; the pill itself stays an atom.
       handleClickOn(view, _pos, node, nodePos, event) {
         if (
-          node.type.name !== "relayQuote" ||
+          node.type.name === "relayPaste" &&
+          !(
+            event.target instanceof Element &&
+            event.target.closest(".composer-quote-remove")
+          )
+        ) {
+          let index = 0;
+          view.state.doc.descendants((other, pos) => {
+            if (other.type.name === "relayPaste" && pos < nodePos) index++;
+          });
+          callbacks.current.onOpenPaste?.(index);
+          return true;
+        }
+        if (
+          !["relayQuote", "relayPaste"].includes(node.type.name) ||
           !(event.target instanceof Element) ||
           !event.target.closest(".composer-quote-remove")
         )
@@ -446,24 +564,64 @@ export function ComposerPromptInput({
           "quote-chips:" + draftKey,
           JSON.stringify(quotes.current),
         );
-        // Quotes stack at the start of the message, ahead of anything typed.
-        let pos = 1;
-        const first = editor.state.doc.firstChild;
-        if (first)
-          for (let i = 0; i < first.childCount; i++) {
-            const child = first.child(i);
-            if (child.type.name !== "relayQuote") break;
-            pos += child.nodeSize;
-          }
-        const empty = !text(editor.state.doc);
+        // After any selection rather than over it: the quote came from the thread.
         editor.view.dispatch(closeHistory(editor.state.tr));
         editor
           .chain()
           .focus()
-          .insertContentAt(pos, { type: "relayQuote", attrs: { text: quote } })
+          .insertContentAt(editor.state.selection.to, {
+            type: "relayQuote",
+            attrs: { text: quote },
+          })
           .run();
-        if (!empty) editor.commands.focus("end");
         editor.view.dispatch(closeHistory(editor.state.tr));
+      },
+      insertPaste(pasted) {
+        if (!editor) return false;
+        let n = 0;
+        editor.state.doc.descendants((node) => {
+          if (node.type.name === "relayPaste") n = Math.max(n, node.attrs.n);
+        });
+        const before = editor.state.doc;
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: "relayPaste", attrs: { n: n + 1, text: pasted } })
+          .run();
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        // The length limit rejects the transaction rather than truncating it.
+        return editor.state.doc !== before;
+      },
+      removePaste(index) {
+        const found = editor && pasteAt(editor.state.doc, index);
+        if (!found) return;
+        editor.view.dispatch(
+          closeHistory(
+            editor.state.tr.delete(found.pos, found.pos + found.node.nodeSize),
+          ),
+        );
+      },
+      inlinePaste(index) {
+        const found = editor && pasteAt(editor.state.doc, index);
+        if (!found) return;
+        const { schema } = editor.state;
+        const nodes = String(found.node.attrs.text)
+          .split("\n")
+          .flatMap((line, i) => [
+            ...(i ? [schema.nodes.hardBreak.create()] : []),
+            ...(line ? [schema.text(line)] : []),
+          ]);
+        editor.view.dispatch(
+          closeHistory(
+            editor.state.tr.replaceWith(
+              found.pos,
+              found.pos + found.node.nodeSize,
+              nodes,
+            ),
+          ),
+        );
+        editor.commands.focus();
       },
     }),
     [editor, draftKey],
