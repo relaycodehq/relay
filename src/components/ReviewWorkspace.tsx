@@ -239,10 +239,10 @@ export function ReviewWorkspace({
     line: number,
     side: Side,
     body: string,
-    id?: string,
+    id: string,
   ) => {
     const draft: Draft = {
-      id: id ?? crypto.randomUUID(),
+      id,
       path,
       line,
       side,
@@ -254,7 +254,6 @@ export function ReviewWorkspace({
       ...p,
       drafts: [...p.drafts.filter((d) => d.id !== draft.id), draft],
     }));
-    return draft.id;
   };
   const removeDraft = (id: string) =>
     update((p) => ({ ...p, drafts: p.drafts.filter((d) => d.id !== id) }));

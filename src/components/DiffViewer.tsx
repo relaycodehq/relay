@@ -58,8 +58,8 @@ interface Props {
     line: number,
     side: Side,
     body: string,
-    id?: string,
-  ) => string;
+    id: string,
+  ) => void;
   removeDraft: (id: string) => void;
   onReply: (id: number, body: string) => Promise<void>;
   onResolve: (id: number, resolved: boolean) => Promise<void>;
@@ -274,12 +274,12 @@ export function DiffViewer({
     [diff, annotations, file.filename],
   );
   const beginComment = (range: SelectedLineRange | null) => {
-    if (range) {
-      const line = range.end,
-        side = range.endSide ?? range.side ?? "additions";
-      const id = addDraft(file.filename, line, side, "");
-      setComposer({ id, line, side });
-    }
+    if (range)
+      setComposer({
+        id: crypto.randomUUID(),
+        line: range.end,
+        side: range.endSide ?? range.side ?? "additions",
+      });
   };
   if (contents.error)
     return (
@@ -573,7 +573,10 @@ export function DiffViewer({
                   progress.drafts.find((d) => d.id === composer?.id)?.body ?? ""
                 }
                 onChange={(body) => {
-                  if (composer)
+                  if (!composer) return;
+                  // A draft exists only while it has text, so a box left
+                  // open when the reader moves on leaves nothing behind.
+                  if (body)
                     addDraft(
                       file.filename,
                       composer.line,
@@ -581,6 +584,7 @@ export function DiffViewer({
                       body,
                       composer.id,
                     );
+                  else removeDraft(composer.id);
                 }}
                 onSave={() => {
                   setComposer(null);
