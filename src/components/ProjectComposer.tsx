@@ -62,6 +62,7 @@ import {
 } from "../lib/draft-images";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
+import { CopyImageMenu } from "./CopyImageMenu";
 import {
   cleanPaste,
   isLongPaste,
@@ -689,7 +690,11 @@ export function ProjectComposer({
         {(images.length > 0 || pastes.length > 0) && (
           <div className="composer-images" aria-label="Attachments">
             {images.map((image) => (
-              <div className="composer-image" key={image.id}>
+              <CopyImageMenu
+                className="composer-image"
+                key={image.id}
+                source={async () => (await flattenSketch(image)).dataUrl}
+              >
                 <button
                   type="button"
                   className="composer-image-open"
@@ -709,7 +714,7 @@ export function ProjectComposer({
                 >
                   <X size={13} />
                 </button>
-              </div>
+              </CopyImageMenu>
             ))}
             {pastes.map((paste, index) => (
               <PastedTextCard

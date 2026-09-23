@@ -54,6 +54,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  ClipboardItem,
   dialog,
   ipcMain,
   Menu,
@@ -1300,6 +1301,19 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "writeClipboard":
       await clipboard.writeText(z.string().max(32768).parse(args[0]));
       return;
+    case "writeClipboardImage": {
+      const image = nativeImage.createFromDataURL(
+        z
+          .string()
+          .max(64 * 1024 * 1024)
+          .startsWith("data:image/")
+          .parse(args[0]),
+      );
+      if (image.isEmpty()) throw new Error("Couldn't read that image.");
+      const png = new Blob([new Uint8Array(image.toPNG())]);
+      await clipboard.write([new ClipboardItem({ "image/png": png })]);
+      return;
+    }
     case "readClipboard":
       return clipboard.readText();
     case "readLocalFile":

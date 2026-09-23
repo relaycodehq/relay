@@ -296,6 +296,7 @@ export interface Api
   ): Promise<{ version: string }>;
   readClipboard(): Promise<string>;
   writeClipboard(text: string): Promise<void>;
+  writeClipboardImage(dataUrl: string): Promise<void>;
   launchCodex(
     ref: PullRef,
     head: string,

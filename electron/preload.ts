@@ -121,6 +121,7 @@ const methods = [
   "saveLocalFile",
   "readClipboard",
   "writeClipboard",
+  "writeClipboardImage",
   "launchCodex",
   "askCodex",
   "aiSettings",

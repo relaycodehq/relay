@@ -27,6 +27,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { wakeLabel } from "../../shared/chat-activity";
+import { CopyImageMenu } from "./CopyImageMenu";
 import {
   applyChatPatch,
   replyRoot,
@@ -109,32 +110,41 @@ function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
     };
   }, [chatId, image.id]);
   return (
-    <div ref={container} className="message-image">
-      {source ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          aria-label={`Open ${image.name}`}
-        >
-          <img src={source} alt={image.name} loading="lazy" />
-        </button>
-      ) : (
-        <span>{error ? "Screenshot unavailable" : "Loading screenshot…"}</span>
-      )}
+    <>
+      <div ref={container} className="message-image">
+        {source ? (
+          <CopyImageMenu source={source}>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              aria-label={`Open ${image.name}`}
+            >
+              <img src={source} alt={image.name} loading="lazy" />
+            </button>
+          </CopyImageMenu>
+        ) : (
+          <span>
+            {error ? "Screenshot unavailable" : "Loading screenshot…"}
+          </span>
+        )}
+      </div>
+      {/* Outside .message-image so the thumbnail's button and img rules don't reach the dialog. */}
       {expanded && source && (
         <Modal
           title={image.name}
           onClose={() => setExpanded(false)}
           className="screenshot-dialog"
         >
-          <img
-            className="message-image-expanded"
-            src={source}
-            alt={image.name}
-          />
+          <CopyImageMenu source={source} inDialog>
+            <img
+              className="message-image-expanded"
+              src={source}
+              alt={image.name}
+            />
+          </CopyImageMenu>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 /** One-line divider where another agent took over, with the outgoing agent's note behind it. */
