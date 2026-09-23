@@ -89,6 +89,27 @@ describe("room authorization and durable conversation", () => {
       db.post(alice, room.id, { ...input(), parentId: randomUUID() }),
     ).toThrow("not found");
   });
+  it("keeps a reply's parent in the agent's context when the parent pins a long code excerpt", () => {
+    const { db, alice, room } = setup();
+    const parent = db.post(alice, room.id, {
+      ...input("Look at this loop"),
+      context: {
+        ...input().context,
+        path: "src/cache.ts",
+        side: "additions",
+        start: 1,
+        end: 150,
+        excerpt: "x".repeat(50_000),
+      },
+    });
+    const reply = db.post(alice, room.id, {
+      ...input("@codex Why does it run twice?"),
+      parentId: parent.id,
+    });
+    const topic = db.topic(alice, room.id, reply.parentId);
+    expect(topic.map((m) => m.body)).toEqual(["Look at this loop"]);
+    expect(topic[0].context.path).toBe("src/cache.ts");
+  });
   it("pages durable history and sends revised answer snapshots after a cursor", () => {
     const { db, alice, room } = setup();
     for (let i = 0; i < 60; i++) db.post(alice, room.id, input(`Message ${i}`));

@@ -452,7 +452,10 @@ export class RoomsDatabase {
     const out: RoomMessage[] = [];
     let budget = 48000;
     while (parentId && out.length < 16) {
-      const m = this.get(s, roomId, parentId);
+      let m = this.get(s, roomId, parentId);
+      // A long code excerpt can go; the agent can read the pinned lines itself.
+      if (JSON.stringify(m).length > budget)
+        m = { ...m, context: { ...m.context, excerpt: undefined } };
       const size = JSON.stringify(m).length;
       if (size > budget) break;
       budget -= size;
