@@ -277,6 +277,17 @@ function Elapsed({ since }: { since: number }) {
   return <span className="sb-elapsed">{text}</span>;
 }
 
+/**
+ * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
+ * or in a menu they open, bubble up here and are left to them.
+ */
+const rowKeys = (open: () => void) => (e: React.KeyboardEvent) => {
+  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " "))
+    return;
+  e.preventDefault();
+  open();
+};
+
 interface ComposerDraft {
   key: string;
   text: string;
@@ -1171,12 +1182,7 @@ export function ProjectSidebar({
           .filter(Boolean)
           .join(" ")}
         onClick={() => open(c)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            open(c);
-          }
-        }}
+        onKeyDown={rowKeys(() => open(c))}
       >
         <div className="sb-card-top">
           <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
@@ -1245,12 +1251,7 @@ export function ProjectSidebar({
         className="sb-card draft"
         title={chat ? `Draft in ${chat.title}` : `New thread in ${p.name}`}
         onClick={resume}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            resume();
-          }
-        }}
+        onKeyDown={rowKeys(resume)}
       >
         <div className="sb-card-top">
           <SquarePen size={14} className="sb-draft-icon" aria-label="Draft" />
@@ -1271,9 +1272,7 @@ export function ProjectSidebar({
         tabIndex={0}
         className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
         onClick={() => open(c)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") open(c);
-        }}
+        onKeyDown={rowKeys(() => open(c))}
       >
         <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
         <span className="sb-compact-title">{c.title}</span>
