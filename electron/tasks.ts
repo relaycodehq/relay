@@ -6,6 +6,7 @@ import {
   describeTask,
   shellCommand,
   taskNote,
+  lastingTask,
   tidyCommand,
   type ProjectTask,
 } from "../shared/tasks";
@@ -87,7 +88,8 @@ export class ProjectTasks {
     string,
     { chatId: string; key: string; at: number }[]
   >();
-  private notes = new Map<string, string>();
+  /** What each agent session last heard about running processes. */
+  private notes = new Map<string, ProjectTask[]>();
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
   private roots = new Set<string>();
   private scanning?: Promise<Proc[]>;
@@ -208,17 +210,18 @@ export class ProjectTasks {
     return { task, exited };
   }
 
-  /** A note for this session's next turn, only when the running set changed since it last heard. */
+  /** A note for this session's next turn: the full list the first time, then only changes. */
   async note(root: string, session: string, chatId: string) {
-    const tasks = await this.list(root).catch(() => []);
-    const note = taskNote(tasks, chatId);
-    const previous = this.notes.get(session);
-    const key = tasks.map((t) => `${t.id}:${t.ports.join(",")}`).join("|");
-    if (key === (previous ?? "")) return;
-    this.notes.set(session, key);
-    if (note) return note;
-    if (previous)
-      return "Relay environment note (from the app, not the user): the background processes mentioned earlier have all stopped.";
+    const tasks = await this.list(root).catch(() => null);
+    if (!tasks) return;
+    const lasting = tasks.filter(lastingTask);
+    const heard = this.notes.get(session);
+    this.notes.set(session, lasting);
+    return taskNote(lasting, chatId, heard);
+  }
+  /** A new agent session knows nothing yet: it hears the whole list again. */
+  forgetNote(session: string) {
+    this.notes.delete(session);
   }
 
   private watch(root: string) {

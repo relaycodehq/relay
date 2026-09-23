@@ -4,6 +4,7 @@ import {
   describeTask,
   shellCommand,
   taskNote,
+  lastingTask,
   tidyCommand,
   type ProjectTask,
 } from "../../shared/tasks";
@@ -78,7 +79,7 @@ it("matches an agent's command to the process running it", () => {
   expect(commandKey("cd app && npm run dev 2>&1 &")).toBe("npm run dev");
 });
 
-it("writes a private note that tells the agent who started what", () => {
+it("tells a session what's running once, then only what changed", () => {
   const task = (patch: Partial<ProjectTask>): ProjectTask => ({
     id: "1",
     command: "npm run dev",
@@ -91,19 +92,38 @@ it("writes a private note that tells the agent who started what", () => {
     ...patch,
   });
   expect(taskNote([], "a")).toBeUndefined();
-  const note = taskNote(
-    [
-      task({ chatId: "a" }),
-      task({ id: "2", chatId: "b", command: "vitest", ports: [] }),
-      task({ id: "3", origin: "external", agent: "codex" }),
-    ],
-    "a",
-    12 * 60000,
-  )!;
+  const dev = task({ chatId: "a" });
+  const external = task({ id: "3", origin: "external", ports: [9333] });
+  const note = taskNote([dev, external], "a")!;
   expect(note).toContain(
-    '"npm run dev" (Dev server, listening on :5173; running 12m; started earlier in this conversation)',
+    '- Dev server on :5173 (started in this conversation): "npm run dev"',
   );
-  expect(note).toContain("started by another Relay conversation");
-  expect(note).toContain("started by a codex CLI session outside Relay");
-  expect(note).toContain("don't mention it unless");
+  expect(note).toContain('- Dev server on :9333: "npm run dev"');
+  expect(note).not.toMatch(/running \d|CLI session/);
+  // Nothing changed: nothing to say.
+  expect(taskNote([dev, external], "a", [dev, external])).toBeUndefined();
+  const watcher = task({ id: "4", kind: "watch", title: "Watcher", ports: [] });
+  const update = taskNote([dev, watcher], "a", [dev, external])!;
+  expect(update).toContain('Now running:\n- Watcher: "npm run dev"');
+  expect(update).toContain('Stopped:\n- Dev server on :9333: "npm run dev"');
+  expect(update).not.toContain(":5173");
+});
+
+it("leaves one-off commands out of the note", () => {
+  const base = {
+    command: "npx vitest run",
+    title: "Vitest",
+    origin: "relay" as const,
+    started: 0,
+    pids: 1,
+  };
+  expect(lastingTask({ ...base, id: "1", kind: "test", ports: [] })).toBe(
+    false,
+  );
+  expect(lastingTask({ ...base, id: "2", kind: "script", ports: [9333] })).toBe(
+    true,
+  );
+  expect(lastingTask({ ...base, id: "3", kind: "watch", ports: [] })).toBe(
+    true,
+  );
 });

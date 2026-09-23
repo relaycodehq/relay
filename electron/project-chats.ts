@@ -1028,16 +1028,28 @@ export class ProjectChats {
       : undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
+    const sessionKey = JSON.stringify([
+      this.dir,
+      chat.id,
+      input.parentId ?? "main",
+    ]);
+    this.providerSessions.add(sessionKey);
+    const provider = message.provider;
+    const sessionId =
+      provider === "claude"
+        ? branch
+          ? branch.claudeThread
+          : chat.claudeThread
+        : branch
+          ? branch.thread
+          : chat.providerThread;
+    // Each agent session hears about running processes on its own.
+    const noteKey = JSON.stringify([sessionKey, provider]);
+    if (!sessionId) projectTasks.forgetNote(noteKey);
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
     try {
-      const sessionKey = JSON.stringify([
-        this.dir,
-        chat.id,
-        input.parentId ?? "main",
-      ]);
-      this.providerSessions.add(sessionKey);
       const options = {
         onControl: (control: { steer: (text: string) => Promise<void> }) => {
           const active = this.active.get(chat.id);
@@ -1053,7 +1065,7 @@ export class ProjectChats {
         },
         cwd: root,
         prompt,
-        context: () => projectTasks.note(root, sessionKey, chat.id),
+        context: () => projectTasks.note(root, noteKey, chat.id),
         choice: input.choice,
         signal: abort.signal,
         onText,
@@ -1114,14 +1126,7 @@ export class ProjectChats {
         onRequest: this.active.get(chat.id)?.requests.ask,
         session: {
           key: sessionKey,
-          id:
-            message.provider === "claude"
-              ? branch
-                ? branch.claudeThread
-                : chat.claudeThread
-              : branch
-                ? branch.thread
-                : chat.providerThread,
+          id: sessionId,
           onId: async (id: string) => {
             if (message.provider === "claude") {
               if (branch) branch.claudeThread = id;
