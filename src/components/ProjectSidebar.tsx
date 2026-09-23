@@ -58,6 +58,9 @@ import "./sidebar.css";
 
 const THREADS_PER_PROJECT = 5;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
+/** Only the latest settled threads stay in Activity; Projects lists them all. */
+const SETTLED_SHELF_SIZE = 15;
+const SHELF_PAGE = 5;
 const PROJECT_DRAG = "application/x-relay-project";
 
 type DropTarget =
@@ -427,6 +430,10 @@ export function ProjectSidebar({
   useEffect(() => writeJson("relay-project-expansion", expanded), [expanded]);
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [shelves, setShelves] = useState({ snoozed: false, settled: false });
+  const [shelfShown, setShelfShown] = useState({
+    snoozed: SHELF_PAGE,
+    settled: SHELF_PAGE,
+  });
   const groups = useQuery({
     queryKey: ["project-groups"],
     queryFn: () => api.projectGroups(),
@@ -632,6 +639,7 @@ export function ProjectSidebar({
     settled: [] as ChatSummary[],
   };
   for (const c of all) sections[chatActivitySection(c, now)].push(c);
+  sections.settled = sections.settled.slice(0, SETTLED_SHELF_SIZE);
   const attention = sections.active.filter(
     (c) => c.waiting || unread(c),
   ).length;
@@ -1304,7 +1312,10 @@ export function ProjectSidebar({
         <button
           className="sb-shelf-toggle"
           aria-expanded={shelves[kind]}
-          onClick={() => setShelves((s) => ({ ...s, [kind]: !s[kind] }))}
+          onClick={() => {
+            setShelves((s) => ({ ...s, [kind]: !s[kind] }));
+            setShelfShown((s) => ({ ...s, [kind]: SHELF_PAGE }));
+          }}
         >
           <span>
             {label} <b>{items.length}</b>
@@ -1314,7 +1325,20 @@ export function ProjectSidebar({
         </button>
         {shelves[kind] && (
           <div className="sb-shelf-list">
-            {items.map((c) => compactRow(c, kind))}
+            {items.slice(0, shelfShown[kind]).map((c) => compactRow(c, kind))}
+            {items.length > shelfShown[kind] && (
+              <button
+                className="sb-thread sb-ghost"
+                onClick={() =>
+                  setShelfShown((s) => ({ ...s, [kind]: s[kind] + SHELF_PAGE }))
+                }
+              >
+                <span className="sb-thread-title">
+                  Show {Math.min(SHELF_PAGE, items.length - shelfShown[kind])}{" "}
+                  more
+                </span>
+              </button>
+            )}
           </div>
         )}
       </section>
