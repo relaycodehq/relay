@@ -608,17 +608,22 @@ export class RoomService {
           value.error =
             "The app closed before the answer finished. Partial output was recovered; ask again to retry.";
         }
-        await this.request(
-          connection.server,
-          `/v1/rooms/${value.roomId}/messages/${id}`,
-          connection.token,
-          "PATCH",
-          {
-            body: value.status === "running" ? "" : value.body,
-            status: value.status,
-            error: value.error,
-          },
-        );
+        try {
+          await this.request(
+            connection.server,
+            `/v1/rooms/${value.roomId}/messages/${id}`,
+            connection.token,
+            "PATCH",
+            {
+              body: value.status === "running" ? "" : value.body,
+              status: value.status,
+              error: value.error,
+            },
+          );
+        } catch {
+          // Kept for the next flush; one refused answer must not hold back the rest.
+          continue;
+        }
         if (value.status === "running") continue;
         await this.store.update((s) => {
           if (

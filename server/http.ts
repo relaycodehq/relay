@@ -337,7 +337,8 @@ export function createRoomsServer(
             else if (m[2] === "messages" && m[3] && method === "GET")
               value = database.get(session, roomId, idSchema.parse(m[3]));
             else if (m[2] === "messages" && m[3] && method === "PATCH") {
-              const input = updateSchema.parse(await body(req));
+              // An answer's 100,000 characters can take 600 kB as JSON.
+              const input = updateSchema.parse(await body(req, 1024 * 1024));
               value = database.update(
                 session,
                 roomId,

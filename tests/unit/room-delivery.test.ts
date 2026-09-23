@@ -202,3 +202,83 @@ it("recovers a final answer from disk after network loss and app restart without
     await rm(root, { recursive: true, force: true });
   }
 });
+it("delivers a long answer in a non-Latin script, and a rejected delivery holds back no later one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "relay-room-long-")),
+    project = { server: "https://gitea.test", owner: "Web", name: "portal" };
+  const store = new Store(join(root, "state"));
+  await store.load();
+  const database = new RoomsDatabase(":memory:"),
+    key = token(),
+    server = createRoomsServer(database, key, roomVerifier);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${(server.address() as any).port}`;
+  const client = {
+    ...roomClient(project),
+    pull: async () => ({
+      head: { sha: "a".repeat(40) },
+      merge_base: "b".repeat(40),
+      html_url: "https://gitea.test/Web/portal/pulls/7",
+      title: "Fixture PR",
+    }),
+  } as unknown as Gitea;
+  const context = {
+    client,
+    ref: { ...project, number: 7 },
+    key: "alice-project",
+    dir: await roomClone(join(root, "repo"), project),
+  };
+  const encode = async (s: string) => Buffer.from(s).toString("base64"),
+    decode = async (s: string) => Buffer.from(s, "base64").toString();
+  const service = new RoomService(store, fetch, encode, decode);
+  const ask = async (answer: string) => {
+    vi.mocked(runCodex).mockResolvedValueOnce(answer);
+    await service.send(
+      context,
+      sendRoomSchema.parse({
+        id: randomUUID(),
+        body: "@codex Explain the fixture",
+        parentId: null,
+        context: { head: "a".repeat(40), base: "b".repeat(40) },
+        choice: defaultAISettings.questions,
+      }),
+    );
+    await vi.waitFor(async () => {
+      await service.flush(context);
+      const shared = database.db.prepare("SELECT data FROM messages").all();
+      expect(
+        shared
+          .map((r) => JSON.parse(String(r.data)))
+          .some((m) => m.body === answer && m.status === "completed"),
+      ).toBe(true);
+    }, 10_000);
+  };
+  try {
+    await service.allowAccess(context, url);
+    const { room } = await service.connect(context, {
+      server: url,
+      secret: key,
+    });
+    // A delivery the server refuses: it has no such message.
+    const lost = randomUUID();
+    await store.update((s) => {
+      s.roomDeliveries = {
+        [lost]: {
+          key: context.key,
+          roomId: room!.id,
+          id: lost,
+          body: "Lost",
+          status: "completed",
+          error: null,
+        },
+      };
+    });
+    await ask("Short answer.");
+    // 70,000 characters of Japanese is 210 kB of UTF-8.
+    await ask("答".repeat(70_000));
+  } finally {
+    await service.dispose();
+    await new Promise<void>((r) => server.close(() => r()));
+    database.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
