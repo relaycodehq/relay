@@ -478,6 +478,8 @@ export async function runClaudeProject(
   const commentary = new Set<string>();
   // A tool result only carries the call id; keep the call's label for the finished row.
   const toolCalls = new Map<string, AgentActivity>();
+  // A subagent's latest summary, by its call; reports between them omit it.
+  const summaries = new Map<string, string>();
   // Findings `/code-review` reported to its tool rather than in its answer.
   let reported: string | undefined;
   const publish = (text: string) => {
@@ -916,8 +918,10 @@ export async function runClaudeProject(
         // A running subagent's row says what it is doing now.
         const call = toolCalls.get(message.tool_use_id ?? "");
         if (call?.kind === "agent" && call.status === "running") {
+          const summary = message.summary?.trim();
+          if (summary) summaries.set(call.id, summary);
           const doing =
-            message.summary?.trim() ||
+            summaries.get(call.id) ||
             (message.last_tool_name && `Using ${message.last_tool_name}`);
           const uses = message.usage.tool_uses;
           const progress = [

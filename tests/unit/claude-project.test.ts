@@ -260,13 +260,13 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
       content: [{ type: "tool_result", tool_use_id: id, content: text }],
     },
   });
-  const progress = (summary?: string) => ({
+  const progress = (summary?: string, uses = 1) => ({
     type: "system",
     subtype: "task_progress",
     task_id: "task",
     tool_use_id: "agent",
     description: "Explore auth",
-    usage: { total_tokens: 10, tool_uses: 1, duration_ms: 5 },
+    usage: { total_tokens: 10, tool_uses: uses, duration_ms: 5 },
     last_tool_name: "Read",
     ...(summary ? { summary } : {}),
     session_id,
@@ -277,6 +277,8 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
     call("read", "Read", { file_path: "/project/auth.ts" }, "agent"),
     progress(),
     progress("Reading the auth module"),
+    // Each later call reports again, without the summary.
+    progress(undefined, 2),
     done("read", "export {}", "agent"),
     done("agent", "Auth lives in auth.ts.", null),
     progress("Too late"),
@@ -304,6 +306,7 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
     ["running", undefined],
     ["running", "Using Read · 1 tool"],
     ["running", "Reading the auth module · 1 tool"],
+    ["running", "Reading the auth module · 2 tools"],
     ["complete", undefined],
   ]);
   expect(agent.at(-1)).toMatchObject({ detail: "Auth lives in auth.ts." });
