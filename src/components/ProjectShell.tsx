@@ -102,6 +102,8 @@ export default function ProjectShell() {
     peekTimer.current = window.setTimeout(() => setPeek(false), 250);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
+  const [attention, setAttention] = useState<"waiting" | "unread">();
   const panes = useWorkspacePanes();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
@@ -464,7 +466,21 @@ export default function ProjectShell() {
             onMouseEnter={peekOpen}
             onMouseLeave={peekClose}
           >
-            <RelayMark />
+            <span className="relay-brand-mark">
+              <RelayMark />
+              {projectsHidden && attention && (
+                <span
+                  className={`sb-status ${attention} relay-brand-dot`}
+                  title={
+                    attention === "waiting"
+                      ? "Needs your input"
+                      : "New activity"
+                  }
+                >
+                  <i />
+                </span>
+              )}
+            </span>
             <strong>Relay</strong>
           </button>
         </div>
@@ -587,6 +603,7 @@ export default function ProjectShell() {
               navigate(p);
               setBrowseShared(true);
             }}
+            onAttention={setAttention}
             onSettings={() => setSettings(true)}
             onAccount={() => setSignin(true)}
             onInbox={() => {

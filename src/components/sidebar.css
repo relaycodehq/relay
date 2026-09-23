@@ -1,7 +1,11 @@
 /* Project sidebar: Codex-style thread list plus a T3 Code-style activity
    inbox (settle / snooze) behind the bell. */
-.sb {
+/* The titlebar brand echoes the status dot while the sidebar is hidden. */
+.sb,
+.relay-brand-mark {
   --sb-waiting: #d99a2b;
+}
+.sb {
   --sb-card: color-mix(in srgb, var(--surface) 55%, var(--sidebar));
   --sb-card-border: color-mix(in srgb, var(--border) 70%, transparent);
   display: flex;

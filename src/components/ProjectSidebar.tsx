@@ -40,6 +40,7 @@ import {
   wakeLabel,
 } from "../../shared/chat-activity";
 import { api } from "../lib/api";
+import { useWindowFocused } from "../lib/window-focus";
 import { IconButton, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
 import { ProviderIcon } from "./ComposerModelPicker";
@@ -79,8 +80,13 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
-/** Last time each thread was open here; drives the unread dot. */
+/**
+ * Last time each thread was open here; drives the unread dot. The open thread
+ * only counts as seen while Relay is in front: an answer that lands while
+ * you're in another app stays unread until you come back.
+ */
 function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
+  const focused = useWindowFocused();
   const [since] = useState(() => {
     const saved = Number(localStorage.getItem("relay-thread-seen-since"));
     if (saved > 0) return saved;
@@ -93,15 +99,17 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
   );
   const current = chats.find((c) => c.id === chatId);
   useEffect(() => {
-    if (!current || (seen[current.id] ?? 0) >= current.updated) return;
+    if (!focused || !current || (seen[current.id] ?? 0) >= current.updated)
+      return;
     setSeen((s) => {
       const next = { ...s, [current.id]: current.updated };
       writeJson("relay-thread-seen", next);
       return next;
     });
-  }, [current?.id, current?.updated]);
+  }, [focused, current?.id, current?.updated]);
   return (c: ChatSummary) =>
-    c.id !== chatId && c.updated > Math.max(since, seen[c.id] ?? 0);
+    (c.id !== chatId || (!focused && !c.running)) &&
+    c.updated > Math.max(since, seen[c.id] ?? 0);
 }
 
 function useNow(interval = 30_000) {
@@ -353,6 +361,7 @@ export function ProjectSidebar({
   onSettings,
   onAccount,
   onInbox,
+  onAttention,
 }: {
   projects: Project[];
   projectId?: string;
@@ -367,6 +376,8 @@ export function ProjectSidebar({
   onSettings: () => void;
   onAccount: () => void;
   onInbox: () => void;
+  /** Strongest status mark among active threads, for the collapsed titlebar. */
+  onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
   const qc = useQueryClient();
   const now = useNow();
@@ -597,6 +608,16 @@ export function ProjectSidebar({
   const attention = sections.active.filter(
     (c) => c.waiting || unread(c),
   ).length;
+  const mark = sections.active.some((c) => c.waiting)
+    ? "waiting"
+    : attention > 0
+      ? "unread"
+      : undefined;
+  useEffect(() => onAttention?.(mark), [mark]);
+  useEffect(() => {
+    // A plain browser preview has no desktop bridge.
+    void api?.setBadge?.(attention)?.catch(() => {});
+  }, [attention]);
   const query = search.trim().toLowerCase();
   const matches = (c: ChatSummary) =>
     `${c.title} ${byId.get(c.projectId)?.name ?? ""}`

@@ -307,6 +307,35 @@ app.on("before-quit", (event) => {
     });
 });
 pendingUrl = process.argv.find(isAppUrl) ?? pendingUrl;
+/** Windows has no badge count; a dot on the taskbar button stands in. */
+function badgeDot() {
+  const size = 16,
+    pixels = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2),
+        alpha = Math.max(0, Math.min(1, size / 2 - d)),
+        i = (y * size + x) * 4;
+      // BGRA, premultiplied: #e5484d with an antialiased edge.
+      pixels[i] = Math.round(0x4d * alpha);
+      pixels[i + 1] = Math.round(0x48 * alpha);
+      pixels[i + 2] = Math.round(0xe5 * alpha);
+      pixels[i + 3] = Math.round(0xff * alpha);
+    }
+  return nativeImage.createFromBitmap(pixels, { width: size, height: size });
+}
+
+function setBadge(count: number) {
+  if (process.platform === "win32")
+    win?.setOverlayIcon(
+      count ? badgeDot() : null,
+      count
+        ? `${count} ${count === 1 ? "thread needs" : "threads need"} you`
+        : "",
+    );
+  else app.setBadgeCount(count);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1500,
@@ -378,6 +407,9 @@ function createWindow() {
   win.on("closed", () => {
     blame.dispose();
     projectChecks.stop();
+    // Only the window knows what's unread; a closed one can't clear it later.
+    // (Windows quits with its last window, taking the overlay with it.)
+    app.setBadgeCount(0);
     win = null;
   });
   if (dev && !app.isPackaged) {
@@ -1338,6 +1370,9 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       }
       return;
     }
+    case "setBadge":
+      setBadge(z.number().int().min(0).max(9999).parse(args[0]));
+      return;
     case "updateState":
       return updater.current;
     case "checkForUpdates":

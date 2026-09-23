@@ -29,3 +29,21 @@
 .relay-brand-toggle:hover strong {
   opacity: 0.8;
 }
+
+.relay-brand-mark {
+  position: relative;
+  display: block;
+}
+
+.relay-brand-mark .relay-brand-dot {
+  position: absolute;
+  top: 1px;
+  right: -3px;
+  width: auto;
+  height: auto;
+  animation: sb-pop 0.25s ease-out;
+}
+
+.relay-brand-dot i {
+  box-shadow: 0 0 0 2px var(--surface);
+}

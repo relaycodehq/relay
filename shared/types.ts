@@ -316,6 +316,8 @@ export interface Api
     background: string;
     icon: string;
   }): Promise<void>;
+  /** Threads needing attention, shown on the app icon; 0 clears it. */
+  setBadge(count: number): Promise<void>;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
 }

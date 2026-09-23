@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 /**
  * Marks the root `data-inactive` while the window is unfocused, so looping
  * animations can hold still (see styles.css). Chromium already stops painting
@@ -11,4 +13,18 @@ export function initWindowFocus() {
   window.addEventListener("focus", sync);
   window.addEventListener("blur", sync);
   sync();
+}
+
+function subscribe(change: () => void) {
+  window.addEventListener("focus", change);
+  window.addEventListener("blur", change);
+  return () => {
+    window.removeEventListener("focus", change);
+    window.removeEventListener("blur", change);
+  };
+}
+
+/** Whether Relay is the frontmost window. */
+export function useWindowFocused() {
+  return useSyncExternalStore(subscribe, () => document.hasFocus());
 }
