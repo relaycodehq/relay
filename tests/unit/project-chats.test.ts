@@ -245,10 +245,11 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
     provider: "claude",
     status: "complete",
   });
-  // The note is a hidden turn: not a queue pause, not the last real input.
+  // The note is a hidden turn: not a queue pause, not the last real input,
+  // and Codex has heard nothing new since its answer.
   expect(after.queuePaused).toBeFalsy();
   expect(after.lastInput?.body).toBe("@claude Now fix it");
-  expect(after.providerThrough).toBe(note.id);
+  expect(after.providerThrough).toBe(after.messages[1]!.id);
   const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()
     .split("\n")
@@ -271,6 +272,70 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   // The history slice carries the earlier exchange, not the note again.
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
+}, 20000);
+it("tells an agent coming back what was asked of the other agent meanwhile", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  for (const [body, count] of [
+    ["@codex Explain the cache guard", 2],
+    ["@claude Now fix it", 5],
+    ["@codex Check the fix", 8],
+  ] as const) {
+    await chats.send(chat.id, {
+      ...input(body),
+      provider: body.startsWith("@claude") ? "claude" : "codex",
+    });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+  const codex = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((c) => c.turn)
+    .map((c) => c.turn.input[0].text as string)
+    .find((text) => text.startsWith("My request: Check the fix"))!;
+  const history = JSON.parse(
+    codex.slice(codex.indexOf("[", codex.indexOf("Conversation updates"))),
+  );
+  expect(history.map((m: { body: string }) => m.body)).toEqual([
+    "@claude Now fix it",
+    "Claude found the same cache guard.",
+  ]);
+}, 30000);
+it("still tells a compacted session the notes left since its last answer", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const settled = (count: number) =>
+    vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 6000 },
+    );
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await settled(2);
+  await chats.send(chat.id, input("Keep the old API."));
+  await chats.compact(chat.id);
+  await settled(4);
+  await chats.send(chat.id, input("@codex Go on"));
+  await settled(6);
+  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .filter((c) => c.turn)
+    .map((c) => c.turn.input[0].text as string)
+    .find((text) => text.startsWith("My request: Go on"))!;
+  expect(prompt).toContain("Keep the old API.");
 }, 20000);
 it("generates a title for Claude conversations, which have no thread-name event", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

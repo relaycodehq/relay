@@ -1706,25 +1706,10 @@ export class ProjectChats {
             : chat.providerThread;
       if (message.status === "complete" && point && thread)
         message.forkPoint = { thread, at: point };
-      if (message.provider === "claude") {
-        if (branch) branch.claudeThrough = message.id;
-        else chat.claudeThrough = message.id;
-      } else {
-        if (branch) branch.through = message.id;
-        else chat.providerThrough = message.id;
-      }
     } catch (e) {
       message.status = abort.signal.aborted ? "cancelled" : "failed";
-      if (abort.signal.aborted) {
-        delete message.error;
-        if (message.provider === "claude") {
-          if (branch) branch.claudeThrough = message.id;
-          else chat.claudeThrough = message.id;
-        } else {
-          if (branch) branch.through = message.id;
-          else chat.providerThrough = message.id;
-        }
-      } else {
+      if (abort.signal.aborted) delete message.error;
+      else {
         message.error = e instanceof Error ? e.message : String(e);
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
@@ -1744,6 +1729,18 @@ export class ProjectChats {
       }
       if (!message.handoff && !message.unprompted) chat.queuePaused = true;
     } finally {
+      // The session has heard the conversation up to this answer. A handoff
+      // note or compaction tells it nothing new, so it still has to hear what
+      // came after its last answer, such as a question asked of another agent.
+      if (message.status !== "failed" && !compact && !message.handoff) {
+        if (message.provider === "claude") {
+          if (branch) branch.claudeThrough = message.id;
+          else chat.claudeThrough = message.id;
+        } else {
+          if (branch) branch.through = message.id;
+          else chat.providerThrough = message.id;
+        }
+      }
       message.ended = Date.now();
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
