@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   mkdtemp,
   mkdir,
@@ -107,6 +107,25 @@ describe("project language support", () => {
       }),
     );
     await expect(detectProject(root)).rejects.toThrow("inside");
+  });
+  it("keeps Windows configuration paths inside the repository", async () => {
+    vi.resetModules();
+    vi.doMock("node:path", async () => {
+      const path =
+        await vi.importActual<typeof import("node:path")>("node:path");
+      return { ...path.win32, default: path.win32 };
+    });
+    try {
+      const { inside } = await import("../../electron/checks/detect");
+      expect(inside("C:\\repo", "C:\\repo\\tsconfig.json")).toBe(true);
+      expect(inside("C:\\repo", "C:\\repo\\..shared\\a.ts")).toBe(true);
+      expect(inside("C:\\repo", "C:\\outside\\tsconfig.json")).toBe(false);
+      expect(inside("C:\\repo", "C:\\")).toBe(false);
+      expect(inside("C:\\repo", "D:\\repo\\tsconfig.json")).toBe(false);
+    } finally {
+      vi.doUnmock("node:path");
+      vi.resetModules();
+    }
   });
   it("checks Angular templates and TS, navigates real symbols, handles unsaved buffers and disk changes without writes", async () => {
     const { root, head, git } = await languageProject(server, true);

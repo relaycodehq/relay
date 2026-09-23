@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { resolve, relative, isAbsolute, dirname } from "node:path";
+import { resolve, relative, isAbsolute, dirname, sep } from "node:path";
 import { createInterface } from "node:readline";
 const root = process.argv[2],
   target = JSON.parse(process.argv[3]),
@@ -17,7 +17,7 @@ const local = (path) => {
   return (
     p &&
     p !== ".." &&
-    !p.startsWith("../") &&
+    !p.startsWith(".." + sep) &&
     !isAbsolute(p) &&
     !p.split(/[\\/]/).some((p) => p === "node_modules" || p === ".git")
   );

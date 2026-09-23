@@ -1,11 +1,11 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse, type ParseError } from "jsonc-parser";
 import type { CheckTarget, ProjectCheckInfo } from "../../shared/checks";
 
 export function inside(root: string, path: string) {
   const rel = relative(root, path);
-  return rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel);
+  return rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel);
 }
 export async function configPath(root: string, path: string) {
   root = await realpath(root);
