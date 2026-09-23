@@ -218,11 +218,15 @@ function HandoffRow({
 }
 /** A queued message's text, with its attachments counted rather than shown. */
 function QueuedBody({ input }: { input: ProjectChatSend }) {
-  const pastes = pastedTexts(input.body);
-  const body = replacePastedTexts(input.body, () => "\n\n").trim();
+  const code = parseCodeReferences(input.body);
+  const pastes = pastedTexts(code.body);
+  const body = replacePastedTexts(code.body, () => "\n\n").trim();
   return (
     <>
       <p>{body.replace(/^@(codex|claude)\s+/i, "")}</p>
+      {!!code.refs.length && (
+        <small>{code.refs.length} code reference(s)</small>
+      )}
       {!!input.images?.length && (
         <small>{input.images.length} screenshot(s)</small>
       )}
