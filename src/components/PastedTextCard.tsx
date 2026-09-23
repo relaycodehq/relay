@@ -71,14 +71,13 @@ export function PastedTextDialog({
 /** A long paste shown beside screenshots, opening to the full text. */
 export function PastedTextCard({
   paste,
+  onOpen,
   onRemove,
-  onInline,
 }: {
   paste: PastedText;
-  onRemove?: () => void;
-  onInline?: () => void;
+  onOpen: () => void;
+  onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="pasted-text">
       <button
@@ -86,7 +85,7 @@ export function PastedTextCard({
         className="pasted-text-open"
         aria-label={`Show ${label(paste)}, ${lineCount(paste)}`}
         title="Show pasted text"
-        onClick={() => setOpen(true)}
+        onClick={onOpen}
       >
         <span className="pasted-text-preview" aria-hidden="true">
           {preview(paste.text)}
@@ -99,23 +98,14 @@ export function PastedTextCard({
           <span className="pasted-text-lines">{lineCount(paste)}</span>
         </span>
       </button>
-      {onRemove && (
-        <button
-          type="button"
-          className="composer-image-remove"
-          aria-label={`Remove ${label(paste)}`}
-          onClick={onRemove}
-        >
-          <X size={13} />
-        </button>
-      )}
-      {open && (
-        <PastedTextDialog
-          paste={paste}
-          onClose={() => setOpen(false)}
-          onInline={onInline}
-        />
-      )}
+      <button
+        type="button"
+        className="composer-image-remove"
+        aria-label={`Remove ${label(paste)}`}
+        onClick={onRemove}
+      >
+        <X size={13} />
+      </button>
     </div>
   );
 }

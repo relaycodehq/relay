@@ -689,8 +689,8 @@ export function ProjectComposer({
               <PastedTextCard
                 key={index}
                 paste={paste}
+                onOpen={() => setViewingPaste(index)}
                 onRemove={() => promptInput.current?.removePaste(index)}
-                onInline={() => promptInput.current?.inlinePaste(index)}
               />
             ))}
           </div>
