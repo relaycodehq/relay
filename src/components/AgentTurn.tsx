@@ -360,13 +360,16 @@ export function AgentTurn({
   );
   // Expanded, the header is the whole run and stays still; the one live row
   // below it is what moves. Folded, the header stands in for that row.
+  const last = activity.at(-1);
   const HeaderIcon = live
     ? expanded
       ? Clock3
       : current
         ? icons[current.kind]
         : null
-    : (icons[activity.at(-1)?.kind ?? "tool"] ?? Brain);
+    : last
+      ? icons[last.kind]
+      : Brain;
   return (
     <details
       className={`agent-activity${live ? " live" : ""}`}

@@ -224,3 +224,27 @@ it("renders GFM tables, task lists and strikethrough, including a table still st
   );
   expect(partial).toContain("<td>2</td>");
 });
+
+it("marks a finished turn that only thought out loud with the brain", () => {
+  const html = renderToStaticMarkup(
+    <AgentTurn
+      message={{
+        id: "answer",
+        role: "assistant",
+        provider: "codex",
+        status: "complete",
+        body: "Done.",
+        created: 0,
+        ended: 3000,
+        version: 1,
+        trace: [{ kind: "commentary", id: "note", text: "Checking first." }],
+      }}
+      projectRoot="/Users/test/workspace"
+      onOpenFile={() => {}}
+      onChanges={() => {}}
+    />,
+  );
+  expect(html).toContain("Thought");
+  expect(html).toContain("lucide-brain");
+  expect(html).not.toContain("lucide-wrench");
+});
