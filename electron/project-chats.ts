@@ -23,6 +23,7 @@ import type {
   ChatMessage,
   ProjectChatSend,
   ScheduledChatMessage,
+  StoppedWork,
   ChatImage,
   AgentProvider,
   KnownMessages,
@@ -372,7 +373,7 @@ export class ProjectChats {
     for (const [chatId, entries] of left) {
       const chat = await this.load(chatId).catch(() => undefined);
       if (!chat) continue;
-      const stopped: ChatPending[] = [];
+      const stopped: StoppedWork[] = [];
       for (const { item, parentId } of entries)
         if (item.kind === "wakeup" && !item.recurring && item.at)
           (chat.heldWakeups ??= []).push({
@@ -381,7 +382,7 @@ export class ProjectChats {
             at: item.at,
             ...(parentId ? { parentId } : {}),
           });
-        else stopped.push(item);
+        else stopped.push({ ...item, ...(parentId ? { parentId } : {}) });
       if (stopped.length)
         chat.stopped = {
           at: now,
@@ -399,15 +400,20 @@ export class ProjectChats {
     await this.save(chat);
     await this.updateSummary(chat);
     if (action === "dismiss") return;
-    const lines = stopped.items.map((item) =>
-      item.kind === "task"
-        ? `- Background work: ${item.description}`
-        : `- Recurring wake-up: ${item.prompt}`,
-    );
-    await this.send(id, {
-      ...this.sessionInput(chat, "claude"),
-      body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
-    });
+    // Each conversation's Claude hears about the work it started.
+    for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {
+      const lines = stopped.items
+        .filter((item) => item.parentId === parentId)
+        .map((item) =>
+          item.kind === "task"
+            ? `- Background work: ${item.description}`
+            : `- Recurring wake-up: ${item.prompt}`,
+        );
+      await this.send(id, {
+        ...this.sessionInput(chat, "claude", parentId),
+        body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
+      });
+    }
   }
   /** Background work and wake-ups in the thread's live Claude sessions, replies included. */
   private pending(chatId: string) {

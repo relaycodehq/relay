@@ -65,7 +65,7 @@ export interface ChatSummary {
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
-  stopped?: { at: number; items: ChatPending[] };
+  stopped?: { at: number; items: StoppedWork[] };
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
@@ -84,6 +84,8 @@ export interface HeldWakeup {
   /** The reply thread whose Claude session scheduled it. */
   parentId?: string;
 }
+/** `parentId` is the side conversation whose Claude session ran it. */
+export type StoppedWork = ChatPending & { parentId?: string };
 export type ChatPending =
   | { kind: "task"; id: string; description: string; since: number }
   | {

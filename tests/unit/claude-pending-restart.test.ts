@@ -38,8 +38,8 @@ afterEach(async () => {
 });
 
 /** A live Claude session for the thread, with this work outstanding. */
-function leave(chatId: string, items: ChatPending[]) {
-  const key = JSON.stringify([join(root, "chats"), chatId, "main"]);
+function leave(chatId: string, items: ChatPending[], branch = "main") {
+  const key = JSON.stringify([join(root, "chats"), chatId, branch]);
   (chats as unknown as { providerSessions: Set<string> }).providerSessions.add(
     key,
   );
@@ -89,6 +89,22 @@ it("keeps what Claude was waiting on when Relay closes", async () => {
   // Cancelling a held wake-up just forgets it.
   await chats.stopPending(chat.id, "later");
   expect(chats.list(projectId)[0].pending).toBeUndefined();
+});
+
+it("picks stopped work back up in the side conversation that ran it", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const reply = randomUUID();
+  leave(chat.id, [task], reply);
+  await chats.dispose();
+  vi.mocked(claudePending).mockReturnValue([]);
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  const send = vi.spyOn(chats, "send").mockResolvedValue(undefined);
+  await chats.resolveStoppedWork(chat.id, "resume");
+  expect(send).toHaveBeenCalledOnce();
+  expect(send.mock.calls[0][1]).toMatchObject({
+    parentId: reply,
+    body: expect.stringContaining("Run A/B"),
+  });
 });
 
 it("sends a kept wake-up itself once it comes due", async () => {
