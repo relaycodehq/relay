@@ -2,21 +2,13 @@ import { ContextMenu } from "@base-ui/react/context-menu";
 import { CalendarClock } from "lucide-react";
 import { useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
-import { wakeLabel } from "../../shared/chat-activity";
+import { atHour, wakeLabel } from "../../shared/chat-activity";
 import { Modal } from "./ui";
 import "./send-later.css";
 
 interface Preset {
   label: string;
   at: number;
-}
-
-/** Today (or `days` ahead) at `hour`:00 local time. */
-function atHour(now: Date, days: number, hour: number) {
-  const at = new Date(now);
-  at.setDate(at.getDate() + days);
-  at.setHours(hour, 0, 0, 0);
-  return at.getTime();
 }
 
 export function sendLaterPresets(now: Date): Preset[] {

@@ -62,7 +62,8 @@ export interface SnoozePreset {
   until: number;
 }
 
-function atHour(base: Date, days: number, hour: number): number {
+/** `hour`:00 local time, `days` after `base`'s date. */
+export function atHour(base: Date, days: number, hour: number): number {
   // Calendar-day advance keeps the wake hour stable across DST changes.
   const next = new Date(base);
   next.setDate(next.getDate() + days);
