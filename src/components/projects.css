@@ -1398,9 +1398,6 @@
 .agent-run-heading svg {
   flex: none;
 }
-.agent-run-heading svg.failed {
-  color: #c78073;
-}
 .agent-run-time {
   flex: none;
   opacity: 0.7;
@@ -1555,10 +1552,6 @@ details.agent-step > .agent-step-heading:hover {
 .agent-step-heading > span.mono {
   font-family: var(--font-mono);
   font-size: 11px;
-}
-.agent-step.failed .agent-step-heading > svg {
-  color: #c78073;
-  opacity: 1;
 }
 .agent-step pre {
   margin: 2px 0 8px 21px;

@@ -1,11 +1,11 @@
 // Adapted from T3 Code's MessagesTimeline activity group: one summary line per turn,
 // and a flat list of tool rows named by what they touched.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bot,
   Brain,
   ChevronRight,
-  CircleAlert,
+  Clock3,
   FilePen,
   FileText,
   Globe,
@@ -20,6 +20,7 @@ import type {
 } from "../../shared/projects";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import { RichText, Spinner } from "./ui";
+import "./agent-trace.css";
 
 function duration(ms: number) {
   const seconds = Math.max(0, ms / 1000);
@@ -81,11 +82,74 @@ export function summarizeActivity(activity: AgentActivity[]) {
 
 const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
 
+const commandWrappers = new Set([
+  "sudo",
+  "env",
+  "time",
+  "nice",
+  "nohup",
+  "exec",
+  "command",
+  "npx",
+  "pnpx",
+  "bunx",
+]);
+const commandSetup = new Set([
+  "cd",
+  "pushd",
+  "popd",
+  "export",
+  "unset",
+  "set",
+  "source",
+  ".",
+  "true",
+]);
+
+/** The program a command line is about: "cd app && npx vitest run" is
+ *  vitest, and Codex's "/bin/zsh -lc 'rg foo'" is rg. */
+export function programName(command: string): string | undefined {
+  const shell = command.match(
+    /^\s*(?:\S*\/)?(?:ba|z|fi)?sh\s+-\w*c\s+(['"])([\s\S]*)\1\s*$/,
+  );
+  if (shell) return programName(shell[2]!);
+  for (const segment of command.split(/&&|\|\||[;|\n]/)) {
+    const words = segment.trim().split(/\s+/);
+    while (
+      words[0] &&
+      (commandWrappers.has(words[0]) || /^\w+=/.test(words[0]))
+    )
+      words.shift();
+    const word = words[0]?.replace(/^["'(]+|["')]+$/g, "");
+    if (!word || commandSetup.has(word)) continue;
+    return word.split("/").at(-1) || word;
+  }
+}
+
+/** The past-tense line for a finished call, e.g. "Ran rg" or "Read AgentTurn.tsx". */
+function doneLabel(a: AgentActivity) {
+  switch (a.kind) {
+    case "command":
+      return `${a.status === "failed" ? "Failed" : "Ran"} ${programName(a.label) ?? "command"}`;
+    case "read":
+      return `Read ${baseName(a.label)}`;
+    case "file":
+      return `Edited ${baseName(a.label)}`;
+    case "search":
+      return `Searched for ${a.label}`;
+    case "web":
+      return "Searched the web";
+    case "agent":
+    case "tool":
+      return a.label;
+  }
+}
+
 /** The present-tense line shown while a call runs, e.g. "Reading AgentTurn.tsx". */
 function liveLabel(a: AgentActivity) {
   switch (a.kind) {
     case "command":
-      return `Running ${a.label.trim().split(/\s+/)[0] ?? "command"}`;
+      return `Running ${programName(a.label) ?? "command"}`;
     case "read":
       return `Reading ${baseName(a.label)}`;
     case "file":
@@ -101,31 +165,46 @@ function liveLabel(a: AgentActivity) {
   }
 }
 
+/** A fold that builds its body the first time it opens; a long run keeps hundreds closed. */
+function Fold({
+  className,
+  summary,
+  children,
+}: {
+  className: string;
+  summary: ReactNode;
+  children: ReactNode;
+}) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <details
+      className={className}
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpened(true);
+      }}
+    >
+      {summary}
+      {opened && children}
+    </details>
+  );
+}
+
 function ToolRow({
   activity: a,
   label,
-  live = false,
   onChanges,
 }: {
   activity: AgentActivity;
   label: string;
-  live?: boolean;
   onChanges: () => void;
 }) {
-  const Icon = a.status === "failed" ? CircleAlert : icons[a.kind];
+  // A failed call looks like any other: commands fail as part of the work.
+  const Icon = icons[a.kind];
   const expandable = Boolean(a.detail) || a.kind === "file";
   const heading = (
     <>
       {a.status === "running" ? <Spinner size={14} /> : <Icon size={14} />}
-      <span
-        className={
-          [a.kind === "command" && !live && "mono", live && "shimmer"]
-            .filter(Boolean)
-            .join(" ") || undefined
-        }
-      >
-        {label}
-      </span>
+      <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
     </>
   );
   if (!expandable)
@@ -135,15 +214,15 @@ function ToolRow({
       </div>
     );
   return (
-    <details className={`agent-step ${a.status}`}>
-      <summary className="agent-step-heading">
-        {heading}
-      </summary>
+    <Fold
+      className={`agent-step ${a.status}`}
+      summary={<summary className="agent-step-heading">{heading}</summary>}
+    >
       {a.detail && <pre>{a.detail}</pre>}
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
       )}
-    </details>
+    </Fold>
   );
 }
 
@@ -158,17 +237,17 @@ function ActivityGroup({
   onChanges: () => void;
 }) {
   const kinds = new Set(activity.map((a) => a.kind));
-  const Icon = activity.some((a) => a.status === "failed")
-    ? CircleAlert
-    : kinds.size === 1
-      ? icons[activity[0]!.kind]
-      : Wrench;
+  const Icon = kinds.size === 1 ? icons[activity[0]!.kind] : Wrench;
   return (
-    <details className="agent-step agent-group">
-      <summary className="agent-step-heading">
-        <Icon size={14} />
-        <span>{summarizeActivity(activity)}</span>
-      </summary>
+    <Fold
+      className="agent-step agent-group"
+      summary={
+        <summary className="agent-step-heading">
+          <Icon size={14} />
+          <span>{summarizeActivity(activity)}</span>
+        </summary>
+      }
+    >
       <div className="agent-group-rows">
         {activity.map((a) => (
           <ToolRow
@@ -179,7 +258,7 @@ function ActivityGroup({
           />
         ))}
       </div>
-    </details>
+    </Fold>
   );
 }
 
@@ -212,33 +291,33 @@ export function AgentTurn({
   const activity = entries.flatMap((e) =>
     e.kind === "activity" ? [e.activity] : [],
   );
-  const last = entries.at(-1);
-  const current =
-    live && last?.kind === "activity" && last.activity.status === "running"
-      ? last.activity
-      : undefined;
+  const current = live
+    ? [...activity].reverse().find((a) => a.status === "running")
+    : undefined;
   const thinking = live && !current && !message.body;
-  const failed = activity.some((a) => a.status === "failed");
   const ended = message.ended ?? message.created;
-  const label = live
-    ? expanded
-      ? "Working for"
-      : current
-      ? display(liveLabel(current))
-      : message.body
-        ? "Writing"
-        : "Thinking"
-    : summarizeActivity(activity) || "Thought";
-  // Expanded, the header is the whole run; the rows below name the current step.
+  const label = live ? (
+    expanded ? (
+      "Working for"
+    ) : current ? (
+      display(liveLabel(current))
+    ) : message.body ? (
+      "Writing"
+    ) : (
+      <ThinkingWord seed={message.id} />
+    )
+  ) : (
+    summarizeActivity(activity) || "Thought"
+  );
+  // Expanded, the header is the whole run and stays still; the one live row
+  // below it is what moves. Folded, the header stands in for that row.
   const HeaderIcon = live
     ? expanded
-      ? null
+      ? Clock3
       : current
         ? icons[current.kind]
-        : Brain
-    : failed
-      ? CircleAlert
-      : (icons[activity.at(-1)?.kind ?? "tool"] ?? Brain);
+        : null
+    : (icons[activity.at(-1)?.kind ?? "tool"] ?? Brain);
   return (
     <details
       className={`agent-activity${live ? " live" : ""}`}
@@ -251,11 +330,17 @@ export function AgentTurn({
     >
       <summary className="agent-run-heading">
         {HeaderIcon ? (
-          <HeaderIcon size={14} className={failed ? "failed" : undefined} />
+          <HeaderIcon size={14} />
         ) : (
-          <Spinner size={14} />
+          <ThinkingGlyph provider={message.provider} />
         )}
-        <span className={live ? "shimmer" : undefined}>
+        <span
+          className={
+            live && !expanded && typeof label === "string"
+              ? "live-shine"
+              : undefined
+          }
+        >
           {label}
         </span>
         <span className="agent-run-time">
@@ -272,7 +357,7 @@ export function AgentTurn({
       </summary>
       {expanded && (entries.length > 0 || thinking) && (
         <div className="agent-trace" aria-label="Local agent activity">
-          {groupTrace(entries).map((part) =>
+          {groupTrace(entries).map((part, index, parts) =>
             part.kind === "commentary" ? (
               <div className="agent-commentary" key={part.id}>
                 <RichText
@@ -281,21 +366,40 @@ export function AgentTurn({
                   onOpenFile={onOpenFile}
                 />
               </div>
-            ) : (
-              <TraceRun
+            ) : live && index === parts.length - 1 ? (
+              <OpenBatch
                 key={part.id}
                 activity={part.activity}
-                live={live}
+                display={display}
+                onChanges={onChanges}
+              />
+            ) : part.activity.length === 1 ? (
+              <ToolRow
+                key={part.id}
+                activity={part.activity[0]!}
+                label={display(part.activity[0]!.label)}
+                onChanges={onChanges}
+              />
+            ) : (
+              <ActivityGroup
+                key={part.id}
+                activity={part.activity}
                 display={display}
                 onChanges={onChanges}
               />
             ),
           )}
-          {thinking && (
-            <div className="agent-step">
+          {/* The line keeps its height while a call runs, so each call
+              doesn't shrink the trace and jolt the thread pinned below. */}
+          {live && !message.body && (
+            <div className="agent-step agent-thinking">
               <div className="agent-step-heading">
-                <Brain size={14} />
-                <span className="shimmer">Thinking</span>
+                {thinking && (
+                  <>
+                    <ThinkingGlyph provider={message.provider} />
+                    <ThinkingWord seed={message.id} />
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -324,46 +428,113 @@ function groupTrace(entries: AgentTrace[]) {
   return parts;
 }
 
-function TraceRun({
+const thinkingWords = [
+  "Thinking",
+  "Pondering",
+  "Mulling it over",
+  "Noodling",
+  "Ruminating",
+  "Percolating",
+  "Cogitating",
+  "Brewing",
+  "Tinkering",
+  "Musing",
+  "Scheming",
+  "Untangling",
+  "Marinating",
+  "Puzzling",
+  "Chewing on it",
+  "Connecting dots",
+];
+
+const hash = (text: string) =>
+  [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7) >>> 0;
+/** The turn's word for this six-second window; the same on every remount. */
+const thinkingWord = (seed: string) =>
+  thinkingWords[
+    hash(`${seed}:${Math.floor(Date.now() / 6000)}`) % thinkingWords.length
+  ]!;
+
+/**
+ * A thinking verb that changes every few seconds, so a long pause still looks
+ * alive. The line comes and goes around every call; picking by turn and time
+ * keeps the word from changing each time it does.
+ */
+function ThinkingWord({ seed }: { seed: string }) {
+  const [word, setWord] = useState(() => thinkingWord(seed));
+  const first = useRef(word);
+  useEffect(() => {
+    const timer = setInterval(() => setWord(thinkingWord(seed)), 1000);
+    return () => clearInterval(timer);
+  }, [seed]);
+  // Only a word that changes in place fades in; a remount shows it as it was.
+  return (
+    <span
+      key={word}
+      className={word === first.current ? undefined : "agent-word"}
+    >
+      <span className="live-shine">{word}</span>
+    </span>
+  );
+}
+
+/** Claude's turning asterisk, or a terminal braille spinner for Codex. */
+function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
+  return <span className={`thinking-glyph ${provider}`} aria-hidden />;
+}
+
+/**
+ * The batch still being worked on: one row names the latest call, and the
+ * ones before it fold behind that row. It gets its "Ran 6 commands" summary
+ * only once commentary or the end of the turn closes it.
+ */
+function OpenBatch({
   activity,
-  live,
   display,
   onChanges,
 }: {
   activity: AgentActivity[];
-  live: boolean;
   display: (text: string) => string;
   onChanges: () => void;
 }) {
-  // Calls still in flight stay on their own line, named by what they're doing.
-  const running = live ? activity.filter((a) => a.status === "running") : [];
-  const finished = live
-    ? activity.filter((a) => a.status !== "running")
-    : activity;
+  const [open, setOpen] = useState(false);
+  const head =
+    [...activity].reverse().find((a) => a.status === "running") ??
+    activity.at(-1)!;
+  const earlier = activity.filter((a) => a !== head);
+  const running = head.status === "running";
+  const Icon = icons[head.kind];
   return (
-    <>
-      {finished.length === 1 ? (
-        <ToolRow
-          activity={finished[0]!}
-          label={display(finished[0]!.label)}
-          onChanges={onChanges}
-        />
-      ) : finished.length > 1 ? (
-        <ActivityGroup
-          activity={finished}
-          display={display}
-          onChanges={onChanges}
-        />
-      ) : null}
-      {running.map((a) => (
-        <ToolRow
-          key={a.id}
-          activity={a}
-          label={display(liveLabel(a))}
-          live
-          onChanges={onChanges}
-        />
-      ))}
-    </>
+    <div className={`agent-batch ${head.status}`}>
+      <button
+        type="button"
+        className="agent-step-heading agent-batch-head"
+        aria-expanded={earlier.length ? open : undefined}
+        disabled={!earlier.length}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="agent-batch-row" title={display(head.label)}>
+          <Icon size={14} />
+          <span className={running ? "live-shine" : undefined}>
+            {display(running ? liveLabel(head) : doneLabel(head))}
+          </span>
+        </span>
+        {earlier.length > 0 && (
+          <ChevronRight size={13} className="agent-batch-chevron" />
+        )}
+      </button>
+      {open && (
+        <div className="agent-group-rows">
+          {earlier.map((a) => (
+            <ToolRow
+              key={a.id}
+              activity={a}
+              label={display(a.label)}
+              onChanges={onChanges}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1457,9 +1457,11 @@ body.resizing-table-column {
     .cache-glow,
     .cache-ember,
     .project-ribbon-wave,
-    .project-ribbon-sheen
+    .project-ribbon-sheen,
+    .live-shine
   ),
-:root[data-inactive] .sb-status.waiting i::after {
+:root[data-inactive] .sb-status.waiting i::after,
+:root[data-inactive] .thinking-glyph::before {
   animation-play-state: paused;
 }
 .modal {

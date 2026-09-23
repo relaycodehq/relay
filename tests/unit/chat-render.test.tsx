@@ -112,7 +112,10 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
     onChanges: () => {},
   };
   const live = renderToStaticMarkup(<AgentTurn message={message} {...props} />);
-  expect(live).toContain("Thinking");
+  // Between calls the open batch names its last one, and a thinking line runs.
+  expect(live).toContain("agent-thinking");
+  expect(live).toContain("Ran git");
+  expect(live).not.toContain("Ran 1 command");
   expect(live).toContain("Working for");
   expect(live).toContain("I will inspect the repository.");
   const running = renderToStaticMarkup(
@@ -165,7 +168,9 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
   expect(grouped.indexOf("Ran 2 commands")).toBeLessThan(
     grouped.indexOf("Now the tests."),
   );
-  expect(grouped).toContain("echo three");
+  // The batch still open gets no count until commentary or the end closes it.
+  expect(grouped).toContain("Ran echo");
+  expect(grouped).not.toContain("Ran 1 command");
   const done = renderToStaticMarkup(
     <AgentTurn
       message={{

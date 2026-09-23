@@ -1,0 +1,199 @@
+/* The live end of an agent's trace: one row per open batch of calls, and a
+   thinking line between them. Only one of those animates at a time. */
+.agent-batch-head,
+.agent-batch-head:hover:not(:disabled) {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  justify-content: flex-start;
+  filter: none;
+  cursor: pointer;
+}
+.agent-batch-head:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.agent-step-heading > .agent-batch-row {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.agent-batch-row > svg {
+  flex: none;
+  opacity: 0.75;
+}
+/* Fit the label to its text, so the shine crosses words and not empty row. */
+.agent-batch-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-batch-row > span.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.agent-batch-head:not(:disabled):hover
+  .agent-batch-row
+  > span:not(.live-shine) {
+  color: var(--text);
+}
+.agent-batch-chevron {
+  flex: none;
+  opacity: 0;
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease;
+}
+.agent-batch-head:hover .agent-batch-chevron,
+.agent-batch-head[aria-expanded="true"] .agent-batch-chevron {
+  opacity: 0.8;
+}
+.agent-batch-head[aria-expanded="true"] .agent-batch-chevron {
+  transform: rotate(90deg);
+}
+/* The step heading stretches its label; the thinking line sits at its text's width. */
+.agent-thinking .agent-step-heading > span {
+  flex: none;
+}
+.agent-word {
+  display: inline-block;
+  animation: agent-word-in 280ms ease-out;
+}
+@keyframes agent-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* T3 Code's narrow highlight band crossing a muted label. */
+.live-shine {
+  color: transparent;
+  background-image:
+    linear-gradient(to right, transparent, var(--text), transparent),
+    linear-gradient(var(--muted), var(--muted));
+  background-size:
+    4.5rem 100%,
+    100% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  will-change: transform;
+  animation: live-shine 2.2s steps(30) infinite;
+}
+@keyframes live-shine {
+  from {
+    background-position:
+      -4.5rem 0,
+      0 0;
+  }
+  to {
+    background-position:
+      calc(100% + 4.5rem) 0,
+      0 0;
+  }
+}
+
+/* While the agent thinks: Claude's turning asterisk, Codex's braille spinner. */
+.thinking-glyph {
+  flex: none;
+  width: 14px;
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+.thinking-glyph.claude::before {
+  content: "\2733";
+  animation: thinking-claude 1.5s steps(1) infinite;
+}
+.thinking-glyph.codex::before {
+  content: "\280b";
+  font-size: 14px;
+  animation: thinking-codex 0.8s steps(1) infinite;
+}
+@keyframes thinking-claude {
+  0% {
+    content: "\00b7";
+  }
+  10% {
+    content: "\2722";
+  }
+  20% {
+    content: "\2733";
+  }
+  30% {
+    content: "\2736";
+  }
+  40% {
+    content: "\273b";
+  }
+  50% {
+    content: "\273d";
+  }
+  60% {
+    content: "\273b";
+  }
+  70% {
+    content: "\2736";
+  }
+  80% {
+    content: "\2733";
+  }
+  90% {
+    content: "\2722";
+  }
+}
+@keyframes thinking-codex {
+  0% {
+    content: "\280b";
+  }
+  10% {
+    content: "\2819";
+  }
+  20% {
+    content: "\2839";
+  }
+  30% {
+    content: "\2838";
+  }
+  40% {
+    content: "\283c";
+  }
+  50% {
+    content: "\2834";
+  }
+  60% {
+    content: "\2826";
+  }
+  70% {
+    content: "\2827";
+  }
+  80% {
+    content: "\2807";
+  }
+  90% {
+    content: "\280f";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-shine {
+    animation: none;
+    color: var(--muted);
+    background: none;
+  }
+  .thinking-glyph::before,
+  .agent-word {
+    animation: none;
+  }
+}
