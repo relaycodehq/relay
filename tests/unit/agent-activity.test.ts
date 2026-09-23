@@ -1,5 +1,9 @@
 import { it, expect } from "vitest";
-import { claudeActivity, codexActivity } from "../../electron/rooms/activity";
+import {
+  claudeActivity,
+  claudeEditedPaths,
+  codexActivity,
+} from "../../electron/rooms/activity";
 import { publicMessage } from "../../electron/project-sharing";
 it("caps retained output, represents failures, and excludes local execution traces when sharing", () => {
   const activity = codexActivity("item/completed", {
@@ -73,4 +77,18 @@ it("caps retained output, represents failures, and excludes local execution trac
     "linear: get_issue",
   );
   expect(codexActivity("item/started", null)).toBeUndefined();
+});
+it("takes the files Claude writes from its file tools only", () => {
+  const edit = { file_path: "/repo/a.ts", old_string: "x" };
+  expect(claudeActivity("e", "Edit", edit)).toMatchObject({
+    kind: "file",
+    label: "/repo/a.ts",
+  });
+  expect(claudeEditedPaths("Edit", edit)).toEqual(["/repo/a.ts"]);
+  expect(
+    claudeEditedPaths("NotebookEdit", { notebook_path: "/repo/n.ipynb" }),
+  ).toEqual(["/repo/n.ipynb"]);
+  expect(claudeEditedPaths("Read", { file_path: "/repo/a.ts" })).toEqual([]);
+  expect(claudeEditedPaths("Write", null)).toEqual([]);
+  expect(claudeEditedPaths("toString", {})).toEqual([]);
 });

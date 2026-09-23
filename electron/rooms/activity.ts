@@ -51,6 +51,14 @@ export function codexActivity(
     return { ...base, kind: "tool", label: item.tool.slice(0, 500) };
 }
 
+/** Claude's tools that write a file, by the input field that names it. */
+const claudeFileTools: Record<string, string> = {
+  Edit: "file_path",
+  MultiEdit: "file_path",
+  Write: "file_path",
+  NotebookEdit: "notebook_path",
+};
+
 /** Name a Claude tool call by what it touched, not by the tool or its raw input. */
 export function claudeActivity(
   id: string,
@@ -69,17 +77,13 @@ export function claudeActivity(
     kind,
     label: (label || name).slice(0, 500),
   });
+  if (Object.hasOwn(claudeFileTools, name))
+    return call("file", text(claudeFileTools[name]));
   switch (name) {
     case "Bash":
       return call("command", text("command"));
     case "Read":
       return call("read", text("file_path"));
-    case "Edit":
-    case "MultiEdit":
-    case "Write":
-      return call("file", text("file_path"));
-    case "NotebookEdit":
-      return call("file", text("notebook_path"));
     case "Grep":
     case "Glob":
       return call(
@@ -114,16 +118,7 @@ export function codexEditedPaths(changes: unknown): string[] {
 
 /** The file a Claude edit tool writes, if the call is one. */
 export function claudeEditedPaths(name: string, value: unknown): string[] {
-  const input =
-    value && typeof value === "object"
-      ? (value as Record<string, unknown>)
-      : {};
-  const key =
-    name === "NotebookEdit"
-      ? "notebook_path"
-      : ["Edit", "MultiEdit", "Write"].includes(name)
-        ? "file_path"
-        : undefined;
-  const path = key && input[key];
+  if (!Object.hasOwn(claudeFileTools, name) || !value) return [];
+  const path = (value as Record<string, unknown>)[claudeFileTools[name]];
   return typeof path === "string" && path ? [path] : [];
 }
