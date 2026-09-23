@@ -313,6 +313,9 @@ export class TriageService {
     try {
       state.status = "scanning";
       let evidenceChars = 0;
+      // Each save rewrites the whole checkpoint, which grows with every file,
+      // so save at most once a second; a crash repeats only that second.
+      let saved = Date.now();
       for (const path of [...checkpoint.scanPending]) {
         signal.throwIfAborted();
         if (evidenceChars >= this.limits.evidenceChars) {
@@ -347,9 +350,14 @@ export class TriageService {
             else checkpoint.failures[path] = { stage: "scan", reason };
           }
         }
-        await publish("interrupted");
+        state.scanned = files.length - checkpoint.scanPending.length;
+        if (Date.now() - saved >= 1000) {
+          await publish("interrupted");
+          saved = Date.now();
+        }
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
+      await publish("interrupted");
       const packets = new Map(
         [...candidates.values()].map((c) => [
           c.path,
