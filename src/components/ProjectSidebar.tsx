@@ -57,6 +57,7 @@ import {
 import "./sidebar.css";
 
 const THREADS_PER_PROJECT = 5;
+const SEARCH_RESULTS = 50;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
 const SHELF_PAGE = 5;
 const PROJECT_DRAG = "application/x-relay-project";
@@ -424,6 +425,8 @@ export function ProjectSidebar({
   const qc = useQueryClient();
   const now = useNow();
   const [search, setSearch] = useState("");
+  /** The query whose results are listed past the first SEARCH_RESULTS. */
+  const [allResultsFor, setAllResultsFor] = useState<string>();
   const [view, setView] = useState<"threads" | "activity">(() =>
     localStorage.getItem("relay-sidebar-view") === "activity"
       ? "activity"
@@ -1412,6 +1415,8 @@ export function ProjectSidebar({
   );
 
   const results = all.filter(matches);
+  const listed =
+    allResultsFor === query ? results : results.slice(0, SEARCH_RESULTS);
   const searching = (
     <div className="sb-scroll">
       <div className="sb-view-heading">
@@ -1419,7 +1424,17 @@ export function ProjectSidebar({
         <small>{results.length}</small>
       </div>
       <div className="sb-thread-list flat">
-        {results.slice(0, 50).map((c) => threadRow(c, true))}
+        {listed.map((c) => threadRow(c, true))}
+        {listed.length < results.length && (
+          <button
+            className="sb-thread sb-ghost"
+            onClick={() => setAllResultsFor(query)}
+          >
+            <span className="sb-thread-title">
+              Show {results.length - listed.length} more
+            </span>
+          </button>
+        )}
       </div>
       {!results.length && <p className="sb-note">No matching threads.</p>}
     </div>
