@@ -364,8 +364,11 @@ export function reviewerTask(
   const level = claudeReviewLevel(reviewer.choice);
   if (t.kind === "uncommitted")
     return { body: `@claude /code-review ${level}` };
-  if (t.kind === "branch" && scope.branch)
-    return { body: `@claude /code-review ${level} ${scope.branch}` };
+  // Given a branch name, `/code-review` picks its own base; a range keeps the one chosen.
+  if (t.kind === "branch")
+    return {
+      body: `@claude /code-review ${level} ${scope.base}...${scope.head}`,
+    };
   // `/code-review` fetches pull requests from GitHub; review the fetched range instead.
   return { body: `@claude ${reviewPrompt(scope, focus)}` };
 }

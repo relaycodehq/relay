@@ -141,8 +141,9 @@ describe("reviewer tasks", () => {
       branch: "feature",
       target: { kind: "branch" as const, base: "main" },
     };
+    // The range itself: given a branch name, /code-review picks its own base.
     expect(reviewerTask(claude, branch).body).toBe(
-      "@claude /code-review high feature",
+      `@claude /code-review high ${scope.base}...${scope.head}`,
     );
     expect(reviewerTask(codex, branch).codex).toEqual({
       type: "baseBranch",
