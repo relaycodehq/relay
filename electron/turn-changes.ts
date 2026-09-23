@@ -4,6 +4,7 @@ import {
   copyFile,
   lstat,
   mkdtemp,
+  realpath,
   rm,
   rmdir,
   stat,
@@ -11,7 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { decodeText } from "./working-files";
 import { digest } from "./hash";
@@ -20,7 +21,7 @@ import type { FilePair } from "../shared/types";
 import type { TurnFileChange } from "../shared/projects";
 
 // Adapted from T3 Code's Git checkpoints: each agent turn snapshots the whole
-// worktree before and after, so its card lists exactly what that turn changed.
+// worktree before and after; its card lists the changes the agent made itself.
 const exec = promisify(execFile);
 const identity = {
   GIT_AUTHOR_NAME: "Relay",
@@ -145,21 +146,83 @@ export async function startTurn(root: string, messageId: string) {
   }
 }
 
+/** What the agent itself did to files during a turn, as its tools reported. */
+export interface TurnClaim {
+  /** Paths its file tools wrote, absolute or relative to the checkout. */
+  edited: string[];
+  /** Shell commands it ran; a file one names outright counts as its own. */
+  commands: string[];
+}
+
+const pathChar = /[\w.@+~\/-]/;
+/** `text` names `path` as a whole path, not as part of a longer one. */
+function names(text: string, path: string) {
+  for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
+    const before = text[at - 1] ?? "";
+    const after = text[at + path.length] ?? "";
+    if (!pathChar.test(before) && !pathChar.test(after)) return true;
+  }
+  return false;
+}
+
+/**
+ * The files among `files` (relative to the repository `top`) that the agent
+ * changed: written by its file tools, or named in a command it ran. The
+ * snapshots see the whole checkout, so without this a turn would also claim
+ * edits from the user's editor, other threads and CLI sessions that ran
+ * meanwhile. Changes a command made without naming the file are missed.
+ */
+export function ownFiles(
+  files: TurnFileChange[],
+  claim: TurnClaim,
+  cwd: string,
+  tops: string[],
+) {
+  const edited = new Set<string>();
+  for (const path of claim.edited)
+    for (const top of tops) {
+      const rel = relative(top, resolve(cwd, path));
+      if (rel && !rel.startsWith("..") && !isAbsolute(rel)) edited.add(rel);
+    }
+  return files.filter((file) => {
+    if (edited.has(file.path)) return true;
+    const forms = new Set([file.path, `./${file.path}`]);
+    for (const top of tops) {
+      const absolute = join(top, file.path);
+      forms.add(absolute);
+      const fromCwd = relative(cwd, absolute);
+      if (!fromCwd.startsWith("..")) forms.add(fromCwd).add(`./${fromCwd}`);
+    }
+    return claim.commands.some((command) =>
+      [...forms].some((form) => names(command, form)),
+    );
+  });
+}
+
+/** The repository's top folder, both as given and with symlinks resolved. */
+async function repositoryTops(root: string) {
+  const top = (await run(root, ["rev-parse", "--show-toplevel"])).trim();
+  const real = await realpath(top).catch(() => top);
+  return [...new Set([top, real])];
+}
+
 /**
  * Snapshots the worktree again and lists what the turn changed. A turn without
  * changes keeps no ref. The ref moves to `answerId` when a steer split the
- * turn, so the diff opens from the message that shows the changes.
+ * turn, so the diff opens from the message that shows the changes. With a
+ * `claim`, only files the agent changed itself are listed.
  */
 export async function finishTurn(
   root: string,
   messageId: string,
   before: string,
   answerId = messageId,
+  claim?: TurnClaim,
 ): Promise<TurnFileChange[]> {
   const ref = turnRef(messageId);
   try {
     const after = await snapshot(root, before);
-    const files = parseNumstat(
+    let files = parseNumstat(
       await run(root, [
         "diff",
         "--numstat",
@@ -171,7 +234,10 @@ export async function finishTurn(
         before,
         after,
       ]),
-    ).slice(0, maxFiles);
+    );
+    if (claim && files.length)
+      files = ownFiles(files, claim, root, await repositoryTops(root));
+    files = files.slice(0, maxFiles);
     if (!files.length) await run(root, ["update-ref", "-d", ref]);
     else if (answerId === messageId)
       await run(root, [...durable, "update-ref", ref, after, before]);

@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   finishTurn,
+  ownFiles,
   parseNumstat,
   redoRevert,
   revertRef,
@@ -76,6 +77,61 @@ it("lists only what the turn changed and keeps the user's index and prior edits 
   expect(pair.next?.contents).toBe("one\nTWO\nmine\nthree\n");
   expect((await turnDiff(root, id, "gone.ts")).next).toBeNull();
   expect((await turnDiff(root, id, "src/new.ts")).old).toBeNull();
+});
+
+it("lists only files the agent changed itself, not edits made meanwhile by anyone else", async () => {
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "src", "b.ts"), "b\n");
+  await writeFile(join(root, "src", "b.tsx"), "view\n");
+  git("add", ".");
+  git("commit", "-qm", "More");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  // The agent: a file tool edit (absolute path) and a command naming a file.
+  await writeFile(join(root, "a.ts"), "one\nTWO\n");
+  await rm(join(root, "gone.ts"));
+  // Someone else: the user's editor, another thread, a CLI session.
+  await writeFile(join(root, "src", "b.ts"), "theirs\n");
+  await writeFile(join(root, "src", "b.tsx"), "theirs\n");
+  await writeFile(join(root, "notes.md"), "theirs\n");
+  const files = await finishTurn(root, id, before!, id, {
+    edited: [join(root, "a.ts")],
+    // Names src/b.tsx's neighbour only as part of a longer path.
+    commands: ["/bin/zsh -lc 'rm gone.ts && cat src/b.tsx.bak'"],
+  });
+  expect(files.map((f) => f.path)).toEqual(["a.ts", "gone.ts"]);
+  // Only the agent's files can be rolled back from its card.
+  await expect(turnDiff(root, id, "a.ts")).resolves.toBeTruthy();
+});
+
+it("keeps no ref when only someone else changed files during the turn", async () => {
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  await writeFile(join(root, "a.ts"), "theirs\n");
+  expect(
+    await finishTurn(root, id, before!, id, { edited: [], commands: [] }),
+  ).toEqual([]);
+  expect(() => git("rev-parse", "--verify", "-q", turnRef(id))).toThrow();
+});
+
+it("matches the agent's paths from a subfolder and through symlinked folders", () => {
+  const files = [
+    { path: "app/src/x.ts", additions: 1, deletions: 0 },
+    { path: "app/src/y.ts", additions: 1, deletions: 0 },
+    { path: "app/src/z.ts", additions: 1, deletions: 0 },
+    { path: "app/src/other.ts", additions: 1, deletions: 0 },
+  ];
+  expect(
+    ownFiles(
+      files,
+      {
+        edited: ["src/x.ts", "/private/tmp/repo/app/src/y.ts"],
+        commands: ["sed -i '' 's/a/b/' ./src/z.ts"],
+      },
+      "/tmp/repo/app",
+      ["/tmp/repo", "/private/tmp/repo"],
+    ).map((f) => f.path),
+  ).toEqual(["app/src/x.ts", "app/src/y.ts", "app/src/z.ts"]);
 });
 
 it("drops the ref when a turn changes nothing", async () => {

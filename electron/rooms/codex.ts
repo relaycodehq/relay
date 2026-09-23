@@ -10,7 +10,7 @@ import { acquireCodexConnection } from "./codex-connection";
 import { findExecutable } from "../executables";
 import { codexModelArgs, type ModelChoice } from "../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
-import { codexActivity } from "./activity";
+import { codexActivity, codexEditedPaths } from "./activity";
 import { CodexAnswerStream } from "./answer-stream";
 import type { AgentActivity, ContextUsage } from "../../shared/projects";
 export interface AgentOptions {
@@ -27,6 +27,8 @@ export interface AgentOptions {
   onText: (text: string) => void;
   onCommentary?: (id: string, text: string | null) => void;
   onActivity?: (activity: AgentActivity) => void;
+  /** Paths the agent's own file tools are writing, as it reported them. */
+  onEdit?: (paths: string[]) => void;
   onTitle?: (title: string) => void;
   onPlan?: (text: string) => void;
   onContext?: (usage: ContextUsage) => void;
@@ -127,8 +129,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     }
     if (method === "thread/name/updated" && typeof p.threadName === "string")
       options.onTitle?.(p.threadName);
-    if (p.item?.type === "fileChange" && p.item.id && p.item.changes)
+    if (p.item?.type === "fileChange" && p.item.id && p.item.changes) {
       fileChanges.set(p.item.id, p.item.changes);
+      options.onEdit?.(codexEditedPaths(p.item.changes));
+    }
     if (method === "item/plan/delta" && typeof p.delta === "string") {
       plan += p.delta;
       if (plan.length > 100000) {

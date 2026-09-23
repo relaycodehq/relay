@@ -101,3 +101,29 @@ export function claudeActivity(
   const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
   return call("tool", mcp ? `${mcp[1]}: ${mcp[2]}` : name);
 }
+
+/** Every path a Codex patch writes, a rename's new name included. */
+export function codexEditedPaths(changes: unknown): string[] {
+  if (!Array.isArray(changes)) return [];
+  return changes.flatMap((change) => {
+    if (!change || typeof change.path !== "string") return [];
+    const moved = change.kind?.move_path;
+    return typeof moved === "string" ? [change.path, moved] : [change.path];
+  });
+}
+
+/** The file a Claude edit tool writes, if the call is one. */
+export function claudeEditedPaths(name: string, value: unknown): string[] {
+  const input =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  const key =
+    name === "NotebookEdit"
+      ? "notebook_path"
+      : ["Edit", "MultiEdit", "Write"].includes(name)
+        ? "file_path"
+        : undefined;
+  const path = key && input[key];
+  return typeof path === "string" && path ? [path] : [];
+}

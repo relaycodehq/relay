@@ -423,6 +423,30 @@ if (args.includes("--permission-prompt-tool")) {
           path.join(m.params.cwd, "src", "guard.ts"),
           "export const guard = true;\n",
         );
+        // Codex reports its own edits; Relay credits the turn with only these.
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-edit",
+              type: "fileChange",
+              status: "completed",
+              changes: [
+                {
+                  path: path.join(m.params.cwd, "README.md"),
+                  kind: { type: "update", move_path: null },
+                  diff: "",
+                },
+                {
+                  path: path.join(m.params.cwd, "src", "guard.ts"),
+                  kind: { type: "add" },
+                  diff: "",
+                },
+              ],
+            },
+          },
+        });
       }
       if (!process.env.RELAY_AGENT_NO_TITLE)
         send({

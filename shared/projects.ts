@@ -106,7 +106,7 @@ export interface ChatMessage {
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
-  /** Local: files this turn changed in the checkout, from snapshots before and after it. */
+  /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   ended?: number;
   author?: string;

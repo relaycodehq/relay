@@ -9,7 +9,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
-import { claudeActivity } from "./activity";
+import { claudeActivity, claudeEditedPaths } from "./activity";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
   AgentActivity,
@@ -753,6 +753,8 @@ export async function runClaudeProject(
           const activity = claudeActivity(tool.id, tool.name, tool.input);
           toolCalls.set(tool.id, activity);
           options.onActivity?.(activity);
+          const edited = claudeEditedPaths(tool.name, tool.input);
+          if (edited.length) options.onEdit?.(edited);
         }
         if (
           text &&

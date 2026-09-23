@@ -1028,6 +1028,9 @@ export class ProjectChats {
       : undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
+    // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
+    const edited = new Set<string>(),
+      commands = new Map<string, string>();
     try {
       const sessionKey = JSON.stringify([
         this.dir,
@@ -1074,6 +1077,8 @@ export class ProjectChats {
         onActivity: (activity: import("../shared/projects").AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
             projectTasks.record(root, chat.id, activity.label);
+          if (activity.kind === "command")
+            commands.set(activity.id, activity.label);
           const trace = (message.trace ??= []);
           const traceIndex = trace.findIndex((a) => a.id === activity.id);
           const entry = {
@@ -1100,6 +1105,9 @@ export class ProjectChats {
             trace.push({ kind: "commentary", id, text: text.slice(0, 12000) });
           }
           changed();
+        },
+        onEdit: (paths: string[]) => {
+          for (const path of paths) edited.add(path);
         },
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
@@ -1146,7 +1154,10 @@ export class ProjectChats {
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
-          const files = await finishTurn(root, first, before, message.id);
+          const files = await finishTurn(root, first, before, message.id, {
+            edited: [...edited],
+            commands: [...commands.values()],
+          });
           if (files.length) message.changes = files;
         }
       }
