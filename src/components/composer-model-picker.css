@@ -825,7 +825,7 @@
   --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
   --usage-ring-session: var(--accent);
 }
-.usage-ring-trigger svg {
+.usage-ring-dial {
   transform: rotate(-90deg);
 }
 .usage-ring-track,
