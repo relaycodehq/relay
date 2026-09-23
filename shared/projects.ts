@@ -58,6 +58,8 @@ export interface ChatSummary {
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
   stopped?: { at: number; items: ChatPending[] };
+  /** When the earliest message scheduled with Send later goes out. */
+  nextSend?: number;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
@@ -212,9 +214,14 @@ export interface QueuedChatMessage {
   created: number;
   error?: string;
 }
+/** Sent with Send later; goes out at `at`, or queues if an answer is running. */
+export interface ScheduledChatMessage extends QueuedChatMessage {
+  at: number;
+}
 export interface ProjectChat extends ChatSummary {
   requests?: AgentRequest[];
   queue?: QueuedChatMessage[];
+  scheduled?: ScheduledChatMessage[];
   queuePaused?: boolean;
   lastInput?: ProjectChatSend;
   messages: ChatMessage[];
@@ -265,6 +272,8 @@ export function applyChatPatch(
 export const projectChatSendSchema = z
   .object({
     delivery: z.enum(["queue", "steer"]).optional(),
+    /** Send later: hold the message until this time. */
+    sendAt: z.number().int().positive().optional(),
     id: idSchema,
     body: z.string().trim().min(1).max(32000),
     choice: aiSettingsSchema.shape.questions,
@@ -284,7 +293,7 @@ export interface ProjectApi {
     requestId: string,
     response: AgentResponse,
   ): Promise<void>;
-  /** `move` puts the message at `index` in the queue. */
+  /** `move` puts the message at `index` in the queue. Scheduled messages take `remove` and `steer`, which sends them now. */
   projectChatQueueAction(
     id: string,
     action: "remove" | "steer" | "move",

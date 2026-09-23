@@ -605,6 +605,9 @@
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
+.sb-status.scheduled {
+  color: var(--muted);
+}
 .sb-status.waiting i {
   position: relative;
   background: var(--sb-waiting);

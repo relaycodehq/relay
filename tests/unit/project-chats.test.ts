@@ -922,6 +922,50 @@ it("drains queued follow-ups in order and retains a paused queue across restart"
   expect((await chats.get(chat.id)).queue).toHaveLength(0);
 }, 20000);
 
+it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const soon = input("Check the deploy.");
+  await chats.send(chat.id, { ...soon, sendAt: Date.now() + 400 });
+  let saved = await chats.get(chat.id);
+  expect(saved.messages).toHaveLength(0);
+  expect(saved.scheduled?.[0]).toMatchObject({ input: { id: soon.id } });
+  expect(saved.scheduled?.[0].input.sendAt).toBeUndefined();
+  expect(chats.list(projectId)[0].nextSend).toBe(saved.scheduled?.[0].at);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.map((m) => m.id)).toEqual([
+      soon.id,
+    ]),
+  );
+  expect((await chats.get(chat.id)).scheduled).toBeUndefined();
+  expect(chats.list(projectId)[0].nextSend).toBeUndefined();
+
+  await expect(
+    chats.send(chat.id, { ...input("Too late"), sendAt: Date.now() - 1000 }),
+  ).rejects.toThrow("future");
+  const now = input("Send me early."),
+    dropped = input("Never mind.");
+  await chats.send(chat.id, { ...now, sendAt: Date.now() + 3_600_000 });
+  await chats.send(chat.id, { ...dropped, sendAt: Date.now() + 3_600_000 });
+  await chats.queueAction(chat.id, "steer", now.id);
+  await chats.queueAction(chat.id, "remove", dropped.id);
+  saved = await chats.get(chat.id);
+  expect(saved.messages.map((m) => m.id)).toEqual([soon.id, now.id]);
+  expect(saved.scheduled).toBeUndefined();
+
+  // Due while Relay was closed: it goes out once Relay arms it again.
+  const missed = input("Sent after restart.");
+  await chats.send(chat.id, { ...missed, sendAt: Date.now() + 300 });
+  await chats.dispose();
+  await new Promise((r) => setTimeout(r, 400));
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  expect((await chats.get(chat.id)).scheduled).toHaveLength(1);
+  chats.armWakeups();
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id),
+  );
+});
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");
   const chat = await chats.create(projectId, { kind: "project" });

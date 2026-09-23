@@ -68,6 +68,7 @@ import {
   pastedTexts,
 } from "../../shared/pasted-texts";
 import { PastedTextCard, PastedTextDialog } from "./PastedTextCard";
+import { SendLaterMenu } from "./SendLaterMenu";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -124,6 +125,7 @@ export function ProjectComposer({
       | "interactionMode"
       | "images"
       | "delivery"
+      | "sendAt"
     >,
   ) => Promise<boolean>;
   onStop: () => void;
@@ -556,7 +558,8 @@ export function ProjectComposer({
         return next;
       });
   }
-  async function send(steer = false) {
+  /** `sendAt` holds the message until then (Send later). */
+  async function send(steer = false, sendAt?: number) {
     if (busy || commands.interceptSend()) return;
     if (
       !selected ||
@@ -582,9 +585,11 @@ export function ProjectComposer({
         return;
       }
       const sent = await onSend({
-        ...(running
-          ? { delivery: steer ? ("steer" as const) : ("queue" as const) }
-          : {}),
+        ...(sendAt
+          ? { sendAt }
+          : running
+            ? { delivery: steer ? ("steer" as const) : ("queue" as const) }
+            : {}),
         body:
           mention || recipient === "message"
             ? body
@@ -619,6 +624,12 @@ export function ProjectComposer({
       sending.current = false;
     }
   }
+  const sendDisabled =
+    busy ||
+    (!draft.trim() && !images.length && !allowEmpty) ||
+    preparing ||
+    !selected ||
+    (recipient === "codex" && !supportsEffort(selected, codexModels));
   return (
     <div className="thread-compose-wrap">
       {planProvider && (
@@ -945,26 +956,23 @@ export function ProjectComposer({
             </button>
           )}
           {(!running || !!draft.trim() || !!images.length) && (
-            <button
-              className="primary send-message"
-              aria-label="Send message"
-              title={
-                running
-                  ? `Queue message · ${steerKeyLabel(sendKey)} to steer`
-                  : "Send message"
-              }
-              disabled={
-                busy ||
-                (!draft.trim() &&
-                  !images.length &&
-                  !allowEmpty) ||
-                preparing ||
-                !selected ||
-                (recipient === "codex" && !supportsEffort(selected))
-              }
+            <SendLaterMenu
+              disabled={sendDisabled}
+              onPick={(at) => void send(false, at)}
             >
-              <ArrowUp size={18} />
-            </button>
+              <button
+                className="primary send-message"
+                aria-label="Send message"
+                title={
+                  running
+                    ? `Queue message · ${steerKeyLabel(sendKey)} to steer · right-click to send later`
+                    : "Send message · right-click to send later"
+                }
+                disabled={sendDisabled}
+              >
+                <ArrowUp size={18} />
+              </button>
+            </SendLaterMenu>
           )}
         </div>
       </form>

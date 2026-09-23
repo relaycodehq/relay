@@ -7,6 +7,7 @@ import {
   Bell,
   Check,
   ChevronRight,
+  CalendarClock,
   Clock,
   Copy,
   Ellipsis,
@@ -163,6 +164,12 @@ function StatusMark({
         <i />
       </span>
     );
+  if (chat.nextSend)
+    return (
+      <span className="sb-status scheduled" title={sendsTitle(chat.nextSend)}>
+        <CalendarClock size={12} />
+      </span>
+    );
   return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
 }
 
@@ -208,6 +215,9 @@ function SnoozeMenu({
   );
 }
 
+const sendsTitle = (at: number) =>
+  `Sends a scheduled message ${wakeLabel(at, new Date())}`;
+
 /** Right side of a card's top row: live state, else the age. */
 function CardState({
   chat,
@@ -235,6 +245,16 @@ function CardState({
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
     return <span className="sb-card-state unread">Woke up</span>;
+  if (chat.nextSend && !unread)
+    return (
+      <span
+        className="sb-card-state scheduled"
+        title={sendsTitle(chat.nextSend)}
+      >
+        <CalendarClock size={12} />
+        Sends {wakeLabel(chat.nextSend, new Date(now))}
+      </span>
+    );
   return (
     <time className={`sb-card-state ${unread ? "unread" : ""}`}>
       {unread && <i />}

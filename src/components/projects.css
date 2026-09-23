@@ -2220,6 +2220,9 @@ details.agent-step > .agent-step-heading:hover {
   font-size: 11px;
   color: var(--muted);
 }
+.queued-status.error {
+  color: var(--danger, #e46b73);
+}
 .queued-message small {
   color: var(--muted);
   font-size: 11px;

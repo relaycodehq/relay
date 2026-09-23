@@ -23,8 +23,10 @@ import {
   ChevronDown,
   ArrowUp,
   Clock3,
+  CalendarClock,
   RotateCcw,
 } from "lucide-react";
+import { wakeLabel } from "../../shared/chat-activity";
 import {
   applyChatPatch,
   replyRoot,
@@ -724,6 +726,7 @@ export function ProjectChat({
       | "interactionMode"
       | "images"
       | "delivery"
+      | "sendAt"
     >,
   ): Promise<boolean> {
     if (busy) return false;
@@ -856,6 +859,7 @@ export function ProjectChat({
       setComposerRevision((value) => value + 1);
       await api.projectChatQueueAction(chat.id, "remove", input.id);
       await history.refetch();
+      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
     } catch (e) {
       setError(e);
     } finally {
@@ -873,6 +877,7 @@ export function ProjectChat({
     try {
       await api.projectChatQueueAction(chat.id, action, messageId, index);
       await history.refetch();
+      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
     } catch (e) {
       setError(e);
     } finally {
@@ -1246,6 +1251,61 @@ export function ProjectChat({
                     <kbd>{steerKeyLabel(sendKey)}</kbd> to steer
                   </p>
                 )}
+              </section>
+            )}
+            {!!history.data?.scheduled?.length && (
+              <section className="chat-queue" aria-label="Scheduled messages">
+                {[...history.data.scheduled]
+                  .sort((a, b) => a.at - b.at)
+                  .map((scheduled) => (
+                    <div key={scheduled.input.id} className="queued-message">
+                      <QueuedBody input={scheduled.input} />
+                      <footer>
+                        <span
+                          className={`queued-status${scheduled.error ? " error" : ""}`}
+                          title={
+                            scheduled.error ??
+                            new Date(scheduled.at).toLocaleString()
+                          }
+                        >
+                          <CalendarClock size={13} />{" "}
+                          {scheduled.error
+                            ? "Didn't send"
+                            : `Sends ${wakeLabel(scheduled.at, new Date())}`}
+                        </span>
+                        <span className="queued-actions">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label="Send now"
+                            title={
+                              running
+                                ? "Queue now, to send when the current answer finishes"
+                                : "Send now"
+                            }
+                            onPointerDown={(e) => e.preventDefault()}
+                            onClick={() =>
+                              void queueAction("steer", scheduled.input.id)
+                            }
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label="Cancel and return to the composer"
+                            title="Cancel and return to the composer"
+                            onPointerDown={(e) => e.preventDefault()}
+                            onClick={() =>
+                              void returnToComposer(scheduled.input)
+                            }
+                          >
+                            <X size={14} />
+                          </button>
+                        </span>
+                      </footer>
+                    </div>
+                  ))}
               </section>
             )}
             {root && shown.length === 1 && (
