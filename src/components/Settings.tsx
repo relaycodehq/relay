@@ -138,7 +138,9 @@ const categories: {
 
 const shortcuts: [string, string][] = [
   ["Open settings", "⌘ / Ctrl ,"],
+  ["New thread", "⌘ / Ctrl N"],
   ["View activity", "⌥⌘U"],
+  ["Open one of the first nine activity threads", "⌘1–⌘9"],
   ["Search pull requests", "⌘ / Ctrl F"],
   ["Open PR URL", "⌘ / Ctrl K"],
   ["Toggle file list", "⌘ / Ctrl B"],
