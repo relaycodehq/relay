@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Gitea, ApiError } from "./gitea";
 import { git } from "./git";
 import { workingTree, serializeRepo } from "./working-tree";
+import { remoteUrl } from "./repository";
 import type { Repo, Pull } from "../shared/types";
 import type {
   BranchPull,
@@ -24,19 +25,12 @@ interface SavedPlan {
   expires: number;
   result?: CreatedPullRequest;
 }
+/** A remote without credentials or a `.git` suffix, for comparing URLs. */
 function identity(raw: string) {
-  try {
-    const u = new URL(
-      raw.includes("://")
-        ? raw
-        : raw.replace(/^([^@]+@)?([^:]+):/, "ssh://$2/"),
-    );
-    u.username = "";
-    u.password = "";
-    return `${u.protocol}//${u.host}${u.pathname.replace(/\.git\/?$/, "").replace(/\/$/, "")}`;
-  } catch {
-    return null;
-  }
+  const u = remoteUrl(raw);
+  return u
+    ? `${u.protocol}//${u.host}${u.pathname.replace(/\.git\/?$/, "").replace(/\/$/, "")}`
+    : null;
 }
 const asBranchPull = (repo: Repo, p: Pull): BranchPull => ({
   ref: { ...repo, number: p.number },

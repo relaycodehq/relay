@@ -85,19 +85,16 @@ export function parseStatus(raw: string): WorkingChange[] {
 }
 async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
-  const remote =
-    (
-      await git(root, ["config", "--get", `branch.${branch}.remote`]).catch(
-        () => "",
-      )
-    ).trim() || "origin";
-  const merge =
-    (
-      await git(root, ["config", "--get", `branch.${branch}.merge`]).catch(
-        () => "",
-      )
-    ).trim() || `refs/heads/${branch}`;
-  const remotes = (await git(root, ["remote"])).trim().split("\n");
+  const config = (key: string) =>
+    git(root, ["config", "--get", `branch.${branch}.${key}`]).then(
+      (out) => out.trim(),
+      () => "",
+    );
+  const [remote, merge, remotes] = await Promise.all([
+    config("remote").then((value) => value || "origin"),
+    config("merge").then((value) => value || `refs/heads/${branch}`),
+    git(root, ["remote"]).then((out) => out.trim().split("\n")),
+  ]);
   if (!remotes.includes(remote) || !merge.startsWith("refs/heads/"))
     return null;
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
@@ -116,67 +113,65 @@ async function fetchUpstream(root: string, branch: string) {
   await git(root, ["fetch", "--prune", "--quiet", remote], 60000);
 }
 export async function workingTree(root: string): Promise<WorkingTree> {
-  const [headRaw, branchRaw, raw] = await Promise.all([
+  // This runs every few seconds and around every Git action, so reads that
+  // don't depend on each other run together (status takes no index lock).
+  const [headRaw, branchRaw, raw, upstream, operation] = await Promise.all([
     git(root, ["rev-parse", "HEAD"]),
     git(root, ["branch", "--show-current"]),
     git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+    git(root, [
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "@{upstream}",
+    ]).then(
+      (out) => out.trim() || null,
+      () => null,
+    ),
+    gitOperation(root),
   ]);
   const head = headRaw.trim(),
     branch = branchRaw.trim(),
     changes = parseStatus(raw);
+  for (const c of changes) workingPathSchema.parse(c.path);
   // Staging the status line doesn't show (such as `git add -p`) only happens
   // on changed paths. The whole index is megabytes in a large repository.
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
-  const index = tracked.length
-    ? await git(root, [
-        "ls-files",
-        "--stage",
-        "-z",
-        ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
-      ])
-    : "";
-  const stamps = [];
-  for (const c of changes) {
-    workingPathSchema.parse(c.path);
-    const s = await lstat(join(root, c.path)).catch(
-      (e: NodeJS.ErrnoException) => {
-        if (e.code !== "ENOENT") throw e;
-        return null;
-      },
-    );
-    stamps.push(
-      s
-        ? [c.path, s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode]
-        : [c.path, null],
-    );
-  }
-  const upstream =
-    (
-      await git(root, [
-        "rev-parse",
-        "--abbrev-ref",
-        "--symbolic-full-name",
-        "@{upstream}",
-      ]).catch(() => "")
-    ).trim() || null;
-  const destination = await pushDestination(root, branch);
-  const counts = upstream
-    ? (
-        await git(root, [
+  const [index, stamps, destination, counts, log] = await Promise.all([
+    tracked.length
+      ? git(root, [
+          "ls-files",
+          "--stage",
+          "-z",
+          ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
+        ])
+      : "",
+    Promise.all(
+      changes.map(async (c) => {
+        const s = await lstat(join(root, c.path)).catch(
+          (e: NodeJS.ErrnoException) => {
+            if (e.code !== "ENOENT") throw e;
+            return null;
+          },
+        );
+        return s
+          ? [c.path, s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode]
+          : [c.path, null];
+      }),
+    ),
+    pushDestination(root, branch),
+    upstream
+      ? git(root, [
           "rev-list",
           "--left-right",
           "--count",
           `${upstream}...HEAD`,
-        ])
-      )
-        .trim()
-        .split(/\s+/)
-        .map(Number)
-    : [0, 0];
-  const log = upstream
-    ? await git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
-    : "";
-  const operation = await gitOperation(root);
+        ]).then((out) => out.trim().split(/\s+/).map(Number))
+      : [0, 0],
+    upstream
+      ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
+      : "",
+  ]);
   return {
     head,
     branch,
