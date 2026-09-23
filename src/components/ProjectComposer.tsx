@@ -246,10 +246,6 @@ export function ProjectComposer({
       : selected;
   const [pickModel, setPickModel] = useState(0);
   function selectModel(next: "codex" | "claude" | "message", model: string) {
-    applyModel(next, model);
-    if (mention) onDraft(mention.question);
-  }
-  function applyModel(next: "codex" | "claude" | "message", model: string) {
     setProvider(next);
     if (next === "claude") {
       const efforts = claudeEffortsFor(claudeModels, model);
@@ -262,8 +258,9 @@ export function ProjectComposer({
     }
     if (next === "codex" && selected)
       setChoice(supportedChoice({ ...selected, model }, codexModels));
+    dropMention();
   }
-  /** A command picked an agent, so an @mention would only override it. */
+  /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
     const prefix = /^\s*@(?:codex|claude)(?=\s|$)\s*/i.exec(draft)?.[0];
     if (prefix)
@@ -413,8 +410,7 @@ export function ProjectComposer({
       if (model === undefined) return "Enter a valid model ID.";
       if (next === "message")
         return "Choose Codex or Claude before changing agent settings.";
-      applyModel(next, model);
-      dropMention();
+      selectModel(next, model);
       return true;
     }
     if (recipient === "message")
