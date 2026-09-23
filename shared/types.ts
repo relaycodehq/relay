@@ -6,6 +6,7 @@ import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
+import type { UpdateState } from "./updates";
 import type { LineQuestion } from "./questions";
 import type {
   ProjectCheckInfo,
@@ -303,6 +304,12 @@ export interface Api
     comment: string,
   ): Promise<void>;
   openExternal(url: string): Promise<void>;
+  updateState(): Promise<UpdateState>;
+  checkForUpdates(): Promise<UpdateState>;
+  downloadUpdate(): Promise<UpdateState>;
+  /** Quits and hands over to the new version, which starts by itself. */
+  installUpdate(): Promise<UpdateState>;
+  onUpdate(callback: (state: UpdateState) => void): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {
     kind: "light" | "dark";

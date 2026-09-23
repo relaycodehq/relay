@@ -1,7 +1,6 @@
 import { runClaudeProject } from "./claude-project";
-import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { findExecutable } from "../executables";
+import { findExecutable, spawnExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
 export async function runClaude(
   options: AgentOptions & { model: string; effort: string },
@@ -22,7 +21,7 @@ export async function runClaude(
   );
   options.signal.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const child = spawn(
+    const child = spawnExecutable(
       executable,
       [
         "--print",

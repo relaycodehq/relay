@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawnExecutable } from "../executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
 
 /** A native session owns its approvals. Keep its process alive between project turns. */
@@ -14,7 +14,7 @@ export class CodexConnection {
   onError?: (error: Error) => void;
   private release!: () => void;
   constructor(executable: string, args: string[], cwd: string) {
-    this.child = spawn(executable, args, {
+    this.child = spawnExecutable(executable, args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });

@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { findExecutable } from "./executables";
+import { findExecutable, spawnExecutable } from "./executables";
 import { withCodexTransport } from "./rooms/codex-transport";
 const skillSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_.:-]+$/),
@@ -35,7 +34,7 @@ export function codexSkills(root: string): Promise<CodexSkill[]> {
   return result;
 }
 async function discover(root: string): Promise<CodexSkill[]> {
-  const child = spawn(await findExecutable("codex"), ["app-server"], {
+  const child = spawnExecutable(await findExecutable("codex"), ["app-server"], {
     cwd: root,
     stdio: ["pipe", "pipe", "pipe"],
   });

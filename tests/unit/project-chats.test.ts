@@ -17,7 +17,10 @@ import { ProjectChats } from "../../electron/project-chats";
 import { findExecutable } from "../../electron/executables";
 import { defaultAISettings } from "../../shared/settings";
 import type { ChatMessage } from "../../shared/projects";
-vi.mock("../../electron/executables", () => ({ findExecutable: vi.fn() }));
+vi.mock("../../electron/executables", async (actual) => ({
+  ...(await actual<typeof import("../../electron/executables")>()),
+  findExecutable: vi.fn(),
+}));
 let root: string,
   store: Store,
   projects: Projects,

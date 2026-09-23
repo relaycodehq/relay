@@ -5,7 +5,10 @@ import { findExecutable } from "../../electron/executables";
 import { openLinuxTerminal } from "../../electron/terminal";
 
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
-vi.mock("../../electron/executables", () => ({ findExecutable: vi.fn() }));
+vi.mock("../../electron/executables", async (actual) => ({
+  ...(await actual<typeof import("../../electron/executables")>()),
+  findExecutable: vi.fn(),
+}));
 beforeEach(() => vi.resetAllMocks());
 
 function spawned(error?: Error) {

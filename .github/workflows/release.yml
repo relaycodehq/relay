@@ -1,0 +1,111 @@
+name: Release
+# Every push to main becomes a release that installed apps update to.
+# Installers go to the public releases repo so friends need no GitHub access.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # A newer push supersedes a release that is still building.
+  group: release
+  cancel-in-progress: true
+env:
+  RELEASES_REPO: lubomirmolin/relay-releases
+jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        # major.minor from package.json, patch from the run number (stable across re-runs).
+        run: echo "version=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")').${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:setup
+      - run: npm test
+      - run: python3 -m unittest discover -s tests/packaging -v
+
+  build:
+    needs: [version, test]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-14
+            name: mac
+            package: npx electron-builder --mac --publish never
+            files: |
+              release/*.zip
+              release/*.dmg
+          - os: windows-latest
+            name: windows
+            package: npx electron-builder --win --publish never
+            files: release/*.exe
+          - os: ubuntu-22.04
+            name: linux
+            package: npx electron-builder --linux AppImage dir --x64 --publish never && python3 scripts/package-omarchy.py
+            files: |
+              release/*.AppImage
+              release/Relay-Omarchy-x86_64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm version ${{ needs.version.outputs.version }} --no-git-tag-version --allow-same-version
+      - run: npm run build
+      - name: Windows-specific tests
+        if: runner.os == 'Windows'
+        run: npx vitest run tests/unit/platform.test.ts tests/unit/terminal.test.ts
+      - name: Package
+        run: ${{ matrix.package }}
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relay-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Write update feed
+        env:
+          NOTES: ${{ github.event.head_commit.message }}
+        run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$NOTES"
+      - name: Publish to ${{ env.RELEASES_REPO }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" out/* --repo "$RELEASES_REPO" --clobber
+          else
+            gh release create "$tag" out/* --repo "$RELEASES_REPO" \
+              --title "Relay $VERSION" --notes "${NOTES:-Relay $VERSION}" --latest
+          fi

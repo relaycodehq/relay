@@ -5,13 +5,12 @@ import {
   type AgentProvider,
   type ModelChoice,
 } from "../../shared/settings";
-import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import { findExecutable } from "../executables";
+import { findExecutable, spawnExecutable } from "../executables";
 import { sdk as claudeSdk } from "../rooms/claude-project";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
 import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";
@@ -391,7 +390,7 @@ export async function classifyChanges(
       ),
     );
     return await new Promise((resolve, reject) => {
-      const child = spawn(executable, args, {
+      const child = spawnExecutable(executable, args, {
         cwd: dir,
         env,
         stdio: ["pipe", "pipe", "pipe"],

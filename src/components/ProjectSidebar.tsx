@@ -41,6 +41,7 @@ import {
 } from "../../shared/chat-activity";
 import { api } from "../lib/api";
 import { IconButton, Spinner } from "./ui";
+import { UpdateButton } from "./UpdateButton";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import {
@@ -1415,6 +1416,7 @@ export function ProjectSidebar({
           </span>
           <span>{account ?? "Connect Gitea"}</span>
         </button>
+        <UpdateButton />
         <IconButton label="Open settings" onClick={onSettings}>
           <Settings2 size={15} />
         </IconButton>

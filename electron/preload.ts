@@ -128,6 +128,10 @@ const methods = [
   "providerUsage",
   "claudeModels",
   "openExternal",
+  "updateState",
+  "checkForUpdates",
+  "downloadUpdate",
+  "installUpdate",
   "applyAppearance",
   "parseUrl",
 ];
@@ -147,6 +151,11 @@ contextBridge.exposeInMainWorld("relay", {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:project-chat", listener);
     return () => ipcRenderer.removeListener("relay:project-chat", listener);
+  },
+  onUpdate: (callback: (state: unknown) => void) => {
+    const listener = (_event: unknown, value: unknown) => callback(value);
+    ipcRenderer.on("relay:update", listener);
+    return () => ipcRenderer.removeListener("relay:update", listener);
   },
   onOpenUrl: (callback: (url: string) => void) => {
     const listener = (_event: unknown, url: string) => callback(url);

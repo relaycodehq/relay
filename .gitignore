@@ -13,3 +13,4 @@ server/setup-key.txt
 server/.secrets/
 /t3code/
 /openusage/
+__pycache__/

@@ -11,7 +11,7 @@ import {
   codexModelArgs,
   type ModelChoice,
 } from "../shared/settings";
-import { openLinuxTerminal } from "./terminal";
+import { openLinuxTerminal, openWindowsTerminal } from "./terminal";
 export async function launchCodex(
   dir: string,
   dataDir: string,
@@ -44,15 +44,15 @@ export async function openCodexTerminal(
   choice?: ModelChoice,
 ) {
   const codex = await findExecutable("codex");
-  const modelArgs = choice
-    ? codexModelArgs(choice).map(shellQuote).join(" ")
-    : "";
-  await openTerminal(
+  await openTerminal(dir, dataDir, prompt, codex, [
+    "--sandbox",
+    sandbox,
+    "--ask-for-approval",
+    "on-request",
+    "--cd",
     dir,
-    dataDir,
-    prompt,
-    `${shellQuote(codex)} --sandbox ${sandbox} --ask-for-approval on-request --cd ${shellQuote(dir)} ${modelArgs}`,
-  );
+    ...(choice ? codexModelArgs(choice) : []),
+  ]);
 }
 
 /** Claude Code without its file-editing tools, for question-only sessions. */
@@ -70,27 +70,48 @@ export async function openClaudeQuestionTerminal(
     ...(model ? ["--model", model] : []),
     ...(effort ? ["--effort", effort] : []),
   ];
-  await openTerminal(
-    dir,
-    dataDir,
-    prompt,
-    `${shellQuote(claude)} ${args.map(shellQuote).join(" ")}`,
-  );
+  await openTerminal(dir, dataDir, prompt, claude, args);
 }
 
-/** Runs `command "<prompt>"` in a new terminal window at dir. */
+/** Runs `executable ...args "<prompt>"` in a new terminal window at dir. */
 async function openTerminal(
   dir: string,
   dataDir: string,
   prompt: string,
-  command: string,
+  executable: string,
+  args: string[],
 ) {
   const taskDir = join(dataDir, "handoffs");
   await mkdir(taskDir, { recursive: true, mode: 0o700 });
   const id = randomUUID(),
     promptPath = join(taskDir, `${id}.txt`),
-    scriptPath = join(taskDir, `${id}.command`);
+    scriptPath = join(
+      taskDir,
+      `${id}.${process.platform === "win32" ? "ps1" : "command"}`,
+    );
   await writeFile(promptPath, prompt, { mode: 0o600 });
+  const discard = () =>
+    Promise.all([promptPath, scriptPath].map((p) => rm(p, { force: true })));
+  if (process.platform === "win32") {
+    await writeFile(
+      scriptPath,
+      powershellScript(dir, promptPath, scriptPath, executable, args),
+    );
+    try {
+      await openWindowsTerminal(dir, scriptPath);
+    } catch (error) {
+      await discard();
+      throw error;
+    }
+    return;
+  }
+  const command = [
+    ...(/\.[cm]?js$/i.test(executable) ? ["node"] : []),
+    executable,
+    ...args,
+  ]
+    .map(shellQuote)
+    .join(" ");
   const cleanupCommand = `rm -f -- ${shellQuote(promptPath)} ${shellQuote(scriptPath)}`;
   const script = `#!/bin/sh\ntrap ${shellQuote(cleanupCommand)} EXIT\ncd -- ${shellQuote(dir)} || exit 1\n${command} "$(cat -- ${shellQuote(promptPath)})"\n`;
   await writeFile(scriptPath, script, { mode: 0o700 });
@@ -98,9 +119,7 @@ async function openTerminal(
   if (process.platform === "darwin") {
     const error = await shell.openPath(scriptPath);
     if (error) {
-      await Promise.all(
-        [promptPath, scriptPath].map((p) => rm(p, { force: true })),
-      );
+      await discard();
       throw new Error(error);
     }
     return;
@@ -108,9 +127,35 @@ async function openTerminal(
   try {
     await openLinuxTerminal(dir, scriptPath);
   } catch (error) {
-    await Promise.all(
-      [promptPath, scriptPath].map((p) => rm(p, { force: true })),
-    );
+    await discard();
     throw error;
   }
+}
+
+const powershellQuote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+/**
+ * Windows PowerShell 5.1 passes native arguments without escaping embedded
+ * quotes. Pin the same legacy behaviour on PowerShell 7 and escape the prompt
+ * the way the Microsoft C runtime parses it, so both shells deliver it intact.
+ */
+export function powershellScript(
+  dir: string,
+  promptPath: string,
+  scriptPath: string,
+  executable: string,
+  args: string[],
+) {
+  const [file, ...rest] = /\.[cm]?js$/i.test(executable)
+    ? ["node", executable, ...args]
+    : [executable, ...args];
+  return [
+    "$PSNativeCommandArgumentPassing = 'Legacy'",
+    `Set-Location -LiteralPath ${powershellQuote(dir)}`,
+    `$prompt = Get-Content -Raw -Encoding UTF8 -LiteralPath ${powershellQuote(promptPath)}`,
+    `Remove-Item -Force -LiteralPath ${powershellQuote(promptPath)}, ${powershellQuote(scriptPath)}`,
+    String.raw`$prompt = ($prompt -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'`,
+    `& ${[file, ...rest].map(powershellQuote).join(" ")} $prompt`,
+    "",
+  ].join("\r\n");
 }

@@ -14,9 +14,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "start": "electron .",
-    "package:mac": "npm run build && electron-builder --mac dir",
-    "package:linux": "npm run build && electron-builder --linux AppImage tar.gz --x64",
-    "package:omarchy": "npm run build && electron-builder --linux dir --x64 && python3 scripts/package-omarchy.py",
+    "package:mac": "npm run build && electron-builder --mac --publish never",
+    "package:linux": "npm run build && electron-builder --linux AppImage tar.gz --x64 --publish never",
+    "package:omarchy": "npm run build && electron-builder --linux dir --x64 --publish never && python3 scripts/package-omarchy.py",
     "format": "prettier --write src electron shared tests scripts *.ts",
     "test:triage-live": "node scripts/eval-triage.mjs",
     "test:setup": "npm ci --prefix tests/fixtures/language-toolchain --ignore-scripts",
@@ -25,7 +25,8 @@
     "package:server": "node scripts/package-rooms.mjs",
     "vendor:t3:check": "python3 scripts/update-t3-streaming.py",
     "vendor:t3:update": "python3 scripts/update-t3-streaming.py --update",
-    "test:streaming": "vitest run tests/unit/t3-streaming.test.ts tests/unit/project-chats.test.ts"
+    "test:streaming": "vitest run tests/unit/t3-streaming.test.ts tests/unit/project-chats.test.ts",
+    "package:win": "npm run build && electron-builder --win --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.276",
@@ -89,7 +90,18 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dir"
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "hardenedRuntime": true,
       "icon": "assets/icon.icns",
@@ -102,9 +114,35 @@
         "tar.gz"
       ],
       "icon": "assets/icon.png",
-      "syncDesktopName": true
+      "syncDesktopName": true,
+      "executableName": "review-relay"
     },
-    "compression": "normal"
+    "compression": "normal",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": null,
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
+      "shortcutName": "Relay"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    }
   },
   "license": "MIT",
   "desktopName": "review-relay-experimental.desktop"

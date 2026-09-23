@@ -15,7 +15,8 @@ import { runCodex } from "../../electron/rooms/codex";
 import type { Gitea } from "../../electron/gitea";
 
 vi.mock("../../electron/rooms/codex", () => ({ runCodex: vi.fn() }));
-vi.mock("../../electron/executables", () => ({
+vi.mock("../../electron/executables", async (actual) => ({
+  ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(async () => "/test/codex"),
 }));
 it("retries a redeemed invitation after a lost response without a secure credential store", async () => {

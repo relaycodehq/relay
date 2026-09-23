@@ -75,6 +75,7 @@ import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
 import { projectTasks } from "./tasks";
 import { inspectFolder } from "./repository";
+import { Updater } from "./updater";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
   bodySchema,
@@ -125,6 +126,9 @@ let devops: DevOps;
 let projects: Projects;
 let projectChats: ProjectChats;
 const pullRequestCreation = new PullRequestCreation();
+const updater = new Updater((state) => {
+  if (win && !win.isDestroyed()) win.webContents.send("relay:update", state);
+});
 const liveSyncs = new Map<string, LiveSync>();
 const startingLiveSyncRoots = new Set<string>();
 async function stopSyncs() {
@@ -1328,6 +1332,14 @@ async function dispatch(method: string, args: unknown[]) {
       }
       return;
     }
+    case "updateState":
+      return updater.current;
+    case "checkForUpdates":
+      return updater.check();
+    case "downloadUpdate":
+      return updater.download();
+    case "installUpdate":
+      return updater.installAndRestart();
     case "openExternal": {
       const u = new URL(z.string().max(4096).parse(args[0]));
       if (!["https:", "http:"].includes(u.protocol) || u.username || u.password)
@@ -1449,6 +1461,7 @@ app
         };
       }
     });
+    updater.start();
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([
         {
