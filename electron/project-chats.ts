@@ -191,7 +191,7 @@ export class ProjectChats {
       .map((c) => {
         const active = this.active.get(c.id) ?? reviewing.get(c.id);
         const pending = [
-          ...this.pending(c.id),
+          ...this.pending(c.id).map((p) => p.item),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
             kind: "wakeup",
             id: w.id,
@@ -225,28 +225,19 @@ export class ProjectChats {
     // Its timer finds it gone and sends nothing.
     if (chat.heldWakeups?.some((w) => w.id === pendingId))
       return this.dropWakeup(chat, pendingId);
-    for (const key of this.providerSessions) {
-      const [, chatId, branch] = JSON.parse(key) as string[];
-      if (chatId !== id) continue;
-      const item = claudePending(key).find((p) => p.id === pendingId);
-      if (!item) continue;
-      if (item.kind === "task") return stopClaudeTask(key, pendingId);
-      return this.send(id, {
-        ...this.sessionInput(
-          chat,
-          "claude",
-          branch === "main" ? undefined : branch,
-        ),
-        body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
-      });
-    }
-    throw new Error("That work has already finished.");
+    const work = this.pending(id).find((p) => p.item.id === pendingId);
+    if (!work) throw new Error("That work has already finished.");
+    if (work.item.kind === "task") return stopClaudeTask(work.key, pendingId);
+    return this.send(id, {
+      ...this.sessionInput(chat, "claude", work.parentId),
+      body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
+    });
   }
   /** Background commands and agents still running, across every thread. */
   runningTasks() {
-    return [...this.providerSessions].flatMap((key) =>
-      claudePending(key).filter((p) => p.kind === "task"),
-    );
+    return this.pending()
+      .map((p) => p.item)
+      .filter((item) => item.kind === "task");
   }
   /** Arms the wake-ups kept when Relay last closed, and scheduled messages. */
   armWakeups() {
@@ -358,31 +349,23 @@ export class ProjectChats {
    */
   private async keepPending() {
     const now = Date.now();
-    const left = new Map<string, { parentId?: string; item: ChatPending }[]>();
-    for (const key of this.providerSessions) {
-      const [, chatId, branch] = JSON.parse(key) as string[];
-      for (const item of claudePending(key))
-        left
-          .set(chatId, left.get(chatId) ?? [])
-          .get(chatId)!
-          .push({
-            item,
-            ...(branch === "main" ? {} : { parentId: branch }),
-          });
-    }
-    for (const [chatId, entries] of left) {
+    const left = this.pending();
+    for (const chatId of new Set(left.map((p) => p.chatId))) {
       const chat = await this.load(chatId).catch(() => undefined);
       if (!chat) continue;
       const stopped: StoppedWork[] = [];
-      for (const { item, parentId } of entries)
+      const work = left.filter((p) => p.chatId === chatId);
+      for (const { item, parentId } of work) {
+        const reply = parentId ? { parentId } : {};
         if (item.kind === "wakeup" && !item.recurring && item.at)
           (chat.heldWakeups ??= []).push({
             id: item.id,
             prompt: item.prompt,
             at: item.at,
-            ...(parentId ? { parentId } : {}),
+            ...reply,
           });
-        else stopped.push({ ...item, ...(parentId ? { parentId } : {}) });
+        else stopped.push({ ...item, ...reply });
+      }
       if (stopped.length)
         chat.stopped = {
           at: now,
@@ -415,13 +398,22 @@ export class ProjectChats {
       });
     }
   }
-  /** Background work and wake-ups in the thread's live Claude sessions, replies included. */
-  private pending(chatId: string) {
-    const pending: ChatPending[] = [];
-    for (const key of this.providerSessions)
-      if ((JSON.parse(key) as string[])[1] === chatId)
-        pending.push(...claudePending(key));
-    return pending;
+  /**
+   * Background work and wake-ups in the live Claude sessions of a thread, or
+   * of every thread, with the side conversation each session belongs to.
+   */
+  private pending(chatId?: string) {
+    return [...this.providerSessions].flatMap((key) => {
+      const [, id, branch] = JSON.parse(key) as string[];
+      if (chatId && id !== chatId) return [];
+      const parentId = branch === "main" ? undefined : branch;
+      return claudePending(key).map((item) => ({
+        key,
+        chatId: id,
+        parentId,
+        item,
+      }));
+    });
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {

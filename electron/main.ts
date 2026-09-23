@@ -300,9 +300,7 @@ app.on("before-quit", (event) => {
             ? "Claude is still running something in the background."
             : `Claude is still running ${tasks.length} things in the background.`,
         detail: [
-          ...tasks
-            .slice(0, 5)
-            .map((t) => `• ${t.kind === "task" ? t.description : ""}`),
+          ...tasks.slice(0, 5).map((t) => `• ${t.description}`),
           "",
           "Quitting stops it. Relay will offer to pick it back up next time.",
         ].join("\n"),
