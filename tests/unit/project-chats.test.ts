@@ -184,6 +184,26 @@ it("generates a separate title when Codex sends no thread name and persists it",
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
 }, 12000);
+it("retries a missing title once, not every time the thread is read", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  // The generated title is the prompt excerpt already.
+  await chats.send(chat.id, input("@codex Cache guard behavior"));
+  const titleRuns = async () =>
+    (await readFile(join(root, "capture.jsonl"), "utf8"))
+      .split("\n")
+      .filter((line) => line.includes("Generate a short title")).length;
+  await vi.waitFor(async () => expect(await titleRuns()).toBe(1), {
+    timeout: 8000,
+  });
+  for (let read = 0; read < 3; read++) {
+    await new Promise((r) => setTimeout(r, 500));
+    chats.ensureTitle(chat.id);
+  }
+  await new Promise((r) => setTimeout(r, 1000));
+  expect(await titleRuns()).toBe(1);
+  expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
+}, 15000);
 it("keeps a user's thread name over the prompt excerpt and generated titles", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });

@@ -107,6 +107,8 @@ export class ProjectChats {
     { abort: AbortController; job: Promise<void> }
   >();
   private titleUpdates = new Set<Promise<void>>();
+  /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
+  private titlesAsked = new Set<string>();
   private reviews = new DeepReviews({
     load: (id) => this.load(id),
     save: (chat) => this.save(chat),
@@ -1781,9 +1783,11 @@ export class ProjectChats {
       !answer.provider ||
       chat.renamed ||
       chat.title !== promptTitle(firstUser.body) ||
-      this.titleJobs.has(chat.id)
+      this.titlesAsked.has(chat.id)
     )
       return;
+    // A title can come back as the excerpt; asking again would never end.
+    this.titlesAsked.add(chat.id);
     const titleAbort = new AbortController();
     const job = (async () => {
       // One exhausted or unavailable CLI must not leave every thread named
