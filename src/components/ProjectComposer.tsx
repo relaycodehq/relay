@@ -1,9 +1,4 @@
-import {
-  runtimeModes,
-  savedRuntimeMode,
-  type RuntimeMode,
-  type InteractionMode,
-} from "../../shared/agent-modes";
+import { runtimeModes } from "../../shared/agent-modes";
 import { ComposerModeControls } from "./ComposerModeControls";
 import {
   ComposerPromptInput,
@@ -33,7 +28,6 @@ import {
   reasoningEffortsFor,
   effortLabels,
   type ReasoningEffort,
-  aiSettingsSchema,
   codexQuestionChoice,
   claudeEfforts,
   type ClaudeModel,
@@ -46,6 +40,10 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
+import {
+  loadComposerSettings,
+  saveComposerSettings,
+} from "../lib/composer-settings";
 import { api } from "../lib/api";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { useCodexModels } from "../lib/useCodexModels";
@@ -137,40 +135,12 @@ export function ProjectComposer({
   placeholder?: string;
 }) {
   const settings = useAISettings();
-  const [saved] = useState(() => {
-    const read = (key: string) => {
-      try {
-        return JSON.parse(
-          localStorage.getItem("composer-settings:" + key) || "null",
-        );
-      } catch {
-        return null;
-      }
-    };
-    const own = read(settingsKey);
-    if (own || !inherit) return own;
-    const base = read(inherit.settingsKey);
-    return inherit.provider ? { ...base, provider: inherit.provider } : base;
-  });
-  const [provider, setProvider] = useState<"codex" | "claude" | "message">(
-    ["codex", "claude", "message"].includes(saved?.provider)
-      ? saved.provider
-      : shared
-        ? "message"
-        : "codex",
+  const [saved] = useState(() =>
+    loadComposerSettings(settingsKey, shared, inherit),
   );
-  const [choice, setChoice] = useState<ModelChoice | undefined>(
-    () => aiSettingsSchema.shape.questions.safeParse(saved?.choice).data,
-  );
-  const [claude, setClaude] = useState<{
-    model: string;
-    reasoningEffort: ReasoningEffort;
-  }>(() => ({
-    model: modelSchema.safeParse(saved?.claude?.model).data ?? "",
-    reasoningEffort: claudeEfforts.includes(saved?.claude?.reasoningEffort)
-      ? reasoningEffortSchema.parse(saved.claude.reasoningEffort)
-      : "",
-  }));
+  const [provider, setProvider] = useState(saved.provider);
+  const [choice, setChoice] = useState(saved.choice);
+  const [claude, setClaude] = useState(saved.claude);
   const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
   const composerLive = useRef(true);
   const loadClaudeModels = useCallback(() => {
@@ -193,23 +163,16 @@ export function ProjectComposer({
   const claudeListed = findClaudeModel(claudeModels, claude.model);
   // Unknown models (list failed or a custom id) offer every Claude level.
   const claudeModelEfforts = claudeListed?.efforts ?? claudeEfforts;
-  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>(() =>
-    savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
-  );
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>(
-    saved?.interactionMode === "plan" ? "plan" : "default",
-  );
+  const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
+  const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
   useEffect(() => {
-    localStorage.setItem(
-      "composer-settings:" + settingsKey,
-      JSON.stringify({
-        provider,
-        choice,
-        claude,
-        runtimeMode,
-        interactionMode,
-      }),
-    );
+    saveComposerSettings(settingsKey, {
+      provider,
+      choice,
+      claude,
+      runtimeMode,
+      interactionMode,
+    });
   }, [settingsKey, provider, choice, claude, runtimeMode, interactionMode]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);

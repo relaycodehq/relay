@@ -46,6 +46,7 @@ import {
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
+import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
@@ -718,22 +719,11 @@ export function ProjectChat({
       created.current = target;
       // Messages in the thread go to the lead, with the lead's settings.
       const { lead } = config;
-      localStorage.setItem(
-        "composer-settings:" + target.id,
-        JSON.stringify({
-          provider: lead.provider,
-          ...(lead.provider === "codex"
-            ? { choice: lead.choice }
-            : {
-                claude: {
-                  model: lead.choice.model,
-                  reasoningEffort: lead.choice.reasoningEffort,
-                },
-              }),
-          runtimeMode: config.runtimeMode,
-          interactionMode: "default",
-        }),
-      );
+      saveSentSettings(target.id, lead.provider, {
+        ...lead,
+        runtimeMode: config.runtimeMode,
+        interactionMode: "default",
+      });
       await api.startDeepReview(target.id, config);
       follow.current = true;
       await onCreated(target);
@@ -983,14 +973,10 @@ export function ProjectChat({
       // Persist the complete draft before removing the durable queue entry.
       await saveDraftImages(key, restored);
       onDraft(body, key);
-      localStorage.setItem(
-        "composer-settings:" + id,
-        JSON.stringify({
-          provider: agentMention(input.body)?.provider ?? "message",
-          choice: input.choice,
-          runtimeMode: input.runtimeMode,
-          interactionMode: input.interactionMode,
-        }),
+      saveSentSettings(
+        id,
+        agentMention(input.body)?.provider ?? "message",
+        input,
       );
       if (restoredCode.refs.length)
         setCodeRefs((refs) => [
