@@ -266,6 +266,15 @@ const QUEUED_DRAG = "application/x-relay-queued-message";
  * pixel offset would land somewhere else. Threads left at the bottom have no
  * entry and open pinned there. */
 const readingPlaces = new Map<string, { id: string; offset: number }>();
+/** The message at the top of the thread's view, and how far below it starts. */
+function placeInView(view: HTMLElement) {
+  const top = view.getBoundingClientRect().top;
+  for (const m of view.querySelectorAll<HTMLElement>("[data-message-id]")) {
+    const box = m.getBoundingClientRect();
+    if (box.bottom > top)
+      return { id: m.dataset.messageId!, offset: box.top - top };
+  }
+}
 const Message = memo(function Message({
   message: m,
   chatId,
@@ -1306,18 +1315,8 @@ export function ProjectChat({
               readingPlaces.delete(place);
               return;
             }
-            const view = e.getBoundingClientRect().top;
-            for (const m of column.current?.querySelectorAll<HTMLElement>(
-              "[data-message-id]",
-            ) ?? []) {
-              const box = m.getBoundingClientRect();
-              if (box.bottom <= view) continue;
-              readingPlaces.set(place, {
-                id: m.dataset.messageId!,
-                offset: box.top - view,
-              });
-              break;
-            }
+            const top = placeInView(e);
+            if (top) readingPlaces.set(place, top);
           }}
         >
           {chat && history.isPending && (
@@ -1334,7 +1333,11 @@ export function ProjectChat({
             {shown.length > visible && (
               <button
                 className="load-more"
-                onClick={() => setVisible((v) => v + 80)}
+                onClick={() => {
+                  // They go in above the message being read, which stays put.
+                  returning.current = placeInView(scroll.current!);
+                  setVisible((v) => v + 80);
+                }}
               >
                 Earlier messages
               </button>
