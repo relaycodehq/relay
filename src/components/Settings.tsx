@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Info,
@@ -465,6 +465,11 @@ export function Settings({
     }
   };
 
+  // Releases stamp their own version at build time; the app knows it.
+  const version = useQuery({
+    queryKey: ["update-state"],
+    queryFn: () => api.updateState(),
+  }).data?.current;
   const appearance = useAppearance();
   const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
@@ -831,7 +836,7 @@ export function Settings({
       id: "version",
       category: "about",
       title: "Relay",
-      description: "Version 0.1.0",
+      description: version && `Version ${version}`,
       keywords: "version about",
       render: () => <RelayMark size={28} />,
     },
