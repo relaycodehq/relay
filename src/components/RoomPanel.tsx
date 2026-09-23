@@ -28,7 +28,6 @@ import {
   type RoomState,
   type Presence,
   type SendRoom,
-  type Member,
 } from "../../shared/rooms";
 import {
   choiceLabel,

@@ -1,6 +1,6 @@
 import type { Gitea } from "../gitea";
 import type { Store } from "../store";
-import type { RoomConnection, RoomProject } from "../../shared/rooms";
+import type { RoomConnection } from "../../shared/rooms";
 import { inspectRepository } from "../repository";
 export interface ProjectRoomContext {
   client: Gitea;

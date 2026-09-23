@@ -1,5 +1,5 @@
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,

@@ -16,7 +16,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { fixtureServer, BASE, HEAD } from "../fixtures/gitea";
+import { fixtureServer } from "../fixtures/gitea";
 let app: ElectronApplication,
   page: Page,
   fixture: Awaited<ReturnType<typeof fixtureServer>>,

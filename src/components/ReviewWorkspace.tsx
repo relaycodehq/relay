@@ -17,8 +17,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   Check,
   CheckCheck,
@@ -34,11 +32,7 @@ import {
   Terminal,
   WrapText,
   UnfoldVertical,
-  X,
-  Bookmark,
   Send,
-  Plus,
-  Undo2,
   Pencil,
 } from "lucide-react";
 import type {

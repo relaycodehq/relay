@@ -758,7 +758,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       const target = z
         .union([z.object({ chatId: idSchema }).strict(), refSchema])
         .parse(args[0]);
-      const ref = "chatId" in target ? null : target;
       const key = "chatId" in target ? "chat:" + target.chatId : prKey(target);
       let sync = liveSyncs.get(key);
       if (method === "liveSyncState") return sync?.status() ?? idleSync;

@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "../shared/rooms";
-import {
-  chatScopeSchema,
-  type ChatMessage,
-  type ChatSummary,
-} from "../shared/projects";
+import { chatScopeSchema, type ChatMessage } from "../shared/projects";
 import { RoomsDatabase, HttpError, type Session } from "./database";
 const sharedMessage = z
   .object({

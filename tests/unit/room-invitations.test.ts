@@ -15,7 +15,6 @@ import { createRoomsServer } from "../../server/http";
 import { RoomsDatabase, token } from "../../server/database";
 import { RoomService } from "../../electron/rooms/service";
 import { Store } from "../../electron/store";
-import type { Gitea } from "../../electron/gitea";
 
 const target = {
   project: { server: "https://gitea.test/gitea", owner: "Web", name: "portal" },

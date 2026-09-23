@@ -4,7 +4,7 @@ import { RelayMark } from "./components/RelayMark";
 import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
 import { parseRoomInvitation, roomProtocol } from "../shared/rooms";
 import type { QuestionTarget } from "../shared/questions";
-import { Settings, type SettingsCategory } from "./components/Settings";
+import type { SettingsCategory } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
 import { shouldResumeReview } from "./lib/resumeReview";
@@ -24,22 +24,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowUpRight,
   Check,
-  ChevronsUpDown,
   FileCode2,
   FolderGit2,
   GitPullRequest,
   Inbox,
   Link2,
-  ListFilter,
   PanelLeft,
   PanelLeftClose,
-  Plus,
   RefreshCw,
   Search,
   Settings2,
   UserRound,
   MessageSquare,
-  Command,
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";

@@ -482,37 +482,35 @@ describe("Analysis lifecycle and durable groups", () => {
     "clears recovered validation failures when the later decision is %s",
     async (decision) => {
       let calls = 0;
-      const classify = vi.fn<typeof classifyChanges>(
-        async (c, known, _signal, mode) => {
-          calls++;
-          const matches = c.filter(
-            (x) =>
-              (calls > 1 && decision === "group" && x.path === "one.ts") ||
-              x.path === "z.ts",
-          );
-          return {
-            result: {
-              groups: matches.length ? [definition] : [],
-              files: c.map((x) => ({
-                path: x.path,
-                ...(matches.includes(x)
-                  ? { pattern: "p1", decision: "group" as const }
-                  : { pattern: "" as const, decision: "normal" as const }),
-                reason: matches.includes(x)
-                  ? "Matches the discovered transformation."
-                  : calls === 1 && x.path === "one.ts"
-                    ? INCOMPLETE_HUNKS_REASON
-                    : "Contains unrelated behavior changes.",
-                coveredHunks: matches.includes(x)
-                  ? Array.from({ length: x.hunks }, (_, i) => i + 1)
-                  : [],
-              })),
-            },
-            rejectedFiles: calls === 1 ? ["one.ts"] : [],
-            usage: { inputTokens: 100, outputTokens: 20, batches: 1 },
-          };
-        },
-      );
+      const classify = vi.fn<typeof classifyChanges>(async (c) => {
+        calls++;
+        const matches = c.filter(
+          (x) =>
+            (calls > 1 && decision === "group" && x.path === "one.ts") ||
+            x.path === "z.ts",
+        );
+        return {
+          result: {
+            groups: matches.length ? [definition] : [],
+            files: c.map((x) => ({
+              path: x.path,
+              ...(matches.includes(x)
+                ? { pattern: "p1", decision: "group" as const }
+                : { pattern: "" as const, decision: "normal" as const }),
+              reason: matches.includes(x)
+                ? "Matches the discovered transformation."
+                : calls === 1 && x.path === "one.ts"
+                  ? INCOMPLETE_HUNKS_REASON
+                  : "Contains unrelated behavior changes.",
+              coveredHunks: matches.includes(x)
+                ? Array.from({ length: x.hunks }, (_, i) => i + 1)
+                : [],
+            })),
+          },
+          rejectedFiles: calls === 1 ? ["one.ts"] : [],
+          usage: { inputTokens: 100, outputTokens: 20, batches: 1 },
+        };
+      });
       const f = await fixture(classify);
       f.files.push(
         ...Array.from({ length: MAX_BATCH_FILES - 3 }, (_, i) =>

@@ -1,5 +1,5 @@
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openInbox } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -18,7 +18,6 @@ import {
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { randomBytes } from "node:crypto";
 import { createServer, request } from "node:http";
 import { fixtureServer, newCode } from "../fixtures/gitea";
 import { RoomsDatabase, token } from "../../server/database";
