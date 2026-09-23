@@ -64,7 +64,9 @@ import { CopyImageMenu } from "./CopyImageMenu";
 import {
   cleanPaste,
   isLongPaste,
+  pasteMarkdown,
   pastedTexts,
+  type PastedText,
 } from "../../shared/pasted-texts";
 import { PastedTextCard, PastedTextDialog } from "./PastedTextCard";
 import { SendLaterMenu } from "./SendLaterMenu";
@@ -194,6 +196,26 @@ export function ProjectComposer({
   // Paste pills live in the draft text; their cards mirror them in order.
   const pastes = useMemo(() => pastedTexts(draft), [draft]);
   const [viewingPaste, setViewingPaste] = useState<number>();
+  // Earlier versions kept pastes beside the draft; move any left into it.
+  useEffect(() => {
+    const key = "pasted-texts:" + draftKey;
+    const kept = localStorage.getItem(key);
+    if (kept === null) return;
+    localStorage.removeItem(key);
+    try {
+      const value: unknown = JSON.parse(kept);
+      const blocks = (Array.isArray(value) ? value : [])
+        .filter(
+          (p): p is PastedText =>
+            Number.isInteger(p?.n) && typeof p.text === "string",
+        )
+        .map(pasteMarkdown)
+        .join("");
+      if (blocks) onDraft(draft.trimEnd() + blocks);
+    } catch {
+      // Nothing readable to keep.
+    }
+  }, [draftKey]);
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(draftKey);
