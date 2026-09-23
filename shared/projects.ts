@@ -108,6 +108,8 @@ export interface ChatMessage {
   trace?: AgentTrace[];
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
+  /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */
+  forkPoint?: ForkPoint;
   ended?: number;
   author?: string;
   authorId?: string;
@@ -122,6 +124,11 @@ export interface ChatMessage {
   provider: "codex" | "claude";
   error?: string;
   version: number;
+}
+/** A provider session and its last turn (Codex) or entry (Claude) to continue from. */
+export interface ForkPoint {
+  thread: string;
+  at: string;
 }
 export interface TurnFileChange {
   path: string;
@@ -193,6 +200,8 @@ export interface ProjectChat extends ChatSummary {
   sharedCursor?: number;
   /** Local: checkout rollbacks the next agent turn should hear about. */
   checkoutNotes?: string[];
+  /** Local: the scope each agent session last heard, by `provider:branch`. */
+  scopeHeard?: Record<string, string>;
   replySessions?: Record<
     string,
     {

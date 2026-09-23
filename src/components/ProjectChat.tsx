@@ -1309,7 +1309,17 @@ export function ProjectChat({
           key={`${id}:${root?.id ?? "main"}:${composerRevision}`}
           handleRef={composer}
           onCommand={runCommand}
-          settingsKey={id}
+          // A side conversation keeps its own agent and opens on the one that wrote its message.
+          settingsKey={root ? `${id}:${root.id}` : id}
+          inherit={
+            root
+              ? {
+                  settingsKey: id,
+                  provider:
+                    root.role === "assistant" ? root.provider : undefined,
+                }
+              : undefined
+          }
           draftKey={draftKey}
           draft={draft}
           onDraft={onDraft}

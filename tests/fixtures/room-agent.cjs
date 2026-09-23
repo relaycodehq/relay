@@ -17,6 +17,18 @@ if (args.includes("--permission-prompt-tool")) {
   const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
   function finish(answer) {
     emit({
+      type: "assistant",
+      uuid: "fixture-assistant",
+      session_id: "fixture-claude",
+      parent_tool_use_id: null,
+      message: {
+        id: "fixture-message",
+        role: "assistant",
+        content: [{ type: "text", text: answer }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    });
+    emit({
       type: "stream_event",
       uuid: "fixture-event",
       session_id: "fixture-claude",
@@ -293,7 +305,11 @@ if (args.includes("--permission-prompt-tool")) {
       });
     } else if (m.method === "config/read")
       send({ id: m.id, result: { config: {} } });
-    else if (m.method === "thread/start" || m.method === "thread/resume") {
+    else if (
+      m.method === "thread/start" ||
+      m.method === "thread/resume" ||
+      m.method === "thread/fork"
+    ) {
       record({ provider: "codex", thread: m.params, method: m.method });
       send({
         id: m.id,

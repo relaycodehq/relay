@@ -92,11 +92,14 @@ export function ProjectComposer({
   onStop,
   planProvider,
   contextMeter,
+  inherit,
 }: {
   handleRef?: Ref<ComposerHandle>;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   draftKey: string;
   settingsKey: string;
+  /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
+  inherit?: { settingsKey: string; provider?: "codex" | "claude" };
   draft: string;
   onDraft: (v: string) => void;
   shared: boolean;
@@ -127,13 +130,19 @@ export function ProjectComposer({
 }) {
   const settings = useAISettings();
   const [saved] = useState(() => {
-    try {
-      return JSON.parse(
-        localStorage.getItem("composer-settings:" + settingsKey) || "null",
-      );
-    } catch {
-      return null;
-    }
+    const read = (key: string) => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("composer-settings:" + key) || "null",
+        );
+      } catch {
+        return null;
+      }
+    };
+    const own = read(settingsKey);
+    if (own || !inherit) return own;
+    const base = read(inherit.settingsKey);
+    return inherit.provider ? { ...base, provider: inherit.provider } : base;
   });
   const [provider, setProvider] = useState<"codex" | "claude" | "message">(
     ["codex", "claude", "message"].includes(saved?.provider)

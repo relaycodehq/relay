@@ -680,15 +680,30 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
     .trim()
     .split("\n")
     .map((l) => JSON.parse(l));
+  // The side conversation continues Codex's own session, cut after its answer.
   expect(requests.filter((r) => r.thread).map((r) => r.method)).toEqual([
     "thread/start",
-    "thread/start",
+    "thread/fork",
   ]);
+  expect(requests.find((r) => r.method === "thread/fork").thread).toMatchObject(
+    { threadId: "fixture-thread", lastTurnId: "fixture-turn" },
+  );
+  expect(main.forkPoint).toEqual({
+    thread: "fixture-thread",
+    at: "fixture-turn",
+  });
   const prompts = requests
     .filter((r) => r.turn)
     .map((r) => r.turn.input[0].text);
-  expect(prompts[1]).toContain("focused reply to this message");
+  expect(prompts[0]).toContain("general discussion of the linked project");
+  // The fork already holds the main conversation and the scope.
+  expect(prompts[1]).toContain("side conversation branching off your answer");
+  expect(prompts[1]).not.toContain("MAIN question");
+  expect(prompts[1]).not.toContain("general discussion");
+  expect(prompts[2]).not.toContain("side conversation");
+  expect(prompts[2]).not.toContain("MAIN question");
   expect(prompts[3]).not.toContain("BRANCH");
+  expect(prompts[3]).not.toContain("general discussion");
   expect(
     saved.messages
       .at(-1)
@@ -715,6 +730,76 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).replySessions).toEqual(saved.replySessions);
 }, 25000);
+
+it("forks Claude's session for a side conversation, and gives another agent the conversation up to its message", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const ask = async (
+    body: string,
+    provider: "codex" | "claude",
+    count: number,
+    parentId?: string,
+  ) => {
+    await chats.send(chat.id, {
+      ...input(body),
+      provider,
+      ...(parentId ? { parentId } : {}),
+    });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+    return (await chats.get(chat.id)).messages.at(-1)!;
+  };
+  const main = await ask("@claude MAIN question", "claude", 2);
+  expect(main.forkPoint).toEqual({
+    thread: "fixture-claude",
+    at: "fixture-assistant",
+  });
+  await ask("@claude BRANCH question", "claude", 4, main.id);
+  // Codex joins the side conversation: Claude's side session hands off first.
+  await ask("@codex OTHER question", "codex", 7, main.id);
+  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const claudeText = (call: { prompt: string }) =>
+    JSON.parse(call.prompt).message.content.find(
+      (p: { type: string }) => p.type === "text",
+    ).text as string;
+  const branch = calls.find(
+    (c) => c.provider === "claude" && c.prompt?.includes("BRANCH question"),
+  );
+  expect(branch.args).toEqual(
+    expect.arrayContaining([
+      "--resume=fixture-claude",
+      "--fork-session",
+      "--resume-session-at=fixture-assistant",
+    ]),
+  );
+  expect(claudeText(branch)).toContain(
+    "side conversation branching off your answer",
+  );
+  expect(claudeText(branch)).not.toContain("MAIN question");
+  const codex = calls.find((c) => c.turn)!.turn.input[0].text as string;
+  expect(codex).toContain('side conversation about the message marked "focus"');
+  expect(codex).toContain("general discussion of the linked project");
+  expect(codex).toContain("Handoff note from Claude");
+  const history = JSON.parse(
+    codex.slice(codex.indexOf("[", codex.indexOf("Conversation updates"))),
+  );
+  expect(history.map((m: { body: string }) => m.body)).toEqual([
+    "@claude MAIN question",
+    main.body,
+    "@claude BRANCH question",
+    "Claude found the same cache guard.",
+  ]);
+  expect(history[1].focus).toBe(true);
+}, 30000);
 
 it("discovers an enabled skill and sends its native input to Codex without trusting a renderer path", async () => {
   const { codexSkills } = await import("../../electron/provider-commands");

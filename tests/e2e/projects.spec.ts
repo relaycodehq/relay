@@ -551,6 +551,13 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByText("git diff --stat", { exact: true }),
     ).toBeVisible();
+    // The main composer on Claude; the side conversation still opens on the
+    // agent that wrote its message, with that agent's last model.
+    await picker.click();
+    await page.getByRole("button", { name: "Claude", exact: true }).click();
+    await page
+      .getByRole("option", { name: "Claude default", exact: true })
+      .click();
     await page
       .locator(".project-message.assistant")
       .getByRole("button", { name: "Reply to message" })
@@ -558,6 +565,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByRole("heading", { name: "Side conversation" }),
     ).toBeVisible();
+    await expect(picker).toContainText("GPT-5.6-Luna");
     await picker.click();
     await page.getByRole("button", { name: "Claude", exact: true }).click();
     await page
@@ -578,10 +586,19 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toHaveCount(0);
+    // Each keeps its own agent: back on Codex here, the side one stays on Claude.
+    await expect(picker).toContainText("Claude default");
+    await picker.click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page
+      .getByRole("option", { name: "GPT-5.6-Luna", exact: true })
+      .click();
+    await expect(picker).toContainText("GPT-5.6-Luna");
     await page.getByRole("button", { name: "2 replies", exact: true }).click();
     await expect(
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toBeVisible();
+    await expect(picker).toContainText("Claude default");
     await page.screenshot({
       path: "test-results/screenshots/46-thread-reply.png",
     });

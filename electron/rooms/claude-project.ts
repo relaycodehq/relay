@@ -455,7 +455,15 @@ export async function runClaudeProject(
         // A one-line "what it's doing" for each running subagent, every ~30s.
         agentProgressSummaries: true,
         persistSession: true,
-        ...(options.session?.id ? { resume: options.session.id } : {}),
+        ...(options.session?.id
+          ? { resume: options.session.id }
+          : options.session?.fork
+            ? {
+                resume: options.session.fork.thread,
+                forkSession: true,
+                resumeSessionAt: options.session.fork.at,
+              }
+            : {}),
         settingSources: ["user", "project", "local"],
         strictMcpConfig: true,
         mcpServers: {},
@@ -737,6 +745,8 @@ export async function runClaudeProject(
       }
       if (message.type === "assistant") {
         if (!message.parent_tool_use_id) {
+          // The newest entry of the main conversation is where a fork continues.
+          options.session?.onPoint?.(message.uuid);
           const usage = message.message.usage;
           session.cacheTtl = claudeCacheTtl(usage, session.cacheTtl);
           if (session.cacheTtl)
