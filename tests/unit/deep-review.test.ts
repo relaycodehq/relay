@@ -67,6 +67,15 @@ describe("findings block", () => {
       { title: "Nit", reason: "Style only", reviewers: [] },
     ]);
   });
+  it("reads a block whose finding quotes a code fence", () => {
+    const { body, report } = extractFindings(
+      'See `F1`.\n\n```relay-findings\n{"findings":[{"id":"F1","priority":"P2","title":"Stops at the ``` in a string"}]}\n```\nWant it fixed?',
+    );
+    expect(report?.findings.map((f) => f.title)).toEqual([
+      "Stops at the ``` in a string",
+    ]);
+    expect(body).toBe("See `F1`.\n\nWant it fixed?");
+  });
   it("keeps an answer whose block isn't a report as it was", () => {
     for (const body of [
       "No findings block here.",

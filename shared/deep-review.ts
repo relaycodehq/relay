@@ -149,7 +149,8 @@ export function extractFindings(body: string): {
   if (start < 0) return { body };
   const open = body.indexOf("\n", start);
   if (open < 0) return { body };
-  const close = body.indexOf("```", open);
+  // The closing fence starts a line; a JSON string can't hold a line break.
+  const close = body.indexOf("\n```", open);
   const json = body.slice(open + 1, close < 0 ? undefined : close).trim();
   let parsed: unknown;
   try {
@@ -166,11 +167,11 @@ export function extractFindings(body: string): {
   const findings = report.data.findings.filter(
     (f) => !seen.has(f.id) && seen.add(f.id),
   );
-  const rest =
-    body.slice(0, start) +
-    (close < 0 ? "" : body.slice(close + 3).replace(/^\n+/, "\n"));
   return {
-    body: rest.trim(),
+    body: [body.slice(0, start), close < 0 ? "" : body.slice(close + 4)]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("\n\n"),
     report: { findings, dropped: report.data.dropped },
   };
 }
