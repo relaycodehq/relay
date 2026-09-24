@@ -208,9 +208,7 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
       .getByRole("button", { name: "Review this PR", exact: true })
       .click();
     // The local edit leads with Commit & push; the PR waits under the arrow.
-    await expect(page.locator(".git-actions-main")).toHaveText(
-      "Commit & push",
-    );
+    await expect(page.locator(".git-actions-main")).toHaveText("Commit & push");
     await page.getByRole("button", { name: "More Git actions" }).click();
     await expect(
       page.getByRole("menuitem", { name: "View PR #8", exact: true }),

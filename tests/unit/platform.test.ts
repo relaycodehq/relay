@@ -137,6 +137,8 @@ describe.runIf(windows)("Windows", () => {
         prompt + "\n",
       ]);
     },
+    // Windows PowerShell's first launch on a fresh CI runner takes seconds.
+    30_000,
   );
 
   it("resolves npm .cmd shims and runs their JavaScript entry", async () => {

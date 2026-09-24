@@ -336,7 +336,11 @@ export async function performGitAction(root: string, action: GitAction) {
         throw new Error("Resolve and stage all merge conflicts first.");
       if (action.kind === "commit" && action.paths) {
         // Both sides of a rename, so its old path is committed as removed.
-        const paths = withPreviousPaths(state.changes, action.paths, () => true);
+        const paths = withPreviousPaths(
+          state.changes,
+          action.paths,
+          () => true,
+        );
         // New and deleted files must be in the index before `commit --only` sees them.
         await git(root, ["add", "--", ...paths]);
         await git(
