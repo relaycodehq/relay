@@ -1201,12 +1201,15 @@ export function ProjectSidebar({
       >
         <div className="sb-card-top">
           <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-          <span className="sb-card-project">{p?.name}</span>
-          {shortcut && (
-            <kbd className="sb-card-shortcut" aria-hidden>
-              ⌘{shortcut}
-            </kbd>
-          )}
+          <span className="sb-card-name">
+            <span className="sb-card-project">{p?.name}</span>
+            {shortcut && (
+              <kbd className="sb-card-shortcut" aria-hidden>
+                <span>⌘</span>
+                {shortcut}
+              </kbd>
+            )}
+          </span>
           <CardState chat={c} unread={isUnread} now={now} />
           <div className="sb-card-actions">
             {!c.waiting && (
