@@ -88,7 +88,9 @@
   -webkit-background-clip: text;
   background-clip: text;
   will-change: transform;
-  animation: live-shine 2.2s steps(30) infinite;
+  /* Smooth, not stepped: on its own layer this one line repaints for next to
+     nothing (measured the same as paused), and steps read as the app lagging. */
+  animation: live-shine 2.2s linear infinite;
 }
 @keyframes live-shine {
   from {

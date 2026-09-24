@@ -1,5 +1,5 @@
 // Searchable branch menu follows T3 Code's BranchToolbarBranchSelector.
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ import { api } from "../lib/api";
 import { Spinner } from "./ui";
 import type { BranchAction } from "../../shared/branches";
 import type { WorkingTree } from "../../shared/working-tree";
-export function ProjectBranchPicker({
+export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   projectId,
   branch,
   disabled,
@@ -311,4 +311,4 @@ export function ProjectBranchPicker({
       )}
     </>
   );
-}
+});

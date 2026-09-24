@@ -1,8 +1,8 @@
 import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
-export function ComposerSelect<T extends string>({
+function ComposerSelectImpl<T extends string>({
   label,
   value,
   options,
@@ -80,3 +80,8 @@ export function ComposerSelect<T extends string>({
     </Select.Root>
   );
 }
+
+// Generic, so memo needs the cast to keep `T`.
+export const ComposerSelect = memo(
+  ComposerSelectImpl,
+) as typeof ComposerSelectImpl;

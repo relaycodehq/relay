@@ -48,6 +48,7 @@ import {
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
+import { readDraft, writeDraft } from "../lib/drafts";
 import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
@@ -577,7 +578,6 @@ export function ProjectChat({
     enabled: !project.plain,
   });
   const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [rootId, setRootId] = useState<string | null>(() =>
     localStorage.getItem("chat-reply:" + id),
   );
@@ -883,11 +883,7 @@ export function ProjectChat({
     return onCommand(command, args);
   }
   const draftKey = `chat-draft:${id}${root ? ":" + root.id : ""}`;
-  const draft = drafts[draftKey] ?? localStorage.getItem(draftKey) ?? "";
-  const onDraft = (v: string, key = draftKey) => {
-    localStorage.setItem(key, v);
-    setDrafts((s) => ({ ...s, [key]: v }));
-  };
+  const onDraft = (v: string, key = draftKey) => writeDraft(key, v);
   useLayoutEffect(() => {
     if (rootId) localStorage.setItem("chat-reply:" + id, rootId);
     else localStorage.removeItem("chat-reply:" + id);
@@ -909,7 +905,7 @@ export function ProjectChat({
       else setSelection(contextText.selection);
       if (text) {
         const key = "chat-draft:" + id,
-          old = localStorage.getItem(key) || "";
+          old = readDraft(key);
         onDraft(`${old}${old ? "\n\n" : ""}${text}`, key);
       }
       onContextUsed();
@@ -1034,7 +1030,7 @@ export function ProjectChat({
         ? replyRoot(messages, input.parentId).id
         : null;
       const key = `chat-draft:${id}${parent ? ":" + parent : ""}`;
-      const old = drafts[key] ?? localStorage.getItem(key) ?? "";
+      const old = readDraft(key);
       const restoredCode = parent
         ? { refs: [], body: input.body }
         : parseCodeReferences(input.body);
@@ -1888,7 +1884,6 @@ export function ProjectChat({
                 : undefined
             }
             draftKey={draftKey}
-            draft={draft}
             onDraft={onDraft}
             shared={!!chat?.shared}
             running={running || reviewing}

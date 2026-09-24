@@ -58,6 +58,8 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "../lib/draft-images";
+import { useDraft } from "../lib/drafts";
+import { useStableCallback } from "../lib/useStableCallback";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
 import { CopyImageMenu } from "./CopyImageMenu";
@@ -81,7 +83,6 @@ export function ProjectComposer({
   onCommand,
   draftKey,
   settingsKey,
-  draft,
   onDraft,
   shared,
   running,
@@ -109,7 +110,6 @@ export function ProjectComposer({
   settingsKey: string;
   /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
   inherit?: { settingsKey: string; provider?: "codex" | "claude" };
-  draft: string;
   onDraft: (v: string) => void;
   shared: boolean;
   running: boolean;
@@ -147,6 +147,7 @@ export function ProjectComposer({
   notice?: ReactNode;
   placeholder?: string;
 }) {
+  const draft = useDraft(draftKey);
   const settings = useAISettings();
   const [saved] = useState(() =>
     loadComposerSettings(settingsKey, shared, inherit),
@@ -247,7 +248,10 @@ export function ProjectComposer({
   const codexChoice =
     choice ?? (settings.data && codexQuestionChoice(settings.data));
   // An effort Codex no longer lists for the model runs as its default.
-  const selected = codexChoice && supportedChoice(codexChoice, codexModels);
+  const selected = useMemo(
+    () => codexChoice && supportedChoice(codexChoice, codexModels),
+    [codexChoice, codexModels],
+  );
   const mention = agentMention(draft);
   const recipient = mention?.provider ?? provider;
   const showUsage = useUsageRing();
@@ -258,7 +262,10 @@ export function ProjectComposer({
       ? { ...selected, ...claude, fast: false }
       : selected;
   const [pickModel, setPickModel] = useState(0);
-  function selectModel(next: "codex" | "claude" | "message", model: string) {
+  const selectModel = useStableCallback(function selectModel(
+    next: "codex" | "claude" | "message",
+    model: string,
+  ) {
     setProvider(next);
     if (next === "claude") {
       const efforts = claudeEffortsFor(claudeModels, model);
@@ -272,7 +279,81 @@ export function ProjectComposer({
     if (next === "codex" && selected)
       setChoice(supportedChoice({ ...selected, model }, codexModels));
     dropMention();
-  }
+  });
+  const openModelPicker = useStableCallback(() => {
+    // A failed first probe leaves the list empty; ask again.
+    if (!claudeModels?.length) loadClaudeModels();
+    codex.retry();
+  });
+  const codexEffortOptions = useMemo(
+    () =>
+      selected
+        ? [
+            {
+              value: "" as ReasoningEffort,
+              label: "Default",
+            },
+            ...reasoningEffortsFor(selected.model, codexModels).map(
+              (value) => ({ value, label: effortLabels[value] }),
+            ),
+          ]
+        : [],
+    [selected, codexModels],
+  );
+  const setCodexEffort = useStableCallback(
+    (reasoningEffort: ReasoningEffort) =>
+      selected && setChoice({ ...selected, reasoningEffort }),
+  );
+  const claudeTraits = useMemo(
+    () => [
+      ...(claudeModelEfforts.length > 0
+        ? [
+            {
+              label: "Reasoning",
+              value: claude.reasoningEffort,
+              options: [
+                { value: "", label: "Default" },
+                ...claudeModelEfforts.map((value) => ({
+                  value,
+                  label: effortLabels[value],
+                })),
+              ],
+              onChange: (value: string) =>
+                setClaude((c) => ({
+                  ...c,
+                  reasoningEffort: reasoningEffortSchema.parse(value),
+                })),
+            },
+          ]
+        : []),
+      ...(claudeListed?.longContext
+        ? [
+            {
+              label: "Context window",
+              value: claudeContextWindow(claude.model),
+              options: [
+                { value: "200k", label: "200k" },
+                { value: "1m", label: "1M" },
+              ],
+              onChange: (value: string) =>
+                setClaude((c) => ({
+                  ...c,
+                  model: withClaudeContextWindow(
+                    c.model,
+                    value === "1m" ? "1m" : "200k",
+                  ),
+                })),
+            },
+          ]
+        : []),
+    ],
+    // The efforts list is rebuilt each render; its contents are what matter.
+    [
+      claude,
+      claudeListed?.longContext,
+      claudeModelEfforts.join(),
+    ],
+  );
   /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
     const prefix = /^\s*@(?:codex|claude)(?=\s|$)\s*/i.exec(draft)?.[0];
@@ -810,11 +891,7 @@ export function ProjectComposer({
             claudeModel={claudeListed?.id ?? claude.model}
             claudeModels={claudeModels}
             codexModels={codexModels}
-            onOpen={() => {
-              // A failed first probe leaves the list empty; ask again.
-              if (!claudeModels?.length) loadClaudeModels();
-              codex.retry();
-            }}
+            onOpen={openModelPicker}
             openSignal={pickModel}
             onSelect={selectModel}
           />
@@ -824,18 +901,8 @@ export function ProjectComposer({
               <ComposerSelect<ReasoningEffort>
                 label="Reasoning effort"
                 value={selected.reasoningEffort}
-                options={[
-                  { value: "", label: "Default" },
-                  ...reasoningEffortsFor(selected.model, codexModels).map(
-                    (value) => ({
-                      value,
-                      label: effortLabels[value],
-                    }),
-                  ),
-                ]}
-                onChange={(reasoningEffort) =>
-                  setChoice({ ...selected, reasoningEffort })
-                }
+                options={codexEffortOptions}
+                onChange={setCodexEffort}
               />
               <button
                 type="button"
@@ -857,49 +924,7 @@ export function ProjectComposer({
                 <span className="composer-divider" aria-hidden />
                 <ComposerTraitsMenu
                   label="Reasoning effort and context window"
-                  sections={[
-                    ...(claudeModelEfforts.length > 0
-                      ? [
-                          {
-                            label: "Reasoning",
-                            value: claude.reasoningEffort,
-                            options: [
-                              { value: "", label: "Default" },
-                              ...claudeModelEfforts.map((value) => ({
-                                value,
-                                label: effortLabels[value],
-                              })),
-                            ],
-                            onChange: (value: string) =>
-                              setClaude((c) => ({
-                                ...c,
-                                reasoningEffort:
-                                  reasoningEffortSchema.parse(value),
-                              })),
-                          },
-                        ]
-                      : []),
-                    ...(claudeListed?.longContext
-                      ? [
-                          {
-                            label: "Context window",
-                            value: claudeContextWindow(claude.model),
-                            options: [
-                              { value: "200k", label: "200k" },
-                              { value: "1m", label: "1M" },
-                            ],
-                            onChange: (value: string) =>
-                              setClaude((c) => ({
-                                ...c,
-                                model: withClaudeContextWindow(
-                                  c.model,
-                                  value === "1m" ? "1m" : "200k",
-                                ),
-                              })),
-                          },
-                        ]
-                      : []),
-                  ]}
+                  sections={claudeTraits}
                 />
               </>
             )}

@@ -84,6 +84,22 @@ function SendLaterDialog({
   );
 }
 
+// Its own component so the times are worked out when the menu opens, not on
+// every keystroke in the composer that holds the closed menu.
+function SendLaterPresets({ onPick }: { onPick: (at: number) => void }) {
+  const [now] = useState(() => new Date());
+  return sendLaterPresets(now).map((preset) => (
+    <ContextMenu.Item
+      key={preset.label}
+      className="sb-menu-item"
+      onClick={() => onPick(preset.at)}
+    >
+      <span>{preset.label}</span>
+      <small>{wakeLabel(preset.at, now)}</small>
+    </ContextMenu.Item>
+  ));
+}
+
 /** Right-click on Send: send the message at a later time instead. */
 export function SendLaterMenu({
   disabled,
@@ -95,31 +111,16 @@ export function SendLaterMenu({
   /** The send button, which becomes the trigger. */
   children: ReactElement;
 }) {
-  const [now, setNow] = useState(() => new Date());
   const [picking, setPicking] = useState(false);
   return (
     <>
-      <ContextMenu.Root
-        disabled={disabled}
-        onOpenChange={(open) => {
-          if (open) setNow(new Date());
-        }}
-      >
+      <ContextMenu.Root disabled={disabled}>
         <ContextMenu.Trigger render={children} />
         <ContextMenu.Portal>
           <ContextMenu.Positioner className="sb-menu-positioner">
             <ContextMenu.Popup className="sb-menu send-later-menu">
               <div className="sb-menu-heading">Send later…</div>
-              {sendLaterPresets(now).map((preset) => (
-                <ContextMenu.Item
-                  key={preset.label}
-                  className="sb-menu-item"
-                  onClick={() => onPick(preset.at)}
-                >
-                  <span>{preset.label}</span>
-                  <small>{wakeLabel(preset.at, now)}</small>
-                </ContextMenu.Item>
-              ))}
+              <SendLaterPresets onPick={onPick} />
               <ContextMenu.Separator className="send-later-separator" />
               <ContextMenu.Item
                 className="sb-menu-item"

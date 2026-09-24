@@ -1391,13 +1391,17 @@ body.resizing-table-column {
     transform: rotate(360deg);
   }
 }
-/* Spinner: the svg turns at a steady pace while the arc stretches and draws
+/* Spinner: it turns at a steady pace while the arc stretches and draws
    back on an eased, offset beat, so the head and tail glide instead of tick.
    Unequal periods keep the loop from looking mechanical. */
 .spinner {
   flex: none;
-  overflow: visible;
+  display: inline-flex;
   animation: spin 1.6s linear infinite;
+}
+.spinner svg {
+  display: block;
+  overflow: visible;
 }
 .spinner circle {
   fill: none;
@@ -1416,6 +1420,12 @@ body.resizing-table-column {
 /* In pathLength units (100 = full turn): a short dash grows to a half-ring,
    then its tail sweeps round to meet the head. The dash left over at the end
    lines up with the start, so the loop has no seam. */
+/* The turn runs on the compositor; the stretching arc repaints every frame.
+   Four running threads in the sidebar measured ~18% of the main thread and
+   a frame of typing latency, turning alone ~1%. */
+.spinner.steady .spinner-arc {
+  animation: none;
+}
 @keyframes spinner-arc {
   0% {
     stroke-dasharray: 5 150;

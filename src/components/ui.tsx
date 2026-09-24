@@ -125,22 +125,27 @@ export function ErrorBox({
 // The one spinner: an arc that breathes as it turns, over a faint track.
 export function Spinner({
   size = 14,
-  className,
+  steady,
 }: {
   size?: number;
-  className?: string;
+  /** The arc keeps its length and only turns; for spinners that run for long or in numbers. */
+  steady?: boolean;
 }) {
+  // The span turns rather than the svg: Chrome can't composite an animated
+  // transform on SVG, so turning the svg costs the main thread every frame.
   return (
-    <svg
-      className={className ? `spinner ${className}` : "spinner"}
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-    >
-      <circle className="spinner-track" cx="8" cy="8" r="6.25" />
-      <circle className="spinner-arc" cx="8" cy="8" r="6.25" pathLength={100} />
-    </svg>
+    <span className={steady ? "spinner steady" : "spinner"} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 16 16">
+        <circle className="spinner-track" cx="8" cy="8" r="6.25" />
+        <circle
+          className="spinner-arc"
+          cx="8"
+          cy="8"
+          r="6.25"
+          pathLength={100}
+        />
+      </svg>
+    </span>
   );
 }
 export function Loading({ text = "Loading…" }: { text?: string }) {

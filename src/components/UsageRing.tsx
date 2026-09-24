@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Flame } from "lucide-react";
 import {
@@ -53,7 +53,11 @@ const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
  * A double ring beside the context meter with the signed-in provider's
  * session and weekly limits. Hovering shows each one in full.
  */
-export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
+export const UsageRing = memo(function UsageRing({
+  provider,
+}: {
+  provider: "codex" | "claude";
+}) {
   const [usage, setUsage] = useState<ProviderUsage>();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -156,7 +160,7 @@ export function UsageRing({ provider }: { provider: "codex" | "claude" }) {
       </Popover.Portal>
     </Popover.Root>
   );
-}
+});
 
 function UsageRow({ meter }: { meter: UsageMeter }) {
   const hot = meter.pace === "hot" || meter.pace === "spent";

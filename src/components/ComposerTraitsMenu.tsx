@@ -1,6 +1,6 @@
 import { Menu } from "@base-ui/react/menu";
 import { Check, ChevronDown } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, memo } from "react";
 
 export type TraitSection = {
   label: string;
@@ -12,7 +12,7 @@ export type TraitSection = {
  * T3's TraitsPicker: related choices behind one trigger that names them all,
  * e.g. "High · 200k".
  */
-export function ComposerTraitsMenu({
+export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({
   label,
   sections,
 }: {
@@ -71,4 +71,4 @@ export function ComposerTraitsMenu({
       </Menu.Portal>
     </Menu.Root>
   );
-}
+});

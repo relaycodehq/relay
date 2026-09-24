@@ -1,5 +1,5 @@
 // Adapted from T3 Code's chat model picker. See THIRD_PARTY_NOTICES.md.
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { Toolbar } from "@base-ui/react/toolbar";
@@ -64,7 +64,7 @@ export function ProviderIcon({ provider }: { provider: MessageProvider }) {
     <MessageSquare className="provider-glyph" aria-hidden />
   );
 }
-export function ComposerModelPicker({
+export const ComposerModelPicker = memo(function ComposerModelPicker({
   provider,
   choice,
   claudeModel,
@@ -512,4 +512,4 @@ export function ComposerModelPicker({
       </Popover.Portal>
     </Popover.Root>
   );
-}
+});

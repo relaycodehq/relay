@@ -151,7 +151,7 @@ function StatusMark({
   if (chat.running)
     return (
       <span className="sb-status running" title="Working">
-        <Spinner size={11} />
+        <Spinner size={11} steady />
       </span>
     );
   if (unread)
@@ -243,7 +243,7 @@ function CardState({
   if (chat.running)
     return (
       <span className="sb-card-state running">
-        <Spinner size={11} />
+        <Spinner size={11} steady />
         Working
         {chat.runningSince && <Elapsed since={chat.runningSince} />}
       </span>
@@ -872,7 +872,7 @@ export function ProjectSidebar({
                 />
                 {busy && !isOpen && (
                   <span className="sb-status running" title="Working">
-                    <Spinner size={11} />
+                    <Spinner size={11} steady />
                   </span>
                 )}
               </button>
