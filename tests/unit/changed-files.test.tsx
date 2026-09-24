@@ -124,7 +124,7 @@ it("lists changes the agent can't be shown to have made apart, outside the turn'
     />,
   );
   expect(html).toContain("1 changed file<");
-  expect(html).toContain("Also changed during this turn");
+  expect(html).toContain("Changed outside this thread");
   expect(html).toMatch(/changed-files-others[\s\S]*notes\.md/);
   // With nothing of the agent's own, only the folded list shows.
   const theirs = renderToStaticMarkup(
@@ -137,5 +137,28 @@ it("lists changes the agent can't be shown to have made apart, outside the turn'
     />,
   );
   expect(theirs).not.toContain("changed file");
-  expect(theirs).toContain("Also changed during this turn");
+  expect(theirs).toContain("Changed outside this thread");
+});
+
+it("names the thread that changed a file meanwhile, apart from changes nobody claims", () => {
+  const by = { chatId: "c2", title: "Commit history" };
+  const html = renderToStaticMarkup(
+    <ChangedFilesCard
+      files={[
+        { path: "notes.md", additions: 2, deletions: 0, unclaimed: true },
+        {
+          path: "src/history.css",
+          additions: 9,
+          deletions: 0,
+          unclaimed: true,
+          changedBy: by,
+        },
+      ]}
+      onOpen={() => {}}
+      onOpenThread={() => {}}
+    />,
+  );
+  expect(html).toMatch(
+    /Changed in thread “Commit history”[\s\S]*Open that thread[\s\S]*history\.css[\s\S]*Changed outside this thread[\s\S]*notes\.md/,
+  );
 });

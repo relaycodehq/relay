@@ -135,10 +135,16 @@ export function parseNumstat(output: string): TurnFileChange[] {
 }
 
 /** Snapshots the worktree as a turn starts. Null when it can't: the turn runs without a card. */
-export async function startTurn(root: string, messageId: string) {
+export async function startTurn(
+  root: string,
+  messageId: string,
+  owner?: TurnOwner,
+) {
   try {
     const before = await snapshot(root);
     await run(root, [...durable, "update-ref", turnRef(messageId), before]);
+    if (owner)
+      turns.set(messageId, { root: resolve(root), owner, start: Date.now() });
     return before;
   } catch {
     return null;
@@ -212,12 +218,52 @@ export function ownFiles(
   });
 }
 
+/** The thread a turn runs in, and what its agent has touched so far. */
+export interface TurnOwner {
+  chatId: string;
+  /** Read when crediting: a new thread gets its title mid-turn. */
+  title: () => string;
+  claim: () => TurnClaim;
+}
+interface TrackedTurn {
+  root: string;
+  owner: TurnOwner;
+  start: number;
+  end?: number;
+}
+// Turns in flight, and finished ones a turn still in flight overlapped, so a
+// turn can credit what it didn't change to the thread that did.
+const turns = new Map<string, TrackedTurn>();
+
+/** Drops finished turns no running turn overlaps anymore. */
+function prune() {
+  const running = [...turns.values()].filter((t) => t.end === undefined);
+  const oldest = Math.min(...running.map((t) => t.start));
+  for (const [id, t] of turns) if (t.end! < oldest) turns.delete(id);
+}
+
+/** Which of `files` other turns overlapping `messageId` on its checkout changed, by path. */
+function credits(messageId: string, files: TurnFileChange[]) {
+  const self = turns.get(messageId);
+  const by = new Map<string, NonNullable<TurnFileChange["changedBy"]>>();
+  if (!self) return by;
+  for (const [id, other] of turns) {
+    if (id === messageId || other.root !== self.root) continue;
+    if (other.start > self.end! || (other.end ?? Infinity) < self.start)
+      continue;
+    const owner = { chatId: other.owner.chatId, title: other.owner.title() };
+    for (const f of ownFiles(files, other.owner.claim(), other.root))
+      if (!by.has(f.path)) by.set(f.path, owner);
+  }
+  return by;
+}
+
 /**
  * Snapshots the worktree again and lists what the turn changed. A turn without
  * changes keeps no ref. The ref moves to `answerId` when a steer split the
  * turn, so the diff opens from the message that shows the changes. With a
  * `claim`, files the agent can't be shown to have changed come last, marked
- * `unclaimed`.
+ * `unclaimed`, and credited to another thread whose agent changed them meanwhile.
  */
 export async function finishTurn(
   root: string,
@@ -227,6 +273,8 @@ export async function finishTurn(
   claim?: TurnClaim,
 ): Promise<TurnFileChange[]> {
   const ref = turnRef(messageId);
+  const self = turns.get(messageId);
+  if (self) self.end = Date.now();
   try {
     const after = await snapshot(root, before);
     let files = parseNumstat(
@@ -246,11 +294,15 @@ export async function finishTurn(
     // snapshot is kept for it too: nothing a turn did is left without a way back.
     if (claim) {
       const own = new Set(ownFiles(files, claim, root));
+      const others = files.filter((f) => !own.has(f));
+      const by = credits(messageId, others);
       files = [
         ...files.filter((f) => own.has(f)),
-        ...files
-          .filter((f) => !own.has(f))
-          .map((f) => ({ ...f, unclaimed: true as const })),
+        ...others.map((f) => ({
+          ...f,
+          unclaimed: true as const,
+          ...(by.has(f.path) ? { changedBy: by.get(f.path) } : {}),
+        })),
       ];
     }
     files = files.slice(0, maxFiles);
@@ -265,6 +317,8 @@ export async function finishTurn(
   } catch {
     await run(root, ["update-ref", "-d", ref]).catch(() => {});
     return [];
+  } finally {
+    prune();
   }
 }
 

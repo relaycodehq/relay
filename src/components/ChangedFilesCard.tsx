@@ -9,6 +9,7 @@ import {
   FileDiff,
   Folder,
   FolderOpen,
+  MessagesSquare,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -59,6 +60,30 @@ type Prompt =
     }
   | { kind: "error"; message: string };
 
+/** Changes the agent didn't make, per thread that did; `by` is unset for the rest. */
+interface OtherGroup {
+  key: string;
+  by?: TurnFileChange["changedBy"];
+  tree: TurnTreeNode[];
+  count: number;
+}
+function groupOthers(files: TurnFileChange[]): OtherGroup[] {
+  const groups = new Map<string, TurnFileChange[]>();
+  for (const f of files) {
+    const key = f.changedBy?.chatId ?? "";
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
+  // Threads first, what nobody in Relay claims last.
+  return [...groups]
+    .sort(([a], [b]) => (a ? 0 : 1) - (b ? 0 : 1))
+    .map(([key, list]) => ({
+      key,
+      by: list[0].changedBy,
+      tree: buildTurnTree(list),
+      count: list.length,
+    }));
+}
+
 const filesUnder = (node: TurnTreeNode): TurnFileChange[] =>
   node.kind === "file" ? [node.change] : node.children.flatMap(filesUnder);
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
@@ -67,10 +92,13 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   files,
   onOpen,
   onRewind,
+  onOpenThread,
 }: {
   files: TurnFileChange[];
   /** Opens this turn's diff, on a file when one was picked. */
   onOpen: (path?: string) => void;
+  /** Opens the thread that changed some of these files meanwhile. */
+  onOpenThread?: (chatId: string) => void;
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
 }) {
@@ -78,7 +106,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   const own = useMemo(() => files.filter((f) => !f.unclaimed), [files]);
   const others = useMemo(() => files.filter((f) => f.unclaimed), [files]);
   const tree = useMemo(() => buildTurnTree(own), [own]);
-  const otherTree = useMemo(() => buildTurnTree(others), [others]);
+  const otherGroups = useMemo(() => groupOthers(others), [others]);
   const total = useMemo(() => sumStats(own), [own]);
   const nested = tree.some((node) => node.kind === "directory");
   const [allOpen, setAllOpen] = useState(own.length <= EXPAND_UP_TO);
@@ -309,20 +337,42 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
       <div className="changed-files-tree">
         {tree.map((node) => row(node, 0))}
       </div>
-      {others.length > 0 && (
-        <details className="changed-files-others">
-          <summary title="Not written by the agent's tools or named in its commands: maybe your editor, another thread, or a command like rm -rf. Roll each back on its own.">
+      {otherGroups.map((group) => (
+        <details key={group.key} className="changed-files-others">
+          <summary
+            title={
+              group.by
+                ? `The agent in “${group.by.title}” changed these while this turn ran. Roll each back on its own.`
+                : "This thread didn't change these. Something else did while it ran: your editor, a command like rm -rf, or a session outside Relay. Roll each back on its own."
+            }
+          >
             <ChevronRight size={14} className="changed-files-chevron" />
-            Also changed during this turn
+            {group.by ? (
+              <span className="changed-files-name">
+                Changed in thread “{group.by.title}”
+              </span>
+            ) : (
+              "Changed outside this thread"
+            )}
             <span className="changed-files-note">
-              {others.length} file{others.length === 1 ? "" : "s"}
+              {group.count} file{group.count === 1 ? "" : "s"}
             </span>
           </summary>
           <div className="changed-files-tree">
-            {otherTree.map((node) => row(node, 0))}
+            {group.by && onOpenThread && (
+              <button
+                type="button"
+                className="changed-files-open"
+                onClick={() => onOpenThread(group.by!.chatId)}
+              >
+                <MessagesSquare size={14} />
+                Open that thread
+              </button>
+            )}
+            {group.tree.map((node) => row(node, 0))}
           </div>
         </details>
-      )}
+      ))}
     </section>
   );
 });

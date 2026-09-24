@@ -301,6 +301,7 @@ const Message = memo(function Message({
   onChanges,
   onTurnDiff,
   onRewind,
+  onOpenThread,
   projectRoot,
   onOpenFile,
   replyCount = 0,
@@ -320,6 +321,7 @@ const Message = memo(function Message({
     mode: "revert" | "redo",
     force: boolean,
   ) => Promise<{ conflicts: string[] }>;
+  onOpenThread: (chatId: string) => void;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
@@ -433,6 +435,7 @@ const Message = memo(function Message({
         <ChangedFilesCard
           files={m.changes}
           onOpen={(path) => onTurnDiff(m, path)}
+          onOpenThread={onOpenThread}
           onRewind={
             chatId
               ? (paths, mode, force) => onRewind(m, paths, mode, force)
@@ -499,6 +502,7 @@ export function ProjectChat({
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
+  onOpenThread,
   viewing,
 }: {
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -526,6 +530,8 @@ export function ProjectChat({
   onOpenCode: (mode: "changes" | "files" | "pulls") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
+  /** Opens another thread of this project. */
+  onOpenThread: (chatId: string) => void;
   viewing: { path: string | null; viewed: number; total: number };
 }) {
   const qc = useQueryClient(),
@@ -1116,6 +1122,7 @@ export function ProjectChat({
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
+    onOpenThread,
     onCreated,
     chatId: chat?.id,
   });
@@ -1124,6 +1131,7 @@ export function ProjectChat({
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
+    onOpenThread,
     onCreated,
     chatId: chat?.id,
   };
@@ -1142,6 +1150,10 @@ export function ProjectChat({
   }, []);
   const openChanges = useCallback(
     () => latest.current.onOpenCode("changes"),
+    [],
+  );
+  const openThread = useCallback(
+    (id: string) => latest.current.onOpenThread(id),
     [],
   );
   const openFile = useCallback(
@@ -1420,6 +1432,7 @@ export function ProjectChat({
                   onChanges={openChanges}
                   onTurnDiff={openTurnDiff}
                   onRewind={rewindTurn}
+                  onOpenThread={openThread}
                   projectRoot={project.path}
                   onOpenFile={openFile}
                   replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}

@@ -1634,6 +1634,10 @@ export class ProjectChats {
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
+    const claim = () => ({
+      edited: [...edited],
+      commands: [...commands.values()],
+    });
     let point: string | undefined;
     try {
       const options = {
@@ -1753,7 +1757,13 @@ export class ProjectChats {
       };
       // Taken right before the agent starts, so the card lists only its edits.
       const first = message.id;
-      const before = compact ? null : await startTurn(root, first);
+      const before = compact
+        ? null
+        : await startTurn(root, first, {
+            chatId: chat.id,
+            title: () => chat.title,
+            claim,
+          });
       try {
         // Awaited first: a steer can move the answer to a new message meanwhile.
         const body =
@@ -1764,10 +1774,13 @@ export class ProjectChats {
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
-          const files = await finishTurn(root, first, before, message.id, {
-            edited: [...edited],
-            commands: [...commands.values()],
-          });
+          const files = await finishTurn(
+            root,
+            first,
+            before,
+            message.id,
+            claim(),
+          );
           if (files.length) message.changes = files;
         }
       }

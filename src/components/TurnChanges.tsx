@@ -82,9 +82,11 @@ export function TurnChanges({
                   <button
                     className={`working-select turn-file${f.unclaimed ? " unclaimed" : ""}`}
                     title={
-                      f.unclaimed
-                        ? `${f.path} · changed during this turn, maybe not by the agent`
-                        : f.path
+                      f.changedBy
+                        ? `${f.path} · changed in thread “${f.changedBy.title}”`
+                        : f.unclaimed
+                          ? `${f.path} · changed outside this thread`
+                          : f.path
                     }
                     onClick={() => setPath(f.path)}
                   >

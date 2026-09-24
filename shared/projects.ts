@@ -187,6 +187,8 @@ export interface TurnFileChange {
    * like `rm -rf dir`. Listed apart and never rolled back with the rest.
    */
   unclaimed?: true;
+  /** With `unclaimed`: the other thread whose agent changed it during the turn. */
+  changedBy?: { chatId: string; title: string };
 }
 export interface ChatImage {
   id: string;

@@ -737,6 +737,10 @@ export default function ProjectShell() {
                 onOpenCode={openCode}
                 onOpenFile={openChatFile}
                 onOpenTurnDiff={openTurnDiff}
+                onOpenThread={(id) => {
+                  const other = chats.data?.find((c) => c.id === id);
+                  if (other) navigate(project, other);
+                }}
               />
               <RunningTasks
                 key={project.id}

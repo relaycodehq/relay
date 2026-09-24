@@ -113,6 +113,43 @@ it("lists the agent's own files first and marks edits made meanwhile by anyone e
   await expect(turnDiff(root, id, "notes.md")).resolves.toBeTruthy();
 });
 
+it("credits what another thread's agent changed during the turn to that thread", async () => {
+  const owner = (chatId: string, edited: string[]) => ({
+    chatId,
+    title: () => `Thread ${chatId}`,
+    claim: () => ({ edited, commands: [] }),
+  });
+  const research = randomUUID(),
+    history = randomUUID(),
+    later = randomUUID();
+  const before = await startTurn(root, research, owner("research", []));
+  // Starts after the research turn and finishes first: still credited.
+  const theirs = await startTurn(root, history, owner("history", ["h.css"]));
+  await writeFile(join(root, "h.css"), "theirs\n");
+  await finishTurn(root, history, theirs!, history, {
+    edited: ["h.css"],
+    commands: [],
+  });
+  await writeFile(join(root, "notes.md"), "editor\n");
+  const files = await finishTurn(root, research, before!, research, {
+    edited: [],
+    commands: [],
+  });
+  expect(files.map((f) => [f.path, f.changedBy?.title])).toEqual([
+    ["h.css", "Thread history"],
+    ["notes.md", undefined],
+  ]);
+
+  // A turn that starts once another has finished doesn't claim its files.
+  const next = await startTurn(root, later, owner("later", []));
+  await writeFile(join(root, "h.css"), "mine\n");
+  const after = await finishTurn(root, later, next!, later, {
+    edited: [],
+    commands: [],
+  });
+  expect(after[0].changedBy).toBeUndefined();
+});
+
 it("keeps the snapshot when only someone else changed files during the turn", async () => {
   // e.g. `rm -rf dir` or a formatter: a command that names no file it changed.
   const id = randomUUID();
