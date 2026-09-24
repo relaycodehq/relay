@@ -81,6 +81,7 @@ import {
 } from "../../shared/pasted-texts";
 import { PastedTextCard, PastedTextDialog } from "./PastedTextCard";
 import { SendLaterMenu } from "./SendLaterMenu";
+import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -112,6 +113,7 @@ export function ProjectComposer({
   notice,
   placeholder,
   inherit,
+  ultraplanOffered = false,
 }: {
   handleRef?: Ref<ComposerHandle>;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -148,10 +150,13 @@ export function ProjectComposer({
       | "delivery"
       | "sendAt"
       | "side"
+      | "ultraplan"
     >,
   ) => Promise<boolean>;
   onStop: () => void;
   planProvider?: "codex" | "claude";
+  /** The main conversation of a private thread can plan with a council first. */
+  ultraplanOffered?: boolean;
   contextMeter?: ReactNode;
   /** Sits on top of the input, attached to it. */
   notice?: ReactNode;
@@ -189,6 +194,10 @@ export function ProjectComposer({
   const claudeModelEfforts = claudeEffortsFor(claudeModels, claude.model);
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
+  const [ultraplan, setUltraplan] = useState(saved.ultraplan);
+  const [council, setCouncil] = useState(saved.council);
+  /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
+  const [spark, setSpark] = useState(0);
   useEffect(() => {
     saveComposerSettings(settingsKey, {
       provider,
@@ -196,8 +205,19 @@ export function ProjectComposer({
       claude,
       runtimeMode,
       interactionMode,
+      ultraplan,
+      council,
     });
-  }, [settingsKey, provider, choice, claude, runtimeMode, interactionMode]);
+  }, [
+    settingsKey,
+    provider,
+    choice,
+    claude,
+    runtimeMode,
+    interactionMode,
+    ultraplan,
+    council,
+  ]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
   const sendToAgent = useRef<ComposerHandle["sendToAgent"]>(async () => false);
@@ -265,6 +285,11 @@ export function ProjectComposer({
   );
   const mention = agentMention(draft);
   const recipient = mention?.provider ?? provider;
+  const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
+  const pickUltraplan = useCallback((on: boolean) => {
+    setUltraplan(on);
+    if (on) setSpark((n) => n + 1);
+  }, []);
   const showUsage = useUsageRing();
   const sendKey = useSendKey();
   // Claude keeps its own model and effort; Codex-only settings never reach it.
@@ -572,9 +597,9 @@ export function ProjectComposer({
       return true;
     }
     if (command === "plan") {
-      setInteractionMode(
-        toggle(args, interactionMode === "plan") ? "plan" : "default",
-      );
+      const plan = toggle(args, interactionMode === "plan");
+      setInteractionMode(plan ? "plan" : "default");
+      if (!plan) setUltraplan(false);
       return true;
     }
     if (recipient !== "codex") return "Fast mode is only available for Codex.";
@@ -720,11 +745,28 @@ export function ProjectComposer({
         setImageError("Could not apply the drawing to the screenshot.");
         return;
       }
+      // A council is one question's worth: follow-ups go to the lead, in
+      // Plan. Saved before sending, so a thread it starts opens that way too.
+      if (councilOn) {
+        setUltraplan(false);
+        saveComposerSettings(settingsKey, {
+          provider,
+          choice,
+          claude,
+          runtimeMode,
+          interactionMode,
+          ultraplan: false,
+          council,
+        });
+      }
       const sent = await onSend({
         ...(sendAt
           ? { sendAt }
           : running
-            ? { delivery: steer ? ("steer" as const) : ("queue" as const) }
+            ? {
+                delivery:
+                  steer && !councilOn ? ("steer" as const) : ("queue" as const),
+              }
             : {}),
         body:
           mention || recipient === "message"
@@ -733,7 +775,8 @@ export function ProjectComposer({
         choice: choiceFor(recipient)!,
         provider: recipient === "claude" ? "claude" : "codex",
         runtimeMode,
-        interactionMode,
+        interactionMode: councilOn ? "plan" : interactionMode,
+        ...(councilOn ? { ultraplan: council } : {}),
         ...(attached.length
           ? {
               images: attached.map(({ name, mimeType, dataUrl }) => ({
@@ -744,6 +787,7 @@ export function ProjectComposer({
             }
           : {}),
       });
+      if (!sent && councilOn) setUltraplan(true);
       if (sent && images.length) {
         try {
           await saveDraftImages(draftKey, []);
@@ -782,6 +826,7 @@ export function ProjectComposer({
                 if (accepted) {
                   setProvider(planProvider);
                   setInteractionMode("default");
+                  setUltraplan(false);
                   onDraft(draft);
                 }
               } finally {
@@ -826,6 +871,7 @@ export function ProjectComposer({
           send();
         }}
       >
+        {councilOn && <UltraplanRing key={spark} />}
         {attachment}
         {(images.length > 0 || pastes.length > 0) && (
           <div className="composer-images" aria-label="Attachments">
@@ -892,7 +938,9 @@ export function ProjectComposer({
             recipient === "message"
               ? "Leave a note or message your colleague…"
               : (placeholder ??
-                "Ask about the code, plan a change, or build something…")
+                (councilOn
+                  ? "Something hard? A council thinks it over, then the lead plans…"
+                  : "Ask about the code, plan a change, or build something…"))
           }
           onKeyDownCapture={(e) => {
             if (commands.onKeyDown(e)) return;
@@ -938,6 +986,15 @@ export function ProjectComposer({
               event.preventDefault();
           }}
         />
+        {councilOn && (
+          <UltraplanCouncilRow
+            kind={council}
+            onKind={(kind) => {
+              setCouncil(kind);
+              setSpark((n) => n + 1);
+            }}
+          />
+        )}
         <div className="composer-tools">
           <ComposerModelPicker
             provider={recipient}
@@ -993,8 +1050,10 @@ export function ProjectComposer({
             <ComposerModeControls
               runtimeMode={runtimeMode}
               interactionMode={interactionMode}
+              ultraplan={councilOn}
               onRuntimeMode={setRuntimeMode}
               onInteractionMode={setInteractionMode}
+              onUltraplan={ultraplanOffered ? pickUltraplan : undefined}
             />
           )}
           <input

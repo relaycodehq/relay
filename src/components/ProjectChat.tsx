@@ -119,6 +119,8 @@ import {
   DeepReviewSetup,
   findingCode,
 } from "./DeepReview";
+import { UltraplanCouncil } from "./Ultraplan";
+import { councilWorking } from "../../shared/ultraplan";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
     key: `${chatId}:${image.id}`,
@@ -799,6 +801,11 @@ export function ProjectChat({
   const review = history.data?.deepReview;
   // Reviewers work in threads of their own; this one waits for the lead.
   const reviewing = review?.status === "reviewing";
+  const plans = history.data?.ultraplans;
+  // Thinkers work in threads of their own; messages wait for the lead's plan.
+  const planning = councilWorking(Object.values(plans ?? {}));
+  // A council's brief shows inside it, not as an answer of its own.
+  const listed = useMemo(() => shown.filter((m) => !m.brief), [shown]);
   const leadAnswered = messages.some(
     (m) => m.role === "assistant" && !m.parentId,
   );
@@ -878,6 +885,16 @@ export function ProjectChat({
     setError(undefined);
     void api
       .resumeDeepReview(chat.id)
+      .then(() => history.refetch())
+      .catch(setError)
+      .finally(() => setBusy(false));
+  }
+  function resumeUltraplan(request: string) {
+    if (!chat || busy) return;
+    setBusy(true);
+    setError(undefined);
+    void api
+      .resumeUltraplan(chat.id, request)
       .then(() => history.refetch())
       .catch(setError)
       .finally(() => setBusy(false));
@@ -990,6 +1007,7 @@ export function ProjectChat({
       | "delivery"
       | "sendAt"
       | "side"
+      | "ultraplan"
     >,
   ): Promise<boolean> {
     if (busy) return false;
@@ -1616,7 +1634,7 @@ export function ProjectChat({
                 Earlier messages
               </button>
             )}
-            {shown.slice(-visible).map((m) =>
+            {listed.slice(-visible).map((m) =>
               m.side ? (
                 <SideQuestion
                   key={m.id}
@@ -1670,6 +1688,22 @@ export function ProjectChat({
                         ),
                       }
                     : {})}
+                  {...(plans?.[m.id]
+                    ? {
+                        after: (
+                          <UltraplanCouncil
+                            state={plans[m.id]!}
+                            brief={messages.find(
+                              (b) => b.id === plans[m.id]!.brief,
+                            )}
+                            busy={busy}
+                            projectRoot={folder}
+                            onOpenFile={openFile}
+                            onResume={() => resumeUltraplan(m.id)}
+                          />
+                        ),
+                      }
+                    : {})}
                 />
               ),
             )}
@@ -1677,11 +1711,11 @@ export function ProjectChat({
               <WorktreeLanded status={worktree.data} />
             )}
             {!running &&
-              shown.some(
+              listed.some(
                 (m) => m.role === "assistant" && !m.compaction && !m.handoff,
               ) &&
               ["cancelled", "failed"].includes(
-                shown
+                listed
                   .filter(
                     (m) =>
                       m.role === "assistant" && !m.compaction && !m.handoff,
@@ -1969,7 +2003,7 @@ export function ProjectChat({
             onDraft={onDraft}
             shared={!!chat?.shared}
             // A side thread doesn't wait for the main answer, nor queue behind it.
-            running={root?.side ? false : running || reviewing}
+            running={root?.side ? false : running || reviewing || planning}
             busy={busy}
             branch={checkout.data?.branch}
             plain={project.plain}
@@ -2033,12 +2067,15 @@ export function ProjectChat({
                 ? `Ask ${root.provider === "codex" ? "Codex" : "Claude"} a follow-up on the side…`
                 : reviewing
                   ? "Reviewers are at work. Messages wait for the lead…"
-                  : pending?.some((p) => p.kind === "task")
-                    ? "Message Claude, its background work keeps going…"
-                    : pending
-                      ? "Message Claude now, or wait for it to check back…"
-                      : undefined
+                  : planning
+                    ? "The council is thinking. Messages wait for the lead's plan…"
+                    : pending?.some((p) => p.kind === "task")
+                      ? "Message Claude, its background work keeps going…"
+                      : pending
+                        ? "Message Claude now, or wait for it to check back…"
+                        : undefined
             }
+            ultraplanOffered={!root && !chat?.shared && scope.kind !== "review"}
             planProvider={
               !running &&
               shown.at(-1)?.status === "complete" &&

@@ -1,0 +1,566 @@
+/* Ultraplan. The colour lives in one gradient, used by the composer's ring,
+   the mode's label and the send button; everything else is the app's. */
+:root {
+  --up-1: var(--accent);
+  --up-2: light-dark(#c2548f, #ff79c6);
+  --up-3: light-dark(#23879a, #8be9fd);
+  --up-gradient: linear-gradient(
+    100deg,
+    var(--up-1),
+    var(--up-2) 55%,
+    var(--up-3)
+  );
+}
+.up-gradient-text {
+  background: var(--up-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 600;
+}
+
+/* The ring: always there, so switching modes never moves the composer.
+   Picking Ultraplan spins it for a few seconds and lets a glow fade out
+   behind it; both are one-shot, and only transform and opacity animate. */
+.up-halo {
+  position: relative;
+}
+.up-glow {
+  position: absolute;
+  inset: 4px;
+  border-radius: 22px;
+  background: var(--up-gradient);
+  filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+}
+.up-halo[data-on="true"] .up-glow {
+  animation: up-glow 3.2s ease-out;
+}
+.up-ring {
+  position: relative;
+  isolation: isolate;
+  padding: 1.5px;
+  border-radius: 21.5px;
+  overflow: hidden;
+}
+.up-ring-fill {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  background: conic-gradient(
+    from 0deg,
+    var(--up-1),
+    var(--up-2) 25%,
+    var(--up-3) 50%,
+    var(--up-1) 75%,
+    var(--up-2)
+  );
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 200ms ease;
+}
+.up-ring[data-on="true"] .up-ring-fill {
+  opacity: 1;
+  animation: up-spark 3.2s cubic-bezier(0.2, 0.55, 0.25, 1);
+}
+@keyframes up-spark {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(2turn);
+  }
+}
+@keyframes up-glow {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The mode button and its menu. Selected reads as in the app, whatever
+   order the preview loads its stylesheets in. */
+.composer-tools .composer-interaction.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.composer-tools .up-mode[data-mode="ultra"] {
+  background: color-mix(in srgb, var(--up-2) 12%, var(--accent-soft));
+}
+.composer-tools .up-mode[data-mode="ultra"] > svg:first-child {
+  color: var(--up-2);
+}
+/* A and C: one line per mode. */
+.up-mode-list {
+  min-width: 250px;
+}
+.up-mode-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.up-mode-row > svg {
+  color: var(--muted);
+}
+.up-mode-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.up-mode-list [data-mode="ultra"] .up-mode-row > svg {
+  color: var(--up-2);
+}
+
+/* B: tiles, with the council's kind in a strip below. */
+.up-tiles-popup {
+  width: 384px;
+  padding: 8px;
+}
+.up-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.up-tile {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 3px;
+  padding: 10px 10px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--toolbar);
+  outline: none;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.up-tile[data-highlighted] {
+  background: var(--hover);
+}
+.up-tile[data-checked] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.up-tile-icon {
+  display: inline-flex;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+.up-tile-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.up-tile small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.up-tile[data-mode="ultra"] {
+  border-color: color-mix(in srgb, var(--up-2) 35%, var(--border));
+}
+.up-tile[data-mode="ultra"] .up-tile-icon {
+  color: var(--up-2);
+}
+.up-tile[data-mode="ultra"][data-checked] {
+  border-color: transparent;
+  background:
+    linear-gradient(
+        color-mix(in srgb, var(--up-2) 10%, var(--surface)),
+        color-mix(in srgb, var(--up-2) 10%, var(--surface))
+      )
+      padding-box,
+    var(--up-gradient) border-box;
+}
+.up-tile-kinds {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 2px 0;
+  border-top: 1px solid var(--border);
+}
+.up-tile-kinds[data-dim] {
+  opacity: 0.6;
+}
+.up-tile-kinds[data-dim]:hover {
+  opacity: 1;
+}
+.up-tile-kinds-label {
+  margin: 0 4px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.up-tile-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  outline: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+.up-tile-kind[data-highlighted] {
+  background: var(--hover);
+  color: var(--text);
+}
+.up-tile-kind[data-checked] {
+  background: var(--selected);
+  color: var(--text);
+}
+
+/* A: the kind as a toggle at the start of the council row. */
+.up-kind-toggle {
+  display: inline-flex;
+  margin-right: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+.up-kind-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  border: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.up-kind-toggle button[aria-checked="true"] {
+  background: var(--toolbar);
+  color: var(--text);
+  box-shadow: 0 1px 2px #0000001a;
+}
+
+/* The council row, between the prompt and the tools. */
+.composer-tools.up-thinkers {
+  gap: 6px;
+  padding-bottom: 2px;
+}
+.up-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 2px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+.up-thinker {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.up-thinker .composer-control {
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 11.5px;
+}
+.up-thinker .composer-control:first-child {
+  color: var(--text);
+}
+.up-thinker .composer-control + .composer-control {
+  padding-left: 4px;
+}
+.up-thinker .provider-glyph {
+  width: 13px;
+  height: 13px;
+}
+.up-thinker-remove {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 3px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.up-thinker-remove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.up-hint {
+  color: light-dark(#a86a00, #e5b567);
+  font-size: 11px;
+}
+
+/* Send: the gradient and how many thinkers it wakes. */
+.composer-tools .send-message.up-send {
+  position: relative;
+  background: var(--up-gradient);
+  color: light-dark(#fff, #1d1d22);
+}
+.composer-tools .send-message.up-send:hover {
+  filter: brightness(1.08);
+}
+.up-send-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 99px;
+  background: var(--text);
+  color: var(--toolbar);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* In the thread. */
+.up-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--up-2) 14%, var(--accent-soft));
+  color: light-dark(#8e2f66, #ff9bd4);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.up-chip.plain {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.up-council .deep-review-council-toggle > svg:first-child {
+  color: var(--up-2);
+}
+.up-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* Brief → thinkers → pick & check. Static: the status line is what moves. */
+.up-stages {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 10px;
+  padding: 0 12px;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.up-stages li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.up-stages li > span {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 10px;
+}
+.up-stages li[data-state="now"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.up-stages li[data-state="now"] > span {
+  border-color: var(--up-2);
+  color: var(--up-2);
+}
+.up-stages li[data-state="done"] > svg {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.up-brief {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 40%, transparent);
+  font-size: 12.5px;
+}
+.up-brief > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+}
+.up-brief > p {
+  margin: 0;
+}
+.up-brief ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.up-council .deep-review-pane-thread.up-pane-body {
+  height: 280px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+}
+.up-pane-lens {
+  display: inline-flex;
+  color: var(--up-2);
+}
+.up-pane-angle {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-style: italic;
+}
+.up-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.up-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.up-steps code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* A thinker's notes: claim, evidence, confidence. No colour, like priorities. */
+.up-notes {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.up-notes li {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+.up-notes .markdown > p {
+  margin: 0;
+}
+.up-confidence {
+  display: inline-grid;
+  place-items: center;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.up-confidence[data-level="high"] {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+  color: var(--text);
+  font-weight: 650;
+}
+.up-confidence[data-level="low"] {
+  border-style: dashed;
+}
+.up-evidence {
+  display: inline-block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.up-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.up-meta strong {
+  margin-right: 4px;
+  color: var(--text);
+  font-weight: 600;
+}
+.up-build {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+.up-build:hover {
+  background: var(--hover);
+}
+
+/* The status line while the council works: a stepped shimmer, not every frame. */
+.up-live {
+  background: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      var(--muted) 40%,
+      var(--up-2) 50%,
+      var(--muted) 60%,
+      var(--muted) 100%
+    )
+    0 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: up-shimmer 2.4s steps(12) infinite;
+}
+@keyframes up-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* The shimmer is the one endless loop; in the app it joins the
+   :root[data-inactive] list in src/styles.css. */
+:root[data-inactive] .up-live {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .up-halo[data-on="true"] .up-glow,
+  .up-ring[data-on="true"] .up-ring-fill {
+    animation: none;
+  }
+  .up-ring-fill {
+    transition: none;
+  }
+  .up-live {
+    animation: none;
+    background: none;
+    color: var(--muted);
+  }
+}

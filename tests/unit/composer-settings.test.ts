@@ -29,6 +29,8 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     claude: { model: "opus", reasoningEffort: "max" },
     runtimeMode: "full-access",
     interactionMode: "default",
+    ultraplan: false,
+    council: "angles",
   });
   saveSentSettings("chat", "claude", {
     provider: "claude",
@@ -42,6 +44,8 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     claude: { model: "claude-sonnet-4-6", reasoningEffort: "low" },
     runtimeMode: "auto",
     interactionMode: "plan",
+    ultraplan: false,
+    council: "angles",
   });
   // A Codex or message-only one carries Codex's choice.
   saveSentSettings("chat", "message", {
@@ -87,6 +91,8 @@ it("falls back to defaults for anything unreadable", () => {
     choice: undefined,
     claude: { model: "", reasoningEffort: "" },
     interactionMode: "default",
+    ultraplan: false,
+    council: "angles",
   };
   expect(loadComposerSettings("a", true)).toEqual({
     ...defaults,
@@ -107,6 +113,8 @@ it("starts the next new thread on Default, keeping the agent and modes", () => {
     claude: { model: "claude-fable-5-1[1m]", reasoningEffort: "xhigh" },
     runtimeMode: "auto",
     interactionMode: "plan",
+    ultraplan: true,
+    council: "same",
   });
   resetComposerModels("new:project");
   expect(loadComposerSettings("new:project", false)).toEqual({
@@ -115,8 +123,34 @@ it("starts the next new thread on Default, keeping the agent and modes", () => {
     claude: { model: "", reasoningEffort: "" },
     runtimeMode: "auto",
     interactionMode: "plan",
+    ultraplan: true,
+    council: "same",
   });
   // Nothing saved yet stays that way.
   resetComposerModels("new:other");
   expect(store.has("composer-settings:new:other")).toBe(false);
+});
+
+it("keeps Ultraplan and its council, and reads anything else as off", () => {
+  store.set(
+    "composer-settings:odd",
+    JSON.stringify({ ultraplan: "yes", council: "debate" }),
+  );
+  expect(loadComposerSettings("odd", false)).toMatchObject({
+    ultraplan: false,
+    council: "angles",
+  });
+  store.set(
+    "composer-settings:on",
+    JSON.stringify({
+      interactionMode: "plan",
+      ultraplan: true,
+      council: "same",
+    }),
+  );
+  expect(loadComposerSettings("on", false)).toMatchObject({
+    interactionMode: "plan",
+    ultraplan: true,
+    council: "same",
+  });
 });

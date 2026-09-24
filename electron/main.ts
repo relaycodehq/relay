@@ -1062,6 +1062,11 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     }
     case "resumeDeepReview":
       return projectChats.resumeDeepReview(idSchema.parse(args[0]));
+    case "resumeUltraplan":
+      return projectChats.resumeUltraplan(
+        idSchema.parse(args[0]),
+        idSchema.parse(args[1]),
+      );
     case "setDeepReviewFinding":
       return projectChats.setDeepReviewFinding(
         idSchema.parse(args[0]),

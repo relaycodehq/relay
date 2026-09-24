@@ -72,6 +72,8 @@ import {
   worktreeExists,
 } from "./worktrees";
 import { DeepReviews, type PullInfo } from "./deep-review";
+import { Ultraplans, briefPrompt } from "./ultraplan";
+import { council, type ThinkerTask } from "../shared/ultraplan";
 import type {
   DeepReviewStart,
   FindingStatus,
@@ -168,14 +170,36 @@ export class ProjectChats {
   private titleUpdates = new Set<Promise<void>>();
   /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
   private titlesAsked = new Set<string>();
-  /** What a deep review does after a turn ends; closing waits for it. */
+  /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
   private reviewSteps = new Set<Promise<void>>();
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
-    const step = this.reviews
-      .finished(id, turn)
-      .catch((e) => console.warn("Deep review could not continue:", e));
+    const step = Promise.all([
+      this.reviews
+        .finished(id, turn)
+        .catch((e) => console.warn("Deep review could not continue:", e)),
+      this.ultraplans
+        .finished(id, turn)
+        .catch((e) => console.warn("Ultraplan could not continue:", e)),
+    ]).then(() => {});
     this.reviewSteps.add(step);
     void step.finally(() => this.reviewSteps.delete(step));
+  }
+  /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
+  private closeSessions(id: string) {
+    for (const key of this.providerSessions)
+      if ((JSON.parse(key) as string[])[1] === id) {
+        this.providerSessions.delete(key);
+        closeClaudeSession(key);
+        void closeCodexConnection(key).catch(() => {});
+      }
+  }
+  /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */
+  private async touch(chat: ProjectChat, messageId: string) {
+    const message = chat.messages.find((m) => m.id === messageId);
+    if (message) message.version++;
+    await this.save(chat);
+    if (message)
+      this.emit({ chatId: chat.id, message: structuredClone(message) });
   }
   private reviews = new DeepReviews({
     load: (id) => this.load(id),
@@ -186,23 +210,24 @@ export class ProjectChats {
     lead: (chat, input, prompt) => this.lead(chat, input, prompt),
     active: (id) => this.active.has(id),
     stop: (id) => this.active.get(id)?.abort.abort(),
-    close: (id) => {
-      for (const key of this.providerSessions)
-        if ((JSON.parse(key) as string[])[1] === id) {
-          this.providerSessions.delete(key);
-          closeClaudeSession(key);
-          void closeCodexConnection(key).catch(() => {});
-        }
-    },
-    touch: async (chat, messageId) => {
-      const message = chat.messages.find((m) => m.id === messageId);
-      if (message) message.version++;
-      await this.save(chat);
-      if (message)
-        this.emit({ chatId: chat.id, message: structuredClone(message) });
-    },
+    close: (id) => this.closeSessions(id),
+    touch: (chat, messageId) => this.touch(chat, messageId),
     summary: (chat) => this.updateSummary(chat),
   });
+  private ultraplans = new Ultraplans({
+    load: (id) => this.load(id),
+    createThinker: (parent, task) => this.createThinker(parent, task),
+    send: (id, input) => this.send(id, input),
+    lead: (chat, input, prompt) => this.lead(chat, input, prompt),
+    active: (id) => this.active.has(id),
+    stop: (id) => this.active.get(id)?.abort.abort(),
+    close: (id) => this.closeSessions(id),
+    touch: (chat, messageId) => this.touch(chat, messageId),
+  });
+  /** Deep review reviewers and Ultraplan thinkers hold new messages back. */
+  private councilBusy(chat: ProjectChat) {
+    return this.reviews.reviewing(chat) || this.ultraplans.working(chat);
+  }
   constructor(
     private store: Store,
     private projects: Projects,
@@ -223,18 +248,19 @@ export class ProjectChats {
     const chats = (this.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
-    // A review runs while any of its reviewers does.
+    // A review runs while any of its reviewers does, a thread while its thinkers do.
     const reviewing = new Map<string, ActiveChat>();
     for (const c of chats) {
-      const active = c.reviewer && this.active.get(c.id);
-      const earlier = c.reviewer && reviewing.get(c.reviewer.parent);
+      const parent = (c.reviewer ?? c.thinker)?.parent;
+      const active = parent && this.active.get(c.id);
+      const earlier = parent && reviewing.get(parent);
       if (active && (!earlier || earlier.started > active.started))
-        reviewing.set(c.reviewer!.parent, active);
+        reviewing.set(parent, active);
     }
     // Once for the list: the sidebar asks every few seconds.
     const live = this.pending();
     return chats
-      .filter((c) => !c.reviewer)
+      .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
         const active = this.active.get(c.id) ?? reviewing.get(c.id);
@@ -478,7 +504,7 @@ export class ProjectChats {
     const chat = this.cache.get(id)!;
     const now = Date.now();
     if (triage.kind === "archive") {
-      if (this.active.has(id) || this.reviews.reviewing(chat))
+      if (this.active.has(id) || this.councilBusy(chat))
         throw new Error("Stop the running answer before archiving.");
       // Nothing reopens an archived thread to cancel what would still run in it.
       if (
@@ -644,6 +670,33 @@ export class ProjectChats {
       this.reviews.setFinding(id, findingId, status),
     );
   }
+  resumeUltraplan(id: string, request: string) {
+    return this.control(id, async () => {
+      if (this.disposing) throw new Error("Relay is closing.");
+      await this.ultraplans.resume(id, request);
+    });
+  }
+  /** A thinker's own thread, shown only inside its council. */
+  private async createThinker(parent: ProjectChat, task: ThinkerTask) {
+    const chat: ProjectChat = {
+      id: randomUUID(),
+      projectId: parent.projectId,
+      scope: parent.scope,
+      thinker: task,
+      title: `Thinker ${task.slot + 1}`,
+      // Its name is fixed; no title is generated for it.
+      renamed: true,
+      created: Date.now(),
+      updated: Date.now(),
+      messages: [],
+    };
+    await this.save(chat);
+    await this.store.update((s) => {
+      (s.chats ??= []).push(this.summary(chat));
+    });
+    this.cache.set(chat.id, chat);
+    return chat;
+  }
   /** A reviewer's own thread, shown only inside its review. */
   private async createReviewer(parent: ProjectChat, task: ReviewerTask) {
     const chat: ProjectChat = {
@@ -682,6 +735,7 @@ export class ProjectChats {
     checkoutNotes,
     scopeHeard,
     deepReview,
+    ultraplans,
     ...summary
   }: ProjectChat): ChatSummary {
     const provider = [...messages]
@@ -748,6 +802,18 @@ export class ProjectChats {
               review.status === "reviewing" ? "stopped" : "failed";
             interrupted = true;
           }
+          // A council cut off before the lead's plan waits for Resume; a plan
+          // cut off resumes like any answer.
+          for (const plan of Object.values(chat.ultraplans ?? {}))
+            if (
+              plan.status === "briefing" ||
+              plan.status === "thinking" ||
+              plan.status === "leading"
+            ) {
+              plan.status =
+                plan.status === "leading" && plan.answer ? "done" : "stopped";
+              interrupted = true;
+            }
           if (review?.fixing) {
             for (const id of Object.values(review.fixing).flat())
               if (review.statuses?.[id] === "fixing") {
@@ -917,10 +983,7 @@ export class ProjectChats {
           return this.askAside(chat, input);
       }
       if (input.sendAt) return this.schedule(id, input);
-      if (
-        !this.active.has(id) &&
-        !this.reviews.reviewing(await this.load(id))
-      ) {
+      if (!this.active.has(id) && !this.councilBusy(await this.load(id))) {
         await this.sendNow(id, input);
         // Asking an agent again picks a stopped queue back up after this
         // answer. Drain waits behind this control, so it sees the change.
@@ -1000,7 +1063,7 @@ export class ProjectChats {
     if (this.disposing || this.active.has(id)) return;
     await this.load(id);
     const chat = this.cache.get(id)!;
-    if (this.reviews.reviewing(chat)) return;
+    if (this.councilBusy(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {
@@ -1133,6 +1196,8 @@ export class ProjectChats {
         images: undefined,
         selection: undefined,
         delivery: undefined,
+        // Carrying on doesn't call another council.
+        ultraplan: undefined,
       });
     });
   }
@@ -1150,7 +1215,8 @@ export class ProjectChats {
     try {
       await this.load(id);
       const chat = this.cache.get(id)!;
-      if (!chat.worktree) this.projects.assertCheckoutAvailable(chat.projectId);
+      if (!chat.worktree && !chat.thinker)
+        this.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.chatRoot(chat, input.body);
       if (chat.shared) await this.sync(id);
       if (chat.messages.some((m) => m.id === input.id)) {
@@ -1190,6 +1256,19 @@ export class ProjectChats {
       active.input = input;
       if (mention && !mention.question)
         throw new Error("Add a question after the agent mention.");
+      if (input.ultraplan) {
+        if (!mention)
+          throw new Error("Ultraplan needs Claude or Codex to lead it.");
+        if (parent || chat.shared || chat.scope.kind === "review")
+          throw new Error(
+            "Ultraplan runs in the main conversation of a private thread.",
+          );
+        if (/^\//.test(mention.question))
+          throw new Error("Ultraplan can't run a command. Ask a question.");
+        // The lead plans; nobody edits until you ask it to build.
+        input = { ...input, interactionMode: "plan" };
+        active.input = input;
+      }
       let evidence: unknown;
       if (input.selection && mention) {
         if (!this.evidence || chat.scope.kind !== "pr")
@@ -1281,21 +1360,27 @@ export class ProjectChats {
         provider: mention.provider,
         created: Date.now(),
         version: 1,
+        // With a council, the lead's first answer is its brief.
+        ...(input.ultraplan ? { brief: true } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...(chat.shared ? { pending: true } : {}),
       };
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
+      if (input.ultraplan)
+        this.ultraplans.begin(chat, input, mention.provider, answer.id);
       await this.save(chat);
       this.emit({ chatId: id, message: answer });
       const scope =
         chat.scope.kind === "pr"
           ? `This discussion concerns PR #${chat.scope.ref.number} in ${chat.scope.ref.owner}/${chat.scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`
-          : chat.scope.kind === "review"
-            ? chat.reviewer
-              ? "You are one of several reviewers in a deep review. Don't change any files."
-              : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
-            : "This is a general discussion of the linked project and its local working changes.";
+          : chat.thinker
+            ? "You are one of several thinkers in an Ultraplan, working read-only on the linked project. Don't change any files."
+            : chat.scope.kind === "review"
+              ? chat.reviewer
+                ? "You are one of several reviewers in a deep review. Don't change any files."
+                : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
+              : "This is a general discussion of the linked project and its local working changes.";
       const previous = chat.messages.filter(
           (m) =>
             m.id !== user.id && m.id !== answer.id && onBranch(m) && !m.side,
@@ -1361,7 +1446,7 @@ export class ProjectChats {
       const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
       const prompt = command
         ? mention.question
-        : `My request: ${mention.question}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}`;
+        : `My request: ${mention.question}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`;
       this.reply(chat, active, answer, root, prompt, input, {
         skills,
         // What a command couldn't carry, the session hears next turn.
@@ -1995,6 +2080,7 @@ export class ProjectChats {
         },
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
+        ...(chat.thinker ? { readOnly: true } : {}),
         ...(chat.reviewer
           ? {
               readOnly: true,
@@ -2182,7 +2268,10 @@ export class ProjectChats {
     this.titleJobs.set(chat.id, { abort: titleAbort, job });
   }
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
-  private async chatRoot(chat: ProjectChat, prompt?: string) {
+  private async chatRoot(chat: ProjectChat, prompt?: string): Promise<string> {
+    // A thinker reads whatever its thread works in, worktree included.
+    if (chat.thinker)
+      return this.chatRoot(await this.load(chat.thinker.parent));
     const root = await this.projects.root(chat.projectId);
     const worktree = chat.worktree;
     if (!worktree) return root;
@@ -2723,6 +2812,7 @@ export class ProjectChats {
     if (chat) chat.queuePaused = true;
     this.active.get(id)?.abort.abort();
     if (chat) await this.reviews.stop(chat);
+    if (chat) await this.ultraplans.stop(chat);
     return chat ? this.save(chat) : undefined;
   }
   async dispose() {

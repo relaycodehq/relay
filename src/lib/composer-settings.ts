@@ -5,6 +5,10 @@ import {
 } from "../../shared/agent-modes";
 import type { ProjectChatSend } from "../../shared/projects";
 import {
+  ultraplanKindSchema,
+  type UltraplanKind,
+} from "../../shared/ultraplan";
+import {
   aiSettingsSchema,
   claudeEfforts,
   modelSchema,
@@ -21,6 +25,10 @@ export interface ComposerSettings {
   claude: { model: string; reasoningEffort: ReasoningEffort };
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
+  /** Plan with a council first; see shared/ultraplan. */
+  ultraplan: boolean;
+  /** The council's kind, kept while Ultraplan is off. */
+  council: UltraplanKind;
 }
 const storageKey = (key: string) => "composer-settings:" + key;
 function read(key: string) {
@@ -56,6 +64,8 @@ export function loadComposerSettings(
     },
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
+    ultraplan: saved?.ultraplan === true,
+    council: ultraplanKindSchema.catch("angles").parse(saved?.council),
   };
 }
 export function saveComposerSettings(key: string, settings: ComposerSettings) {

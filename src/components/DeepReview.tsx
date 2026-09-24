@@ -69,7 +69,7 @@ function useClaudeModels() {
   return query.isError ? [] : query.data;
 }
 /** Names an agent by its model, as the pickers do. */
-function useAgentName() {
+export function useAgentName() {
   const claude = useClaudeModels();
   const codex = useCodexModels().models;
   return (agent: ReviewAgent) =>
@@ -612,13 +612,18 @@ function useReviewerThread(chatId: string, live: boolean) {
   }, [history.data, updates]);
 }
 
-function ReviewerPane({
+/** One agent of a council in its hidden thread: a reviewer, or an Ultraplan thinker. */
+export function ReviewerPane({
   number,
   agent,
   chatId,
   live,
   projectRoot,
   onOpenFile,
+  role = "Reviewer",
+  title,
+  via = "Deep review",
+  prompt,
 }: {
   number: number;
   agent: ReviewAgent;
@@ -626,6 +631,12 @@ function ReviewerPane({
   live: boolean;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
+  role?: string;
+  /** Leads the header, like a thinker's job. */
+  title?: ReactNode;
+  via?: string;
+  /** Shown in place of a request too long to read in a pane. */
+  prompt?: string;
 }) {
   const name = useAgentName();
   const messages = useReviewerThread(chatId, live);
@@ -648,9 +659,10 @@ function ReviewerPane({
   return (
     <section
       className="deep-review-pane"
-      aria-label={`Reviewer ${number}: ${name(agent)}`}
+      aria-label={`${role} ${number}: ${name(agent)}`}
     >
       <header>
+        {title}
         <ProviderIcon provider={agent.provider} />
         <strong>{name(agent)}</strong>
         <span className="muted">{effortName(agent)}</span>
@@ -688,10 +700,10 @@ function ReviewerPane({
               <article className="project-message user" key={m.id}>
                 <header>
                   <strong>You</strong>
-                  <span className="muted">via Deep review</span>
+                  <span className="muted">via {via}</span>
                 </header>
                 <div className="markdown deep-review-pane-prompt">
-                  <p>{m.body.replace(/^@(codex|claude)\s+/i, "")}</p>
+                  <p>{prompt ?? m.body.replace(/^@(codex|claude)\s+/i, "")}</p>
                 </div>
               </article>
             ) : (

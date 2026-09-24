@@ -17,6 +17,11 @@ import type {
   FindingStatus,
   ReviewerTask,
 } from "./deep-review";
+import {
+  ultraplanKindSchema,
+  type ThinkerTask,
+  type UltraplanState,
+} from "./ultraplan";
 export interface Project {
   /** Sidebar-only folder path; never a filesystem location. */
   folder?: string;
@@ -118,6 +123,8 @@ export interface ChatSummary {
   nextSend?: number;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
   reviewer?: ReviewerTask;
+  /** An Ultraplan's thinker; its thread shows inside the council, never on its own. */
+  thinker?: ThinkerTask;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
@@ -181,6 +188,8 @@ export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
   handoff?: AgentHandoff;
+  /** Local marker: the lead's brief for an Ultraplan council, shown inside it. */
+  brief?: boolean;
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
   unprompted?: boolean;
   context?: ContextUsage;
@@ -321,6 +330,8 @@ export interface ProjectChat extends ChatSummary {
   /** Local: the scope each agent session last heard, by `provider:branch`. */
   scopeHeard?: Record<string, string>;
   deepReview?: DeepReviewState;
+  /** Ultraplan councils, by the user message each one works on. */
+  ultraplans?: Record<string, UltraplanState>;
   replySessions?: Record<
     string,
     {
@@ -373,6 +384,8 @@ export const projectChatSendSchema = z
     viewing: filePathSchema.optional(),
     selection: lineQuestionSchema.optional(),
     images: z.array(pastedImageSchema).max(3).optional(),
+    /** Plan this with a council of thinkers first; see shared/ultraplan. */
+    ultraplan: ultraplanKindSchema.optional(),
     /** Deep review findings this message asks the lead to fix. */
     fixes: z
       .array(z.string().regex(/^F\d{1,3}$/))
@@ -590,6 +603,8 @@ export interface ProjectApi {
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** Runs the council's thinkers that didn't finish, then the lead. */
+  resumeUltraplan(id: string, request: string): Promise<void>;
   /** Runs the reviewers that didn't finish, then the lead. */
   resumeDeepReview(id: string): Promise<void>;
   setDeepReviewFinding(

@@ -100,11 +100,10 @@ test("restores per-project composer settings, answers native approvals, and impl
     await page.screenshot({ path: "test-results/composer-runtime-menu.png" });
     await page.getByRole("option", { name: /Auto-accept edits/ }).click();
     await page
-      .getByRole("button", {
-        name: "Default mode — click to enter plan mode",
-        exact: true,
-      })
+      .getByRole("button", { name: "Mode: Build", exact: true })
       .click();
+    await expect(page.getByRole("menuitemradio")).toHaveCount(3);
+    await page.getByRole("menuitemradio", { name: /^Plan/ }).click();
     await page.getByRole("button", { name: "Fast mode", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Reasoning effort", exact: true })
@@ -121,10 +120,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
     ).toHaveText("Full access");
     await expect(
-      page.getByRole("button", {
-        name: "Default mode — click to enter plan mode",
-        exact: true,
-      }),
+      page.getByRole("button", { name: "Mode: Build", exact: true }),
     ).toBeVisible();
     // A project's name only folds its row; its new thread opens it.
     await page
@@ -134,10 +130,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
     ).toHaveText("Auto-accept edits");
     await expect(
-      page.getByRole("button", {
-        name: "Plan mode — click to return to normal build mode",
-        exact: true,
-      }),
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("combobox", { name: "Reasoning effort", exact: true }),
@@ -152,10 +145,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
     ).toHaveText("Auto-accept edits");
     await expect(
-      page.getByRole("button", {
-        name: "Plan mode — click to return to normal build mode",
-        exact: true,
-      }),
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
     ).toBeVisible();
     await page.evaluate(() => {
       document.documentElement.dataset.theme = "dark";
@@ -211,10 +201,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       .getByRole("button", { name: "Implement plan", exact: true })
       .click();
     await expect(
-      page.getByRole("button", {
-        name: "Default mode — click to enter plan mode",
-        exact: true,
-      }),
+      page.getByRole("button", { name: "Mode: Build", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
