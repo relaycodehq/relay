@@ -92,14 +92,8 @@ export function TurnChanges({
                   key={f.path}
                 >
                   <button
-                    className={`working-select turn-file${f.unclaimed ? " unclaimed" : ""}`}
-                    title={
-                      f.changedBy
-                        ? `${f.path} · changed in thread “${f.changedBy.title}”`
-                        : f.unclaimed
-                          ? `${f.path} · changed outside this thread`
-                          : f.path
-                    }
+                    className="working-select turn-file"
+                    title={f.path}
                     onClick={() => setPath(f.path)}
                   >
                     <FileEntryIcon path={f.path} directory={false} />

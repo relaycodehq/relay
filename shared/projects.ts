@@ -214,14 +214,6 @@ export interface TurnFileChange {
   binary?: boolean;
   /** Local: rolled back by this snapshot, which redo restores from. */
   revertedBy?: string;
-  /**
-   * Changed during the turn, but not by the agent's file tools or a command
-   * that names it: maybe the user's editor, another thread, or a command
-   * like `rm -rf dir`. Listed apart and never rolled back with the rest.
-   */
-  unclaimed?: true;
-  /** With `unclaimed`: the other thread whose agent changed it during the turn. */
-  changedBy?: { chatId: string; title: string };
 }
 export interface ChatImage {
   id: string;

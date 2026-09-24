@@ -749,6 +749,12 @@ export class ProjectChats {
           for (const m of chat.messages) {
             // Older saves kept every tool call twice; the trace alone is shown.
             if (m.trace) delete m.activity;
+            // Some saves also listed files the agent didn't change; only its own are shown.
+            const changes = m.changes?.filter(
+              (f) => !(f as { unclaimed?: true }).unclaimed,
+            );
+            if (changes?.length) m.changes = changes;
+            else delete m.changes;
             if (m.status === "streaming") {
               m.status = "failed";
               m.error =
@@ -1721,10 +1727,6 @@ export class ProjectChats {
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
-    const claim = () => ({
-      edited: [...edited],
-      commands: [...commands.values()],
-    });
     let point: string | undefined;
     try {
       const options = {
@@ -1852,13 +1854,7 @@ export class ProjectChats {
       };
       // Taken right before the agent starts, so the card lists only its edits.
       const first = message.id;
-      const before = compact
-        ? null
-        : await startTurn(root, first, {
-            chatId: chat.id,
-            title: () => chat.title,
-            claim,
-          });
+      const before = compact ? null : await startTurn(root, first);
       try {
         // Awaited first: a steer can move the answer to a new message meanwhile.
         const body =
@@ -1869,13 +1865,10 @@ export class ProjectChats {
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
-          const files = await finishTurn(
-            root,
-            first,
-            before,
-            message.id,
-            claim(),
-          );
+          const files = await finishTurn(root, first, before, message.id, {
+            edited: [...edited],
+            commands: [...commands.values()],
+          });
           if (files.length) message.changes = files;
         }
       }
@@ -2228,10 +2221,9 @@ export class ProjectChats {
           );
       }
       const message = chat.messages.find((m) => m.id === messageId);
-      // The whole turn means the agent's own files; others go one by one.
       const files = (message?.changes ?? []).filter(
         (f) =>
-          (paths ? paths.includes(f.path) : !f.unclaimed) &&
+          (!paths || paths.includes(f.path)) &&
           (mode === "revert") === !f.revertedBy,
       );
       if (!message || !files.length) return { conflicts: [] };

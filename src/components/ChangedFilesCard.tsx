@@ -9,7 +9,6 @@ import {
   FileDiff,
   Folder,
   FolderOpen,
-  MessagesSquare,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -60,30 +59,6 @@ type Prompt =
     }
   | { kind: "error"; message: string };
 
-/** Changes the agent didn't make, per thread that did; `by` is unset for the rest. */
-interface OtherGroup {
-  key: string;
-  by?: TurnFileChange["changedBy"];
-  tree: TurnTreeNode[];
-  count: number;
-}
-function groupOthers(files: TurnFileChange[]): OtherGroup[] {
-  const groups = new Map<string, TurnFileChange[]>();
-  for (const f of files) {
-    const key = f.changedBy?.chatId ?? "";
-    groups.set(key, [...(groups.get(key) ?? []), f]);
-  }
-  // Threads first, what nobody in Relay claims last.
-  return [...groups]
-    .sort(([a], [b]) => (a ? 0 : 1) - (b ? 0 : 1))
-    .map(([key, list]) => ({
-      key,
-      by: list[0].changedBy,
-      tree: buildTurnTree(list),
-      count: list.length,
-    }));
-}
-
 const filesUnder = (node: TurnTreeNode): TurnFileChange[] =>
   node.kind === "file" ? [node.change] : node.children.flatMap(filesUnder);
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
@@ -92,28 +67,21 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   files,
   onOpen,
   onRewind,
-  onOpenThread,
 }: {
   files: TurnFileChange[];
   /** Opens this turn's diff, on a file when one was picked. */
   onOpen: (path?: string) => void;
-  /** Opens the thread that changed some of these files meanwhile. */
-  onOpenThread?: (chatId: string) => void;
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
 }) {
-  // The agent's own changes lead; the rest may not be its doing (see `unclaimed`).
-  const own = useMemo(() => files.filter((f) => !f.unclaimed), [files]);
-  const others = useMemo(() => files.filter((f) => f.unclaimed), [files]);
-  const tree = useMemo(() => buildTurnTree(own), [own]);
-  const otherGroups = useMemo(() => groupOthers(others), [others]);
-  const total = useMemo(() => sumStats(own), [own]);
+  const tree = useMemo(() => buildTurnTree(files), [files]);
+  const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
-  const [allOpen, setAllOpen] = useState(own.length <= EXPAND_UP_TO);
+  const [allOpen, setAllOpen] = useState(files.length <= EXPAND_UP_TO);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [working, setWorking] = useState(false);
-  const reverted = own.filter((f) => f.revertedBy).length;
+  const reverted = files.filter((f) => f.revertedBy).length;
   async function rewind(paths: string[] | null, mode: Mode, force = false) {
     if (!onRewind || working) return;
     setWorking(true);
@@ -216,79 +184,77 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   };
   return (
     <section className="changed-files" aria-label="Changed files">
-      {own.length > 0 && (
-        <header>
-          <strong>
-            {own.length} changed file{own.length === 1 ? "" : "s"}
-          </strong>
-          {(total.additions > 0 || total.deletions > 0) && (
-            <DiffStatLabel stat={total} />
-          )}
-          {reverted > 0 && (
-            <span className="changed-files-note">
-              {reverted === own.length
-                ? "Rolled back"
-                : `${reverted} rolled back`}
-            </span>
-          )}
-          <span className="spacer" />
-          {nested && (
-            <IconButton
-              label={allOpen ? "Collapse all folders" : "Expand all folders"}
-              onClick={() => {
-                setAllOpen((v) => !v);
-                setToggled({});
-              }}
-            >
-              {allOpen ? (
-                <ChevronsDownUp size={14} />
-              ) : (
-                <ChevronsUpDown size={14} />
-              )}
-            </IconButton>
-          )}
+      <header>
+        <strong>
+          {files.length} changed file{files.length === 1 ? "" : "s"}
+        </strong>
+        {(total.additions > 0 || total.deletions > 0) && (
+          <DiffStatLabel stat={total} />
+        )}
+        {reverted > 0 && (
+          <span className="changed-files-note">
+            {reverted === files.length
+              ? "Rolled back"
+              : `${reverted} rolled back`}
+          </span>
+        )}
+        <span className="spacer" />
+        {nested && (
+          <IconButton
+            label={allOpen ? "Collapse all folders" : "Expand all folders"}
+            onClick={() => {
+              setAllOpen((v) => !v);
+              setToggled({});
+            }}
+          >
+            {allOpen ? (
+              <ChevronsDownUp size={14} />
+            ) : (
+              <ChevronsUpDown size={14} />
+            )}
+          </IconButton>
+        )}
+        <button
+          type="button"
+          className="changed-files-open"
+          title="Open the full diff"
+          onClick={() => onOpen(files[0]?.path)}
+        >
+          <FileDiff size={14} />
+          Open diff
+        </button>
+        {onRewind && (
           <button
             type="button"
             className="changed-files-open"
-            title="Open the full diff"
-            onClick={() => onOpen(own[0]?.path)}
+            disabled={working}
+            title={
+              reverted === files.length
+                ? "Redo this turn's changes"
+                : "Roll back this turn's changes"
+            }
+            onClick={() =>
+              reverted === files.length
+                ? void rewind(null, "redo")
+                : files.length - reverted > 1
+                  ? setPrompt({ kind: "confirm" })
+                  : void rewind(null, "revert")
+            }
           >
-            <FileDiff size={14} />
-            Open diff
+            {reverted === files.length ? (
+              <>
+                <Redo2 size={14} />
+                Redo
+              </>
+            ) : (
+              <>
+                <Undo2 size={14} />
+                Roll back
+              </>
+            )}
           </button>
-          {onRewind && (
-            <button
-              type="button"
-              className="changed-files-open"
-              disabled={working}
-              title={
-                reverted === own.length
-                  ? "Redo this turn's changes"
-                  : "Roll back this turn's changes"
-              }
-              onClick={() =>
-                reverted === own.length
-                  ? void rewind(null, "redo")
-                  : own.length - reverted > 1
-                    ? setPrompt({ kind: "confirm" })
-                    : void rewind(null, "revert")
-              }
-            >
-              {reverted === own.length ? (
-                <>
-                  <Redo2 size={14} />
-                  Redo
-                </>
-              ) : (
-                <>
-                  <Undo2 size={14} />
-                  Roll back
-                </>
-              )}
-            </button>
-          )}
-        </header>
-      )}
+        )}
+      </header>
       {prompt && (
         <div
           className={`changed-files-prompt${prompt.kind === "error" ? " error" : ""}`}
@@ -297,8 +263,8 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           {prompt.kind === "confirm" && (
             <>
               <span>
-                Roll back {own.length - reverted} files to how they were before
-                this turn? Later edits are kept where they merge.
+                Roll back {files.length - reverted} files to how they were
+                before this turn? Later edits are kept where they merge.
               </span>
               <button
                 type="button"
@@ -337,42 +303,6 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
       <div className="changed-files-tree">
         {tree.map((node) => row(node, 0))}
       </div>
-      {otherGroups.map((group) => (
-        <details key={group.key} className="changed-files-others">
-          <summary
-            title={
-              group.by
-                ? `The agent in “${group.by.title}” changed these while this turn ran. Roll each back on its own.`
-                : "This thread didn't change these. Something else did while it ran: your editor, a command like rm -rf, or a session outside Relay. Roll each back on its own."
-            }
-          >
-            <ChevronRight size={14} className="changed-files-chevron" />
-            {group.by ? (
-              <span className="changed-files-name">
-                Changed in thread “{group.by.title}”
-              </span>
-            ) : (
-              "Changed outside this thread"
-            )}
-            <span className="changed-files-note">
-              {group.count} file{group.count === 1 ? "" : "s"}
-            </span>
-          </summary>
-          <div className="changed-files-tree">
-            {group.by && onOpenThread && (
-              <button
-                type="button"
-                className="changed-files-open"
-                onClick={() => onOpenThread(group.by!.chatId)}
-              >
-                <MessagesSquare size={14} />
-                Open that thread
-              </button>
-            )}
-            {group.tree.map((node) => row(node, 0))}
-          </div>
-        </details>
-      ))}
     </section>
   );
 });
