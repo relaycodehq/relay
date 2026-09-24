@@ -6,8 +6,10 @@ import App from "./App";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
+import { initFocusRing } from "./lib/focus-ring";
 initAppearance();
 initWindowFocus();
+initFocusRing();
 const client = new QueryClient({
   defaultOptions: {
     queries: {
