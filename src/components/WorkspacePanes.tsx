@@ -245,11 +245,14 @@ export function PaneHeader({
   onClose,
   closeDisabled,
   onSlots,
+  detail,
   children,
 }: {
   id: PaneId;
   icon: ReactNode;
   title: string;
+  /** Muted text after the title, like which folder the pane shows. */
+  detail?: { text: string; title?: string };
   onClose: () => void;
   closeDisabled?: boolean;
   onSlots?: (update: (slots: PaneSlots) => PaneSlots) => void;
@@ -273,6 +276,11 @@ export function PaneHeader({
         <GripVertical className="pane-grip" size={13} />
         {icon}
         <strong>{title}</strong>
+        {detail && (
+          <small className="pane-header-detail" title={detail.title}>
+            {detail.text}
+          </small>
+        )}
         <div className="pane-title-slot" ref={titleRef} />
       </div>
       <div className="pane-header-actions" ref={actionsRef} />

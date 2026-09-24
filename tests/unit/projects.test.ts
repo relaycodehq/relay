@@ -102,21 +102,16 @@ it("opens and saves files in a folder without Git", async () => {
     const project = await projects.add(root, null);
     expect(project.plain).toBe(true);
     expect((await projects.list(null))[0]!.plain).toBe(true);
-    expect(await projects.files(project.id)).toEqual([
+    const place = await projects.inspect(project.id);
+    expect(await projects.files(place)).toEqual([
       "README.md",
       "app/.gitignore",
       "app/main.rs",
       "notes/todo.txt",
     ]);
-    const file = await projects.file(project.id, "notes/todo.txt");
+    const file = await projects.file(place, "notes/todo.txt");
     expect(file).toMatchObject({ head: "", original: "ship it\n" });
-    await projects.save(
-      project.id,
-      "notes/todo.txt",
-      "",
-      file.version,
-      "done\n",
-    );
+    await projects.save(place, "notes/todo.txt", "", file.version, "done\n");
     expect(await readFile(join(root, "notes/todo.txt"), "utf8")).toBe("done\n");
     // A folder inside a repository would run Git against that repository.
     await expect(projects.add(app + "/target", null)).rejects.toThrow(

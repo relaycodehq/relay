@@ -1,24 +1,27 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import type { Project } from "../../shared/projects";
 import type { MergeResult } from "../../shared/branch-merge";
 import { api } from "../lib/api";
 import { ErrorBox, Loading, Modal } from "./ui";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
 export function MergeSheet({
-  project,
+  where,
   onClose,
 }: {
-  project: Project;
+  /** Workspace id; from a thread's worktree, `base` is the checkout's branch. */
+  where: string;
   onClose: () => void;
 }) {
+  // A worktree can't switch to a branch the checkout has open, and its own
+  // branch goes with the worktree.
+  const inWorktree = where.includes("/");
   const qc = useQueryClient();
   const [base, setBase] = useState<string>();
   const plan = useQuery({
-    queryKey: ["merge-plan", project.id, "sheet", base],
-    queryFn: () => api.projectMergePlan(project.id, base),
+    queryKey: ["merge-plan", where, "sheet", base],
+    queryFn: () => api.projectMergePlan(where, base),
     staleTime: 0,
     gcTime: 0,
     retry: false,
@@ -29,13 +32,14 @@ export function MergeSheet({
   const [error, setError] = useState<unknown>();
   const [result, setResult] = useState<MergeResult>();
   const [switched, setSwitched] = useState(false);
+  const [caughtUp, setCaughtUp] = useState<string[]>();
   const p = plan.data;
   const refresh = () =>
     Promise.all(
       [
-        ["working-tree", "project", project.id],
-        ["project-branches", project.id],
-        ["merge-plan", project.id],
+        ["working-tree", "project", where],
+        ["project-branches", where],
+        ["merge-plan", where],
       ].map((queryKey) => qc.invalidateQueries({ queryKey })),
     );
   async function step(work: () => Promise<void>) {
@@ -54,7 +58,7 @@ export function MergeSheet({
     step(async () => {
       if (!p) return;
       setResult(
-        await api.projectMergeBranch(project.id, {
+        await api.projectMergeBranch(where, {
           branch: p.branch,
           head: p.head,
           base: p.base,
@@ -65,10 +69,10 @@ export function MergeSheet({
     });
   const switchToBase = () =>
     step(async () => {
-      const list = await api.projectBranches(project.id);
+      const list = await api.projectBranches(where);
       const target = list.branches.find((b) => !b.remote && b.name === p!.base);
       if (!target) throw new Error(`${p!.base} no longer exists.`);
-      await api.projectChangeBranch(project.id, {
+      await api.projectChangeBranch(where, {
         kind: "switch",
         name: target.ref,
         current: list.current,
@@ -78,8 +82,14 @@ export function MergeSheet({
     });
   const deleteBranch = () =>
     step(async () => {
-      await api.projectDeleteBranch(project.id, p!.branch);
+      await api.projectDeleteBranch(where, p!.branch);
       onClose();
+    });
+  const catchUp = () =>
+    step(async () => {
+      const { conflicts } = await api.projectCatchUp(where, p!.base);
+      setCaughtUp(conflicts);
+      if (!conflicts.length) setResult(undefined);
     });
   const commits = p?.commits.length ?? 0;
   const pushing = push && !!p?.pushTarget;
@@ -106,7 +116,13 @@ export function MergeSheet({
             )}
           </p>
           {!!error && <ErrorBox error={error} />}
-          {switched ? (
+          {inWorktree ? (
+            <div className="merge-done-actions">
+              <button className="primary" onClick={onClose}>
+                Done
+              </button>
+            </div>
+          ) : switched ? (
             <div className="merge-done-actions">
               <button
                 className="primary"
@@ -133,7 +149,7 @@ export function MergeSheet({
               </button>
             </div>
           )}
-          {!switched && !!p.uncommitted && (
+          {!inWorktree && !switched && !!p.uncommitted && (
             <small className="muted">
               Your {p.uncommitted} uncommitted{" "}
               {p.uncommitted === 1 ? "file comes" : "files come"} along when you
@@ -214,30 +230,62 @@ export function MergeSheet({
                 </p>
               )}
               {p.checkedOutAt && (
-                <p role="alert">
-                  {p.base} is checked out in <code>{p.checkedOutAt}</code>.
-                  Merge there, or switch that checkout to another branch.
+                <p className="pr-local-note" title={p.checkedOutAt}>
+                  Also moves {p.base} where it's checked out, in{" "}
+                  <code>{p.checkedOutAt.split("/").pop()}</code>. Uncommitted
+                  edits there stay; if one touches a file this merge changes,
+                  nothing happens.
                 </p>
               )}
-              {result && !result.merged && (
+              {!!p.snapshots && (
+                <p className="pr-local-note">
+                  Includes{" "}
+                  {p.snapshots === 1 ? "a commit" : `${p.snapshots} commits`}{" "}
+                  Relay made of the checkout's uncommitted edits when this
+                  worktree started; merging lands those edits too.
+                </p>
+              )}
+              {caughtUp?.length ? (
                 <div role="alert" className="merge-conflicts">
                   <p>
-                    These files conflict, so nothing was merged. Merge {p.base}{" "}
-                    into {p.branch} first and resolve them in Changes.
+                    {p.base} is merged into {p.branch}, with conflicts marked in
+                    these files. Resolve them in Changes (or ask the agent),
+                    commit, then merge again.
                   </p>
                   <ul>
-                    {result.conflicts.map((path) => (
+                    {caughtUp.map((path) => (
                       <li key={path}>
                         <code>{path}</code>
                       </li>
                     ))}
                   </ul>
                 </div>
+              ) : (
+                result &&
+                !result.merged && (
+                  <div role="alert" className="merge-conflicts">
+                    <p>
+                      These files conflict, so nothing was merged. Catch{" "}
+                      {p.branch} up with {p.base} first, then resolve them
+                      there.
+                    </p>
+                    <ul>
+                      {result.conflicts.map((path) => (
+                        <li key={path}>
+                          <code>{path}</code>
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" onClick={catchUp} disabled={busy}>
+                      Merge {p.base} into {p.branch}
+                    </button>
+                  </div>
+                )
               )}
               {!!error && <ErrorBox error={error} />}
               <button
                 className="primary"
-                disabled={busy || !commits || !!p.checkedOutAt}
+                disabled={busy || !commits || !!caughtUp?.length}
               >
                 {busy
                   ? "Merging…"

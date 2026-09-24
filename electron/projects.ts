@@ -51,6 +51,11 @@ const withKind = async (p: Project): Promise<Project> =>
     ? p
     : { ...p, plain: true };
 const maxFiles = 50000;
+/** A folder to browse: a project's checkout, or a thread's worktree of it. */
+export interface Place {
+  root: string;
+  plain: boolean;
+}
 export class Projects {
   /** Moves a project into `folder`, before `before` (or last in that folder). */
   async move(id: string, folder: string, before: string | null) {
@@ -247,8 +252,7 @@ export class Projects {
       "No Git remote matches your Gitea account. Add the repository’s remote in Git, then connect again.",
     );
   }
-  async files(id: string) {
-    const { root, plain } = await this.inspect(id);
+  async files({ root, plain }: Place) {
     const names = plain
       ? await folderFiles(root, maxFiles)
       : (
@@ -270,9 +274,8 @@ export class Projects {
       );
     return [...new Set(names)].sort();
   }
-  async file(id: string, path: string) {
-    const { root, plain } = await this.inspect(id),
-      file = await readWorkingFile(root, path);
+  async file({ root, plain }: Place, path: string) {
+    const file = await readWorkingFile(root, path);
     if (!file) throw new Error("This file no longer exists.");
     // A plain folder has no committed version: the file is its own original.
     if (plain)
@@ -305,15 +308,13 @@ export class Projects {
     };
   }
   async save(
-    id: string,
+    { root, plain }: Place,
     path: string,
     head: string,
     version: string,
     contents: string,
   ) {
-    const root = await this.root(id);
     await writeWorkingFile(root, path, version, { contents }, async () => {
-      const { plain } = await this.inspect(id);
       if (
         (plain ? "" : (await git(root, ["rev-parse", "HEAD"])).trim()) !== head
       )

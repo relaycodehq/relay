@@ -1,4 +1,5 @@
 import { GitActions } from "./GitActions";
+import { workspaceId } from "../../shared/workspaces";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
@@ -184,11 +185,19 @@ export default function ProjectShell() {
   const toggleTerminalRef = useRef(toggleTerminal);
   toggleTerminalRef.current = toggleTerminal;
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
+  // Git and file panes follow the thread: its worktree once it has one.
+  const inWorktree =
+    !!chat?.worktree?.path && !chat.worktree.removedAt ? chat : undefined;
+  const where = project ? workspaceId(project.id, inWorktree?.id) : "";
+  const worktreeDetail = inWorktree && {
+    text: "worktree",
+    title: `${inWorktree.worktree!.branch} · ${inWorktree.worktree!.path}`,
+  };
   // The one poller for the working tree: panes, pickers and the chat read this
   // cache. Every polling observer would run its own round of Git commands.
   const tree = useQuery({
-    queryKey: ["working-tree", "project", project?.id],
-    queryFn: () => api.projectWorkingTree(project!.id),
+    queryKey: ["working-tree", "project", where],
+    queryFn: () => api.projectWorkingTree(where),
     enabled: !!project && !legacy && !project.plain,
     refetchInterval: 3000,
   });
@@ -197,7 +206,7 @@ export default function ProjectShell() {
   const checks = useProjectChecks(
     undefined,
     project && tree.data && !legacy && !pull
-      ? { id: project.id, head: tree.data.head }
+      ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
     !!chats.data?.some((c) => c.running),
@@ -399,7 +408,7 @@ export default function ProjectShell() {
   // files lists them in Files.
   async function openChatFile(target: ProjectFileLink) {
     if (pull) return revealChange(target);
-    const id = project!.id;
+    const id = where;
     try {
       const changes = project!.plain
         ? []
@@ -645,8 +654,9 @@ export default function ProjectShell() {
             />
             {!project.plain && (
               <GitActions
-                key={project.id}
+                key={where}
                 project={project}
+                where={where}
                 connected={!!account}
                 disabled={dirty}
                 request={openPrRequest}
@@ -821,7 +831,6 @@ export default function ProjectShell() {
                   onOpenCode={openCode}
                   onOpenFile={openChatFile}
                   onOpenTurnDiff={openTurnDiff}
-                  onReviewPull={(ref) => void reviewBranchPr(ref)}
                 />
                 <RunningTasks
                   key={project.id}
@@ -843,6 +852,7 @@ export default function ProjectShell() {
                         )
                       }
                       title={pull ? "Review" : "Changes"}
+                      detail={pull ? undefined : worktreeDetail}
                       onSlots={setChangesSlots}
                       onClose={() => togglePane("changes")}
                     />
@@ -914,8 +924,9 @@ export default function ProjectShell() {
                       )
                     ) : (
                       <ProjectChanges
-                        key={project.id}
+                        key={where}
                         project={project}
+                        where={where}
                         slots={changesSlots}
                         onViewing={setViewing}
                         onOpenFile={(path, line) =>
@@ -945,12 +956,14 @@ export default function ProjectShell() {
                       id="files"
                       icon={<Files size={14} />}
                       title="Files"
+                      detail={worktreeDetail}
                       closeDisabled={dirty}
                       onClose={() => togglePane("files")}
                     />
                     <ProjectFiles
-                      key={project.id}
+                      key={where}
                       project={project}
+                      where={where}
                       checks={checks}
                       dirty={dirty}
                       onDirtyChange={setDirty}
@@ -968,12 +981,13 @@ export default function ProjectShell() {
                       id="history"
                       icon={<GitGraph size={14} />}
                       title="History"
+                      detail={worktreeDetail}
                       onSlots={setHistorySlots}
                       onClose={() => togglePane("history")}
                     />
                     <ProjectHistory
-                      key={project.id}
-                      projectId={project.id}
+                      key={where}
+                      projectId={where}
                       slots={historySlots}
                       onOpenFile={(path) =>
                         openInEditor({ path, directory: false })

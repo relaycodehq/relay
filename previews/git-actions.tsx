@@ -62,6 +62,7 @@ const plan = (): MergePlan => {
     fastForward: true,
     pushTarget: "origin/main",
     checkedOutAt: null,
+    snapshots: 0,
     uncommitted: 0,
   };
 };
@@ -164,6 +165,7 @@ function App() {
         <GitActions
           key={String(gitea)}
           project={gitea ? withGitea : withoutGitea}
+          where="sample"
           connected
           disabled={false}
           request={0}

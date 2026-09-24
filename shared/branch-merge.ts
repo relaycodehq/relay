@@ -16,8 +16,10 @@ export interface MergePlan {
   fastForward: boolean;
   /** Where `base` pushes, like `origin/main`; null for a local-only branch. */
   pushTarget: string | null;
-  /** Another worktree has `base` checked out, so it can't move under it. */
+  /** Another folder has `base` checked out; it fast-forwards there, around its uncommitted edits. */
   checkedOutAt: string | null;
+  /** Commits an older Relay worktree made of the checkout's uncommitted edits; merging lands those too. */
+  snapshots: number;
   /** Uncommitted files, which stay in the checkout and aren't merged. */
   uncommitted: number;
 }

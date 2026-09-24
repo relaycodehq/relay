@@ -99,11 +99,9 @@ import {
   CheckoutControl,
   RemoveWorktreeDialog,
   WorkspacePicker,
-  WorktreeConflict,
   WorktreeLanded,
   WorktreeMenu,
 } from "./WorktreeControls";
-import { CreatePullSheet } from "./BranchPullRequest";
 import type { TurnDiffTarget } from "./TurnChanges";
 import { matchLink, type ProjectFileLink } from "../lib/project-file-links";
 import type { PullRef } from "../../shared/types";
@@ -517,7 +515,6 @@ export function ProjectChat({
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
-  onReviewPull,
   onDraftWorkspace,
   viewing,
 }: {
@@ -546,7 +543,6 @@ export function ProjectChat({
   onOpenCode: (mode: "changes" | "files" | "pulls") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
-  onReviewPull: (ref: PullRef) => void;
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   viewing: { path: string | null; viewed: number; total: number };
@@ -765,9 +761,7 @@ export function ProjectChat({
     worktree.data?.path && !worktree.data.removed
       ? worktree.data.path
       : project.path;
-  const [worktreeConflicts, setWorktreeConflicts] = useState<string[]>();
   const [worktreeBusy, setWorktreeBusy] = useState(false);
-  const [pullSheet, setPullSheet] = useState(false);
   const [removingWorktree, setRemovingWorktree] = useState(false);
   useEffect(() => {
     // A finished turn leaves new changes to count.
@@ -1326,43 +1320,13 @@ export function ProjectChat({
     } finally {
       setWorktreeBusy(false);
       void worktree.refetch();
-      void qc.invalidateQueries({
-        queryKey: ["working-tree", "project", project.id],
-      });
+      void qc.invalidateQueries({ queryKey: ["working-tree", "project"] });
       void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
     }
   }
-  const mergeWorktree = () =>
-    worktreeAction(async (chatId) => {
-      const { conflicts } = await api.mergeProjectWorktree(chatId);
-      setWorktreeConflicts(conflicts.length ? conflicts : undefined);
-    });
-  // The checkout's changes go into the worktree first. What merges cleanly is
-  // merged right away; clashing lines go to the agent as conflict markers.
-  const fixWorktree = () =>
-    worktreeAction(async (chatId) => {
-      const { conflicts } = await api.catchUpProjectWorktree(chatId);
-      if (!conflicts.length) {
-        const again = await api.mergeProjectWorktree(chatId);
-        setWorktreeConflicts(
-          again.conflicts.length ? again.conflicts : undefined,
-        );
-        return;
-      }
-      setWorktreeConflicts(undefined);
-      await composer.current?.sendToAgent(
-        activeAgent ?? "claude",
-        `Relay brought the checkout's latest changes into this worktree so it can merge. ${
-          conflicts.length === 1 ? "This file has" : "These files have"
-        } Git conflict markers where both sides changed the same lines: ${conflicts.join(
-          ", ",
-        )}. Resolve them so each side's change still does what it meant to, and remove the markers.`,
-      );
-    });
   const removeWorktree = () =>
     worktreeAction(async (chatId) => {
       await api.removeProjectWorktree(chatId);
-      setWorktreeConflicts(undefined);
       // What ran in it stopped with it.
       void qc.invalidateQueries({ queryKey: ["project-tasks", project.id] });
     });
@@ -1378,12 +1342,6 @@ export function ProjectChat({
         status={worktree.data}
         running={running}
         busy={worktreeBusy}
-        onMerge={() => void mergeWorktree()}
-        onCreatePr={() => setPullSheet(true)}
-        onViewPr={() => {
-          const url = worktree.data?.pr?.url;
-          if (url) void api.openExternal(url).catch(setError);
-        }}
         onShowChanges={() => {
           const status = worktree.data;
           if (status?.files.length)
@@ -2017,14 +1975,7 @@ export function ProjectChat({
             }
             onSend={send}
             notice={
-              worktreeConflicts ? (
-                <WorktreeConflict
-                  files={worktreeConflicts}
-                  busy={worktreeBusy || running}
-                  onDismiss={() => setWorktreeConflicts(undefined)}
-                  onFix={() => void fixWorktree()}
-                />
-              ) : stopped?.length ? (
+              stopped?.length ? (
                 <StoppedStrip
                   items={stopped}
                   onResolve={async (action) => {
@@ -2161,20 +2112,10 @@ export function ProjectChat({
           />
         )}
       </div>
-      {pullSheet && chat && (
-        <CreatePullSheet
-          project={project}
-          chatId={chat.id}
-          onClose={() => setPullSheet(false)}
-          onReview={(ref) => {
-            setPullSheet(false);
-            onReviewPull(ref);
-          }}
-        />
-      )}
       {removingWorktree && (
         <RemoveWorktreeDialog
           files={worktree.data?.files.length ?? 0}
+          from={worktree.data?.from}
           onCancel={() => setRemovingWorktree(false)}
           onRemove={() => {
             setRemovingWorktree(false);

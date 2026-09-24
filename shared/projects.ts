@@ -62,14 +62,16 @@ export interface ChatWorktree {
   /** Unset until the first message makes the worktree. */
   path?: string;
   branch?: string;
-  /** The checkout's commit when the worktree was made; a PR builds on it. */
+  /** The checkout's branch it was made from; its changes are what that branch lacks. */
+  from?: string;
+  /** The checkout's commit when the worktree was made. */
   head?: string;
-  /** The checkout as the worktree started from it, uncommitted edits included. */
+  /** Where its branch starts: `head`, or for older worktrees a snapshot of the checkout's uncommitted edits. */
   start?: string;
-  /** What the worktree's changes are counted from: `start`, moved up by each merge. */
+  /** Older worktrees count their changes from here instead of from `from`. */
   base?: string;
-  /** The changes reached the checkout: merged from Relay, or found there. */
-  landed?: { at: number; by: "relay" | "outside" | "pr" };
+  /** Its PR was merged on the Git host. Older worktrees may hold other values. */
+  landed?: { at: number; by: string };
   pr?: { number: number; url: string };
   /** Removed; the next message makes a fresh one from the checkout. */
   removedAt?: number;
@@ -83,9 +85,12 @@ export interface AgentWorktree {
 export interface WorktreeStatus {
   branch?: string;
   path?: string;
-  /** What changed since `base`: not in the checkout yet. */
+  /** The branch it merges into. */
+  from?: string;
+  /** What it has that `from` doesn't yet, committed or not. */
   files: TurnFileChange[];
-  landed?: ChatWorktree["landed"];
+  /** Everything it committed is in `from` now, or its PR was merged. */
+  landed?: { by: "merge" | "pr" };
   pr?: ChatWorktree["pr"];
   removed: boolean;
 }
@@ -435,22 +440,20 @@ export interface ProjectApi {
     provider: "codex" | "claude",
   ): Promise<import("./commands").ProviderCommand[]>;
   projectBranchPulls(
-    id: string,
+    where: string,
   ): Promise<import("./pull-request-create").BranchPull[]>;
   /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */
   projectCiStatus(
     id: string,
     chatId?: string,
   ): Promise<import("./ci").CiStatus | null>;
-  /** With `chatId`, for that thread's worktree: its changes become one commit on the checkout's. */
+  /** `where` is a workspace id: a thread's worktree opens its PR from its own branch. */
   projectPreparePull(
-    id: string,
-    chatId?: string,
+    where: string,
   ): Promise<import("./pull-request-create").PullRequestPlan>;
   projectCreatePull(
-    id: string,
+    where: string,
     input: import("./pull-request-create").CreatePullRequest,
-    chatId?: string,
   ): Promise<import("./pull-request-create").CreatedPullRequest>;
   projectBranches(id: string): Promise<import("./branches").BranchList>;
   projectChangeBranch(
@@ -481,76 +484,84 @@ export interface ProjectApi {
     roomId: string,
   ): Promise<ChatSummary>;
 
-  localCheckInfo(id: string): Promise<import("./checks").ProjectCheckInfo>;
+  // Calls taking `where` accept a workspace id (see shared/workspaces.ts):
+  // the checkout, or a thread's worktree.
+  localCheckInfo(where: string): Promise<import("./checks").ProjectCheckInfo>;
   localCheckState(
-    id: string,
+    where: string,
     head: string,
   ): Promise<import("./checks").ProjectCheckState | null>;
   startLocalChecks(
-    id: string,
+    where: string,
     head: string,
     target: string,
   ): Promise<import("./checks").ProjectCheckState>;
-  stopLocalChecks(id: string): Promise<void>;
-  pauseLocalChecks(id: string, paused: boolean): Promise<void>;
+  stopLocalChecks(where: string): Promise<void>;
+  pauseLocalChecks(where: string, paused: boolean): Promise<void>;
   updateLocalCheckBuffer(
-    id: string,
+    where: string,
     head: string,
     path: string,
     text: string | null,
   ): Promise<void>;
   inspectLocalSymbol(
-    id: string,
+    where: string,
     head: string,
     query: import("./checks").SymbolQuery,
   ): Promise<import("./checks").SymbolResult>;
   localBlame(
-    id: string,
+    where: string,
     query: import("./types").BlameQuery,
   ): Promise<import("./types").LineBlame>;
 
   projects(): Promise<Project[]>;
   addProject(): Promise<Project | null>;
   linkProject(id: string): Promise<Project>;
-  projectFiles(id: string): Promise<string[]>;
-  projectFile(id: string, path: string): Promise<LocalFile>;
+  projectFiles(where: string): Promise<string[]>;
+  projectFile(where: string, path: string): Promise<LocalFile>;
   saveProjectFile(
-    id: string,
+    where: string,
     path: string,
     head: string,
     version: string,
     contents: string,
   ): Promise<{ version: string }>;
-  projectWorkingTree(id: string): Promise<WorkingTree>;
+  projectWorkingTree(where: string): Promise<WorkingTree>;
   projectWorkingDiff(
-    id: string,
+    where: string,
     path: string,
     area: ChangeArea,
   ): Promise<FilePair>;
-  projectGitAction(id: string, action: GitAction): Promise<WorkingTree>;
+  projectGitAction(where: string, action: GitAction): Promise<WorkingTree>;
   /** A generated message for committing just these changed files. */
-  projectCommitMessage(id: string, paths: string[]): Promise<string>;
+  projectCommitMessage(where: string, paths: string[]): Promise<string>;
   /** Merging the current branch into `base`, the default branch when omitted. */
   projectMergePlan(
-    id: string,
+    where: string,
     base?: string,
   ): Promise<import("./branch-merge").MergePlan>;
   projectMergeBranch(
-    id: string,
+    where: string,
     input: import("./branch-merge").MergeBranch,
   ): Promise<import("./branch-merge").MergeResult>;
-  projectDeleteBranch(id: string, name: string): Promise<void>;
+  projectDeleteBranch(where: string, name: string): Promise<void>;
+  /** Merges `base` into the current branch; conflicts stay marked in its folder. */
+  projectCatchUp(where: string, base: string): Promise<{ conflicts: string[] }>;
   projectHistory(
-    id: string,
+    where: string,
     scope: import("./history").HistoryScope,
     limit: number,
   ): Promise<import("./history").CommitLog>;
   projectCommit(
-    id: string,
+    where: string,
     sha: string,
   ): Promise<import("./history").CommitDetail>;
   /** One file as a commit left it, against its first parent. */
-  projectCommitDiff(id: string, sha: string, path: string): Promise<FilePair>;
+  projectCommitDiff(
+    where: string,
+    sha: string,
+    path: string,
+  ): Promise<FilePair>;
   /** One file as an agent turn left it, against how the turn found it. */
   projectTurnDiff(
     chatId: string,
@@ -576,11 +587,7 @@ export interface ProjectApi {
     workspace?: ChatWorkspace,
   ): Promise<ChatSummary>;
   projectWorktree(chatId: string): Promise<WorktreeStatus>;
-  /** Brings the worktree's changes into the checkout, uncommitted. Nothing is written when a file conflicts. */
-  mergeProjectWorktree(chatId: string): Promise<{ conflicts: string[] }>;
-  /** Brings the checkout's changes into the worktree; conflicts stay there as markers. */
-  catchUpProjectWorktree(chatId: string): Promise<{ conflicts: string[] }>;
-  /** One file as the worktree has it, against what its changes are counted from. */
+  /** One file as the worktree has it, against where its branch forks. */
   projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
   removeProjectWorktree(chatId: string): Promise<void>;
   revealProjectWorktree(chatId: string): Promise<void>;

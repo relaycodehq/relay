@@ -1,29 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Upload } from "lucide-react";
-import type { Project } from "../../shared/projects";
 import type { PullRef } from "../../shared/types";
 import type { CreatedPullRequest } from "../../shared/pull-request-create";
 import { api } from "../lib/api";
 import { ErrorBox, Loading, Modal } from "./ui";
-/** With `chatId`, a PR of that thread's worktree: its changes as one commit on the checkout's. */
+/** A PR of the current branch of `where`: the checkout's, or a thread's worktree's. */
 export function CreatePullSheet({
-  project,
-  chatId,
+  where,
   onClose,
   onReview,
   onChanges,
 }: {
-  project: Project;
-  chatId?: string;
+  where: string;
   onClose: () => void;
   onReview: (ref: PullRef) => void;
   onChanges?: () => void;
 }) {
   const qc = useQueryClient();
   const preview = useQuery({
-    queryKey: ["create-pull-preview", project.id, chatId],
-    queryFn: () => api.projectPreparePull(project.id, chatId),
+    queryKey: ["create-pull-preview", where],
+    queryFn: () => api.projectPreparePull(where),
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: false,
@@ -50,25 +47,22 @@ export function CreatePullSheet({
     setBusy(true);
     setError(undefined);
     try {
-      const created = await api.projectCreatePull(
-        project.id,
-        {
-          planId: p.id,
-          base,
-          title,
-          body,
-          draft,
-          push: p.needsPush,
-        },
-        chatId,
-      );
-      if (chatId)
-        await qc.invalidateQueries({ queryKey: ["worktree", chatId] });
-      setResult(created);
-      await qc.invalidateQueries({ queryKey: ["branch-pulls", project.id] });
-      await qc.invalidateQueries({
-        queryKey: ["working-tree", "project", project.id],
+      const created = await api.projectCreatePull(where, {
+        planId: p.id,
+        base,
+        title,
+        body,
+        draft,
+        push: p.needsPush,
       });
+      setResult(created);
+      await Promise.all(
+        [
+          ["worktree"],
+          ["branch-pulls", where],
+          ["working-tree", "project", where],
+        ].map((queryKey) => qc.invalidateQueries({ queryKey })),
+      );
     } catch (e) {
       setError(e);
     } finally {
@@ -165,22 +159,17 @@ export function CreatePullSheet({
                 />
                 Draft PR <span className="muted">(WIP:)</span>
               </label>
-              {!!p.dirtyFiles &&
-                (chatId ? (
-                  <p className="pr-local-note">
-                    {p.dirtyFiles} {p.dirtyFiles === 1 ? "file" : "files"}{" "}
-                    uncommitted in the checkout when this worktree started{" "}
-                    {p.dirtyFiles === 1 ? "is" : "are"} left out.
-                  </p>
-                ) : (
-                  <p className="pr-local-note">
-                    {p.dirtyFiles} uncommitted{" "}
-                    {p.dirtyFiles === 1 ? "file is" : "files are"} excluded.{" "}
+              {!!p.dirtyFiles && (
+                <p className="pr-local-note">
+                  {p.dirtyFiles} uncommitted{" "}
+                  {p.dirtyFiles === 1 ? "file is" : "files are"} excluded.{" "}
+                  {onChanges && (
                     <button type="button" onClick={onChanges} disabled={busy}>
                       Review local changes
                     </button>
-                  </p>
-                ))}
+                  )}
+                </p>
+              )}
               {p.needsPush && (
                 <div className="pr-push-preview">
                   <p>

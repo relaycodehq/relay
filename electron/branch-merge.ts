@@ -102,14 +102,20 @@ export async function mergePlan(
     fastForward: await isAncestor(root, baseHead, state.head),
     pushTarget: destination?.label ?? null,
     checkedOutAt: open.get(base) ?? null,
+    snapshots: log
+      .split("\n")
+      .filter((r) => / Relay: the checkout('s)? /.test(r)).length,
     uncommitted: state.changes.length,
   };
 }
 
 /**
- * Merges the current branch into `base` without switching to it: the checkout
- * and its uncommitted work never move. A fast-forward just moves the ref;
- * otherwise the merge commit is made in a throwaway worktree.
+ * Merges the current branch into `base` without switching to it: this folder
+ * and its uncommitted work never move. The merge commit, when one is needed,
+ * is made in a throwaway worktree. Then `base` moves to it: just the ref, or
+ * where another folder has `base` checked out (a thread's worktree landing in
+ * the checkout), a fast-forward there, which Git refuses rather than touch a
+ * file with uncommitted edits.
  */
 export function mergeBranch(
   root: string,
@@ -127,9 +133,9 @@ export function mergeBranch(
         `${input.base} changed. Reopen the merge to review it again.`,
       );
     const open = (await openBranches(root)).get(input.base);
-    if (open)
+    if (open && (await gitOperation(open)))
       throw new Error(
-        `${input.base} is checked out in ${open}. Merge there, or switch that checkout away first.`,
+        `Finish the Git operation in ${open} before merging into ${input.base}.`,
       );
     const destination = input.push
       ? await pushDestination(root, input.base)
@@ -195,19 +201,39 @@ export function mergeBranch(
       }
     }
 
-    // Push before moving the local ref, so a rejected push changes nothing.
-    if (destination)
-      await git(
+    const push = () =>
+      git(
         root,
         [
           "push",
           "--porcelain",
-          destination.remote,
-          `${sha}:${destination.ref}`,
+          destination!.remote,
+          `${sha}:${destination!.ref}`,
         ],
         120000,
       );
-    await git(root, ["update-ref", baseRef, sha, input.baseHead]);
+    if (open) {
+      // The checkout moves first: its edits can stop the merge, and then nothing was pushed.
+      await serializeRepo(open, () =>
+        git(open, ["merge", "--ff-only", "--quiet", sha], 120000),
+      ).catch((e: Error) => {
+        throw new Error(
+          /overwritten/.test(e.message)
+            ? `${input.base} in ${open} has uncommitted edits to files this merge changes. Commit or stash them there first.\n\n${e.message}`
+            : e.message,
+        );
+      });
+      if (destination)
+        await push().catch((e: Error) => {
+          throw new Error(
+            `Merged into ${input.base}, but pushing it failed: ${e.message}`,
+          );
+        });
+    } else {
+      // Push before moving the local ref, so a rejected push changes nothing.
+      if (destination) await push();
+      await git(root, ["update-ref", baseRef, sha, input.baseHead]);
+    }
     return {
       merged: true,
       base: input.base,
@@ -215,6 +241,34 @@ export function mergeBranch(
       fastForward,
       pushedTo: destination?.label ?? null,
     };
+  });
+}
+
+/**
+ * Merges `base` into the current branch, the usual fix when landing it
+ * conflicts. Conflicts stay in this folder, marked, to resolve and commit.
+ */
+export function catchUpBranch(root: string, base: string) {
+  return serializeRepo(root, async () => {
+    if (await gitOperation(root))
+      throw new Error("Finish the current Git operation first.");
+    if (!(await revParse(root, `refs/heads/${base}`).catch(() => "")))
+      throw new Error(`There is no local branch ${base}.`);
+    try {
+      await git(root, ["merge", "--no-edit", `refs/heads/${base}`], 120000);
+      return { conflicts: [] as string[] };
+    } catch (e) {
+      const conflicts = (
+        await git(root, ["diff", "--name-only", "--diff-filter=U"]).catch(
+          () => "",
+        )
+      )
+        .trim()
+        .split("\n")
+        .filter(Boolean);
+      if (!conflicts.length) throw e;
+      return { conflicts };
+    }
   });
 }
 

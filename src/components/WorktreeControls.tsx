@@ -1,13 +1,5 @@
 import { Menu } from "@base-ui/react/menu";
-import {
-  Check,
-  ChevronDown,
-  Folder,
-  FolderGit2,
-  GitMerge,
-  GitPullRequest,
-  TriangleAlert,
-} from "lucide-react";
+import { Check, ChevronDown, Folder, FolderGit2 } from "lucide-react";
 import type {
   AgentWorktree,
   ChatWorkspace,
@@ -158,14 +150,14 @@ export function CheckoutControl({
   );
 }
 
-/** After the first message a thread's place is fixed; this is how a worktree lands. */
+/**
+ * After the first message a thread's place is fixed. Its worktree is an
+ * ordinary branch: the header's Git button commits, pushes and lands it.
+ */
 export function WorktreeMenu({
   status,
   running,
   busy,
-  onMerge,
-  onCreatePr,
-  onViewPr,
   onShowChanges,
   onReveal,
   onRemove,
@@ -173,9 +165,7 @@ export function WorktreeMenu({
   status?: WorktreeStatus;
   running: boolean;
   busy: boolean;
-  onMerge: () => void;
-  onCreatePr: () => void;
-  onViewPr: () => void;
+  /** Everything the branch has that `from` doesn't, committed or not. */
   onShowChanges: () => void;
   onReveal: () => void;
   onRemove: () => void;
@@ -215,7 +205,7 @@ export function WorktreeMenu({
           !running && (
             <i
               className="worktree-dot"
-              aria-label={`${files} ${files === 1 ? "file" : "files"} not in the checkout`}
+              aria-label={`${files} ${files === 1 ? "file" : "files"} not in ${status.from ?? "the checkout's branch"}`}
             />
           )
         )}
@@ -238,42 +228,18 @@ export function WorktreeMenu({
                 {running
                   ? "working"
                   : files
-                    ? `${files} ${files === 1 ? "file" : "files"} changed`
+                    ? `${files} ${files === 1 ? "file" : "files"} not in ${status.from ?? "its source branch"}`
                     : status.landed
-                      ? "merged"
+                      ? `merged into ${status.from ?? "its source branch"}`
                       : "no changes"}
               </small>
             </div>
             <Menu.Item
               className="composer-select-item worktree-item"
-              disabled={!idle || !files}
-              onClick={onMerge}
-            >
-              <GitMerge size={14} /> Merge into current checkout
-            </Menu.Item>
-            {status.pr ? (
-              <Menu.Item
-                className="composer-select-item worktree-item"
-                onClick={onViewPr}
-              >
-                <GitPullRequest size={14} /> View PR #{status.pr.number}
-              </Menu.Item>
-            ) : (
-              <Menu.Item
-                className="composer-select-item worktree-item"
-                disabled={!idle || !files}
-                onClick={onCreatePr}
-              >
-                <GitPullRequest size={14} /> Create PR
-              </Menu.Item>
-            )}
-            <Menu.Separator className="composer-menu-separator" />
-            <Menu.Item
-              className="composer-select-item worktree-item"
               disabled={!files}
               onClick={onShowChanges}
             >
-              Show changes
+              Changes against {status.from ?? "its source branch"}
             </Menu.Item>
             <Menu.Item
               className="composer-select-item worktree-item"
@@ -296,61 +262,16 @@ export function WorktreeMenu({
   );
 }
 
-const listFiles = (files: string[]) => {
-  const names = files.slice(0, 2).map((f) => f.split("/").pop());
-  return files.length > 2
-    ? `${names.join(", ")} and ${files.length - 2} more`
-    : names.join(" and ");
-};
-
-/** Merging stopped: files the checkout changed too. Nothing was written. */
-export function WorktreeConflict({
-  files,
-  busy,
-  onDismiss,
-  onFix,
-}: {
-  files: string[];
-  busy: boolean;
-  onDismiss: () => void;
-  onFix: () => void;
-}) {
-  return (
-    <div className="waiting-strip stopped" role="status">
-      <div className="waiting-strip-head">
-        <TriangleAlert size={15} />
-        <span className="waiting-strip-text" title={files.join("\n")}>
-          <b>Couldn’t merge</b>
-          <span> · {listFiles(files)} changed in the checkout too</span>
-        </span>
-        <button type="button" disabled={busy} onClick={onDismiss}>
-          Dismiss
-        </button>
-        <button
-          type="button"
-          className="primary-action"
-          disabled={busy}
-          onClick={onFix}
-        >
-          Ask the agent to fix
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** The quiet line under the thread once its worktree's changes reached the checkout. */
+/** The quiet line under the thread once its worktree's branch landed. */
 export function WorktreeLanded({ status }: { status: WorktreeStatus }) {
   const landed = status.landed;
   if (!landed || status.files.length) return null;
   return (
     <p className="worktree-landed">
       <Check size={12} />
-      {landed.by === "relay"
-        ? "Merged into the checkout"
-        : landed.by === "pr"
-          ? `Merged through PR #${status.pr?.number}`
-          : "Merged into the checkout outside Relay"}
+      {landed.by === "pr"
+        ? `Merged through PR #${status.pr?.number}`
+        : `Merged into ${status.from ?? "its source branch"}`}
       {status.removed ? " · worktree removed" : ""}
     </p>
   );
@@ -358,19 +279,21 @@ export function WorktreeLanded({ status }: { status: WorktreeStatus }) {
 
 export function RemoveWorktreeDialog({
   files,
+  from,
   onCancel,
   onRemove,
 }: {
   files: number;
+  from?: string;
   onCancel: () => void;
   onRemove: () => void;
 }) {
   return (
     <Modal title="Remove the worktree?" onClose={onCancel}>
       <p>
-        {files} {files === 1 ? "file has" : "files have"} changes that aren’t in
-        the checkout. Relay keeps a snapshot, but the worktree’s folder and
-        branch go away.
+        {files} {files === 1 ? "file has" : "files have"} changes that aren’t in{" "}
+        {from ?? "the checkout’s branch"}. Relay keeps a snapshot, but the
+        worktree’s folder and branch go away.
       </p>
       <div className="modal-actions">
         <button type="button" onClick={onCancel}>

@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 
-test("a thread works in its own worktree and merges back into the checkout", async () => {
+test("a worktree thread is its own branch: the header follows it, commits there and merges into main", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-worktree-")));
   const repo = join(root, "project"),
     bin = join(root, "bin"),
@@ -33,7 +33,7 @@ test("a thread works in its own worktree and merges back into the checkout", asy
   await writeFile(join(repo, "src/cache.ts"), "export const cache = 1;\n");
   git("add", ".");
   git("commit", "-qm", "Base");
-  // Another thread's work in progress: the worktree starts with it.
+  // Another thread's work in progress stays in the checkout.
   await writeFile(join(repo, "notes.txt"), "mine\n");
   await writeFile(
     join(bin, "codex"),
@@ -84,28 +84,54 @@ test("a thread works in its own worktree and merges back into the checkout", asy
       .click();
     await expect(page.getByText("needed no change")).toBeVisible();
 
-    // The agent worked in the worktree; the checkout is untouched.
+    // The agent worked in the worktree, on its own branch from the last commit.
     const folder = join(data, "worktrees", "project");
     const [leaf] = await readdir(folder);
     const worktree = join(folder, leaf);
+    const inWorktree = (...args: string[]) =>
+      execFileSync("git", ["-C", worktree, ...args], {
+        encoding: "utf8",
+      }).trim();
     expect(leaf).toBe("fixture-edit-files");
     expect(await readFile(join(worktree, "src/guard.ts"), "utf8")).toBe(
       "export const guard = true;\n",
     );
-    expect(await readFile(join(worktree, "notes.txt"), "utf8")).toBe("mine\n");
+    expect(existsSync(join(worktree, "notes.txt"))).toBe(false);
     expect(await readFile(join(repo, "README.md"), "utf8")).toBe("# Cache\n");
     expect(existsSync(join(repo, "src/guard.ts"))).toBe(false);
     await expect(page.getByText("relay/fixture-edit-files")).toBeVisible();
 
-    // What the worktree changed opens like a turn's diff.
+    // The header follows the thread: Changes and Files show the worktree.
+    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    const local = page.getByRole("region", { name: "Local changes" });
+    await expect(
+      local.getByRole("button", { name: "Added src/guard.ts", exact: true }),
+    ).toBeVisible();
+    await expect(
+      local.getByRole("button", { name: "Modified README.md", exact: true }),
+    ).toBeVisible();
+    await expect(local).not.toContainText("notes.txt");
+    await expect(page.locator(".pane-header-detail").first()).toHaveText(
+      "worktree",
+    );
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    const fileList = page.locator(".project-file-list");
+    await expect(
+      fileList.getByRole("button", { name: /guard\.ts/ }),
+    ).toBeVisible();
+    await expect(fileList).not.toContainText("notes.txt");
+    await page.screenshot({ path: "test-results/worktree-header.png" });
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+
+    // What the branch has that main doesn't opens like a turn's diff.
     const menu = page.getByRole("button", { name: /^Worktree/ });
-    await expect(menu.getByLabel("2 files not in the checkout")).toBeVisible();
+    await expect(menu.getByLabel("2 files not in main")).toBeVisible();
     await menu.click();
     await page.screenshot({ path: "test-results/worktree-menu.png" });
-    await page.getByRole("menuitem", { name: "Show changes" }).click();
+    await page.getByRole("menuitem", { name: "Changes against main" }).click();
     const changes = page.getByRole("region", { name: "Turn changes" });
     await expect(changes).toContainText("Changed in this worktree");
-    await expect(changes).toContainText("Checkout → Worktree");
+    await expect(changes).toContainText("Branched from → Worktree");
     await expect(changes).not.toContainText("notes.txt");
 
     // A process running in the worktree says so in Running.
@@ -127,14 +153,43 @@ test("a thread works in its own worktree and merges back into the checkout", asy
     await expect(running).toContainText("worktree", { timeout: 20000 });
     await running.screenshot({ path: "test-results/worktree-running.png" });
 
-    // Merging brings the thread's changes over, uncommitted, and nothing else.
-    await menu.click();
-    await page
-      .getByRole("menuitem", { name: "Merge into current checkout" })
-      .click();
-    await expect(
-      page.getByText("Merged into the checkout", { exact: true }),
-    ).toBeVisible();
+    // The header's Git button commits on the worktree's branch.
+    const commitIn = async (message: string) => {
+      await page.getByRole("button", { name: "More Git actions" }).click();
+      await page.getByRole("menuitem", { name: "Commit", exact: true }).click();
+      const sheet = page.getByRole("dialog", { name: "Commit" });
+      await sheet.getByLabel("Commit message").fill(message);
+      await sheet.getByRole("button", { name: "Commit", exact: true }).click();
+      await expect(sheet).toBeHidden();
+    };
+    await commitIn("Add the cache guard");
+    expect(inWorktree("log", "-1", "--format=%s")).toBe("Add the cache guard");
+    expect(inWorktree("branch", "--show-current")).toBe(
+      "relay/fixture-edit-files",
+    );
+    expect(git("rev-list", "--count", "HEAD")).toBe("1");
+
+    // Landing moves main in the checkout, around its work in progress.
+    // The fixture remote isn't a Git server, so nothing is pushed.
+    const mergeIntoMain = async () => {
+      await page.getByRole("button", { name: "More Git actions" }).click();
+      await page.getByRole("menuitem", { name: "Merge into main" }).click();
+      const sheet = page.getByRole("dialog", { name: "Merge branch" });
+      await expect(sheet).toContainText(
+        "Also moves main where it's checked out",
+      );
+      await sheet.getByLabel(/Push main to/).uncheck();
+      await sheet
+        .getByRole("button", { name: "Merge into main", exact: true })
+        .click();
+      return sheet;
+    };
+    await mergeIntoMain();
+    const merged = page.getByRole("dialog", { name: "Merged into main" });
+    await expect(merged).toBeVisible();
+    await page.screenshot({ path: "test-results/worktree-merged.png" });
+    await merged.getByRole("button", { name: "Done" }).click();
+    expect(git("rev-list", "--count", "HEAD")).toBe("2");
     expect(await readFile(join(repo, "src/guard.ts"), "utf8")).toBe(
       "export const guard = true;\n",
     );
@@ -142,53 +197,47 @@ test("a thread works in its own worktree and merges back into the checkout", asy
       "# Cache\nEdited by the agent.\n",
     );
     expect(await readFile(join(repo, "notes.txt"), "utf8")).toBe("mine\n");
-    expect(git("rev-list", "--count", "HEAD")).toBe("1");
-    await page.screenshot({ path: "test-results/worktree-merged.png" });
-
-    // Brought over by hand, outside Relay: it notices.
-    await page.getByLabel("Message project").fill("fixture edit files again");
-    await page
-      .getByRole("button", { name: "Send message", exact: true })
-      .click();
-    await expect(menu.getByLabel("1 file not in the checkout")).toBeVisible();
-    await writeFile(
-      join(repo, "README.md"),
-      await readFile(join(worktree, "README.md"), "utf8"),
+    await expect(page.locator(".worktree-landed")).toHaveText(
+      "Merged into main",
     );
-    await expect(
-      page.getByText("Merged into the checkout outside Relay"),
-    ).toBeVisible({ timeout: 25000 });
 
-    // Both sides change the same lines: nothing is written, the agent gets markers.
+    // Both sides change the same lines: nothing lands; catching up with main
+    // leaves the conflict marked in the worktree.
     await page
       .getByLabel("Message project")
       .fill("fixture edit files once more");
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
-    await expect(menu.getByLabel("1 file not in the checkout")).toBeVisible();
-    const before =
-      (await readFile(join(repo, "README.md"), "utf8")) + "Mine too.\n";
-    await writeFile(join(repo, "README.md"), before);
-    await menu.click();
-    await page
-      .getByRole("menuitem", { name: "Merge into current checkout" })
-      .click();
-    await expect(page.getByText("Couldn’t merge")).toBeVisible();
-    expect(await readFile(join(repo, "README.md"), "utf8")).toBe(before);
+    await expect(menu.getByLabel("1 file not in main")).toBeVisible();
+    await writeFile(
+      join(repo, "README.md"),
+      "# Cache\nEdited by the agent.\nMine too.\n",
+    );
+    git("commit", "-qam", "Mine too");
+    await commitIn("Edit again");
+    const sheet = await mergeIntoMain();
+    await expect(sheet).toContainText("These files conflict");
+    expect(git("log", "-1", "--format=%s")).toBe("Mine too");
     await page.screenshot({ path: "test-results/worktree-conflict.png" });
-    await page.getByRole("button", { name: "Ask the agent to fix" }).click();
-    await expect(
-      page.getByText("Relay brought the checkout's latest changes"),
-    ).toBeVisible();
+    await sheet
+      .getByRole("button", { name: "Merge main into relay/fixture-edit-files" })
+      .click();
+    await expect(sheet).toContainText("with conflicts marked");
     const marked = await readFile(join(worktree, "README.md"), "utf8");
-    expect(marked).toContain("<<<<<<< worktree");
+    expect(marked).toContain("<<<<<<<");
     expect(marked).toContain("Mine too.");
-
-    // Removing asks first while changes aren't merged; the process stops with it.
+    await sheet.getByRole("button", { name: "Close dialog" }).click();
+    await page
+      .getByRole("button", { name: "Local changes", exact: true })
+      .click();
     await expect(
-      page.getByText("The cache guard prevents duplicate requests."),
+      local
+        .getByRole("button", { name: "Conflict README.md", exact: true })
+        .first(),
     ).toBeVisible();
+
+    // Removing asks first while changes aren't in main; the process stops with it.
     await menu.click();
     await page.getByRole("menuitem", { name: "Remove worktree" }).click();
     await page

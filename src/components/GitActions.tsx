@@ -27,6 +27,7 @@ const MAX_COMMIT_FILES = 1000;
  */
 export function GitActions({
   project,
+  where,
   connected,
   disabled,
   request,
@@ -36,6 +37,8 @@ export function GitActions({
   onError,
 }: {
   project: Project;
+  /** Workspace id: the checkout, or the thread's worktree and its branch. */
+  where: string;
   connected: boolean;
   disabled: boolean;
   /** Bumped to open the branch's PR, as the PR button did. */
@@ -46,23 +49,23 @@ export function GitActions({
   onError: (error: unknown) => void;
 }) {
   const qc = useQueryClient();
-  const key = ["working-tree", "project", project.id];
+  const key = ["working-tree", "project", where];
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
     queryKey: key,
-    queryFn: () => api.projectWorkingTree(project.id),
+    queryFn: () => api.projectWorkingTree(where),
   });
   const existing = useQuery({
-    queryKey: ["branch-pulls", project.id, tree.data?.branch, connected],
-    queryFn: () => api.projectBranchPulls(project.id),
+    queryKey: ["branch-pulls", where, tree.data?.branch, connected],
+    queryFn: () => api.projectBranchPulls(where),
     enabled: connected && !!project.repository && !!tree.data?.branch,
     staleTime: 30000,
     refetchInterval: 60000,
   });
   // Fails on the main branch itself, which has nothing to merge into.
   const plan = useQuery({
-    queryKey: ["merge-plan", project.id, tree.data?.branch, tree.data?.head],
-    queryFn: () => api.projectMergePlan(project.id),
+    queryKey: ["merge-plan", where, tree.data?.branch, tree.data?.head],
+    queryFn: () => api.projectMergePlan(where),
     enabled: !!tree.data?.branch,
     staleTime: 30000,
     retry: false,
@@ -128,7 +131,7 @@ export function GitActions({
     try {
       qc.setQueryData(
         key,
-        await api.projectGitAction(project.id, {
+        await api.projectGitAction(where, {
           kind: "push",
           revision: t.revision,
         }),
@@ -217,18 +220,18 @@ export function GitActions({
       </div>
       {committing && (
         <CommitSheet
-          project={project}
+          where={where}
           tree={t}
           push={committing === "commit_push"}
           onClose={() => setCommitting(undefined)}
         />
       )}
       {merging && (
-        <MergeSheet project={project} onClose={() => setMerging(false)} />
+        <MergeSheet where={where} onClose={() => setMerging(false)} />
       )}
       {creatingPr && (
         <CreatePullSheet
-          project={project}
+          where={where}
           onClose={() => setCreatingPr(false)}
           onReview={(ref) => {
             setCreatingPr(false);
@@ -245,19 +248,19 @@ export function GitActions({
 }
 
 function CommitSheet({
-  project,
+  where,
   tree,
   push,
   onClose,
 }: {
-  project: Project;
+  where: string;
   /** Kept current by the poll, so the commit checks the latest revision. */
   tree: WorkingTree;
   push: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const key = ["working-tree", "project", project.id];
+  const key = ["working-tree", "project", where];
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
@@ -275,7 +278,7 @@ function CommitSheet({
     setWriting(true);
     setError(undefined);
     try {
-      const next = await api.projectCommitMessage(project.id, paths);
+      const next = await api.projectCommitMessage(where, paths);
       if (id === generation.current && !typed.current) setMessage(next);
     } catch (e) {
       if (id === generation.current) setError(e);
@@ -297,7 +300,7 @@ function CommitSheet({
     setBusy(true);
     setError(undefined);
     try {
-      let next = await api.projectGitAction(project.id, {
+      let next = await api.projectGitAction(where, {
         kind: "commit",
         revision: tree.revision,
         message,
@@ -305,7 +308,7 @@ function CommitSheet({
       } satisfies GitAction);
       qc.setQueryData(key, next);
       if (push) {
-        next = await api.projectGitAction(project.id, {
+        next = await api.projectGitAction(where, {
           kind: "push",
           revision: next.revision,
         });

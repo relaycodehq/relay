@@ -13,7 +13,7 @@ import {
   historyScopeSchema,
 } from "../shared/history";
 import { branchActionSchema } from "../shared/branches";
-import { Projects } from "./projects";
+import { Projects, type Place } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
 import { deepReviewStartSchema } from "../shared/deep-review";
@@ -38,8 +38,14 @@ import {
   validateRepo,
 } from "./working-tree";
 import { generateCommitMessage } from "./commit-messages";
-import { deleteMergedBranch, mergeBranch, mergePlan } from "./branch-merge";
+import {
+  catchUpBranch,
+  deleteMergedBranch,
+  mergeBranch,
+  mergePlan,
+} from "./branch-merge";
 import { mergeBranchSchema } from "../shared/branch-merge";
+import { parseWorkspaceId, workspaceIdSchema } from "../shared/workspaces";
 import { RoomService } from "./rooms/service";
 import { readHostingSetup } from "./rooms/provision";
 import {
@@ -532,20 +538,36 @@ const terminalSizeSchema = z.object({
   cols: z.number().int().min(2).max(1000),
   rows: z.number().int().min(1).max(500),
 });
+/** The folder a workspace id names: the project's checkout, or a thread's worktree. */
+async function place(
+  where: unknown,
+): Promise<Place & { projectId: string; chatId?: string }> {
+  const { projectId, chatId } = parseWorkspaceId(
+    workspaceIdSchema.parse(where),
+  );
+  if (!chatId) return { ...(await projects.inspect(projectId)), projectId };
+  return {
+    root: await projectChats.worktreeRoot(projectId, chatId),
+    plain: false,
+    projectId,
+    chatId,
+  };
+}
+const placeRoot = async (where: unknown) => (await place(where)).root;
 async function dispatch(method: ApiMethod, args: unknown[]) {
   switch (method) {
     case "localCheckInfo":
-      return detectProject(await projects.root(idSchema.parse(args[0])));
+      return detectProject(await placeRoot(args[0]));
     case "localCheckState":
       return projectChecks.state(
-        "project:" + idSchema.parse(args[0]),
+        "project:" + workspaceIdSchema.parse(args[0]),
         shaSchema.parse(args[1]),
       );
     case "startLocalChecks": {
-      const id = idSchema.parse(args[0]);
+      const id = workspaceIdSchema.parse(args[0]);
       return projectChecks.start(
         "project:" + id,
-        await projects.root(id),
+        await placeRoot(id),
         null,
         null,
         shaSchema.parse(args[1]),
@@ -553,30 +575,30 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     }
     case "stopLocalChecks":
-      projectChecks.stop("project:" + idSchema.parse(args[0]));
+      projectChecks.stop("project:" + workspaceIdSchema.parse(args[0]));
       return;
     case "pauseLocalChecks":
       projectChecks.pause(
-        "project:" + idSchema.parse(args[0]),
+        "project:" + workspaceIdSchema.parse(args[0]),
         z.boolean().parse(args[1]),
       );
       return;
     case "updateLocalCheckBuffer":
       return projectChecks.update(
-        "project:" + idSchema.parse(args[0]),
+        "project:" + workspaceIdSchema.parse(args[0]),
         shaSchema.parse(args[1]),
         workingPathSchema.parse(args[2]),
         textSchema.nullable().parse(args[3]),
       );
     case "inspectLocalSymbol":
       return projectChecks.symbol(
-        "project:" + idSchema.parse(args[0]),
+        "project:" + workspaceIdSchema.parse(args[0]),
         shaSchema.parse(args[1]),
         symbolQuerySchema.parse(args[2]),
       );
     case "localBlame":
       return blame.read(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         null,
         null,
         blameQuerySchema.parse(args[1]),
@@ -680,29 +702,16 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "projectBranchPulls":
     case "projectPreparePull":
     case "projectCreatePull": {
-      const id = idSchema.parse(args[0]);
+      // A worktree thread's PR opens from its own branch.
+      const { root, projectId, chatId } = await place(args[0]);
       const client = requireClient();
-      const repo = await projects.linked(id, client);
-      // A worktree thread's PR opens from its worktree.
-      const chatId = idSchema
-        .optional()
-        .parse(args[method === "projectCreatePull" ? 2 : 1] ?? undefined);
-      if (chatId && (await projectChats.get(chatId)).projectId !== id)
-        throw new Error("That thread belongs to another project.");
+      const repo = await projects.linked(projectId, client);
       if (method === "projectBranchPulls")
-        return branchPulls(await projects.root(id), client, repo);
+        return branchPulls(root, client, repo);
       if (method === "projectPreparePull")
-        return pullRequestCreation.prepare(
-          chatId
-            ? await projectChats.preparePull(chatId)
-            : await projects.root(id),
-          client,
-          repo,
-        );
+        return pullRequestCreation.prepare(root, client, repo);
       const created = await pullRequestCreation.create(
-        chatId
-          ? await projectChats.worktreePath(chatId)
-          : await projects.root(id),
+        root,
         client,
         createPullRequestSchema.parse(args[1]),
       );
@@ -741,15 +750,15 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       }
     }
     case "projectFiles":
-      return projects.files(idSchema.parse(args[0]));
+      return projects.files(await place(args[0]));
     case "projectFile":
       return projects.file(
-        idSchema.parse(args[0]),
+        await place(args[0]),
         workingPathSchema.parse(args[1]),
       );
     case "saveProjectFile":
       return projects.save(
-        idSchema.parse(args[0]),
+        await place(args[0]),
         workingPathSchema.parse(args[1]),
         // A plain folder has no HEAD.
         shaSchema.or(z.literal("")).parse(args[2]),
@@ -819,27 +828,27 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return;
     }
     case "projectWorkingTree":
-      return workingTree(await projects.root(idSchema.parse(args[0])));
+      return workingTree(await placeRoot(args[0]));
     case "projectWorkingDiff":
       return workingDiff(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         workingPathSchema.parse(args[1]),
         z.enum(["staged", "unstaged"]).parse(args[2]),
       );
     case "projectHistory":
       return commitLog(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         historyScopeSchema.parse(args[1]),
         historyLimitSchema.parse(args[2]),
       );
     case "projectCommit":
       return commitDetail(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         commitShaSchema.parse(args[1]),
       );
     case "projectCommitDiff":
       return commitDiff(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         commitShaSchema.parse(args[1]),
         workingPathSchema.parse(args[2]),
       );
@@ -859,29 +868,34 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "projectMergePlan":
       return mergePlan(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         z.string().min(1).max(250).optional().parse(args[1]),
       );
     case "projectMergeBranch":
       return mergeBranch(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         mergeBranchSchema.parse(args[1]),
+      );
+    case "projectCatchUp":
+      return catchUpBranch(
+        await placeRoot(args[0]),
+        z.string().min(1).max(250).parse(args[1]),
       );
     case "projectDeleteBranch":
       return deleteMergedBranch(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         z.string().min(1).max(250).parse(args[1]),
       );
     case "projectCommitMessage":
       return generateCommitMessage(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
         aiSettingsSchema.parse(store.get().aiSettings ?? defaultAISettings),
         AbortSignal.timeout(120_000),
       );
     case "projectGitAction":
       return performGitAction(
-        await projects.root(idSchema.parse(args[0])),
+        await placeRoot(args[0]),
         gitActionSchema.parse(args[1]),
       );
     case "projectPulls": {
@@ -954,17 +968,13 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "projectWorktree": {
       const chatId = idSchema.parse(args[0]);
       const status = await projectChats.worktreeStatus(chatId);
-      if (status.pr && status.landed?.by !== "pr" && client)
+      if (status.pr && !status.landed && client)
         if (await pullMerged(chatId, status.pr.number)) {
           await projectChats.pullMerged(chatId);
           return projectChats.worktreeStatus(chatId);
         }
       return status;
     }
-    case "mergeProjectWorktree":
-      return projectChats.mergeWorktree(idSchema.parse(args[0]));
-    case "catchUpProjectWorktree":
-      return projectChats.catchUpWorktree(idSchema.parse(args[0]));
     case "projectWorktreeDiff":
       return projectChats.worktreeDiff(
         idSchema.parse(args[0]),

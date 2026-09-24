@@ -24,12 +24,14 @@ export type FileTarget = ProjectFileLink & {
 };
 
 /**
- * Uncommitted work in the project folder, or what one agent turn changed
- * while a turn is open. A changed file clicked in the chat selects its row
- * here; unchanged ones open in the Files pane.
+ * Uncommitted work in the folder the thread works in (the checkout, or its
+ * worktree), or what one agent turn changed while a turn is open. A changed
+ * file clicked in the chat selects its row here; unchanged ones open in the
+ * Files pane.
  */
 export function ProjectChanges({
   project,
+  where,
   slots,
   onViewing,
   onOpenFile,
@@ -40,6 +42,8 @@ export function ProjectChanges({
   onRevealConsumed,
 }: {
   project: Project;
+  /** Workspace id: the checkout, or the thread's worktree. */
+  where: string;
   slots: PaneSlots;
   onViewing: (v: Viewing) => void;
   onOpenFile: (path: string, line?: number) => void;
@@ -61,7 +65,7 @@ export function ProjectChanges({
     );
   return (
     <LocalChanges
-      projectId={project.id}
+      projectId={where}
       slots={slots}
       onOpenFile={onOpenFile}
       onAsk={onAsk}
@@ -72,9 +76,10 @@ export function ProjectChanges({
   );
 }
 
-/** The project's files with an inline editor, VS Code style. */
+/** The files of the folder the thread works in, with an inline editor, VS Code style. */
 export function ProjectFiles({
   project,
+  where,
   checks,
   dirty,
   onDirtyChange,
@@ -83,6 +88,8 @@ export function ProjectFiles({
   onOpenTargetConsumed,
 }: {
   project: Project;
+  /** Workspace id: the checkout, or the thread's worktree. */
+  where: string;
   /** Owned by the shell, which shows the status in the title bar. */
   checks: ChecksController;
   dirty: boolean;
@@ -93,8 +100,8 @@ export function ProjectFiles({
 }) {
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
-    queryKey: ["working-tree", "project", project.id],
-    queryFn: () => api.projectWorkingTree(project.id),
+    queryKey: ["working-tree", "project", where],
+    queryFn: () => api.projectWorkingTree(where),
     enabled: !project.plain,
   });
   // Preserve an edited buffer (and its original revision) if Git moves externally.
@@ -103,7 +110,7 @@ export function ProjectFiles({
   const [file, setFile] = useState<{ path: string; line?: number } | null>(
       () => {
         const path = filePathSchema.safeParse(
-          localStorage.getItem("relay-project-file:" + project.id),
+          localStorage.getItem("relay-project-file:" + where),
         ).data;
         return path ? { path } : null;
       },
@@ -121,14 +128,13 @@ export function ProjectFiles({
     onOpenTargetConsumed?.();
   }, [openTarget?.request, project.id, dirty]);
   useEffect(() => {
-    if (file)
-      localStorage.setItem("relay-project-file:" + project.id, file.path);
-    else localStorage.removeItem("relay-project-file:" + project.id);
+    if (file) localStorage.setItem("relay-project-file:" + where, file.path);
+    else localStorage.removeItem("relay-project-file:" + where);
     onViewing({ path: file?.path ?? null, viewed: 0, total: 0 });
   }, [file?.path, onViewing]);
   const files = useQuery({
-    queryKey: ["project-files", project.id],
-    queryFn: () => api.projectFiles(project.id),
+    queryKey: ["project-files", where],
+    queryFn: () => api.projectFiles(where),
     refetchInterval: 5000,
   });
   const list = (files.data ?? []).filter((p) =>
@@ -203,7 +209,7 @@ export function ProjectFiles({
           <LocalFileEditor
             key={`${editorCheckout.current?.head}:${editorCheckout.current?.branch}:${file.path}:${file.line ?? ""}`}
             project={{
-              id: project.id,
+              id: where,
               head: editorCheckout.current?.head ?? tree.data?.head ?? "",
               plain: project.plain,
             }}

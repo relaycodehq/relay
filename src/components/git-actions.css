@@ -113,6 +113,9 @@
 .merge-conflicts p {
   margin: 0;
 }
+.merge-conflicts button {
+  margin-top: 10px;
+}
 .merge-done {
   display: flex;
   flex-direction: column;

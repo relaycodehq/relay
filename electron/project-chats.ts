@@ -60,12 +60,7 @@ import {
 } from "./turn-changes";
 import { cleanTitle, generateThreadTitle, promptTitle } from "./thread-titles";
 import {
-  advance,
-  catchUpWorktree,
   createWorktree,
-  landedIn,
-  mergeWorktree,
-  pullCommit,
   removeWorktree,
   worktreeChanges,
   worktreeDiff,
@@ -2279,7 +2274,6 @@ export class ProjectChats {
     chat.worktree = await createWorktree(
       root,
       join(dirname(this.dir), "worktrees"),
-      chat.id,
       promptTitle(prompt ?? chat.title),
       worktree,
     );
@@ -2293,61 +2287,26 @@ export class ProjectChats {
       throw new Error("This thread works in the project's checkout.");
     return { chat, worktree: chat.worktree };
   }
-  /** When each worktree was last checked against the checkout, by its tree. */
-  private landingChecks = new Map<string, { tree: string; at: number }>();
-  /**
-   * What the worktree changed that the checkout doesn't have yet. Changes that
-   * reached the checkout some other way, merged from a terminal or copied by an
-   * agent, count as landed and drop out.
-   */
+  /** What the worktree has that the branch it came from doesn't, and whether it all got there. */
   async worktreeStatus(id: string): Promise<WorktreeStatus> {
-    const { chat, worktree } = await this.worktreeOf(id);
+    const { worktree } = await this.worktreeOf(id);
     const exists = await worktreeExists(worktree);
-    const status = (files: WorktreeStatus["files"]): WorktreeStatus => ({
+    const changes = exists ? await worktreeChanges(worktree) : null;
+    const merged =
+      changes && !changes.files.length && changes.commits > 0
+        ? ("merge" as const)
+        : worktree.landed?.by === "pr"
+          ? ("pr" as const)
+          : undefined;
+    return {
       ...(worktree.branch ? { branch: worktree.branch } : {}),
       ...(worktree.path ? { path: worktree.path } : {}),
-      files,
-      ...(worktree.landed ? { landed: worktree.landed } : {}),
+      ...(worktree.from ? { from: worktree.from } : {}),
+      files: changes?.files ?? [],
+      ...(merged ? { landed: { by: merged } } : {}),
       ...(worktree.pr ? { pr: worktree.pr } : {}),
       removed: !!worktree.path && !exists,
-    });
-    if (!exists) return status([]);
-    const { tree, files } = await worktreeChanges(worktree);
-    if (!files.length || this.active.has(id)) return status(files);
-    const checked = this.landingChecks.get(id);
-    if (checked?.tree === tree && Date.now() - checked.at < 15000) {
-      if (worktree.landed) {
-        delete worktree.landed;
-        await this.saveWorktree(chat);
-      }
-      return status(files);
-    }
-    this.landingChecks.set(id, { tree, at: Date.now() });
-    const root = await this.projects.root(chat.projectId);
-    if (
-      await landedIn(
-        root,
-        worktree.base!,
-        tree,
-        files.map((f) => f.path),
-      )
-    ) {
-      worktree.base = await advance(
-        root,
-        id,
-        worktree,
-        tree,
-        "Relay: found in the checkout",
-      );
-      worktree.landed = { at: Date.now(), by: "outside" };
-      await this.saveWorktree(chat);
-      return status([]);
-    }
-    if (worktree.landed) {
-      delete worktree.landed;
-      await this.saveWorktree(chat);
-    }
-    return status(files);
+    };
   }
   private async saveWorktree(chat: ProjectChat) {
     await this.save(chat);
@@ -2356,42 +2315,6 @@ export class ProjectChats {
   private assertIdle(id: string) {
     if (this.active.has(id))
       throw new Error("Wait for the answer to finish first.");
-  }
-  mergeWorktree(id: string) {
-    return this.control(id, async () => {
-      const { chat, worktree } = await this.worktreeOf(id);
-      this.assertIdle(id);
-      if (!(await worktreeExists(worktree)))
-        throw new Error("This thread's worktree was removed.");
-      this.projects.assertCheckoutAvailable(chat.projectId);
-      const root = await this.projects.root(chat.projectId);
-      const result = await mergeWorktree(root, id, worktree);
-      if (result.base) {
-        worktree.base = result.base;
-        worktree.landed = { at: Date.now(), by: "relay" };
-        await this.saveWorktree(chat);
-      }
-      return { conflicts: result.conflicts };
-    });
-  }
-  /** Brings the checkout's changes into the worktree, so it can merge again. */
-  catchUpWorktree(id: string) {
-    return this.control(id, async () => {
-      const { chat, worktree } = await this.worktreeOf(id);
-      this.assertIdle(id);
-      if (!(await worktreeExists(worktree)))
-        throw new Error("This thread's worktree was removed.");
-      const root = await this.projects.root(chat.projectId);
-      const result = await catchUpWorktree(root, id, worktree);
-      worktree.base = result.base;
-      // Without a PR yet, one would now build on the checkout it caught up with.
-      if (!worktree.pr) {
-        worktree.start = result.base;
-        worktree.head = result.head;
-      }
-      await this.saveWorktree(chat);
-      return { conflicts: result.conflicts };
-    });
   }
   async worktreeDiff(id: string, path: string) {
     const { worktree } = await this.worktreeOf(id);
@@ -2444,48 +2367,28 @@ export class ProjectChats {
     if (!worktree) throw new Error("This thread didn't make that worktree.");
     return worktree.path;
   }
+  /** A thread's worktree folder, for a workspace id; only while it exists. */
+  async worktreeRoot(projectId: string, id: string) {
+    const chat = await this.load(id);
+    if (chat.projectId !== projectId)
+      throw new Error("This thread belongs to another project.");
+    return this.worktreePath(id);
+  }
   async worktreePath(id: string) {
     const { worktree } = await this.worktreeOf(id);
     if (!(await worktreeExists(worktree)))
       throw new Error("This thread's worktree was removed.");
     return worktree.path!;
   }
-  /** Commits the worktree's changes for a PR; returns the folder to open it from. */
-  preparePull(id: string) {
-    return this.control(id, async () => {
-      const { chat, worktree } = await this.worktreeOf(id);
-      this.assertIdle(id);
-      if (!(await worktreeExists(worktree)))
-        throw new Error("This thread's worktree was removed.");
-      await pullCommit(
-        await this.projects.root(chat.projectId),
-        id,
-        worktree,
-        chat.title,
-      );
-      return worktree.path!;
-    });
-  }
   async recordPull(id: string, pr: { number: number; url: string }) {
     const { chat, worktree } = await this.worktreeOf(id);
     worktree.pr = pr;
     await this.saveWorktree(chat);
   }
-  /** The worktree's PR was merged: its changes count as landed, though the checkout may still need a pull. */
+  /** The worktree's PR was merged on the Git host, though the checkout may still need a pull. */
   async pullMerged(id: string) {
     const { chat, worktree } = await this.worktreeOf(id);
     if (worktree.landed?.by === "pr") return;
-    if (await worktreeExists(worktree)) {
-      const { tree, files } = await worktreeChanges(worktree);
-      if (files.length)
-        worktree.base = await advance(
-          await this.projects.root(chat.projectId),
-          id,
-          worktree,
-          tree,
-          "Relay: merged through its PR",
-        );
-    }
     worktree.landed = { at: Date.now(), by: "pr" };
     await this.saveWorktree(chat);
   }

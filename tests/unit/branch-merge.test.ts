@@ -4,6 +4,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  catchUpBranch,
   deleteMergedBranch,
   mergeBranch,
   mergePlan,
@@ -110,11 +111,42 @@ it("has nothing to merge into from main itself", async () => {
   await expect(mergePlan(root)).rejects.toThrow("is the main branch");
 });
 
-it("refuses a main that is open in another worktree", async () => {
+it("fast-forwards a main open in another folder, around its uncommitted edits", async () => {
   await commit("b.ts", "b\n", "Add b");
   await rm(other, { recursive: true, force: true });
   git("worktree", "add", "-q", other, "main");
-  await expect(merge(false)).rejects.toThrow("is checked out in");
+  await writeFile(join(other, "a.ts"), "wip\n");
+  expect(await merge()).toMatchObject({
+    merged: true,
+    pushedTo: "origin/main",
+  });
+  expect(run(other, "rev-parse", "HEAD")).toBe(git("rev-parse", "feature"));
+  expect(await readFile(join(other, "b.ts"), "utf8")).toBe("b\n");
+  expect(await readFile(join(other, "a.ts"), "utf8")).toBe("wip\n");
+  expect(run(remote, "rev-parse", "main")).toBe(git("rev-parse", "feature"));
+});
+
+it("stops before pushing when that folder has edits to a file the merge changes", async () => {
+  await commit("a.ts", "feature\n", "Change a");
+  await rm(other, { recursive: true, force: true });
+  git("worktree", "add", "-q", other, "main");
+  await writeFile(join(other, "a.ts"), "wip\n");
+  const before = git("rev-parse", "main");
+  await expect(merge()).rejects.toThrow("uncommitted edits");
+  expect(git("rev-parse", "main")).toBe(before);
+  expect(run(remote, "rev-parse", "main")).toBe(before);
+  expect(await readFile(join(other, "a.ts"), "utf8")).toBe("wip\n");
+});
+
+it("catches up with main, leaving conflicts marked to resolve", async () => {
+  await commit("a.ts", "feature\n", "Feature a");
+  git("switch", "-q", "main");
+  await commit("a.ts", "main\n", "Main a");
+  await commit("c.ts", "c\n", "Add c");
+  git("switch", "-q", "feature");
+  expect(await catchUpBranch(root, "main")).toEqual({ conflicts: ["a.ts"] });
+  expect(await readFile(join(root, "a.ts"), "utf8")).toContain("<<<<<<<");
+  expect(await readFile(join(root, "c.ts"), "utf8")).toBe("c\n");
 });
 
 it("deletes the branch once merged, never the current one", async () => {

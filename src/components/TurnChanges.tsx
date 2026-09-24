@@ -18,12 +18,12 @@ export type TurnDiffTarget = {
   path?: string;
   /** Who answered and when, e.g. "Claude · 12:04". */
   label: string;
-  /** Everything the thread's worktree changed that the checkout doesn't have yet. */
+  /** Everything the thread's worktree has that the branch it came from doesn't yet. */
   worktree?: boolean;
 };
 
 const turnSides = { deletions: "Before turn", additions: "After turn" };
-const worktreeSides = { deletions: "Checkout", additions: "Worktree" };
+const worktreeSides = { deletions: "Branched from", additions: "Worktree" };
 
 /** What one agent turn changed, from the snapshots Relay took around it. */
 export function TurnChanges({

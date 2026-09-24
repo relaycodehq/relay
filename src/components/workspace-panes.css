@@ -126,6 +126,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pane-header-detail {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .pane-header-actions {
   display: flex;
   align-items: center;
