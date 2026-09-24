@@ -526,7 +526,9 @@ export class ProjectChats {
     scope: ChatScope,
     workspace: ChatWorkspace = "checkout",
   ) {
-    await this.projects.root(projectId);
+    const { plain } = await this.projects.inspect(projectId);
+    if (plain && (workspace === "worktree" || scope.kind !== "project"))
+      throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")
       throw new Error("Only repository threads can work in a worktree.");
     const chat: ProjectChat = {

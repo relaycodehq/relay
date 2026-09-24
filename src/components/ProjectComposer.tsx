@@ -87,6 +87,7 @@ export function ProjectComposer({
   running,
   busy,
   branch,
+  plain,
   projectId,
   checkoutDisabled,
   context,
@@ -114,6 +115,8 @@ export function ProjectComposer({
   running: boolean;
   busy: boolean;
   branch?: string | null;
+  /** A folder without Git: no branch to show or switch. */
+  plain?: boolean;
   projectId: string;
   checkoutDisabled: boolean;
   context: ReactNode;
@@ -664,7 +667,7 @@ export function ProjectComposer({
       <div className="thread-context-controls">
         {context}
         {workspace}
-        {branchLabel ? (
+        {plain ? null : branchLabel ? (
           <span
             className="composer-branch-trigger workspace-trigger static"
             title="This thread's worktree branch"

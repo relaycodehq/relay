@@ -21,6 +21,7 @@ import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Folder,
   FolderPlus,
   FolderGit2,
   MessageSquare,
@@ -151,7 +152,7 @@ export default function ProjectShell() {
   const tree = useQuery({
     queryKey: ["working-tree", "project", project?.id],
     queryFn: () => api.projectWorkingTree(project!.id),
-    enabled: !!project && !legacy,
+    enabled: !!project && !legacy && !project.plain,
     refetchInterval: 3000,
   });
   // Live checks for the working tree. A PR thread's review runs its own checks
@@ -314,7 +315,7 @@ export default function ProjectShell() {
     panes.show("chat");
   }
   function openCode(next: "changes" | "files" | "pulls") {
-    panes.show(next === "files" ? "files" : "changes");
+    panes.show(next === "files" || project?.plain ? "files" : "changes");
   }
   function togglePane(id: PaneId) {
     const open = panes.layout.open[id];
@@ -359,9 +360,11 @@ export default function ProjectShell() {
     if (pull) return revealChange(target);
     const id = project!.id;
     try {
-      const changes = (
-        tree.data ?? (await api.projectWorkingTree(id))
-      ).changes.map((c) => c.path);
+      const changes = project!.plain
+        ? []
+        : (tree.data ?? (await api.projectWorkingTree(id))).changes.map(
+            (c) => c.path,
+          );
       const changed = matchLink(target, changes);
       if (target.directory ? changed.length : changed.length === 1)
         return revealChange(
@@ -475,6 +478,10 @@ export default function ProjectShell() {
     qc.setQueryData(["bootstrap"], { ...next, account });
     setSignin(false);
   };
+  // A folder without Git has no changes or history to show.
+  const paneOrder = project?.plain
+    ? panes.layout.order.filter((id) => id === "chat" || id === "files")
+    : panes.layout.order;
   const paneProps = (id: PaneId) => {
     const index = panes.visible.indexOf(id);
     const previous = index > 0 ? panes.visible[index - 1] : undefined;
@@ -549,7 +556,11 @@ export default function ProjectShell() {
           </button>
         ) : (
           <div className="project-window-title">
-            {project ? (
+            {project?.plain ? (
+              <span className="ci-plain">
+                <Folder size={14} />
+              </span>
+            ) : project ? (
               <CiStatusIcon projectId={project.id} chatId={chat?.id} />
             ) : (
               <FolderGit2 size={14} />
@@ -591,20 +602,22 @@ export default function ProjectShell() {
                 openInEditor({ path, line, directory: false })
               }
             />
-            <BranchPullRequest
-              key={project.id}
-              project={project}
-              connected={!!account}
-              disabled={dirty}
-              request={openPrRequest}
-              onConnect={() => setSignin(true)}
-              onReview={(ref) => void reviewBranchPr(ref)}
-              onChanges={() => openCode("changes")}
-            />
+            {!project.plain && (
+              <BranchPullRequest
+                key={project.id}
+                project={project}
+                connected={!!account}
+                disabled={dirty}
+                request={openPrRequest}
+                onConnect={() => setSignin(true)}
+                onReview={(ref) => void reviewBranchPr(ref)}
+                onChanges={() => openCode("changes")}
+              />
+            )}
             <PaneToggles
               onToggle={togglePane}
               onMove={panes.move}
-              panes={panes.layout.order.map((id) => ({
+              panes={paneOrder.map((id) => ({
                 id,
                 open: panes.layout.open[id],
                 disabled:
@@ -694,7 +707,7 @@ export default function ProjectShell() {
             <FolderGit2 size={40} />
             <h1>Your project. Your conversation.</h1>
             <p>
-              Open a local Git folder to edit, review changes and chat with your
+              Open a project folder to edit, review changes and chat with your
               agent.
               <br />
               Connect Gitea when you’re ready to review pull requests together.

@@ -64,7 +64,8 @@ export default function LocalFileEditor({
 }: {
   checks: ChecksController;
   pull?: Pull;
-  project?: { id: string; head: string };
+  /** `plain`: a folder without Git, so no HEAD to compare with or blame. */
+  project?: { id: string; head: string; plain?: boolean };
   inline?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   path: string;
@@ -86,12 +87,14 @@ export default function LocalFileEditor({
   const [bufferText, setBufferText] = useState<string>();
   // Inline, the editor reads like a plain file with change bars; the
   // side-by-side comparison with HEAD is one click away.
-  const [compare, setCompare] = useState(
+  const plain = !!project?.plain;
+  const [comparing, setCompare] = useState(
     () => !inline || localStorage.getItem("relay-editor-compare") === "true",
   );
+  const compare = comparing && !plain;
   useEffect(() => {
-    if (inline) localStorage.setItem("relay-editor-compare", String(compare));
-  }, [inline, compare]);
+    if (inline) localStorage.setItem("relay-editor-compare", String(comparing));
+  }, [inline, comparing]);
   const bufferHash = useContentHash(bufferText);
   const target = pull ?? {
     projectId: project!.id,
@@ -126,24 +129,26 @@ export default function LocalFileEditor({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const blame = useLineBlame(
     target,
-    {
-      deletions: {
-        revision: revision,
-        path,
-        label: project ? "HEAD" : "PR head",
-      },
-      additions: {
-        revision: revision,
-        path,
-        label: "Local checkout",
-        ...(source?.original !== bufferText
-          ? {
-              unavailable:
-                "This local version differs from the PR. Hover the PR-head line on the left for committed history.",
-            }
-          : {}),
-      },
-    },
+    plain
+      ? { deletions: undefined, additions: undefined }
+      : {
+          deletions: {
+            revision: revision,
+            path,
+            label: project ? "HEAD" : "PR head",
+          },
+          additions: {
+            revision: revision,
+            path,
+            label: "Local checkout",
+            ...(source?.original !== bufferText
+              ? {
+                  unavailable:
+                    "This local version differs from the PR. Hover the PR-head line on the left for committed history.",
+                }
+              : {}),
+          },
+        },
     compare ? "split" : "unified",
   );
   const checkState = checks.state;
@@ -391,13 +396,15 @@ export default function LocalFileEditor({
           >
             <RotateCw size={15} />
           </IconButton>
-          <IconButton
-            label={`Compare with ${project ? "HEAD" : "PR head"}`}
-            active={compare}
-            onClick={() => setCompare((v) => !v)}
-          >
-            <Columns2 size={15} />
-          </IconButton>
+          {!plain && (
+            <IconButton
+              label={`Compare with ${project ? "HEAD" : "PR head"}`}
+              active={compare}
+              onClick={() => setCompare((v) => !v)}
+            >
+              <Columns2 size={15} />
+            </IconButton>
+          )}
           <button
             className="primary"
             aria-label="Save locally"
@@ -426,7 +433,7 @@ export default function LocalFileEditor({
           {source?.path ??
             `${pull ? `${pull.owner}/${pull.name} · ` : ""}${path}`}
         </span>
-        {source && <small>{source.branch}</small>}
+        {source?.branch && <small>{source.branch}</small>}
       </div>
       {!!(error || compared.error) && (
         <ErrorBox error={error || compared.error} />

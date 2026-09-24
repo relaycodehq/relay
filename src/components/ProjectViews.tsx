@@ -95,6 +95,7 @@ export function ProjectFiles({
   const tree = useQuery({
     queryKey: ["working-tree", "project", project.id],
     queryFn: () => api.projectWorkingTree(project.id),
+    enabled: !project.plain,
   });
   // Preserve an edited buffer (and its original revision) if Git moves externally.
   const editorCheckout = useRef(tree.data);
@@ -197,13 +198,14 @@ export function ProjectFiles({
           </div>
         </div>
       </aside>
-      {file && tree.data ? (
+      {file && (tree.data || project.plain) ? (
         <Suspense fallback={<Loading text="Opening editor…" />}>
           <LocalFileEditor
             key={`${editorCheckout.current?.head}:${editorCheckout.current?.branch}:${file.path}:${file.line ?? ""}`}
             project={{
               id: project.id,
-              head: editorCheckout.current?.head ?? tree.data.head,
+              head: editorCheckout.current?.head ?? tree.data?.head ?? "",
+              plain: project.plain,
             }}
             checks={checks}
             path={file.path}
@@ -220,7 +222,11 @@ export function ProjectFiles({
         <div className="empty project-editor-empty">
           <FileCode2 size={28} />
           <h2>Open a file</h2>
-          <p>Pick a file on the left, or open one from Changes.</p>
+          <p>
+            {project.plain
+              ? "Pick a file on the left."
+              : "Pick a file on the left, or open one from Changes."}
+          </p>
           {tree.error && <ErrorBox error={tree.error} />}
         </div>
       )}

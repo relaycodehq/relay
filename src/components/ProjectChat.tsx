@@ -573,6 +573,7 @@ export function ProjectChat({
   const checkout = useQuery({
     queryKey: ["working-tree", "project", project.id],
     queryFn: () => api.projectWorkingTree(project.id),
+    enabled: !project.plain,
   });
   const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -1289,7 +1290,7 @@ export function ProjectChat({
       void qc.invalidateQueries({ queryKey: ["project-tasks", project.id] });
     });
   const workspaceControl =
-    scope.kind !== "project" ? undefined : !chat ? (
+    scope.kind !== "project" || project.plain ? undefined : !chat ? (
       <WorkspacePicker
         value={workspace}
         onChange={setWorkspace}
@@ -1380,7 +1381,7 @@ export function ProjectChat({
   const contextButtons = (
     <>
       {/* A thread's scope is fixed once it starts; another takes a new thread. */}
-      {isEmpty && (
+      {isEmpty && !project.plain && (
         <>
           <button
             className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
@@ -1456,7 +1457,7 @@ export function ProjectChat({
             Together{peers.length ? ` · ${peers.length + 1}` : ""}
           </button>
         )}
-        {chat && (
+        {chat && !project.plain && (
           <button
             className="text-button"
             aria-label="Share conversation"
@@ -1858,7 +1859,9 @@ export function ProjectChat({
                 ? "Ask about the changes. Open the review when you’re ready."
                 : scope.kind === "review"
                   ? "Reviewers read the changes on their own. The lead checks what they found, then fixes it with you."
-                  : "Understand the code, work on an idea, or review your changes."}
+                  : project.plain
+                    ? "Understand the code or work on an idea."
+                    : "Understand the code, work on an idea, or review your changes."}
             </p>
           </div>
         )}
@@ -1897,6 +1900,7 @@ export function ProjectChat({
             running={running || reviewing}
             busy={busy}
             branch={checkout.data?.branch}
+            plain={project.plain}
             projectId={project.id}
             checkoutDisabled={dirty}
             workspace={workspaceControl}

@@ -606,7 +606,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return projects.list(client);
     case "addProject": {
       const result = await dialog.showOpenDialog(win!, {
-        title: "Add a local Git project",
+        title: "Add a project folder",
         properties: ["openDirectory"],
       });
       return result.canceled ? null : projects.add(result.filePaths[0], client);
@@ -724,7 +724,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return projects.save(
         idSchema.parse(args[0]),
         workingPathSchema.parse(args[1]),
-        shaSchema.parse(args[2]),
+        // A plain folder has no HEAD.
+        shaSchema.or(z.literal("")).parse(args[2]),
         digestSchema.parse(args[3]),
         textSchema.parse(args[4]),
       );

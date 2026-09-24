@@ -1500,7 +1500,7 @@ export function ProjectSidebar({
       {groupError && <p className="sb-note error">{groupError}</p>}
       {renderFolder(tree)}
       {!projects.length && (
-        <p className="sb-note">Add a local Git folder to get started.</p>
+        <p className="sb-note">Add a project folder to get started.</p>
       )}
     </div>
   );

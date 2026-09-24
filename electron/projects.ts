@@ -1,5 +1,5 @@
-import { realpath } from "node:fs/promises";
-import { basename } from "node:path";
+import { lstat, realpath } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import { ApiError, type Gitea } from "./gitea";
@@ -12,6 +12,7 @@ import {
   sortGroupPaths,
 } from "../shared/project-folders";
 import { git, gitBytes } from "./git";
+import { folderFiles } from "./folder-files";
 import { digest } from "./hash";
 import { inspectRepository, remoteUrl } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
@@ -29,6 +30,27 @@ export function repositoryFromRemote(
   return { server, owner: parts.at(-2)!, name: parts.at(-1)! };
 }
 const unique = (values: string[]) => [...new Set(values)];
+/** The root of the repository `dir` is in; null when it's in none. */
+async function repositoryRoot(dir: string) {
+  try {
+    return await realpath(
+      (await git(dir, ["rev-parse", "--show-toplevel"])).trim(),
+    );
+  } catch (e) {
+    // Without Git installed, every folder is a plain one.
+    if (/not a git repository|ENOENT/i.test((e as Error).message)) return null;
+    throw e;
+  }
+}
+/** Marks a folder without Git, so the app leaves out branches, changes and history. */
+const withKind = async (p: Project): Promise<Project> =>
+  (await lstat(join(p.path, ".git")).then(
+    () => true,
+    () => false,
+  ))
+    ? p
+    : { ...p, plain: true };
+const maxFiles = 50000;
 export class Projects {
   /** Moves a project into `folder`, before `before` (or last in that folder). */
   async move(id: string, folder: string, before: string | null) {
@@ -131,9 +153,12 @@ export class Projects {
             p.name = projectTitle(p.name);
         s.projectTitlesTidied = true;
       });
+    const projects = await Promise.all(
+      (this.store.get().projects ?? []).map(withKind),
+    );
     if (client)
-      for (const p of this.store.get().projects ?? [])
-        if (!p.repository) {
+      for (const p of projects)
+        if (!p.repository && !p.plain) {
           const attempt = JSON.stringify([client.account.id, p.id]);
           if (!this.linkAttempts.has(attempt)) {
             this.linkAttempts.add(attempt);
@@ -141,37 +166,34 @@ export class Projects {
             void this.link(p.id, client).catch(() => {});
           }
         }
-    return this.store.get().projects ?? [];
+    return projects;
   }
   get(id: string) {
     const project = this.store.get().projects?.find((p) => p.id === id);
     if (!project) throw new Error("Project not found. Add its folder first.");
     return project;
   }
-  async root(id: string) {
+  /** The project's folder: its repository's root, or a plain folder outside any. */
+  async inspect(id: string) {
     const p = this.get(id),
-      root = await realpath(p.path);
-    if (
-      root !== p.path ||
-      (await realpath(
-        (await git(root, ["rev-parse", "--show-toplevel"])).trim(),
-      )) !== root
-    )
+      root = await realpath(p.path),
+      repository = root === p.path ? await repositoryRoot(root) : undefined;
+    if (repository === undefined || (repository && repository !== root))
       throw new Error(
         "This project’s Git root changed. Add the correct folder again.",
       );
-    return root;
+    return { root, plain: !repository };
+  }
+  async root(id: string) {
+    return (await this.inspect(id)).root;
   }
   async add(path: string, client: Gitea | null) {
-    const root = await realpath(path);
-    if (
-      (await realpath(
-        (await git(root, ["rev-parse", "--show-toplevel"])).trim(),
-      )) !== root
-    )
-      throw new Error("Choose the root of a Git repository.");
+    const root = await realpath(path),
+      repository = await repositoryRoot(root);
+    if (repository && repository !== root)
+      throw new Error("Choose the root of its Git repository.");
     const existing = this.store.get().projects?.find((p) => p.path === root);
-    if (existing) return existing;
+    if (existing) return withKind(existing);
     const project: Project = {
       id: randomUUID(),
       path: root,
@@ -182,14 +204,14 @@ export class Projects {
     await this.store.update((s) => {
       (s.projects ??= []).push(project);
     });
-    if (client) {
+    if (client && repository) {
       try {
         return await this.link(project.id, client);
       } catch {
         /* Local work must remain available when the Git host is offline. */
       }
     }
-    return project;
+    return withKind(project);
   }
   async link(id: string, client: Gitea) {
     const root = await this.root(id),
@@ -226,28 +248,42 @@ export class Projects {
     );
   }
   async files(id: string) {
-    const root = await this.root(id);
-    const names = (
-      await git(root, [
-        "ls-files",
-        "--cached",
-        "--others",
-        "--exclude-standard",
-        "-z",
-      ])
-    )
-      .split("\0")
-      .filter(Boolean);
-    if (names.length > 50000)
+    const { root, plain } = await this.inspect(id);
+    const names = plain
+      ? await folderFiles(root, maxFiles)
+      : (
+          await git(root, [
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+          ])
+        )
+          .split("\0")
+          .filter(Boolean);
+    if (names.length > maxFiles)
       throw new Error(
-        "This checkout has more than 50,000 files. Narrow its Git checkout before browsing here.",
+        plain
+          ? "This folder has more than 50,000 files. Add a smaller folder to browse it here."
+          : "This checkout has more than 50,000 files. Narrow its Git checkout before browsing here.",
       );
     return [...new Set(names)].sort();
   }
   async file(id: string, path: string) {
-    const root = await this.root(id),
+    const { root, plain } = await this.inspect(id),
       file = await readWorkingFile(root, path);
     if (!file) throw new Error("This file no longer exists.");
+    // A plain folder has no committed version: the file is its own original.
+    if (plain)
+      return {
+        path,
+        contents: file.contents,
+        version: file.hash,
+        original: file.contents,
+        head: "",
+        branch: "",
+      };
     // Only HEAD and the branch are needed, not a full status scan.
     const [head, branch] = (
       await Promise.all([
@@ -277,8 +313,10 @@ export class Projects {
   ) {
     const root = await this.root(id);
     await writeWorkingFile(root, path, version, { contents }, async () => {
-      await this.root(id);
-      if ((await git(root, ["rev-parse", "HEAD"])).trim() !== head)
+      const { plain } = await this.inspect(id);
+      if (
+        (plain ? "" : (await git(root, ["rev-parse", "HEAD"])).trim()) !== head
+      )
         throw new Error(
           "The checkout moved to another commit. Reopen the file; your unsaved text is kept.",
         );

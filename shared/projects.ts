@@ -25,6 +25,8 @@ export interface Project {
   name: string;
   repository: ({ server: string } & Repo) | null;
   added: number;
+  /** Live: the folder isn't a Git repository, so it has no branches, changes or history. Never saved. */
+  plain?: true;
 }
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>
