@@ -442,6 +442,17 @@ export interface ProjectApi {
     area: ChangeArea,
   ): Promise<FilePair>;
   projectGitAction(id: string, action: GitAction): Promise<WorkingTree>;
+  projectHistory(
+    id: string,
+    scope: import("./history").HistoryScope,
+    limit: number,
+  ): Promise<import("./history").CommitLog>;
+  projectCommit(
+    id: string,
+    sha: string,
+  ): Promise<import("./history").CommitDetail>;
+  /** One file as a commit left it, against its first parent. */
+  projectCommitDiff(id: string, sha: string, path: string): Promise<FilePair>;
   /** One file as an agent turn left it, against how the turn found it. */
   projectTurnDiff(
     chatId: string,

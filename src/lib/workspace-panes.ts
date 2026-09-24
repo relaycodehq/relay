@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type PaneId = "chat" | "changes" | "files";
-export const PANE_IDS: PaneId[] = ["chat", "changes", "files"];
+export type PaneId = "chat" | "changes" | "files" | "history";
+export const PANE_IDS: PaneId[] = ["chat", "changes", "files", "history"];
 const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   chat: 0.85,
   changes: 1.6,
   files: 1.6,
+  history: 1.2,
 };
 const STORAGE_KEY = "relay-workspace-panes";
 
@@ -23,6 +24,9 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
           PANE_IDS.includes(id as PaneId),
         )
       : [];
+    // Panes added since the layout was saved go at the end.
+    if (order.length && new Set(order).size === order.length)
+      order.push(...PANE_IDS.filter((id) => !order.includes(id)));
     const weights = { ...DEFAULT_WEIGHTS };
     for (const id of PANE_IDS) {
       const value = Number(saved?.weights?.[id]);
@@ -41,7 +45,7 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
 export function useWorkspacePanes() {
   const [layout, setLayout] = useState<PaneLayout>(() => ({
     ...restore(),
-    open: { chat: true, changes: false, files: false },
+    open: { chat: true, changes: false, files: false, history: false },
   }));
   useEffect(() => {
     localStorage.setItem(
@@ -64,7 +68,7 @@ export function useWorkspacePanes() {
     () =>
       setLayout((l) => ({
         ...l,
-        open: { chat: true, changes: false, files: false },
+        open: { chat: true, changes: false, files: false, history: false },
       })),
     [],
   );

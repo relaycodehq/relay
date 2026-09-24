@@ -5,6 +5,12 @@ import { codexModels, codexSkills } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import { createPullRequestSchema } from "../shared/pull-request-create";
 import { branches, changeBranch } from "./branches";
+import { commitDetail, commitDiff, commitLog } from "./history";
+import {
+  commitShaSchema,
+  historyLimitSchema,
+  historyScopeSchema,
+} from "../shared/history";
 import { branchActionSchema } from "../shared/branches";
 import { Projects } from "./projects";
 import { ProjectSharing } from "./project-sharing";
@@ -681,6 +687,23 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         await projects.root(idSchema.parse(args[0])),
         workingPathSchema.parse(args[1]),
         z.enum(["staged", "unstaged"]).parse(args[2]),
+      );
+    case "projectHistory":
+      return commitLog(
+        await projects.root(idSchema.parse(args[0])),
+        historyScopeSchema.parse(args[1]),
+        historyLimitSchema.parse(args[2]),
+      );
+    case "projectCommit":
+      return commitDetail(
+        await projects.root(idSchema.parse(args[0])),
+        commitShaSchema.parse(args[1]),
+      );
+    case "projectCommitDiff":
+      return commitDiff(
+        await projects.root(idSchema.parse(args[0])),
+        commitShaSchema.parse(args[1]),
+        workingPathSchema.parse(args[2]),
       );
     case "projectTurnDiff":
       return projectChats.turnDiff(

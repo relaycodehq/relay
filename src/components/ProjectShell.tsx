@@ -1,6 +1,7 @@
 import { BranchPullRequest } from "./BranchPullRequest";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
+import { ProjectHistory } from "./ProjectHistory";
 import type { TurnDiffTarget } from "./TurnChanges";
 import {
   NO_SLOTS,
@@ -26,6 +27,7 @@ import {
   Settings2,
   GitPullRequest,
   GitCompareArrows,
+  GitGraph,
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
@@ -108,6 +110,7 @@ export default function ProjectShell() {
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const panes = useWorkspacePanes();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
+  const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
     [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
     [changeTarget, setChangeTarget] = useState<FileTarget | null>(null),
@@ -555,15 +558,17 @@ export default function ProjectShell() {
                   ? { label: "Chat", icon: <MessageSquare size={14} /> }
                   : id === "files"
                     ? { label: "Files", icon: <Files size={14} /> }
-                    : pull
-                      ? {
-                          label: `PR #${pull.number}`,
-                          icon: <GitPullRequest size={14} />,
-                        }
-                      : {
-                          label: "Changes",
-                          icon: <GitCompareArrows size={14} />,
-                        }),
+                    : id === "history"
+                      ? { label: "History", icon: <GitGraph size={14} /> }
+                      : pull
+                        ? {
+                            label: `PR #${pull.number}`,
+                            icon: <GitPullRequest size={14} />,
+                          }
+                        : {
+                            label: "Changes",
+                            icon: <GitCompareArrows size={14} />,
+                          }),
               }))}
             />
           </div>
@@ -816,6 +821,27 @@ export default function ProjectShell() {
                     onViewing={setViewing}
                     openTarget={openFileTarget}
                     onOpenTargetConsumed={() => setOpenFileTarget(null)}
+                  />
+                </>
+              )}
+            </Pane>
+            <Pane id="history" label="History" {...paneProps("history")}>
+              {panes.layout.open.history && (
+                <>
+                  <PaneHeader
+                    id="history"
+                    icon={<GitGraph size={14} />}
+                    title="History"
+                    onSlots={setHistorySlots}
+                    onClose={() => togglePane("history")}
+                  />
+                  <ProjectHistory
+                    key={project.id}
+                    projectId={project.id}
+                    slots={historySlots}
+                    onOpenFile={(path) =>
+                      openInEditor({ path, directory: false })
+                    }
                   />
                 </>
               )}

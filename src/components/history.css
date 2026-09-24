@@ -1,0 +1,204 @@
+/* Commit log on top; the picked commit's files and diff fill the rest. */
+.project-history {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--surface);
+  --graph-0: #6c8ee8;
+  --graph-1: #d9822b;
+  --graph-2: #3aa675;
+  --graph-3: #b36bd6;
+  --graph-4: #d85c7a;
+  --graph-5: #2fa3b3;
+  --graph-6: #c9a227;
+  --graph-7: #8b8fd9;
+}
+.history-log {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+  outline: none;
+}
+.project-history:has(.commit-changes) .history-log {
+  flex: 0 0 38%;
+  border-bottom: 1px solid var(--border);
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  padding: 0 12px 0 8px;
+  font-size: 12px;
+  cursor: default;
+  white-space: nowrap;
+}
+.history-row:hover {
+  background: var(--hover);
+}
+.history-row[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.history-log:focus-visible .history-row[aria-selected="true"] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.history-graph {
+  flex: none;
+  overflow: visible;
+}
+.history-graph path {
+  fill: none;
+  stroke: var(--lane);
+  stroke-width: 1.6;
+}
+.history-graph circle {
+  fill: var(--lane);
+  stroke: var(--lane);
+  stroke-width: 1.6;
+}
+.history-graph circle[data-merge] {
+  fill: var(--surface);
+}
+.history-graph [data-color="0"] {
+  --lane: var(--graph-0);
+}
+.history-graph [data-color="1"] {
+  --lane: var(--graph-1);
+}
+.history-graph [data-color="2"] {
+  --lane: var(--graph-2);
+}
+.history-graph [data-color="3"] {
+  --lane: var(--graph-3);
+}
+.history-graph [data-color="4"] {
+  --lane: var(--graph-4);
+}
+.history-graph [data-color="5"] {
+  --lane: var(--graph-5);
+}
+.history-graph [data-color="6"] {
+  --lane: var(--graph-6);
+}
+.history-graph [data-color="7"] {
+  --lane: var(--graph-7);
+}
+.history-subject {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.history-subject > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-ref {
+  flex: none;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  line-height: 17px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.history-ref[data-kind="head"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.history-ref[data-kind="branch"] {
+  color: var(--text);
+}
+.history-ref[data-kind="tag"] {
+  border-style: dashed;
+}
+.history-author,
+.history-row time,
+.history-row code {
+  flex: none;
+  color: var(--muted);
+}
+.history-author {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-row time {
+  width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.history-row code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.history-more {
+  display: block;
+  margin: 8px auto;
+  font-size: 11px;
+}
+.history-scope {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--toolbar);
+}
+.pane-header-actions .history-scope > button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  min-height: 0;
+  border-radius: 6px;
+}
+.pane-header-actions .history-scope > button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.commit-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.commit-meta > div {
+  flex: 1;
+  min-width: 0;
+}
+.commit-meta strong {
+  display: block;
+  font-size: 13px;
+}
+.commit-meta p {
+  margin: 6px 0 0;
+  max-height: 6.5em;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.commit-meta small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+.commit-meta code {
+  font-family: var(--font-mono);
+}
+@container (max-width: 560px) {
+  .history-author,
+  .history-row code {
+    display: none;
+  }
+}
