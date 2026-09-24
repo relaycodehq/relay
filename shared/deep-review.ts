@@ -241,3 +241,33 @@ export function reportedFindings(input: unknown): string | undefined {
     ? `Findings:\n${lines.join("\n")}`
     : "No findings survived review.";
 }
+
+/**
+ * Without the tool, `/code-review` may answer with the findings' JSON alone,
+ * bare or fenced. That answer written out; undefined for any other answer.
+ */
+export function answeredFindings(answer: string): string | undefined {
+  const json = answer
+    .trim()
+    .replace(/^```(?:json)?\s*\n([\s\S]*)\n```$/, "$1")
+    .trim();
+  if (!/^[[{]/.test(json)) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return;
+  }
+  const findings = Array.isArray(parsed)
+    ? parsed
+    : (parsed as { findings?: unknown })?.findings;
+  if (
+    !Array.isArray(findings) ||
+    !findings.every(
+      (f) =>
+        f && typeof f === "object" && ("summary" in f || "short_summary" in f),
+    )
+  )
+    return;
+  return reportedFindings({ findings });
+}

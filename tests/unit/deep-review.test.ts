@@ -20,6 +20,7 @@ import {
   extractFindings,
   fixRequest,
   reportedFindings,
+  answeredFindings,
   type DeepReviewStart,
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "../../electron/deep-review";
@@ -123,6 +124,19 @@ describe("findings block", () => {
       "No findings survived review.",
     );
     expect(reportedFindings("nonsense")).toBeUndefined();
+  });
+  it("writes out findings Claude answered with as JSON", () => {
+    const findings = [
+      { file: "src/q.ts", line: 3, summary: "Queue drops a message" },
+    ];
+    const written = "Findings:\n- Queue drops a message `src/q.ts:3`";
+    expect(answeredFindings(JSON.stringify(findings, null, 2))).toBe(written);
+    expect(
+      answeredFindings("```json\n" + JSON.stringify(findings) + "\n```"),
+    ).toBe(written);
+    expect(answeredFindings("[]")).toBe("No findings survived review.");
+    expect(answeredFindings('[{"name":"x"}]')).toBeUndefined();
+    expect(answeredFindings("Looks fine: [1, 2]")).toBeUndefined();
   });
 });
 

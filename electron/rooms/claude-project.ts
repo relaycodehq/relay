@@ -12,7 +12,7 @@ import type {
 import { findExecutable } from "../executables";
 import type { AgentOptions } from "./codex";
 import { claudeActivity, claudeEditedPaths } from "./activity";
-import { reportedFindings } from "../../shared/deep-review";
+import { answeredFindings, reportedFindings } from "../../shared/deep-review";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
   AgentActivity,
@@ -1087,10 +1087,12 @@ export async function runClaudeProject(
           return "";
         }
         const final = session.plan || message.result || answer;
+        const written = session.plan ? undefined : answeredFindings(final);
         publish(
-          reported && !session.plan
-            ? [final, reported].filter((part) => part.trim()).join("\n\n")
-            : final,
+          written ??
+            (reported && !session.plan
+              ? [final, reported].filter((part) => part.trim()).join("\n\n")
+              : final),
         );
         // A turn Claude started itself may only have run tools.
         if (!answer.trim() && !options.adopt)
