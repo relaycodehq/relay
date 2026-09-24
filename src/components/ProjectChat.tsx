@@ -399,16 +399,6 @@ const Message = memo(function Message({
             started on its own
           </span>
         )}
-        {m.role === "user" && (
-          <button
-            className="message-reply"
-            aria-label="Reply to message"
-            title="Reply to message"
-            onClick={() => onReply(m)}
-          >
-            <Reply size={14} />
-          </button>
-        )}
       </header>
       {m.role === "assistant" && (
         <AgentTurn

@@ -3,7 +3,7 @@ import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../shared/chat-activity";
 import { api } from "../lib/api";
 
-/** The row under an agent's answer: copy, reply, fork, and when it was sent. */
+/** The row under an agent's answer: copy, fork, reply, and when it was sent. */
 export function MessageActions({
   text,
   sent,
@@ -41,14 +41,6 @@ export function MessageActions({
           {copied ? <Check size={15} /> : <Copy size={15} />}
         </button>
       )}
-      <button
-        type="button"
-        title="Reply to message"
-        aria-label="Reply to message"
-        onClick={onReply}
-      >
-        <Reply size={15} />
-      </button>
       {onFork && (
         <button
           type="button"
@@ -59,6 +51,14 @@ export function MessageActions({
           <Split size={15} />
         </button>
       )}
+      <button
+        type="button"
+        title="Reply to message"
+        aria-label="Reply to message"
+        onClick={onReply}
+      >
+        <Reply size={15} />
+      </button>
       <time
         dateTime={new Date(sent).toISOString()}
         title={new Date(sent).toLocaleString()}
