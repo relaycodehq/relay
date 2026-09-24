@@ -58,6 +58,7 @@ import {
 } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
+import { MessageActions } from "./MessageActions";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -376,12 +377,14 @@ const Message = memo(function Message({
               ? "Codex"
               : "Claude"}
         </strong>
-        <time>
-          {new Date(m.created).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </time>
+        {m.role === "user" && (
+          <time>
+            {new Date(m.created).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </time>
+        )}
         {m.author && m.role === "assistant" && (
           <span className="muted">via {m.author}</span>
         )}
@@ -393,14 +396,16 @@ const Message = memo(function Message({
             started on its own
           </span>
         )}
-        <button
-          className="message-reply"
-          aria-label="Reply to message"
-          title="Reply to message"
-          onClick={() => onReply(m)}
-        >
-          <Reply size={14} />
-        </button>
+        {m.role === "user" && (
+          <button
+            className="message-reply"
+            aria-label="Reply to message"
+            title="Reply to message"
+            onClick={() => onReply(m)}
+          >
+            <Reply size={14} />
+          </button>
+        )}
       </header>
       {m.role === "assistant" && (
         <AgentTurn
@@ -467,6 +472,14 @@ const Message = memo(function Message({
         <p role="status" className="chat-message-error">
           {m.error}
         </p>
+      )}
+      {m.role === "assistant" && (
+        <MessageActions
+          text={text}
+          sent={m.created}
+          pending={m.status === "streaming"}
+          onReply={() => onReply(m)}
+        />
       )}
     </article>
   );

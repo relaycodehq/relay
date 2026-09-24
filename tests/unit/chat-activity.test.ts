@@ -4,6 +4,7 @@ import {
   chatActivitySections,
   chatIsEmpty,
   shortAge,
+  sentLabel,
   snoozePresets,
   wakeLabel,
 } from "../../shared/chat-activity";
@@ -128,5 +129,25 @@ describe("chat activity", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("labels when a message was sent by how far back its day is", () => {
+    const now = new Date(2026, 8, 24, 9, 0);
+    const at = (d: number, h = 13, y = 2026, mo = 8) =>
+      sentLabel(new Date(y, mo, d, h, 25).getTime(), now);
+    expect(at(24, 8)).toBe(
+      new Date(2026, 8, 24, 8, 25).toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    );
+    expect(at(23, 23)).toMatch(/^Yesterday /);
+    const tuesday = new Date(2026, 8, 22).toLocaleDateString(undefined, {
+      weekday: "long",
+    });
+    expect(at(22).startsWith(`${tuesday} `)).toBe(true);
+    expect(at(17)).toMatch(/17/);
+    expect(at(17)).not.toMatch(/2026/);
+    expect(at(17, 13, 2025)).toMatch(/2025/);
   });
 });

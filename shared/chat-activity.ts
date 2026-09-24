@@ -114,6 +114,27 @@ export function wakeLabel(until: number, now: Date): string {
   return `${wake.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
 }
 
+/** When a message was sent: "13:25", "Yesterday 13:25", "Tuesday 13:25", "Sep 3, 13:25". */
+export function sentLabel(sent: number, now: Date): string {
+  const at = new Date(sent);
+  const time = at.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
+  const days = Math.round((midnight(now) - midnight(at)) / 86_400_000);
+  if (days <= 0) return time;
+  if (days === 1) return `Yesterday ${time}`;
+  if (days < 7)
+    return `${at.toLocaleDateString(undefined, { weekday: "long" })} ${time}`;
+  const date = at.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: at.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+  return `${date}, ${time}`;
+}
+
 /** Compact age for sidebar rows: "now", "4m", "3h", "2d", "5w". */
 export function shortAge(then: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now - then) / 60_000));

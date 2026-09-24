@@ -499,6 +499,39 @@
 .message-reply:focus-visible {
   opacity: 1;
 }
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  margin-left: -5px;
+}
+.message-actions[inert] {
+  visibility: hidden;
+}
+.message-actions button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px;
+}
+.message-actions button:hover {
+  background: var(--toolbar);
+  color: var(--text);
+}
+.message-actions time {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.project-message:hover .message-actions time,
+.message-actions:focus-within time {
+  opacity: 1;
+}
 .composer-reply {
   display: flex;
   align-items: center;
