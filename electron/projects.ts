@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import { ApiError, type Gitea } from "./gitea";
-import type { Project } from "../shared/projects";
+import { projectTitle, type Project } from "../shared/projects";
 import {
   moveProjectInList,
   parentGroup,
@@ -102,14 +102,21 @@ export class Projects {
           additions.push({
             id: randomUUID(),
             path,
-            name,
+            name: projectTitle(name),
             repository: { server: client.account.server, owner, name },
             added: Date.now(),
           });
       }
-    if (additions.length)
+    const tidy = !this.store.get().projectTitlesTidied;
+    if (additions.length || tidy)
       await this.store.update((s) => {
         s.projects = [...(s.projects ?? []), ...additions];
+        if (!tidy) return;
+        // Names still equal to the folder or repo were never typed by hand.
+        for (const p of s.projects)
+          if (p.name === basename(p.path) || p.name === p.repository?.name)
+            p.name = projectTitle(p.name);
+        s.projectTitlesTidied = true;
       });
     if (client)
       for (const p of this.store.get().projects ?? [])
@@ -155,7 +162,7 @@ export class Projects {
     const project: Project = {
       id: randomUUID(),
       path: root,
-      name: basename(root),
+      name: projectTitle(basename(root)),
       repository: null,
       added: Date.now(),
     };

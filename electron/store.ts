@@ -8,6 +8,8 @@ interface State {
   projects?: import("../shared/projects").Project[];
   /** Sidebar group paths, kept even while no project is in them. */
   projectGroups?: string[];
+  /** Set once folder-named projects got title-cased names. */
+  projectTitlesTidied?: true;
   chats?: import("../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;
