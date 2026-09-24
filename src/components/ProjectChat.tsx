@@ -51,11 +51,8 @@ import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
-import {
-  ImagePreviewDialog,
-  ImageThumbnail,
-  type PreviewImage,
-} from "./ImagePreview";
+import { ImageThumbnail, type PreviewImage } from "./ImagePreview";
+import { ImageViewer } from "./ImageViewer";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
 import {
@@ -125,11 +122,17 @@ function readImage(
   chatId: string,
   messageId: string,
   path: string,
+  projectRoot: string,
 ): PreviewImage {
   return {
     key: `${chatId}:${messageId}:${path}`,
     name: path.split("/").at(-1) || path,
+    path,
+    location: path.startsWith(`${projectRoot}/`)
+      ? path.slice(projectRoot.length + 1)
+      : path,
     load: () => api.projectChatReadImage(chatId, messageId, path),
+    reveal: () => api.revealProjectChatReadImage(chatId, messageId, path),
   };
 }
 /** One-line divider where another agent took over, with the outgoing agent's note behind it. */
@@ -297,17 +300,18 @@ const Message = memo(function Message({
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
 }) {
-  const [openImage, setOpenImage] = useState<string>();
-  // The images the agent read show once its turn ends, after the answer.
+  const [viewing, setViewing] = useState<number>();
   const images = useMemo(
     () =>
-      m.status === "streaming"
-        ? []
-        : [
+      chatId
+        ? [
             ...(m.images ?? []).map((image) => userImage(chatId, image)),
-            ...turnImages(m).map((path) => readImage(chatId, m.id, path)),
-          ],
-    [chatId, m],
+            ...turnImages(m).map((path) =>
+              readImage(chatId, m.id, path, projectRoot),
+            ),
+          ]
+        : [],
+    [chatId, m, projectRoot],
   );
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
@@ -387,7 +391,14 @@ const Message = memo(function Message({
           projectRoot={projectRoot}
           onOpenFile={onOpenFile}
           onChanges={onChanges}
-          onOpenImage={chatId ? setOpenImage : undefined}
+          onOpenImage={
+            chatId
+              ? (path) => {
+                  const index = images.findIndex((i) => i.path === path);
+                  if (index >= 0) setViewing(index);
+                }
+              : undefined
+          }
         />
       )}
       {!!parsed.refs.length && (
@@ -423,17 +434,24 @@ const Message = memo(function Message({
           }
         />
       )}
-      {!!chatId && !!images.length && (
+      {/* The images the agent read show once its turn ends, after the answer. */}
+      {!!images.length && m.status !== "streaming" && (
         <div className="message-images">
-          {images.map((image) => (
-            <ImageThumbnail key={image.key} image={image} />
+          {images.map((image, index) => (
+            <ImageThumbnail
+              key={image.key}
+              image={image}
+              onOpen={() => setViewing(index)}
+            />
           ))}
         </div>
       )}
-      {openImage && (
-        <ImagePreviewDialog
-          image={readImage(chatId, m.id, openImage)}
-          onClose={() => setOpenImage(undefined)}
+      {viewing !== undefined && images[viewing] && (
+        <ImageViewer
+          images={images}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(undefined)}
         />
       )}
       {!!replyCount && (

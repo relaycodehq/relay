@@ -793,6 +793,10 @@ it("previews only the images a turn read, and only when they really are images",
   await expect(chats.readImage(chat.id, randomUUID(), shot)).rejects.toThrow(
     "didn't read that image",
   );
+  await rm(shot);
+  await expect(chats.readImage(chat.id, turn, shot)).rejects.toThrow(
+    "no longer on disk",
+  );
 });
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

@@ -557,6 +557,12 @@ export interface ProjectApi {
     messageId: string,
     path: string,
   ): Promise<string>;
+  /** Shows that image file in Finder. */
+  revealProjectChatReadImage(
+    id: string,
+    messageId: string,
+    path: string,
+  ): Promise<void>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;

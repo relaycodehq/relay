@@ -1,0 +1,271 @@
+/* The thread's images over the whole window: a bar, the picture, a strip. Dark in
+   either theme, like the sketch editor, so the picture's own colours read true. */
+.image-viewer {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, #0b0b10 92%, transparent);
+  color: #fff;
+  overflow: hidden;
+  /* The titlebar's drag region underneath would swallow clicks on the bar. */
+  -webkit-app-region: no-drag;
+}
+.image-viewer[open] {
+  display: flex;
+  flex-direction: column;
+}
+.image-viewer::backdrop {
+  background: transparent;
+  backdrop-filter: blur(6px);
+}
+
+.image-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  /* Clear of the traffic lights. */
+  padding: 8px 12px 8px 93px;
+}
+.platform-linux .image-viewer-bar {
+  padding: 8px 150px 8px 16px;
+}
+.image-viewer-title {
+  flex: 1;
+  min-width: 0;
+}
+.image-viewer-title h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.image-viewer-title h2 span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.image-viewer-title small {
+  color: #ffffff80;
+  font-size: 11.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+/* Long paths lose their start rather than the file's name. */
+.image-viewer-location {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: #ffffff66;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.image-viewer-failure {
+  max-width: 34%;
+  overflow: hidden;
+  color: #ff9ca4;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.image-viewer-count {
+  color: #ffffff99;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.image-viewer-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: #1e1e21e0;
+  box-shadow: 0 0 0 1px #ffffff14;
+}
+.image-viewer-tools button {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #ffffffd9;
+}
+.image-viewer-tools button:not(:disabled):hover {
+  background: #ffffff17;
+  color: #fff;
+}
+.image-viewer-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.image-viewer-scale {
+  width: 52px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.image-viewer-separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 5px;
+  background: #ffffff26;
+}
+
+.image-viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+.image-viewer-stage[data-cursor="grab"] {
+  cursor: grab;
+}
+.image-viewer-stage[data-cursor="grabbing"] {
+  cursor: grabbing;
+}
+.image-viewer-stage[data-cursor="zoom-in"] .image-viewer-frame {
+  cursor: zoom-in;
+}
+.image-viewer-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--image-width);
+  height: var(--image-height);
+  margin: calc(var(--image-height) / -2) 0 0 calc(var(--image-width) / -2);
+  transform: translate(var(--image-x), var(--image-y)) scale(var(--image-scale));
+}
+.image-viewer-stage[data-glide] .image-viewer-frame {
+  transition: transform 0.16s ease-out;
+}
+.image-viewer-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  visibility: hidden;
+  /* A checkerboard behind transparent pixels that keeps its size at any zoom. */
+  --check: calc(8px / var(--image-scale));
+  background: repeating-conic-gradient(#2b2b31 0 25%, #222227 0 50%) 0 0 /
+    calc(var(--check) * 2) calc(var(--check) * 2);
+  box-shadow: 0 24px 70px -20px #000a;
+}
+.image-viewer-frame img[data-loaded] {
+  visibility: visible;
+}
+/* Close enough to count pixels, so show them as squares. */
+.image-viewer-stage[data-pixels] img {
+  image-rendering: pixelated;
+}
+
+.image-viewer-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #ffffffa6;
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.image-viewer-message p {
+  max-width: 420px;
+  margin: 0;
+  text-align: center;
+}
+.image-viewer-message button {
+  pointer-events: auto;
+  border-color: #ffffff26;
+  background: #ffffff12;
+  color: #fff;
+  font-size: 12px;
+}
+.image-viewer-message button:hover {
+  background: #ffffff21;
+}
+
+.image-viewer-step {
+  position: absolute;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  margin-top: -19px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #1e1e21cc;
+  box-shadow: 0 0 0 1px #ffffff14;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.image-viewer-step.previous {
+  left: 16px;
+}
+.image-viewer-step.next {
+  right: 16px;
+}
+.image-viewer-stage:hover .image-viewer-step:not(:disabled),
+.image-viewer-step:focus-visible {
+  opacity: 1;
+}
+.image-viewer-step:not(:disabled):hover {
+  background: #2c2c31;
+}
+
+.image-viewer-strip {
+  display: flex;
+  justify-content: safe center;
+  gap: 6px;
+  padding: 10px 16px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.image-viewer-strip button {
+  flex: none;
+  width: 58px;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff0f;
+  color: #ffffff80;
+  opacity: 0.55;
+  box-shadow: 0 0 0 1px #ffffff14;
+  transition: opacity 0.12s;
+}
+.image-viewer-strip button:hover {
+  opacity: 0.85;
+}
+.image-viewer-strip button[aria-current] {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fffffff2;
+}
+.image-viewer-strip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-viewer-stage[data-glide] .image-viewer-frame,
+  .image-viewer-step,
+  .image-viewer-strip button {
+    transition: none;
+  }
+}

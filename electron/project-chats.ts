@@ -797,13 +797,22 @@ export class ProjectChats {
     const bytes = await readFile(this.imagePath(chatId, image));
     return `data:${image.mimeType};base64,${bytes.toString("base64")}`;
   }
-  /** Only a path the turn itself read, so the renderer can't ask for any file on disk. */
-  async readImage(chatId: string, messageId: string, path: string) {
+  /** Only a path the turn itself read, so the renderer can't reach any other file on disk. */
+  async turnImagePath(chatId: string, messageId: string, path: string) {
     const chat = await this.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message || !isAbsolute(path) || !turnImages(message).includes(path))
       throw new Error("This turn didn't read that image.");
-    if ((await stat(path)).size > 30_000_000)
+    return path;
+  }
+  async readImage(chatId: string, messageId: string, path: string) {
+    await this.turnImagePath(chatId, messageId, path);
+    const { size } = await stat(path).catch((e: NodeJS.ErrnoException) => {
+      throw e.code === "ENOENT"
+        ? new Error("That image is no longer on disk.")
+        : e;
+    });
+    if (size > 30_000_000)
       throw new Error("That image is too large to preview.");
     const bytes = await readFile(path);
     const mimeType = imageMimeType(bytes);

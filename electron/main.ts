@@ -903,6 +903,15 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         idSchema.parse(args[1]),
         z.string().min(1).max(500).parse(args[2]),
       );
+    case "revealProjectChatReadImage":
+      shell.showItemInFolder(
+        await projectChats.turnImagePath(
+          idSchema.parse(args[0]),
+          idSchema.parse(args[1]),
+          z.string().min(1).max(500).parse(args[2]),
+        ),
+      );
+      return;
     case "sendProjectChat":
       return projectChats.send(
         idSchema.parse(args[0]),

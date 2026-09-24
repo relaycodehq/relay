@@ -69,6 +69,7 @@ const methods = [
   "projectChat",
   "projectChatImage",
   "projectChatReadImage",
+  "revealProjectChatReadImage",
   "sendProjectChat",
   "cancelProjectChat",
   "startDeepReview",
