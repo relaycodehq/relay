@@ -36,7 +36,12 @@ type Model = {
 };
 const models: Model[] = [
   { provider: "codex", id: "", name: "Codex default" },
-  { provider: "claude", id: "", name: "Claude default" },
+  {
+    provider: "claude",
+    id: "",
+    name: "Claude default",
+    description: "Claude · CLI default",
+  },
   { provider: "message", id: "", name: "Message only" },
 ];
 const providerNames = { codex: "Codex", claude: "Claude", message: "No agent" };
@@ -77,6 +82,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   label,
   container,
   openSignal,
+  defaultNames,
 }: {
   provider: MessageProvider;
   choice: ModelChoice | undefined;
@@ -97,6 +103,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   container?: HTMLElement;
   /** Opens the picker whenever this changes, e.g. from a /model command. */
   openSignal?: number;
+  /** The model each agent's Default runs, where known. */
+  defaultNames?: Partial<Record<"codex" | "claude", string>>;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -119,6 +127,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         ? claudeModel
         : "",
   ]);
+  const defaultName = (m: Model) =>
+    m.provider !== "message" && !m.id ? defaultNames?.[m.provider] : undefined;
   // CLI-listed models sit above each agent's default.
   const catalog = models.flatMap((m): Model[] =>
     m.provider === "codex"
@@ -157,6 +167,10 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const current =
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
+  const currentDefault = defaultName(current);
+  const triggerName = currentDefault
+    ? `Default (${currentDefault})`
+    : current.name;
   const rows = catalog
     .filter((m) => allowDefault || m.provider === "message" || m.id)
     .filter((m) => {
@@ -286,11 +300,11 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         type="button"
         className="composer-control composer-model-trigger"
         aria-label={label ? `${label} model` : "Choose model and provider"}
-        title={current.name}
+        title={triggerName}
         disabled={!choice}
       >
         <ProviderIcon provider={provider} />
-        <span>{current.name}</span>
+        <span>{triggerName}</span>
         <ChevronDown size={12} />
       </Popover.Trigger>
       <Popover.Portal container={container}>
@@ -405,8 +419,11 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                               m.legacy &&
                               legacyToggle}
                             <Combobox.Item
+                              // A default that knows its model shows it like any other row.
                               data-default={
-                                m.provider !== "message" && !m.id
+                                m.provider !== "message" &&
+                                !m.id &&
+                                !defaultName(m)
                                   ? ""
                                   : undefined
                               }
@@ -425,10 +442,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                   <span>
                                     {m.custom
                                       ? "Custom Codex model"
-                                      : m.provider === "claude"
-                                        ? m.id
-                                          ? m.description || "Claude"
-                                          : "Claude · CLI default"
+                                      : defaultName(m)
+                                        ? `Runs ${defaultName(m)}`
                                         : m.description ||
                                           providerNames[m.provider]}
                                   </span>

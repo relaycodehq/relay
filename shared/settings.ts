@@ -37,6 +37,10 @@ export type CodexModel = {
   efforts: ReasoningEffort[];
   /** Codex suggests moving from it to a newer model. */
   legacy: boolean;
+  /** The effort it runs when none is set. */
+  defaultEffort?: ReasoningEffort;
+  /** The model Codex runs when its config names none. */
+  isDefault?: boolean;
 };
 const commonEfforts: ReasoningEffort[] = ["low", "medium", "high", "xhigh"];
 const preset = (
@@ -62,6 +66,8 @@ export type ClaudeModel = {
   efforts: ReasoningEffort[];
   /** Whether the model also runs with a 1M-token context window. */
   longContext: boolean;
+  /** The model id an alias stands for, e.g. `claude-opus-5-5` for `opus`. */
+  resolved?: string;
 };
 /** Claude Code switches to the 1M context window with a `[1m]` model suffix. */
 export type ClaudeContextWindow = "200k" | "1m";

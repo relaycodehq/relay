@@ -1,9 +1,15 @@
-import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { findExecutable } from "../../electron/executables";
-import { codexModels } from "../../electron/provider-commands";
+import { codexDefaults, codexModels } from "../../electron/provider-commands";
 import {
   reasoningEffortsFor,
   supportedChoice,
@@ -35,7 +41,8 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
     send({ id: m.id, result: { nextCursor: "2", data: [
       { id: "gpt-6-sol", model: "gpt-6-sol", displayName: "GPT-6-Sol",
         description: "Workhorse model.", hidden: false, upgrade: null,
-        supportedReasoningEfforts: efforts("low", "medium", "ultra", "turbo") },
+        supportedReasoningEfforts: efforts("low", "medium", "ultra", "turbo"),
+        defaultReasoningEffort: "medium", isDefault: true },
       { id: "codex-auto-review", model: "codex-auto-review", hidden: true,
         supportedReasoningEfforts: [] },
     ] } });
@@ -46,6 +53,12 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
         upgrade: "gpt-5.6-sol", supportedReasoningEfforts: efforts("low") },
       { id: "not a valid id!", hidden: false },
     ] } });
+  // A checkout's own config can pin a model; the user's sets the effort.
+  else if (m.method === "config/read")
+    send({ id: m.id, result: { config: {
+      model: m.params.cwd.endsWith("pinned") ? "gpt-5.5" : null,
+      model_reasoning_effort: "high",
+    } } });
 });
 `;
 
@@ -74,6 +87,8 @@ it("lists the signed-in Codex models once, and asks again after a failure or sig
       description: "Workhorse model.",
       efforts: ["low", "medium", "ultra"],
       legacy: false,
+      defaultEffort: "medium",
+      isDefault: true,
     },
     {
       id: "gpt-5.5",
@@ -107,4 +122,20 @@ it("lists the signed-in Codex models once, and asks again after a failure or sig
   });
   const low = { ...saved, reasoningEffort: "low" as const };
   expect(supportedChoice(low, models)).toBe(low);
+});
+
+it("reads the model and effort Codex's config gives a checkout's threads", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-defaults-")));
+  const cli = join(root, "codex"),
+    pinned = join(root, "pinned");
+  await writeFile(cli, fakeCodex(join(root, "launches"), join(root, "auth")), {
+    mode: 0o700,
+  });
+  await mkdir(pinned);
+  vi.mocked(findExecutable).mockResolvedValue(cli);
+  expect(await codexDefaults(root)).toEqual({ model: "", effort: "high" });
+  expect(await codexDefaults(pinned)).toEqual({
+    model: "gpt-5.5",
+    effort: "high",
+  });
 });

@@ -62,6 +62,19 @@ export function saveComposerSettings(key: string, settings: ComposerSettings) {
   localStorage.setItem(storageKey(key), JSON.stringify(settings));
 }
 /**
+ * Puts each agent's model and effort back on Default, keeping the agent and
+ * modes. A new thread's pick stays with the thread it started.
+ */
+export function resetComposerModels(key: string) {
+  const saved = read(key);
+  if (!saved) return;
+  saveComposerSettings(key, {
+    ...loadComposerSettings(key, false),
+    choice: undefined,
+    claude: { model: "", reasoningEffort: "" },
+  });
+}
+/**
  * Opens a composer on what a message was sent with. A Claude message's choice
  * is Claude's model, so it goes there; the other agent keeps its own.
  */

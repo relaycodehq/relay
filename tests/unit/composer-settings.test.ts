@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   loadComposerSettings,
+  resetComposerModels,
   saveComposerSettings,
   saveSentSettings,
 } from "../../src/lib/composer-settings";
@@ -97,4 +98,25 @@ it("falls back to defaults for anything unreadable", () => {
     provider: "codex",
     runtimeMode: "approval-required",
   });
+});
+
+it("starts the next new thread on Default, keeping the agent and modes", () => {
+  saveComposerSettings("new:project", {
+    provider: "claude",
+    choice: sol,
+    claude: { model: "claude-fable-5-1[1m]", reasoningEffort: "xhigh" },
+    runtimeMode: "auto",
+    interactionMode: "plan",
+  });
+  resetComposerModels("new:project");
+  expect(loadComposerSettings("new:project", false)).toEqual({
+    provider: "claude",
+    choice: undefined,
+    claude: { model: "", reasoningEffort: "" },
+    runtimeMode: "auto",
+    interactionMode: "plan",
+  });
+  // Nothing saved yet stays that way.
+  resetComposerModels("new:other");
+  expect(store.has("composer-settings:new:other")).toBe(false);
 });

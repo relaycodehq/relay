@@ -5,6 +5,7 @@ import type { TaskApi } from "./tasks";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
+import type { ClaudeDefaults, CodexDefaults } from "./agent-defaults";
 import type { ProviderUsage } from "./provider-usage";
 import type { UpdateState } from "./updates";
 import type { LineQuestion } from "./questions";
@@ -247,6 +248,9 @@ export interface Api
   providerUsage(provider: "claude" | "codex"): Promise<ProviderUsage>;
   claudeModels(): Promise<ClaudeModel[]>;
   codexModels(): Promise<CodexModel[]>;
+  /** What a project's threads run when they leave the model or effort on Default. */
+  claudeDefaults(projectId: string): Promise<ClaudeDefaults | null>;
+  codexDefaults(projectId: string): Promise<CodexDefaults>;
   askCodex(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   retryLoginRestore(): Promise<void>;

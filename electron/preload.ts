@@ -149,6 +149,8 @@ const methods = [
   "providerUsage",
   "claudeModels",
   "codexModels",
+  "claudeDefaults",
+  "codexDefaults",
   "openExternal",
   "updateState",
   "checkForUpdates",

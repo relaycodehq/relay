@@ -341,10 +341,22 @@ it("asks Claude for its models again once the user signs in", async () => {
 
 it("moves a session with background work to new settings instead of ending it", async () => {
   const close = vi.fn();
+  // As `getSettings()` answers for a user file pinning Fable at xhigh.
+  const settings = {
+    effective: {
+      model: "claude-fable-5-1[1m]",
+      effortLevel: "high",
+      modelSettings: { "claude-fable-5-1": { effortLevel: "xhigh" } },
+    },
+    applied: { model: "claude-opus-5-5", effort: "medium" },
+  };
   const live = {
-    setModel: vi.fn(async () => {}),
+    setModel: vi.fn(async (model?: string) => {
+      settings.applied.model = (model ?? "claude-opus-5-5").replace("[1m]", "");
+    }),
     applyFlagSettings: vi.fn(async () => {}),
     setPermissionMode: vi.fn(async () => {}),
+    getSettings: vi.fn(async () => settings),
   };
   vi.mocked(query).mockImplementation(({ prompt }) => {
     const input = (prompt as AsyncIterable<{ uuid: string }>)[
@@ -390,6 +402,14 @@ it("moves a session with background work to new settings instead of ending it", 
   expect(live.applyFlagSettings).toHaveBeenCalledWith({ effortLevel: "max" });
   expect(live.setPermissionMode).toHaveBeenCalledWith("plan");
   expect(claudePending(key).map((p) => p.id)).toEqual(["dev"]);
+  // Cleared, the CLI would fall to its built-in model and effort; Default
+  // sends the settings' ones, as a fresh session would take them.
+  await turn({ model: "sonnet", effort: "max", interactionMode: "plan" });
+  live.applyFlagSettings.mockClear();
+  await turn({ effort: "", interactionMode: "plan" });
+  expect(live.setModel).toHaveBeenLastCalledWith("claude-fable-5-1[1m]");
+  expect(live.applyFlagSettings).toHaveBeenCalledWith({ effortLevel: "xhigh" });
+  expect(close).not.toHaveBeenCalled();
   // Full access needs a session launched with it: that one still restarts.
   await turn({ effort: "max", runtimeMode: "full-access" });
   expect(close).toHaveBeenCalledTimes(1);

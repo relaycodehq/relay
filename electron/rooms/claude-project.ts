@@ -22,6 +22,11 @@ import type {
   PromptCache,
 } from "../../shared/projects";
 import type { ClaudeModel } from "../../shared/settings";
+import {
+  claudeDefaultsFrom,
+  settingsEffort,
+  type ClaudeDefaults,
+} from "../../shared/agent-defaults";
 import type { ProviderCommand } from "../../shared/commands";
 
 export async function sdk(): Promise<
@@ -48,6 +53,13 @@ export function claudePermissionMode(
 type ClaudeStream = ReturnType<
   typeof import("@anthropic-ai/claude-agent-sdk").query
 >;
+/** The settings the session runs with; `getSettings` is missing from the SDK's types. */
+async function readSettings(stream: ClaudeStream) {
+  const withSettings = stream as ClaudeStream & {
+    getSettings?: () => Promise<unknown>;
+  };
+  return claudeDefaultsFrom(await withSettings.getSettings?.());
+}
 class ClaudeInput {
   private queued: SDKUserMessage[] = [];
   private wake?: () => void;
@@ -155,9 +167,7 @@ function closeSession(session: ClaudeSession) {
 /**
  * Moves a live session to new settings instead of restarting it, which
  * would end the background work and wake-ups it holds. False when it can't:
- * another folder, or full access for a session launched without it. Unlike
- * a restart, a model or effort put back to default takes Claude Code's own
- * default rather than one in the user's settings file.
+ * another folder, or full access for a session launched without it.
  */
 async function retune(
   session: ClaudeSession,
@@ -171,12 +181,29 @@ async function retune(
   )
     return false;
   try {
+    // Cleared, model and effort fall to Claude Code's built-in ones rather
+    // than the settings a fresh session would take, so Default sends those.
     if (options.model !== before.model)
-      await session.stream.setModel(options.model || undefined);
-    if (options.effort !== before.effort)
+      await session.stream.setModel(
+        options.model ||
+          (await readSettings(session.stream))?.model ||
+          undefined,
+      );
+    if (
+      options.effort !== before.effort ||
+      (!options.effort && options.model !== before.model)
+    ) {
+      let effort = options.effort;
+      if (!effort) {
+        const defaults = await readSettings(session.stream);
+        effort = defaults
+          ? settingsEffort(defaults, defaults.appliedModel)
+          : "";
+      }
       await session.stream.applyFlagSettings({
-        effortLevel: (options.effort as EffortLevel) || null,
+        effortLevel: (effort as EffortLevel) || null,
       });
+    }
     if (mode !== claudePermissionMode(before))
       await session.stream.setPermissionMode(mode);
     return true;
@@ -341,6 +368,7 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
             id: m.value,
             name: full ? lead : m.displayName || m.value,
             description: full ? rest.join(" · ") : m.description,
+            ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
             efforts:
               m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
             // The CLI doesn't report context sizes; every current model but
@@ -457,13 +485,19 @@ const hiddenCommands = new Set([
 ]);
 // SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
 const chromeArgs = { chrome: null };
-const commandLists = new Map<
+type ClaudeProbe = { commands: ProviderCommand[]; defaults?: ClaudeDefaults };
+const probes = new Map<
   string,
-  { expires: number; result: Promise<ProviderCommand[]> }
+  { expires: number; result: Promise<ClaudeProbe> }
 >();
 /** Claude's commands and skills for this checkout, as the SDK resolves them. */
-export function listClaudeCommands(root: string): Promise<ProviderCommand[]> {
-  const previous = commandLists.get(root);
+export const listClaudeCommands = (root: string) =>
+  probeClaude(root).then((probe) => probe.commands);
+/** What threads in this checkout run on Default; null when Claude can't say. */
+export const claudeDefaults = (root: string) =>
+  probeClaude(root).then((probe) => probe.defaults ?? null);
+function probeClaude(root: string): Promise<ClaudeProbe> {
+  const previous = probes.get(root);
   if (previous && previous.expires > Date.now()) return previous.result;
   const result = (async () => {
     const [{ query }, executable] = await Promise.all([
@@ -483,8 +517,11 @@ export function listClaudeCommands(root: string): Promise<ProviderCommand[]> {
       },
     });
     try {
-      const commands = await Promise.race([
-        stream.supportedCommands(),
+      const [commands, defaults] = await Promise.race([
+        Promise.all([
+          stream.supportedCommands(),
+          readSettings(stream).catch(() => undefined),
+        ]),
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error("Claude did not list commands.")),
@@ -492,7 +529,7 @@ export function listClaudeCommands(root: string): Promise<ProviderCommand[]> {
           ),
         ),
       ]);
-      return (commands ?? [])
+      const listed = (commands ?? [])
         .filter(
           (c) =>
             /^[a-zA-Z0-9_.:-]+$/.test(c.name) &&
@@ -510,17 +547,17 @@ export function listClaudeCommands(root: string): Promise<ProviderCommand[]> {
             ? { argumentHint: c.argumentHint.slice(0, 80) }
             : {}),
         }));
+      return { commands: listed, defaults };
     } finally {
       input.close();
       stream.close();
     }
   })().catch((e) => {
-    commandLists.delete(root);
+    probes.delete(root);
     throw e;
   });
-  if (commandLists.size >= 30)
-    commandLists.delete(commandLists.keys().next().value!);
-  commandLists.set(root, { expires: Date.now() + 60000, result });
+  if (probes.size >= 30) probes.delete(probes.keys().next().value!);
+  probes.set(root, { expires: Date.now() + 60000, result });
   return result;
 }
 export function closeClaudeSession(key: string) {

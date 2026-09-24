@@ -47,6 +47,14 @@ import {
 import { api } from "../lib/api";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { useCodexModels } from "../lib/useCodexModels";
+import { useAgentDefaults } from "../lib/useAgentDefaults";
+import {
+  claudeDefaultEffort,
+  claudeDefaultModelName,
+  codexDefaultEffort,
+  codexDefaultModelName,
+  defaultEffortLabel,
+} from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
@@ -174,6 +182,7 @@ export function ProjectComposer({
   }, [loadClaudeModels]);
   const codex = useCodexModels();
   const codexModels = codex.models;
+  const defaults = useAgentDefaults(projectId);
   const claudeListed = findClaudeModel(claudeModels, claude.model);
   const claudeModelEfforts = claudeEffortsFor(claudeModels, claude.model);
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
@@ -284,21 +293,40 @@ export function ProjectComposer({
     // A failed first probe leaves the list empty; ask again.
     if (!claudeModels?.length) loadClaudeModels();
     codex.retry();
+    defaults.refresh();
   });
+  // Default says what it runs, as each agent's own settings decide.
+  const claudeDefaultLevel = claudeDefaultEffort(
+    defaults.claude,
+    claude.model,
+    claudeModels,
+  );
+  const codexDefaultLevel = codexDefaultEffort(
+    defaults.codex,
+    selected?.model ?? "",
+    codexModels,
+  );
+  const defaultNames = useMemo(
+    () => ({
+      claude: claudeDefaultModelName(defaults.claude, claudeModels),
+      codex: codexDefaultModelName(defaults.codex, codexModels),
+    }),
+    [defaults.claude, defaults.codex, claudeModels, codexModels],
+  );
   const codexEffortOptions = useMemo(
     () =>
       selected
         ? [
             {
               value: "" as ReasoningEffort,
-              label: "Default",
+              label: defaultEffortLabel(codexDefaultLevel),
             },
             ...reasoningEffortsFor(selected.model, codexModels).map(
               (value) => ({ value, label: effortLabels[value] }),
             ),
           ]
         : [],
-    [selected, codexModels],
+    [selected, codexModels, codexDefaultLevel],
   );
   const setCodexEffort = useStableCallback(
     (reasoningEffort: ReasoningEffort) =>
@@ -312,7 +340,7 @@ export function ProjectComposer({
               label: "Reasoning",
               value: claude.reasoningEffort,
               options: [
-                { value: "", label: "Default" },
+                { value: "", label: defaultEffortLabel(claudeDefaultLevel) },
                 ...claudeModelEfforts.map((value) => ({
                   value,
                   label: effortLabels[value],
@@ -352,6 +380,7 @@ export function ProjectComposer({
       claude,
       claudeListed?.longContext,
       claudeModelEfforts.join(),
+      claudeDefaultLevel,
     ],
   );
   /** An agent was picked here, so an @mention would only override it. */
@@ -399,7 +428,9 @@ export function ProjectComposer({
             {
               provider: recipient,
               value: "default",
-              description: `${agentNames[recipient]} default`,
+              description: defaultNames[recipient]
+                ? `${agentNames[recipient]} default · ${defaultNames[recipient]}`
+                : `${agentNames[recipient]} default`,
             },
           ]),
       ...listed.filter((m) => m.provider !== recipient),
@@ -441,11 +472,13 @@ export function ProjectComposer({
         recipient === "claude"
           ? claude.reasoningEffort
           : selected?.reasoningEffort;
+      const runs =
+        recipient === "claude" ? claudeDefaultLevel : codexDefaultLevel;
       return [
         {
           value: "default",
           label: "default",
-          description: "Model default",
+          description: runs ? effortLabels[runs] : "Model default",
           current: !effort,
         },
         ...efforts.map((e) => ({
@@ -894,6 +927,7 @@ export function ProjectComposer({
             onOpen={openModelPicker}
             openSignal={pickModel}
             onSelect={selectModel}
+            defaultNames={defaultNames}
           />
           {recipient === "codex" && selected && (
             <>

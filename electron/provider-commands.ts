@@ -11,6 +11,7 @@ import {
   reasoningEffortSchema,
   type CodexModel,
 } from "../shared/settings";
+import type { CodexDefaults } from "../shared/agent-defaults";
 const skillSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_.:-]+$/),
   path: z.string().refine(isAbsolute),
@@ -27,20 +28,26 @@ const skillSchema = z.object({
   shortDescription: z.string().nullable().optional(),
 });
 export type CodexSkill = z.infer<typeof skillSchema>;
-const cache = new Map<
-  string,
-  { expires: number; result: Promise<CodexSkill[]> }
->();
-export function codexSkills(root: string): Promise<CodexSkill[]> {
+type Remembered<T> = Map<string, { expires: number; result: Promise<T> }>;
+/** Answers from `load` for a minute per checkout; a failure asks again. */
+function remember<T>(
+  cache: Remembered<T>,
+  root: string,
+  load: (root: string) => Promise<T>,
+): Promise<T> {
   const previous = cache.get(root);
   if (previous && previous.expires > Date.now()) return previous.result;
-  const result = discover(root).catch((e) => {
+  const result = load(root).catch((e) => {
     cache.delete(root);
     throw e;
   });
   if (cache.size >= 30) cache.delete(cache.keys().next().value!);
   cache.set(root, { expires: Date.now() + 60000, result });
   return result;
+}
+const skillLists: Remembered<CodexSkill[]> = new Map();
+export function codexSkills(root: string): Promise<CodexSkill[]> {
+  return remember(skillLists, root, discover);
 }
 function discover(root: string): Promise<CodexSkill[]> {
   return withAppServer(root, "loading skills", async (wire) => {
@@ -78,6 +85,8 @@ const modelEntrySchema = z.object({
     .array(z.object({ reasoningEffort: z.string() }))
     .max(20)
     .nullish(),
+  defaultReasoningEffort: z.string().nullish(),
+  isDefault: z.boolean().nullish(),
 });
 const modelPageSchema = z.object({
   data: z.array(z.unknown()).max(500),
@@ -105,6 +114,9 @@ export function codexModels(): Promise<CodexModel[]> {
         const entry = modelEntrySchema.safeParse(value).data;
         const id = modelSchema.safeParse(entry?.model ?? entry?.id).data;
         if (!entry || !id || entry.hidden) continue;
+        const defaultEffort = reasoningEffortSchema.safeParse(
+          entry.defaultReasoningEffort,
+        ).data;
         models.push({
           id,
           name: entry.displayName || id,
@@ -116,6 +128,8 @@ export function codexModels(): Promise<CodexModel[]> {
             },
           ),
           legacy: entry.upgrade != null,
+          ...(defaultEffort ? { defaultEffort } : {}),
+          ...(entry.isDefault ? { isDefault: true } : {}),
         });
       }
       cursor = response.nextCursor;
@@ -128,6 +142,29 @@ export function codexModels(): Promise<CodexModel[]> {
     throw e;
   });
   return modelList;
+}
+const configSchema = z.object({
+  config: z.object({
+    model: z.string().nullish(),
+    model_reasoning_effort: z.string().nullish(),
+  }),
+});
+const defaultLists: Remembered<CodexDefaults> = new Map();
+/** The model and effort Codex's config gives threads in `root` that leave them on Default. */
+export function codexDefaults(root: string): Promise<CodexDefaults> {
+  return remember(defaultLists, root, (cwd) =>
+    withAppServer(cwd, "reading its config", async (wire) => {
+      const { config } = configSchema.parse(
+        await wire.request("config/read", { cwd }),
+      );
+      return {
+        model: modelSchema.safeParse(config.model).data ?? "",
+        effort:
+          reasoningEffortSchema.safeParse(config.model_reasoning_effort).data ??
+          "",
+      };
+    }),
+  );
 }
 /** Runs one exchange with a short-lived `codex app-server`. */
 async function withAppServer<T>(

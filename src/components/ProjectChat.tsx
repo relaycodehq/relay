@@ -49,7 +49,10 @@ import {
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { readDraft, writeDraft } from "../lib/drafts";
-import { saveSentSettings } from "../lib/composer-settings";
+import {
+  resetComposerModels,
+  saveSentSettings,
+} from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
 import {
@@ -1010,6 +1013,7 @@ export function ProjectChat({
         const preferences = localStorage.getItem("composer-settings:" + id);
         if (preferences)
           localStorage.setItem("composer-settings:" + target.id, preferences);
+        resetComposerModels(id);
         await onCreated(target);
       } else await history.refetch();
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
