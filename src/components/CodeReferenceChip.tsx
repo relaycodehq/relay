@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, FileCode2, SquarePen, X } from "lucide-react";
+import { ChevronDown, FileCode2, FileDiff, X } from "lucide-react";
 import {
   codeReferenceLines,
   type CodeReference,
@@ -34,14 +34,15 @@ export function CodeReferenceChip({
           <span className="code-ref-label">{ref.label}</span>
           <ChevronDown size={12} className="code-ref-caret" />
         </button>
+        {/* Like a file link in the chat, this goes to its diff in Changes. */}
         {onOpen && (
           <button
             type="button"
-            aria-label={`Open ${ref.path}`}
-            title="Open in editor"
+            aria-label={`Show ${ref.path} in Changes`}
+            title="Show in Changes"
             onClick={onOpen}
           >
-            <SquarePen size={12} />
+            <FileDiff size={12} />
           </button>
         )}
         {onRemove && (
