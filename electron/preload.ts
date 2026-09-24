@@ -38,6 +38,7 @@ const methods = [
   "forkProjectChat",
   "projectCommands",
   "projectBranchPulls",
+  "projectCiStatus",
   "projectPreparePull",
   "projectCreatePull",
   "projectBranches",

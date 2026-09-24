@@ -3,6 +3,7 @@ import { presentSkill } from "./skill-presentation";
 import { projectFolderSchema } from "../shared/project-folders";
 import { codexModels, codexSkills } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
+import { Ci } from "./ci";
 import { createPullRequestSchema } from "../shared/pull-request-create";
 import { branches, changeBranch } from "./branches";
 import { commitDetail, commitDiff, commitLog } from "./history";
@@ -169,6 +170,7 @@ let windowReady = false;
 const root = join(__dirname, "../dist/index.html");
 const projectChecks = new ProjectChecks(join(__dirname, "checks-worker.mjs"));
 const blame = new BlameService();
+const ci = new Ci((url, init) => net.fetch(url, init));
 const dev = process.env.RELAY_DEV_URL;
 const pageSchema = z.number().int().min(1).max(100000);
 const requireClient = () => {
@@ -632,6 +634,21 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return provider === "codex"
         ? (await codexSkills(root)).map(presentSkill)
         : listClaudeCommands(root);
+    }
+    case "projectCiStatus": {
+      const id = idSchema.parse(args[0]);
+      const chatId = idSchema.optional().parse(args[1] ?? undefined);
+      const chat = chatId ? await projectChats.get(chatId) : null;
+      if (chat && chat.projectId !== id)
+        throw new Error("That thread belongs to another project.");
+      // A worktree thread reports its own branch; a removed one, the checkout's.
+      const root =
+        chat?.worktree?.path && !chat.worktree.removedAt
+          ? await projectChats
+              .worktreePath(chatId!)
+              .catch(() => projects.root(id))
+          : await projects.root(id);
+      return ci.status(root, client);
     }
     case "projectBranchPulls":
     case "projectPreparePull":

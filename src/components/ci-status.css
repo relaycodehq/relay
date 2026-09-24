@@ -1,0 +1,131 @@
+/* CI on the thread header's folder icon. Red and amber match the
+   diagnostics; green matches the settings bars. */
+:root {
+  --ci-pass: light-dark(#1a7f37, #3fb950);
+  --ci-run: #c39236;
+  --ci-fail: #e56370;
+}
+.ci-plain {
+  display: grid;
+}
+.ci-trigger {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 -4px;
+  border-radius: 6px;
+  color: inherit;
+  -webkit-app-region: no-drag;
+}
+.ci-trigger:hover,
+.ci-trigger[data-popup-open] {
+  background: var(--hover);
+}
+.ci-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* CI hasn't seen the newest commits, so the verdict is about older code. */
+.ci-trigger[data-stale] > * {
+  opacity: 0.5;
+}
+
+/* The sidebar's status dot, pinned to the icon like the Relay mark's. */
+.ci-dot.sb-status {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  width: auto;
+  height: auto;
+}
+.ci-dot.sb-status i {
+  background: var(--ci);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+/* Building: hollow and still, like a thread whose next turn is pending. */
+.ci-dot[data-state="running"] i {
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1.5px var(--ci),
+    0 0 0 2px var(--surface);
+}
+.ci-trigger [data-state="success"],
+.ci-card [data-state="success"] {
+  --ci: var(--ci-pass);
+}
+.ci-trigger [data-state="running"],
+.ci-card [data-state="running"] {
+  --ci: var(--ci-run);
+}
+.ci-trigger [data-state="failure"],
+.ci-card [data-state="failure"] {
+  --ci: var(--ci-fail);
+}
+
+/* The line-blame tooltip, placed by the positioner instead of the pointer. */
+.ci-card.line-blame-tooltip {
+  position: static;
+  max-height: none;
+  width: min(330px, calc(100vw - 24px));
+}
+.ci-card .blame-commit {
+  margin-top: 0;
+}
+.ci-card .blame-commit span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ci-card-author {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.ci-card-runs {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 9px 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 15px minmax(0, auto) 1fr;
+  align-items: center;
+  gap: 5px 7px;
+}
+/* Rows share the list's columns so the workflow names line up. */
+.ci-card-runs li {
+  display: contents;
+}
+.ci-card-runs svg {
+  color: var(--ci, var(--muted));
+}
+.ci-card-runs strong {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ci-card-runs span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ci-card-runs li[data-state="failure"] span {
+  color: var(--ci-fail);
+}
+.ci-card-stale {
+  margin: 10px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ci-run) 12%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ci-card-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}

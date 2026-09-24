@@ -1,4 +1,5 @@
 import { BranchPullRequest } from "./BranchPullRequest";
+import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
 import { ProjectHistory } from "./ProjectHistory";
@@ -548,7 +549,11 @@ export default function ProjectShell() {
           </button>
         ) : (
           <div className="project-window-title">
-            <FolderGit2 size={14} />
+            {project ? (
+              <CiStatusIcon projectId={project.id} chatId={chat?.id} />
+            ) : (
+              <FolderGit2 size={14} />
+            )}
             <span>{project?.name ?? "Workspace"}</span>
             <span className="breadcrumb-slash">/</span>
             {chat ? (

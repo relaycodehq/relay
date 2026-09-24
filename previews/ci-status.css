@@ -1,0 +1,348 @@
+/* Preview chrome: the controls above the app, not part of the design. */
+html,
+body,
+#root {
+  height: 100%;
+}
+.preview-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+  color: var(--text);
+}
+.preview-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 8px 16px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--sidebar));
+  font-size: 11px;
+  color: var(--muted);
+}
+.preview-bar > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+.preview-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-tag {
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 550;
+}
+.preview-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.preview-segmented button {
+  border: 0;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.preview-segmented button[aria-checked="true"] {
+  background: var(--selected);
+  color: var(--text);
+}
+
+/* The app shell, trimmed to the header. */
+.ci-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ci-shell .project-titlebar {
+  -webkit-app-region: no-drag;
+}
+
+/* Status colours: the diagnostics' red and amber, the settings bars' green. */
+:root {
+  --ci-pass: light-dark(#1a7f37, #3fb950);
+  --ci-run: #c39236;
+  --ci-fail: #e56370;
+}
+[data-state="success"] {
+  --ci: var(--ci-pass);
+}
+[data-state="running"] {
+  --ci: var(--ci-run);
+}
+[data-state="failure"] {
+  --ci: var(--ci-fail);
+}
+
+/* The trigger takes the folder icon's place but gets a real hit target. */
+.ci-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 -4px;
+  border-radius: 6px;
+  color: inherit;
+  -webkit-app-region: no-drag;
+}
+.ci-trigger:hover,
+.ci-trigger[data-popup-open] {
+  background: var(--hover);
+}
+.ci-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ci-trigger[data-stale] > * {
+  opacity: 0.5;
+}
+.ci-glyph {
+  color: var(--ci);
+}
+
+/* 1 · Ring */
+.ci-ring circle {
+  fill: none;
+  stroke-width: 1.75;
+}
+.ci-ring-track {
+  stroke: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+.ci-ring-fill {
+  stroke: var(--ci);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.ci-ring-mark {
+  fill: none;
+  stroke: var(--ci);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ci-ring-popup {
+  width: 280px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 12px;
+}
+.ci-ring-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ci-ring-heading code,
+.ci-menu-label code {
+  color: var(--accent);
+  font: 10px/1.6 var(--font-mono);
+  font-weight: 400;
+}
+.ci-meter[data-pace="ok"] .usage-fill {
+  background: var(--ci-pass);
+}
+.ci-meter[data-pace="hot"] .usage-limit {
+  color: var(--ci-fail);
+}
+.ci-meter[data-pace="ok"] .usage-limit {
+  color: var(--ci-pass);
+}
+.ci-meter[data-pace="warn"] .usage-limit {
+  color: var(--ci-run);
+}
+
+/* 2 · Commit card: the blame tooltip, placed by the positioner instead. */
+.ci-commit-card.line-blame-tooltip {
+  position: static;
+  max-height: none;
+  width: 330px;
+}
+.ci-commit-card .blame-commit {
+  margin-top: 0;
+}
+.ci-commit-card .blame-commit span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ci-author {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.ci-run-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 9px 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 5px;
+}
+.ci-run-list li {
+  display: grid;
+  grid-template-columns: 15px 64px 1fr;
+  align-items: center;
+  gap: 7px;
+}
+.ci-run-list strong {
+  font-weight: 550;
+}
+.ci-run-list span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ci-run-list li[data-state="failure"] span {
+  color: var(--ci-fail);
+}
+
+/* 3 · Folder + dot: the sidebar's status dot, pinned like the brand dot. */
+.ci-folder {
+  position: relative;
+  display: grid;
+}
+.ci-folder-dot.sb-status {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: auto;
+  height: auto;
+}
+.ci-dot.sb-status i {
+  background: var(--ci);
+}
+.ci-folder-dot.sb-status i {
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.ci-dot[data-state="running"] i {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--ci);
+}
+.ci-folder-dot[data-state="running"] i {
+  box-shadow:
+    inset 0 0 0 1.5px var(--ci),
+    0 0 0 2px var(--surface);
+}
+.ci-menu {
+  width: 260px;
+}
+.ci-menu-label {
+  display: flex;
+  justify-content: space-between;
+}
+.ci-menu-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.ci-menu-row:hover,
+.ci-menu-row:focus-visible {
+  background: var(--hover);
+}
+.ci-menu-row .composer-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ci-menu-row .sb-status {
+  width: 14px;
+}
+.ci-menu-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ci-menu-foot {
+  margin: 0;
+  padding: 4px 10px 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* Shared bits of the cards. */
+.ci-stale-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ci-run) 12%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ci-menu .ci-stale-note {
+  margin: 4px 5px 0;
+}
+.ci-commit-card .ci-stale-note {
+  margin-top: 10px;
+}
+.ci-stale-note code {
+  font: 10px var(--font-mono);
+}
+.ci-click-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.ci-commit-card .ci-click-hint {
+  margin-top: 10px;
+}
+
+.ci-notes {
+  max-width: 620px;
+  padding: 40px 48px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.ci-notes h2 {
+  margin: 18px 0 2px;
+  font-size: 16px;
+}
+.ci-notes-lead {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ci-notes-from {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ci-notes ul {
+  padding-left: 18px;
+  color: var(--muted);
+}
+.ci-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px #0003;
+  font-size: 12px;
+}

@@ -414,6 +414,11 @@ export interface ProjectApi {
   projectBranchPulls(
     id: string,
   ): Promise<import("./pull-request-create").BranchPull[]>;
+  /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */
+  projectCiStatus(
+    id: string,
+    chatId?: string,
+  ): Promise<import("./ci").CiStatus | null>;
   /** With `chatId`, for that thread's worktree: its changes become one commit on the checkout's. */
   projectPreparePull(
     id: string,
