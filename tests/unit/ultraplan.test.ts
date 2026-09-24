@@ -297,7 +297,11 @@ it("stops its thinkers with the thread, and resumes only the unfinished ones", a
     const threads = await Promise.all(
       state.thinkers.map((t) => chats.get(t.chatId)),
     );
-    return threads.map((t) => t.messages.at(-1)?.status);
+    // Until the answer lands, the last message is the thinker's complete prompt.
+    return threads.map(
+      (t) =>
+        [...t.messages].reverse().find((m) => m.role === "assistant")?.status,
+    );
   };
   await vi.waitFor(
     async () =>
@@ -310,8 +314,11 @@ it("stops its thinkers with the thread, and resumes only the unfinished ones", a
     "stopped",
   );
   await vi.waitFor(
-    async () =>
-      expect(await thinking()).toEqual(["cancelled", "complete", "complete"]),
+    async () => {
+      expect(await thinking()).toEqual(["cancelled", "complete", "complete"]);
+      // The answer settles before the turn lets go of the thread.
+      expect(chats.list(projectId)[0]?.running).toBeFalsy();
+    },
     { timeout: 10000 },
   );
   // Nothing hands over to the lead after a stop.
