@@ -50,6 +50,7 @@ import { api } from "../lib/api";
 import { sendsMessage, useSendKey } from "../lib/send-key";
 import { FileEntryIcon, RichText } from "./ui";
 import { AgentTurn } from "./AgentTurn";
+import { formatTokens } from "./ContextWindowMeter";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
@@ -629,6 +630,9 @@ function ReviewerPane({
   const name = useAgentName();
   const messages = useReviewerThread(chatId, live);
   const answer = [...messages].reverse().find((m) => m.role === "assistant");
+  const tokens = answer?.context
+    ? (answer.context.totalTokens ?? answer.context.usedTokens)
+    : 0;
   const scroll = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -651,6 +655,14 @@ function ReviewerPane({
         <strong>{name(agent)}</strong>
         <span className="muted">{effortName(agent)}</span>
         <span className="spacer" />
+        {tokens > 0 && (
+          <span
+            className="deep-review-pane-tokens"
+            title={`${tokens.toLocaleString()} tokens processed, cache reads included`}
+          >
+            {formatTokens(tokens)} tokens
+          </span>
+        )}
         {answer?.status === "complete" && (
           <span className="deep-review-pane-status done">
             <CircleCheck size={13} /> Done

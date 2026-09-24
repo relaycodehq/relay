@@ -266,6 +266,11 @@
   flex: none;
   color: var(--muted);
 }
+.deep-review-pane-tokens {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .deep-review-pane-status.done {
   color: light-dark(#1a7f45, #4cc38a);
 }

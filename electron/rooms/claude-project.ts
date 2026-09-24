@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type {
   EffortLevel,
+  ModelUsage,
   Options,
   PermissionMode,
   SDKControlGetUsageResponse,
@@ -1082,6 +1083,11 @@ export async function runClaudeProject(
           session.contextWindow = Math.max(...windows);
           if (context) report(context.usedTokens);
         }
+        const total = claudeSessionTokens(message.modelUsage);
+        if (context && total) {
+          context = { ...context, totalTokens: total };
+          options.onContext?.(context);
+        }
         if (options.compact) {
           succeeded = true;
           return "";
@@ -1160,6 +1166,19 @@ export function claudeCacheTtl(
 }
 
 /** A request's prompt plus its reply is what the next request carries forward. */
+/** Tokens the session processed so far, subagents and cache reads included. */
+function claudeSessionTokens(modelUsage: Record<string, ModelUsage> = {}) {
+  return Object.values(modelUsage).reduce(
+    (sum, u) =>
+      sum +
+      u.inputTokens +
+      u.outputTokens +
+      u.cacheReadInputTokens +
+      u.cacheCreationInputTokens,
+    0,
+  );
+}
+
 export function claudeContextTokens(usage: unknown): number {
   if (!usage || typeof usage !== "object") return 0;
   const u = usage as Record<string, unknown>;
