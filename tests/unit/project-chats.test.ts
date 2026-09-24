@@ -93,6 +93,7 @@ it("sends only messages the renderer doesn't hold at their current version", asy
   expect(() => applyChatPatch(patch, undefined)).toThrow("missing a message");
 }, 15000);
 it("streams locally, persists final answers, and resumes the same Codex session with selected settings", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await vi.waitFor(() =>
@@ -1214,6 +1215,7 @@ it("tells an agent about steering that went to the other agent", async () => {
 }, 30000);
 
 it("drains queued follow-ups in order and retains a paused queue across restart", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex First"));
   const second = input("@codex Second"),

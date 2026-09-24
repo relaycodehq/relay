@@ -104,6 +104,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
           RELAY_TEST_HEADED: "0",
           RELAY_TEST_NATIVE_STORAGE: "0",
           RELAY_AGENT_CAPTURE: capture,
+          RELAY_AGENT_TURN_MS: "2600",
         },
       });
       apps.push(app);

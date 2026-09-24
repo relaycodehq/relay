@@ -35,6 +35,9 @@ const twoFindings = leadReport([
   },
 ]);
 const capture = process.env.RELAY_AGENT_CAPTURE;
+// How long a Codex turn streams before it completes. A test that must act on a
+// running turn either sends "wait for cancellation" or raises this.
+const turnMs = Number(process.env.RELAY_AGENT_TURN_MS) || 300;
 function record(data) {
   if (capture)
     fs.appendFileSync(
@@ -658,7 +661,7 @@ if (args.includes("--permission-prompt-tool")) {
               turn: { id: "fixture-turn", status: "completed" },
             },
           });
-        }, 2600);
+        }, turnMs);
     } else if (m.method === "review/start") {
       // Codex's own review hands its result back as one item.
       record({ provider: "codex", review: m.params });
