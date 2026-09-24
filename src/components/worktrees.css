@@ -1,0 +1,63 @@
+/* The Workspace control sits just left of the branch picker. */
+.thread-context-controls .workspace-trigger {
+  flex: none;
+}
+.thread-context-controls .workspace-trigger ~ .composer-branch-trigger {
+  margin-left: 0;
+}
+.workspace-trigger.static {
+  cursor: default;
+}
+.workspace-trigger.static:hover {
+  background: none;
+  color: var(--muted);
+}
+.composer-select-item.workspace-item,
+.composer-select-item.worktree-item {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.workspace-item > svg,
+.worktree-item > svg {
+  color: var(--muted);
+}
+.composer-select-item.worktree-item[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.worktree-menu {
+  min-width: 250px;
+}
+.worktree-menu-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.worktree-menu-heading > span {
+  font-family: var(--font-mono);
+}
+.worktree-menu-heading > small {
+  font-size: 11px;
+}
+/* The worktree has changes the checkout doesn't. */
+.worktree-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.worktree-landed-mark,
+.worktree-landed > svg {
+  flex: none;
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.worktree-landed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}

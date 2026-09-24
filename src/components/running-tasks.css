@@ -115,6 +115,12 @@ button.running-task-title:hover > span {
 button.running-task-title:hover > svg {
   color: var(--text);
 }
+/* Runs in a thread's worktree, where it serves that worktree's files. */
+.running-task-where {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
 .running-task-end {
   display: grid;
   flex-shrink: 0;

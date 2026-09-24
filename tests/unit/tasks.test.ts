@@ -109,6 +109,30 @@ it("tells a session what's running once, then only what changed", () => {
   expect(update).not.toContain(":5173");
 });
 
+it("tells an agent in a worktree that the checkout's servers don't serve its files", () => {
+  const checkout: ProjectTask = {
+    id: "1",
+    command: "npm run dev",
+    kind: "server",
+    title: "Dev server",
+    origin: "detached",
+    started: 0,
+    ports: [5173],
+    pids: 2,
+  };
+  const note = taskNote([], "a", undefined, {
+    path: "/data/worktrees/relay/split",
+    checkout: "/code/relay",
+    running: [checkout],
+  })!;
+  expect(note).toContain('own Git worktree at "/data/worktrees/relay/split"');
+  expect(note).toContain(
+    "Running in the project's checkout, not here: these serve the checkout's files, not your changes.",
+  );
+  expect(note).toContain('- Dev server on :5173: "npm run dev"');
+  expect(note).not.toContain("Already running in this worktree");
+});
+
 it("leaves one-off commands out of the note", () => {
   const base = {
     command: "npx vitest run",

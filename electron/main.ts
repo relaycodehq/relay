@@ -20,6 +20,7 @@ import { git } from "./git";
 import {
   chatScopeSchema,
   chatTriageSchema,
+  chatWorkspaceSchema,
   knownMessagesSchema,
   projectChatSendSchema,
   projectNameSchema,
@@ -174,6 +175,24 @@ const requireClient = () => {
   if (!client) throw new Error("Connect your Gitea account first.");
   return client;
 };
+/** Whether a worktree thread's PR was merged on Gitea; asked at most once a minute. */
+const pullChecks = new Map<string, { at: number; merged: boolean }>();
+async function pullMerged(chatId: string, number: number) {
+  const seen = pullChecks.get(chatId);
+  if (seen && Date.now() - seen.at < 60000) return seen.merged;
+  const projectId = store.get().chats?.find((c) => c.id === chatId)?.projectId;
+  if (!projectId || !client) return false;
+  const gitea = client;
+  const merged = await projects
+    .linked(projectId, gitea)
+    .then((repo) => gitea.request<Pull>(`${gitea.repo(repo)}/pulls/${number}`))
+    .then(
+      (r) => !!r.data.merged,
+      () => false,
+    );
+  pullChecks.set(chatId, { at: Date.now(), merged });
+  return merged;
+}
 const repoKey = (r: { owner: string; name: string }) =>
   JSON.stringify([requireClient().account.id, r.owner, r.name]);
 const prKey = (r: { owner: string; name: string; number: number }) =>
@@ -620,16 +639,35 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       const id = idSchema.parse(args[0]);
       const client = requireClient();
       const repo = await projects.linked(id, client);
-      const root = await projects.root(id);
+      // A worktree thread's PR opens from its worktree.
+      const chatId = idSchema
+        .optional()
+        .parse(args[method === "projectCreatePull" ? 2 : 1] ?? undefined);
+      if (chatId && (await projectChats.get(chatId)).projectId !== id)
+        throw new Error("That thread belongs to another project.");
       if (method === "projectBranchPulls")
-        return branchPulls(root, client, repo);
+        return branchPulls(await projects.root(id), client, repo);
       if (method === "projectPreparePull")
-        return pullRequestCreation.prepare(root, client, repo);
-      return pullRequestCreation.create(
-        root,
+        return pullRequestCreation.prepare(
+          chatId
+            ? await projectChats.preparePull(chatId)
+            : await projects.root(id),
+          client,
+          repo,
+        );
+      const created = await pullRequestCreation.create(
+        chatId
+          ? await projectChats.worktreePath(chatId)
+          : await projects.root(id),
         client,
         createPullRequestSchema.parse(args[1]),
       );
+      if (chatId)
+        await projectChats.recordPull(chatId, {
+          number: created.pull.ref.number,
+          url: created.pull.url,
+        });
+      return created;
     }
     case "projectBranches":
       return branches(await projects.root(idSchema.parse(args[0])));
@@ -673,18 +711,22 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         digestSchema.parse(args[3]),
         textSchema.parse(args[4]),
       );
-    case "projectTasks":
-      return projectTasks.list(await projects.root(idSchema.parse(args[0])));
+    case "projectTasks": {
+      const id = idSchema.parse(args[0]);
+      return projectTasks.list(
+        await projects.root(id),
+        projectChats.worktreeFolders(id),
+      );
+    }
     case "stopProjectTask":
-      return projectTasks.stop(
-        await projects.root(idSchema.parse(args[0])),
+    case "restartProjectTask": {
+      const id = idSchema.parse(args[0]);
+      return projectTasks[method === "stopProjectTask" ? "stop" : "restart"](
+        await projects.root(id),
         z.string().max(64).parse(args[1]),
+        projectChats.worktreeFolders(id),
       );
-    case "restartProjectTask":
-      return projectTasks.restart(
-        await projects.root(idSchema.parse(args[0])),
-        z.string().max(64).parse(args[1]),
-      );
+    }
     case "projectWorkingTree":
       return workingTree(await projects.root(idSchema.parse(args[0])));
     case "projectWorkingDiff":
@@ -794,7 +836,36 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return projectChats.create(
         idSchema.parse(args[0]),
         chatScopeSchema.parse(args[1]),
+        chatWorkspaceSchema.optional().parse(args[2] ?? undefined),
       );
+    case "projectWorktree": {
+      const chatId = idSchema.parse(args[0]);
+      const status = await projectChats.worktreeStatus(chatId);
+      if (status.pr && status.landed?.by !== "pr" && client)
+        if (await pullMerged(chatId, status.pr.number)) {
+          await projectChats.pullMerged(chatId);
+          return projectChats.worktreeStatus(chatId);
+        }
+      return status;
+    }
+    case "mergeProjectWorktree":
+      return projectChats.mergeWorktree(idSchema.parse(args[0]));
+    case "catchUpProjectWorktree":
+      return projectChats.catchUpWorktree(idSchema.parse(args[0]));
+    case "projectWorktreeDiff":
+      return projectChats.worktreeDiff(
+        idSchema.parse(args[0]),
+        workingPathSchema.parse(args[1]),
+      );
+    case "removeProjectWorktree":
+      return projectChats.removeWorktree(idSchema.parse(args[0]));
+    case "revealProjectWorktree": {
+      const error = await shell.openPath(
+        await projectChats.worktreePath(idSchema.parse(args[0])),
+      );
+      if (error) throw new Error(error);
+      return;
+    }
     case "projectChat": {
       const id = idSchema.parse(args[0]);
       const chat =

@@ -86,21 +86,24 @@ export function BranchPullRequest({
     </>
   );
 }
-function CreatePullSheet({
+/** With `chatId`, a PR of that thread's worktree: its changes as one commit on the checkout's. */
+export function CreatePullSheet({
   project,
+  chatId,
   onClose,
   onReview,
   onChanges,
 }: {
   project: Project;
+  chatId?: string;
   onClose: () => void;
   onReview: (ref: PullRef) => void;
-  onChanges: () => void;
+  onChanges?: () => void;
 }) {
   const qc = useQueryClient();
   const preview = useQuery({
-    queryKey: ["create-pull-preview", project.id],
-    queryFn: () => api.projectPreparePull(project.id),
+    queryKey: ["create-pull-preview", project.id, chatId],
+    queryFn: () => api.projectPreparePull(project.id, chatId),
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: false,
@@ -127,14 +130,20 @@ function CreatePullSheet({
     setBusy(true);
     setError(undefined);
     try {
-      const created = await api.projectCreatePull(project.id, {
-        planId: p.id,
-        base,
-        title,
-        body,
-        draft,
-        push: p.needsPush,
-      });
+      const created = await api.projectCreatePull(
+        project.id,
+        {
+          planId: p.id,
+          base,
+          title,
+          body,
+          draft,
+          push: p.needsPush,
+        },
+        chatId,
+      );
+      if (chatId)
+        await qc.invalidateQueries({ queryKey: ["worktree", chatId] });
       setResult(created);
       await qc.invalidateQueries({ queryKey: ["branch-pulls", project.id] });
       await qc.invalidateQueries({
@@ -236,15 +245,22 @@ function CreatePullSheet({
                 />
                 Draft PR <span className="muted">(WIP:)</span>
               </label>
-              {!!p.dirtyFiles && (
-                <p className="pr-local-note">
-                  {p.dirtyFiles} uncommitted{" "}
-                  {p.dirtyFiles === 1 ? "file is" : "files are"} excluded.{" "}
-                  <button type="button" onClick={onChanges} disabled={busy}>
-                    Review local changes
-                  </button>
-                </p>
-              )}
+              {!!p.dirtyFiles &&
+                (chatId ? (
+                  <p className="pr-local-note">
+                    {p.dirtyFiles} {p.dirtyFiles === 1 ? "file" : "files"}{" "}
+                    uncommitted in the checkout when this worktree started{" "}
+                    {p.dirtyFiles === 1 ? "is" : "are"} left out.
+                  </p>
+                ) : (
+                  <p className="pr-local-note">
+                    {p.dirtyFiles} uncommitted{" "}
+                    {p.dirtyFiles === 1 ? "file is" : "files are"} excluded.{" "}
+                    <button type="button" onClick={onChanges} disabled={busy}>
+                      Review local changes
+                    </button>
+                  </p>
+                ))}
               {p.needsPush && (
                 <div className="pr-push-preview">
                   <p>

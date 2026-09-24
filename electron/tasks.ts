@@ -18,6 +18,11 @@ interface Proc {
   started: number;
   line: string;
 }
+/** A thread's worktree, whose processes list with the project's. */
+export interface Worktree {
+  path: string;
+  chatId: string;
+}
 /** A shell an agent started, followed across reparenting until every process in it exits. */
 interface Tracked {
   id: string;
@@ -109,14 +114,21 @@ export class ProjectTasks {
     this.commands.set(root, list.slice(-200));
   }
 
-  async list(root: string): Promise<ProjectTask[]> {
+  /** Processes in the project's checkout, and in the `worktrees` its threads work in. */
+  async list(root: string, worktrees: Worktree[] = []): Promise<ProjectTask[]> {
     if (process.platform === "win32") return [];
     this.watch(root);
+    for (const w of worktrees) this.watch(w.path);
     await this.scan();
-    const inside = (cwd?: string) => !!cwd && within(cwd, root);
+    const folders: { path: string; chatId?: string }[] = [
+      { path: root },
+      ...worktrees,
+    ];
+    const folder = (cwd?: string) =>
+      cwd ? folders.find((f) => within(cwd, f.path)) : undefined;
     const now = Date.now();
     const tasks = [...this.tracked.values()].filter(
-      (t) => inside(t.cwd) && (t.restarted || now - t.started >= minimumAge),
+      (t) => !!folder(t.cwd) && (t.restarted || now - t.started >= minimumAge),
     );
     const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
     return tasks
@@ -124,10 +136,12 @@ export class ProjectTasks {
         const listening = [
           ...new Set([...t.pids.keys()].flatMap((pid) => ports.get(pid) ?? [])),
         ].sort((a, b) => a - b);
+        const worktree = folder(t.cwd);
         return {
           id: t.id,
           command: t.command,
           ...describeTask(t.command, listening),
+          ...(worktree?.chatId ? { worktree: worktree.chatId } : {}),
           ...(t.agent ? { agent: t.agent } : {}),
           origin: t.origin,
           ...(t.chatId ? { chatId: t.chatId } : {}),
@@ -140,13 +154,23 @@ export class ProjectTasks {
   }
 
   /** Stop every process in the task; force the ones still running after 3 seconds. */
-  async stop(root: string, id: string) {
-    void (await this.terminate(root, id)).exited;
+  async stop(root: string, id: string, worktrees: Worktree[] = []) {
+    void (await this.terminate(root, id, worktrees)).exited;
+  }
+  /** Stops everything running in a folder about to go away, and waits for it. */
+  async stopWithin(path: string) {
+    const tasks = await this.list(path).catch(() => []);
+    await Promise.all(
+      tasks.map(
+        async (t) =>
+          (await this.terminate(path, t.id).catch(() => null))?.exited,
+      ),
+    );
   }
 
   /** Stop the task, wait for it to exit so its ports are free, then run its command again in the same folder. */
-  async restart(root: string, id: string) {
-    const { task, exited } = await this.terminate(root, id);
+  async restart(root: string, id: string, worktrees: Worktree[] = []) {
+    const { task, exited } = await this.terminate(root, id, worktrees);
     await exited;
     const child = spawn(
       process.env.SHELL || "/bin/sh",
@@ -171,8 +195,12 @@ export class ProjectTasks {
     this.scanned = 0;
   }
 
-  private async terminate(root: string, id: string) {
-    const tasks = await this.list(root);
+  private async terminate(
+    root: string,
+    id: string,
+    worktrees: Worktree[] = [],
+  ) {
+    const tasks = await this.list(root, worktrees);
     const task = this.tracked.get(id);
     if (!task || !tasks.some((t) => t.id === id))
       throw new Error("This process is no longer running.");
@@ -210,14 +238,28 @@ export class ProjectTasks {
     return { task, exited };
   }
 
-  /** A note for this session's next turn: the full list the first time, then only changes. */
-  async note(root: string, session: string, chatId: string) {
+  /**
+   * A note for this session's next turn: the full list the first time, then
+   * only changes. An agent in a worktree (`root`) first hears that it is one,
+   * and what runs in the project's `checkout` instead.
+   */
+  async note(root: string, session: string, chatId: string, checkout?: string) {
     const tasks = await this.list(root).catch(() => null);
     if (!tasks) return;
     const lasting = tasks.filter(lastingTask);
     const heard = this.notes.get(session);
     this.notes.set(session, lasting);
-    return taskNote(lasting, chatId, heard);
+    const worktree =
+      checkout && !heard
+        ? {
+            path: root,
+            checkout,
+            running: (await this.list(checkout).catch(() => [])).filter(
+              lastingTask,
+            ),
+          }
+        : undefined;
+    return taskNote(lasting, chatId, heard, worktree);
   }
   /** A new agent session knows nothing yet: it hears the whole list again. */
   forgetNote(session: string) {

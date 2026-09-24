@@ -467,7 +467,8 @@ if (args.includes("--permission-prompt-tool")) {
         return;
       }
       // Answers that link project files, for the chat's file links.
-      const said = m.params.input[0].text;
+      // Relay's private note, when there is one, comes before the prompt.
+      const said = m.params.input.filter((i) => i.type === "text").at(-1).text;
       const answer =
         Object.entries({
           // A review whose focus asks for it reports two findings.

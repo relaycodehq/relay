@@ -40,7 +40,11 @@ const noMonitor = ["-c", "core.fsmonitor=false"];
 const maxFiles = 1000;
 const maxText = 2 * 1024 * 1024;
 
-async function run(root: string, args: string[], env?: NodeJS.ProcessEnv) {
+export async function run(
+  root: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+) {
   return (
     await exec("git", ["-C", root, ...args], {
       timeout: 30000,
@@ -54,8 +58,8 @@ async function run(root: string, args: string[], env?: NodeJS.ProcessEnv) {
 /** One ref per turn: its commit is the after snapshot, its parent the before. */
 export const turnRef = (messageId: string) => `refs/relay/turns/${messageId}`;
 
-/** Commits the worktree, untracked files included, without touching the real index. */
-async function snapshot(root: string, parent?: string) {
+/** Writes the worktree's tree, untracked files included, without touching the real index. */
+export async function snapshotTree(root: string) {
   const index = (
     await run(root, [
       "rev-parse",
@@ -94,27 +98,46 @@ async function snapshot(root: string, parent?: string) {
       if (head) await run(root, ["read-tree", "HEAD"], env);
     }
     await run(root, [...noMonitor, ...durable, "add", "-A", "--", "."], env);
-    const tree = (
-      await run(root, [...noMonitor, ...durable, "write-tree"], env)
-    ).trim();
     return (
-      await run(
-        root,
-        [
-          ...durable,
-          "commit-tree",
-          tree,
-          ...(parent ? ["-p", parent] : []),
-          "-m",
-          "Relay turn snapshot",
-        ],
-        env,
-      )
+      await run(root, [...noMonitor, ...durable, "write-tree"], env)
     ).trim();
   } finally {
     await rm(temp, { force: true });
     await rm(`${temp}.lock`, { force: true });
   }
+}
+
+/** Commits a tree as Relay, outside any branch. */
+export async function commitTree(
+  root: string,
+  tree: string,
+  parent: string | undefined,
+  message: string,
+) {
+  return (
+    await run(
+      root,
+      [
+        ...durable,
+        "commit-tree",
+        tree,
+        ...(parent ? ["-p", parent] : []),
+        "-m",
+        message,
+      ],
+      identity,
+    )
+  ).trim();
+}
+
+/** Commits the worktree, untracked files included, without touching the real index. */
+export async function snapshot(root: string, parent?: string) {
+  return commitTree(
+    root,
+    await snapshotTree(root),
+    parent,
+    "Relay turn snapshot",
+  );
 }
 
 /** Reads `git diff --numstat -z`; binary files report no line counts. */
@@ -339,6 +362,16 @@ export async function turnDiff(
     () => false,
   );
   if (!exists) throw new Error("This turn's snapshot is no longer available.");
+  return revisionDiff(root, `${ref}^`, ref, path);
+}
+
+/** One file between two commits or trees, as text unless it's binary or too big. */
+export async function revisionDiff(
+  root: string,
+  from: string,
+  to: string,
+  path: string,
+): Promise<FilePair> {
   let binary = false;
   const read = async (rev: string) => {
     const spec = `${rev}:${path}`;
@@ -366,7 +399,7 @@ export async function turnDiff(
     const contents = decodeText(bytes);
     return { name: path, contents, cacheKey: digest(contents) };
   };
-  const [old, next] = await Promise.all([read(`${ref}^`), read(ref)]);
+  const [old, next] = await Promise.all([read(from), read(to)]);
   return binary
     ? { old: null, next: null, binary: true }
     : { old, next, binary: false };
@@ -385,18 +418,18 @@ export interface RewindResult {
   undo?: string;
 }
 
-type Step =
+export type Step =
   | { path: string; kind: "keep" | "restore" | "delete" }
   | { path: string; kind: "merge"; contents: Buffer };
 
-const blobId = (root: string, rev: string, path: string) =>
+export const blobId = (root: string, rev: string, path: string) =>
   run(root, ["rev-parse", "-q", "--verify", `${rev}:${path}`]).then(
     (s) => s.trim(),
     () => null,
   );
 
 /** The worktree file's blob id as `git add` would store it; "other" for anything but a file. */
-async function worktreeId(root: string, path: string) {
+export async function worktreeId(root: string, path: string) {
   const info = await lstat(join(root, path)).catch(() => null);
   if (!info) return null;
   if (!info.isFile()) return "other";
@@ -404,7 +437,7 @@ async function worktreeId(root: string, path: string) {
 }
 
 /** A blob as it would be checked out, line endings and filters applied. */
-async function checkedOut(root: string, rev: string, path: string) {
+export async function checkedOut(root: string, rev: string, path: string) {
   return (
     await exec("git", ["-C", root, "cat-file", "--filters", `${rev}:${path}`], {
       timeout: 15000,
@@ -448,7 +481,7 @@ async function mergeBack(root: string, path: string, from: string, to: string) {
  * Plans moving files from how `from` has them to how `to` has them, keeping
  * edits made since: an untouched file is replaced, an edited one merged.
  */
-async function plan(
+export async function plan(
   root: string,
   paths: string[],
   from: string,
@@ -478,7 +511,7 @@ async function plan(
   return { steps, conflicts: conflicts.sort() };
 }
 
-async function apply(root: string, to: string, steps: Step[]) {
+export async function apply(root: string, to: string, steps: Step[]) {
   const restore = steps.filter((s) => s.kind === "restore").map((s) => s.path);
   if (restore.length) {
     // A scratch index checks files out of `to` with their modes and filters,

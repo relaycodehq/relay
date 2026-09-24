@@ -21,7 +21,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { ArrowUp, Zap, Paperclip, X } from "lucide-react";
+import { ArrowUp, GitBranch, Zap, Paperclip, X } from "lucide-react";
 import {
   type ModelChoice,
   supportedChoice,
@@ -73,6 +73,8 @@ import { SendLaterMenu } from "./SendLaterMenu";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
+  /** Sends Relay's own message to an agent with the composer's settings, keeping the draft. */
+  sendToAgent: (provider: "codex" | "claude", body: string) => Promise<boolean>;
 }
 export function ProjectComposer({
   handleRef,
@@ -88,6 +90,8 @@ export function ProjectComposer({
   projectId,
   checkoutDisabled,
   context,
+  workspace,
+  branchLabel,
   attachment,
   allowEmpty,
   onSend,
@@ -113,6 +117,10 @@ export function ProjectComposer({
   projectId: string;
   checkoutDisabled: boolean;
   context: ReactNode;
+  /** Where the thread works; sits before the branch. */
+  workspace?: ReactNode;
+  /** A branch the thread can't switch, shown instead of the picker. */
+  branchLabel?: string;
   attachment?: ReactNode;
   /** The attachment alone is a complete message. */
   allowEmpty?: boolean;
@@ -177,10 +185,12 @@ export function ProjectComposer({
   }, [settingsKey, provider, choice, claude, runtimeMode, interactionMode]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
+  const sendToAgent = useRef<ComposerHandle["sendToAgent"]>(async () => false);
   useImperativeHandle(
     handleRef,
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
+      sendToAgent: (provider, body) => sendToAgent.current(provider, body),
     }),
     [],
   );
@@ -535,6 +545,26 @@ export function ProjectComposer({
     preparing ||
     !selected;
   /** `sendAt` holds the message until then (Send later). */
+  sendToAgent.current = async (to, body) => {
+    const choice = choiceFor(to);
+    if (!choice || busy || running || sending.current) return false;
+    sending.current = true;
+    try {
+      const kept = draft;
+      const accepted = await onSend({
+        body: `@${to} ${body}`,
+        provider: to,
+        choice,
+        runtimeMode,
+        interactionMode: "default",
+      });
+      // Sending clears the composer; the user's own draft stays.
+      if (accepted) onDraft(kept);
+      return accepted;
+    } finally {
+      sending.current = false;
+    }
+  };
   async function send(steer = false, sendAt?: number) {
     if (busy || commands.interceptSend()) return;
     if (sendDisabled || sending.current) return;
@@ -633,11 +663,22 @@ export function ProjectComposer({
       )}
       <div className="thread-context-controls">
         {context}
-        <ProjectBranchPicker
-          projectId={projectId}
-          branch={branch}
-          disabled={checkoutDisabled || running || busy}
-        />
+        {workspace}
+        {branchLabel ? (
+          <span
+            className="composer-branch-trigger workspace-trigger static"
+            title="This thread's worktree branch"
+          >
+            <GitBranch size={13} />
+            <span>{branchLabel}</span>
+          </span>
+        ) : (
+          <ProjectBranchPicker
+            projectId={projectId}
+            branch={branch}
+            disabled={checkoutDisabled || running || busy}
+          />
+        )}
       </div>
       {notice}
       <form

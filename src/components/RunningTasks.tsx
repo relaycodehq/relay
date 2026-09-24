@@ -140,8 +140,13 @@ export function RunningTasks({
                     : `${agent} in Relay`;
             const port = task.ports[0];
             const state = busy.get(task.id);
+            const worktree = task.worktree
+              ? chats.find((c) => c.id === task.worktree)
+              : undefined;
             const detail = [
               displayCommand(task.command),
+              task.worktree &&
+                `Runs in the worktree of ${worktree?.title ?? "a thread"}, not the checkout`,
               task.ports.length > 1 &&
                 `Listening on ${task.ports.map((p) => `:${p}`).join(", ")}`,
               chat ? `${agent ? `${agent} · ` : ""}${chat.title}` : source,
@@ -181,6 +186,9 @@ export function RunningTasks({
                   <span className="running-task-title">
                     <span>{task.title}</span>
                   </span>
+                )}
+                {task.worktree && (
+                  <small className="running-task-where">worktree</small>
                 )}
                 <span className="running-task-end">
                   <span className="running-task-time">

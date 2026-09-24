@@ -18,9 +18,12 @@ export type TurnDiffTarget = {
   path?: string;
   /** Who answered and when, e.g. "Claude · 12:04". */
   label: string;
+  /** Everything the thread's worktree changed that the checkout doesn't have yet. */
+  worktree?: boolean;
 };
 
-const sideLabels = { deletions: "Before turn", additions: "After turn" };
+const turnSides = { deletions: "Before turn", additions: "After turn" };
+const worktreeSides = { deletions: "Checkout", additions: "Worktree" };
 
 /** What one agent turn changed, from the snapshots Relay took around it. */
 export function TurnChanges({
@@ -36,12 +39,18 @@ export function TurnChanges({
 }) {
   const [path, setPath] = useState(target.path ?? target.files[0]?.path);
   const [split, setSplit] = useSplitDiff();
+  const sides = target.worktree ? worktreeSides : turnSides;
   const diff = useQuery({
-    queryKey: ["turn-diff", target.chatId, target.messageId, path],
-    queryFn: () => api.projectTurnDiff(target.chatId, target.messageId, path!),
+    queryKey: target.worktree
+      ? ["worktree-diff", target.chatId, path]
+      : ["turn-diff", target.chatId, target.messageId, path],
+    queryFn: () =>
+      target.worktree
+        ? api.projectWorktreeDiff(target.chatId, path!)
+        : api.projectTurnDiff(target.chatId, target.messageId, path!),
     enabled: !!path,
-    // Snapshots never change, so a diff stays valid for the session.
-    staleTime: Infinity,
+    // Snapshots never change, so a turn's diff stays valid for the session.
+    staleTime: target.worktree ? 0 : Infinity,
   });
   return (
     <section className="local-changes" aria-label="Turn changes">
@@ -71,7 +80,10 @@ export function TurnChanges({
             <section>
               <header>
                 <strong>
-                  Changed in this turn <span>{target.files.length}</span>
+                  {target.worktree
+                    ? "Changed in this worktree"
+                    : "Changed in this turn"}{" "}
+                  <span>{target.files.length}</span>
                 </strong>
               </header>
               {target.files.map((f) => (
@@ -113,7 +125,9 @@ export function TurnChanges({
             <>
               <header>
                 <strong title={path}>{path}</strong>
-                <span>Before turn → After turn</span>
+                <span>
+                  {sides.deletions} → {sides.additions}
+                </span>
                 <SplitDiffToggle split={split} onChange={setSplit} />
                 <IconButton
                   label="Open in editor"
@@ -127,7 +141,7 @@ export function TurnChanges({
               ) : diff.data ? (
                 <WorkingDiff
                   pair={diff.data}
-                  sideLabels={sideLabels}
+                  sideLabels={sides}
                   split={split}
                 />
               ) : (
@@ -136,7 +150,11 @@ export function TurnChanges({
             </>
           ) : (
             <div className="empty">
-              <h2>This turn changed no files.</h2>
+              <h2>
+                {target.worktree
+                  ? "Nothing here that the checkout doesn’t have."
+                  : "This turn changed no files."}
+              </h2>
             </div>
           )}
         </div>

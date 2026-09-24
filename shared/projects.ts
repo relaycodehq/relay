@@ -47,6 +47,35 @@ export const chatScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("review") }).strict(),
 ]);
 export type ChatScope = z.infer<typeof chatScopeSchema>;
+/** Where a new thread works: the project's own checkout, or a worktree of its own. */
+export const chatWorkspaceSchema = z.enum(["checkout", "worktree"]);
+export type ChatWorkspace = z.infer<typeof chatWorkspaceSchema>;
+/** A thread that works in its own git worktree, leaving the checkout alone. */
+export interface ChatWorktree {
+  /** Unset until the first message makes the worktree. */
+  path?: string;
+  branch?: string;
+  /** The checkout's commit when the worktree was made; a PR builds on it. */
+  head?: string;
+  /** The checkout as the worktree started from it, uncommitted edits included. */
+  start?: string;
+  /** What the worktree's changes are counted from: `start`, moved up by each merge. */
+  base?: string;
+  /** The changes reached the checkout: merged from Relay, or found there. */
+  landed?: { at: number; by: "relay" | "outside" | "pr" };
+  pr?: { number: number; url: string };
+  /** Removed; the next message makes a fresh one from the checkout. */
+  removedAt?: number;
+}
+export interface WorktreeStatus {
+  branch?: string;
+  path?: string;
+  /** What changed since `base`: not in the checkout yet. */
+  files: TurnFileChange[];
+  landed?: ChatWorktree["landed"];
+  pr?: ChatWorktree["pr"];
+  removed: boolean;
+}
 export interface ChatSummary {
   id: string;
   projectId: string;
@@ -69,6 +98,8 @@ export interface ChatSummary {
   archivedAt?: number;
   /** Branch checked out when the latest message was sent. */
   branch?: string;
+  /** Set on threads that work in their own worktree; fixed when the thread starts. */
+  worktree?: ChatWorktree;
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
@@ -363,12 +394,15 @@ export interface ProjectApi {
   projectBranchPulls(
     id: string,
   ): Promise<import("./pull-request-create").BranchPull[]>;
+  /** With `chatId`, for that thread's worktree: its changes become one commit on the checkout's. */
   projectPreparePull(
     id: string,
+    chatId?: string,
   ): Promise<import("./pull-request-create").PullRequestPlan>;
   projectCreatePull(
     id: string,
     input: import("./pull-request-create").CreatePullRequest,
+    chatId?: string,
   ): Promise<import("./pull-request-create").CreatedPullRequest>;
   projectBranches(id: string): Promise<import("./branches").BranchList>;
   projectChangeBranch(
@@ -476,7 +510,20 @@ export interface ProjectApi {
   ): Promise<{ conflicts: string[] }>;
   projectPulls(id: string, state: string, page: number): Promise<Page<Issue>>;
   projectChats(id: string): Promise<ChatSummary[]>;
-  createProjectChat(id: string, scope: ChatScope): Promise<ChatSummary>;
+  createProjectChat(
+    id: string,
+    scope: ChatScope,
+    workspace?: ChatWorkspace,
+  ): Promise<ChatSummary>;
+  projectWorktree(chatId: string): Promise<WorktreeStatus>;
+  /** Brings the worktree's changes into the checkout, uncommitted. Nothing is written when a file conflicts. */
+  mergeProjectWorktree(chatId: string): Promise<{ conflicts: string[] }>;
+  /** Brings the checkout's changes into the worktree; conflicts stay there as markers. */
+  catchUpProjectWorktree(chatId: string): Promise<{ conflicts: string[] }>;
+  /** One file as the worktree has it, against what its changes are counted from. */
+  projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
+  removeProjectWorktree(chatId: string): Promise<void>;
+  revealProjectWorktree(chatId: string): Promise<void>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   projectChatImage(id: string, imageId: string): Promise<string>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
