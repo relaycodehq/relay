@@ -834,7 +834,6 @@ export class ProjectChats {
       if (this.writes.get(chat.id) === task) this.writes.delete(chat.id);
     }
   }
-  /** An agent is working in the project's checkout; worktree threads don't count. */
   /** The worktrees a project's threads work in, for its process list. */
   worktreeFolders(projectId: string) {
     return (this.store.get().chats ?? []).flatMap((chat) =>
@@ -845,6 +844,7 @@ export class ProjectChats {
         : [],
     );
   }
+  /** An agent is working in the project's checkout; worktree threads don't count. */
   hasActiveProject(projectId: string) {
     // Reviewer threads count too, though the sidebar never lists them.
     return (this.store.get().chats ?? []).some(

@@ -1165,7 +1165,6 @@ export function claudeCacheTtl(
     return CACHE_5M;
 }
 
-/** A request's prompt plus its reply is what the next request carries forward. */
 /** Tokens the session processed so far, subagents and cache reads included. */
 function claudeSessionTokens(modelUsage: Record<string, ModelUsage> = {}) {
   return Object.values(modelUsage).reduce(
@@ -1179,6 +1178,7 @@ function claudeSessionTokens(modelUsage: Record<string, ModelUsage> = {}) {
   );
 }
 
+/** A request's prompt plus its reply is what the next request carries forward. */
 export function claudeContextTokens(usage: unknown): number {
   if (!usage || typeof usage !== "object") return 0;
   const u = usage as Record<string, unknown>;
