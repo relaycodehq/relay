@@ -493,6 +493,9 @@ if (args.includes("--permission-prompt-tool")) {
           path.join(m.params.cwd, "src", "guard.ts"),
           "export const guard = true;\n",
         );
+        // A change nothing reports, as `rm -rf` or a formatter would leave.
+        if (said.includes("and a stray file"))
+          fs.writeFileSync(path.join(m.params.cwd, "stray.md"), "Stray.\n");
         // Codex reports its own edits; Relay credits the turn with only these.
         send({
           method: "item/completed",

@@ -1226,6 +1226,34 @@ it("holds a Send later message until its time, sends it now on request, and keep
     expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id),
   );
 });
+it("rolls back a turn's own files together, and a change it can't claim only on its own", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(
+    chat.id,
+    input("@codex fixture edit files and a stray file"),
+  );
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 10000 },
+  );
+  const answer = (await chats.get(chat.id)).messages.at(-1)!;
+  expect(answer.changes?.map((f) => [f.path, !!f.unclaimed])).toEqual([
+    ["README.md", false],
+    ["src/guard.ts", false],
+    ["stray.md", true],
+  ]);
+  const repo = join(root, "repo");
+  await chats.rewindTurn(chat.id, answer.id, null, "revert", false);
+  await expect(readFile(join(repo, "src", "guard.ts"))).rejects.toThrow();
+  expect(await readFile(join(repo, "stray.md"), "utf8")).toBe("Stray.\n");
+  await chats.rewindTurn(chat.id, answer.id, ["stray.md"], "revert", false);
+  await expect(readFile(join(repo, "stray.md"))).rejects.toThrow();
+}, 20000);
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");
   const chat = await chats.create(projectId, { kind: "project" });

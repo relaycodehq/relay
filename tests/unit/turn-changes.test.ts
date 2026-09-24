@@ -79,7 +79,7 @@ it("lists only what the turn changed and keeps the user's index and prior edits 
   expect((await turnDiff(root, id, "src/new.ts")).old).toBeNull();
 });
 
-it("lists only files the agent changed itself, not edits made meanwhile by anyone else", async () => {
+it("lists the agent's own files first and marks edits made meanwhile by anyone else", async () => {
   await mkdir(join(root, "src"));
   await writeFile(join(root, "src", "b.ts"), "b\n");
   await writeFile(join(root, "src", "b.tsx"), "view\n");
@@ -99,19 +99,29 @@ it("lists only files the agent changed itself, not edits made meanwhile by anyon
     // Names src/b.tsx's neighbour only as part of a longer path.
     commands: ["/bin/zsh -lc 'rm gone.ts && cat src/b.tsx.bak'"],
   });
-  expect(files.map((f) => f.path)).toEqual(["a.ts", "gone.ts"]);
-  // Only the agent's files can be rolled back from its card.
+  expect(files.filter((f) => !f.unclaimed).map((f) => f.path)).toEqual([
+    "a.ts",
+    "gone.ts",
+  ]);
+  expect(files.filter((f) => f.unclaimed).map((f) => f.path)).toEqual([
+    "notes.md",
+    "src/b.ts",
+    "src/b.tsx",
+  ]);
+  // Either kind opens its diff; the card rolls back only the agent's together.
   await expect(turnDiff(root, id, "a.ts")).resolves.toBeTruthy();
+  await expect(turnDiff(root, id, "notes.md")).resolves.toBeTruthy();
 });
 
-it("keeps no ref when only someone else changed files during the turn", async () => {
+it("keeps the snapshot when only someone else changed files during the turn", async () => {
+  // e.g. `rm -rf dir` or a formatter: a command that names no file it changed.
   const id = randomUUID();
   const before = await startTurn(root, id);
   await writeFile(join(root, "a.ts"), "theirs\n");
   expect(
     await finishTurn(root, id, before!, id, { edited: [], commands: [] }),
-  ).toEqual([]);
-  expect(() => git("rev-parse", "--verify", "-q", turnRef(id))).toThrow();
+  ).toEqual([{ path: "a.ts", additions: 1, deletions: 2, unclaimed: true }]);
+  expect(git("rev-parse", "--verify", "-q", turnRef(id))).toBeTruthy();
 });
 
 it("matches the agent's paths whether relative, absolute or dotted", () => {

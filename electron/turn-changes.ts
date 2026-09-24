@@ -216,7 +216,8 @@ export function ownFiles(
  * Snapshots the worktree again and lists what the turn changed. A turn without
  * changes keeps no ref. The ref moves to `answerId` when a steer split the
  * turn, so the diff opens from the message that shows the changes. With a
- * `claim`, only files the agent changed itself are listed.
+ * `claim`, files the agent can't be shown to have changed come last, marked
+ * `unclaimed`.
  */
 export async function finishTurn(
   root: string,
@@ -241,7 +242,17 @@ export async function finishTurn(
         after,
       ]),
     );
-    if (claim) files = ownFiles(files, claim, root);
+    // What the agent can't be shown to have changed stays, marked, so the
+    // snapshot is kept for it too: nothing a turn did is left without a way back.
+    if (claim) {
+      const own = new Set(ownFiles(files, claim, root));
+      files = [
+        ...files.filter((f) => own.has(f)),
+        ...files
+          .filter((f) => !own.has(f))
+          .map((f) => ({ ...f, unclaimed: true as const })),
+      ];
+    }
     files = files.slice(0, maxFiles);
     if (!files.length) await run(root, ["update-ref", "-d", ref]);
     else if (answerId === messageId)

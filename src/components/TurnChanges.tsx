@@ -80,8 +80,12 @@ export function TurnChanges({
                   key={f.path}
                 >
                   <button
-                    className="working-select turn-file"
-                    title={f.path}
+                    className={`working-select turn-file${f.unclaimed ? " unclaimed" : ""}`}
+                    title={
+                      f.unclaimed
+                        ? `${f.path} · changed during this turn, maybe not by the agent`
+                        : f.path
+                    }
                     onClick={() => setPath(f.path)}
                   >
                     <FileEntryIcon path={f.path} directory={false} />

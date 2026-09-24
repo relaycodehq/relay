@@ -1857,9 +1857,10 @@ export class ProjectChats {
             "Wait for the running answer to finish before rolling back files.",
           );
       const message = chat.messages.find((m) => m.id === messageId);
+      // The whole turn means the agent's own files; others go one by one.
       const files = (message?.changes ?? []).filter(
         (f) =>
-          (!paths || paths.includes(f.path)) &&
+          (paths ? paths.includes(f.path) : !f.unclaimed) &&
           (mode === "revert") === !f.revertedBy,
       );
       if (!message || !files.length) return { conflicts: [] };

@@ -74,14 +74,18 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
 }) {
-  const tree = useMemo(() => buildTurnTree(files), [files]);
-  const total = useMemo(() => sumStats(files), [files]);
+  // The agent's own changes lead; the rest may not be its doing (see `unclaimed`).
+  const own = useMemo(() => files.filter((f) => !f.unclaimed), [files]);
+  const others = useMemo(() => files.filter((f) => f.unclaimed), [files]);
+  const tree = useMemo(() => buildTurnTree(own), [own]);
+  const otherTree = useMemo(() => buildTurnTree(others), [others]);
+  const total = useMemo(() => sumStats(own), [own]);
   const nested = tree.some((node) => node.kind === "directory");
-  const [allOpen, setAllOpen] = useState(files.length <= EXPAND_UP_TO);
+  const [allOpen, setAllOpen] = useState(own.length <= EXPAND_UP_TO);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [working, setWorking] = useState(false);
-  const reverted = files.filter((f) => f.revertedBy).length;
+  const reverted = own.filter((f) => f.revertedBy).length;
   async function rewind(paths: string[] | null, mode: Mode, force = false) {
     if (!onRewind || working) return;
     setWorking(true);
@@ -184,77 +188,79 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   };
   return (
     <section className="changed-files" aria-label="Changed files">
-      <header>
-        <strong>
-          {files.length} changed file{files.length === 1 ? "" : "s"}
-        </strong>
-        {(total.additions > 0 || total.deletions > 0) && (
-          <DiffStatLabel stat={total} />
-        )}
-        {reverted > 0 && (
-          <span className="changed-files-note">
-            {reverted === files.length
-              ? "Rolled back"
-              : `${reverted} rolled back`}
-          </span>
-        )}
-        <span className="spacer" />
-        {nested && (
-          <IconButton
-            label={allOpen ? "Collapse all folders" : "Expand all folders"}
-            onClick={() => {
-              setAllOpen((v) => !v);
-              setToggled({});
-            }}
-          >
-            {allOpen ? (
-              <ChevronsDownUp size={14} />
-            ) : (
-              <ChevronsUpDown size={14} />
-            )}
-          </IconButton>
-        )}
-        <button
-          type="button"
-          className="changed-files-open"
-          title="Open the full diff"
-          onClick={() => onOpen(files[0]?.path)}
-        >
-          <FileDiff size={14} />
-          Open diff
-        </button>
-        {onRewind && (
+      {own.length > 0 && (
+        <header>
+          <strong>
+            {own.length} changed file{own.length === 1 ? "" : "s"}
+          </strong>
+          {(total.additions > 0 || total.deletions > 0) && (
+            <DiffStatLabel stat={total} />
+          )}
+          {reverted > 0 && (
+            <span className="changed-files-note">
+              {reverted === own.length
+                ? "Rolled back"
+                : `${reverted} rolled back`}
+            </span>
+          )}
+          <span className="spacer" />
+          {nested && (
+            <IconButton
+              label={allOpen ? "Collapse all folders" : "Expand all folders"}
+              onClick={() => {
+                setAllOpen((v) => !v);
+                setToggled({});
+              }}
+            >
+              {allOpen ? (
+                <ChevronsDownUp size={14} />
+              ) : (
+                <ChevronsUpDown size={14} />
+              )}
+            </IconButton>
+          )}
           <button
             type="button"
             className="changed-files-open"
-            disabled={working}
-            title={
-              reverted === files.length
-                ? "Redo this turn's changes"
-                : "Roll back this turn's changes"
-            }
-            onClick={() =>
-              reverted === files.length
-                ? void rewind(null, "redo")
-                : files.length - reverted > 1
-                  ? setPrompt({ kind: "confirm" })
-                  : void rewind(null, "revert")
-            }
+            title="Open the full diff"
+            onClick={() => onOpen(own[0]?.path)}
           >
-            {reverted === files.length ? (
-              <>
-                <Redo2 size={14} />
-                Redo
-              </>
-            ) : (
-              <>
-                <Undo2 size={14} />
-                Roll back
-              </>
-            )}
+            <FileDiff size={14} />
+            Open diff
           </button>
-        )}
-      </header>
+          {onRewind && (
+            <button
+              type="button"
+              className="changed-files-open"
+              disabled={working}
+              title={
+                reverted === own.length
+                  ? "Redo this turn's changes"
+                  : "Roll back this turn's changes"
+              }
+              onClick={() =>
+                reverted === own.length
+                  ? void rewind(null, "redo")
+                  : own.length - reverted > 1
+                    ? setPrompt({ kind: "confirm" })
+                    : void rewind(null, "revert")
+              }
+            >
+              {reverted === own.length ? (
+                <>
+                  <Redo2 size={14} />
+                  Redo
+                </>
+              ) : (
+                <>
+                  <Undo2 size={14} />
+                  Roll back
+                </>
+              )}
+            </button>
+          )}
+        </header>
+      )}
       {prompt && (
         <div
           className={`changed-files-prompt${prompt.kind === "error" ? " error" : ""}`}
@@ -263,8 +269,8 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           {prompt.kind === "confirm" && (
             <>
               <span>
-                Roll back {files.length - reverted} files to how they were
-                before this turn? Later edits are kept where they merge.
+                Roll back {own.length - reverted} files to how they were before
+                this turn? Later edits are kept where they merge.
               </span>
               <button
                 type="button"
@@ -303,6 +309,20 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
       <div className="changed-files-tree">
         {tree.map((node) => row(node, 0))}
       </div>
+      {others.length > 0 && (
+        <details className="changed-files-others">
+          <summary title="Not written by the agent's tools or named in its commands: maybe your editor, another thread, or a command like rm -rf. Roll each back on its own.">
+            <ChevronRight size={14} className="changed-files-chevron" />
+            Also changed during this turn
+            <span className="changed-files-note">
+              {others.length} file{others.length === 1 ? "" : "s"}
+            </span>
+          </summary>
+          <div className="changed-files-tree">
+            {otherTree.map((node) => row(node, 0))}
+          </div>
+        </details>
+      )}
     </section>
   );
 });

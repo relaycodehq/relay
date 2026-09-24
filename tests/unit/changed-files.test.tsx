@@ -111,3 +111,31 @@ it("offers rollback per row and for the turn, and redo once rolled back", () => 
     renderToStaticMarkup(<ChangedFilesCard files={files} onOpen={() => {}} />),
   ).not.toContain("Roll back");
 });
+
+it("lists changes the agent can't be shown to have made apart, outside the turn's rollback", () => {
+  const html = renderToStaticMarkup(
+    <ChangedFilesCard
+      files={[
+        { path: "src/guard.ts", additions: 1, deletions: 0 },
+        { path: "notes.md", additions: 2, deletions: 0, unclaimed: true },
+      ]}
+      onOpen={() => {}}
+      onRewind={async () => ({ conflicts: [] })}
+    />,
+  );
+  expect(html).toContain("1 changed file<");
+  expect(html).toContain("Also changed during this turn");
+  expect(html).toMatch(/changed-files-others[\s\S]*notes\.md/);
+  // With nothing of the agent's own, only the folded list shows.
+  const theirs = renderToStaticMarkup(
+    <ChangedFilesCard
+      files={[
+        { path: "notes.md", additions: 2, deletions: 0, unclaimed: true },
+      ]}
+      onOpen={() => {}}
+      onRewind={async () => ({ conflicts: [] })}
+    />,
+  );
+  expect(theirs).not.toContain("changed file");
+  expect(theirs).toContain("Also changed during this turn");
+});

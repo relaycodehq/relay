@@ -108,6 +108,29 @@
 .diff-stat-del {
   color: light-dark(#c4323f, #f0707a);
 }
+/* Changed during the turn, but maybe not by the agent: folded under its own. */
+.changed-files-others > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 16px;
+  color: var(--muted);
+  list-style: none;
+  cursor: pointer;
+}
+.changed-files-others > summary::-webkit-details-marker {
+  display: none;
+}
+.changed-files-others > summary:hover {
+  color: var(--text);
+}
+.changed-files-others[open] > summary .changed-files-chevron {
+  transform: rotate(90deg);
+}
+.changed-files-others > .changed-files-tree {
+  padding-top: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   .changed-files-chevron {
     transition: none;
@@ -116,6 +139,9 @@
 /* The turn's file list in the Changes pane. */
 .turn-file {
   align-items: center;
+}
+.turn-file.unclaimed {
+  color: var(--muted);
 }
 .turn-file .file-entry-icon {
   width: 14px;
