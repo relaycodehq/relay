@@ -397,6 +397,7 @@ export function ProjectSidebar({
   account,
   onChat,
   onNew,
+  onPickNew,
   onDraft,
   onAdd,
   onShared,
@@ -412,6 +413,8 @@ export function ProjectSidebar({
   account?: string;
   onChat: (c: ChatSummary) => void;
   onNew: (p: Project) => void;
+  /** New thread in a project still to be chosen. */
+  onPickNew: () => void;
   /** Back to a project's unsent new thread. */
   onDraft: (p: Project) => void;
   onAdd: () => void;
@@ -1390,10 +1393,7 @@ export function ProjectSidebar({
         <button
           className="sb-nav-item primary"
           disabled={dirty || !projects.length}
-          onClick={() => {
-            const p = byId.get(projectId ?? "") ?? projects[0];
-            if (p) onNew(p);
-          }}
+          onClick={onPickNew}
         >
           <SquarePen size={15} />
           New thread

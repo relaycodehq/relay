@@ -857,6 +857,23 @@
   background: var(--hover);
   color: var(--text);
 }
+.modal.new-thread-picker {
+  width: 420px;
+  padding: 0;
+  overflow: hidden;
+}
+.modal.new-thread-picker[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: min(480px, calc(100vh - 80px));
+}
+.new-thread-picker .modal-heading {
+  margin: 0;
+  padding: 14px 13px 4px 16px;
+}
+.new-thread-picker .modal-heading h2 {
+  font-size: 14px;
+}
 .thread-introduction p {
   margin: 0;
   font-size: 12px;

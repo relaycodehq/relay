@@ -43,6 +43,7 @@ import { ProjectChat } from "./ProjectChat";
 import type { CodeReference } from "../../shared/code-references";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
+import { NewThreadPicker } from "./NewThreadPicker";
 import { RelayMark } from "./RelayMark";
 import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
@@ -92,6 +93,7 @@ export default function ProjectShell() {
   );
   // While the sidebar is hidden, hovering the brand toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
+  const [pickingProject, setPickingProject] = useState(false);
   const peekTimer = useRef<number | undefined>(undefined);
   const peekOpen = () => {
     window.clearTimeout(peekTimer.current);
@@ -250,21 +252,12 @@ export default function ProjectShell() {
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
-        navigate(project, undefined, true);
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() =>
-            document
-              .querySelector<HTMLElement>(
-                '.project-chat-pane [contenteditable="true"][aria-label="Message project"]',
-              )
-              ?.focus(),
-          ),
-        );
+        pickNewThread();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [project?.id, legacy, dirty, error]);
+  }, [project?.id, projects.data, legacy, dirty, error]);
   async function add() {
     try {
       const p = await api.addProject();
@@ -361,6 +354,25 @@ export default function ProjectShell() {
     setContextText(undefined);
     setViewing(NO_VIEWING);
     if (fresh === true) setDraftScope({ kind: "project" });
+  }
+  /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
+  function pickNewThread() {
+    if (dirty) return;
+    const list = projects.data ?? [];
+    if (list.length === 1) openNewThread(list[0]);
+    else if (list.length) setPickingProject(true);
+  }
+  function openNewThread(p: Project) {
+    navigate(p, undefined, true);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLElement>(
+            '.project-chat-pane [contenteditable="true"][aria-label="Message project"]',
+          )
+          ?.focus(),
+      ),
+    );
   }
   /** A thread keeps the scope it started with; another one takes a new thread. */
   function newThreadIn(scope: ChatSummary["scope"]) {
@@ -584,6 +596,7 @@ export default function ProjectShell() {
               if (p) navigate(p, c);
             }}
             onNew={(p) => navigate(p, undefined, true)}
+            onPickNew={pickNewThread}
             onDraft={(p) => navigate(p, undefined, "draft")}
             onAdd={() => void add()}
             onShared={(p) => {
@@ -823,6 +836,18 @@ export default function ProjectShell() {
           </p>
           <button onClick={() => void linked()}>Connect Gitea</button>
         </Modal>
+      )}
+      {pickingProject && (
+        <NewThreadPicker
+          projects={projects.data ?? []}
+          current={project?.id ?? null}
+          onSelect={(p) => {
+            setPickingProject(false);
+            openNewThread(p);
+          }}
+          onAdd={() => void add()}
+          onClose={() => setPickingProject(false)}
+        />
       )}
       {settings && (
         <Settings
