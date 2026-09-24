@@ -20,10 +20,11 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
-import type {
-  AgentActivity,
-  AgentTrace,
-  ChatMessage,
+import {
+  isImagePath,
+  type AgentActivity,
+  type AgentTrace,
+  type ChatMessage,
 } from "../../shared/projects";
 import type { ProjectFileLink } from "../lib/project-file-links";
 import { RichText, Spinner } from "./ui";
@@ -178,6 +179,19 @@ const Subagents = createContext({
   display: (text: string) => text,
 });
 
+/** Opens an image the turn read in the preview dialog; absent where there's none to open. */
+const OpenImage = createContext<((path: string) => void) | undefined>(
+  undefined,
+);
+
+/** The path of a finished read that can open in the image preview. */
+function useImageRead(a: AgentActivity) {
+  const open = useContext(OpenImage);
+  return open && a.kind === "read" && a.status === "complete" && isImagePath(a.label)
+    ? () => open(a.label)
+    : undefined;
+}
+
 /** A running agent's status after its name, dimmed so the name leads. */
 function Progress({ activity: a }: { activity: AgentActivity }) {
   if (a.status !== "running" || !a.progress) return null;
@@ -221,6 +235,7 @@ function ToolRow({
   const Icon = icons[a.kind];
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
+  const openImage = useImageRead(a);
   const heading = (
     <>
       {a.status === "running" ? <Spinner size={14} /> : <Icon size={14} />}
@@ -231,7 +246,17 @@ function ToolRow({
   if (!expandable)
     return (
       <div className={`agent-step ${a.status}`}>
-        <div className="agent-step-heading">{heading}</div>
+        {openImage ? (
+          <button
+            type="button"
+            className="agent-step-heading agent-step-open"
+            onClick={openImage}
+          >
+            {heading}
+          </button>
+        ) : (
+          <div className="agent-step-heading">{heading}</div>
+        )}
       </div>
     );
   return (
@@ -314,11 +339,13 @@ export function AgentTurn({
   projectRoot,
   onOpenFile,
   onChanges,
+  onOpenImage,
 }: {
   message: ChatMessage;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
+  onOpenImage?: (path: string) => void;
 }) {
   const live = message.status === "streaming";
   // Open while the turn runs, like T3 Code's work log; fold back once it ends
@@ -409,6 +436,7 @@ export function AgentTurn({
       </summary>
       {expanded && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
+          <OpenImage.Provider value={onOpenImage}>
           <div className="agent-trace" aria-label="Local agent activity">
             {groupTrace(shown).map((part, index, parts) =>
               part.kind === "commentary" ? (
@@ -457,6 +485,7 @@ export function AgentTurn({
               </div>
             )}
           </div>
+          </OpenImage.Provider>
         </Subagents.Provider>
       )}
     </details>
@@ -575,14 +604,16 @@ function OpenBatch({
   const Icon = icons[head.kind];
   const calls = useContext(Subagents).calls.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
+  // With nothing folded behind it, an image's row opens the image instead.
+  const openImage = useImageRead(head);
   return (
     <div className={`agent-batch ${head.status}`}>
       <button
         type="button"
         className="agent-step-heading agent-batch-head"
         aria-expanded={folded ? open : undefined}
-        disabled={!folded}
-        onClick={() => setOpen(!open)}
+        disabled={!folded && !openImage}
+        onClick={folded ? () => setOpen(!open) : openImage}
       >
         <span className="agent-batch-row" title={display(head.label)}>
           <Icon size={14} />

@@ -752,6 +752,48 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
     { timeout: 15000 },
   );
 });
+it("previews only the images a turn read, and only when they really are images", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.dispose();
+  const shot = join(root, "shot.png"),
+    fake = join(root, "fake.png"),
+    unread = join(root, "unread.png");
+  await writeFile(shot, Buffer.from(tinyPng, "base64"));
+  await writeFile(fake, "not an image");
+  await writeFile(unread, Buffer.from(tinyPng, "base64"));
+  const read = (label: string) => ({
+    kind: "activity",
+    id: label,
+    activity: { id: label, kind: "read", label, status: "complete" },
+  });
+  const path = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  const turn = randomUUID();
+  saved.messages.push({
+    id: turn,
+    role: "assistant",
+    provider: "claude",
+    created: Date.now(),
+    body: "Looked at it.",
+    status: "complete",
+    version: 1,
+    trace: [read(shot), read(fake)],
+  });
+  await writeFile(path, JSON.stringify(saved));
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  expect(await chats.readImage(chat.id, turn, shot)).toBe(
+    `data:image/png;base64,${tinyPng}`,
+  );
+  await expect(chats.readImage(chat.id, turn, fake)).rejects.toThrow(
+    "isn't an image",
+  );
+  await expect(chats.readImage(chat.id, turn, unread)).rejects.toThrow(
+    "didn't read that image",
+  );
+  await expect(chats.readImage(chat.id, randomUUID(), shot)).rejects.toThrow(
+    "didn't read that image",
+  );
+});
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();

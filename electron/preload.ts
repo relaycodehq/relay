@@ -67,6 +67,7 @@ const methods = [
   "revealProjectWorktree",
   "projectChat",
   "projectChatImage",
+  "projectChatReadImage",
   "sendProjectChat",
   "cancelProjectChat",
   "startDeepReview",

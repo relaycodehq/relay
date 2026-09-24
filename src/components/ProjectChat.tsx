@@ -32,7 +32,6 @@ import {
   ScanSearch,
 } from "lucide-react";
 import { wakeLabel } from "../../shared/chat-activity";
-import { CopyImageMenu } from "./CopyImageMenu";
 import {
   applyChatPatch,
   replyRoot,
@@ -45,12 +44,18 @@ import {
   type ChatImage,
   type AgentProvider,
   type ProjectChat as ProjectChatData,
+  turnImages,
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
-import { ErrorBox, IconButton, Loading, Modal, RichText } from "./ui";
+import { ErrorBox, IconButton, Loading, RichText } from "./ui";
+import {
+  ImagePreviewDialog,
+  ImageThumbnail,
+  type PreviewImage,
+} from "./ImagePreview";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
 import {
@@ -108,72 +113,24 @@ import {
   DeepReviewSetup,
   findingCode,
 } from "./DeepReview";
-function MessageImage({ chatId, image }: { chatId: string; image: ChatImage }) {
-  const container = useRef<HTMLDivElement>(null);
-  const [source, setSource] = useState<string>();
-  const [error, setError] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    if (!chatId) return;
-    let live = true;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        observer.disconnect();
-        void api
-          .projectChatImage(chatId, image.id)
-          .then((url) => {
-            if (live) setSource(url);
-          })
-          .catch(() => {
-            if (live) setError(true);
-          });
-      },
-      { rootMargin: "150px" },
-    );
-    if (container.current) observer.observe(container.current);
-    return () => {
-      live = false;
-      observer.disconnect();
-    };
-  }, [chatId, image.id]);
-  return (
-    <>
-      <div ref={container} className="message-image">
-        {source ? (
-          <CopyImageMenu source={source}>
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              aria-label={`Open ${image.name}`}
-            >
-              <img src={source} alt={image.name} loading="lazy" />
-            </button>
-          </CopyImageMenu>
-        ) : (
-          <span>
-            {error ? "Screenshot unavailable" : "Loading screenshot…"}
-          </span>
-        )}
-      </div>
-      {/* Outside .message-image so the thumbnail's button and img rules don't reach the dialog. */}
-      {expanded && source && (
-        <Modal
-          title={image.name}
-          onClose={() => setExpanded(false)}
-          className="screenshot-dialog"
-        >
-          <CopyImageMenu source={source} inDialog>
-            <img
-              className="message-image-expanded"
-              src={source}
-              alt={image.name}
-            />
-          </CopyImageMenu>
-        </Modal>
-      )}
-    </>
-  );
+function userImage(chatId: string, image: ChatImage): PreviewImage {
+  return {
+    key: `${chatId}:${image.id}`,
+    name: image.name,
+    load: () => api.projectChatImage(chatId, image.id),
+  };
+}
+/** An image file the agent read in the turn `messageId`, as it is on disk now. */
+function readImage(
+  chatId: string,
+  messageId: string,
+  path: string,
+): PreviewImage {
+  return {
+    key: `${chatId}:${messageId}:${path}`,
+    name: path.split("/").at(-1) || path,
+    load: () => api.projectChatReadImage(chatId, messageId, path),
+  };
 }
 /** One-line divider where another agent took over, with the outgoing agent's note behind it. */
 function HandoffRow({
@@ -340,6 +297,18 @@ const Message = memo(function Message({
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
 }) {
+  const [openImage, setOpenImage] = useState<string>();
+  // The images the agent read show once its turn ends, after the answer.
+  const images = useMemo(
+    () =>
+      m.status === "streaming"
+        ? []
+        : [
+            ...(m.images ?? []).map((image) => userImage(chatId, image)),
+            ...turnImages(m).map((path) => readImage(chatId, m.id, path)),
+          ],
+    [chatId, m],
+  );
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
     const code = parseCodeReferences(m.body);
@@ -418,6 +387,7 @@ const Message = memo(function Message({
           projectRoot={projectRoot}
           onOpenFile={onOpenFile}
           onChanges={onChanges}
+          onOpenImage={chatId ? setOpenImage : undefined}
         />
       )}
       {!!parsed.refs.length && (
@@ -453,12 +423,18 @@ const Message = memo(function Message({
           }
         />
       )}
-      {!!m.images?.length && (
+      {!!chatId && !!images.length && (
         <div className="message-images">
-          {m.images?.map((image) => (
-            <MessageImage key={image.id} chatId={chatId} image={image} />
+          {images.map((image) => (
+            <ImageThumbnail key={image.key} image={image} />
           ))}
         </div>
+      )}
+      {openImage && (
+        <ImagePreviewDialog
+          image={readImage(chatId, m.id, openImage)}
+          onClose={() => setOpenImage(undefined)}
+        />
       )}
       {!!replyCount && (
         <button className="thread-replies-link" onClick={() => onReply(m)}>

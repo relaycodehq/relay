@@ -207,3 +207,22 @@
 .agent-step-progress::before {
   content: "· ";
 }
+
+/* A finished read of an image opens it in the preview dialog. */
+.agent-step-open,
+.agent-step-open:hover {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  justify-content: flex-start;
+  filter: none;
+  cursor: pointer;
+}
+.agent-step-open:hover {
+  color: var(--text);
+}

@@ -92,3 +92,17 @@ it("takes the files Claude writes from its file tools only", () => {
   expect(claudeEditedPaths("Write", null)).toEqual([]);
   expect(claudeEditedPaths("toString", {})).toEqual([]);
 });
+it("names an image Codex viewed as a read of its path", () => {
+  expect(
+    codexActivity("item/completed", {
+      id: "view",
+      type: "imageView",
+      path: "/tmp/shot.png",
+    }),
+  ).toEqual({
+    id: "view",
+    status: "complete",
+    kind: "read",
+    label: "/tmp/shot.png",
+  });
+});

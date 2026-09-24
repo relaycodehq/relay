@@ -8,8 +8,15 @@ import { AgentRequests } from "./agent-requests";
 import { savedRuntimeMode, type AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
 import type { LineQuestion } from "../shared/questions";
-import { copyFile, mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import type { Projects } from "./projects";
@@ -32,7 +39,7 @@ import type {
   ProjectChatPatch,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
-import { replyRoot } from "../shared/projects";
+import { replyRoot, turnImages } from "../shared/projects";
 import { runCodex } from "./rooms/codex";
 import type { ProjectSharing } from "./project-sharing";
 import { runClaude } from "./rooms/claude";
@@ -99,6 +106,21 @@ const HANDOFF_TIMEOUT = 120000;
 /** Asked of the agent whose session ends here, in that session, so it can draw on everything it did. */
 const handoffPrompt = (to: AgentProvider) =>
   `${agentName(to)} is taking over this conversation from here and cannot see your session. Write a handoff note for it: the user's goal, what you did (files read or changed, commands run), what you found, decisions and their reasons, and what remains or should be verified next. Use concrete file paths. Answer from what you already know without running tools or changing anything. Keep it under 500 words.`;
+/** The image type the bytes start with, whatever the file is called. */
+function imageMimeType(bytes: Buffer) {
+  if (
+    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  )
+    return "image/png";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return "image/jpeg";
+  if (
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WEBP"
+  )
+    return "image/webp";
+  if (/^GIF8[79]a/.test(bytes.toString("ascii", 0, 6))) return "image/gif";
+}
 interface ActiveChat {
   started: number;
   requests: AgentRequests;
@@ -775,6 +797,19 @@ export class ProjectChats {
     const bytes = await readFile(this.imagePath(chatId, image));
     return `data:${image.mimeType};base64,${bytes.toString("base64")}`;
   }
+  /** Only a path the turn itself read, so the renderer can't ask for any file on disk. */
+  async readImage(chatId: string, messageId: string, path: string) {
+    const chat = await this.load(chatId);
+    const message = chat.messages.find((m) => m.id === messageId);
+    if (!message || !isAbsolute(path) || !turnImages(message).includes(path))
+      throw new Error("This turn didn't read that image.");
+    if ((await stat(path)).size > 30_000_000)
+      throw new Error("That image is too large to preview.");
+    const bytes = await readFile(path);
+    const mimeType = imageMimeType(bytes);
+    if (!mimeType) throw new Error("That file isn't an image Relay can show.");
+    return `data:${mimeType};base64,${bytes.toString("base64")}`;
+  }
   private async saveImages(
     chatId: string,
     images: NonNullable<ProjectChatSend["images"]>,
@@ -784,16 +819,7 @@ export class ProjectChats {
         dataUrl.slice(dataUrl.indexOf(",") + 1),
         "base64",
       );
-      const valid =
-        mimeType === "image/png"
-          ? bytes
-              .subarray(0, 8)
-              .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-          : mimeType === "image/jpeg"
-            ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-            : bytes.toString("ascii", 0, 4) === "RIFF" &&
-              bytes.toString("ascii", 8, 12) === "WEBP";
-      if (!valid || bytes.length === 0 || bytes.length > 800_000)
+      if (imageMimeType(bytes) !== mimeType || bytes.length > 800_000)
         throw new Error("Screenshot is invalid or exceeds the 800 KB limit.");
       return {
         meta: {

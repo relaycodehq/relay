@@ -253,6 +253,26 @@ export interface AgentActivity {
 export type AgentTrace =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "activity"; id: string; activity: AgentActivity };
+export const isImagePath = (path: string) =>
+  /\.(?:png|jpe?g|gif|webp)$/i.test(path);
+/** Images the agent looked at during a turn, subagents included, by path in first-read order. */
+export function turnImages(message: ChatMessage): string[] {
+  const calls = message.trace
+    ? message.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
+    : (message.activity ?? []);
+  return [
+    ...new Set(
+      calls
+        .filter(
+          (a) =>
+            a.kind === "read" &&
+            a.status === "complete" &&
+            isImagePath(a.label),
+        )
+        .map((a) => a.label),
+    ),
+  ];
+}
 export function replyRoot(messages: ChatMessage[], id: string): ChatMessage {
   const seen = new Set<string>();
   let current = messages.find((m) => m.id === id);
@@ -526,6 +546,12 @@ export interface ProjectApi {
   revealProjectWorktree(chatId: string): Promise<void>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   projectChatImage(id: string, imageId: string): Promise<string>;
+  /** An image file the agent read during the turn `messageId`, as a data URL. */
+  projectChatReadImage(
+    id: string,
+    messageId: string,
+    path: string,
+  ): Promise<string>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;

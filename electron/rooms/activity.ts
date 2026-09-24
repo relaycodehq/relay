@@ -44,6 +44,8 @@ export function codexActivity(
       detail: paths.join("\n"),
     };
   }
+  if (item.type === "imageView" && typeof item.path === "string")
+    return { ...base, kind: "read", label: item.path.slice(0, 500) };
   if (
     (item.type === "mcpToolCall" || item.type === "dynamicToolCall") &&
     typeof item.tool === "string"
