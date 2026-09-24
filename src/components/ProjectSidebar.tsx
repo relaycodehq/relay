@@ -62,6 +62,7 @@ const THREADS_PER_PROJECT = 5;
 const SEARCH_RESULTS = 50;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
 const SHELF_PAGE = 5;
+const CMD_HINT_DELAY_MS = 500;
 const PROJECT_DRAG = "application/x-relay-project";
 const GROUP_DRAG = "application/x-relay-group";
 
@@ -652,14 +653,29 @@ export function ProjectSidebar({
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
-  /** Holding ⌘ on the activity view shows ⌘1–⌘9 on the first nine cards. */
+  /**
+   * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
+   * first nine cards. ⌘ used as part of another shortcut or a ⌘-click never
+   * shows them.
+   */
   const [cmdHeld, setCmdHeld] = useState(false);
   const jumpTo = useRef<(index: number) => boolean>(() => false);
   const settleOpen = useRef<() => boolean>(() => false);
   useEffect(() => {
+    let reveal: number | undefined;
+    const cancel = () => {
+      clearTimeout(reveal);
+      reveal = undefined;
+    };
+    const release = () => {
+      cancel();
+      setCmdHeld(false);
+    };
     const down = (e: KeyboardEvent) => {
-      setCmdHeld(e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey);
-      if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return;
+      if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return release();
+      if (e.key !== "Meta") cancel();
+      else if (reveal === undefined)
+        reveal = window.setTimeout(() => setCmdHeld(true), CMD_HINT_DELAY_MS);
       const digit = /^Digit([1-9])$/.exec(e.code);
       if (digit && jumpTo.current(Number(digit[1]) - 1)) e.preventDefault();
       if (
@@ -672,15 +688,20 @@ export function ProjectSidebar({
         e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
-      if (!e.metaKey) setCmdHeld(false);
+      if (!e.metaKey) release();
     };
-    const release = () => setCmdHeld(false);
+    const click = (e: PointerEvent) => {
+      if (e.metaKey) cancel();
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("pointerdown", click);
     window.addEventListener("blur", release);
     return () => {
+      cancel();
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("pointerdown", click);
       window.removeEventListener("blur", release);
     };
   }, []);
