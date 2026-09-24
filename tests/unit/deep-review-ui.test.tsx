@@ -56,7 +56,7 @@ it("opens on the setup last used in the project", () => {
   const html = setup();
   expect(html).toContain("3 reviewers and a lead");
   expect(html).toMatch(
-    /aria-checked="true"><svg[^>]*lucide-git-commit-horizontal/,
+    /aria-checked="true">(?:(?!<\/button>)[^])*Commit<\/button>/,
   );
   expect(html).not.toContain('type="checkbox" checked=""');
 });

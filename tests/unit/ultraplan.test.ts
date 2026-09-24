@@ -15,11 +15,7 @@ import { Store } from "../../electron/store";
 import { Projects } from "../../electron/projects";
 import { ProjectChats } from "../../electron/project-chats";
 import { findExecutable } from "../../electron/executables";
-import {
-  briefPrompt,
-  leadPrompt,
-  thinkerPrompt,
-} from "../../electron/ultraplan";
+import { leadPrompt, thinkerPrompt } from "../../electron/ultraplan";
 import { council, type UltraplanKind } from "../../shared/ultraplan";
 import type { ProjectChatSend } from "../../shared/projects";
 vi.mock("../../electron/executables", async (actual) => ({
@@ -28,13 +24,6 @@ vi.mock("../../electron/executables", async (actual) => ({
 }));
 
 describe("prompts", () => {
-  it("keeps the brief neutral, so thinkers reach their own approach", () => {
-    const prompt = briefPrompt(3);
-    expect(prompt).toContain("3 thinkers");
-    expect(prompt).toContain("don't plan or propose an approach");
-    expect(prompt).toContain("don't run tools");
-  });
-
   it("gives an angled thinker its job, and a same-brief one the shared task", () => {
     const [skeptic] = council("angles");
     const [same] = council("same");
