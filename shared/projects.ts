@@ -69,6 +69,12 @@ export interface ChatWorktree {
   /** Removed; the next message makes a fresh one from the checkout. */
   removedAt?: number;
 }
+export interface AgentWorktree {
+  path: string;
+  branch?: string;
+  /** When Relay first saw it. */
+  at: number;
+}
 export interface WorktreeStatus {
   branch?: string;
   path?: string;
@@ -102,6 +108,8 @@ export interface ChatSummary {
   branch?: string;
   /** Set on threads that work in their own worktree; fixed when the thread starts. */
   worktree?: ChatWorktree;
+  /** Worktrees the agent made itself with git, still on disk when last checked. */
+  agentWorktrees?: AgentWorktree[];
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
@@ -555,6 +563,8 @@ export interface ProjectApi {
   projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
   removeProjectWorktree(chatId: string): Promise<void>;
   revealProjectWorktree(chatId: string): Promise<void>;
+  /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
+  revealAgentWorktree(chatId: string, path: string): Promise<void>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   projectChatImage(id: string, imageId: string): Promise<string>;
   /** An image file the agent read during the turn `messageId`, as a data URL. */

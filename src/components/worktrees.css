@@ -61,3 +61,26 @@
   color: var(--muted);
   font-size: 11px;
 }
+/* The agent made a worktree itself: its edits aren't in the checkout. */
+.thread-context-controls .agent-worktree-trigger,
+.agent-worktree-trigger > svg:first-child {
+  color: var(--accent);
+}
+.agent-worktree-note {
+  max-width: 300px;
+  white-space: normal;
+  line-height: 1.4;
+}
+.agent-worktree-item > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.agent-worktree-item small {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

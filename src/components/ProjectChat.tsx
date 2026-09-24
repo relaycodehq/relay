@@ -22,7 +22,6 @@ import {
   X,
   ArrowLeft,
   GitPullRequest,
-  Folder,
   FolderGit2,
   ChevronDown,
   ArrowUp,
@@ -96,6 +95,7 @@ import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import {
+  CheckoutControl,
   RemoveWorktreeDialog,
   WorkspacePicker,
   WorktreeConflict,
@@ -1326,13 +1326,12 @@ export function ProjectChat({
         }}
       />
     ) : (
-      <span
-        className="composer-branch-trigger workspace-trigger static"
-        title="This thread works in the project's checkout"
-      >
-        <Folder size={13} />
-        <span>Current checkout</span>
-      </span>
+      <CheckoutControl
+        worktrees={chat.agentWorktrees}
+        onReveal={(path) =>
+          void api.revealAgentWorktree(chat.id, path).catch(setError)
+        }
+      />
     );
   // A first message scheduled with Send later still shows, to send or take back.
   const isEmpty =

@@ -8,7 +8,11 @@ import {
   GitPullRequest,
   TriangleAlert,
 } from "lucide-react";
-import type { ChatWorkspace, WorktreeStatus } from "../../shared/projects";
+import type {
+  AgentWorktree,
+  ChatWorkspace,
+  WorktreeStatus,
+} from "../../shared/projects";
 import { Modal } from "./ui";
 import "./worktrees.css";
 
@@ -67,6 +71,86 @@ export function WorkspacePicker({
                 );
               })}
             </Menu.Group>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+const folderName = (path: string) => path.split(/[\\/]/).pop() || path;
+
+/**
+ * A checkout thread, plus any worktree its agent made with git on its own:
+ * that's where its edits go, so the footer has to say so.
+ */
+export function CheckoutControl({
+  worktrees = [],
+  onReveal,
+}: {
+  worktrees?: AgentWorktree[];
+  onReveal: (path: string) => void;
+}) {
+  if (!worktrees.length)
+    return (
+      <span
+        className="composer-branch-trigger workspace-trigger static"
+        title="This thread works in the project's checkout"
+      >
+        <Folder size={13} />
+        <span>Current checkout</span>
+      </span>
+    );
+  const [latest] = worktrees.slice(-1);
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className="composer-branch-trigger workspace-trigger agent-worktree-trigger"
+        title={`The agent made ${worktrees.length === 1 ? "a worktree" : "worktrees"} outside the checkout: ${worktrees
+          .map((w) => w.path)
+          .join(", ")}`}
+      >
+        <FolderGit2 size={13} />
+        <span>
+          {worktrees.length === 1
+            ? folderName(latest.path)
+            : `${worktrees.length} worktrees`}
+        </span>
+        <ChevronDown size={12} />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner
+          className="composer-popup-positioner"
+          side="top"
+          align="start"
+          sideOffset={6}
+        >
+          <Menu.Popup
+            className="composer-select-popup worktree-menu"
+            aria-label="Worktrees the agent made"
+          >
+            <div className="composer-menu-label agent-worktree-note">
+              Started in the current checkout. The agent made{" "}
+              {worktrees.length === 1 ? "this worktree" : "these worktrees"}{" "}
+              itself; edits there aren't in the checkout until it merges them.
+            </div>
+            {worktrees.map((w) => (
+              <Menu.Item
+                key={w.path}
+                className="composer-select-item worktree-item agent-worktree-item"
+                title="Open in Finder"
+                onClick={() => onReveal(w.path)}
+              >
+                <FolderGit2 size={14} />
+                <span>
+                  <span>{folderName(w.path)}</span>
+                  <small>
+                    {w.branch ? `${w.branch} · ` : ""}
+                    {w.path}
+                  </small>
+                </span>
+              </Menu.Item>
+            ))}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

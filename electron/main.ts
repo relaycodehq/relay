@@ -979,6 +979,16 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       if (error) throw new Error(error);
       return;
     }
+    case "revealAgentWorktree": {
+      const error = await shell.openPath(
+        await projectChats.agentWorktreePath(
+          idSchema.parse(args[0]),
+          z.string().max(4096).parse(args[1]),
+        ),
+      );
+      if (error) throw new Error(error);
+      return;
+    }
     case "projectChat": {
       const id = idSchema.parse(args[0]);
       const chat =

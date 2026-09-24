@@ -76,6 +76,7 @@ const methods = [
   "projectWorktreeDiff",
   "removeProjectWorktree",
   "revealProjectWorktree",
+  "revealAgentWorktree",
   "projectChat",
   "projectChatImage",
   "projectChatReadImage",

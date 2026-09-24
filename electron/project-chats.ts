@@ -45,6 +45,7 @@ import type { ProjectSharing } from "./project-sharing";
 import { runClaude } from "./rooms/claude";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
+import { watchAgentWorktrees } from "./agent-worktrees";
 import { git } from "./git";
 import {
   dropRevert,
@@ -1728,6 +1729,17 @@ export class ProjectChats {
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
+    const watchWorktrees = watchAgentWorktrees(
+      root,
+      join(dirname(this.dir), "worktrees"),
+      () => chat.agentWorktrees ?? [],
+      async (worktrees) => {
+        if (worktrees.length) chat.agentWorktrees = worktrees;
+        else delete chat.agentWorktrees;
+        await this.save(chat);
+        await this.updateSummary(chat);
+      },
+    );
     let point: string | undefined;
     try {
       const options = {
@@ -1779,6 +1791,7 @@ export class ProjectChats {
             projectTasks.record(root, chat.id, activity.label);
           if (activity.kind === "command")
             commands.set(activity.id, activity.label);
+          watchWorktrees(activity);
           const trace = (message.trace ??= []);
           const traceIndex = trace.findIndex((a) => a.id === activity.id);
           const entry = {
@@ -2166,6 +2179,13 @@ export class ProjectChats {
   async worksInCheckout(projectId: string, id: string) {
     const chat = await this.load(id);
     return chat.projectId === projectId && !chat.worktree;
+  }
+  /** Only paths Relay saw the thread's agent make, so the renderer can't open any folder. */
+  async agentWorktreePath(id: string, path: string) {
+    const chat = await this.load(id);
+    const worktree = chat.agentWorktrees?.find((w) => w.path === path);
+    if (!worktree) throw new Error("This thread didn't make that worktree.");
+    return worktree.path;
   }
   async worktreePath(id: string) {
     const { worktree } = await this.worktreeOf(id);
