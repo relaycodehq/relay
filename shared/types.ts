@@ -247,7 +247,11 @@ export interface Api
   ): Promise<string[]>;
   aiSettings(): Promise<AISettings>;
   saveAISettings(settings: AISettings): Promise<AISettings>;
-  providerUsage(provider: "claude" | "codex"): Promise<ProviderUsage>;
+  /** `force` skips the cached reading, for an explicit refresh. */
+  providerUsage(
+    provider: "claude" | "codex",
+    force?: boolean,
+  ): Promise<ProviderUsage>;
   claudeModels(): Promise<ClaudeModel[]>;
   codexModels(): Promise<CodexModel[]>;
   /** What a project's threads run when they leave the model or effort on Default. */

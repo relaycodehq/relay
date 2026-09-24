@@ -1,6 +1,6 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { Flame } from "lucide-react";
+import { Flame, RefreshCw } from "lucide-react";
 import {
   presentWindow,
   type MeterPace,
@@ -60,12 +60,14 @@ export const UsageRing = memo(function UsageRing({
 }) {
   const [usage, setUsage] = useState<ProviderUsage>();
   const [now, setNow] = useState(() => Date.now());
+  const [refreshing, setRefreshing] = useState(false);
+  const loadRef = useRef<(force: boolean) => Promise<void>>(undefined);
   useEffect(() => {
     let cancel = false;
     setUsage(undefined);
-    const load = () =>
+    const load = (force = false) =>
       api
-        .providerUsage(provider)
+        .providerUsage(provider, force)
         .then((value) => {
           if (cancel) return;
           setUsage(value);
@@ -75,6 +77,7 @@ export const UsageRing = memo(function UsageRing({
         .catch(() => {
           if (!cancel) setUsage({ provider, windows: [], message: null });
         });
+    loadRef.current = load;
     void load();
     const refresh = setInterval(() => void load(), REFRESH_MS);
     const tick = setInterval(() => setNow(Date.now()), 20_000);
@@ -84,6 +87,11 @@ export const UsageRing = memo(function UsageRing({
       clearInterval(tick);
     };
   }, [provider]);
+  const refresh = () => {
+    if (refreshing || !loadRef.current) return;
+    setRefreshing(true);
+    void loadRef.current(true).finally(() => setRefreshing(false));
+  };
   const agent = provider === "codex" ? "Codex" : "Claude";
   const state = ringState(usage, now);
   // Nothing to show when the provider reports no limits at all.
@@ -147,7 +155,23 @@ export const UsageRing = memo(function UsageRing({
           sideOffset={6}
         >
           <Popover.Popup className="composer-select-popup usage-ring-popup">
-            <p className="usage-ring-heading">{agent} usage</p>
+            <div className="usage-ring-header">
+              <p className="usage-ring-heading">{agent} usage</p>
+              <button
+                type="button"
+                className="icon-button usage-ring-refresh"
+                onClick={refresh}
+                disabled={refreshing}
+                aria-label={`Refresh ${agent} usage`}
+                title="Refresh"
+              >
+                <RefreshCw
+                  size={12}
+                  className={refreshing ? "spin" : undefined}
+                  aria-hidden
+                />
+              </button>
+            </div>
             {state ? (
               state.meters.map((meter) => (
                 <UsageRow key={meter.kind} meter={meter} />

@@ -48,7 +48,10 @@ const cache = new Map<Provider, { at: number; value: ProviderUsage }>();
 const pending = new Map<Provider, Promise<ProviderUsage>>();
 const allowedServices = new Set<string>();
 
-export function readProviderUsage(provider: Provider): Promise<ProviderUsage> {
+export function readProviderUsage(
+  provider: Provider,
+  force = false,
+): Promise<ProviderUsage> {
   const hit = cache.get(provider);
   const ttl =
     provider === "claude"
@@ -56,7 +59,9 @@ export function readProviderUsage(provider: Provider): Promise<ProviderUsage> {
       : hit?.value.windows.length
         ? SUCCESS_TTL
         : EMPTY_TTL;
-  if (hit && Date.now() - hit.at < ttl) return Promise.resolve(hit.value);
+  if (!force && hit && Date.now() - hit.at < ttl) {
+    return Promise.resolve(hit.value);
+  }
   const existing = pending.get(provider);
   if (existing) return existing;
   const task = (provider === "claude" ? loadClaude() : loadCodex())

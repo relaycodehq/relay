@@ -867,6 +867,26 @@
   display: grid;
   gap: 10px;
 }
+.usage-ring-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* The button's hit area overhangs the popup padding instead of growing
+     the heading row. */
+  margin: -4px -6px -4px 0;
+}
+.usage-ring-refresh {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+.usage-ring-refresh:disabled {
+  cursor: default;
+  background: transparent;
+  color: var(--muted);
+}
 .usage-ring-heading {
   margin: 0;
   font-size: 11px;
@@ -945,5 +965,8 @@
 @media (prefers-reduced-motion: reduce) {
   .usage-ring-fill {
     transition: none;
+  }
+  .usage-ring-refresh .spin {
+    animation: none;
   }
 }

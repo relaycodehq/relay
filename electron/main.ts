@@ -1657,7 +1657,10 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "codexModels":
       return codexModels();
     case "providerUsage":
-      return readProviderUsage(z.enum(["claude", "codex"]).parse(args[0]));
+      return readProviderUsage(
+        z.enum(["claude", "codex"]).parse(args[0]),
+        z.boolean().optional().parse(args[1]),
+      );
     case "askCodex": {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);
