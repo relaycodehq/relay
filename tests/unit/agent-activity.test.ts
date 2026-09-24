@@ -5,7 +5,7 @@ import {
   codexActivity,
 } from "../../electron/rooms/activity";
 import { publicMessage } from "../../electron/project-sharing";
-it("caps retained output, represents failures, and excludes local execution traces when sharing", () => {
+it("caps a failed command's output and keeps its arguments out", () => {
   const activity = codexActivity("item/completed", {
     id: "a",
     type: "commandExecution",
@@ -17,31 +17,33 @@ it("caps retained output, represents failures, and excludes local execution trac
   expect(activity.status).toBe("failed");
   expect(activity.detail).toHaveLength(8000);
   expect(JSON.stringify(activity)).not.toContain("hidden");
+});
+it("leaves local activity and traces out of a shared message", () => {
+  const message = {
+    id: "message",
+    role: "assistant",
+    provider: "codex",
+    status: "complete",
+    body: "The check failed.",
+    created: 1,
+    version: 1,
+  } as const;
+  const activity = codexActivity("item/started", {
+    id: "a",
+    type: "commandExecution",
+    command: "npm test",
+  })!;
   expect(
-    publicMessage({
-      id: "message",
-      role: "assistant",
-      provider: "codex",
-      status: "complete",
-      body: "The check failed.",
-      created: 1,
-      version: 1,
-      activity: [activity],
-      trace: [{ kind: "commentary", id: "private", text: "private work" }],
-    }),
+    publicMessage({ ...message, activity: [activity] }),
   ).not.toHaveProperty("activity");
   expect(
     publicMessage({
-      id: "m",
-      role: "assistant",
-      provider: "codex",
-      status: "complete",
-      body: "Public answer",
-      created: 1,
-      version: 1,
+      ...message,
       trace: [{ kind: "commentary", id: "secret", text: "private work" }],
     }),
   ).not.toHaveProperty("trace");
+});
+it("names a file change by its path, never its patch, and skips reasoning", () => {
   expect(
     codexActivity("item/started", {
       id: "b",
@@ -62,6 +64,9 @@ it("caps retained output, represents failures, and excludes local execution trac
       summary: ["internal"],
     }),
   ).toBeUndefined();
+  expect(codexActivity("item/started", null)).toBeUndefined();
+});
+it("labels Claude's reads, searches and MCP calls", () => {
   expect(
     claudeActivity("t", "Read", { file_path: "/repo/src/a.ts", limit: 4 }),
   ).toEqual({
@@ -76,7 +81,6 @@ it("caps retained output, represents failures, and excludes local execution trac
   expect(claudeActivity("m", "mcp__linear__get_issue", { id: "x" }).label).toBe(
     "linear: get_issue",
   );
-  expect(codexActivity("item/started", null)).toBeUndefined();
 });
 it("takes the files Claude writes from its file tools only", () => {
   const edit = { file_path: "/repo/a.ts", old_string: "x" };
