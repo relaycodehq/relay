@@ -32,7 +32,6 @@ const methods = [
   "renameProject",
   "revealProject",
   "linkProject",
-  "setProjectChatScope",
   "triageProjectChat",
   "renameProjectChat",
   "projectCommands",

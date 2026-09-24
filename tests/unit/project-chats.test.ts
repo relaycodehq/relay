@@ -1290,9 +1290,6 @@ it("queues incompatible steering first without pausing or changing permissions",
   expect(await readFile(join(root, "capture.jsonl"), "utf8")).not.toContain(
     '"steer"',
   );
-  await expect(chats.setScope(chat.id, { kind: "project" })).rejects.toThrow(
-    "queued messages",
-  );
   await chats.queueAction(chat.id, "move", followup.id, 1);
   expect((await chats.get(chat.id)).queue?.map((q) => q.input.body)).toEqual([
     "@codex Earlier",

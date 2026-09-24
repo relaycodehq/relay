@@ -1202,8 +1202,8 @@ export function ProjectChat({
     presence.data?.filter((p) => p.userId !== chat?.shared?.memberId) ?? [];
   const contextButtons = (
     <>
-      {/* A deep review keeps what it started with. */}
-      {chat?.scope.kind !== "review" && (
+      {/* A thread's scope is fixed once it starts; another takes a new thread. */}
+      {isEmpty && (
         <>
           <button
             className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
@@ -1231,18 +1231,15 @@ export function ProjectChat({
               <ChevronDown size={12} />
             </button>
           )}
+          <button
+            className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
+            onClick={onDeepReview}
+            disabled={dirty}
+          >
+            <ScanSearch size={14} />
+            Deep review
+          </button>
         </>
-      )}
-      {/* Only a new thread can become one. */}
-      {!chat && (
-        <button
-          className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
-          onClick={onDeepReview}
-          disabled={dirty}
-        >
-          <ScanSearch size={14} />
-          Deep review
-        </button>
       )}
       {scope.kind === "pr" && (
         <button

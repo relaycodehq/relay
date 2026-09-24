@@ -362,23 +362,16 @@ export default function ProjectShell() {
     setViewing(NO_VIEWING);
     if (fresh === true) setDraftScope({ kind: "project" });
   }
+  /** A thread keeps the scope it started with; another one takes a new thread. */
+  function newThreadIn(scope: ChatSummary["scope"]) {
+    if (dirty) return;
+    setChatId(null);
+    setDraftScope(scope);
+  }
   async function reviewBranchPr(ref: PullRef) {
     if (!project || dirty) return;
-    try {
-      const scope = { kind: "pr" as const, ref };
-      const target =
-        chat && !chat.shared && chat.scope.kind !== "review"
-          ? await api.setProjectChatScope(chat.id, scope)
-          : await api.createProjectChat(project.id, scope);
-      await chats.refetch();
-      await qc.invalidateQueries({ queryKey: ["project-chat", target.id] });
-      setChatId(target.id);
-      setDraftScope(scope);
-      panes.show("changes");
-      panes.show("chat");
-    } catch (e) {
-      setError(e);
-    }
+    await discuss(ref);
+    panes.show("changes");
   }
   function runCommand(command: RelayCommand) {
     if (dirty) {
@@ -662,25 +655,12 @@ export default function ProjectShell() {
                   await chats.refetch();
                   setChatId(c.id);
                 }}
-                onRepository={() => {
-                  if (dirty) return;
-                  if (!chat) {
-                    setDraftScope({ kind: "project" });
-                    return;
-                  }
-                  if (chat.scope.kind === "pr")
-                    navigate(project, undefined, true);
-                }}
+                onRepository={() => newThreadIn({ kind: "project" })}
                 onChoosePR={() => {
                   if (!dirty) setChoosePR(true);
                 }}
-                onSelectPR={(ref) => {
-                  setChatId(null);
-                  setDraftScope({ kind: "pr", ref });
-                }}
-                onDeepReview={() => {
-                  if (!dirty) setDraftScope({ kind: "review" });
-                }}
+                onSelectPR={(ref) => newThreadIn({ kind: "pr", ref })}
+                onDeepReview={() => newThreadIn({ kind: "review" })}
                 onSwitchProject={(next) => navigate(next, undefined, true)}
                 onAddProject={() => void add()}
                 canChoosePR={!!account && !!project.repository}

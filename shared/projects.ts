@@ -333,7 +333,6 @@ export interface ProjectApi {
   renameProject(id: string, name: string): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;
-  setProjectChatScope(id: string, scope: ChatScope): Promise<ChatSummary>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   projectCommands(

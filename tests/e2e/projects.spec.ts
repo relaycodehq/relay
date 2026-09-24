@@ -149,6 +149,10 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await expect(page.getByRole("button", { name: "Stop answer" })).toHaveCount(
       0,
     );
+    // Once it has started, the thread stays on its PR; another scope takes a new thread.
+    await expect(
+      page.getByRole("button", { name: "Repository", exact: true }),
+    ).toHaveCount(0);
     const requests = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")

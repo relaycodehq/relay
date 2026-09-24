@@ -581,11 +581,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     }
     case "linkProject":
       return projects.link(idSchema.parse(args[0]), requireClient());
-    case "setProjectChatScope":
-      return projectChats.setScope(
-        idSchema.parse(args[0]),
-        chatScopeSchema.parse(args[1]),
-      );
     case "triageProjectChat":
       return projectChats.triage(
         idSchema.parse(args[0]),
