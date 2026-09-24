@@ -114,11 +114,16 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await expect(
       page.getByRole("button", { name: /^Plan mode/ }),
     ).toHaveAttribute("aria-pressed", "true");
-    await input.fill("Fix the bug /bui");
+    await input.fill("Fix the bug /plan of");
     await input.press("Enter");
     await expect(
       page.getByRole("button", { name: /^Default mode/ }),
     ).toBeVisible();
+    // A path is only text, even one like a build folder.
+    await input.fill("The output lands in /build");
+    await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
+      0,
+    );
     const model = page.getByRole("button", {
       name: "Choose model and provider",
     });

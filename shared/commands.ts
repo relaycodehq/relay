@@ -22,7 +22,6 @@ export const relayCommands = [
     args: "<level>",
   },
   { name: "plan", description: "Toggle plan mode", args: "[on|off]" },
-  { name: "build", description: "Leave plan mode" },
   {
     name: "permissions",
     description: "Set what the agent may do without asking",
@@ -40,7 +39,6 @@ export const composerCommands: readonly RelayCommand[] = [
   "model",
   "effort",
   "plan",
-  "build",
   "permissions",
   "fast",
 ];

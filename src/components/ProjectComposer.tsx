@@ -448,10 +448,6 @@ export function ProjectComposer({
       );
       return true;
     }
-    if (command === "build") {
-      setInteractionMode("default");
-      return true;
-    }
     if (recipient !== "codex") return "Fast mode is only available for Codex.";
     if (selected) setChoice({ ...selected, fast: toggle(args, selected.fast) });
     return true;
