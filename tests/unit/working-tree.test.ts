@@ -62,6 +62,39 @@ it("keeps partially staged work separate, commits only the index, then pushes ex
   await performGitAction(root, { kind: "push", revision: tree.revision });
   expect((await workingTree(root)).ahead).toBe(0);
 });
+it("commits only the chosen files and leaves the rest of the checkout alone", async () => {
+  await writeFile(join(root, "gone.ts"), "x\n");
+  git("add", "gone.ts");
+  git("commit", "-qm", "Add gone");
+  await writeFile(join(root, "code.ts"), "export const a = 2;\n");
+  await writeFile(join(root, "new.ts"), "new\n");
+  await rm(join(root, "gone.ts"));
+  await writeFile(join(root, "staged.ts"), "someone else's\n");
+  await writeFile(join(root, "other.ts"), "not mine\n");
+  git("add", "staged.ts");
+  let tree = await workingTree(root);
+  tree = await performGitAction(root, {
+    kind: "commit",
+    revision: tree.revision,
+    message: "Chosen files",
+    paths: ["code.ts", "new.ts", "gone.ts"],
+  });
+  expect(
+    git("show", "--name-status", "--format=", "HEAD").split("\n").sort(),
+  ).toEqual(["A\tnew.ts", "D\tgone.ts", "M\tcode.ts"]);
+  expect(tree.changes.map((c) => [c.path, c.index]).sort()).toEqual([
+    ["other.ts", "?"],
+    ["staged.ts", "A"],
+  ]);
+  await expect(
+    performGitAction(root, {
+      kind: "commit",
+      revision: tree.revision,
+      message: "Stale",
+      paths: ["code.ts"],
+    }),
+  ).rejects.toThrow("no longer changed");
+});
 it("handles literal odd filenames, renames, deletion and untracked files", async () => {
   const name = ":(glob)* weird\nfile.ts";
   await writeFile(join(root, name), "new\n");

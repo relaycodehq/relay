@@ -1,91 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitPullRequest, ArrowRight, Upload } from "lucide-react";
+import { ArrowRight, Upload } from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { PullRef } from "../../shared/types";
 import type { CreatedPullRequest } from "../../shared/pull-request-create";
 import { api } from "../lib/api";
 import { ErrorBox, Loading, Modal } from "./ui";
-export function BranchPullRequest({
-  project,
-  connected,
-  disabled,
-  request,
-  onConnect,
-  onReview,
-  onChanges,
-}: {
-  project: Project;
-  connected: boolean;
-  disabled: boolean;
-  request: number;
-  onConnect: () => void;
-  onReview: (ref: PullRef) => void;
-  onChanges: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const seen = useRef(request);
-  // Refreshed by the shell's working-tree poll.
-  const tree = useQuery({
-    queryKey: ["working-tree", "project", project.id],
-    queryFn: () => api.projectWorkingTree(project.id),
-  });
-  const existing = useQuery({
-    queryKey: ["branch-pulls", project.id, tree.data?.branch, connected],
-    queryFn: () => api.projectBranchPulls(project.id),
-    enabled: connected && !!project.repository && !!tree.data?.branch,
-    staleTime: 30000,
-    refetchInterval: 60000,
-  });
-  function launch() {
-    if (disabled) return;
-    if (!connected) {
-      onConnect();
-      return;
-    }
-    if (existing.data?.length === 1) {
-      onReview(existing.data[0].ref);
-      return;
-    }
-    setOpen(true);
-  }
-  useEffect(() => {
-    if (request !== seen.current) {
-      seen.current = request;
-      launch();
-    }
-  }, [request]);
-  return (
-    <>
-      <button
-        onClick={launch}
-        disabled={disabled}
-        title="Open or create a pull request for the current branch"
-      >
-        <GitPullRequest size={14} />
-        {existing.data?.length === 1
-          ? `PR #${existing.data[0].ref.number} ↗`
-          : existing.data?.length
-            ? `PRs (${existing.data.length})`
-            : "Create PR"}
-      </button>
-      {open && (
-        <CreatePullSheet
-          project={project}
-          onClose={() => setOpen(false)}
-          onReview={(ref) => {
-            setOpen(false);
-            onReview(ref);
-          }}
-          onChanges={() => {
-            setOpen(false);
-            onChanges();
-          }}
-        />
-      )}
-    </>
-  );
-}
 /** With `chatId`, a PR of that thread's worktree: its changes as one commit on the checkout's. */
 export function CreatePullSheet({
   project,

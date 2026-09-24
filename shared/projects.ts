@@ -499,6 +499,18 @@ export interface ProjectApi {
     area: ChangeArea,
   ): Promise<FilePair>;
   projectGitAction(id: string, action: GitAction): Promise<WorkingTree>;
+  /** A generated message for committing just these changed files. */
+  projectCommitMessage(id: string, paths: string[]): Promise<string>;
+  /** Merging the current branch into `base`, the default branch when omitted. */
+  projectMergePlan(
+    id: string,
+    base?: string,
+  ): Promise<import("./branch-merge").MergePlan>;
+  projectMergeBranch(
+    id: string,
+    input: import("./branch-merge").MergeBranch,
+  ): Promise<import("./branch-merge").MergeResult>;
+  projectDeleteBranch(id: string, name: string): Promise<void>;
   projectHistory(
     id: string,
     scope: import("./history").HistoryScope,

@@ -65,6 +65,8 @@ export function PaneToggles({
     icon: ReactNode;
     open: boolean;
     disabled?: boolean;
+    /** Lines changed, shown after the label; hidden when there are none. */
+    stat?: { additions: number; deletions: number };
   }[];
   onToggle: (id: PaneId) => void;
   onMove: (dragged: PaneId, target: PaneId, after: boolean) => void;
@@ -88,6 +90,8 @@ function PaneToggle({
     icon: ReactNode;
     open: boolean;
     disabled?: boolean;
+    /** Lines changed, shown after the label; hidden when there are none. */
+    stat?: { additions: number; deletions: number };
   };
   onToggle: (id: PaneId) => void;
   onMove: (dragged: PaneId, target: PaneId, after: boolean) => void;
@@ -106,6 +110,15 @@ function PaneToggle({
     >
       {pane.icon}
       <span>{pane.label}</span>
+      {!!(pane.stat?.additions || pane.stat?.deletions) && (
+        <span
+          className="pane-toggle-stat"
+          aria-label={`${pane.stat.additions} lines added, ${pane.stat.deletions} removed`}
+        >
+          <span className="pane-toggle-add">+{pane.stat.additions}</span>
+          <span className="pane-toggle-del">−{pane.stat.deletions}</span>
+        </span>
+      )}
     </button>
   );
 }

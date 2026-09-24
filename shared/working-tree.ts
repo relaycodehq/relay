@@ -26,6 +26,8 @@ export interface WorkingTree {
   pushTarget: string | null;
   pushUrl: string | null;
   operation: string | null;
+  /** Lines added and removed across all uncommitted changes, against HEAD. */
+  lines: { additions: number; deletions: number };
   outgoing: { sha: string; subject: string }[];
 }
 export const gitActionSchema = z.discriminatedUnion("kind", [
@@ -48,6 +50,8 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
       kind: z.literal("commit"),
       revision: z.string(),
       message: z.string().trim().min(1).max(16000),
+      /** Commit just these files, as they are on disk; the rest of the index stays put. */
+      paths: z.array(workingPathSchema).min(1).max(1000).optional(),
     })
     .strict(),
   z.object({ kind: z.literal("push"), revision: z.string() }).strict(),

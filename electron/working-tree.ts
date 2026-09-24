@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
-import { lstat } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectRepository } from "./repository";
 import { git, gitBytes, gitEnv, redactCredentials } from "./git";
 import { digest } from "./hash";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
+import { parseNumstat } from "./turn-changes";
 import {
   workingPathSchema,
   type WorkingTree,
@@ -83,7 +84,7 @@ export function parseStatus(raw: string): WorkingChange[] {
   }
   return result;
 }
-async function pushDestination(root: string, branch: string) {
+export async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
   const config = (key: string) =>
     git(root, ["config", "--get", `branch.${branch}.${key}`]).then(
@@ -111,6 +112,67 @@ async function fetchUpstream(root: string, branch: string) {
     : "";
   if (!remote || remote === ".") return;
   await git(root, ["fetch", "--prune", "--quiet", remote], 60000);
+}
+const untrackedLimit = 200,
+  untrackedBytes = 1024 * 1024;
+// The tree is polled every few seconds and untracked files rarely change
+// between polls, so their line counts are kept per checkout by size and mtime.
+const untrackedCache = new Map<string, Map<string, number>>();
+/** Lines added and removed across the checkout against HEAD, untracked text files included. */
+async function lineCounts(root: string, changes: WorkingChange[]) {
+  const untracked = changes
+    .filter((c) => c.index === "?")
+    .slice(0, untrackedLimit);
+  const previous = untrackedCache.get(root),
+    seen = new Map<string, number>();
+  const [diff, added] = await Promise.all([
+    untracked.length === changes.length
+      ? ""
+      : git(root, [
+          "diff",
+          "HEAD",
+          "--numstat",
+          "-z",
+          "--no-renames",
+          "--no-color",
+          "--no-ext-diff",
+          "--no-textconv",
+        ]),
+    Promise.all(
+      untracked.map((c) => untrackedLines(join(root, c.path), previous, seen)),
+    ),
+  ]);
+  if (seen.size) untrackedCache.set(root, seen);
+  else untrackedCache.delete(root);
+  const tracked = parseNumstat(diff);
+  return {
+    additions:
+      tracked.reduce((sum, f) => sum + f.additions, 0) +
+      added.reduce((sum, n) => sum + n, 0),
+    deletions: tracked.reduce((sum, f) => sum + f.deletions, 0),
+  };
+}
+async function untrackedLines(
+  path: string,
+  previous: Map<string, number> | undefined,
+  seen: Map<string, number>,
+) {
+  const s = await lstat(path).catch(() => null);
+  if (!s?.isFile() || !s.size || s.size > untrackedBytes) return 0;
+  const key = `${path}\0${s.size}\0${s.mtimeMs}`;
+  let lines = previous?.get(key);
+  if (lines === undefined) {
+    const bytes = await readFile(path).catch(() => null);
+    // Git counts a file with a NUL byte as binary, with no lines.
+    lines = 0;
+    if (bytes && !bytes.includes(0)) {
+      for (let i = bytes.indexOf(10); i !== -1; i = bytes.indexOf(10, i + 1))
+        lines++;
+      if (bytes[bytes.length - 1] !== 10) lines++;
+    }
+  }
+  seen.set(key, lines);
+  return lines;
 }
 export async function workingTree(root: string): Promise<WorkingTree> {
   // This runs every few seconds and around every Git action, so reads that
@@ -140,7 +202,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   // Staging the status line doesn't show (such as `git add -p`) only happens
   // on changed paths. The whole index is megabytes in a large repository.
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
-  const [index, stamps, destination, counts, log] = await Promise.all([
+  const [index, stamps, destination, counts, log, lines] = await Promise.all([
     tracked.length
       ? git(root, [
           "ls-files",
@@ -174,6 +236,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     upstream
       ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
       : "",
+    lineCounts(root, changes),
   ]);
   return {
     head,
@@ -183,6 +246,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     ahead: counts[1],
     behind: counts[0],
     operation,
+    lines,
     pushTarget: destination?.label ?? null,
     pushUrl: destination ? redactCredentials(destination.url) : null,
     outgoing: log
@@ -218,6 +282,24 @@ export async function serializeRepo<T>(
     if (queue.get(root) === task) queue.delete(root);
   }
 }
+function withPreviousPaths(
+  changes: WorkingChange[],
+  paths: string[],
+  includePrevious: (c: WorkingChange) => boolean,
+) {
+  return [
+    ...new Set(
+      paths.flatMap((path) => {
+        const c = changes.find((c) => c.path === path);
+        if (!c)
+          throw new Error("That file is no longer changed. Refresh first.");
+        return c.previousPath && includePrevious(c)
+          ? [path, c.previousPath]
+          : [path];
+      }),
+    ),
+  ];
+}
 export async function performGitAction(root: string, action: GitAction) {
   return serializeRepo(root, async () => {
     const state = await workingTree(root);
@@ -232,21 +314,11 @@ export async function performGitAction(root: string, action: GitAction) {
         "Your checkout changed. Review the refreshed changes and try again.",
       );
     if (action.kind === "stage" || action.kind === "unstage") {
-      const paths = [...new Set(action.paths)];
-      for (const path of paths)
-        if (!state.changes.some((c) => c.path === path))
-          throw new Error("That file is no longer changed. Refresh first.");
-      const allPaths = [
-        ...new Set(
-          paths.flatMap((path) => {
-            const c = state.changes.find((c) => c.path === path)!;
-            return c.previousPath &&
-              (action.kind === "unstage" || /[RC]/.test(c.worktree))
-              ? [path, c.previousPath]
-              : [path];
-          }),
-        ),
-      ];
+      const allPaths = withPreviousPaths(
+        state.changes,
+        action.paths,
+        (c) => action.kind === "unstage" || /[RC]/.test(c.worktree),
+      );
       // Bounded chunks avoid argv limits; use literal paths even for names containing Git magic.
       for (let i = 0; i < allPaths.length; i += 100)
         await git(
@@ -262,7 +334,17 @@ export async function performGitAction(root: string, action: GitAction) {
         );
       if (state.changes.some((c) => c.conflict))
         throw new Error("Resolve and stage all merge conflicts first.");
-      if (action.kind === "commit") {
+      if (action.kind === "commit" && action.paths) {
+        // Both sides of a rename, so its old path is committed as removed.
+        const paths = withPreviousPaths(state.changes, action.paths, () => true);
+        // New and deleted files must be in the index before `commit --only` sees them.
+        await git(root, ["add", "--", ...paths]);
+        await git(
+          root,
+          ["commit", "--only", "-m", action.message, "--", ...paths],
+          120000,
+        );
+      } else if (action.kind === "commit") {
         if (!state.changes.some((c) => c.index !== " " && c.index !== "?"))
           throw new Error("Stage the changes you want to commit first.");
         await git(root, ["commit", "-m", action.message], 120000);

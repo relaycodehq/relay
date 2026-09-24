@@ -1,4 +1,4 @@
-import { BranchPullRequest } from "./BranchPullRequest";
+import { GitActions } from "./GitActions";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
@@ -644,7 +644,7 @@ export default function ProjectShell() {
               }
             />
             {!project.plain && (
-              <BranchPullRequest
+              <GitActions
                 key={project.id}
                 project={project}
                 connected={!!account}
@@ -653,6 +653,7 @@ export default function ProjectShell() {
                 onConnect={() => setSignin(true)}
                 onReview={(ref) => void reviewBranchPr(ref)}
                 onChanges={() => openCode("changes")}
+                onError={setError}
               />
             )}
             <PaneToggles
@@ -678,6 +679,7 @@ export default function ProjectShell() {
                         : {
                             label: "Changes",
                             icon: <GitCompareArrows size={14} />,
+                            stat: tree.data?.lines,
                           }),
               }))}
             />

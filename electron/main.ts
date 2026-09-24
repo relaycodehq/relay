@@ -37,6 +37,9 @@ import {
   performGitAction,
   validateRepo,
 } from "./working-tree";
+import { generateCommitMessage } from "./commit-messages";
+import { deleteMergedBranch, mergeBranch, mergePlan } from "./branch-merge";
+import { mergeBranchSchema } from "../shared/branch-merge";
 import { RoomService } from "./rooms/service";
 import { readHostingSetup } from "./rooms/provision";
 import {
@@ -853,6 +856,28 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         z.array(workingPathSchema).max(1000).nullable().parse(args[2]),
         z.enum(["revert", "redo"]).parse(args[3]),
         z.boolean().parse(args[4]),
+      );
+    case "projectMergePlan":
+      return mergePlan(
+        await projects.root(idSchema.parse(args[0])),
+        z.string().min(1).max(250).optional().parse(args[1]),
+      );
+    case "projectMergeBranch":
+      return mergeBranch(
+        await projects.root(idSchema.parse(args[0])),
+        mergeBranchSchema.parse(args[1]),
+      );
+    case "projectDeleteBranch":
+      return deleteMergedBranch(
+        await projects.root(idSchema.parse(args[0])),
+        z.string().min(1).max(250).parse(args[1]),
+      );
+    case "projectCommitMessage":
+      return generateCommitMessage(
+        await projects.root(idSchema.parse(args[0])),
+        z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
+        aiSettingsSchema.parse(store.get().aiSettings ?? defaultAISettings),
+        AbortSignal.timeout(120_000),
       );
     case "projectGitAction":
       return performGitAction(

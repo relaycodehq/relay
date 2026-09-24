@@ -170,6 +170,19 @@
   min-height: 0;
   cursor: pointer;
 }
+.pane-toggle-stat {
+  display: inline-flex;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.pane-toggle-add {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.pane-toggle-del {
+  color: light-dark(#c4323f, #f0707a);
+}
 .pane-toggle:hover:not(:disabled) {
   color: var(--text);
   background: var(--hover);
