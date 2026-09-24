@@ -51,7 +51,11 @@ import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
-import { ImageThumbnail, type PreviewImage } from "./ImagePreview";
+import {
+  ImageThumbnail,
+  useWorkingImages,
+  type PreviewImage,
+} from "./ImagePreview";
 import { ImageViewer } from "./ImageViewer";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
@@ -298,8 +302,9 @@ const Message = memo(function Message({
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
 }) {
-  const [viewing, setViewing] = useState<number>();
-  const images = useMemo(
+  /** The key of the image open in the viewer. */
+  const [viewing, setViewing] = useState<string>();
+  const allImages = useMemo(
     () =>
       chatId
         ? [
@@ -311,6 +316,8 @@ const Message = memo(function Message({
         : [],
     [chatId, m, projectRoot],
   );
+  const images = useWorkingImages(allImages, viewing);
+  const viewingIndex = images.findIndex((image) => image.key === viewing);
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
     const code = parseCodeReferences(m.body);
@@ -392,8 +399,8 @@ const Message = memo(function Message({
           onOpenImage={
             chatId
               ? (path) => {
-                  const index = images.findIndex((i) => i.path === path);
-                  if (index >= 0) setViewing(index);
+                  const image = allImages.find((i) => i.path === path);
+                  if (image) setViewing(image.key);
                 }
               : undefined
           }
@@ -434,20 +441,20 @@ const Message = memo(function Message({
       {/* The images the agent read show once its turn ends, after the answer. */}
       {!!images.length && m.status !== "streaming" && (
         <div className="message-images">
-          {images.map((image, index) => (
+          {images.map((image) => (
             <ImageThumbnail
               key={image.key}
               image={image}
-              onOpen={() => setViewing(index)}
+              onOpen={() => setViewing(image.key)}
             />
           ))}
         </div>
       )}
-      {viewing !== undefined && images[viewing] && (
+      {viewingIndex >= 0 && (
         <ImageViewer
           images={images}
-          index={viewing}
-          onIndex={setViewing}
+          index={viewingIndex}
+          onIndex={(index) => setViewing(images[index].key)}
           onClose={() => setViewing(undefined)}
         />
       )}
