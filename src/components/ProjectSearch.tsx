@@ -31,7 +31,9 @@ export function ProjectSearch({
     <Combobox.Root<string>
       inline
       open
-      autoHighlight
+      // The root types this as boolean but passes it through; "always" starts
+      // on the first row, so the first ArrowDown doesn't just land on it.
+      autoHighlight={"always" as unknown as boolean}
       items={matches.map((item) => item.id)}
       filter={null}
       inputValue={search}
@@ -86,14 +88,12 @@ export function ProjectSearch({
       <div className="headline-project-scroll">
         {matches.length ? (
           <Combobox.List aria-label="Projects">
-            {matches.map((item, index) => (
+            {matches.map((item) => (
               <Combobox.Item
                 key={item.id}
                 value={item.id}
-                index={index}
                 aria-label={`${item.name} · ${item.path}`}
                 className="headline-project-row"
-                data-current={item.id === current ? "" : undefined}
                 onClick={() => {
                   // Picking the selected value fires no change.
                   if (item.id === current) onSelect(item);

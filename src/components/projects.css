@@ -804,9 +804,7 @@
   outline: none;
   cursor: pointer;
 }
-.headline-project-row:hover,
-.headline-project-row[data-highlighted],
-.headline-project-row[data-current] {
+.headline-project-row[data-highlighted] {
   background: var(--hover);
 }
 .headline-project-row > svg {
