@@ -1459,14 +1459,6 @@ export function ProjectSidebar({
   const threads = (
     <div className="sb-scroll">
       <nav className="sb-nav">
-        <button
-          className="sb-nav-item primary"
-          disabled={dirty || !projects.length}
-          onClick={onPickNew}
-        >
-          <SquarePen size={15} />
-          New thread
-        </button>
         <button className="sb-nav-item" disabled={dirty} onClick={onInbox}>
           <GitPullRequest size={15} />
           Pull requests
@@ -1549,7 +1541,16 @@ export function ProjectSidebar({
           )}
         </div>
         <button
-          className={`sb-bell ${view === "activity" ? "active" : ""}`}
+          className="sb-top-button"
+          aria-label="New thread"
+          title="New thread  ⌘N"
+          disabled={dirty || !projects.length}
+          onClick={onPickNew}
+        >
+          <Plus size={16} />
+        </button>
+        <button
+          className={`sb-top-button sb-bell ${view === "activity" ? "active" : ""}`}
           aria-pressed={view === "activity"}
           aria-label="View activity"
           title="View activity  ⌥⌘U"

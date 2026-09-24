@@ -38,7 +38,7 @@
   color: var(--text);
 }
 
-/* Header: search + activity bell. */
+/* Header: search, new thread, activity bell. */
 .sb-top {
   display: flex;
   align-items: center;
@@ -85,7 +85,7 @@
   border-radius: 50%;
   color: var(--muted);
 }
-.sb .sb-bell {
+.sb .sb-top-button {
   position: relative;
   display: grid;
   place-items: center;
@@ -95,7 +95,7 @@
   border-radius: 8px;
   color: var(--muted);
 }
-.sb .sb-bell:hover {
+.sb .sb-top-button:hover:not(:disabled) {
   background: var(--hover);
   color: var(--text);
 }
@@ -152,16 +152,6 @@
 }
 .sb .sb-nav-item:hover:not(:disabled) {
   background: var(--hover);
-}
-.sb .sb-nav-item.primary {
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  font-weight: 500;
-}
-.sb .sb-nav-item.primary > svg {
-  color: var(--text);
-}
-.sb .sb-nav-item.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--text) 11%, transparent);
 }
 
 .sb-section-heading,
