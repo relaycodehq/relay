@@ -52,3 +52,14 @@ export function projectFileLink(
     directory,
   };
 }
+
+/**
+ * The paths a link names. Agents often cite a bare `name.ts:33` or a path
+ * from inside the project, so without an exact hit this falls back to paths
+ * that end with it.
+ */
+export function matchLink(link: ProjectFileLink, paths: readonly string[]) {
+  const exact = paths.filter((p) => linksTo(link, p));
+  if (exact.length || link.directory) return exact;
+  return paths.filter((p) => p.endsWith("/" + link.path));
+}

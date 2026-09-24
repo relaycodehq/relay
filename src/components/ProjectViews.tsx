@@ -19,12 +19,14 @@ type Viewing = { path: string | null; viewed: number; total: number };
 export type FileTarget = ProjectFileLink & {
   request: number;
   projectId: string;
+  /** Lists the files matching this instead of opening one. */
+  search?: string;
 };
 
 /**
  * Uncommitted work in the project folder, or what one agent turn changed
- * while a turn is open. A file clicked in the chat selects its row here;
- * only "Open in editor" opens the Files pane.
+ * while a turn is open. A changed file clicked in the chat selects its row
+ * here; unchanged ones open in the Files pane.
  */
 export function ProjectChanges({
   project,
@@ -108,8 +110,8 @@ export function ProjectFiles({
     [filter, setFilter] = useState("");
   useEffect(() => {
     if (!openTarget || openTarget.projectId !== project.id || dirty) return;
-    if (openTarget.directory) {
-      setFilter(openTarget.path + "/");
+    if (openTarget.search !== undefined || openTarget.directory) {
+      setFilter(openTarget.search ?? openTarget.path + "/");
       setFile(null);
     } else {
       setFilter("");

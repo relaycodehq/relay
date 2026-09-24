@@ -43,7 +43,7 @@ import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { CodeReference } from "../../shared/code-references";
-import type { ProjectFileLink } from "../lib/project-file-links";
+import { matchLink, type ProjectFileLink } from "../lib/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { NewThreadPicker } from "./NewThreadPicker";
 import { RelayMark } from "./RelayMark";
@@ -309,7 +309,7 @@ export default function ProjectShell() {
     }));
     panes.show("changes");
   }
-  function openInEditor(target: ProjectFileLink) {
+  function openInEditor(target: ProjectFileLink & { search?: string }) {
     if (dirty) {
       setError(
         new Error("Save or close the edited file before opening another file."),
@@ -323,9 +323,7 @@ export default function ProjectShell() {
     }));
     panes.show("files");
   }
-  // A file clicked in the chat shows its diff in Changes. Files opens only
-  // when asked: its toggle, or "Open in editor".
-  function openChatFile(target: ProjectFileLink) {
+  function revealChange(target: ProjectFileLink) {
     setChangeTarget((previous) => ({
       ...target,
       projectId: project!.id,
@@ -333,6 +331,39 @@ export default function ProjectShell() {
     }));
     setTurnDiff(null);
     panes.show("changes");
+  }
+  // A file clicked in the chat shows its diff in Changes (Review in a PR
+  // thread), or opens in Files when it has none. A name that fits several
+  // files lists them in Files.
+  async function openChatFile(target: ProjectFileLink) {
+    if (pull) return revealChange(target);
+    const id = project!.id;
+    try {
+      const changes = (
+        tree.data ?? (await api.projectWorkingTree(id))
+      ).changes.map((c) => c.path);
+      const changed = matchLink(target, changes);
+      if (target.directory ? changed.length : changed.length === 1)
+        return revealChange(
+          target.directory ? target : { ...target, path: changed[0] },
+        );
+      if (target.directory) return openInEditor(target);
+      const found = matchLink(
+        target,
+        await qc.fetchQuery({
+          queryKey: ["project-files", id],
+          queryFn: () => api.projectFiles(id),
+          staleTime: 5000,
+        }),
+      );
+      openInEditor(
+        found.length === 1
+          ? { ...target, path: found[0] }
+          : { ...target, search: target.path },
+      );
+    } catch (e) {
+      setError(e);
+    }
   }
   /**
    * Opens `next`, or with `fresh` the project's new thread: a fresh one on

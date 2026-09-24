@@ -164,7 +164,7 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     expect(git("diff", "--cached", "--name-only")).toBe("");
 
     // A file clicked in the chat shows its local diff in Changes, even over a
-    // turn's diff. Files opens only when asked.
+    // turn's diff.
     await card.getByRole("button", { name: /guard\.ts/ }).click();
     await expect(
       page.getByRole("region", { name: "Turn changes" }),
@@ -179,16 +179,8 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
       "src/guard.ts",
     );
     await expect(page.locator(".project-file-list")).toHaveCount(0);
-    // A file without local changes says so, and offers the editor.
+    // A file without local changes opens straight in the editor.
     await answer.locator('.chat-file-link[title="src/cache.ts:1"]').click();
-    await expect(local.locator(".working-review")).toContainText(
-      "src/cache.ts has no local changes.",
-    );
-    await expect(local.locator(".working-file.selected")).toHaveCount(0);
-    await expect(page.locator(".project-file-list")).toHaveCount(0);
-    await local
-      .getByRole("button", { name: "Open in editor", exact: true })
-      .click();
     await expect(
       page.locator(".project-inline-editor").getByRole("textbox", {
         name: "src/cache.ts",
