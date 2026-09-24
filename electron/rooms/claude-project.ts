@@ -6,6 +6,7 @@ import type {
   EffortLevel,
   Options,
   PermissionMode,
+  SDKControlGetUsageResponse,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
@@ -356,6 +357,65 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
   // A failed probe (CLI missing, signed out) should be retried on next open.
   modelList.catch(() => (modelList = undefined));
   return modelList;
+}
+/**
+ * The data behind Claude Code's /usage, fetched by the CLI with its own
+ * sign-in; Relay never handles the token. Null when the CLI is signed out.
+ * A running session answers without starting another process.
+ */
+export async function readClaudeUsage(): Promise<SDKControlGetUsageResponse | null> {
+  const live = sessions.values().next().value;
+  if (live) {
+    try {
+      return await usageFrom(live.stream, 5000);
+    } catch {
+      // Closing or stuck behind its turn; a fresh probe still answers.
+    }
+  }
+  const [{ query }, executable] = await Promise.all([
+    sdk(),
+    findExecutable("claude"),
+  ]);
+  const input = new ClaudeInput();
+  const stream = query({
+    prompt: input.read(),
+    options: {
+      pathToClaudeCodeExecutable: executable,
+      settingSources: ["user"],
+      strictMcpConfig: true,
+      mcpServers: {},
+    },
+  });
+  try {
+    return await usageFrom(stream, 20000);
+  } finally {
+    input.close();
+    stream.close();
+  }
+}
+async function usageFrom(stream: ClaudeStream, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ask = async () => {
+    const account = await stream.accountInfo();
+    if (account?.tokenSource === "none" && !account.apiKeySource) return null;
+    // Experimental in the SDK; when it's renamed, this stops type-checking.
+    return stream.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+      skipBehaviors: true,
+    });
+  };
+  try {
+    return await Promise.race([
+      ask(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Claude did not report usage.")),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 // Relay owns these (model, effort, threads, context), or they need the
 // terminal, a long-lived loop, or account setup that the app doesn't offer.

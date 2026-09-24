@@ -1,6 +1,6 @@
 // Subscription windows for the signed-in Claude and Codex accounts.
 // Window selection and burn-rate pacing follow OpenUsage (MIT, Robin Ebers);
-// see THIRD_PARTY_NOTICES.md. Relay calls the provider APIs itself.
+// see THIRD_PARTY_NOTICES.md. Claude Code reports its own; Relay asks Codex's.
 import { z } from "zod";
 
 export const SESSION_MS = 5 * 60 * 60 * 1000;

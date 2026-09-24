@@ -195,7 +195,7 @@ Package source and documentation: https://github.com/anthropics/claude-agent-sdk
 
 ## OpenUsage
 
-Claude and Codex session/weekly limits in the model picker adapt OpenUsage’s usage-window mapping and burn-rate pacing. Relay reads the local Claude Code and Codex CLI sign-in and calls the provider usage APIs itself; the OpenUsage application is not required.
+Claude and Codex session/weekly limits in the model picker adapt OpenUsage’s usage-window mapping and burn-rate pacing. Claude's limits come from Claude Code itself through the Agent SDK; for Codex, Relay reads the local CLI sign-in and calls the usage API. The OpenUsage application is not required.
 
 Source: https://github.com/robinebers/openusage
 
