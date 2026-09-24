@@ -98,6 +98,21 @@ if (args.includes("--permission-prompt-tool")) {
       finish("Approval flow completed.");
       return;
     }
+    if (
+      m.type === "control_request" &&
+      m.request?.subtype === "side_question"
+    ) {
+      record({ provider: "claude", side: m.request });
+      emit({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: m.request_id,
+          response: { response: `On the side: ${m.request.question}` },
+        },
+      });
+      return;
+    }
     if (m.type === "control_request") {
       emit({
         type: "control_response",

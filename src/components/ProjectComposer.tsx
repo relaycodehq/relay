@@ -7,6 +7,7 @@ import {
 import { useComposerCommands } from "./ComposerCommands";
 import {
   composerCommands,
+  relayCommand,
   type CommandOption,
   type RelayCommand,
 } from "../../shared/commands";
@@ -146,6 +147,7 @@ export function ProjectComposer({
       | "images"
       | "delivery"
       | "sendAt"
+      | "side"
     >,
   ) => Promise<boolean>;
   onStop: () => void;
@@ -683,6 +685,25 @@ export function ProjectComposer({
     }
   };
   async function send(steer = false, sendAt?: number) {
+    // `/btw` goes to the agent picked here, beside whatever the thread runs.
+    const btw = relayCommand(draft);
+    if (btw?.name === "btw" && btw.args && recipient !== "message") {
+      if (busy || sending.current) return;
+      sending.current = true;
+      try {
+        await onSend({
+          side: true,
+          body: `@${recipient} ${btw.args}`,
+          provider: recipient,
+          choice: choiceFor(recipient)!,
+          runtimeMode,
+          interactionMode,
+        });
+      } finally {
+        sending.current = false;
+      }
+      return;
+    }
     if (busy || commands.interceptSend()) return;
     if (sendDisabled || sending.current) return;
     const body =

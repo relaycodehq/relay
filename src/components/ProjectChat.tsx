@@ -71,6 +71,7 @@ import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
 import { MessageActions } from "./MessageActions";
 import { ProviderIcon } from "./ComposerModelPicker";
+import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
@@ -720,6 +721,23 @@ export function ProjectChat({
       if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
     return counts;
   }, [parentIds]);
+  // The bar under each side question: how many replies, when the last came.
+  const sideThreads = useMemo(() => {
+    const threads = new Map<string, SideThread>();
+    for (const m of messages)
+      if (m.side)
+        threads.set(m.id, { replies: 0, last: m.created, answering: false });
+    for (const m of messages) {
+      const thread = threads.get(parentIds.get(m.id) ?? "");
+      if (!thread) continue;
+      if (m.status === "streaming") thread.answering = true;
+      else {
+        thread.replies++;
+        thread.last = Math.max(thread.last, m.ended ?? m.created);
+      }
+    }
+    return threads;
+  }, [messages, parentIds]);
   const shown = useMemo(() => {
     const ids = new Set(messages.map((m) => m.id));
     return messages.filter((m) =>
@@ -883,6 +901,11 @@ export function ProjectChat({
       compact(args || undefined);
       return true;
     }
+    // With a question and an agent picked, the composer sends it itself.
+    if (command === "btw")
+      return args
+        ? "Pick Claude or Codex to ask a side question."
+        : "Type your question after /btw.";
     if (command === "context") {
       if (!chat || !context)
         return "Context usage appears after the first answer.";
@@ -966,9 +989,11 @@ export function ProjectChat({
       | "images"
       | "delivery"
       | "sendAt"
+      | "side"
     >,
   ): Promise<boolean> {
     if (busy) return false;
+    if (value.side) return askAside(value);
     const to = agentMention(value.body)?.provider;
     if (
       to &&
@@ -1023,6 +1048,39 @@ export function ProjectChat({
         await onCreated(target);
       } else await history.refetch();
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
+      return true;
+    } catch (e) {
+      setError(e);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  /** `/btw`: its thread opens, and the main thread's draft and attachments wait. */
+  async function askAside(
+    value: Pick<
+      ProjectChatSend,
+      "body" | "provider" | "choice" | "runtimeMode" | "interactionMode"
+    >,
+  ) {
+    if (!chat) {
+      setError(
+        new Error("Ask the agent something first, then ask on the side."),
+      );
+      return false;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const question = crypto.randomUUID();
+      await api.sendProjectChat(chat.id, {
+        ...value,
+        id: question,
+        side: true,
+      });
+      onDraft("");
+      await history.refetch();
+      setRootId(question);
       return true;
     } catch (e) {
       setError(e);
@@ -1541,7 +1599,11 @@ export function ProjectChat({
             />
           )}
           <div className="thread-message-column" ref={column}>
-            {root && <h2 className="reply-heading">Side conversation</h2>}
+            {root && (
+              <h2 className="reply-heading">
+                {root.side ? "Side question" : "Side conversation"}
+              </h2>
+            )}
             {shown.length > visible && (
               <button
                 className="load-more"
@@ -1555,7 +1617,14 @@ export function ProjectChat({
               </button>
             )}
             {shown.slice(-visible).map((m) =>
-              review && m.id === review.request ? (
+              m.side ? (
+                <SideQuestion
+                  key={m.id}
+                  message={m}
+                  thread={root ? undefined : sideThreads.get(m.id)}
+                  onOpen={() => openReply(m)}
+                />
+              ) : review && m.id === review.request ? (
                 <Fragment key={m.id}>
                   <DeepReviewRequest message={m} state={review} />
                   <DeepReviewCouncil
@@ -1574,7 +1643,9 @@ export function ProjectChat({
                   chatId={chat?.id ?? ""}
                   onReply={openReply}
                   onFork={
-                    chat?.scope.kind === "review" ? undefined : forkThread
+                    chat?.scope.kind === "review" || root?.side
+                      ? undefined
+                      : forkThread
                   }
                   onChanges={openChanges}
                   onTurnDiff={openTurnDiff}
@@ -1888,14 +1959,17 @@ export function ProjectChat({
                 ? {
                     settingsKey: id,
                     provider:
-                      root.role === "assistant" ? root.provider : undefined,
+                      root.role === "assistant" || root.side
+                        ? root.provider
+                        : undefined,
                   }
                 : undefined
             }
             draftKey={draftKey}
             onDraft={onDraft}
             shared={!!chat?.shared}
-            running={running || reviewing}
+            // A side thread doesn't wait for the main answer, nor queue behind it.
+            running={root?.side ? false : running || reviewing}
             busy={busy}
             branch={checkout.data?.branch}
             plain={project.plain}
@@ -1955,13 +2029,15 @@ export function ProjectChat({
               )
             }
             placeholder={
-              reviewing
-                ? "Reviewers are at work. Messages wait for the lead…"
-                : pending?.some((p) => p.kind === "task")
-                  ? "Message Claude, its background work keeps going…"
-                  : pending
-                    ? "Message Claude now, or wait for it to check back…"
-                    : undefined
+              root?.side
+                ? `Ask ${root.provider === "codex" ? "Codex" : "Claude"} a follow-up on the side…`
+                : reviewing
+                  ? "Reviewers are at work. Messages wait for the lead…"
+                  : pending?.some((p) => p.kind === "task")
+                    ? "Message Claude, its background work keeps going…"
+                    : pending
+                      ? "Message Claude now, or wait for it to check back…"
+                      : undefined
             }
             planProvider={
               !running &&

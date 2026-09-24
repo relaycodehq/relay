@@ -11,6 +11,11 @@ export const relayCommands = [
   },
   { name: "context", description: "Show context window usage" },
   {
+    name: "btw",
+    description: "Ask a side question without interrupting the agent",
+    args: "<question>",
+  },
+  {
     name: "provider",
     description: "Switch between Codex, Claude, and messages only",
     args: "<agent>",

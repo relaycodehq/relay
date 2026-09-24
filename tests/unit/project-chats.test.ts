@@ -1845,3 +1845,113 @@ it("keeps a shared thread's local handoff note where it happened when others' me
     "Bob: looks good",
   ]);
 }, 30000);
+const captured = async () =>
+  (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+it("answers /btw from Claude's session beside its running turn, and remembers the side thread", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(chat.id, claude("@claude fixture wait for steer"));
+  await vi.waitFor(
+    async () => expect((await chats.get(chat.id)).claudeThread).toBeTruthy(),
+    { timeout: 6000 },
+  );
+  const question = {
+    ...claude("@claude where is the cache guard?"),
+    side: true as const,
+  };
+  await chats.send(chat.id, question);
+  const answered = async () => {
+    const saved = await chats.get(chat.id);
+    const answers = saved.messages.filter(
+      (m) => m.parentId === question.id && m.role === "assistant",
+    );
+    expect(answers.every((m) => m.status === "complete")).toBe(true);
+    return { saved, answers };
+  };
+  const first = await vi.waitFor(answered, { timeout: 6000 });
+  expect(first.answers.map((m) => m.body)).toEqual([
+    "On the side: where is the cache guard?",
+  ]);
+  expect(first.saved.messages.find((m) => m.id === question.id)?.side).toBe(
+    true,
+  );
+  // The main turn kept running, and nothing waited behind it.
+  expect(first.saved.messages[1]!.status).toBe("streaming");
+  expect(first.saved.queue ?? []).toEqual([]);
+  await chats.send(chat.id, {
+    ...claude("@claude and why?"),
+    parentId: question.id,
+  });
+  await vi.waitFor(
+    async () => expect((await answered()).answers).toHaveLength(2),
+    { timeout: 6000 },
+  );
+  const asked = (await captured()).filter((c) => c.side);
+  expect(asked.map((c) => c.side.question)).toEqual([
+    "where is the cache guard?",
+    "and why?",
+  ]);
+  expect(asked[1].side.history).toEqual([
+    {
+      question: "where is the cache guard?",
+      response: "On the side: where is the cache guard?",
+    },
+  ]);
+});
+it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from the main session", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(
+    async () => expect((await chats.get(chat.id)).providerThread).toBeTruthy(),
+    { timeout: 6000 },
+  );
+  const question = {
+    ...input("@codex which test covers the guard?"),
+    side: true as const,
+  };
+  await chats.send(chat.id, question);
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.find(
+          (m) => m.parentId === question.id,
+        )?.status,
+      ).toBe("complete"),
+    { timeout: 6000 },
+  );
+  expect((await chats.get(chat.id)).messages[1]!.status).toBe("streaming");
+  const fork = (await captured()).find((c) => c.method === "thread/fork");
+  // The whole thread, its running turn included, in a sandbox that can't write.
+  expect(fork.thread.lastTurnId).toBeUndefined();
+  expect(fork.thread.sandbox).toBe("read-only");
+  expect(fork.thread.developerInstructions).toContain(
+    "You are in a side conversation",
+  );
+  await chats.cancel(chat.id);
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages[1]!.status).toBe("cancelled"),
+    { timeout: 6000 },
+  );
+  await chats.send(chat.id, input("@codex Now fix it"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const main = (await captured()).filter((c) =>
+    c.turn?.input.some((i: { text?: string }) =>
+      i.text?.includes("Now fix it"),
+    ),
+  );
+  expect(main).toHaveLength(1);
+  expect(JSON.stringify(main[0].turn.input)).not.toContain("which test covers");
+}, 20000);

@@ -2284,3 +2284,59 @@ details.agent-step > .agent-step-heading:hover {
   width: auto;
   accent-color: var(--accent);
 }
+/* A /btw question: a normal message, outlined dashed with no fill, since the
+   main session never heard it. The bar under it opens its side thread. */
+.side-question-body {
+  padding: 12px 16px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 13px;
+}
+.side-thread-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: calc(100% + 16px);
+  margin: 8px -8px -6px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+}
+.side-thread-bar:hover {
+  border-color: var(--border);
+  background: var(--toolbar);
+}
+.side-thread-bar strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.side-thread-face {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--toolbar);
+}
+.side-thread-view {
+  margin-left: auto;
+  opacity: 0;
+}
+.side-thread-bar:hover .side-thread-view,
+.side-thread-bar:focus-visible .side-thread-view {
+  opacity: 1;
+}
+/* Asked mid-turn, a side question sits right under the running answer. That
+   answer's hidden copy/reply row would only hold empty space there: when the
+   turn ends, its text streams in above and moves the question anyway. */
+.project-message.assistant:has(+ .side-question) {
+  padding-bottom: 6px;
+}
+.project-message.assistant:has(+ .side-question) > .message-actions[inert] {
+  display: none;
+}

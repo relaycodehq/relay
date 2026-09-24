@@ -188,6 +188,12 @@ export interface ChatMessage {
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
+  /**
+   * Local marker: a `/btw` question, asked beside the main conversation. It
+   * roots a side thread its agent answers without changing anything, and the
+   * main session never hears it.
+   */
+  side?: boolean;
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
@@ -362,6 +368,8 @@ export const projectChatSendSchema = z
     runtimeMode: runtimeModeSchema,
     interactionMode: interactionModeSchema,
     parentId: idSchema.nullable().optional(),
+    /** Asks `/btw`: starts a side thread instead of a turn of the main one. */
+    side: z.literal(true).optional(),
     viewing: filePathSchema.optional(),
     selection: lineQuestionSchema.optional(),
     images: z.array(pastedImageSchema).max(3).optional(),
