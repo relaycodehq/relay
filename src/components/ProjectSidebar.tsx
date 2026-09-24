@@ -670,6 +670,18 @@ export function ProjectSidebar({
   const open = (c: ChatSummary) => {
     if (!dirty) onChat(c);
   };
+  /** Settling the open thread moves on to its neighbour in activity, or a new thread. */
+  const settle = (c: ChatSummary) => {
+    if (c.id === chatId && !dirty) {
+      const index = sections.active.findIndex((a) => a.id === c.id);
+      const rest = sections.active.filter((a) => a.id !== c.id);
+      const next = rest[Math.min(Math.max(index, 0), rest.length - 1)];
+      const p = byId.get(c.projectId);
+      if (next) onChat(next);
+      else if (p) onNew(p);
+    }
+    void triage(c, { kind: "settle" });
+  };
   const shortcuts = view === "activity" && !query;
   // Re-read on every render: drafts live in localStorage and the sidebar
   // re-renders on its clock and chat refetches anyway.
@@ -1209,7 +1221,7 @@ export function ProjectSidebar({
                 title="Settle — hide until something new happens"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void triage(c, { kind: "settle" });
+                  settle(c);
                 }}
               >
                 <Check size={13} />
