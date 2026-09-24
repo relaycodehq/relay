@@ -619,9 +619,11 @@ export async function runClaudeProject(
             {
               hooks: [
                 async () => {
-                  const note = await holder.options
-                    .context?.()
-                    .catch(() => undefined);
+                  // Claude Code holds the prompt until this returns; a slow scan just skips the note.
+                  const note = await Promise.race([
+                    holder.options.context?.().catch(() => undefined),
+                    new Promise<undefined>((r) => setTimeout(r, 3000)),
+                  ]);
                   return note
                     ? {
                         hookSpecificOutput: {
