@@ -88,11 +88,11 @@ describe("pasted texts", () => {
     expect(code.refs).toHaveLength(1);
     expect(pastedTexts(code.body)).toEqual(pastes);
   });
-  it("attaches long or many-line pastes only", () => {
+  it("attaches huge pastes only", () => {
     expect(isLongPaste("short line")).toBe(false);
-    expect(isLongPaste("x".repeat(1000))).toBe(true);
-    expect(isLongPaste(log)).toBe(true);
-    expect(isLongPaste("a\nb\nc")).toBe(false);
+    expect(isLongPaste(log)).toBe(false);
+    expect(isLongPaste("x".repeat(20_000))).toBe(true);
+    expect(isLongPaste("line\n".repeat(200))).toBe(true);
   });
   it("cleans line endings and surrounding blank lines, keeping indentation", () => {
     expect(cleanPaste("\r\n\n    indented\r\n  next\r\n\r\n")).toBe(

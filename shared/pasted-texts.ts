@@ -23,9 +23,9 @@ export const cleanPaste = (raw: string) =>
 
 export const pastedLines = (text: string) => text.split("\n").length;
 
-/** Pastes this long become pills; shorter ones stay ordinary text. */
+/** Only huge pastes become pills; anything smaller is ordinary text. */
 export const isLongPaste = (text: string) =>
-  text.length >= 1000 || pastedLines(text) >= 12;
+  text.length >= 20_000 || pastedLines(text) >= 200;
 
 /** Serialises a pill: the fenced paste on its own lines, where the pill sits. */
 export function pasteMarkdown({ n, text }: PastedText) {

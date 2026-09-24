@@ -21,7 +21,7 @@ import { fixtureServer } from "../fixtures/gitea";
 const trace = [
   "TypeError: Cannot read properties of undefined (reading 'map')",
   ...Array.from(
-    { length: 23 },
+    { length: 239 },
     (_, i) =>
       `    at renderRow (src/components/Table.tsx:${40 + i}:17) frame ${i}`,
   ),
@@ -111,14 +111,14 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     await expect(input).toHaveText("Why does the table crash? inline bit");
     await paste(page, trace);
     const card = page.getByRole("button", {
-      name: "Show Pasted text #1, 24 lines",
+      name: "Show Pasted text #1, 240 lines",
     });
     await expect(card).toBeVisible();
     await expect(input).toContainText("Why does the table crash? inline bit");
     await expect(input.locator(".paste-pill")).toHaveCount(1);
     await paste(page, "\r\n" + trace.replaceAll("\n", "\r\n") + "\r\n");
     await expect(
-      page.getByRole("button", { name: "Show Pasted text #2, 24 lines" }),
+      page.getByRole("button", { name: "Show Pasted text #2, 240 lines" }),
     ).toBeVisible();
     // The pill in the editor and its card both offer removal; use the card.
     await page
@@ -143,7 +143,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     }
     await card.click();
     const dialog = page.getByRole("dialog", { name: "Pasted text #1" });
-    await expect(dialog).toContainText("24 lines");
+    await expect(dialog).toContainText("240 lines");
     await expect(dialog.locator("pre")).toHaveText(trace);
     await page.screenshot({ path: "test-results/pasted-text-dialog.png" });
     await dialog.getByRole("button", { name: "Close dialog" }).click();
@@ -160,7 +160,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     // The paste shows as a pill where it went; its text waits behind it.
     await expect(sent).not.toContainText("frame 5");
     const pill = sent.getByRole("button", {
-      name: "Show Pasted text #1, 24 lines",
+      name: "Show Pasted text #1, 240 lines",
     });
     await expect(pill).toBeVisible();
     await pill.click();
