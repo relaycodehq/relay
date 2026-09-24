@@ -51,6 +51,7 @@ import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
 import { RunningTasks } from "./RunningTasks";
 import { useProjectChecks } from "../lib/useProjectChecks";
+import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 export default function ProjectShell() {
@@ -197,8 +198,26 @@ export default function ProjectShell() {
     if (project && project.id === restoredProject)
       localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
   }, [project?.id, chatId, restoredProject]);
+  // Opening a side pane hides the sidebar for room; closing them all brings it
+  // back, unless the user toggled it themselves in between.
+  const autoHide = useSidebarAutoHide();
+  const autoHidden = useRef(false);
+  const sidePaneOpen = panes.visible.some((id) => id !== "chat");
   useEffect(() => {
-    localStorage.setItem("relay-projects-hidden", String(projectsHidden));
+    if (sidePaneOpen && autoHide && !projectsHidden) {
+      autoHidden.current = true;
+      setProjectsHidden(true);
+    } else if (!sidePaneOpen && autoHidden.current) {
+      autoHidden.current = false;
+      setProjectsHidden(false);
+    }
+  }, [sidePaneOpen]);
+  useEffect(() => {
+    // A sidebar hidden only for a pane shouldn't stay hidden after a restart.
+    localStorage.setItem(
+      "relay-projects-hidden",
+      String(projectsHidden && !autoHidden.current),
+    );
   }, [projectsHidden]);
   function openUrl(url: string) {
     if (dirty) {
@@ -494,6 +513,7 @@ export default function ProjectShell() {
             onClick={() => {
               window.clearTimeout(peekTimer.current);
               setPeek(false);
+              autoHidden.current = false;
               setProjectsHidden((v) => !v);
             }}
             onMouseEnter={peekOpen}

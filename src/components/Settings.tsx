@@ -38,6 +38,10 @@ import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import { setUsageRing, useUsageRing } from "../lib/usage-ring";
 import {
+  setSidebarAutoHide,
+  useSidebarAutoHide,
+} from "../lib/sidebar-auto-hide";
+import {
   setSendKey,
   steerKeyLabel,
   useSendKey,
@@ -475,6 +479,7 @@ export function Settings({
   const appearance = useAppearance();
   const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
+  const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
   const iconSrc = useMemo(
     () => svgDataUrl(relayIconSvg(appearance.accent)),
@@ -587,6 +592,21 @@ export function Settings({
           label="Show prompt cache fire and ice"
           checked={cacheHeat}
           onChange={setCacheHeat}
+        />
+      ),
+    },
+    {
+      id: "sidebar-auto-hide",
+      category: "appearance",
+      title: "Make room for side panes",
+      description:
+        "Hide the projects sidebar while Changes, Files or History is open, and bring it back when they close.",
+      keywords: "sidebar projects hide collapse changes files history pane",
+      render: () => (
+        <Switch
+          label="Hide the sidebar while side panes are open"
+          checked={sidebarAutoHide}
+          onChange={setSidebarAutoHide}
         />
       ),
     },
