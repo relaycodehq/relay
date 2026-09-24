@@ -28,7 +28,7 @@ interface Tracked {
   id: string;
   command: string;
   agent?: "claude" | "codex";
-  origin: "relay" | "external" | "detached";
+  origin: ProjectTask["origin"];
   root: number;
   started: number;
   chatId?: string;
@@ -37,6 +37,8 @@ interface Tracked {
   rerun?: string;
   /** Restarted from Relay, so it's listed straight away. */
   restarted?: boolean;
+  /** Started from this terminal shell in Relay. */
+  shell?: number;
   pids: Map<number, number>;
 }
 
@@ -100,6 +102,8 @@ export class ProjectTasks {
   private scanning?: Promise<Proc[]>;
   private scanned = 0;
   private last: Proc[] = [];
+  /** Relay's terminal shells, and the thread each belongs to. */
+  private terminals = new Map<number, string | undefined>();
   /** Shells Relay started to restart a task, adopted on the next scan. */
   private adopting = new Map<
     number,
@@ -112,6 +116,14 @@ export class ProjectTasks {
     const list = this.commands.get(root) ?? [];
     list.push({ chatId, key: commandKey(command), at: Date.now() });
     this.commands.set(root, list.slice(-200));
+  }
+
+  /** What runs in this shell counts as the thread's; a draft's has no thread yet. */
+  trackTerminal(pid: number, chatId: string | undefined) {
+    this.terminals.set(pid, chatId);
+  }
+  untrackTerminal(pid: number) {
+    this.terminals.delete(pid);
   }
 
   /** Processes in the project's checkout, and in the `worktrees` its threads work in. */
@@ -131,12 +143,17 @@ export class ProjectTasks {
       (t) => !!folder(t.cwd) && (t.restarted || now - t.started >= minimumAge),
     );
     const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
+    // An editor or pager open in a terminal isn't worth listing; servers are.
     return tasks
       .map((t) => {
         const listening = [
           ...new Set([...t.pids.keys()].flatMap((pid) => ports.get(pid) ?? [])),
         ].sort((a, b) => a - b);
         const worktree = folder(t.cwd);
+        const chatId =
+          t.shell && this.terminals.has(t.shell)
+            ? this.terminals.get(t.shell)
+            : t.chatId;
         return {
           id: t.id,
           command: t.command,
@@ -144,12 +161,13 @@ export class ProjectTasks {
           ...(worktree?.chatId ? { worktree: worktree.chatId } : {}),
           ...(t.agent ? { agent: t.agent } : {}),
           origin: t.origin,
-          ...(t.chatId ? { chatId: t.chatId } : {}),
+          ...(chatId ? { chatId } : {}),
           started: t.started,
           ports: listening,
           pids: t.pids.size,
         };
       })
+      .filter((t) => t.origin !== "terminal" || lastingTask(t))
       .sort((a, b) => a.started - b.started);
   }
 
@@ -170,6 +188,8 @@ export class ProjectTasks {
 
   /** Stop the task, wait for it to exit so its ports are free, then run its command again in the same folder. */
   async restart(root: string, id: string, worktrees: Worktree[] = []) {
+    if (this.tracked.get(id)?.origin === "terminal")
+      throw new Error("Restart it from its terminal.");
     const { task, exited } = await this.terminate(root, id, worktrees);
     await exited;
     const child = spawn(
@@ -315,13 +335,16 @@ export class ProjectTasks {
       if (list) list.push(p);
       else children.set(p.ppid, [p]);
     }
+    // An agent run from Relay's terminal is as external as one in any other.
     const ours = (p: Proc) => {
       for (
         let c: Proc | undefined = p, n = 0;
         c && n < 64;
         c = byPid.get(c.ppid), n++
-      )
+      ) {
+        if (this.terminals.has(c.pid)) return false;
         if (c.pid === process.pid) return true;
+      }
       return false;
     };
     const fresh: number[] = [];
@@ -351,6 +374,25 @@ export class ProjectTasks {
           root: child.pid,
           started: child.started,
           ...(match ? { chatId: match } : {}),
+          pids: new Map(),
+        });
+        fresh.push(child.pid);
+      }
+    }
+    // What the user runs in a Relay terminal: each job the shell starts.
+    for (const [shell, chatId] of this.terminals) {
+      for (const child of children.get(shell) ?? []) {
+        const id = `${child.pid}:${child.started}`;
+        if (this.tracked.has(id) || agentName(child.line)) continue;
+        firstSight(child);
+        this.tracked.set(id, {
+          id,
+          command: tidyCommand(child.line),
+          origin: "terminal",
+          root: child.pid,
+          started: child.started,
+          shell,
+          ...(chatId ? { chatId } : {}),
           pids: new Map(),
         });
         fresh.push(child.pid);
@@ -413,7 +455,9 @@ export class ProjectTasks {
       const cwd = this.cwds.get(`${task.root}:${task.started}`);
       if (
         cwd &&
-        (task.origin === "relay" || [...this.roots].some((r) => within(cwd, r)))
+        (task.origin === "relay" ||
+          task.origin === "terminal" ||
+          [...this.roots].some((r) => within(cwd, r)))
       )
         task.cwd = cwd;
       else if (cwd !== undefined) this.tracked.delete(task.id);

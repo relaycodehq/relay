@@ -2,6 +2,7 @@ import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
 import type { LiveSyncApi } from "./live-sync";
 import type { TaskApi } from "./tasks";
+import type { TerminalApi } from "./terminals";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
@@ -206,7 +207,8 @@ export interface Api
     LiveSyncApi,
     ProjectApi,
     DevOpsApi,
-    TaskApi {
+    TaskApi,
+    TerminalApi {
   inspectSymbol(
     ref: PullRef,
     head: string,

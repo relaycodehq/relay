@@ -515,6 +515,7 @@ export function ProjectChat({
   onOpenFile,
   onOpenTurnDiff,
   onReviewPull,
+  onDraftWorkspace,
   viewing,
 }: {
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -543,6 +544,8 @@ export function ProjectChat({
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   onReviewPull: (ref: PullRef) => void;
+  /** Where the unsent thread will work, as the picker changes. */
+  onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   viewing: { path: string | null; viewed: number; total: number };
 }) {
   const qc = useQueryClient(),
@@ -728,6 +731,9 @@ export function ProjectChat({
   const running = messages.some((m) => m.status === "streaming");
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>("checkout");
+  useEffect(() => {
+    if (!chat) onDraftWorkspace?.(workspace);
+  }, [workspace, !chat]);
   const worktree = useQuery({
     queryKey: ["worktree", chat?.id],
     queryFn: () => api.projectWorktree(chat!.id),

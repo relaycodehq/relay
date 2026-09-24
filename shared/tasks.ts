@@ -7,8 +7,8 @@ export interface ProjectTask {
   /** A short name for what the process is, e.g. "Vite dev server". */
   title: string;
   agent?: "claude" | "codex";
-  /** relay: a Relay chat's agent; external: a Claude or Codex CLI outside Relay; detached: running on its own in the project. */
-  origin: "relay" | "external" | "detached";
+  /** relay: a Relay chat's agent; terminal: a thread's terminal in Relay; external: a Claude or Codex CLI outside Relay; detached: running on its own in the project. */
+  origin: "relay" | "terminal" | "external" | "detached";
   chatId?: string;
   /** Runs in this thread's worktree rather than the project's checkout. */
   worktree?: string;
@@ -229,9 +229,13 @@ const taskLine = (task: ProjectTask, chatId: string) => {
     ? ` on ${task.ports.map((p) => `:${p}`).join(" ")}`
     : "";
   const mine =
-    task.origin === "relay" && task.chatId === chatId
-      ? " (started in this conversation)"
-      : "";
+    task.chatId !== chatId
+      ? ""
+      : task.origin === "relay"
+        ? " (started in this conversation)"
+        : task.origin === "terminal"
+          ? " (the user runs it in this conversation's terminal)"
+          : "";
   return `- ${task.title}${ports}${mine}: ${JSON.stringify(task.command.slice(0, 120))}`;
 };
 const listed = (tasks: ProjectTask[], chatId: string) => {

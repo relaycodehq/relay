@@ -1458,7 +1458,8 @@ body.resizing-table-column {
     .cache-ember,
     .project-ribbon-wave,
     .project-ribbon-sheen,
-    .live-shine
+    .live-shine,
+    .thread-terminal .xterm-cursor-blink
   ),
 :root[data-inactive] .sb-status.waiting i::after,
 :root[data-inactive] .thinking-glyph::before {

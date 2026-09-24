@@ -130,6 +130,7 @@ export function RunningTasks({
             const duplicate = seen.has(task.command);
             seen.add(task.command);
             const agent = task.agent ? agentLabel[task.agent] : undefined;
+            const terminal = task.origin === "terminal";
             const source =
               task.origin === "detached"
                 ? "In the background"
@@ -137,7 +138,9 @@ export function RunningTasks({
                   ? `${agent} in a terminal`
                   : chat
                     ? null
-                    : `${agent} in Relay`;
+                    : terminal
+                      ? "In a Relay terminal"
+                      : `${agent} in Relay`;
             const port = task.ports[0];
             const state = busy.get(task.id);
             const worktree = task.worktree
@@ -149,7 +152,9 @@ export function RunningTasks({
                 `Runs in the worktree of ${worktree?.title ?? "a thread"}, not the checkout`,
               task.ports.length > 1 &&
                 `Listening on ${task.ports.map((p) => `:${p}`).join(", ")}`,
-              chat ? `${agent ? `${agent} · ` : ""}${chat.title}` : source,
+              chat
+                ? `${terminal ? "Terminal · " : agent ? `${agent} · ` : ""}${chat.title}`
+                : source,
               `Started ${new Date(task.started).toLocaleString()}`,
               duplicate && "The same command is already running",
             ]
@@ -195,15 +200,17 @@ export function RunningTasks({
                     {elapsed(task.started, now)}
                   </span>
                   <span className="running-task-buttons">
-                    <button
-                      type="button"
-                      title={state === "restart" ? "Restarting…" : "Restart"}
-                      aria-label={`Restart ${task.title}`}
-                      disabled={!!state}
-                      onClick={() => void act(task, "restart")}
-                    >
-                      <RotateCw size={12} />
-                    </button>
+                    {!terminal && (
+                      <button
+                        type="button"
+                        title={state === "restart" ? "Restarting…" : "Restart"}
+                        aria-label={`Restart ${task.title}`}
+                        disabled={!!state}
+                        onClick={() => void act(task, "restart")}
+                      >
+                        <RotateCw size={12} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="running-task-stop"

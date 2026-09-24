@@ -90,6 +90,8 @@ import {
 import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
 import { projectTasks } from "./tasks";
+import { threadTerminals } from "./thread-terminals";
+import { draftTerminalKey } from "../shared/terminals";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
@@ -316,6 +318,7 @@ let quitReady = false,
   closingToQuit = false;
 app.on("before-quit", (event) => {
   if (quitReady || !store) {
+    threadTerminals.closeAll();
     blame.dispose();
     client?.dispose();
     return;
@@ -459,6 +462,11 @@ function createWindow() {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // A reloaded window starts without terminals; shells keep their output until it asks.
+  win.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument)
+      threadTerminals.detach();
+  });
   // Reloading Relay itself counts as a navigation too: Vite's full reload
   // after re-bundling dependencies and the error screen's button need it.
   // Every other destination stays blocked.
@@ -513,6 +521,14 @@ const symbolQuerySchema = z
     kind: z.enum(["hover", "definition", "references", "source"]),
   })
   .strict();
+const terminalKeySchema = z.union([
+  idSchema,
+  z.templateLiteral(["draft:", idSchema]),
+]);
+const terminalSizeSchema = z.object({
+  cols: z.number().int().min(2).max(1000),
+  rows: z.number().int().min(1).max(500),
+});
 async function dispatch(method: ApiMethod, args: unknown[]) {
   switch (method) {
     case "localCheckInfo":
@@ -752,6 +768,52 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         z.string().max(64).parse(args[1]),
         projectChats.worktreeFolders(id),
       );
+    }
+    case "openTerminal": {
+      const projectId = idSchema.parse(args[0]);
+      const chatId = idSchema.nullable().parse(args[1]);
+      const size = terminalSizeSchema.parse(args[2]);
+      const cwd = chatId
+        ? await projectChats.terminalFolder(projectId, chatId)
+        : await projects.root(projectId);
+      return threadTerminals.open(
+        chatId ?? draftTerminalKey(projectId),
+        cwd,
+        size.cols,
+        size.rows,
+        z.boolean().optional().parse(args[3]),
+      );
+    }
+    case "writeTerminal":
+      return threadTerminals.write(
+        terminalKeySchema.parse(args[0]),
+        z
+          .string()
+          .max(1 << 20)
+          .parse(args[1]),
+      );
+    case "resizeTerminal": {
+      const size = terminalSizeSchema.parse({ cols: args[1], rows: args[2] });
+      return threadTerminals.resize(
+        terminalKeySchema.parse(args[0]),
+        size.cols,
+        size.rows,
+      );
+    }
+    case "ackTerminal":
+      return threadTerminals.ack(
+        terminalKeySchema.parse(args[0]),
+        z.number().int().nonnegative().parse(args[1]),
+      );
+    case "closeTerminal":
+      return threadTerminals.close(terminalKeySchema.parse(args[0]));
+    case "adoptTerminal": {
+      const projectId = idSchema.parse(args[0]);
+      const chatId = idSchema.parse(args[1]);
+      // A thread in its own worktree starts its own shell there.
+      if (await projectChats.worksInCheckout(projectId, chatId))
+        threadTerminals.adopt(draftTerminalKey(projectId), chatId);
+      return;
     }
     case "projectWorkingTree":
       return workingTree(await projects.root(idSchema.parse(args[0])));
@@ -1690,6 +1752,10 @@ app
       return;
     }
     triage = new TriageService(store, app.getPath("userData"));
+    threadTerminals.connect((event) => {
+      if (win && !win.isDestroyed())
+        win.webContents.send("relay:terminal", event);
+    });
     ipcMain.handle("relay:invoke", async (event, method, args) => {
       const source = event.senderFrame?.url;
       if (

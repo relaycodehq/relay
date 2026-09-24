@@ -50,6 +50,12 @@ const methods = [
   "projectTasks",
   "stopProjectTask",
   "restartProjectTask",
+  "openTerminal",
+  "writeTerminal",
+  "resizeTerminal",
+  "ackTerminal",
+  "closeTerminal",
+  "adoptTerminal",
   "projectWorkingDiff",
   "projectTurnDiff",
   "projectHistory",
@@ -186,6 +192,11 @@ contextBridge.exposeInMainWorld("relay", {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:update", listener);
     return () => ipcRenderer.removeListener("relay:update", listener);
+  },
+  onTerminal: (callback: (event: unknown) => void) => {
+    const listener = (_event: unknown, value: unknown) => callback(value);
+    ipcRenderer.on("relay:terminal", listener);
+    return () => ipcRenderer.removeListener("relay:terminal", listener);
   },
   onOpenUrl: (callback: (url: string) => void) => {
     const listener = (_event: unknown, url: string) => callback(url);

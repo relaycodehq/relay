@@ -44,6 +44,7 @@ import { runCodex } from "./rooms/codex";
 import type { ProjectSharing } from "./project-sharing";
 import { runClaude } from "./rooms/claude";
 import { projectTasks } from "./tasks";
+import { threadTerminals } from "./thread-terminals";
 import { git } from "./git";
 import {
   dropRevert,
@@ -2133,7 +2134,10 @@ export class ProjectChats {
     return this.control(id, async () => {
       const { chat, worktree } = await this.worktreeOf(id);
       this.assertIdle(id);
-      if (worktree.path) await projectTasks.stopWithin(worktree.path);
+      if (worktree.path) {
+        threadTerminals.closeWithin(worktree.path);
+        await projectTasks.stopWithin(worktree.path);
+      }
       await removeWorktree(
         await this.projects.root(chat.projectId),
         id,
@@ -2142,6 +2146,26 @@ export class ProjectChats {
       worktree.removedAt = Date.now();
       await this.saveWorktree(chat);
     });
+  }
+  /** Where the thread's terminal opens: its worktree, or the project's checkout. */
+  async terminalFolder(projectId: string, id: string) {
+    const chat = await this.load(id);
+    if (chat.projectId !== projectId)
+      throw new Error("This thread belongs to another project.");
+    const worktree = chat.worktree;
+    if (!worktree) return this.projects.root(projectId);
+    if (
+      worktree.removedAt ||
+      (worktree.path && !(await worktreeExists(worktree)))
+    )
+      throw new Error("This thread's worktree was removed.");
+    if (!worktree.path)
+      throw new Error("This thread's worktree is made with its first message.");
+    return worktree.path;
+  }
+  async worksInCheckout(projectId: string, id: string) {
+    const chat = await this.load(id);
+    return chat.projectId === projectId && !chat.worktree;
   }
   async worktreePath(id: string) {
     const { worktree } = await this.worktreeOf(id);

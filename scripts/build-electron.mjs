@@ -1,4 +1,6 @@
 import { build } from "esbuild";
+import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
 await build({
   entryPoints: ["electron/main.ts"],
   bundle: true,
@@ -44,3 +46,27 @@ await build({
     js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
   },
 });
+
+// node-pty loads its native binaries from beside its own lib/, so it ships as
+// plain files next to main.cjs (unpacked from the asar), not in the bundle.
+const pty = "node_modules/node-pty",
+  ptyOut = "dist-electron/node-pty";
+rmSync(ptyOut, { recursive: true, force: true });
+cpSync(join(pty, "package.json"), join(ptyOut, "package.json"));
+cpSync(join(pty, "lib"), join(ptyOut, "lib"), {
+  recursive: true,
+  filter: (path) => !/\.(test\.js|map)$/.test(path),
+});
+// A source build (Linux) lands in build/Release; macOS and Windows use prebuilds.
+const native = existsSync(join(pty, "build/Release/pty.node"))
+  ? "build/Release"
+  : `prebuilds/${process.platform}-${process.arch}`;
+cpSync(join(pty, native), join(ptyOut, native), {
+  recursive: true,
+  filter: (path) =>
+    !/\.(pdb|o|d|mk)$|\/obj(\.target)?(\/|$)|\/\.deps(\/|$)/.test(path),
+});
+// node-pty 1.1.0 publishes spawn-helper without its executable bit, and
+// every shell then fails with "posix_spawnp failed".
+const helper = join(ptyOut, native, "spawn-helper");
+if (existsSync(helper)) chmodSync(helper, 0o755);

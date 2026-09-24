@@ -30,12 +30,14 @@ import {
   GitPullRequest,
   GitCompareArrows,
   GitGraph,
+  PanelBottom,
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
 import type { Account, PullRef } from "../../shared/types";
 import {
   chatScopeSchema,
+  type ChatWorkspace,
   type Project,
   type ChatSummary,
 } from "../../shared/projects";
@@ -52,10 +54,21 @@ import { RelayMark } from "./RelayMark";
 import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
 import { RunningTasks } from "./RunningTasks";
+import { TerminalDrawer } from "./TerminalDrawer";
+import {
+  adoptDraftTerminal,
+  isToggleShortcut,
+  setTerminalOpen,
+  terminalFor,
+  terminalKey,
+  useTerminalOpen,
+} from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
+const WORKTREE_PENDING =
+  "The terminal opens in this thread's worktree, which its first message makes";
 export default function ProjectShell() {
   const qc = useQueryClient();
   const boot = useQuery({
@@ -82,6 +95,8 @@ export default function ProjectShell() {
   const [draftScope, setDraftScope] = useState<ChatSummary["scope"]>({
     kind: "project",
   });
+  const [draftWorkspace, setDraftWorkspace] =
+    useState<ChatWorkspace>("checkout");
   const [openPrRequest, setOpenPrRequest] = useState(0);
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
@@ -146,6 +161,28 @@ export default function ProjectShell() {
   // A PR thread reviews its PR; any other thread shows the working tree.
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
+  const shellKey = project ? terminalKey(project.id, chat?.id ?? null) : "";
+  const terminalOpen = useTerminalOpen(shellKey);
+  // A thread's terminal works where its files are: a worktree thread has
+  // none until its first message makes the worktree.
+  const terminalBlocked = chat?.worktree
+    ? chat.worktree.removedAt
+      ? "This thread's worktree was removed. Its next message makes a new one"
+      : !chat.worktree.path
+        ? WORKTREE_PENDING
+        : undefined
+    : !chat && scope.kind === "project" && draftWorkspace === "worktree"
+      ? WORKTREE_PENDING
+      : undefined;
+  const showTerminal = !!project && !legacy && terminalOpen && !terminalBlocked;
+  function toggleTerminal() {
+    if (!project || legacy || terminalBlocked) return;
+    if (!terminalOpen)
+      terminalFor(project.id, chat?.id ?? null).focusOnShow = true;
+    setTerminalOpen(shellKey, !terminalOpen);
+  }
+  const toggleTerminalRef = useRef(toggleTerminal);
+  toggleTerminalRef.current = toggleTerminal;
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
   // The one poller for the working tree: panes, pickers and the chat read this
   // cache. Every polling observer would run its own round of Git commands.
@@ -258,6 +295,10 @@ export default function ProjectShell() {
   }, [boot.data?.pendingUrl]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isToggleShortcut(e)) {
+        e.preventDefault();
+        toggleTerminalRef.current();
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
         setSettings(true);
@@ -640,6 +681,26 @@ export default function ProjectShell() {
                           }),
               }))}
             />
+            <div
+              className="pane-toggles"
+              title={
+                terminalBlocked ??
+                `${terminalOpen ? "Hide" : "Show"} terminal (${
+                  boot.data.platform === "darwin" ? "⌘J" : "Ctrl+`"
+                })`
+              }
+            >
+              <button
+                type="button"
+                className={`pane-toggle ${showTerminal ? "active" : ""}`}
+                aria-label="Terminal"
+                aria-pressed={showTerminal}
+                disabled={!!terminalBlocked}
+                onClick={toggleTerminal}
+              >
+                <PanelBottom size={14} />
+              </button>
+            </div>
           </div>
         )}
         {projectsHidden && !legacy && (
@@ -718,204 +779,215 @@ export default function ProjectShell() {
             </button>
           </main>
         ) : (
-          <div className="workspace-panes">
-            <Pane
-              id="chat"
-              label="Chat"
-              {...paneProps("chat")}
-              className="project-chat-pane"
-            >
-              <ProjectChat
-                key={chat?.id ?? `new:${project.id}`}
-                project={project}
-                onCommand={runCommand}
-                projects={projects.data ?? []}
-                chat={chat}
-                draftScope={draftScope}
-                viewing={codeOpen ? viewing : NO_VIEWING}
-                contextText={contextText}
-                onContextUsed={() => setContextText(undefined)}
-                onShare={() => {
-                  if (chat) setShare(chat);
-                }}
-                onCreated={async (c) => {
-                  await chats.refetch();
-                  setChatId(c.id);
-                }}
-                onRepository={() => newThreadIn({ kind: "project" })}
-                onChoosePR={() => {
-                  if (!dirty) setChoosePR(true);
-                }}
-                onSelectPR={(ref) => newThreadIn({ kind: "pr", ref })}
-                onDeepReview={() => newThreadIn({ kind: "review" })}
-                onSwitchProject={(next) => navigate(next, undefined, true)}
-                onAddProject={() => void add()}
-                canChoosePR={!!account && !!project.repository}
-                dirty={dirty}
-                onOpenCode={openCode}
-                onOpenFile={openChatFile}
-                onOpenTurnDiff={openTurnDiff}
-                onReviewPull={(ref) => void reviewBranchPr(ref)}
-              />
-              <RunningTasks
-                key={project.id}
-                project={project}
-                chats={chats.data ?? []}
-                onOpenChat={(c) => navigate(project, c)}
-              />
-            </Pane>
-            <Pane id="changes" label="Changes" {...paneProps("changes")}>
-              {panes.layout.open.changes && (
-                <>
-                  <PaneHeader
-                    id="changes"
-                    icon={
-                      pull ? (
-                        <GitPullRequest size={14} />
+          <div className="workspace-column">
+            <div className="workspace-panes">
+              <Pane
+                id="chat"
+                label="Chat"
+                {...paneProps("chat")}
+                className="project-chat-pane"
+              >
+                <ProjectChat
+                  key={chat?.id ?? `new:${project.id}`}
+                  project={project}
+                  onCommand={runCommand}
+                  projects={projects.data ?? []}
+                  chat={chat}
+                  draftScope={draftScope}
+                  viewing={codeOpen ? viewing : NO_VIEWING}
+                  contextText={contextText}
+                  onContextUsed={() => setContextText(undefined)}
+                  onShare={() => {
+                    if (chat) setShare(chat);
+                  }}
+                  onDraftWorkspace={setDraftWorkspace}
+                  onCreated={async (c) => {
+                    if (!c.worktree) adoptDraftTerminal(project.id, c.id);
+                    await chats.refetch();
+                    setChatId(c.id);
+                  }}
+                  onRepository={() => newThreadIn({ kind: "project" })}
+                  onChoosePR={() => {
+                    if (!dirty) setChoosePR(true);
+                  }}
+                  onSelectPR={(ref) => newThreadIn({ kind: "pr", ref })}
+                  onDeepReview={() => newThreadIn({ kind: "review" })}
+                  onSwitchProject={(next) => navigate(next, undefined, true)}
+                  onAddProject={() => void add()}
+                  canChoosePR={!!account && !!project.repository}
+                  dirty={dirty}
+                  onOpenCode={openCode}
+                  onOpenFile={openChatFile}
+                  onOpenTurnDiff={openTurnDiff}
+                  onReviewPull={(ref) => void reviewBranchPr(ref)}
+                />
+                <RunningTasks
+                  key={project.id}
+                  project={project}
+                  chats={chats.data ?? []}
+                  onOpenChat={(c) => navigate(project, c)}
+                />
+              </Pane>
+              <Pane id="changes" label="Changes" {...paneProps("changes")}>
+                {panes.layout.open.changes && (
+                  <>
+                    <PaneHeader
+                      id="changes"
+                      icon={
+                        pull ? (
+                          <GitPullRequest size={14} />
+                        ) : (
+                          <GitCompareArrows size={14} />
+                        )
+                      }
+                      title={pull ? "Review" : "Changes"}
+                      onSlots={setChangesSlots}
+                      onClose={() => togglePane("changes")}
+                    />
+                    {pull ? (
+                      account && project.repository ? (
+                        <div className="project-review">
+                          <Connected
+                            onDirtyChange={setDirty}
+                            key={`${project.id}:${pull.number}`}
+                            embedded={{
+                              ref: pull,
+                              slots: changesSlots,
+                              onEditFile: (path, line) =>
+                                openInEditor({ path, line, directory: false }),
+                              reveal:
+                                changeTarget?.projectId === project.id
+                                  ? changeTarget
+                                  : null,
+                              onRevealConsumed: () => setChangeTarget(null),
+                              onPresence: (next) => {
+                                setViewing(next);
+                                if (next.path)
+                                  localStorage.setItem(
+                                    `relay-project-review-file:${project.id}:${pull.number}`,
+                                    next.path,
+                                  );
+                              },
+                              onDiscuss: (target, selectedPull) => {
+                                void discuss(selectedPull)
+                                  .then(() => {
+                                    setContextText({
+                                      id: crypto.randomUUID(),
+                                      text: `@codex About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
+                                      selection: {
+                                        ...target,
+                                        head: selectedPull.head.sha,
+                                        base: selectedPull.merge_base,
+                                        question: "Explain this code.",
+                                      },
+                                    });
+                                    panes.show("chat");
+                                  })
+                                  .catch(setError);
+                              },
+                            }}
+                            account={account}
+                            initialWorkspace={{
+                              ...boot.data.workspace,
+                              pull,
+                              file: localStorage.getItem(
+                                `relay-project-review-file:${project.id}:${pull.number}`,
+                              ),
+                            }}
+                            onSettings={() => setSettings(true)}
+                          />
+                        </div>
                       ) : (
-                        <GitCompareArrows size={14} />
+                        <div className="empty pane-empty">
+                          <GitPullRequest size={28} />
+                          <h2>Connect your Git host</h2>
+                          <p>
+                            We’ll match the repository using this folder’s Git
+                            remote.
+                          </p>
+                          <button onClick={() => void linked()}>
+                            Connect Gitea
+                          </button>
+                        </div>
                       )
-                    }
-                    title={pull ? "Review" : "Changes"}
-                    onSlots={setChangesSlots}
-                    onClose={() => togglePane("changes")}
-                  />
-                  {pull ? (
-                    account && project.repository ? (
-                      <div className="project-review">
-                        <Connected
-                          onDirtyChange={setDirty}
-                          key={`${project.id}:${pull.number}`}
-                          embedded={{
-                            ref: pull,
-                            slots: changesSlots,
-                            onEditFile: (path, line) =>
-                              openInEditor({ path, line, directory: false }),
-                            reveal:
-                              changeTarget?.projectId === project.id
-                                ? changeTarget
-                                : null,
-                            onRevealConsumed: () => setChangeTarget(null),
-                            onPresence: (next) => {
-                              setViewing(next);
-                              if (next.path)
-                                localStorage.setItem(
-                                  `relay-project-review-file:${project.id}:${pull.number}`,
-                                  next.path,
-                                );
-                            },
-                            onDiscuss: (target, selectedPull) => {
-                              void discuss(selectedPull)
-                                .then(() => {
-                                  setContextText({
-                                    id: crypto.randomUUID(),
-                                    text: `@codex About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
-                                    selection: {
-                                      ...target,
-                                      head: selectedPull.head.sha,
-                                      base: selectedPull.merge_base,
-                                      question: "Explain this code.",
-                                    },
-                                  });
-                                  panes.show("chat");
-                                })
-                                .catch(setError);
-                            },
-                          }}
-                          account={account}
-                          initialWorkspace={{
-                            ...boot.data.workspace,
-                            pull,
-                            file: localStorage.getItem(
-                              `relay-project-review-file:${project.id}:${pull.number}`,
-                            ),
-                          }}
-                          onSettings={() => setSettings(true)}
-                        />
-                      </div>
                     ) : (
-                      <div className="empty pane-empty">
-                        <GitPullRequest size={28} />
-                        <h2>Connect your Git host</h2>
-                        <p>
-                          We’ll match the repository using this folder’s Git
-                          remote.
-                        </p>
-                        <button onClick={() => void linked()}>
-                          Connect Gitea
-                        </button>
-                      </div>
-                    )
-                  ) : (
-                    <ProjectChanges
+                      <ProjectChanges
+                        key={project.id}
+                        project={project}
+                        slots={changesSlots}
+                        onViewing={setViewing}
+                        onOpenFile={(path, line) =>
+                          openInEditor({ path, line, directory: false })
+                        }
+                        turn={turnDiff}
+                        onCloseTurn={() => setTurnDiff(null)}
+                        reveal={changeTarget}
+                        onRevealConsumed={() => setChangeTarget(null)}
+                        onAsk={(code) => {
+                          setContextText({
+                            id: crypto.randomUUID(),
+                            text: "",
+                            code,
+                          });
+                          panes.show("chat");
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </Pane>
+              <Pane id="files" label="Files" {...paneProps("files")}>
+                {panes.layout.open.files && (
+                  <>
+                    <PaneHeader
+                      id="files"
+                      icon={<Files size={14} />}
+                      title="Files"
+                      closeDisabled={dirty}
+                      onClose={() => togglePane("files")}
+                    />
+                    <ProjectFiles
                       key={project.id}
                       project={project}
-                      slots={changesSlots}
+                      checks={checks}
+                      dirty={dirty}
+                      onDirtyChange={setDirty}
                       onViewing={setViewing}
-                      onOpenFile={(path, line) =>
-                        openInEditor({ path, line, directory: false })
-                      }
-                      turn={turnDiff}
-                      onCloseTurn={() => setTurnDiff(null)}
-                      reveal={changeTarget}
-                      onRevealConsumed={() => setChangeTarget(null)}
-                      onAsk={(code) => {
-                        setContextText({
-                          id: crypto.randomUUID(),
-                          text: "",
-                          code,
-                        });
-                        panes.show("chat");
-                      }}
+                      openTarget={openFileTarget}
+                      onOpenTargetConsumed={() => setOpenFileTarget(null)}
                     />
-                  )}
-                </>
-              )}
-            </Pane>
-            <Pane id="files" label="Files" {...paneProps("files")}>
-              {panes.layout.open.files && (
-                <>
-                  <PaneHeader
-                    id="files"
-                    icon={<Files size={14} />}
-                    title="Files"
-                    closeDisabled={dirty}
-                    onClose={() => togglePane("files")}
-                  />
-                  <ProjectFiles
-                    key={project.id}
-                    project={project}
-                    checks={checks}
-                    dirty={dirty}
-                    onDirtyChange={setDirty}
-                    onViewing={setViewing}
-                    openTarget={openFileTarget}
-                    onOpenTargetConsumed={() => setOpenFileTarget(null)}
-                  />
-                </>
-              )}
-            </Pane>
-            <Pane id="history" label="History" {...paneProps("history")}>
-              {panes.layout.open.history && (
-                <>
-                  <PaneHeader
-                    id="history"
-                    icon={<GitGraph size={14} />}
-                    title="History"
-                    onSlots={setHistorySlots}
-                    onClose={() => togglePane("history")}
-                  />
-                  <ProjectHistory
-                    key={project.id}
-                    projectId={project.id}
-                    slots={historySlots}
-                    onOpenFile={(path) =>
-                      openInEditor({ path, directory: false })
-                    }
-                  />
-                </>
-              )}
-            </Pane>
+                  </>
+                )}
+              </Pane>
+              <Pane id="history" label="History" {...paneProps("history")}>
+                {panes.layout.open.history && (
+                  <>
+                    <PaneHeader
+                      id="history"
+                      icon={<GitGraph size={14} />}
+                      title="History"
+                      onSlots={setHistorySlots}
+                      onClose={() => togglePane("history")}
+                    />
+                    <ProjectHistory
+                      key={project.id}
+                      projectId={project.id}
+                      slots={historySlots}
+                      onOpenFile={(path) =>
+                        openInEditor({ path, directory: false })
+                      }
+                    />
+                  </>
+                )}
+              </Pane>
+            </div>
+            {showTerminal && (
+              <TerminalDrawer
+                terminal={terminalFor(project.id, chat?.id ?? null)}
+                worktree={!!chat?.worktree}
+                onClose={() => setTerminalOpen(shellKey, false)}
+              />
+            )}
           </div>
         )}
       </div>
