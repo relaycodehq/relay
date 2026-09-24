@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
 }));
 import { net } from "electron";
 import { Updater } from "../../electron/updater";
-import type { UpdateFile } from "../../shared/updates";
+import type { UpdateFile, UpdateState } from "../../shared/updates";
 
 const bytes = Buffer.from("relay update payload ".repeat(4096));
 const release = (data = bytes): UpdateFile => ({
@@ -82,9 +82,12 @@ it("gives up on a stalled connection", async () => {
 });
 
 /** An updater with a download staged, whose install fails harmlessly. */
-function staged(runningTasks: () => number) {
+function staged(
+  runningTasks: () => number,
+  emit: (state: UpdateState) => void = () => {},
+) {
   process.env.APPIMAGE = join(tmpdir(), "relay-missing-dir", "Relay.AppImage");
-  const updater = new Updater(() => {}, { runningTasks, beforeQuit() {} });
+  const updater = new Updater(emit, { runningTasks, beforeQuit() {} });
   Object.assign(updater as any, {
     state: { status: "ready", current: "0.1.0", version: "0.2.0" },
     staged: { version: "0.2.0", path: join(tmpdir(), "relay-missing-update") },
@@ -96,7 +99,13 @@ function staged(runningTasks: () => number) {
 it("holds the restart until Claude's background work finishes", async () => {
   vi.useFakeTimers();
   let tasks = 2;
-  const updater = staged(() => tasks);
+  // The failing install is real disk I/O and may settle within a timer tick,
+  // so check the sequence of states rather than the state at one instant.
+  const seen: string[] = [];
+  const updater = staged(
+    () => tasks,
+    (s) => seen.push(s.status),
+  );
   expect(await updater.installAndRestart()).toMatchObject({
     status: "waiting",
     tasks: 2,
@@ -104,9 +113,10 @@ it("holds the restart until Claude's background work finishes", async () => {
   tasks = 1;
   await vi.advanceTimersByTimeAsync(5000);
   expect(updater.current).toMatchObject({ status: "waiting", tasks: 1 });
+  expect(seen).not.toContain("installing");
   tasks = 0;
   await vi.advanceTimersByTimeAsync(5000);
-  expect(updater.current.status).toBe("installing");
+  expect(seen).toContain("installing");
   vi.useRealTimers();
   // The staged file is missing, so the install itself fails.
   await vi.waitFor(() => expect(updater.current.status).toBe("error"));
