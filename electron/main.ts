@@ -586,6 +586,11 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         idSchema.parse(args[0]),
         chatTriageSchema.parse(args[1]),
       );
+    case "forkProjectChat":
+      return projectChats.fork(
+        idSchema.parse(args[0]),
+        idSchema.parse(args[1]),
+      );
     case "renameProjectChat":
       return projectChats.rename(
         idSchema.parse(args[0]),

@@ -8,7 +8,7 @@ import { AgentRequests } from "./agent-requests";
 import { savedRuntimeMode, type AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
 import type { LineQuestion } from "../shared/questions";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
@@ -496,6 +496,62 @@ export class ProjectChats {
     this.cache.set(chat.id, chat);
     return this.summary(chat);
   }
+  /**
+   * A new thread holding the conversation up to an answer, side conversation
+   * included when the answer is in one. The original keeps its turns' changes
+   * to review and roll back; the fork starts without them.
+   */
+  async fork(id: string, messageId: string) {
+    const source = await this.load(id);
+    if (source.scope.kind === "review")
+      throw new Error("A deep review can't be forked.");
+    const at = source.messages.find((m) => m.id === messageId);
+    if (at?.role !== "assistant" || at.status === "streaming")
+      throw new Error("Fork from an answer that has finished.");
+    const upTo = source.messages.slice(0, source.messages.indexOf(at) + 1);
+    const side = at.parentId;
+    const main = side
+      ? upTo.slice(0, upTo.findIndex((m) => m.id === side) + 1)
+      : upTo;
+    const kept = upTo.filter((m) =>
+      side
+        ? m.parentId === side || (!m.parentId && main.includes(m))
+        : !m.parentId,
+    );
+    const chat: ProjectChat = {
+      id: randomUUID(),
+      projectId: source.projectId,
+      scope: source.scope,
+      title: `Fork: ${source.title}`.slice(0, 120),
+      created: Date.now(),
+      updated: Date.now(),
+      ...(source.branch ? { branch: source.branch } : {}),
+      messages: kept.map(({ changes, pending, seq, parentId, ...m }) => ({
+        ...structuredClone(m),
+        id: randomUUID(),
+        version: 1,
+      })),
+    };
+    chat.forkedAt = chat.messages.at(-1)!.id;
+    const images = kept.flatMap((m) => m.images ?? []);
+    if (images.length) {
+      await mkdir(join(this.dir, "images", chat.id), {
+        recursive: true,
+        mode: 0o700,
+      });
+      for (const image of images)
+        await copyFile(
+          this.imagePath(source.id, image),
+          this.imagePath(chat.id, image),
+        );
+    }
+    await this.save(chat);
+    await this.store.update((s) => {
+      (s.chats ??= []).push(this.summary(chat));
+    });
+    this.cache.set(chat.id, chat);
+    return this.summary(chat);
+  }
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
@@ -550,6 +606,7 @@ export class ProjectChats {
     claudeThrough,
     providerThread,
     providerThrough,
+    forkedAt,
     sharedCursor,
     replySessions,
     checkoutNotes,
@@ -1145,7 +1202,7 @@ export class ProjectChats {
           providerThread && providerThrough
             ? previous.findIndex((m) => m.id === providerThrough)
             : fork
-              ? previous.indexOf(parent!)
+              ? previous.indexOf(fork.from)
               : -1;
       // A steering message went straight into the session of the agent it steered.
       const heard = (m: ChatMessage) =>
@@ -1172,7 +1229,9 @@ export class ProjectChats {
           (!providerThread && !fork) ||
           (chat.scopeHeard?.[heardKey] ?? scopeKey) !== scopeKey;
       const side = !parent
-        ? ""
+        ? fork
+          ? "\nThis thread was forked from another after your answer above. Work may have continued there since; re-read files before relying on what you saw."
+          : ""
         : fork
           ? "\nThis is a side conversation branching off your answer above. The main conversation may have continued since; re-read files before relying on what you saw."
           : !providerThread
@@ -1241,18 +1300,23 @@ export class ProjectChats {
     void active.job.catch(() => {});
   }
   /**
-   * A side conversation's first turn with the agent that wrote its message
-   * starts from a copy of that agent's session, cut right after the message.
+   * The first turn of a side conversation or a forked thread with the agent
+   * that wrote its answer starts from a copy of that agent's session, cut
+   * right after the answer.
    */
   private forkFor(
     chat: ProjectChat,
     provider: AgentProvider,
     parentId?: string,
   ) {
-    if (!parentId || agentSession(chat, provider, parentId).thread) return;
-    const parent = chat.messages.find((m) => m.id === parentId);
-    return parent?.role === "assistant" && parent.provider === provider
-      ? parent.forkPoint
+    if (agentSession(chat, provider, parentId).thread) return;
+    const from = chat.messages.find(
+      (m) => m.id === (parentId ?? chat.forkedAt),
+    );
+    return from?.role === "assistant" &&
+      from.provider === provider &&
+      from.forkPoint
+      ? { point: from.forkPoint, from }
       : undefined;
   }
   /** A hidden turn on an existing session, with the settings that session last ran under. */
@@ -1664,7 +1728,7 @@ export class ProjectChats {
         session: {
           key: sessionKey,
           id: sessionId,
-          fork,
+          fork: fork?.point,
           onPoint: (at: string) => {
             point = at;
           },
@@ -1719,18 +1783,21 @@ export class ProjectChats {
         message.error = e instanceof Error ? e.message : String(e);
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
-        if (fork && branch) {
+        if (fork) {
           if (provider === "claude") {
-            delete branch.claudeThread;
-            delete branch.claudeThrough;
+            delete (branch ?? chat).claudeThread;
+            delete (branch ?? chat).claudeThrough;
             closeClaudeSession(sessionKey);
-          } else {
+          } else if (branch) {
             delete branch.thread;
             delete branch.through;
             await closeCodexConnection(sessionKey).catch(() => {});
+          } else {
+            delete chat.providerThread;
+            delete chat.providerThrough;
+            await closeCodexConnection(sessionKey).catch(() => {});
           }
-          const parent = chat.messages.find((m) => m.id === input.parentId);
-          if (parent) delete parent.forkPoint;
+          delete fork.from.forkPoint;
         }
       }
       if (!message.handoff && !message.unprompted) chat.queuePaused = true;

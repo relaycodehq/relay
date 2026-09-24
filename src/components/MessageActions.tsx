@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Reply } from "lucide-react";
+import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../shared/chat-activity";
 import { api } from "../lib/api";
 
-/** The row under an agent's answer: copy, reply, and when it was sent. */
+/** The row under an agent's answer: copy, reply, fork, and when it was sent. */
 export function MessageActions({
   text,
   sent,
   pending,
   onReply,
+  onFork,
 }: {
   text?: string;
   sent: number;
   /** While the answer streams the row keeps its height but stays hidden. */
   pending: boolean;
   onReply: () => void;
+  onFork?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -47,6 +49,16 @@ export function MessageActions({
       >
         <Reply size={15} />
       </button>
+      {onFork && (
+        <button
+          type="button"
+          title="Fork into a new thread"
+          aria-label="Fork into a new thread"
+          onClick={onFork}
+        >
+          <Split size={15} />
+        </button>
+      )}
       <time
         dateTime={new Date(sent).toISOString()}
         title={new Date(sent).toLocaleString()}

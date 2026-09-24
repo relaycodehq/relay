@@ -297,6 +297,7 @@ const Message = memo(function Message({
   message: m,
   chatId,
   onReply,
+  onFork,
   onChanges,
   onTurnDiff,
   onRewind,
@@ -309,6 +310,8 @@ const Message = memo(function Message({
   message: ChatMessage;
   chatId: string;
   onReply: (m: ChatMessage) => void;
+  /** Absent where a thread can't be forked, like a deep review. */
+  onFork?: (m: ChatMessage) => void;
   onChanges: () => void;
   onTurnDiff: (m: ChatMessage, path?: string) => void;
   onRewind: (
@@ -479,6 +482,7 @@ const Message = memo(function Message({
           sent={m.created}
           pending={m.status === "streaming"}
           onReply={() => onReply(m)}
+          onFork={onFork && (() => onFork(m))}
         />
       )}
     </article>
@@ -1122,6 +1126,7 @@ export function ProjectChat({
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
+    onCreated,
     chatId: chat?.id,
   });
   latest.current = {
@@ -1129,10 +1134,21 @@ export function ProjectChat({
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
+    onCreated,
     chatId: chat?.id,
   };
   const openReply = useCallback((m: ChatMessage) => {
     setRootId(replyRoot(latest.current.messages, m.id).id);
+  }, []);
+  const forkThread = useCallback(async (m: ChatMessage) => {
+    const { chatId, onCreated } = latest.current;
+    if (!chatId) return;
+    setError(undefined);
+    try {
+      await onCreated(await api.forkProjectChat(chatId, m.id));
+    } catch (e) {
+      setError(e);
+    }
   }, []);
   const openChanges = useCallback(
     () => latest.current.onOpenCode("changes"),
@@ -1408,6 +1424,9 @@ export function ProjectChat({
                   message={m}
                   chatId={chat?.id ?? ""}
                   onReply={openReply}
+                  onFork={
+                    chat?.scope.kind === "review" ? undefined : forkThread
+                  }
                   onChanges={openChanges}
                   onTurnDiff={openTurnDiff}
                   onRewind={rewindTurn}

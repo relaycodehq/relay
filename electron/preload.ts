@@ -34,6 +34,7 @@ const methods = [
   "linkProject",
   "triageProjectChat",
   "renameProjectChat",
+  "forkProjectChat",
   "projectCommands",
   "projectBranchPulls",
   "projectPreparePull",

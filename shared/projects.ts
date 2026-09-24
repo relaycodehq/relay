@@ -245,6 +245,8 @@ export interface ProjectChat extends ChatSummary {
   claudeThrough?: string;
   providerThread?: string;
   providerThrough?: string;
+  /** Local: a forked thread's last copied answer, whose session its agent continues. */
+  forkedAt?: string;
   sharedCursor?: number;
   /** Local: checkout rollbacks the next agent turn should hear about. */
   checkoutNotes?: string[];
@@ -341,6 +343,8 @@ export interface ProjectApi {
   revealProject(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
+  /** A new thread holding the conversation up to this answer. */
+  forkProjectChat(id: string, messageId: string): Promise<ChatSummary>;
   projectCommands(
     id: string,
     provider: "codex" | "claude",

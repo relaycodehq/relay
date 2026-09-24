@@ -988,6 +988,56 @@ it("forks Claude's session for a side conversation, and gives another agent the 
   expect(history[1].focus).toBe(true);
 }, 30000);
 
+it("forks a thread at an answer, and its first turn continues that answer's session", async () => {
+  const ask = async (chatId: string, body: string, count: number) => {
+    await chats.send(chatId, { ...input(body), provider: "claude" });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chatId)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+    return (await chats.get(chatId)).messages.at(-1)!;
+  };
+  const chat = await chats.create(projectId, { kind: "project" });
+  const first = await ask(chat.id, "@claude FIRST question", 2);
+  await ask(chat.id, "@claude LATER question", 4);
+  const fork = await chats.fork(chat.id, first.id);
+  const forked = await chats.get(fork.id);
+  expect(forked.messages.map((m) => m.body)).toEqual([
+    "@claude FIRST question",
+    first.body,
+  ]);
+  expect(forked.messages.map((m) => m.id)).not.toContain(first.id);
+  expect(forked.forkedAt).toBe(forked.messages[1].id);
+  expect((await chats.get(chat.id)).messages).toHaveLength(4);
+
+  await ask(fork.id, "@claude FORKED question", 4);
+  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const call = calls.find(
+    (c) => c.provider === "claude" && c.prompt?.includes("FORKED question"),
+  );
+  expect(call.args).toEqual(
+    expect.arrayContaining([
+      "--resume=fixture-claude",
+      "--fork-session",
+      "--resume-session-at=fixture-assistant",
+    ]),
+  );
+  const text = JSON.parse(call.prompt).message.content.find(
+    (p: { type: string }) => p.type === "text",
+  ).text as string;
+  expect(text).toContain("forked from another after your answer");
+  expect(text).not.toContain("FIRST question");
+  expect(text).not.toContain("LATER question");
+}, 30000);
+
 it("discovers an enabled skill and sends its native input to Codex without trusting a renderer path", async () => {
   const { codexSkills } = await import("../../electron/provider-commands");
   const skills = await codexSkills(join(root, "repo"));
