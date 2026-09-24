@@ -30,6 +30,7 @@ import {
 import {
   projectNameSchema,
   type Project,
+  type ChatPending,
   type ChatSummary,
   type ChatTriage,
 } from "../../shared/projects";
@@ -223,6 +224,11 @@ function SnoozeMenu({
 const sendsTitle = (at: number) =>
   `Sends a scheduled message ${wakeLabel(at, new Date())}`;
 
+const pendingTitle = (pending: ChatPending[]) =>
+  `Claude will continue on its own after:\n${pending
+    .map((p) => (p.kind === "task" ? p.description : p.prompt || "a wake-up"))
+    .join("\n")}`;
+
 /** Right side of a card's top row: live state, else the age. */
 function CardState({
   chat,
@@ -250,6 +256,16 @@ function CardState({
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
     return <span className="sb-card-state unread">Woke up</span>;
+  if (chat.pending?.length)
+    return (
+      <span
+        className={`sb-card-state pending ${unread ? "unread" : ""}`}
+        title={pendingTitle(chat.pending)}
+      >
+        <i />
+        Waiting
+      </span>
+    );
   if (chat.nextSend && !unread)
     return (
       <span

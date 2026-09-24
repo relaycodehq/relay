@@ -837,6 +837,15 @@
 .sb-card-state.unread i {
   background: var(--accent);
 }
+.sb-card-state.pending {
+  color: var(--muted);
+}
+.sb-card-state.pending i {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.sb-card-state.pending.unread {
+  color: var(--accent);
+}
 .sb-card-state.running {
   color: var(--accent);
 }
