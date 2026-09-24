@@ -639,12 +639,21 @@ export function ProjectSidebar({
   /** Holding ⌘ on the activity view shows ⌘1–⌘9 on the first nine cards. */
   const [cmdHeld, setCmdHeld] = useState(false);
   const jumpTo = useRef<(index: number) => boolean>(() => false);
+  const settleOpen = useRef<() => boolean>(() => false);
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       setCmdHeld(e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey);
       if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return;
       const digit = /^Digit([1-9])$/.exec(e.code);
       if (digit && jumpTo.current(Number(digit[1]) - 1)) e.preventDefault();
+      if (
+        e.code === "KeyE" &&
+        !e.repeat &&
+        !e.isComposing &&
+        !document.querySelector('dialog[open], [role="dialog"]') &&
+        settleOpen.current()
+      )
+        e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
       if (!e.metaKey) setCmdHeld(false);
@@ -725,6 +734,12 @@ export function ProjectSidebar({
   // re-renders on its clock and chat refetches anyway.
   const drafts =
     view === "activity" ? composerDrafts(chatId, projectId, !!chatId) : [];
+  settleOpen.current = () => {
+    const c = sections.active.find((a) => a.id === chatId);
+    if (!c || c.running || c.waiting) return false;
+    settle(c);
+    return true;
+  };
   jumpTo.current = (index) => {
     const c = sections.active[index];
     if (!shortcuts || !c) return false;
@@ -1293,7 +1308,7 @@ export function ProjectSidebar({
             {!c.running && !c.waiting && (
               <button
                 className="sb-card-action"
-                title="Settle — hide until something new happens"
+                title={`Settle${c.id === chatId ? " (⌘E)" : ""} — hide until something new happens`}
                 onClick={(e) => {
                   e.stopPropagation();
                   settle(c);
