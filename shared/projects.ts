@@ -344,6 +344,8 @@ export interface ProjectApi {
   createProjectGroup(path: string): Promise<void>;
   renameProjectGroup(from: string, to: string): Promise<void>;
   removeProjectGroup(path: string): Promise<void>;
+  /** Places a group before sibling `before`, or last among its siblings. */
+  moveProjectGroup(path: string, before: string | null): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
   renameProject(id: string, name: string): Promise<Project>;
   /** Opens the project's folder in Finder. */

@@ -28,6 +28,7 @@ const methods = [
   "createProjectGroup",
   "renameProjectGroup",
   "removeProjectGroup",
+  "moveProjectGroup",
   "moveProject",
   "renameProject",
   "revealProject",

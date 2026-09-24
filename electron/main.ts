@@ -558,6 +558,11 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "removeProjectGroup":
       return projects.removeGroup(projectFolderSchema.parse(args[0]));
+    case "moveProjectGroup":
+      return projects.moveGroup(
+        projectFolderSchema.parse(args[0]),
+        projectFolderSchema.nullable().parse(args[1]),
+      );
     case "moveProject":
       return projects.move(
         idSchema.parse(args[0]),

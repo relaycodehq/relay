@@ -48,6 +48,7 @@ import { ProviderIcon } from "./ComposerModelPicker";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import {
   joinGroup,
+  moveGroupInList,
   moveProjectInList,
   parentGroup,
   projectFolderTree,
@@ -61,10 +62,12 @@ const SEARCH_RESULTS = 50;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
 const SHELF_PAGE = 5;
 const PROJECT_DRAG = "application/x-relay-project";
+const GROUP_DRAG = "application/x-relay-group";
 
 type DropTarget =
   | { kind: "project"; id: string; where: "before" | "after" }
-  | { kind: "folder"; path: string };
+  | { kind: "folder"; path: string }
+  | { kind: "group"; path: string; where: "before" | "after" };
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -509,15 +512,20 @@ export function ProjectSidebar({
     setDraft({ parent, project });
   };
   const [dragging, setDragging] = useState<string | null>(null);
+  const [draggingGroup, setDraggingGroup] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
   const expandTimer = useRef<{ key: string; timer: number } | null>(null);
   const clearDrag = () => {
     setDragging(null);
+    setDraggingGroup(null);
     setDrop(null);
     if (expandTimer.current) clearTimeout(expandTimer.current.timer);
     expandTimer.current = null;
   };
-  const moveProject = async (id: string, target: DropTarget) => {
+  const moveProject = async (
+    id: string,
+    target: Exclude<DropTarget, { kind: "group" }>,
+  ) => {
     let folder = "",
       before: string | null = null;
     if (target.kind === "folder") folder = target.path;
@@ -541,9 +549,27 @@ export function ProjectSidebar({
       void refreshGroups();
     }
   };
-  /** Shared dragover handling: accept only project drags, mark the target. */
+  const moveGroup = (path: string, target: { path: string; where: string }) => {
+    const parent = parentGroup(path);
+    const before =
+      target.where === "before"
+        ? target.path
+        : (groupPaths
+            .slice(groupPaths.indexOf(target.path) + 1)
+            .find((p) => p !== path && parentGroup(p) === parent) ?? null);
+    void changeGroups(
+      () => api.moveProjectGroup(path, before),
+      (list) => moveGroupInList(list, path, before),
+    );
+  };
+  /** Shared dragover handling: accepts the drag the target takes, marks it. */
   const dragOver = (e: React.DragEvent, target: DropTarget) => {
-    if (!dragging || !e.dataTransfer.types.includes(PROJECT_DRAG)) return;
+    const group = target.kind === "group";
+    if (
+      !(group ? draggingGroup : dragging) ||
+      !e.dataTransfer.types.includes(group ? GROUP_DRAG : PROJECT_DRAG)
+    )
+      return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
@@ -552,6 +578,15 @@ export function ProjectSidebar({
     );
   };
   const dropOn = (e: React.DragEvent, target: DropTarget) => {
+    if (target.kind === "group") {
+      if (!draggingGroup) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const path = draggingGroup;
+      clearDrag();
+      if (target.path !== path) moveGroup(path, target);
+      return;
+    }
     if (!dragging) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1090,8 +1125,34 @@ export function ProjectSidebar({
           return (
             <section
               key={folder.path}
-              className="sb-folder"
+              className={[
+                "sb-folder",
+                draggingGroup === folder.path && "dragging",
+                drop?.kind === "group" &&
+                  drop.path === folder.path &&
+                  `drop-${drop.where}`,
+              ]
+                .filter(Boolean)
+                .join(" ")}
               aria-label={`Group ${folder.path}`}
+              onDragOver={(e) => {
+                // Groups only trade places with their siblings.
+                if (
+                  !draggingGroup ||
+                  draggingGroup === folder.path ||
+                  parentGroup(draggingGroup) !== parentGroup(folder.path)
+                )
+                  return;
+                const row =
+                  e.currentTarget.firstElementChild!.getBoundingClientRect();
+                dragOver(e, {
+                  kind: "group",
+                  path: folder.path,
+                  where:
+                    e.clientY < row.top + row.height / 2 ? "before" : "after",
+                });
+              }}
+              onDrop={(e) => drop?.kind === "group" && dropOn(e, drop)}
             >
               {renaming === folder.path ? (
                 <GroupNameInput
@@ -1114,7 +1175,15 @@ export function ProjectSidebar({
                 <ContextMenu.Root>
                   <ContextMenu.Trigger
                     className={`sb-folder-row ${into ? "drop-into" : ""}`}
+                    draggable={!dirty}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(GROUP_DRAG, folder.path);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDraggingGroup(folder.path);
+                    }}
+                    onDragEnd={clearDrag}
                     onDragOver={(e) => {
+                      if (!dragging) return;
                       dragOver(e, { kind: "folder", path: folder.path });
                       openWhileDragging(key, isOpen);
                     }}

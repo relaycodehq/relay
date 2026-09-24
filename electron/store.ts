@@ -10,6 +10,8 @@ interface State {
   projectGroups?: string[];
   /** Set once folder-named projects got title-cased names. */
   projectTitlesTidied?: true;
+  /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */
+  projectGroupsOrdered?: true;
   chats?: import("../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;

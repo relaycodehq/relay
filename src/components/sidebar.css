@@ -564,6 +564,37 @@
 .sb-project.drop-after::after {
   animation: sb-line 0.12s ease-out;
 }
+/* Group reordering: ::before is the group's guide line, so the insertion
+   line uses ::after on either edge. */
+.sb-folder-row[draggable="true"] {
+  cursor: grab;
+}
+.sb-folder-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+.sb-folder.dragging {
+  opacity: 0.4;
+}
+.sb-folder.drop-before::after,
+.sb-folder.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--sidebar);
+  pointer-events: none;
+  z-index: 1;
+  animation: sb-line 0.12s ease-out;
+}
+.sb-folder.drop-before::after {
+  top: -5px;
+}
+.sb-folder.drop-after::after {
+  bottom: -5px;
+}
 .sb-folder-row.drop-into,
 .sb-section-heading.drop-into {
   color: var(--accent);

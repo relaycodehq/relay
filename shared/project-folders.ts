@@ -84,8 +84,17 @@ export function projectFolderTree(
   for (const group of groups) reach(group);
   for (const project of projects)
     reach(project.folder ?? "").projects.push(project);
+  // A group sits where its first listed path (itself or anything inside) is.
+  const rank = new Map<string, number>();
+  groups.forEach((group, index) => {
+    for (let path = group; path; path = parentGroup(path))
+      if (!rank.has(path)) rank.set(path, index);
+  });
+  const at = (path: string) => rank.get(path) ?? Infinity;
   const sort = (node: ProjectFolderNode) => {
-    node.folders.sort((a, b) => a.name.localeCompare(b.name));
+    node.folders.sort(
+      (a, b) => at(a.path) - at(b.path) || a.name.localeCompare(b.name),
+    );
     node.folders.forEach(sort);
   };
   sort(root);
@@ -117,5 +126,47 @@ export function moveProjectInList<T extends Pick<Project, "id" | "folder">>(
       }
   }
   rest.splice(index, 0, moved);
+  return rest;
+}
+/** Orders group paths by name, level by level, for lists never reordered. */
+export function sortGroupPaths(paths: string[]) {
+  return [...paths].sort((a, b) => {
+    const x = a.split("/"),
+      y = b.split("/");
+    for (let i = 0; i < Math.min(x.length, y.length); i++) {
+      const order = x[i].localeCompare(y[i]);
+      if (order) return order;
+    }
+    return x.length - y.length;
+  });
+}
+/**
+ * Moves group `path`, with everything inside it, before sibling `before` or,
+ * without one, after its last sibling. Other groups keep their order.
+ */
+export function moveGroupInList(
+  list: string[],
+  path: string,
+  before: string | null,
+): string[] {
+  const within = (group: string, parent: string) =>
+    group === parent || group.startsWith(parent + "/");
+  const parent = parentGroup(path);
+  if (before === path || (before !== null && parentGroup(before) !== parent))
+    return list;
+  const moving = list.filter((group) => within(group, path));
+  if (!moving.length) moving.push(path);
+  const rest = list.filter((group) => !within(group, path));
+  let index = before ? rest.findIndex((group) => within(group, before)) : -1;
+  if (index < 0) {
+    index = rest.length;
+    if (parent)
+      for (let i = rest.length - 1; i >= 0; i--)
+        if (within(rest[i], parent)) {
+          index = i + 1;
+          break;
+        }
+  }
+  rest.splice(index, 0, ...moving);
   return rest;
 }

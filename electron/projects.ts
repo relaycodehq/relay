@@ -5,9 +5,11 @@ import type { Store } from "./store";
 import { ApiError, type Gitea } from "./gitea";
 import { projectTitle, type Project } from "../shared/projects";
 import {
+  moveGroupInList,
   moveProjectInList,
   parentGroup,
   rebaseGroup,
+  sortGroupPaths,
 } from "../shared/project-folders";
 import { git, gitBytes } from "./git";
 import { digest } from "./hash";
@@ -46,8 +48,19 @@ export class Projects {
     });
     return this.get(id);
   }
+  /** Group paths in sidebar order; alphabetical until one is dragged. */
   groups() {
-    return this.store.get().projectGroups ?? [];
+    const s = this.store.get();
+    const groups = s.projectGroups ?? [];
+    return s.projectGroupsOrdered ? groups : sortGroupPaths(groups);
+  }
+  async moveGroup(path: string, before: string | null) {
+    if (!path) throw new Error("Choose a group.");
+    const groups = this.groups();
+    await this.store.update((s) => {
+      s.projectGroups = moveGroupInList(groups, path, before);
+      s.projectGroupsOrdered = true;
+    });
   }
   async createGroup(path: string) {
     if (!path) throw new Error("Name the group.");

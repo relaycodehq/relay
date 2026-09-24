@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  moveGroupInList,
   projectFolderTree,
   projectGroupNameSchema,
   rebaseGroup,
+  sortGroupPaths,
 } from "../../shared/project-folders";
 import type { Project } from "../../shared/projects";
 
@@ -28,6 +30,52 @@ describe("projectFolderTree", () => {
     expect(tree.folders.map((f) => f.path)).toEqual(["Home", "Work"]);
     expect(tree.folders[0].folders[0].path).toBe("Home/Side");
     expect(tree.folders[1].projects).toEqual([project]);
+  });
+});
+
+describe("group order", () => {
+  const list = ["Home", "Home/Side", "Work", "Work/Web", "Work/Api", "Zoo"];
+  it("moves a group with everything inside it", () => {
+    expect(moveGroupInList(list, "Work", "Home")).toEqual([
+      "Work",
+      "Work/Web",
+      "Work/Api",
+      "Home",
+      "Home/Side",
+      "Zoo",
+    ]);
+    expect(moveGroupInList(list, "Home", null)).toEqual([
+      "Work",
+      "Work/Web",
+      "Work/Api",
+      "Zoo",
+      "Home",
+      "Home/Side",
+    ]);
+  });
+  it("keeps a subgroup last inside its parent without a sibling to precede", () => {
+    expect(moveGroupInList(list, "Work/Web", null)).toEqual([
+      "Home",
+      "Home/Side",
+      "Work",
+      "Work/Api",
+      "Work/Web",
+      "Zoo",
+    ]);
+  });
+  it("refuses to move a group out of its parent", () => {
+    expect(moveGroupInList(list, "Work/Web", "Home")).toBe(list);
+  });
+  it("places groups the way the list orders them", () => {
+    const tree = projectFolderTree([], ["Zoo", "Work/Web", "Home", "Work/Api"]);
+    expect(tree.folders.map((f) => f.path)).toEqual(["Zoo", "Work", "Home"]);
+    expect(tree.folders[1].folders.map((f) => f.name)).toEqual(["Web", "Api"]);
+  });
+  it("sorts never-dragged groups by name at every level", () => {
+    const sorted = sortGroupPaths(["Work b", "Work/Web", "Work/Api", "Home"]);
+    const tree = projectFolderTree([], sorted);
+    expect(tree.folders.map((f) => f.path)).toEqual(["Home", "Work", "Work b"]);
+    expect(tree.folders[1].folders.map((f) => f.name)).toEqual(["Api", "Web"]);
   });
 });
 

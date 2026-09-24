@@ -56,6 +56,14 @@ test("organizes project groups, preserves child expansion across restart, and ce
       )?.folder;
     const row = (name: string) =>
       page.locator(".sb-project-row").filter({ hasText: name });
+    const topGroups = async () =>
+      (
+        await page
+          .locator("section.sb-folder")
+          .evaluateAll((sections) =>
+            sections.map((s) => s.getAttribute("aria-label")!.slice(6)),
+          )
+      ).filter((path) => !path.includes("/"));
     await page.getByRole("button", { name: "New group", exact: true }).click();
     await page.getByLabel("New group name").fill("Work");
     await page.getByLabel("New group name").press("Enter");
@@ -78,6 +86,19 @@ test("organizes project groups, preserves child expansion across restart, and ce
       path: "test-results/screenshots/59-organize-projects.png",
       animations: "disabled",
     });
+    await page.getByRole("button", { name: "New group", exact: true }).click();
+    await page.getByLabel("New group name").fill("Home");
+    await page.getByLabel("New group name").press("Enter");
+    await expect.poll(topGroups).toEqual(["Home", "Work"]);
+    await page
+      .locator('section[aria-label="Group Work"] > .sb-folder-row')
+      .dragTo(
+        page.locator('section[aria-label="Group Home"] > .sb-folder-row'),
+        {
+          targetPosition: { x: 30, y: 2 },
+        },
+      );
+    await expect.poll(topGroups).toEqual(["Work", "Home"]);
     await page
       .locator(".sb-project-name")
       .filter({ hasText: "web-store" })
@@ -103,6 +124,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await app.close();
     app = await launch();
     page = await app.firstWindow();
+    await expect.poll(topGroups).toEqual(["Work", "Home"]);
     await page
       .getByRole("button", { name: "Expand group Work", exact: true })
       .click();
