@@ -42,6 +42,11 @@ export async function withCodexTransport<T>(
   onRequest?: (method: string, params: any) => Promise<unknown>,
 ): Promise<T> {
   let finished = false;
+  // A failed write also emits `error`; unheard, it crashes the main process.
+  child.stdin.on("error", (error) => {
+    if (!finished)
+      onError(new Error(`The Codex connection closed: ${error.message}`));
+  });
   const platformError = (cause: unknown) =>
     PlatformError.systemError({
       _tag: "Unknown",
