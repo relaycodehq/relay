@@ -38,7 +38,7 @@ import {
   modelSchema,
   reasoningEffortSchema,
 } from "../../shared/settings";
-import type { ProjectChatSend } from "../../shared/projects";
+import type { ProjectChatSend, ResumeSettings } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import {
@@ -93,6 +93,8 @@ export interface ComposerHandle {
   insertQuote: (text: string) => void;
   /** Sends Relay's own message to an agent with the composer's settings, keeping the draft. */
   sendToAgent: (provider: "codex" | "claude", body: string) => Promise<boolean>;
+  /** The agent picked here and its settings; none while it only messages people. */
+  agentSettings: () => ResumeSettings | undefined;
 }
 export function ProjectComposer({
   handleRef,
@@ -228,11 +230,15 @@ export function ProjectComposer({
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
   const sendToAgent = useRef<ComposerHandle["sendToAgent"]>(async () => false);
+  const agentSettings = useRef<ComposerHandle["agentSettings"]>(
+    () => undefined,
+  );
   useImperativeHandle(
     handleRef,
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
       sendToAgent: (provider, body) => sendToAgent.current(provider, body),
+      agentSettings: () => agentSettings.current(),
     }),
     [],
   );
@@ -742,6 +748,19 @@ export function ProjectComposer({
     preparing ||
     !selected;
   /** `sendAt` holds the message until then (Send later). */
+  agentSettings.current = () => {
+    if (provider === "message") return;
+    const choice = choiceFor(provider);
+    return choice
+      ? {
+          provider,
+          choice,
+          ...contextFor(provider),
+          runtimeMode,
+          interactionMode,
+        }
+      : undefined;
+  };
   sendToAgent.current = async (to, body) => {
     const choice = choiceFor(to);
     if (!choice || busy || running || sending.current) return false;

@@ -1013,6 +1013,34 @@ export function ProjectChat({
     }
     oldest.current = shown[Math.max(0, shown.length - visible)]?.id;
   }, [shown, visible]);
+  /** Taking over from another agent loses its session: say so first. */
+  async function confirmSwitch(to: AgentProvider | undefined) {
+    return (
+      !to ||
+      !activeAgent ||
+      to === activeAgent ||
+      agentSwitchNoticeHidden() ||
+      new Promise<boolean>((resolve) =>
+        setAgentSwitch({ from: activeAgent, to, resolve }),
+      )
+    );
+  }
+  /** Carries on the stopped answer with whichever agent the composer has picked. */
+  async function resume() {
+    if (!chat || busy) return;
+    const settings = composer.current?.agentSettings();
+    if (!(await confirmSwitch(settings?.provider))) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.resumeProjectChat(chat.id, settings);
+      await history.refetch();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function send(
     value: Pick<
       ProjectChatSend,
@@ -1031,16 +1059,7 @@ export function ProjectChat({
   ): Promise<boolean> {
     if (busy) return false;
     if (value.side) return askAside(value);
-    const to = agentMention(value.body)?.provider;
-    if (
-      to &&
-      activeAgent &&
-      to !== activeAgent &&
-      !agentSwitchNoticeHidden() &&
-      !(await new Promise<boolean>((resolve) =>
-        setAgentSwitch({ from: activeAgent, to, resolve }),
-      ))
-    )
+    if (!(await confirmSwitch(agentMention(value.body)?.provider)))
       return false;
     setBusy(true);
     setError(undefined);
@@ -1729,16 +1748,7 @@ export function ProjectChat({
                 <button
                   className="resume-answer"
                   disabled={busy}
-                  onClick={() => {
-                    if (chat) {
-                      setBusy(true);
-                      void api
-                        .resumeProjectChat(chat.id)
-                        .then(() => history.refetch())
-                        .catch(setError)
-                        .finally(() => setBusy(false));
-                    }
-                  }}
+                  onClick={() => void resume()}
                 >
                   <RotateCcw size={13} /> Resume answer
                 </button>

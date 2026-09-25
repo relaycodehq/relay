@@ -34,6 +34,7 @@ import type {
   ChatMessage,
   ForkPoint,
   ProjectChatSend,
+  ResumeSettings,
   ScheduledChatMessage,
   StoppedWork,
   ChatImage,
@@ -1173,7 +1174,7 @@ export class ProjectChats {
     if (sendNow)
       await this.dispatchScheduled(id, { ...sendNow, error: undefined });
   }
-  resume(id: string) {
+  resume(id: string, settings?: ResumeSettings) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
       await this.load(id);
@@ -1184,10 +1185,15 @@ export class ProjectChats {
         throw new Error(
           "Send a follow-up message to continue this conversation.",
         );
+      // Picking another agent before resuming hands the work to it.
       const provider =
-        agentMention(chat.lastInput.body)?.provider ?? chat.lastInput.provider;
+        settings?.provider ??
+        agentMention(chat.lastInput.body)?.provider ??
+        chat.lastInput.provider;
       await this.sendNow(id, {
         ...chat.lastInput,
+        ...(settings && { contextWindow: undefined }),
+        ...settings,
         id: randomUUID(),
         body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
         images: undefined,

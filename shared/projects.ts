@@ -403,6 +403,17 @@ export const projectChatSendSchema = z
   })
   .strict();
 export type ProjectChatSend = z.infer<typeof projectChatSendSchema>;
+/** Which agent carries on a stopped answer, and how; see resumeProjectChat. */
+export const resumeSettingsSchema = projectChatSendSchema
+  .pick({
+    provider: true,
+    choice: true,
+    contextWindow: true,
+    runtimeMode: true,
+    interactionMode: true,
+  })
+  .strict();
+export type ResumeSettings = z.infer<typeof resumeSettingsSchema>;
 export interface ProjectApi {
   respondProjectChat(
     id: string,
@@ -416,7 +427,8 @@ export interface ProjectApi {
     messageId: string,
     index?: number,
   ): Promise<void>;
-  resumeProjectChat(id: string): Promise<void>;
+  /** Left out, the agent and settings of the stopped answer's message carry on. */
+  resumeProjectChat(id: string, settings?: ResumeSettings): Promise<void>;
   /** Claude also takes instructions for what the summary should keep. */
   compactProjectChat(
     id: string,

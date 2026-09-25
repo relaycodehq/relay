@@ -24,6 +24,7 @@ import {
   chatWorkspaceSchema,
   knownMessagesSchema,
   projectChatSendSchema,
+  resumeSettingsSchema,
   projectNameSchema,
 } from "../shared/projects";
 import { LiveSync } from "./live-sync";
@@ -1049,7 +1050,10 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         projectChatSendSchema.parse(args[1]),
       );
     case "resumeProjectChat":
-      return projectChats.resume(idSchema.parse(args[0]));
+      return projectChats.resume(
+        idSchema.parse(args[0]),
+        resumeSettingsSchema.optional().parse(args[1] ?? undefined),
+      );
     case "compactProjectChat":
       return projectChats.compact(
         idSchema.parse(args[0]),

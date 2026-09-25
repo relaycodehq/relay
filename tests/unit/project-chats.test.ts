@@ -1169,6 +1169,36 @@ it("steers an active Codex turn natively and resumes its saved session after sto
   ]);
 }, 15000);
 
+it("resumes a stopped answer with the agent picked since", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  const choice = { model: "", reasoningEffort: "" as const, fast: false };
+  await chats.resume(chat.id, {
+    provider: "claude",
+    choice,
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 8000 },
+  );
+  const after = await chats.get(chat.id);
+  expect(after.messages.at(-1)?.provider).toBe("claude");
+  expect(after.lastInput).toMatchObject({ provider: "claude", choice });
+  expect(after.lastInput?.body).toMatch(/^@claude Continue/);
+}, 15000);
+
 it("tells an agent about steering that went to the other agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const idle = () =>
