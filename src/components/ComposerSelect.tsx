@@ -9,6 +9,7 @@ function ComposerSelectImpl<T extends string>({
   onChange,
   icon,
   container,
+  heading,
 }: {
   label: string;
   value: T;
@@ -22,6 +23,8 @@ function ComposerSelectImpl<T extends string>({
   icon?: ReactNode;
   /** Portal target, needed inside a modal <dialog>'s top layer. */
   container?: HTMLElement;
+  /** A title over the options, with keys that change it from the composer. */
+  heading?: { label: string; hint?: string };
 }) {
   return (
     <Select.Root
@@ -52,6 +55,12 @@ function ComposerSelectImpl<T extends string>({
             className={`composer-select-popup ${options.some((o) => o.description) ? "composer-runtime-popup" : ""}`}
             aria-label={label}
           >
+            {heading && (
+              <div className="composer-menu-label" aria-hidden>
+                {heading.label}
+                {heading.hint && <kbd>{heading.hint}</kbd>}
+              </div>
+            )}
             <Select.List>
               {options.map((option) => (
                 <Select.Item

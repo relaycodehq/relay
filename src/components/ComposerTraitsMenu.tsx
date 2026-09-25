@@ -4,6 +4,8 @@ import { Fragment, memo } from "react";
 
 export type TraitSection = {
   label: string;
+  /** Keys that change this without opening the menu. */
+  hint?: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
@@ -44,6 +46,7 @@ export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({
                 <Menu.Group>
                   <Menu.GroupLabel className="composer-menu-label">
                     {section.label}
+                    {section.hint && <kbd>{section.hint}</kbd>}
                   </Menu.GroupLabel>
                   <Menu.RadioGroup
                     value={section.value}

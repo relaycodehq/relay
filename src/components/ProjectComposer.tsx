@@ -60,6 +60,11 @@ import {
 import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
+import {
+  effortKeysLabel,
+  effortStep,
+  stepEffort,
+} from "../lib/effort-shortcut";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import {
@@ -377,12 +382,34 @@ export function ProjectComposer({
     (reasoningEffort: ReasoningEffort) =>
       selected && setChoice({ ...selected, reasoningEffort }),
   );
+  function stepRecipientEffort(step: -1 | 1) {
+    if (recipient === "claude")
+      setClaude((c) => ({
+        ...c,
+        reasoningEffort: stepEffort(
+          claudeModelEfforts,
+          c.reasoningEffort,
+          claudeDefaultLevel,
+          step,
+        ),
+      }));
+    else if (recipient === "codex" && selected)
+      setCodexEffort(
+        stepEffort(
+          reasoningEffortsFor(selected.model, codexModels),
+          selected.reasoningEffort,
+          codexDefaultLevel,
+          step,
+        ),
+      );
+  }
   const claudeTraits = useMemo(
     () => [
       ...(claudeModelEfforts.length > 0
         ? [
             {
               label: "Reasoning",
+              hint: effortKeysLabel,
               value: claude.reasoningEffort,
               options: [
                 { value: "", label: defaultEffortLabel(claudeDefaultLevel) },
@@ -974,6 +1001,12 @@ export function ProjectComposer({
           }
           onKeyDownCapture={(e) => {
             if (commands.onKeyDown(e)) return;
+            const step = effortStep(e);
+            if (step) {
+              e.preventDefault();
+              stepRecipientEffort(step);
+              return;
+            }
             const action = sendAction(e, sendKey);
             if (action) {
               e.preventDefault();
@@ -1045,6 +1078,7 @@ export function ProjectComposer({
                 value={selected.reasoningEffort}
                 options={codexEffortOptions}
                 onChange={setCodexEffort}
+                heading={{ label: "Reasoning", hint: effortKeysLabel }}
               />
               <button
                 type="button"

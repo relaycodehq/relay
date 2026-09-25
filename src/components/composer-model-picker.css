@@ -970,3 +970,15 @@
     animation: none;
   }
 }
+.composer-menu-label:has(kbd) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.composer-menu-label kbd {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
+}
