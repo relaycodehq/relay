@@ -1,0 +1,217 @@
+/* The DMG window mock around the background options. */
+.dmg-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px;
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+}
+.dmg-window {
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.3),
+    0 22px 60px rgb(0 0 0 / 0.28);
+}
+.dmg-titlebar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  background: #3a3a3c;
+  color: #d8d8dc;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dmg-titlebar img {
+  width: 16px;
+  height: 16px;
+}
+.dmg-lights {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+}
+.dmg-lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+.dmg-lights i:nth-child(2) {
+  background: #febc2e;
+}
+.dmg-lights i:nth-child(3) {
+  background: #28c840;
+}
+.dmg-content {
+  position: relative;
+}
+.dmg-note {
+  max-width: 600px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Finder's own icon + label, approximated. */
+.dmg-item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font: 500 13px -apple-system, BlinkMacSystemFont, sans-serif;
+  white-space: nowrap;
+}
+.dmg-item img,
+.dmg-item svg {
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.18));
+}
+.dmg-item span {
+  color: #000;
+}
+
+/* Backgrounds: fixed pixels, no app theme; they become a static image. */
+.dmg-export {
+  position: fixed;
+  inset: 0 auto auto 0;
+}
+.dmg-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.dmg-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.dmg-title {
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.dmg-title strong {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.dmg-title span {
+  font-size: 13px;
+}
+.dmg-title-light strong {
+  color: #232329;
+}
+.dmg-title-light span {
+  color: #7a7a86;
+}
+.dmg-title-dark strong {
+  color: #f1f0fb;
+}
+.dmg-title-dark span {
+  color: #8d8ca3;
+}
+.dmg-title-dusk strong {
+  color: #fff;
+}
+.dmg-title-dusk span {
+  color: rgb(255 255 255 / 0.78);
+}
+.dmg-title-mono span {
+  margin-top: 16px;
+  color: #6565a9;
+  font: 13px ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.02em;
+}
+.dmg-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+}
+.dmg-hint code {
+  font: 11px ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.dmg-hint-light {
+  color: #8a8a94;
+}
+.dmg-hint-light code {
+  background: rgb(0 0 0 / 0.05);
+  color: #44444c;
+}
+.dmg-hint-dark {
+  color: rgb(255 255 255 / 0.6);
+}
+.dmg-hint-dark code {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+
+.dmg-ribbon {
+  background:
+    radial-gradient(420px 220px at 50% 108%, rgb(157 153 224 / 0.22), transparent 70%),
+    #f7f6f2;
+}
+.dmg-midnight {
+  background:
+    radial-gradient(150px 150px at 170px 220px, rgb(170 168 229 / 0.28), transparent 70%),
+    radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1.2px) 0 0 / 18px 18px,
+    #141418;
+}
+.dmg-dusk {
+  background:
+    radial-gradient(500px 260px at 20% 0%, rgb(255 255 255 / 0.22), transparent 70%),
+    linear-gradient(160deg, #a9a6e4, #7472b8);
+}
+.dmg-line {
+  background: #fff;
+}
+.dmg-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dmg-wordmark img {
+  width: 30px;
+  height: 30px;
+}
+.dmg-caption-mono {
+  color: #aaa8e5;
+  font: 13px ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.02em;
+}
+.dmg-title-light .dmg-caption-mono {
+  color: #6565a9;
+}
+.dmg-paper {
+  background:
+    radial-gradient(150px 150px at 170px 220px, rgb(157 153 224 / 0.26), transparent 70%),
+    radial-gradient(rgb(0 0 0 / 0.07) 1px, transparent 1.2px) 0 0 / 18px 18px,
+    #f7f6f2;
+}
+/* Starts just under the icons, where Finder draws its always-black labels. */
+.dmg-shelf {
+  position: absolute;
+  inset: 268px 0 0;
+  border-top: 1px solid rgb(170 168 229 / 0.5);
+  background: linear-gradient(#e4e3ee, #d6d5e4);
+}

@@ -130,7 +130,26 @@
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "publish": null,
     "dmg": {
-      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "background": "build/dmg-background.tiff",
+      "iconSize": 100,
+      "window": {
+        "width": 600,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 430,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "target": [
