@@ -1205,10 +1205,12 @@ it("steers an active Codex turn natively and resumes its saved session after sto
 it("resumes a stopped answer with the agent picked since", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-      "cache guard",
-    ),
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+        "cache guard",
+      ),
+    { timeout: 6000 },
   );
   await chats.cancel(chat.id);
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
@@ -1803,21 +1805,26 @@ it.each(["codex", "claude"] as const)(
 
 it("resumes Claude's own saved session after restart without mixing Codex's cursor", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
+  // An answer reads complete before its turn lets go of the thread; asked
+  // then, Claude would only queue, and the restart would drop it.
+  const finished = (provider: "codex" | "claude") =>
+    vi.waitFor(
+      async () => {
+        expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+          provider,
+          status: "complete",
+        });
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 6000 },
+    );
   await chats.send(chat.id, input("@codex Explain cache guard"));
-  await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-        "complete",
-      ),
-    { timeout: 6000 },
-  );
+  await finished("codex");
   await chats.send(chat.id, {
     ...input("@claude Explain the cache guard"),
     provider: "claude",
   });
-  await vi.waitFor(async () =>
-    expect(chats.hasActiveProject(projectId)).toBe(false),
-  );
+  await finished("claude");
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   const saved = await chats.get(chat.id);
@@ -1827,9 +1834,7 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
     ...input("@claude Continue with the next step"),
     provider: "claude",
   });
-  await vi.waitFor(async () =>
-    expect(chats.hasActiveProject(projectId)).toBe(false),
-  );
+  await finished("claude");
   const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()
     .split("\n")
