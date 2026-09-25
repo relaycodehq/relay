@@ -1056,11 +1056,13 @@ export function ProjectChat({
       | "side"
       | "ultraplan"
     >,
+    dispatch?: () => void,
   ): Promise<boolean> {
     if (busy) return false;
-    if (value.side) return askAside(value);
+    if (value.side) return askAside(value, dispatch);
     if (!(await confirmSwitch(agentMention(value.body)?.provider)))
       return false;
+    dispatch?.();
     setBusy(true);
     setError(undefined);
     try {
@@ -1088,7 +1090,6 @@ export function ProjectChat({
           ? { selection: { ...selection, question: value.body } }
           : {}),
       });
-      onDraft("");
       // A side conversation leaves the thread's attachments waiting.
       if (!root) {
         setSelection(undefined);
@@ -1123,6 +1124,7 @@ export function ProjectChat({
       | "runtimeMode"
       | "interactionMode"
     >,
+    dispatch?: () => void,
   ) {
     if (!chat) {
       setError(
@@ -1130,6 +1132,7 @@ export function ProjectChat({
       );
       return false;
     }
+    dispatch?.();
     setBusy(true);
     setError(undefined);
     try {
@@ -1139,7 +1142,6 @@ export function ProjectChat({
         id: question,
         side: true,
       });
-      onDraft("");
       await history.refetch();
       setRootId(question);
       return true;

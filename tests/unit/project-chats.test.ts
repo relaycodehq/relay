@@ -332,6 +332,37 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
 }, 20000);
+it("accepts a message for another agent without waiting for the handoff note", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  await chats.send(chat.id, {
+    ...input("@claude Now fix it"),
+    provider: "claude",
+  });
+  // Codex is still writing its note; the message is already in the thread.
+  const messages = (await chats.get(chat.id)).messages;
+  expect(messages.at(-2)?.body).toBe("@claude Now fix it");
+  expect(messages.at(-1)).toMatchObject({
+    handoff: { from: "codex", to: "claude" },
+    status: "streaming",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+        provider: "claude",
+        status: "complete",
+      }),
+    { timeout: 10000 },
+  );
+}, 20000);
 it("tells an agent coming back what was asked of the other agent meanwhile", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const [body, count] of [
@@ -1218,11 +1249,13 @@ it("tells an agent about steering that went to the other agent", async () => {
   await chats.send(chat.id, claude("@claude Explain the cache guard"));
   await idle();
   await chats.send(chat.id, input("@codex wait for cancellation"));
+  // Claude's handoff note comes first; steer Codex's own answer.
   await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
-        "cache guard",
-      ),
+    async () => {
+      const last = (await chats.get(chat.id)).messages.at(-1);
+      expect(last?.provider).toBe("codex");
+      expect(last?.body).toContain("cache guard");
+    },
     { timeout: 6000 },
   );
   await chats.send(chat.id, {

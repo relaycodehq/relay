@@ -1309,6 +1309,44 @@ export class ProjectChats {
         this.active.delete(id);
         return;
       }
+      // The message is in. A handoff note can take minutes; the answer
+      // starts after it without holding up the send.
+      void this.start(chat, active, input, {
+        mention,
+        parent,
+        root,
+        user,
+        skills,
+        evidence,
+      });
+    } catch (e) {
+      this.active.delete(id);
+      throw e;
+    }
+  }
+  /** Everything after the message is in: a handoff note if another agent takes over, then the answer. */
+  private async start(
+    chat: ProjectChat,
+    active: ActiveChat,
+    input: ProjectChatSend,
+    {
+      mention,
+      parent,
+      root,
+      user,
+      skills,
+      evidence,
+    }: {
+      mention: NonNullable<ReturnType<typeof agentMention>>;
+      parent: ChatMessage | undefined;
+      root: string;
+      user: ChatMessage;
+      skills: CodexSkill[];
+      evidence: unknown;
+    },
+  ) {
+    const id = chat.id;
+    try {
       // A side conversation continues the main one as it stood at its message.
       const upToParent = new Set(
         parent
@@ -1456,8 +1494,24 @@ export class ProjectChats {
         caughtUp: !command || !updates.length,
       });
     } catch (e) {
+      // The send already went through, so the thread shows the failure.
+      active.requests.close();
       this.active.delete(id);
-      throw e;
+      const failed: ChatMessage = {
+        id: randomUUID(),
+        role: "assistant",
+        body: "",
+        status: "failed",
+        error: e instanceof Error ? e.message : String(e),
+        provider: mention.provider,
+        created: Date.now(),
+        version: 1,
+        ...(input.parentId ? { parentId: input.parentId } : {}),
+      };
+      chat.messages.push(failed);
+      if (chat.queue?.length) chat.queuePaused = true;
+      await this.save(chat).catch(() => {});
+      this.emit({ chatId: id, message: failed });
     }
   }
   /**

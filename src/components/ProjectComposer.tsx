@@ -73,7 +73,7 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "../lib/draft-images";
-import { useDraft } from "../lib/drafts";
+import { readDraft, useDraft } from "../lib/drafts";
 import { useStableCallback } from "../lib/useStableCallback";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
@@ -161,6 +161,8 @@ export function ProjectComposer({
       | "side"
       | "ultraplan"
     >,
+    /** Called as the message goes out; the composer empties then, not once it's accepted. */
+    dispatch?: () => void,
   ) => Promise<boolean>;
   onStop: () => void;
   planProvider?: "codex" | "claude";
@@ -766,8 +768,7 @@ export function ProjectComposer({
     if (!choice || busy || running || sending.current) return false;
     sending.current = true;
     try {
-      const kept = draft;
-      const accepted = await onSend({
+      return await onSend({
         body: `@${to} ${body}`,
         provider: to,
         choice,
@@ -775,29 +776,52 @@ export function ProjectComposer({
         runtimeMode,
         interactionMode: "default",
       });
-      // Sending clears the composer; the user's own draft stays.
-      if (accepted) onDraft(kept);
-      return accepted;
     } finally {
       sending.current = false;
     }
   };
+  /**
+   * Empties the composer as the message goes out; a message that is turned
+   * down comes back, ahead of anything typed since.
+   */
+  function takeDraft(withImages: boolean) {
+    let taken: { text: string; images: DraftImage[] } | undefined;
+    return {
+      dispatch() {
+        taken = { text: draft, images: withImages ? images : [] };
+        onDraft("");
+        if (withImages) setImages([]);
+      },
+      restore() {
+        if (!taken) return;
+        const { text, images: back } = taken,
+          typed = readDraft(draftKey).trim();
+        onDraft(typed ? `${text.trimEnd()}\n\n${typed}` : text);
+        if (back.length) setImages((now) => [...back, ...now]);
+      },
+    };
+  }
   async function send(steer = false, sendAt?: number) {
     // `/btw` goes to the agent picked here, beside whatever the thread runs.
     const btw = relayCommand(draft);
     if (btw?.name === "btw" && btw.args && recipient !== "message") {
       if (busy || sending.current) return;
       sending.current = true;
+      const outgoing = takeDraft(false);
       try {
-        await onSend({
-          side: true,
-          body: `@${recipient} ${btw.args}`,
-          provider: recipient,
-          choice: choiceFor(recipient)!,
-          ...contextFor(recipient),
-          runtimeMode,
-          interactionMode,
-        });
+        const sent = await onSend(
+          {
+            side: true,
+            body: `@${recipient} ${btw.args}`,
+            provider: recipient,
+            choice: choiceFor(recipient)!,
+            ...contextFor(recipient),
+            runtimeMode,
+            interactionMode,
+          },
+          outgoing.dispatch,
+        );
+        if (!sent) outgoing.restore();
       } finally {
         sending.current = false;
       }
@@ -833,41 +857,49 @@ export function ProjectComposer({
           council,
         });
       }
-      const sent = await onSend({
-        ...(sendAt
-          ? { sendAt }
-          : running
+      const outgoing = takeDraft(true);
+      const sent = await onSend(
+        {
+          ...(sendAt
+            ? { sendAt }
+            : running
+              ? {
+                  delivery:
+                    steer && !councilOn
+                      ? ("steer" as const)
+                      : ("queue" as const),
+                }
+              : {}),
+          body:
+            mention || recipient === "message"
+              ? body
+              : `@${recipient} ${body}`.trim(),
+          choice: choiceFor(recipient)!,
+          ...contextFor(recipient),
+          provider: recipient === "claude" ? "claude" : "codex",
+          runtimeMode,
+          interactionMode: councilOn ? "plan" : interactionMode,
+          ...(councilOn ? { ultraplan: council } : {}),
+          ...(attached.length
             ? {
-                delivery:
-                  steer && !councilOn ? ("steer" as const) : ("queue" as const),
+                images: attached.map(({ name, mimeType, dataUrl }) => ({
+                  name,
+                  mimeType,
+                  dataUrl,
+                })),
               }
             : {}),
-        body:
-          mention || recipient === "message"
-            ? body
-            : `@${recipient} ${body}`.trim(),
-        choice: choiceFor(recipient)!,
-        ...contextFor(recipient),
-        provider: recipient === "claude" ? "claude" : "codex",
-        runtimeMode,
-        interactionMode: councilOn ? "plan" : interactionMode,
-        ...(councilOn ? { ultraplan: council } : {}),
-        ...(attached.length
-          ? {
-              images: attached.map(({ name, mimeType, dataUrl }) => ({
-                name,
-                mimeType,
-                dataUrl,
-              })),
-            }
-          : {}),
-      });
-      if (!sent && councilOn) setUltraplan(true);
+        },
+        outgoing.dispatch,
+      );
+      if (!sent) {
+        outgoing.restore();
+        if (councilOn) setUltraplan(true);
+      }
       if (sent && images.length) {
         try {
           await saveDraftImages(draftKey, []);
           imageQueue.current = Promise.resolve([]);
-          setImages([]);
           sketchHistories.current.clear();
         } catch {
           setImageError(
@@ -903,7 +935,6 @@ export function ProjectComposer({
                   setProvider(planProvider);
                   setInteractionMode("default");
                   setUltraplan(false);
-                  onDraft(draft);
                 }
               } finally {
                 sending.current = false;
