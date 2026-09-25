@@ -33,6 +33,7 @@ export type UsageMeter = {
 };
 
 const FIVE_MINUTES = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function compactDuration(ms: number): string | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
@@ -150,7 +151,11 @@ function project(
   if (resetsAt == null || used <= 0 || periodMs <= 0 || now >= resetsAt)
     return null;
   const elapsed = now - (resetsAt - periodMs);
-  if (elapsed < Math.max(60_000, periodMs * 0.01)) return null;
+  // Nobody burns a weekly limit around the clock; until a full day/night
+  // cycle has passed, the average is just this morning's session.
+  const minElapsed =
+    periodMs > DAY_MS ? DAY_MS : Math.max(60_000, periodMs * 0.01);
+  if (elapsed < minElapsed) return null;
   const projected = (used / elapsed) * periodMs;
   const status =
     used >= 100 || projected > 100
