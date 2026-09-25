@@ -50,7 +50,7 @@ import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { readDraft, writeDraft } from "../lib/drafts";
 import {
-  resetComposerModels,
+  startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
@@ -1098,10 +1098,11 @@ export function ProjectChat({
       }
       follow.current = true;
       if (!chat) {
-        const preferences = localStorage.getItem("composer-settings:" + id);
-        if (preferences)
-          localStorage.setItem("composer-settings:" + target.id, preferences);
-        resetComposerModels(id);
+        startThreadSettings(
+          id,
+          target.id,
+          agentMention(value.body)?.provider ?? "message",
+        );
         await onCreated(target);
       } else await history.refetch();
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });

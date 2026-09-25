@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  composerProvider,
   loadComposerSettings,
   resetComposerModels,
   saveComposerSettings,
   saveSentSettings,
+  startThreadSettings,
 } from "../../src/lib/composer-settings";
 
 const store = new Map<string, string>();
@@ -38,7 +40,7 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     runtimeMode: "auto",
     interactionMode: "plan",
   });
-  expect(loadComposerSettings("chat", false)).toEqual({
+  expect(loadComposerSettings("chat")).toEqual({
     provider: "claude",
     choice: sol,
     claude: { model: "claude-sonnet-4-6", reasoningEffort: "low" },
@@ -54,7 +56,7 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     runtimeMode: "auto",
     interactionMode: "default",
   });
-  expect(loadComposerSettings("chat", false)).toMatchObject({
+  expect(loadComposerSettings("chat")).toMatchObject({
     provider: "message",
     choice: { model: "gpt-6-luna" },
     claude: { model: "claude-sonnet-4-6" },
@@ -69,7 +71,7 @@ it("starts a side conversation from the thread's settings, on its agent", () => 
     interactionMode: "plan",
   });
   expect(
-    loadComposerSettings("chat:reply", false, {
+    loadComposerSettings("chat:reply", {
       settingsKey: "chat",
       provider: "claude",
     }),
@@ -94,14 +96,14 @@ it("falls back to defaults for anything unreadable", () => {
     ultraplan: false,
     council: "angles",
   };
-  expect(loadComposerSettings("a", true)).toEqual({
+  expect(loadComposerSettings("a")).toEqual({
     ...defaults,
-    provider: "message",
+    provider: undefined,
     runtimeMode: "full-access",
   });
-  expect(loadComposerSettings("b", false)).toEqual({
+  expect(loadComposerSettings("b")).toEqual({
     ...defaults,
-    provider: "codex",
+    provider: undefined,
     runtimeMode: "approval-required",
   });
 });
@@ -117,7 +119,7 @@ it("starts the next new thread on Default, keeping the agent and modes", () => {
     council: "same",
   });
   resetComposerModels("new:project");
-  expect(loadComposerSettings("new:project", false)).toEqual({
+  expect(loadComposerSettings("new:project")).toEqual({
     provider: "claude",
     choice: undefined,
     claude: { model: "", reasoningEffort: "" },
@@ -136,7 +138,7 @@ it("keeps Ultraplan and its council, and reads anything else as off", () => {
     "composer-settings:odd",
     JSON.stringify({ ultraplan: "yes", council: "debate" }),
   );
-  expect(loadComposerSettings("odd", false)).toMatchObject({
+  expect(loadComposerSettings("odd")).toMatchObject({
     ultraplan: false,
     council: "angles",
   });
@@ -148,9 +150,57 @@ it("keeps Ultraplan and its council, and reads anything else as off", () => {
       council: "same",
     }),
   );
-  expect(loadComposerSettings("on", false)).toMatchObject({
+  expect(loadComposerSettings("on")).toMatchObject({
     interactionMode: "plan",
     ultraplan: true,
     council: "same",
+  });
+});
+
+it("follows the default agent until one is picked", () => {
+  expect(composerProvider(undefined, false, "claude")).toBe("claude");
+  expect(composerProvider(undefined, true, "claude")).toBe("message");
+  expect(composerProvider("codex", false, "claude")).toBe("codex");
+  saveComposerSettings("new:project", {
+    claude: { model: "", reasoningEffort: "" },
+    runtimeMode: "auto",
+    interactionMode: "default",
+    ultraplan: false,
+    council: "angles",
+  });
+  expect(loadComposerSettings("new:project").provider).toBeUndefined();
+});
+
+it("reads an old new-thread Codex as the old default, other agents as picks", () => {
+  const old = (provider: string) => JSON.stringify({ provider });
+  store.set("composer-settings:new:a", old("codex"));
+  store.set("composer-settings:new:b", old("claude"));
+  store.set("composer-settings:thread", old("codex"));
+  expect(loadComposerSettings("new:a").provider).toBeUndefined();
+  expect(loadComposerSettings("new:b").provider).toBe("claude");
+  expect(loadComposerSettings("thread").provider).toBe("codex");
+});
+
+it("starts a thread on the agent its first message went to", () => {
+  saveComposerSettings("new:project", {
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max" },
+    runtimeMode: "auto",
+    interactionMode: "plan",
+    ultraplan: false,
+    council: "angles",
+  });
+  startThreadSettings("new:project", "thread", "claude");
+  expect(loadComposerSettings("thread")).toMatchObject({
+    provider: "claude",
+    choice: sol,
+    claude: { model: "opus" },
+    interactionMode: "plan",
+  });
+  // The new-thread composer keeps following the default.
+  expect(loadComposerSettings("new:project")).toMatchObject({
+    provider: undefined,
+    choice: undefined,
+    claude: { model: "" },
   });
 });

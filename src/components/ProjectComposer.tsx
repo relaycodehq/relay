@@ -42,6 +42,7 @@ import type { ProjectChatSend, ResumeSettings } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import {
+  composerProvider,
   loadComposerSettings,
   saveComposerSettings,
 } from "../lib/composer-settings";
@@ -175,10 +176,15 @@ export function ProjectComposer({
 }) {
   const draft = useDraft(draftKey);
   const settings = useAISettings();
-  const [saved] = useState(() =>
-    loadComposerSettings(settingsKey, shared, inherit),
+  const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
+  // Until an agent is picked here, the default agent setting decides, even
+  // when it loads after the composer does.
+  const [picked, setProvider] = useState(saved.provider);
+  const provider = composerProvider(
+    picked,
+    shared,
+    settings.data?.threadProvider,
   );
-  const [provider, setProvider] = useState(saved.provider);
   const [choice, setChoice] = useState(saved.choice);
   const [claude, setClaude] = useState(saved.claude);
   const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
@@ -211,7 +217,7 @@ export function ProjectComposer({
   const [spark, setSpark] = useState(0);
   useEffect(() => {
     saveComposerSettings(settingsKey, {
-      provider,
+      provider: picked,
       choice,
       claude,
       runtimeMode,
@@ -221,7 +227,7 @@ export function ProjectComposer({
     });
   }, [
     settingsKey,
-    provider,
+    picked,
     choice,
     claude,
     runtimeMode,
@@ -848,7 +854,7 @@ export function ProjectComposer({
       if (councilOn) {
         setUltraplan(false);
         saveComposerSettings(settingsKey, {
-          provider,
+          provider: picked,
           choice,
           claude,
           runtimeMode,

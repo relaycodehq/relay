@@ -173,6 +173,8 @@ export const aiSettingsSchema = z
     questions: questionChoiceSchema,
     groupingProvider: agentProviderSchema.default("codex"),
     questionsProvider: agentProviderSchema.default("codex"),
+    /** The agent a composer starts on until it remembers one. */
+    threadProvider: agentProviderSchema.default("codex"),
   })
   .strict()
   .refine((s) => claudeEffortCheck(s.groupingProvider, s.grouping), {
@@ -192,6 +194,7 @@ export const defaultAISettings: AISettings = {
   questions: { model: "", fast: false, reasoningEffort: "" },
   groupingProvider: "codex",
   questionsProvider: "codex",
+  threadProvider: "codex",
 };
 /** Codex's line-question choice, or its defaults when questions go to Claude. */
 export const codexQuestionChoice = (settings: AISettings): ModelChoice =>

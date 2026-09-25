@@ -17,9 +17,11 @@ import {
   type ReasoningEffort,
 } from "../../shared/settings";
 
+type Provider = "codex" | "claude" | "message";
 /** What a chat composer starts from: its agent, each agent's model, its modes. */
 export interface ComposerSettings {
-  provider: "codex" | "claude" | "message";
+  /** The agent picked here; unset follows the default agent setting. */
+  provider?: Provider;
   /** Codex's model; unset follows the line-question setting. */
   choice?: ModelChoice;
   claude: {
@@ -42,23 +44,37 @@ function read(key: string) {
     return null;
   }
 }
+const providers: unknown[] = ["codex", "claude", "message"];
+const isProvider = (value: unknown): value is Provider =>
+  providers.includes(value);
+function pickedProvider(key: string, saved: any): Provider | undefined {
+  if (isProvider(saved?.agent)) return saved.agent;
+  // Composers once saved whichever agent they showed, so a new thread's Codex
+  // may only have been the old default. A thread's agent was real.
+  if (!isProvider(saved?.provider)) return;
+  return key.startsWith("new:") && saved.provider === "codex"
+    ? undefined
+    : saved.provider;
+}
+/** The agent a composer runs: its pick, else the default for its kind. */
+export const composerProvider = (
+  picked: Provider | undefined,
+  shared: boolean,
+  fallback: "codex" | "claude" = "codex",
+): Provider => picked ?? (shared ? "message" : fallback);
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
-  shared: boolean,
   inherit?: { settingsKey: string; provider?: "codex" | "claude" },
 ): ComposerSettings {
   let saved = read(key);
+  let provider = pickedProvider(key, saved);
   if (!saved && inherit) {
     saved = read(inherit.settingsKey);
-    if (inherit.provider) saved = { ...saved, provider: inherit.provider };
+    provider = inherit.provider ?? pickedProvider(inherit.settingsKey, saved);
   }
   return {
-    provider: ["codex", "claude", "message"].includes(saved?.provider)
-      ? saved.provider
-      : shared
-        ? "message"
-        : "codex",
+    provider,
     choice: aiSettingsSchema.shape.questions.safeParse(saved?.choice).data,
     claude: {
       model: modelSchema.safeParse(saved?.claude?.model).data ?? "",
@@ -75,8 +91,27 @@ export function loadComposerSettings(
     council: ultraplanKindSchema.catch("angles").parse(saved?.council),
   };
 }
-export function saveComposerSettings(key: string, settings: ComposerSettings) {
-  localStorage.setItem(storageKey(key), JSON.stringify(settings));
+export function saveComposerSettings(
+  key: string,
+  { provider, ...settings }: ComposerSettings,
+) {
+  localStorage.setItem(
+    storageKey(key),
+    JSON.stringify({ ...settings, agent: provider }),
+  );
+}
+/**
+ * Hands a new thread's composer settings to the thread it started, on the
+ * agent the first message went to, and puts the new-thread composer's models
+ * back on Default.
+ */
+export function startThreadSettings(
+  from: string,
+  to: string,
+  provider: Provider,
+) {
+  saveComposerSettings(to, { ...loadComposerSettings(from), provider });
+  resetComposerModels(from);
 }
 /**
  * Puts each agent's model and effort back on Default, keeping the agent,
@@ -86,7 +121,7 @@ export function saveComposerSettings(key: string, settings: ComposerSettings) {
 export function resetComposerModels(key: string) {
   const saved = read(key);
   if (!saved) return;
-  const settings = loadComposerSettings(key, false);
+  const settings = loadComposerSettings(key);
   saveComposerSettings(key, {
     ...settings,
     choice: undefined,
@@ -112,7 +147,7 @@ export function saveSentSettings(
   >,
 ) {
   saveComposerSettings(key, {
-    ...loadComposerSettings(key, false),
+    ...loadComposerSettings(key),
     provider,
     ...(sent.provider === "claude"
       ? {

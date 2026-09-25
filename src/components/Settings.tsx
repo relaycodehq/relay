@@ -64,6 +64,7 @@ import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
 import { Avatar, ErrorBox, IconButton } from "./ui";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
+import { ProviderIcon } from "./ComposerModelPicker";
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import {
   SettingsCard,
@@ -111,7 +112,8 @@ const categories: {
   {
     id: "models",
     label: "AI models",
-    description: "Codex or Claude models used for grouping and line questions.",
+    description:
+      "The agent new threads start on, and the models for grouping and line questions.",
     icon: Sparkles,
   },
   {
@@ -258,6 +260,38 @@ function ThemeSelect({
           value: theme.id,
           label: theme.name,
           icon: <ThemeDot palette={theme[kind]!} />,
+        }))}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function AgentSelect({
+  value,
+  onChange,
+}: {
+  value: AgentProvider;
+  onChange: (provider: AgentProvider) => void;
+}) {
+  // Popups must render inside a modal <dialog> to sit in its top layer.
+  const [container, setContainer] = useState<HTMLElement>();
+  const ref = useCallback(
+    (el: HTMLElement | null) =>
+      setContainer(el?.closest("dialog") ?? undefined),
+    [],
+  );
+  return (
+    <div ref={ref} className="composer-tools model-field">
+      <ComposerSelect<AgentProvider>
+        label="Default agent"
+        container={container}
+        value={value}
+        icon={<ProviderIcon provider={value} />}
+        options={(["codex", "claude"] as const).map((provider) => ({
+          value: provider,
+          label: provider === "codex" ? "Codex" : "Claude",
+          icon: <ProviderIcon provider={provider} />,
         }))}
         onChange={onChange}
       />
@@ -692,11 +726,23 @@ export function Settings({
       description:
         "Uses your signed-in Codex CLI or Claude Code. Model availability depends on your account.",
       keywords:
-        "grouping line questions reasoning effort fast mode model codex claude ai",
+        "default agent new thread grouping line questions reasoning effort fast mode model codex claude ai",
       block: true,
       render: () =>
         values ? (
           <SettingsCard>
+            <SettingsRow
+              label="Default agent"
+              hint="Where a new thread starts in a project you haven't picked an agent for. A pick stays with its project."
+            >
+              <AgentSelect
+                value={values.threadProvider}
+                onChange={(threadProvider) => {
+                  setDraft({ ...values, threadProvider });
+                  setSaved(false);
+                }}
+              />
+            </SettingsRow>
             <SettingsRow
               label="Grouping"
               hint="Splits a pull request into reviewable steps."
