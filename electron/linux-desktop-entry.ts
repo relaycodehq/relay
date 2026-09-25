@@ -5,9 +5,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 // Shared with packaging/omarchy/install.py and package.json's desktopName.
-export const desktopId = "review-relay-experimental.desktop";
-const installerMarker = "X-ReviewRelay-Experimental-Installer=1";
-export const appImageMarker = "X-ReviewRelay-AppImage=1";
+export const desktopId = "relay-experimental.desktop";
+const installerMarker = "X-Relay-Experimental-Installer=1";
+export const appImageMarker = "X-Relay-AppImage=1";
 
 const escapeString = (value: string) =>
   value
@@ -38,8 +38,8 @@ export function renderAppImageEntry(appImage: string, icon: string) {
     `Icon=${escapeString(icon)}`,
     "Terminal=false",
     "Categories=Development;",
-    "StartupWMClass=review-relay",
-    "MimeType=x-scheme-handler/reviewrelay-room;",
+    `StartupWMClass=${desktopId.replace(/\.desktop$/, "")}`,
+    "MimeType=x-scheme-handler/relay-room;",
     appImageMarker,
     "",
   ].join("\n");
@@ -105,7 +105,7 @@ export function registerAppImage(
   }
   execFile(
     "xdg-mime",
-    ["default", desktopId, "x-scheme-handler/reviewrelay-room"],
+    ["default", desktopId, "x-scheme-handler/relay-room"],
     () => {},
   );
 }

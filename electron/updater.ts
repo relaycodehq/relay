@@ -392,7 +392,7 @@ async function apply(target: UpdateTarget, staged: string) {
       return;
     }
     case "linux-x64-omarchy": {
-      // The bundled installer replaces ~/.local/lib/review-relay-experimental in place.
+      // The bundled installer replaces ~/.local/lib/relay-experimental in place.
       const prefix = resolve(dirname(process.execPath), "../..");
       const args = [join(staged, "install.py")];
       if (prefix !== join(homedir(), ".local")) args.push("--prefix", prefix);

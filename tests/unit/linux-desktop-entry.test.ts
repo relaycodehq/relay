@@ -39,7 +39,8 @@ describe("AppImage desktop entry", () => {
     expect(writeAppImageEntry(input)).toBe(true);
     const content = readFileSync(entry, "utf8");
     expect(content).toContain(`Exec=${escapeExecArgument(input.appImage)} %U`);
-    expect(content).toContain("MimeType=x-scheme-handler/reviewrelay-room;");
+    expect(content).toContain("MimeType=x-scheme-handler/relay-room;");
+    expect(content).toContain("StartupWMClass=relay-experimental\n");
     expect(content).not.toContain("NoDisplay");
     expect(readFileSync(join(input.iconDir, "icon.png"), "utf8")).toBe("png");
   });
@@ -56,7 +57,7 @@ describe("AppImage desktop entry", () => {
     const { input, entry } = setup();
     mkdirSync(join(entry, ".."), { recursive: true });
     const installed =
-      "[Desktop Entry]\nX-ReviewRelay-Experimental-Installer=1\n";
+      "[Desktop Entry]\nX-Relay-Experimental-Installer=1\n";
     writeFileSync(entry, installed);
     expect(writeAppImageEntry(input)).toBe(false);
     expect(readFileSync(entry, "utf8")).toBe(installed);

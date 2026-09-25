@@ -27,6 +27,7 @@ describe("update feed", () => {
       "Relay-0.1.7-mac-arm64.dmg",
       "Relay-0.1.7-win-x64.exe",
       "Relay-0.1.7-linux-x86_64.AppImage",
+      "Relay-0.1.7-omarchy-x86_64.tar.gz",
       "Relay-Omarchy-x86_64.tar.gz",
     ])
       await writeFile(join(dir, name), name);
@@ -46,6 +47,9 @@ describe("update feed", () => {
       "mac-arm64",
       "win-x64",
     ]);
+    expect(manifest.files["linux-x64-omarchy"]?.name).toBe(
+      "Relay-0.1.7-omarchy-x86_64.tar.gz",
+    );
     expect(manifest.files["win-x64"]?.url).toBe(
       "https://github.com/lubomirmolin/relay-releases/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
     );

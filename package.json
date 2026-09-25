@@ -124,7 +124,7 @@
       ],
       "icon": "assets/icon.png",
       "syncDesktopName": true,
-      "executableName": "review-relay"
+      "executableName": "relay-experimental"
     },
     "compression": "normal",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
@@ -154,5 +154,5 @@
     }
   },
   "license": "MIT",
-  "desktopName": "review-relay-experimental.desktop"
+  "desktopName": "relay-experimental.desktop"
 }

@@ -10,11 +10,14 @@ import sys
 import tempfile
 
 
-# Installation identifiers stay stable so existing installs update in place.
-MARKER = "Review Relay Experimental user installation v1\n"
-DESKTOP_MARKER = "X-ReviewRelay-Experimental-Installer=1"
+# Also the executable, desktop id and Wayland app_id (package.json's desktopName).
+NAME = "relay-experimental"
+MARKER = "Relay Experimental user installation v1\n"
+DESKTOP_MARKER = "X-Relay-Experimental-Installer=1"
 # The AppImage writes the same launcher id; installing takes it over.
-APPIMAGE_MARKER = "X-ReviewRelay-AppImage=1"
+APPIMAGE_MARKER = "X-Relay-AppImage=1"
+# Electron's userData folder name.
+USER_DATA = "Relay Experimental"
 
 
 def desktop_command(path):
@@ -26,9 +29,9 @@ def desktop_command(path):
 
 
 def locations(prefix, data_dir):
-    app = prefix / "lib/review-relay-experimental"
-    binary = prefix / "bin/review-relay-experimental"
-    desktop = data_dir / "applications/review-relay-experimental.desktop"
+    app = prefix / "lib" / NAME
+    binary = prefix / "bin" / NAME
+    desktop = data_dir / f"applications/{NAME}.desktop"
     for path in (app, binary, desktop):
         if any(char in str(path) for char in "\n\r\t="):
             raise RuntimeError("Installation paths cannot contain control characters or '='.")
@@ -36,13 +39,17 @@ def locations(prefix, data_dir):
         if app.is_symlink() or not (app / ".installer").is_file() or (app / ".installer").read_text() != MARKER:
             raise RuntimeError(f"Refusing to replace an unrelated installation: {app}")
     if binary.exists() or binary.is_symlink():
-        if not binary.is_symlink() or os.readlink(binary) != str(app / "review-relay"):
+        if not binary.is_symlink() or os.readlink(binary) != str(app / NAME):
             raise RuntimeError(f"An unrelated command already exists: {binary}")
     if desktop.exists() or desktop.is_symlink():
         lines = [] if desktop.is_symlink() else desktop.read_text().splitlines()
         if DESKTOP_MARKER not in lines and APPIMAGE_MARKER not in lines:
             raise RuntimeError(f"An unrelated app launcher already exists: {desktop}")
     return app, binary, desktop
+
+
+def icon_path(data_dir):
+    return data_dir / f"icons/hicolor/scalable/apps/{NAME}.svg"
 
 
 def refresh(desktop):
@@ -53,29 +60,31 @@ def refresh(desktop):
 
     mime = shutil.which("xdg-mime")
     if mime and desktop.exists():
-        subprocess.run([mime, "default", desktop.name, "x-scheme-handler/reviewrelay-room"], check=False,
+        subprocess.run([mime, "default", desktop.name, "x-scheme-handler/relay-room"], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def install(bundle, prefix, data_dir):
     app, binary, desktop = locations(prefix, data_dir)
     source = bundle / "app"
-    if not (source / "review-relay").is_file() or not (source / "resources/app.asar").is_file():
+    if not all((source / name).is_file() for name in (NAME, "resources/app.asar", "VERSION", f"{NAME}.svg")):
         raise RuntimeError("The app payload is missing. Extract the complete download first.")
-    for directory in (app.parent, binary.parent, desktop.parent):
+    version = (source / "VERSION").read_text().strip()
+    icon = icon_path(data_dir)
+    for directory in (app.parent, binary.parent, desktop.parent, icon.parent):
         directory.mkdir(parents=True, exist_ok=True)
     desktop_contents = "\n".join([
         "[Desktop Entry]", "Type=Application", "Version=1.0",
         "Name=Relay", "Comment=Chat about projects, edit code and review pull requests",
-        f"Exec={desktop_command(app / 'review-relay')} %U",
-        f"Icon={str(app / 'review-relay.png').replace(chr(92), chr(92) * 2)}",
+        f"Exec={desktop_command(app / NAME)} %U",
+        f"Icon={NAME}",
         "Terminal=false", "Categories=Development;",
-        "StartupWMClass=review-relay", "MimeType=x-scheme-handler/reviewrelay-room;",
+        f"StartupWMClass={NAME}", "MimeType=x-scheme-handler/relay-room;",
         DESKTOP_MARKER, "",
     ])
     old_desktop = desktop.read_bytes() if desktop.exists() else None
     had_binary = binary.is_symlink()
-    with tempfile.TemporaryDirectory(prefix=".review-relay-", dir=app.parent) as staging:
+    with tempfile.TemporaryDirectory(prefix=f".{NAME}-", dir=app.parent) as staging:
         staging = Path(staging)
         prepared, previous = staging / "new", staging / "previous"
         shutil.copytree(source, prepared, symlinks=True)
@@ -86,9 +95,10 @@ def install(bundle, prefix, data_dir):
         try:
             prepared.rename(app)
             if not had_binary:
-                binary.symlink_to(app / "review-relay")
+                binary.symlink_to(app / NAME)
             desktop.write_text(desktop_contents)
             desktop.chmod(0o644)
+            shutil.copyfile(app / f"{NAME}.svg", icon)
         except Exception:
             if app.exists():
                 shutil.rmtree(app)
@@ -102,23 +112,31 @@ def install(bundle, prefix, data_dir):
                 desktop.write_bytes(old_desktop)
             raise
     refresh(desktop)
-    print(f"Installed Relay. Find it in your app launcher, or run:\n{binary}")
+    print(f"Installed Relay {version}. Find it in your app launcher, or run:\n{binary}")
     print("Your login, settings and review progress are kept between updates.")
 
 
-def uninstall(prefix, data_dir):
+def uninstall(prefix, data_dir, user_data=None):
     app, binary, desktop = locations(prefix, data_dir)
     binary.unlink(missing_ok=True)
     desktop.unlink(missing_ok=True)
+    icon_path(data_dir).unlink(missing_ok=True)
     if app.exists():
         shutil.rmtree(app)
     refresh(desktop)
-    print("Removed Relay. Saved login, settings and review progress were kept.")
+    if user_data is None:
+        print("Removed Relay. Saved login, settings and review progress were kept.")
+        return
+    if user_data.exists():
+        shutil.rmtree(user_data)
+    print(f"Removed Relay and its data in {user_data}.")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uninstall", action="store_true")
+    parser.add_argument("--purge", action="store_true",
+                        help="Uninstall and also delete settings, drafts and review progress")
     parser.add_argument("--prefix", type=Path, help="Installation prefix (default: ~/.local)")
     args = parser.parse_args()
     if sys.platform != "linux" or platform.machine() not in ("x86_64", "amd64"):
@@ -126,8 +144,12 @@ def main():
     if os.geteuid() == 0:
         raise RuntimeError("Run this as your regular desktop user, without sudo.")
     prefix = (args.prefix or Path.home() / ".local").expanduser().resolve()
-    data_dir = prefix / "share" if args.prefix else Path(os.environ.get("XDG_DATA_HOME") or prefix / "share").expanduser().resolve()
-    if args.uninstall:
+    # Launchers only look in XDG data dirs, so a custom prefix still registers there.
+    data_dir = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share").expanduser().resolve()
+    if args.purge:
+        config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config").expanduser().resolve()
+        uninstall(prefix, data_dir, config / USER_DATA)
+    elif args.uninstall:
         uninstall(prefix, data_dir)
     else:
         install(Path(__file__).resolve().parent, prefix, data_dir)

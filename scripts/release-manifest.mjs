@@ -16,7 +16,7 @@ const targets = {
   "mac-x64": `Relay-${version}-mac-x64.zip`,
   "win-x64": `Relay-${version}-win-x64.exe`,
   "linux-x64-appimage": `Relay-${version}-linux-x86_64.AppImage`,
-  "linux-x64-omarchy": "Relay-Omarchy-x86_64.tar.gz",
+  "linux-x64-omarchy": `Relay-${version}-omarchy-x86_64.tar.gz`,
 };
 const present = new Set(readdirSync(dir));
 const files = {};

@@ -63,7 +63,7 @@ jobs:
             package: npx electron-builder --linux AppImage dir --x64 --publish never && python3 scripts/package-omarchy.py
             files: |
               release/*.AppImage
-              release/Relay-Omarchy-x86_64.tar.gz
+              release/Relay-*-omarchy-x86_64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +102,8 @@ jobs:
         # The commit message without trailers like Co-Authored-By.
         run: |
           printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
+      # Unversioned alias for .../releases/latest/download/ links.
+      - run: cp out/Relay-*-omarchy-x86_64.tar.gz out/Relay-Omarchy-x86_64.tar.gz
       - name: Write update feed
         run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
