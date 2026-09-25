@@ -654,6 +654,7 @@ export function ProjectChat({
     returning = useRef<{ id: string; offset: number } | undefined>(undefined),
     // Where holding that message left the scroll; a scroll elsewhere is the reader's.
     placed = useRef(0),
+    lastTop = useRef(0),
     oldest = useRef<string | undefined>(undefined);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
@@ -1612,7 +1613,16 @@ export function ProjectChat({
           onScroll={() => {
             const e = scroll.current!;
             const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
-            follow.current = distance < 80;
+            // Going by distance alone, a small step up while an answer
+            // streams stays near the bottom and the next piece pulls the
+            // reader back. Any step up lets go; coming back down resumes.
+            // Pinning only moves down, and content shrinking at the bottom
+            // leaves no distance, so neither lets go by itself.
+            if (e.scrollTop < lastTop.current - 1 && distance > 1)
+              follow.current = false;
+            else if (e.scrollTop > lastTop.current && distance < 80)
+              follow.current = true;
+            lastTop.current = e.scrollTop;
             setScrolledUp(distance > 160);
             // Holding a message in place scrolls too; the reader scrolling
             // anywhere else lets it go.

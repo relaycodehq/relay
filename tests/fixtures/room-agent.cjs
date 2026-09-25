@@ -666,6 +666,7 @@ if (args.includes("--permission-prompt-tool")) {
             },
           },
         });
+        if (streamed) return streamLong();
         send({
           method: "item/agentMessage/delta",
           params: {
@@ -675,7 +676,60 @@ if (args.includes("--permission-prompt-tool")) {
           },
         });
       }, 100);
-      if (!m.params.input[0].text.includes("wait for cancellation"))
+      // A long answer in small pieces, the way a real one streams, so a test
+      // can scroll the thread while it grows.
+      const streamed = said.includes("fixture stream long");
+      function streamLong() {
+        const text = Array.from({ length: 80 }, (_, i) =>
+          i % 7 === 3
+            ? "```ts\n" +
+              Array.from(
+                { length: 6 },
+                (_, l) => `const line${l} = ${i} * ${l};`,
+              ).join("\n") +
+              "\n```"
+            : i % 5 === 1
+              ? "- first point\n- second point\n- third point"
+              : `Paragraph ${i}. The cache guard keeps requests from piling up while the answer grows, one piece after another.`,
+        ).join("\n\n");
+        const pieces = text.match(/[\s\S]{1,12}/g);
+        let at = 0;
+        const timer = setInterval(() => {
+          send({
+            method: "item/agentMessage/delta",
+            params: {
+              threadId: "fixture-thread",
+              itemId: "fixture-answer",
+              delta: pieces[at++],
+            },
+          });
+          if (at < pieces.length) return;
+          clearInterval(timer);
+          send({
+            method: "item/completed",
+            params: {
+              threadId: "fixture-thread",
+              item: {
+                id: "fixture-answer",
+                type: "agentMessage",
+                phase: "final_answer",
+                text,
+              },
+            },
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { id: "fixture-turn", status: "completed" },
+            },
+          });
+        }, 25);
+      }
+      if (
+        !streamed &&
+        !m.params.input[0].text.includes("wait for cancellation")
+      )
         setTimeout(() => {
           send({
             method: "item/completed",

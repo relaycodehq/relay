@@ -192,3 +192,129 @@ test("reopens a long thread where the reader left it, before or after paging bac
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("lets the reader scroll up while an answer streams", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-stream-scroll-")),
+  );
+  const repo = join(root, "project"),
+    data = join(root, "data"),
+    bin = join(root, "bin");
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(repo);
+    await mkdir(bin);
+    const agent =
+      `#!${process.execPath}\n` +
+      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    for (const name of ["codex", "claude"])
+      await writeFile(join(bin, name), agent, { mode: 0o700 });
+    await mkdir(join(data, "project-chats"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const projectId = randomUUID();
+    const chat = thread(projectId, "Streaming", 12);
+    await writeFile(
+      join(data, "project-chats", chat.id + ".json"),
+      JSON.stringify(chat),
+    );
+    await writeFile(
+      join(data, "state.json"),
+      JSON.stringify({
+        version: 1,
+        folders: {},
+        progress: {},
+        projects: [
+          {
+            id: projectId,
+            path: repo,
+            name: "project",
+            repository: null,
+            added: 1,
+          },
+        ],
+        chats: [chat].map(({ messages: _, ...summary }) => summary),
+      }),
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+      ),
+    ) as Record<string, string>;
+    app = await electron.launch({
+      args: ["tests/fixtures/launch.cjs"],
+      env: {
+        ...env,
+        PATH: bin + ":" + env.PATH,
+        RELAY_TEST_DATA: data,
+        RELAY_TEST_HEADED: "0",
+        RELAY_TEST_NATIVE_STORAGE: "0",
+      },
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.locator(".sb-thread", { hasText: "Streaming" }).click();
+    await expect(
+      page.locator('[data-message-id="streaming-11"]'),
+    ).toBeAttached();
+    await page.waitForTimeout(500);
+    const fromBottom = () =>
+      page.evaluate(() => {
+        const e = document.querySelector(".project-messages")!;
+        return Math.round(e.scrollHeight - e.scrollTop - e.clientHeight);
+      });
+
+    const send = async () => {
+      const prompt = page.getByRole("textbox").last();
+      await prompt.fill("fixture stream long");
+      await prompt.press("Enter");
+      await expect(
+        page.getByText("Paragraph 2.", { exact: false }),
+      ).toBeVisible();
+    };
+    await send();
+
+    // A trackpad scrolls in small steps. Each should take the reader up,
+    // not get pulled back by the next piece of the answer.
+    const box = (await page.locator(".project-messages").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 200);
+    for (let i = 0; i < 30; i++) {
+      await page.mouse.wheel(0, -8);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(200);
+    const afterSmall = await fromBottom();
+    console.log("distance from bottom after 240px of small steps:", afterSmall);
+
+    // Once up, what the reader looks at must stay put while the answer grows.
+    for (let i = 0; i < 5; i++) {
+      await page.mouse.wheel(0, -200);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(100);
+    const anchor = await topOfView(page);
+    const drift: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(25);
+      drift.push((await offsetOf(page, anchor!.id!)) - anchor!.offset);
+    }
+    console.log("anchor", anchor, "drift", JSON.stringify(drift));
+    // Back down to the end: the thread follows the answer again.
+    await page.mouse.wheel(0, 20000);
+    await page.waitForTimeout(300);
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+    const trailing: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(50);
+      trailing.push(await fromBottom());
+    }
+    console.log("following again", JSON.stringify(trailing));
+    expect(Math.max(...trailing)).toBeLessThan(2);
+    expect(afterSmall).toBeGreaterThan(150);
+    expect(Math.max(...drift.map(Math.abs))).toBeLessThan(2);
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
