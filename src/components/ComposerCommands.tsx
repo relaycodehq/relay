@@ -29,6 +29,7 @@ import {
 } from "../../shared/commands";
 import type { SkillPick } from "./ComposerPromptInput";
 import { api } from "../lib/api";
+import { agentName, agents, type AgentProvider } from "../../shared/agents";
 export function useComposerCommands({
   draft,
   onDraft,
@@ -44,7 +45,7 @@ export function useComposerCommands({
   draft: string;
   onDraft: (text: string) => void;
   projectId: string;
-  provider: "codex" | "claude" | "message";
+  provider: AgentProvider | "message";
   /** False leaves the draft alone; a string explains why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   /** Values offered after a command name, e.g. effort levels. */
@@ -76,7 +77,7 @@ export function useComposerCommands({
     queryFn: () =>
       api.projectCommands(
         projectId,
-        provider === "claude" ? "claude" : "codex",
+        provider === "message" ? "codex" : provider,
       ),
     enabled:
       ((open && !inline) || draft.startsWith("/")) && provider !== "message",
@@ -84,9 +85,13 @@ export function useComposerCommands({
     retry: false,
   });
   const query = (argument?.query ?? trigger?.query ?? "").toLowerCase();
+  // An agent whose commands run when the message starts with one lists
+  // commands; the others list skills to mention.
+  const commandsAlone =
+    provider !== "message" && agents[provider].commandsAlone;
   const prefix = trigger?.prefix ?? "/";
   type Item = {
-    kind: "relay" | "argument" | "claude" | "skill";
+    kind: "relay" | "argument" | "command" | "skill";
     name: string;
     label: string;
     description: string;
@@ -122,18 +127,18 @@ export function useComposerCommands({
             ? (providerCommands.data ?? [])
             : []
           )
-            .filter((c) => prefix === "/" || c.source !== "claude")
+            .filter(() => prefix === "/" || !commandsAlone)
             .map((c) =>
-              c.source === "claude"
+              commandsAlone
                 ? {
-                    kind: "claude" as const,
+                    kind: "command" as const,
                     name: c.name,
                     label:
                       "/" +
                       c.name +
                       (c.argumentHint ? " " + c.argumentHint : ""),
                     description: c.description,
-                    source: "Claude",
+                    source: agentName(provider as AgentProvider),
                     Icon: SquareTerminal,
                   }
                 : {
@@ -256,7 +261,7 @@ export function useComposerCommands({
       if ("args" in command && command.args.startsWith("<"))
         onFill({ start, end: at, text: `/${command.name} ` });
       else run(command.name, "", start);
-    } else if (item.kind === "claude")
+    } else if (item.kind === "command")
       onFill({ start: 0, end: at, text: `/${item.name} ` });
     else
       onSkillPick({
@@ -266,15 +271,13 @@ export function useComposerCommands({
         end: trigger?.end ?? draft.length,
       });
   }
-  /** Claude runs its own commands when the message starts with one. */
-  function claudeCommand(text: string) {
+  /** Some agents run their own commands when the message starts with one. */
+  function agentCommand(text: string) {
     const name = /^\/([^\s]+)/.exec(text.trim())?.[1];
     return (
-      provider === "claude" &&
+      commandsAlone &&
       !!name &&
-      !!providerCommands.data?.some(
-        (c) => c.source === "claude" && c.name === name,
-      )
+      !!providerCommands.data?.some((c) => c.name === name)
     );
   }
   function interceptSend() {
@@ -284,13 +287,17 @@ export function useComposerCommands({
       run(action.name, action.args);
       return true;
     }
-    if (claudeCommand(draft)) return false;
-    if (provider === "codex" && /^\/skill:[^\s]+(?:\s|$)/.test(draft.trim()))
+    if (agentCommand(draft)) return false;
+    if (
+      provider !== "message" &&
+      agents[provider].skills &&
+      /^\/skill:[^\s]+(?:\s|$)/.test(draft.trim())
+    )
       return false;
     setError(
-      provider === "claude" && providerCommands.isFetching
-        ? "Loading Claude commands… try again in a moment."
-        : "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or Claude command.",
+      commandsAlone && providerCommands.isFetching
+        ? `Loading ${agentName(provider as AgentProvider)} commands… try again in a moment.`
+        : "Choose a command from the menu. Relay actions run on their own; add instructions after a skill or an agent's command.",
     );
     return true;
   }

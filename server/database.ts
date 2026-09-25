@@ -4,7 +4,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
 import {
-  agentMention,
+  roomMention,
   type MessageInput,
   type RoomMessage,
   type RoomProject,
@@ -321,7 +321,7 @@ export class RoomsDatabase {
         order: 0,
         seq: 0,
         kind: "human",
-        provider: agentMention(input.body)?.provider ?? null,
+        provider: roomMention(input.body)?.provider ?? null,
         requestId: null,
         status: "sent",
         error: null,

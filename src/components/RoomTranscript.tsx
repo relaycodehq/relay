@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ChevronDown, FileCode2, Reply, Square } from "lucide-react";
 import type { RoomMessage } from "../../shared/rooms";
 import { RichText } from "./ui";
+import { agentName } from "../../shared/agents";
 
 const evidenceSchema = z.object({
   lines: z
@@ -205,11 +206,7 @@ function TranscriptMessage({
       </div>
       <div className="room-message-content">
         <div className="room-message-heading">
-          <strong>
-            {agent
-              ? `${m.provider === "claude" ? "Claude" : "Codex"}`
-              : m.author}
-          </strong>
+          <strong>{agent ? agentName(m.provider ?? "codex") : m.author}</strong>
           {agent && <small>via {m.author}</small>}
           <time
             dateTime={new Date(m.createdAt).toISOString()}

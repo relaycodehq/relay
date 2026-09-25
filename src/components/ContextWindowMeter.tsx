@@ -12,6 +12,7 @@ import {
   useCacheHeat,
   useCacheHeatHidden,
 } from "../lib/cache-heat";
+import { agentName } from "../../shared/agents";
 
 /** The newest reported usage on this branch, unless a compaction reset it since. */
 export function latestContext(
@@ -341,7 +342,7 @@ export function ContextWindowMeter({
     rounded === null
       ? `Context window, ${formatTokens(usage.usedTokens)} tokens used`
       : `Context window, ${rounded}% used`;
-  const agent = provider === "codex" ? "Codex" : "Claude";
+  const agent = agentName(provider);
   const [open, setOpen] = useState(false);
   // Only a signal sent while mounted: the composer remounts the meter.
   const [signal, setSignal] = useState(openSignal);

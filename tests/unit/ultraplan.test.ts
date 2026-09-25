@@ -364,7 +364,7 @@ it("plans with a council only in the main conversation of a private thread", asy
   const chat = await chats.create(projectId, { kind: "project" });
   await expect(
     chats.send(chat.id, ask("Plan retries for the queue.", "angles")),
-  ).rejects.toThrow("needs Claude or Codex");
+  ).rejects.toThrow("needs an agent to lead it");
   await expect(
     chats.send(chat.id, ask("@claude /compact", "angles")),
   ).rejects.toThrow("can't run a command");

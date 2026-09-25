@@ -29,6 +29,7 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     provider: "codex",
     choice: sol,
     claude: { model: "opus", reasoningEffort: "max" },
+    picks: {},
     runtimeMode: "full-access",
     interactionMode: "default",
     ultraplan: false,
@@ -44,6 +45,7 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     provider: "claude",
     choice: sol,
     claude: { model: "claude-sonnet-4-6", reasoningEffort: "low" },
+    picks: {},
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: false,
@@ -60,6 +62,7 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
     provider: "message",
     choice: { model: "gpt-6-luna" },
     claude: { model: "claude-sonnet-4-6" },
+    picks: {},
   });
 });
 
@@ -86,12 +89,14 @@ it("falls back to defaults for anything unreadable", () => {
       provider: "gpt",
       choice: { model: "gpt-5.5", fast: false, reasoningEffort: "ultra" },
       claude: { model: "bad id!", reasoningEffort: "ultra" },
+      picks: {},
       mode: "ask",
     }),
   );
   const defaults = {
     choice: undefined,
     claude: { model: "", reasoningEffort: "" },
+    picks: {},
     interactionMode: "default",
     ultraplan: false,
     council: "angles",
@@ -113,6 +118,7 @@ it("starts the next new thread on Default, keeping the agent and modes", () => {
     provider: "claude",
     choice: sol,
     claude: { model: "claude-fable-5-1[1m]", reasoningEffort: "xhigh" },
+    picks: {},
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: true,
@@ -123,6 +129,7 @@ it("starts the next new thread on Default, keeping the agent and modes", () => {
     provider: "claude",
     choice: undefined,
     claude: { model: "", reasoningEffort: "" },
+    picks: {},
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: true,
@@ -163,6 +170,7 @@ it("follows the default agent until one is picked", () => {
   expect(composerProvider("codex", false, "claude")).toBe("codex");
   saveComposerSettings("new:project", {
     claude: { model: "", reasoningEffort: "" },
+    picks: {},
     runtimeMode: "auto",
     interactionMode: "default",
     ultraplan: false,
@@ -185,6 +193,7 @@ it("starts a thread on the agent its first message went to", () => {
   saveComposerSettings("new:project", {
     choice: sol,
     claude: { model: "opus", reasoningEffort: "max" },
+    picks: {},
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: false,
@@ -195,6 +204,7 @@ it("starts a thread on the agent its first message went to", () => {
     provider: "claude",
     choice: sol,
     claude: { model: "opus" },
+    picks: {},
     interactionMode: "plan",
   });
   // The new-thread composer keeps following the default.
@@ -202,5 +212,54 @@ it("starts a thread on the agent its first message went to", () => {
     provider: undefined,
     choice: undefined,
     claude: { model: "" },
+    picks: {},
+  });
+});
+
+it("keeps another agent's model in its own slot, apart from Codex's and Claude's", () => {
+  saveComposerSettings("chat", {
+    provider: "codex",
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max" },
+    picks: {},
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    ultraplan: false,
+    council: "angles",
+  });
+  saveSentSettings("chat", "opencode", {
+    provider: "opencode",
+    choice: {
+      model: "openrouter/anthropic/claude-opus-5",
+      fast: false,
+      reasoningEffort: "high",
+    },
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+  });
+  expect(loadComposerSettings("chat")).toMatchObject({
+    provider: "opencode",
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max" },
+    picks: {
+      opencode: {
+        model: "openrouter/anthropic/claude-opus-5",
+        reasoningEffort: "high",
+      },
+    },
+    runtimeMode: "approval-required",
+  });
+  // An agent Relay doesn't know, or a model id it wouldn't send, isn't kept.
+  store.set(
+    "composer-settings:odd-picks",
+    JSON.stringify({
+      provider: "gemini",
+      picks: { gemini: { model: "x" }, opencode: { model: "bad id!" } },
+    }),
+  );
+  expect(loadComposerSettings("odd-picks")).toMatchObject({
+    // An agent it doesn't know follows the default agent.
+    provider: undefined,
+    picks: { opencode: { model: "", reasoningEffort: "" } },
   });
 });

@@ -1,3 +1,5 @@
+import { agentMentionPattern } from "./agents";
+
 /** Lines of local code attached to a chat message. */
 export interface CodeReference {
   path: string;
@@ -8,7 +10,7 @@ export interface CodeReference {
   code: string;
 }
 
-const MENTION = /^@(codex|claude)(?=\s|$)\s*/i;
+const MENTION = agentMentionPattern;
 // Mirrors codeReferenceMessage so sent messages render as pills again.
 const BLOCK =
   /^About (.+?):(\d+)(?:–(\d+))? \(([^()\n]+)\):\n\n(`{3,})\n([\s\S]*?)\n?\5(?:\n+|$)/;

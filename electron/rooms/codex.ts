@@ -1,75 +1,14 @@
 import { dirname } from "node:path";
-import type {
-  RuntimeMode,
-  InteractionMode,
-  AskAgentRequest,
-} from "../../shared/agent-modes";
 import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
 import { findExecutable } from "../executables";
-import { codexModelArgs, type ModelChoice } from "../../shared/settings";
+import { codexModelArgs } from "../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "./activity";
 import { CodexAnswerStream } from "./answer-stream";
-import type {
-  AgentActivity,
-  ContextUsage,
-  ForkPoint,
-} from "../../shared/projects";
-import type { CodexReviewTarget } from "../../shared/deep-review";
-export interface AgentOptions {
-  /** `id` names the chat message the steer came from, for `onSteered`. */
-  onControl?: (control: {
-    steer: (text: string, id?: string) => Promise<void>;
-  }) => void;
-  /** The agent read steering message `id`; what follows answers it. */
-  onSteered?: (id: string) => void;
-  cwd: string;
-  prompt: string;
-  choice: ModelChoice;
-  signal: AbortSignal;
-  onText: (text: string) => void;
-  onCommentary?: (id: string, text: string | null) => void;
-  onActivity?: (activity: AgentActivity) => void;
-  /** Paths the agent's own file tools are writing, as it reported them. */
-  onEdit?: (paths: string[]) => void;
-  onTitle?: (title: string) => void;
-  onPlan?: (text: string) => void;
-  onContext?: (usage: ContextUsage) => void;
-  /** Private context for this turn: the agent reads it, the transcript never shows it. */
-  context?: () => Promise<string | undefined>;
-  /** Compact the resumed session instead of sending `prompt`. */
-  compact?: boolean;
-  /** Show the turn Claude just started on its own instead of sending `prompt`. */
-  adopt?: boolean;
-  images?: {
-    path: string;
-    mimeType: "image/png" | "image/jpeg" | "image/webp";
-  }[];
-  skills?: { name: string; path: string }[];
-  purpose?: "answer" | "title";
-  runtimeMode?: RuntimeMode;
-  interactionMode?: InteractionMode;
-  /** A deep review's reviewer: it may read and run anything but changes no files. */
-  readOnly?: boolean;
-  /** A `/btw` side thread, forked from the main one while that may still be working. */
-  side?: boolean;
-  /** Run Codex's own `/review` of this target instead of sending `prompt`. */
-  review?: CodexReviewTarget;
-  onRequest?: AskAgentRequest;
-  session?: {
-    key?: string;
-    id?: string;
-    /** With no `id` yet: start as a copy of this session, cut after the point. */
-    fork?: ForkPoint;
-    onId: (id: string) => Promise<void>;
-    /** Where the session stands after this turn, for a later `fork`. */
-    onPoint?: (at: string) => void;
-    /** Claude started a turn between prompts; show it by running an `adopt` turn. */
-    onUnprompted?: () => Promise<void>;
-  };
-}
+import type { ContextUsage } from "../../shared/projects";
+import type { AgentOptions } from "../agents/types";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";

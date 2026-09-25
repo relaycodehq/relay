@@ -1,5 +1,5 @@
 import { RoomAccess, type ProjectRoomContext } from "./access";
-import { runClaude } from "./claude";
+import { agentRuntime } from "../agents";
 import { randomBytes, createHash } from "node:crypto";
 import type { Store } from "../store";
 import type { Gitea } from "../gitea";
@@ -7,9 +7,9 @@ import type { PullRef } from "../../shared/types";
 import { questionContext } from "../questions";
 import { inspectFolder } from "../repository";
 import { findExecutable } from "../executables";
-import { choiceLabel } from "../../shared/settings";
+import { choiceLabel, reasoningEffortSchema } from "../../shared/settings";
 import {
-  agentMention,
+  roomMention,
   roomInvitation,
   connectionSchema,
   projectSchema,
@@ -25,7 +25,6 @@ import {
   type Member,
   type RoomContext,
 } from "../../shared/rooms";
-import { runCodex } from "./codex";
 import { readBounded } from "../../shared/http";
 import { redacted } from "../../shared/redact-secrets";
 
@@ -438,7 +437,7 @@ export class RoomService {
     );
   }
   async send(c: Context, input: SendRoom) {
-    const mention = agentMention(input.body);
+    const mention = roomMention(input.body);
     if (mention && !mention.question)
       throw new Error(`Write a question after @${mention.provider}.`);
     if (mention && this.active)
@@ -574,14 +573,21 @@ export class RoomService {
           text = value;
         },
       };
-      text =
-        agentMention(input.body)?.provider === "claude"
-          ? await runClaude({
+      const provider = roomMention(input.body)?.provider ?? "codex";
+      text = await agentRuntime(provider).run(
+        provider === "claude"
+          ? {
               ...options,
-              model: input.claude.model,
-              effort: input.claude.effort,
-            })
-          : await runCodex(options);
+              choice: {
+                model: input.claude.model,
+                reasoningEffort:
+                  reasoningEffortSchema.safeParse(input.claude.effort).data ??
+                  "",
+                fast: false,
+              },
+            }
+          : options,
+      );
       status = "completed";
     } catch (e) {
       status = abort.signal.aborted ? "cancelled" : "failed";

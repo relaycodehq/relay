@@ -12,7 +12,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
 import { ClaudeSignedOutError } from "./claude-sign-in";
-import type { AgentOptions } from "./codex";
+import type { AgentOptions } from "../agents/types";
 import { claudeActivity, claudeEditedPaths } from "./activity";
 import { answeredFindings, reportedFindings } from "../../shared/deep-review";
 import type { AgentQuestion } from "../../shared/agent-modes";

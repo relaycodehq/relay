@@ -121,6 +121,7 @@ import {
 } from "./DeepReview";
 import { UltraplanCouncil } from "./Ultraplan";
 import { councilWorking } from "../../shared/ultraplan";
+import { agentMentionPattern } from "../../shared/agents";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
     key: `${chatId}:${image.id}`,
@@ -205,7 +206,7 @@ function QueuedBody({ input }: { input: ProjectChatSend }) {
   const body = replacePastedTexts(code.body, () => "\n\n").trim();
   return (
     <>
-      <p>{body.replace(/^@(codex|claude)\s+/i, "")}</p>
+      <p>{body.replace(agentMentionPattern, "")}</p>
       {!!code.refs.length && (
         <small>{code.refs.length} code reference(s)</small>
       )}
@@ -336,7 +337,7 @@ const Message = memo(function Message({
   // A message of only attachments leaves just the agent mention behind.
   const text =
     m.role === "user"
-      ? parsed.body?.replace(/^@(codex|claude)\s+/i, "")
+      ? parsed.body?.replace(agentMentionPattern, "")
       : parsed.body;
   if (m.handoff)
     return (
@@ -374,11 +375,7 @@ const Message = memo(function Message({
       <header>
         <strong>
           {m.role === "assistant" && <ProviderIcon provider={m.provider} />}
-          {m.role === "user"
-            ? (m.author ?? "You")
-            : m.provider === "codex"
-              ? "Codex"
-              : "Claude"}
+          {m.role === "user" ? (m.author ?? "You") : agentName(m.provider)}
         </strong>
         {m.role === "user" && (
           <time>
@@ -1352,7 +1349,7 @@ export function ProjectChat({
       messageId: m.id,
       files: m.changes,
       path,
-      label: `${m.provider === "codex" ? "Codex" : "Claude"} · ${new Date(
+      label: `${agentName(m.provider)} · ${new Date(
         m.created,
       ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     });
@@ -2084,7 +2081,7 @@ export function ProjectChat({
             }
             placeholder={
               root?.side
-                ? `Ask ${root.provider === "codex" ? "Codex" : "Claude"} a follow-up on the side…`
+                ? `Ask ${agentName(root.provider)} a follow-up on the side…`
                 : reviewing
                   ? "Reviewers are at work. Messages wait for the lead…"
                   : planning

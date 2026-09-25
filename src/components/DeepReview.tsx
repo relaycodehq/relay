@@ -54,6 +54,12 @@ import { formatTokens } from "./ContextWindowMeter";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
+import {
+  agentMentionPattern,
+  agentName,
+  agents,
+  type AgentProvider,
+} from "../../shared/agents";
 import { useCodexModels } from "../lib/useCodexModels";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
@@ -72,12 +78,14 @@ function useClaudeModels() {
 export function useAgentName() {
   const claude = useClaudeModels();
   const codex = useCodexModels().models;
-  return (agent: ReviewAgent) =>
+  return (agent: { provider: AgentProvider; choice: ReviewAgent["choice"] }) =>
     agent.provider === "codex"
       ? (codex.find((m) => m.id === agent.choice.model)?.name ??
         (agent.choice.model || "Codex default"))
-      : (findClaudeModel(claude, agent.choice.model)?.name ??
-        (agent.choice.model || "Claude default"));
+      : agent.provider === "claude"
+        ? (findClaudeModel(claude, agent.choice.model)?.name ??
+          (agent.choice.model || "Claude default"))
+        : agent.choice.model || agents[agent.provider].defaultModel;
 }
 const effortName = (agent: ReviewAgent) =>
   agent.choice.reasoningEffort
@@ -703,7 +711,7 @@ export function ReviewerPane({
                   <span className="muted">via {via}</span>
                 </header>
                 <div className="markdown deep-review-pane-prompt">
-                  <p>{prompt ?? m.body.replace(/^@(codex|claude)\s+/i, "")}</p>
+                  <p>{prompt ?? m.body.replace(agentMentionPattern, "")}</p>
                 </div>
               </article>
             ) : (
@@ -711,7 +719,7 @@ export function ReviewerPane({
                 <header>
                   <strong>
                     <ProviderIcon provider={m.provider} />
-                    {m.provider === "codex" ? "Codex" : "Claude"}
+                    {agentName(m.provider)}
                   </strong>
                   <time>
                     {new Date(m.created).toLocaleTimeString([], {

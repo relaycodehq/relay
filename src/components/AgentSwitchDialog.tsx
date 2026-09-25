@@ -1,10 +1,9 @@
 import { useState } from "react";
-import type { AgentProvider } from "../../shared/projects";
+import { agentName, type AgentProvider } from "../../shared/agents";
 import { Modal } from "./ui";
 
 const HIDDEN_KEY = "relay-agent-switch-notice";
-export const agentName = (provider: AgentProvider) =>
-  provider === "codex" ? "Codex" : "Claude";
+export { agentName };
 
 /** The person asked not to see the switch warning again. */
 export function agentSwitchNoticeHidden() {

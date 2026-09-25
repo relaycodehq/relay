@@ -2,7 +2,7 @@ import {
   claudeArgs,
   codexModelArgs,
   modelChoiceSchema,
-  type AgentProvider,
+  type HelperProvider,
   type ModelChoice,
 } from "../../shared/settings";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
@@ -256,7 +256,7 @@ export async function classifyChanges(
     fast: false,
     reasoningEffort: "medium",
   },
-  provider: AgentProvider = "codex",
+  provider: HelperProvider = "codex",
 ): Promise<Classification> {
   modelChoiceSchema.parse(choice);
   signal.throwIfAborted();

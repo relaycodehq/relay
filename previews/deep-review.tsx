@@ -55,11 +55,8 @@ import type {
   ChatMessage,
   Project,
 } from "../shared/projects";
-import {
-  effortLabels,
-  type AgentProvider,
-  type ModelChoice,
-} from "../shared/settings";
+import { effortLabels, type ModelChoice } from "../shared/settings";
+import type { HelperProvider as AgentProvider } from "../shared/agents";
 
 initAppearance();
 initWindowFocus();

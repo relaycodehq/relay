@@ -5,7 +5,7 @@ import {
   lineQuestionSchema,
   type LineQuestion,
 } from "../shared/questions";
-import type { AgentProvider, ModelChoice } from "../shared/settings";
+import type { HelperProvider, ModelChoice } from "../shared/settings";
 import { inspectFolder } from "./repository";
 import { openClaudeQuestionTerminal, openCodexTerminal } from "./local";
 
@@ -62,7 +62,7 @@ export async function launchLineQuestion(
   ref: PullRef,
   question: LineQuestion,
   choice: ModelChoice,
-  provider: AgentProvider = "codex",
+  provider: HelperProvider = "codex",
 ) {
   const local = await inspectFolder(dir, client.account.server, ref);
   if (!local.remoteMatches)

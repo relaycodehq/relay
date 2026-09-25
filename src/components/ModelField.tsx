@@ -6,11 +6,12 @@ import {
   effortLabels,
   reasoningEffortsFor,
   supportsEffort,
-  type AgentProvider,
+  type HelperProvider,
   type ReasoningEffort,
   type ModelChoice,
 } from "../../shared/settings";
 import { api } from "../lib/api";
+import { agents, helperProviders } from "../../shared/agents";
 import { useCodexModels } from "../lib/useCodexModels";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { ComposerSelect } from "./ComposerSelect";
@@ -30,8 +31,8 @@ export function ModelField({
   label: string;
   value: ModelChoice;
   allowDefault?: boolean;
-  provider?: AgentProvider;
-  onChange: (choice: ModelChoice, provider: AgentProvider) => void;
+  provider?: HelperProvider;
+  onChange: (choice: ModelChoice, provider: HelperProvider) => void;
 }) {
   const agent = provider ?? "codex";
   // Popups must render inside a modal <dialog> to sit in its top layer.
@@ -62,16 +63,22 @@ export function ModelField({
       aria-label={label}
     >
       <ComposerModelPicker
-        providers={provider ? ["codex", "claude"] : ["codex"]}
+        providers={provider ? helperProviders : ["codex"]}
         label={label}
         allowDefault={allowDefault}
         container={container}
         provider={agent}
-        // A Claude model id would otherwise be listed as a custom Codex model.
-        choice={agent === "codex" ? value : { ...value, model: "" }}
-        claudeModel={agent === "claude" ? value.model : ""}
-        claudeModels={claudeModels}
-        codexModels={codex.models}
+        // Each agent shows the model only when it's the one picked.
+        catalogs={{
+          codex: {
+            models: codex.models,
+            model: agent === "codex" ? value.model : "",
+          },
+          claude: {
+            models: claudeModels,
+            model: agent === "claude" ? value.model : "",
+          },
+        }}
         onOpen={() => {
           if (provider && !claude.data?.length) void claude.refetch();
           codex.retry();
@@ -90,9 +97,9 @@ export function ModelField({
             {
               ...choice,
               reasoningEffort: keep ? choice.reasoningEffort : "",
-              fast: next === "codex" && choice.fast,
+              fast: agents[next].fast && choice.fast,
             },
-            next,
+            next as HelperProvider,
           );
         }}
       />
@@ -116,7 +123,7 @@ export function ModelField({
           />
         </>
       )}
-      {agent === "codex" && (
+      {agents[agent].fast && (
         <button
           type="button"
           className="composer-control composer-fast"

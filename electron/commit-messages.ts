@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { git } from "./git";
 import { readWorkingFile } from "./working-files";
 import { workingTree } from "./working-tree";
-import { runCodex } from "./rooms/codex";
-import { runClaude } from "./rooms/claude";
+import { agentRuntime } from "./agents";
+import { helperFallbacks } from "../shared/agents";
 import {
   defaultAISettings,
-  type AgentProvider,
+  type HelperProvider,
   type AISettings,
 } from "../shared/settings";
 
@@ -110,12 +110,9 @@ export async function generateCommitMessage(
     context.patch,
   ].join("\n");
   // Line questions' provider picks the model; the other CLI is the fallback.
-  const first: AgentProvider = settings.questionsProvider;
+  const first: HelperProvider = settings.questionsProvider;
   let lastError: unknown;
-  for (const provider of [
-    first,
-    first === "codex" ? "claude" : "codex",
-  ] as const) {
+  for (const provider of helperFallbacks(first)) {
     const choice =
       provider === first ? settings.questions : defaultAISettings.questions;
     const options = {
@@ -128,10 +125,8 @@ export async function generateCommitMessage(
       purpose: "title" as const,
     };
     try {
-      const output =
-        provider === "codex"
-          ? await runCodex(options)
-          : await runClaude({ ...options, model: choice.model, effort: "" });
+      // Commit messages take the model but not the effort of line questions.
+      const output = await agentRuntime(provider).run(options);
       const message = parseCommitMessage(output);
       if (message) return message;
       lastError = new Error(`${provider} returned no usable commit message.`);

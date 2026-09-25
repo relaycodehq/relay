@@ -11,20 +11,27 @@ import {
   Search,
   Star,
 } from "lucide-react";
+import { modelSchema } from "../../shared/settings";
 import {
-  modelSchema,
-  type ClaudeModel,
-  type CodexModel,
-  type ModelChoice,
-} from "../../shared/settings";
+  agentName,
+  agentProviders,
+  agents,
+  type AgentModel,
+  type AgentProvider,
+  type HelperProvider,
+} from "../../shared/agents";
 import type { ProviderUsage } from "../../shared/provider-usage";
-import { OpenAI, ClaudeAI } from "../vendor/t3code/model-picker/ProviderIcons";
+import {
+  OpenAI,
+  ClaudeAI,
+  OpenCode,
+} from "../vendor/t3code/model-picker/ProviderIcons";
 import { scoreModelPickerSearch } from "../vendor/t3code/model-picker/modelPickerSearch";
 import { api } from "../lib/api";
 import { UsageMeters } from "./UsageMeters";
 import "./composer-model-picker.css";
 
-export type MessageProvider = "codex" | "claude" | "message";
+export type MessageProvider = AgentProvider | "message";
 type Category = MessageProvider | "favorites";
 type Model = {
   provider: MessageProvider;
@@ -33,21 +40,30 @@ type Model = {
   legacy?: boolean;
   custom?: boolean;
   description?: string;
+  /** Its section, e.g. the upstream provider an OpenCode model runs on. */
+  group?: string;
 };
-const models: Model[] = [
-  { provider: "codex", id: "", name: "Codex default" },
-  {
-    provider: "claude",
-    id: "",
-    name: "Claude default",
-    description: "Claude · CLI default",
-  },
-  { provider: "message", id: "", name: "Message only" },
-];
-const providerNames = { codex: "Codex", claude: "Claude", message: "No agent" };
+/** What the picker offers for one agent. */
+export interface AgentCatalog {
+  /** Listed by the agent; undefined while loading. */
+  models: AgentModel[] | undefined;
+  /** The model picked for it; "" is its Default. */
+  model: string;
+}
+const providerNames: Record<MessageProvider, string> = {
+  ...(Object.fromEntries(
+    agentProviders.map((p) => [p, agentName(p)]),
+  ) as Record<AgentProvider, string>),
+  message: "No agent",
+};
+/** Search scores from here per word come from fuzzy matches; see modelPickerSearch. */
+const fuzzyScore = 100;
+const searchWords = (query: string) =>
+  Math.max(1, query.trim().split(/\s+/).filter(Boolean).length);
 const modelKey = (m: Model) => JSON.stringify([m.provider, m.id]);
 const favoritesKey = "relay-model-favorites";
-const customsKey = "relay-custom-codex-models";
+const customsKey = (provider: AgentProvider) =>
+  `relay-custom-${provider}-models`;
 function readList(key: string): string[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(key) || "[]");
@@ -60,21 +76,30 @@ function readList(key: string): string[] {
     return [];
   }
 }
+const readCustoms = () =>
+  Object.fromEntries(
+    agentProviders.map((p) => [
+      p,
+      readList(customsKey(p)).filter((id) => modelSchema.safeParse(id).success),
+    ]),
+  ) as Record<AgentProvider, string[]>;
+const providerIcons: Record<MessageProvider, typeof OpenAI> = {
+  codex: OpenAI,
+  claude: ClaudeAI,
+  opencode: OpenCode,
+  message: MessageSquare,
+};
 export function ProviderIcon({ provider }: { provider: MessageProvider }) {
-  return provider === "codex" ? (
-    <OpenAI className="provider-glyph" aria-hidden />
-  ) : provider === "claude" ? (
-    <ClaudeAI className="provider-glyph" aria-hidden />
-  ) : (
-    <MessageSquare className="provider-glyph" aria-hidden />
-  );
+  const Glyph = providerIcons[provider];
+  return <Glyph className="provider-glyph" aria-hidden />;
 }
+const usageProviders = agentProviders.filter(
+  (p): p is HelperProvider => agents[p].usage,
+);
 export const ComposerModelPicker = memo(function ComposerModelPicker({
   provider,
-  choice,
-  claudeModel,
-  claudeModels,
-  codexModels,
+  ready = true,
+  catalogs,
   onOpen,
   onSelect,
   providers,
@@ -85,17 +110,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   defaultNames,
 }: {
   provider: MessageProvider;
-  choice: ModelChoice | undefined;
-  claudeModel: string;
-  /** Listed by the installed Claude CLI; undefined while loading. */
-  claudeModels: ClaudeModel[] | undefined;
-  /** Listed by the installed Codex CLI, or its built-in stand-in. */
-  codexModels: CodexModel[];
+  /** False until the agent's settings have loaded. */
+  ready?: boolean;
+  catalogs: Partial<Record<AgentProvider, AgentCatalog>>;
   onOpen?: () => void;
   onSelect: (provider: MessageProvider, model: string) => void;
   /** Limits the rail to these agents, without favorites or message-only. */
-  providers?: ("codex" | "claude")[];
-  /** Offers the "Codex default" row. */
+  providers?: AgentProvider[];
+  /** Offers each agent's Default row. */
   allowDefault?: boolean;
   /** Names the trigger, e.g. "Grouping" gives "Grouping model". */
   label?: string;
@@ -104,66 +126,60 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   /** Opens the picker whenever this changes, e.g. from a /model command. */
   openSignal?: number;
   /** The model each agent's Default runs, where known. */
-  defaultNames?: Partial<Record<"codex" | "claude", string>>;
+  defaultNames?: Partial<Record<AgentProvider, string>>;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
   const [query, setQuery] = useState("");
   const [legacy, setLegacy] = useState(false);
+  /** The section shown in a grouped agent's list; "" shows them all. */
+  const [group, setGroup] = useState("");
   const [favorites, setFavorites] = useState(() => readList(favoritesKey));
-  const [customs, setCustoms] = useState(() =>
-    readList(customsKey).filter((id) => modelSchema.safeParse(id).success),
-  );
+  const [customs, setCustoms] = useState(readCustoms);
   const search = useRef<HTMLInputElement>(null);
   const [usage, setUsage] = useState<
-    Partial<Record<"codex" | "claude", ProviderUsage>>
+    Partial<Record<HelperProvider, ProviderUsage>>
   >({});
   const [now, setNow] = useState(() => Date.now());
+  const offered = (providers ?? agentProviders).filter((p) => catalogs[p]);
   const selectedKey = JSON.stringify([
     provider,
-    provider === "codex"
-      ? choice?.model || ""
-      : provider === "claude"
-        ? claudeModel
-        : "",
+    provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
   ]);
   const defaultName = (m: Model) =>
     m.provider !== "message" && !m.id ? defaultNames?.[m.provider] : undefined;
-  // CLI-listed models sit above each agent's default.
-  const catalog = models.flatMap((m): Model[] =>
-    m.provider === "codex"
-      ? [
-          ...codexModels.map((c) => ({
-            provider: "codex" as const,
-            id: c.id,
-            name: c.name,
-            description: c.description,
-            legacy: c.legacy,
-          })),
-          m,
-        ]
-      : m.provider === "claude"
-        ? [
-            ...(claudeModels ?? []).map((c) => ({
-              provider: "claude" as const,
-              id: c.id,
-              name: c.name,
-              description: c.description,
-            })),
-            m,
-          ]
-        : [m],
-  );
-  const legacyCount = codexModels.filter((m) => m.legacy).length;
-  if (
-    claudeModel &&
-    !catalog.some((m) => m.provider === "claude" && m.id === claudeModel)
-  )
-    catalog.push({ provider: "claude", id: claudeModel, name: claudeModel });
-  for (const id of [...customs, choice?.model || ""]) {
-    if (id && !catalog.some((m) => m.provider === "codex" && m.id === id))
-      catalog.push({ provider: "codex", id, name: id, custom: true });
-  }
+  // Each agent's listed models sit above its Default, then ids it doesn't
+  // list: typed-in custom ones, and the pick itself.
+  const catalog: Model[] = [
+    ...offered.flatMap((p): Model[] => {
+      const listed = catalogs[p]!.models ?? [];
+      const unlisted = [...customs[p], catalogs[p]!.model].filter(
+        (id, i, all) =>
+          id && all.indexOf(id) === i && !listed.some((m) => m.id === id),
+      );
+      return [
+        ...listed.map((m) => ({
+          provider: p,
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          legacy: m.legacy,
+          group: m.group,
+        })),
+        { provider: p, id: "", name: `${agentName(p)} default` },
+        ...unlisted.map((id) => ({
+          provider: p,
+          id,
+          name: id,
+          custom: customs[p].includes(id),
+        })),
+      ];
+    }),
+    { provider: "message", id: "", name: "Message only" },
+  ];
+  const legacyCount = catalog.filter(
+    (m) => m.provider === category && m.legacy,
+  ).length;
   const current =
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
@@ -171,7 +187,12 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const triggerName = currentDefault
     ? `Default (${currentDefault})`
     : current.name;
-  const rows = catalog
+  // An agent with hundreds of models from many providers lists them by provider.
+  const grouped =
+    category !== "favorites" &&
+    category !== "message" &&
+    agents[category].modelGroups;
+  const matching = catalog
     .filter((m) => allowDefault || m.provider === "message" || m.id)
     .filter((m) => {
       if (category === "favorites") return favorites.includes(modelKey(m));
@@ -186,12 +207,32 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
           providerDisplayName: providerNames[m.provider],
           name: m.name,
           shortName: m.id,
+          subProvider: [m.group, m.description].filter(Boolean).join(" "),
           isFavorite: favorites.includes(modelKey(m)),
         },
         query,
       ),
     }))
-    .filter((r) => r.score !== null)
+    // Among hundreds of models a fuzzy match is noise, and would skew the counts.
+    .filter(
+      (r) =>
+        r.score !== null &&
+        (!grouped || r.score < fuzzyScore * searchWords(query)),
+    );
+  const groups = grouped
+    ? [
+        ...new Set(
+          catalog.flatMap((m) =>
+            m.provider === category && m.group ? [m.group] : [],
+          ),
+        ),
+      ].map((name) => ({
+        name,
+        count: matching.filter((r) => r.model.group === name).length,
+      }))
+    : [];
+  const rows = matching
+    .filter((r) => !grouped || !group || r.model.group === group)
     .sort((a, b) =>
       query.trim()
         ? a.score! - b.score! || a.index - b.index
@@ -201,20 +242,22 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     .map((r) => r.model);
   const customId = query.trim();
   if (
-    category === "codex" &&
+    category !== "favorites" &&
+    category !== "message" &&
     rows.length === 0 &&
     modelSchema.safeParse(customId).success
   )
     rows.push({
-      provider: "codex",
+      provider: category,
       id: customId,
       name: customId,
       custom: true,
     });
 
   function select(m: Model) {
-    if (m.custom && !customs.includes(m.id))
-      setCustoms((ids) => [...ids, m.id].slice(-100));
+    const p = m.provider;
+    if (m.custom && p !== "message" && !customs[p].includes(m.id))
+      setCustoms((all) => ({ ...all, [p]: [...all[p], m.id].slice(-100) }));
     onSelect(m.provider, m.id);
     setOpen(false);
   }
@@ -222,12 +265,13 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     localStorage.setItem(favoritesKey, JSON.stringify(favorites));
   }, [favorites]);
   useEffect(() => {
-    localStorage.setItem(customsKey, JSON.stringify(customs));
+    for (const p of agentProviders)
+      localStorage.setItem(customsKey(p), JSON.stringify(customs[p]));
   }, [customs]);
   useEffect(() => {
     if (!open) return;
     let cancel = false;
-    for (const provider of ["codex", "claude"] as const) {
+    for (const provider of usageProviders) {
       void api
         .providerUsage(provider)
         .then((value) => {
@@ -257,12 +301,36 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     setOpen(true);
     onOpen?.();
     setCategory(provider);
+    openGroup(provider);
     setQuery("");
     setLegacy(false);
     // Only a new signal opens the picker, not a changed provider.
   }, [openSignal]);
+  /** What a row says under its name; nothing, for a plain model in its own section. */
+  const subtitle = (m: Model) =>
+    m.custom && m.provider !== "message"
+      ? `Custom ${agentName(m.provider)} model`
+      : defaultName(m)
+        ? `Runs ${defaultName(m)}`
+        : grouped
+          ? [group ? undefined : m.group, m.description]
+              .filter(Boolean)
+              .join(" · ")
+          : m.description || providerNames[m.provider];
+  // Opens on the section of the model in use, so it shows among its neighbours.
+  const openGroup = (next: Category) =>
+    setGroup(
+      catalog.find((m) => m.provider === next && modelKey(m) === selectedKey)
+        ?.group ?? "",
+    );
+  function changeQuery(next: string) {
+    // A search looks everywhere; a provider can narrow it after.
+    if (next.trim() && !query.trim()) setGroup("");
+    setQuery(next);
+  }
   function changeCategory(next: Category) {
     setCategory(next);
+    openGroup(next);
     setQuery("");
     setLegacy(false);
     requestAnimationFrame(() => search.current?.focus());
@@ -291,6 +359,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         if (next) {
           onOpen?.();
           setCategory(provider);
+          openGroup(provider);
           setQuery("");
           setLegacy(false);
         }
@@ -301,7 +370,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         className="composer-control composer-model-trigger"
         aria-label={label ? `${label} model` : "Choose model and provider"}
         title={triggerName}
-        disabled={!choice}
+        disabled={!ready}
       >
         <ProviderIcon provider={provider} />
         <span>{triggerName}</span>
@@ -317,6 +386,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         >
           <Popover.Popup
             className="model-picker-popup"
+            data-wide={grouped ? "" : undefined}
             aria-label={label ? `${label} model` : "Choose model and provider"}
             initialFocus={search}
             onKeyDown={(e) => {
@@ -328,7 +398,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
               }
             }}
           >
-            {(providers?.length ?? 2) > 1 && (
+            {(providers ? offered.length : 2) > 1 && (
               <Toolbar.Root
                 className="model-picker-rail"
                 orientation="vertical"
@@ -340,9 +410,9 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   }
                 }}
               >
-                {(
-                  providers ??
-                  (["favorites", "codex", "claude", "message"] as const)
+                {(providers
+                  ? offered
+                  : (["favorites", ...offered, "message"] as const)
                 ).map((tab) => (
                   <Toolbar.Button
                     type="button"
@@ -383,7 +453,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   items={rows.map(modelKey)}
                   filter={null}
                   inputValue={query}
-                  onInputValueChange={setQuery}
+                  onInputValueChange={changeQuery}
                   value={selectedKey}
                   onValueChange={(key) => {
                     const m = rows.find((row) => modelKey(row) === key);
@@ -407,114 +477,148 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                       }}
                     />
                   </div>
-                  <div className="model-picker-scroll">
-                    <Combobox.List aria-label="Models">
-                      {rows.map((m, index) => {
-                        const key = modelKey(m),
-                          favorite = favorites.includes(key);
-                        return (
-                          <Fragment key={key}>
-                            {category === "codex" &&
-                              !query.trim() &&
-                              m.legacy &&
-                              legacyToggle}
-                            <Combobox.Item
-                              // A default that knows its model shows it like any other row.
-                              data-default={
-                                m.provider !== "message" &&
-                                !m.id &&
-                                !defaultName(m)
-                                  ? ""
-                                  : undefined
-                              }
-                              onClick={() => {
-                                if (selectedKey === key) select(m);
-                              }}
-                              value={key}
-                              index={index}
-                              className="model-picker-row"
-                              aria-label={m.name}
-                            >
-                              <div className="model-picker-row-label">
-                                <span>{m.name}</span>
-                                <small>
-                                  <ProviderIcon provider={m.provider} />
-                                  <span>
-                                    {m.custom
-                                      ? "Custom Codex model"
-                                      : defaultName(m)
-                                        ? `Runs ${defaultName(m)}`
-                                        : m.description ||
-                                          providerNames[m.provider]}
-                                  </span>
-                                </small>
-                              </div>
-                              <div className="model-picker-row-actions">
-                                {selectedKey === key && (
-                                  <Check size={12} aria-hidden />
-                                )}
-                                {index < 9 && (
-                                  <kbd>
-                                    {navigator.platform.includes("Mac")
-                                      ? "⌘"
-                                      : "Ctrl "}
-                                    {index + 1}
-                                  </kbd>
-                                )}
-                                {m.provider !== "message" && (
-                                  <button
-                                    type="button"
-                                    className="model-favorite"
-                                    aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
-                                    aria-pressed={favorite}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => {
-                                      if (e.key !== "Escape" && e.key !== "Tab")
+                  <div className="model-picker-columns">
+                    {grouped && (
+                      <nav
+                        className="model-picker-groups"
+                        aria-label={`${providerNames[category as AgentProvider]} providers`}
+                      >
+                        {[
+                          {
+                            name: "",
+                            count: groups.reduce((n, g) => n + g.count, 0),
+                          },
+                          ...groups,
+                        ].map((g) => (
+                          <button
+                            key={g.name}
+                            type="button"
+                            aria-pressed={group === g.name}
+                            disabled={!!query.trim() && !g.count}
+                            onClick={() => {
+                              setGroup(g.name);
+                              search.current?.focus();
+                            }}
+                          >
+                            <span>{g.name || "All"}</span>
+                            {catalogs[category as AgentProvider]?.models && (
+                              <small>{g.count}</small>
+                            )}
+                          </button>
+                        ))}
+                      </nav>
+                    )}
+                    <div className="model-picker-scroll">
+                      <Combobox.List aria-label="Models">
+                        {rows.map((m, index) => {
+                          const key = modelKey(m),
+                            favorite = favorites.includes(key);
+                          return (
+                            <Fragment key={key}>
+                              {!query.trim() && m.legacy && legacyToggle}
+                              <Combobox.Item
+                                // A default that knows its model shows it like any other row.
+                                data-default={
+                                  m.provider !== "message" &&
+                                  !m.id &&
+                                  !defaultName(m)
+                                    ? ""
+                                    : undefined
+                                }
+                                onClick={() => {
+                                  if (selectedKey === key) select(m);
+                                }}
+                                value={key}
+                                index={index}
+                                className="model-picker-row"
+                                data-compact={subtitle(m) ? undefined : ""}
+                                aria-label={m.name}
+                              >
+                                <div className="model-picker-row-label">
+                                  <span>{m.name}</span>
+                                  {subtitle(m) && (
+                                    <small>
+                                      <ProviderIcon provider={m.provider} />
+                                      <span>{subtitle(m)}</span>
+                                    </small>
+                                  )}
+                                </div>
+                                <div className="model-picker-row-actions">
+                                  {selectedKey === key && (
+                                    <Check size={12} aria-hidden />
+                                  )}
+                                  {index < 9 && (
+                                    <kbd>
+                                      {navigator.platform.includes("Mac")
+                                        ? "⌘"
+                                        : "Ctrl "}
+                                      {index + 1}
+                                    </kbd>
+                                  )}
+                                  {m.provider !== "message" && (
+                                    <button
+                                      type="button"
+                                      className="model-favorite"
+                                      aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
+                                      aria-pressed={favorite}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onKeyDown={(e) => {
+                                        if (
+                                          e.key !== "Escape" &&
+                                          e.key !== "Tab"
+                                        )
+                                          e.stopPropagation();
+                                      }}
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setFavorites((prev) =>
-                                        favorite
-                                          ? prev.filter((v) => v !== key)
-                                          : [...prev, key].slice(-100),
-                                      );
-                                    }}
-                                  >
-                                    <Star
-                                      size={14}
-                                      fill={favorite ? "currentColor" : "none"}
-                                    />
-                                  </button>
-                                )}
-                              </div>
-                            </Combobox.Item>
-                          </Fragment>
-                        );
-                      })}
-                    </Combobox.List>
-                    {category === "claude" && !claudeModels && (
-                      <p className="model-picker-note">
-                        Loading models from Claude…
-                      </p>
-                    )}
-                    {rows.length === 0 && (
-                      <p className="model-picker-empty">
-                        {category === "favorites" && !query
-                          ? "Star models to keep them here."
-                          : "No matching models."}
-                      </p>
-                    )}
-                    {category === "codex" &&
-                      !query.trim() &&
-                      !legacy &&
-                      legacyCount > 0 &&
-                      legacyToggle}
+                                        setFavorites((prev) =>
+                                          favorite
+                                            ? prev.filter((v) => v !== key)
+                                            : [...prev, key].slice(-100),
+                                        );
+                                      }}
+                                    >
+                                      <Star
+                                        size={14}
+                                        fill={
+                                          favorite ? "currentColor" : "none"
+                                        }
+                                      />
+                                    </button>
+                                  )}
+                                </div>
+                              </Combobox.Item>
+                            </Fragment>
+                          );
+                        })}
+                      </Combobox.List>
+                      {category !== "favorites" &&
+                        category !== "message" &&
+                        !catalogs[category]?.models && (
+                          <p className="model-picker-note">
+                            Loading models from {agentName(category)}…
+                          </p>
+                        )}
+                      {rows.length === 0 && (
+                        <p className="model-picker-empty">
+                          {category === "favorites" && !query
+                            ? "Star models to keep them here."
+                            : "No matching models."}
+                        </p>
+                      )}
+                      {!query.trim() &&
+                        !legacy &&
+                        legacyCount > 0 &&
+                        legacyToggle}
+                    </div>
                   </div>
                 </Combobox.Root>
               </div>
-              {(category === "claude" || category === "codex") && (
-                <UsageMeters usage={usage[category]} now={now} />
+              {usageProviders.some((p) => p === category) && (
+                <UsageMeters
+                  usage={usage[category as HelperProvider]}
+                  now={now}
+                />
               )}
               {category === "message" && (
                 <p className="model-picker-note">

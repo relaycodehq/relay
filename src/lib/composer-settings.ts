@@ -5,6 +5,11 @@ import {
 } from "../../shared/agent-modes";
 import type { ProjectChatSend } from "../../shared/projects";
 import {
+  agentProviders,
+  isAgentProvider,
+  type AgentProvider,
+} from "../../shared/agents";
+import {
   ultraplanKindSchema,
   type UltraplanKind,
 } from "../../shared/ultraplan";
@@ -17,7 +22,21 @@ import {
   type ReasoningEffort,
 } from "../../shared/settings";
 
-type Provider = "codex" | "claude" | "message";
+type Provider = AgentProvider | "message";
+/**
+ * Agents whose model and effort the composer keeps in `picks`. Codex and
+ * Claude keep settings of their own: Fast mode, and the context window.
+ */
+export const pickAgents = agentProviders.filter(
+  (p) => p !== "codex" && p !== "claude",
+);
+export const isPickAgent = (provider: string): provider is AgentProvider =>
+  (pickAgents as string[]).includes(provider);
+/** A model and effort, for an agent with no settings of its own beyond them. */
+export interface AgentPick {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+}
 /** What a chat composer starts from: its agent, each agent's model, its modes. */
 export interface ComposerSettings {
   /** The agent picked here; unset follows the default agent setting. */
@@ -29,6 +48,8 @@ export interface ComposerSettings {
     reasoningEffort: ReasoningEffort;
     contextWindow?: "200k";
   };
+  /** Every other agent's model and effort; Codex and Claude keep theirs above. */
+  picks: Partial<Record<AgentProvider, AgentPick>>;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
   /** Plan with a council first; see shared/ultraplan. */
@@ -44,9 +65,21 @@ function read(key: string) {
     return null;
   }
 }
-const providers: unknown[] = ["codex", "claude", "message"];
 const isProvider = (value: unknown): value is Provider =>
-  providers.includes(value);
+  value === "message" || isAgentProvider(value);
+function readPicks(value: unknown): ComposerSettings["picks"] {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([provider, pick]) => {
+      const model = modelSchema.safeParse(pick?.model).data ?? "";
+      const reasoningEffort =
+        reasoningEffortSchema.safeParse(pick?.reasoningEffort).data ?? "";
+      return isAgentProvider(provider)
+        ? [[provider, { model, reasoningEffort }]]
+        : [];
+    }),
+  );
+}
 function pickedProvider(key: string, saved: any): Provider | undefined {
   if (isProvider(saved?.agent)) return saved.agent;
   // Composers once saved whichever agent they showed, so a new thread's Codex
@@ -60,12 +93,12 @@ function pickedProvider(key: string, saved: any): Provider | undefined {
 export const composerProvider = (
   picked: Provider | undefined,
   shared: boolean,
-  fallback: "codex" | "claude" = "codex",
+  fallback: AgentProvider = "codex",
 ): Provider => picked ?? (shared ? "message" : fallback);
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
-  inherit?: { settingsKey: string; provider?: "codex" | "claude" },
+  inherit?: { settingsKey: string; provider?: AgentProvider },
 ): ComposerSettings {
   let saved = read(key);
   let provider = pickedProvider(key, saved);
@@ -85,6 +118,7 @@ export function loadComposerSettings(
         ? { contextWindow: "200k" as const }
         : {}),
     },
+    picks: readPicks(saved?.picks),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
     ultraplan: saved?.ultraplan === true,
@@ -132,11 +166,13 @@ export function resetComposerModels(key: string) {
         ? { contextWindow: settings.claude.contextWindow }
         : {}),
     },
+    picks: {},
   });
 }
 /**
- * Opens a composer on what a message was sent with. A Claude message's choice
- * is Claude's model, so it goes there; the other agent keeps its own.
+ * Opens a composer on what a message was sent with. The choice is the model
+ * of the agent it went to, so it goes to that agent's slot; the others keep
+ * their own.
  */
 export function saveSentSettings(
   key: string,
@@ -146,20 +182,31 @@ export function saveSentSettings(
     "provider" | "choice" | "contextWindow" | "runtimeMode" | "interactionMode"
   >,
 ) {
+  const saved = loadComposerSettings(key);
   saveComposerSettings(key, {
-    ...loadComposerSettings(key),
+    ...saved,
     provider,
-    ...(sent.provider === "claude"
+    ...(isPickAgent(sent.provider)
       ? {
-          claude: {
-            model: sent.choice.model,
-            reasoningEffort: sent.choice.reasoningEffort,
-            ...(sent.contextWindow
-              ? { contextWindow: sent.contextWindow }
-              : {}),
+          picks: {
+            ...saved.picks,
+            [sent.provider]: {
+              model: sent.choice.model,
+              reasoningEffort: sent.choice.reasoningEffort,
+            },
           },
         }
-      : { choice: sent.choice }),
+      : sent.provider === "claude"
+        ? {
+            claude: {
+              model: sent.choice.model,
+              reasoningEffort: sent.choice.reasoningEffort,
+              ...(sent.contextWindow
+                ? { contextWindow: sent.contextWindow }
+                : {}),
+            },
+          }
+        : { choice: sent.choice }),
     runtimeMode: sent.runtimeMode,
     interactionMode: sent.interactionMode,
   });

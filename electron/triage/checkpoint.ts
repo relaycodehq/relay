@@ -1,5 +1,5 @@
 import {
-  agentProviderSchema,
+  helperProviderSchema,
   modelSchema,
   reasoningEffortSchema,
 } from "../../shared/settings";
@@ -34,7 +34,7 @@ const resultSchema = z.object({
   model: modelSchema,
   fast: z.boolean().optional(),
   reasoningEffort: reasoningEffortSchema.default("medium"),
-  provider: agentProviderSchema.default("codex"),
+  provider: helperProviderSchema.default("codex"),
   createdAt: z.string(),
   files: z
     .array(

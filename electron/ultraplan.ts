@@ -1,5 +1,6 @@
 // Runs an Ultraplan: the lead's brief as a turn in the thread, each thinker in
 // a hidden read-only thread of its own, then the lead's plan in Plan mode.
+import { agentMentionPattern, agentName } from "../shared/agents";
 import { randomUUID } from "node:crypto";
 import type {
   ChatMessage,
@@ -247,7 +248,7 @@ export class Ultraplans {
 
 /** A request as the user typed it, without the agent it was addressed to. */
 const requestText = (body: string) =>
-  body.replace(/^@(codex|claude)\s+/i, "").trim();
+  body.replace(agentMentionPattern, "").trim();
 
 const jobs: Record<ThinkerJob, string> = {
   skeptic:
@@ -308,7 +309,7 @@ export function thinkerPrompt(
 
 /** How a thinker reads to the lead. */
 function thinkerLabel(thinker: Thinker) {
-  const name = thinker.provider === "codex" ? "Codex" : "Claude";
+  const name = agentName(thinker.provider);
   const model = thinker.choice.model || "default model";
   const effort = thinker.choice.reasoningEffort || "default effort";
   return `${name} (${model}, ${effort})`;

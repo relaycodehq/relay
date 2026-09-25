@@ -10,6 +10,7 @@ import {
 import { api } from "../lib/api";
 import { RING_RADIUS } from "./ContextWindowMeter";
 import "./composer-model-picker.css";
+import { agentName } from "../../shared/agents";
 
 const REFRESH_MS = 60_000;
 const PACE_RANK: Record<MeterPace, number> = {
@@ -94,7 +95,7 @@ export const UsageRing = memo(function UsageRing({
     setRefreshing(true);
     void loadRef.current(true).finally(() => setRefreshing(false));
   };
-  const agent = provider === "codex" ? "Codex" : "Claude";
+  const agent = agentName(provider);
   const state = ringState(usage, now);
   // Nothing to show when the provider reports no limits at all.
   if (usage && !usage.windows.length) return null;

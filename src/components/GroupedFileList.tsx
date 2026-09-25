@@ -17,6 +17,7 @@ import {
 import type { ChangedFile, Progress } from "../../shared/types";
 import type { ChangeGroup, TriageResult } from "../../shared/triage";
 import { Modal } from "./ui";
+import { agentName } from "../../shared/agents";
 
 type Row =
   | { type: "file"; file: ChangedFile; grouped: boolean }
@@ -321,10 +322,10 @@ export function GroupedFileList({
         >
           <p className="group-description">{inspect.description}</p>
           <p className="field-note">
-            {result?.provider === "claude" ? "Claude" : "Codex"} suggests these
-            files contain only this repeated change. Inspect any file, then mark
-            the group viewed for this PR revision. Files with extra edits stay
-            in Individual changes.
+            {agentName(result?.provider ?? "codex")} suggests these files
+            contain only this repeated change. Inspect any file, then mark the
+            group viewed for this PR revision. Files with extra edits stay in
+            Individual changes.
           </p>
           <div className="group-inspect-files">
             {inspect.paths.map((path) => (

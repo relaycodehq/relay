@@ -308,7 +308,7 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   // and Codex has heard nothing new since its answer.
   expect(after.queuePaused).toBeFalsy();
   expect(after.lastInput?.body).toBe("@claude Now fix it");
-  expect(after.providerThrough).toBe(after.messages[1]!.id);
+  expect(after.sessions?.codex?.through).toBe(after.messages[1]!.id);
   const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()
     .split("\n")
@@ -525,7 +525,9 @@ it.each([
       ["assistant", "Noted: Use the blue one", "complete", false],
     ]);
     expect(messages[3]!.created).toBeGreaterThan(messages[2]!.created);
-    expect((await chats.get(chat.id)).claudeThrough).toBe(messages[3]!.id);
+    expect((await chats.get(chat.id)).sessions?.claude?.through).toBe(
+      messages[3]!.id,
+    );
   },
   15000,
 );
@@ -940,7 +942,7 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
   await ask("@codex MAIN followup");
   const saved = await chats.get(chat.id);
   expect(saved.messages.at(-1)?.parentId).toBeUndefined();
-  expect(saved.replySessions?.[main.id]?.through).toBe(second.id);
+  expect(saved.replySessions?.[main.id]?.codex?.through).toBe(second.id);
   const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()
     .split("\n")
@@ -1819,8 +1821,8 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   const saved = await chats.get(chat.id);
-  expect(saved.providerThread).toBe("fixture-thread");
-  expect(saved.claudeThread).toBe("fixture-claude");
+  expect(saved.sessions?.codex?.thread).toBe("fixture-thread");
+  expect(saved.sessions?.claude?.thread).toBe("fixture-claude");
   await chats.send(chat.id, {
     ...input("@claude Continue with the next step"),
     provider: "claude",
@@ -1923,7 +1925,8 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
   });
   await chats.send(chat.id, claude("@claude fixture wait for steer"));
   await vi.waitFor(
-    async () => expect((await chats.get(chat.id)).claudeThread).toBeTruthy(),
+    async () =>
+      expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
     { timeout: 6000 },
   );
   const question = {
@@ -1973,7 +1976,8 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
   await vi.waitFor(
-    async () => expect((await chats.get(chat.id)).providerThread).toBeTruthy(),
+    async () =>
+      expect((await chats.get(chat.id)).sessions?.codex?.thread).toBeTruthy(),
     { timeout: 6000 },
   );
   const question = {

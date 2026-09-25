@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentMentionPattern } from "./agents";
 
 export const devopsSettingsSchema = z
   .object({
@@ -119,7 +120,7 @@ export function organizationUrl(value: string) {
  * whatever the user wrote. A leading agent mention stays in front.
  */
 export function workItemMessage(item: WorkItem, body: string) {
-  const mention = /^@(codex|claude)(?=\s|$)\s*/i.exec(body.trim());
+  const mention = agentMentionPattern.exec(body.trim());
   const text = mention ? body.trim().slice(mention[0].length) : body.trim();
   const details = [
     `State: ${item.state}`,

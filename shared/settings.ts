@@ -1,11 +1,19 @@
 import { z } from "zod";
+import {
+  agentName,
+  agentProviderSchema,
+  helperProviderSchema,
+  type AgentProvider,
+  type HelperProvider,
+} from "./agents";
+export { helperProviderSchema, type HelperProvider };
 
 export const modelSchema = z
   .string()
   .trim()
   .min(1)
   .max(160)
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/[\]-]*$/, "Enter a valid model ID.");
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/[\]@~+-]*$/, "Enter a valid model ID.");
 export const reasoningEffortSchema = z.enum([
   "",
   "none",
@@ -156,11 +164,8 @@ const questionChoiceSchema = choiceSchema
     reasoningEffort: reasoningEffortSchema.default(""),
   })
   .refine((choice) => supportsEffort(choice), effortCheck);
-/** Which signed-in CLI runs grouping or line questions. */
-export const agentProviderSchema = z.enum(["codex", "claude"]);
-export type AgentProvider = z.infer<typeof agentProviderSchema>;
 const claudeEffortCheck = (
-  provider: AgentProvider,
+  provider: HelperProvider,
   choice: { reasoningEffort: ReasoningEffort },
 ) =>
   provider === "codex" ||
@@ -171,8 +176,9 @@ export const aiSettingsSchema = z
   .object({
     grouping: modelChoiceSchema,
     questions: questionChoiceSchema,
-    groupingProvider: agentProviderSchema.default("codex"),
-    questionsProvider: agentProviderSchema.default("codex"),
+    /** Which signed-in CLI runs grouping or line questions. */
+    groupingProvider: helperProviderSchema.default("codex"),
+    questionsProvider: helperProviderSchema.default("codex"),
     /** The agent a composer starts on until it remembers one. */
     threadProvider: agentProviderSchema.default("codex"),
   })
@@ -214,8 +220,8 @@ export const choiceLabel = (
   choice: ModelChoice,
   provider: AgentProvider = "codex",
 ) =>
-  provider === "claude"
-    ? `Claude · ${choice.model || "default model"}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} effort` : ""}`
+  provider !== "codex"
+    ? `${agentName(provider)} · ${choice.model || "default model"}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} effort` : ""}`
     : `${modelName(choice.model)}${choice.reasoningEffort ? ` · ${effortLabels[choice.reasoningEffort]} reasoning` : ""} · ${choice.fast ? "Fast" : "Standard"}`;
 
 /** Explicit standard overrides any Fast preference inherited from Codex config. */

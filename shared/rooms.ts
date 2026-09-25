@@ -1,5 +1,11 @@
 import { z } from "zod";
 import {
+  agentMentionPattern,
+  agents,
+  type AgentProvider,
+  type HelperProvider,
+} from "./agents";
+import {
   filePathSchema,
   refSchema,
   shaSchema,
@@ -83,15 +89,29 @@ export type Presence = z.infer<typeof presenceSchema> & {
   name: string;
   at: number;
 };
-export type Provider = "codex" | "claude";
+/** Agents that answer in shared rooms: those that run Relay's helper jobs. */
+export type Provider = HelperProvider;
 
 /** Only an explicit leading mention invokes an agent. Quoted/code mentions are ordinary chat. */
 export function agentMention(
   text: string,
-): { provider: Provider; question: string } | null {
-  const m = /^@(codex|claude)(?=\s|$)\s*([\s\S]*)$/i.exec(text.trim());
+): { provider: AgentProvider; question: string } | null {
+  const trimmed = text.trim();
+  const m = agentMentionPattern.exec(trimmed);
   return m
-    ? { provider: m[1].toLowerCase() as Provider, question: m[2].trim() }
+    ? {
+        provider: m[1].toLowerCase() as AgentProvider,
+        question: trimmed.slice(m[0].length).trim(),
+      }
+    : null;
+}
+/** A mention of an agent that answers in shared rooms. */
+export function roomMention(
+  text: string,
+): { provider: Provider; question: string } | null {
+  const mention = agentMention(text);
+  return mention && agents[mention.provider].helper
+    ? (mention as { provider: Provider; question: string })
     : null;
 }
 export const messageInputSchema = z

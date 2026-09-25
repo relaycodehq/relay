@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { ChatMessage } from "../../shared/projects";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { RichText } from "./ui";
+import { agentMentionPattern, agentName } from "../../shared/agents";
 
 /** What a side question's thread holds, for the bar under it. */
 export interface SideThread {
@@ -27,7 +28,7 @@ export const SideQuestion = memo(function SideQuestion({
   thread?: SideThread;
   onOpen: () => void;
 }) {
-  const agent = m.provider === "codex" ? "Codex" : "Claude";
+  const agent = agentName(m.provider);
   return (
     <article
       className="project-message user side-question"
@@ -39,7 +40,7 @@ export const SideQuestion = memo(function SideQuestion({
         <time>{clock(m.created)}</time>
       </header>
       <div className="side-question-body">
-        <RichText text={m.body.replace(/^@(codex|claude)\s+/i, "")} />
+        <RichText text={m.body.replace(agentMentionPattern, "")} />
         {thread && (
           <button type="button" className="side-thread-bar" onClick={onOpen}>
             <span className="side-thread-face" aria-hidden>

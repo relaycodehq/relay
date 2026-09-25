@@ -254,6 +254,15 @@ export interface Api
   ): Promise<ProviderUsage>;
   claudeModels(): Promise<ClaudeModel[]>;
   codexModels(): Promise<CodexModel[]>;
+  /** Any agent's models, in the registry's common shape. */
+  agentModels(
+    provider: import("./agents").AgentProvider,
+  ): Promise<import("./agents").AgentModel[]>;
+  /** What an agent runs in this project where a thread leaves the model on Default. */
+  agentDefaults(
+    projectId: string,
+    provider: import("./agents").AgentProvider,
+  ): Promise<import("./agents").AgentDefaults | null>;
   /** What a project's threads run when they leave the model or effort on Default. */
   claudeDefaults(projectId: string): Promise<ClaudeDefaults | null>;
   codexDefaults(projectId: string): Promise<CodexDefaults>;

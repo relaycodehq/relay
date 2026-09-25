@@ -4,6 +4,7 @@
 // then the lead checks their notes in the code and plans in Plan mode.
 // "angles" gives each thinker a job of its own; with "same" they all get the
 // same task, so what they agree on carries weight.
+import type { AgentProvider, HelperProvider } from "./agents";
 import { z } from "zod";
 import type { RuntimeMode } from "./agent-modes";
 import type { ModelChoice } from "./settings";
@@ -20,7 +21,7 @@ export const thinkerJobs: Record<ThinkerJob, { label: string; gist: string }> =
   };
 
 export interface Thinker {
-  provider: "codex" | "claude";
+  provider: HelperProvider;
   choice: ModelChoice;
   /** Unset when every thinker gets the same task. */
   job?: ThinkerJob;
@@ -60,7 +61,7 @@ export interface UltraplanState {
   thinkers: (Thinker & { chatId: string })[];
   /** The request's agent and settings; its plan runs in Plan mode. */
   lead: {
-    provider: "codex" | "claude";
+    provider: AgentProvider;
     choice: ModelChoice;
     runtimeMode: RuntimeMode;
   };

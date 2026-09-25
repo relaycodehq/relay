@@ -1,3 +1,4 @@
+import { agentProviders } from "./agents";
 /** A long paste shown as a pill in the message, standing in for its text. */
 export interface PastedText {
   /** Shown as "Pasted text #n". */
@@ -11,8 +12,10 @@ export interface PastedText {
  * after the agent mention. Messages sent before pills put their pastes one
  * blank line apart, which the block before already took.
  */
-export const pasteBlock =
-  /(?:^|\n\n?|(?<=\n\n)|(?<=^@(?:codex|claude) +))Pasted text #(\d+):\n\n(`{3,})\n([\s\S]*?)\n\2(?:\n\n|$)/g;
+export const pasteBlock = new RegExp(
+  `(?:^|\\n\\n?|(?<=\\n\\n)|(?<=^@(?:${agentProviders.join("|")}) +))Pasted text #(\\d+):\\n\\n(\`{3,})\\n([\\s\\S]*?)\\n\\2(?:\\n\\n|$)`,
+  "g",
+);
 
 /** Unifies line endings and drops blank lines around the paste, keeping indentation. */
 export const cleanPaste = (raw: string) =>

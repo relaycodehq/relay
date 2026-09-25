@@ -6,6 +6,7 @@ import {
 } from "./agent-modes";
 import { lineQuestionSchema } from "./questions";
 import { z } from "zod";
+import { agentProviderSchema, type AgentProvider } from "./agents";
 import { idSchema } from "./rooms";
 import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
@@ -107,7 +108,7 @@ export interface ChatSummary {
   updated: number;
   shared?: { roomId: string; server: string; memberId: string };
   /** Provider of the latest answer, for the activity card. */
-  provider?: "codex" | "claude";
+  provider?: AgentProvider;
   /** No messages yet; absent on summaries saved before this field existed. */
   empty?: boolean;
   /** Settled until a newer update; see shared/chat-activity. */
@@ -185,7 +186,7 @@ export interface PromptCache {
   at: number;
   ttlMs: number;
 }
-export type AgentProvider = "codex" | "claude";
+export type { AgentProvider };
 /** Local marker: the outgoing agent wrote this note for the one taking over. */
 export interface AgentHandoff {
   from: AgentProvider;
@@ -230,11 +231,11 @@ export interface ChatMessage {
   body: string;
   status: "complete" | "streaming" | "failed" | "cancelled";
   created: number;
-  provider: "codex" | "claude";
+  provider: AgentProvider;
   error?: string;
   version: number;
 }
-/** A provider session and its last turn (Codex) or entry (Claude) to continue from. */
+/** A provider session and the point in it (a turn, entry or message) to continue from. */
 export interface ForkPoint {
   thread: string;
   at: string;
@@ -327,10 +328,8 @@ export interface ProjectChat extends ChatSummary {
   queuePaused?: boolean;
   lastInput?: ProjectChatSend;
   messages: ChatMessage[];
-  claudeThread?: string;
-  claudeThrough?: string;
-  providerThread?: string;
-  providerThrough?: string;
+  /** Each agent's session on the main conversation. */
+  sessions?: AgentSessions;
   /** Local: a forked thread's last copied answer, whose session its agent continues. */
   forkedAt?: string;
   sharedCursor?: number;
@@ -341,15 +340,63 @@ export interface ProjectChat extends ChatSummary {
   deepReview?: DeepReviewState;
   /** Ultraplan councils, by the user message each one works on. */
   ultraplans?: Record<string, UltraplanState>;
-  replySessions?: Record<
-    string,
-    {
-      thread?: string;
-      through?: string;
-      claudeThread?: string;
-      claudeThrough?: string;
-    }
-  >;
+  /** Each agent's session on a side conversation, by its root message. */
+  replySessions?: Record<string, AgentSessions>;
+}
+/** An agent's session on a conversation, and the last message it heard there. */
+export interface AgentSession {
+  thread?: string;
+  through?: string;
+}
+export type AgentSessions = Partial<Record<AgentProvider, AgentSession>>;
+/**
+ * Saves from before the agent registry kept Claude's session and Codex's
+ * (`provider…`, or bare on a side conversation) in fields of their own.
+ */
+export function migrateAgentSessions(chat: ProjectChat): boolean {
+  type Legacy = {
+    claudeThread?: string;
+    claudeThrough?: string;
+    providerThread?: string;
+    providerThrough?: string;
+    thread?: string;
+    through?: string;
+  };
+  let changed = false;
+  const move = (
+    from: Legacy,
+    to: AgentSessions,
+    provider: AgentProvider,
+    thread: "claudeThread" | "providerThread" | "thread",
+    through: "claudeThrough" | "providerThrough" | "through",
+  ) => {
+    if (!(thread in from) && !(through in from)) return;
+    const session: AgentSession = {
+      ...(from[thread] ? { thread: from[thread] } : {}),
+      ...(from[through] ? { through: from[through] } : {}),
+    };
+    if (session.thread || session.through) to[provider] ??= session;
+    delete from[thread];
+    delete from[through];
+    changed = true;
+  };
+  const main = chat as ProjectChat & Legacy;
+  const sessions = main.sessions ?? {};
+  move(main, sessions, "claude", "claudeThread", "claudeThrough");
+  move(main, sessions, "codex", "providerThread", "providerThrough");
+  if (Object.keys(sessions).length) main.sessions = sessions;
+  for (const [root, side] of Object.entries(chat.replySessions ?? {})) {
+    const legacy = side as AgentSessions & Legacy;
+    const next: AgentSessions = { ...side };
+    delete (next as Legacy).claudeThread;
+    delete (next as Legacy).claudeThrough;
+    delete (next as Legacy).thread;
+    delete (next as Legacy).through;
+    move(legacy, next, "claude", "claudeThread", "claudeThrough");
+    move(legacy, next, "codex", "thread", "through");
+    chat.replySessions![root] = next;
+  }
+  return changed;
 }
 /** Message id → version the renderer already holds. */
 export type KnownMessages = Record<string, number>;
@@ -386,7 +433,7 @@ export const projectChatSendSchema = z
     choice: aiSettingsSchema.shape.questions,
     /** Claude on a 200k window; left out, the CLI picks (1M on most models). */
     contextWindow: z.literal("200k").optional(),
-    provider: z.enum(["codex", "claude"]),
+    provider: agentProviderSchema,
     runtimeMode: runtimeModeSchema,
     interactionMode: interactionModeSchema,
     parentId: idSchema.nullable().optional(),
@@ -455,7 +502,7 @@ export interface ProjectApi {
   forkProjectChat(id: string, messageId: string): Promise<ChatSummary>;
   projectCommands(
     id: string,
-    provider: "codex" | "claude",
+    provider: AgentProvider,
   ): Promise<import("./commands").ProviderCommand[]>;
   projectBranchPulls(
     where: string,

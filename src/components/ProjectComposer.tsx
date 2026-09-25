@@ -43,11 +43,25 @@ import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import {
   composerProvider,
+  isPickAgent,
   loadComposerSettings,
+  pickAgents,
   saveComposerSettings,
 } from "../lib/composer-settings";
+import { useAgentPicks } from "../lib/useAgentPicks";
+import {
+  agentMentionPattern,
+  agentName,
+  agentProviders,
+  agents,
+  type AgentProvider,
+  type HelperProvider,
+} from "../../shared/agents";
 import { api } from "../lib/api";
-import { ComposerModelPicker } from "./ComposerModelPicker";
+import {
+  ComposerModelPicker,
+  type MessageProvider,
+} from "./ComposerModelPicker";
 import { useCodexModels } from "../lib/useCodexModels";
 import { useAgentDefaults } from "../lib/useAgentDefaults";
 import {
@@ -93,7 +107,7 @@ export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
   /** Sends Relay's own message to an agent with the composer's settings, keeping the draft. */
-  sendToAgent: (provider: "codex" | "claude", body: string) => Promise<boolean>;
+  sendToAgent: (provider: AgentProvider, body: string) => Promise<boolean>;
   /** The agent picked here and its settings; none while it only messages people. */
   agentSettings: () => ResumeSettings | undefined;
 }
@@ -129,7 +143,7 @@ export function ProjectComposer({
   draftKey: string;
   settingsKey: string;
   /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
-  inherit?: { settingsKey: string; provider?: "codex" | "claude" };
+  inherit?: { settingsKey: string; provider?: AgentProvider };
   onDraft: (v: string) => void;
   shared: boolean;
   running: boolean;
@@ -166,7 +180,7 @@ export function ProjectComposer({
     dispatch?: () => void,
   ) => Promise<boolean>;
   onStop: () => void;
-  planProvider?: "codex" | "claude";
+  planProvider?: AgentProvider;
   /** The main conversation of a private thread can plan with a council first. */
   ultraplanOffered?: boolean;
   contextMeter?: ReactNode;
@@ -187,6 +201,8 @@ export function ProjectComposer({
   );
   const [choice, setChoice] = useState(saved.choice);
   const [claude, setClaude] = useState(saved.claude);
+  const [picks, setPicks] = useState(saved.picks);
+  const agentPicks = useAgentPicks(projectId);
   const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
   const composerLive = useRef(true);
   const loadClaudeModels = useCallback(() => {
@@ -220,6 +236,7 @@ export function ProjectComposer({
       provider: picked,
       choice,
       claude,
+      picks,
       runtimeMode,
       interactionMode,
       ultraplan,
@@ -230,6 +247,7 @@ export function ProjectComposer({
     picked,
     choice,
     claude,
+    picks,
     runtimeMode,
     interactionMode,
     ultraplan,
@@ -313,7 +331,22 @@ export function ProjectComposer({
   }, []);
   const showUsage = useUsageRing();
   const sendKey = useSendKey();
-  // Claude keeps its own model and effort; Codex-only settings never reach it.
+  /** The model and efforts an agent in `picks` runs; "" is its Default. */
+  const pickOf = (to: AgentProvider) => {
+    const pick = picks[to] ?? { model: "", reasoningEffort: "" as const };
+    const efforts =
+      agentPicks.catalogs[to]?.models?.find((m) => m.id === pick.model)
+        ?.efforts ?? [];
+    return {
+      ...pick,
+      efforts,
+      // An effort the model no longer lists runs as its default.
+      reasoningEffort: efforts.includes(pick.reasoningEffort)
+        ? pick.reasoningEffort
+        : ("" as const),
+    };
+  };
+  // Every agent keeps its own model and effort; Codex-only settings never reach the others.
   const choiceFor = (to: string): ModelChoice | undefined =>
     selected && to === "claude"
       ? {
@@ -322,17 +355,61 @@ export function ProjectComposer({
           reasoningEffort: claude.reasoningEffort,
           fast: false,
         }
-      : selected;
+      : selected && isPickAgent(to)
+        ? {
+            model: pickOf(to).model,
+            reasoningEffort: pickOf(to).reasoningEffort,
+            fast: false,
+          }
+        : selected;
   const contextFor = (to: string) =>
     to === "claude" && claude.contextWindow
       ? { contextWindow: claude.contextWindow }
       : {};
   const [pickModel, setPickModel] = useState(0);
+  const catalogs = useMemo(
+    () => ({
+      codex: { models: codexModels, model: selected?.model ?? "" },
+      claude: { models: claudeModels, model: claudeListed?.id ?? claude.model },
+      ...Object.fromEntries(
+        pickAgents.map((p) => [
+          p,
+          {
+            models: agentPicks.catalogs[p]?.models,
+            model: picks[p]?.model ?? "",
+          },
+        ]),
+      ),
+    }),
+    [
+      codexModels,
+      selected?.model,
+      claudeModels,
+      claudeListed?.id,
+      claude.model,
+      agentPicks.catalogs,
+      picks,
+    ],
+  );
   const selectModel = useStableCallback(function selectModel(
-    next: "codex" | "claude" | "message",
+    next: MessageProvider,
     model: string,
   ) {
     setProvider(next);
+    if (isPickAgent(next)) {
+      const efforts =
+        agentPicks.catalogs[next]?.models?.find((m) => m.id === model)
+          ?.efforts ?? [];
+      setPicks((all) => ({
+        ...all,
+        [next]: {
+          model,
+          reasoningEffort: efforts.includes(all[next]?.reasoningEffort ?? "")
+            ? all[next]!.reasoningEffort
+            : "",
+        },
+      }));
+    }
     if (next === "claude") {
       const efforts = claudeEffortsFor(claudeModels, model);
       setClaude((c) => ({
@@ -355,6 +432,7 @@ export function ProjectComposer({
     if (!claudeModels?.length) loadClaudeModels();
     codex.retry();
     defaults.refresh();
+    agentPicks.refresh();
   });
   // Default says what it runs, as each agent's own settings decide.
   const claudeRuns = claude.model
@@ -371,11 +449,30 @@ export function ProjectComposer({
     codexModels,
   );
   const defaultNames = useMemo(
-    () => ({
+    (): Partial<Record<AgentProvider, string>> => ({
       claude: claudeDefaultModelName(defaults.claude, claudeModels),
       codex: codexDefaultModelName(defaults.codex, codexModels),
+      ...Object.fromEntries(
+        pickAgents.flatMap((p) => {
+          const { models, defaults: runs } = agentPicks.catalogs[p] ?? {};
+          return runs?.model
+            ? [
+                [
+                  p,
+                  models?.find((m) => m.id === runs.model)?.name ?? runs.model,
+                ],
+              ]
+            : [];
+        }),
+      ),
     }),
-    [defaults.claude, defaults.codex, claudeModels, codexModels],
+    [
+      defaults.claude,
+      defaults.codex,
+      claudeModels,
+      codexModels,
+      agentPicks.catalogs,
+    ],
   );
   const codexEffortOptions = useMemo(
     () =>
@@ -416,7 +513,19 @@ export function ProjectComposer({
           step,
         ),
       );
+    else if (isPickAgent(recipient)) {
+      const pick = pickOf(recipient);
+      setPickEffort(
+        recipient,
+        stepEffort(pick.efforts, pick.reasoningEffort, "", step),
+      );
+    }
   }
+  const setPickEffort = (to: AgentProvider, reasoningEffort: ReasoningEffort) =>
+    setPicks((all) => ({
+      ...all,
+      [to]: { model: all[to]?.model ?? "", reasoningEffort },
+    }));
   const claudeTraits = useMemo(
     () => [
       ...(claudeModelEfforts.length > 0
@@ -479,15 +588,14 @@ export function ProjectComposer({
   );
   /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
-    const prefix = /^\s*@(?:codex|claude)(?=\s|$)\s*/i.exec(draft)?.[0];
+    const prefix = agentMentionPattern.exec(draft.trimStart())?.[0];
     if (prefix)
       promptInput.current?.insertText({
         start: 0,
-        end: prefix.length,
+        end: draft.length - draft.trimStart().length + prefix.length,
         text: "",
       });
   }
-  const agentNames = { codex: "Codex", claude: "Claude" };
   // Every model /model can switch to, the current agent's first.
   function modelOptions() {
     const listed = [
@@ -511,9 +619,20 @@ export function ProjectComposer({
             : []),
         ];
       }),
+      ...pickAgents.flatMap((p) =>
+        (agentPicks.catalogs[p]?.models ?? []).map((m) => ({
+          provider: p,
+          value: m.id,
+          description: m.name,
+        })),
+      ),
     ];
     const current =
-      recipient === "claude" ? claude.model : (selected?.model ?? "");
+      recipient === "claude"
+        ? claude.model
+        : isPickAgent(recipient)
+          ? pickOf(recipient).model
+          : (selected?.model ?? "");
     return [
       ...listed.filter((m) => m.provider === recipient),
       ...(recipient === "message"
@@ -523,15 +642,15 @@ export function ProjectComposer({
               provider: recipient,
               value: "default",
               description: defaultNames[recipient]
-                ? `${agentNames[recipient]} default · ${defaultNames[recipient]}`
-                : `${agentNames[recipient]} default`,
+                ? `${agentName(recipient)} default · ${defaultNames[recipient]}`
+                : `${agentName(recipient)} default`,
             },
           ]),
       ...listed.filter((m) => m.provider !== recipient),
     ].map((m) => ({
       ...m,
       label: m.value,
-      source: agentNames[m.provider],
+      source: agentName(m.provider),
       current: m.provider === recipient && m.value === (current || "default"),
     }));
   }
@@ -542,7 +661,7 @@ export function ProjectComposer({
   // Values offered after a composer command, for the current agent.
   function commandOptions(command: RelayCommand): CommandOption[] | undefined {
     if (command === "provider")
-      return (["codex", "claude", "message"] as const).map((value) => ({
+      return ([...agentProviders, "message"] as const).map((value) => ({
         value,
         label: value,
         description:
@@ -550,7 +669,9 @@ export function ProjectComposer({
             ? `Codex · ${codexModels.find((m) => m.id === selected?.model)?.name ?? (selected?.model || "default model")}`
             : value === "claude"
               ? `Claude · ${claudeListed ? claudeListed.name + (claude.contextWindow ? " · 200k" : "") : claude.model || "default model"}`
-              : "Send without running an agent",
+              : value === "message"
+                ? "Send without running an agent"
+                : `${agentName(value)} · ${agentPicks.catalogs[value]?.models?.find((m) => m.id === pickOf(value).model)?.name ?? (pickOf(value).model || "default model")}`,
         current: value === recipient,
       }));
     if (command === "model") return modelOptions();
@@ -559,15 +680,23 @@ export function ProjectComposer({
       const efforts =
         recipient === "claude"
           ? claudeModelEfforts
-          : selected
-            ? reasoningEffortsFor(selected.model, codexModels)
-            : [];
+          : isPickAgent(recipient)
+            ? pickOf(recipient).efforts
+            : selected
+              ? reasoningEffortsFor(selected.model, codexModels)
+              : [];
       const effort =
         recipient === "claude"
           ? claude.reasoningEffort
-          : selected?.reasoningEffort;
+          : isPickAgent(recipient)
+            ? pickOf(recipient).reasoningEffort
+            : selected?.reasoningEffort;
       const runs =
-        recipient === "claude" ? claudeDefaultLevel : codexDefaultLevel;
+        recipient === "claude"
+          ? claudeDefaultLevel
+          : recipient === "codex"
+            ? codexDefaultLevel
+            : "";
       return [
         {
           value: "default",
@@ -591,7 +720,7 @@ export function ProjectComposer({
         current: m.value === runtimeMode,
       }));
     if (command === "plan") return toggles(interactionMode === "plan");
-    if (command === "fast" && recipient === "codex")
+    if (command === "fast" && agents[recipient].fast)
       return toggles(!!selected?.fast);
     return undefined;
   }
@@ -604,10 +733,11 @@ export function ProjectComposer({
     if (!composerCommands.includes(command)) return onCommand(command, args);
     const value = args.toLowerCase();
     if (command === "provider") {
-      const next = (["codex", "claude", "message"] as const).find(
+      const next = ([...agentProviders, "message"] as const).find(
         (p) => p === value,
       );
-      if (!next) return "Choose one of: codex, claude, message.";
+      if (!next)
+        return `Choose one of: ${[...agentProviders, "message"].join(", ")}.`;
       setProvider(next);
       dropMention();
       return true;
@@ -630,12 +760,12 @@ export function ProjectComposer({
       const next = option?.provider ?? recipient;
       if (model === undefined) return "Enter a valid model ID.";
       if (next === "message")
-        return "Choose Codex or Claude before changing agent settings.";
+        return "Choose an agent before changing agent settings.";
       selectModel(next, model);
       return true;
     }
     if (recipient === "message")
-      return "Choose Codex or Claude before changing agent settings.";
+      return "Choose an agent before changing agent settings.";
     if (
       args &&
       ["plan", "fast"].includes(command) &&
@@ -651,6 +781,8 @@ export function ProjectComposer({
           .join(", ")}.`;
       const reasoningEffort = reasoningEffortSchema.parse(effort);
       if (recipient === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
+      else if (isPickAgent(recipient))
+        setPickEffort(recipient, reasoningEffort);
       else if (selected) setChoice({ ...selected, reasoningEffort });
       return true;
     }
@@ -669,7 +801,11 @@ export function ProjectComposer({
       if (!plan) setUltraplan(false);
       return true;
     }
-    if (recipient !== "codex") return "Fast mode is only available for Codex.";
+    if (!agents[recipient].fast)
+      return `Fast mode is only available for ${agentProviders
+        .filter((p) => agents[p].fast)
+        .map(agentName)
+        .join(" and ")}.`;
     if (selected) setChoice({ ...selected, fast: toggle(args, selected.fast) });
     return true;
   }
@@ -857,6 +993,7 @@ export function ProjectComposer({
           provider: picked,
           choice,
           claude,
+          picks,
           runtimeMode,
           interactionMode,
           ultraplan: false,
@@ -882,7 +1019,7 @@ export function ProjectComposer({
               : `@${recipient} ${body}`.trim(),
           choice: choiceFor(recipient)!,
           ...contextFor(recipient),
-          provider: recipient === "claude" ? "claude" : "codex",
+          provider: recipient === "message" ? "codex" : recipient,
           runtimeMode,
           interactionMode: councilOn ? "plan" : interactionMode,
           ...(councilOn ? { ultraplan: council } : {}),
@@ -1117,10 +1254,8 @@ export function ProjectComposer({
         <div className="composer-tools">
           <ComposerModelPicker
             provider={recipient}
-            choice={selected}
-            claudeModel={claudeListed?.id ?? claude.model}
-            claudeModels={claudeModels}
-            codexModels={codexModels}
+            ready={!!selected}
+            catalogs={catalogs}
             onOpen={openModelPicker}
             openSignal={pickModel}
             onSelect={selectModel}
@@ -1157,6 +1292,26 @@ export function ProjectComposer({
                 <ComposerTraitsMenu
                   label="Reasoning effort and context window"
                   sections={claudeTraits}
+                />
+              </>
+            )}
+          {isPickAgent(recipient) &&
+            selected &&
+            pickOf(recipient).efforts.length > 0 && (
+              <>
+                <span className="composer-divider" aria-hidden />
+                <ComposerSelect<ReasoningEffort>
+                  label="Reasoning effort"
+                  value={pickOf(recipient).reasoningEffort}
+                  options={[
+                    { value: "", label: "Default" },
+                    ...pickOf(recipient).efforts.map((value) => ({
+                      value,
+                      label: effortLabels[value],
+                    })),
+                  ]}
+                  onChange={(effort) => setPickEffort(recipient, effort)}
+                  heading={{ label: "Reasoning", hint: effortKeysLabel }}
                 />
               </>
             )}
@@ -1202,8 +1357,8 @@ export function ProjectComposer({
             <Paperclip size={15} />
           </button>
           <span className="spacer" />
-          {showUsage && recipient !== "message" && (
-            <UsageRing provider={recipient} />
+          {showUsage && recipient !== "message" && agents[recipient].usage && (
+            <UsageRing provider={recipient as HelperProvider} />
           )}
           {running && (
             <button

@@ -3,6 +3,7 @@ import { choiceLabel } from "../../shared/settings";
 import { Layers3, RotateCcw, Pause, Play } from "lucide-react";
 import { Spinner } from "./ui";
 import { isAnalyzing, type TriageState } from "../../shared/triage";
+import { agentName } from "../../shared/agents";
 interface Props {
   state?: TriageState | null;
   busy: boolean;
@@ -38,7 +39,7 @@ export function TriageControls({
           ...settings.data.grouping,
           provider: settings.data.groupingProvider,
         };
-  const agent = activeChoice?.provider === "claude" ? "Claude" : "Codex";
+  const agent = agentName(activeChoice?.provider ?? "codex");
   const running = isAnalyzing(state),
     result = state?.result,
     resume = state?.resume;

@@ -29,7 +29,7 @@ import {
 import type { Account } from "../../shared/types";
 import {
   aiSettingsSchema,
-  type AgentProvider,
+  type HelperProvider,
   type AISettings,
 } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -80,6 +80,11 @@ import {
   DevOpsProjectSettings,
 } from "./DevOpsSettings";
 import "./settings.css";
+import {
+  agentName,
+  agentProviders,
+  type AgentProvider,
+} from "../../shared/agents";
 
 export type SettingsCategory = CategoryId;
 type CategoryId =
@@ -288,9 +293,9 @@ function AgentSelect({
         container={container}
         value={value}
         icon={<ProviderIcon provider={value} />}
-        options={(["codex", "claude"] as const).map((provider) => ({
+        options={agentProviders.map((provider) => ({
           value: provider,
-          label: provider === "codex" ? "Codex" : "Claude",
+          label: agentName(provider),
           icon: <ProviderIcon provider={provider} />,
         }))}
         onChange={onChange}
@@ -497,7 +502,7 @@ export function Settings({
   const change = (
     kind: "grouping" | "questions",
     value: AISettings["questions"],
-    provider: AgentProvider,
+    provider: HelperProvider,
   ) => {
     if (values) {
       setDraft({ ...values, [kind]: value, [`${kind}Provider`]: provider });

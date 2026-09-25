@@ -22,7 +22,7 @@ import {
 import type { Pull } from "../../shared/types";
 import type { QuestionTarget } from "../../shared/questions";
 import {
-  agentMention,
+  roomMention,
   parseRoomInvitation,
   type RoomMessage,
   type RoomState,
@@ -139,7 +139,7 @@ export function RoomPanel({
   });
   const connection = state.data?.connection,
     room = state.data?.room;
-  const mention = agentMention(draft.text);
+  const mention = roomMention(draft.text);
   const parent = messages.find((m) => m.id === draft.parentId);
   useEffect(() => {
     void api

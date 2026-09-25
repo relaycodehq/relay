@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelChoice } from "../shared/settings";
 import { pastedTexts, replacePastedTexts } from "../shared/pasted-texts";
-import { runCodex } from "./rooms/codex";
-import { runClaude } from "./rooms/claude";
+import { agentRuntime } from "./agents";
+import type { AgentProvider } from "../shared/agents";
+import { agentMentionPattern } from "../shared/agents";
 
 // T3 Code accepts a harness-provided name first and generates one separately
 // when the provider never supplies it. Keep the title task independent of the
@@ -14,7 +15,7 @@ export function promptTitle(body: string): string {
   const text = replacePastedTexts(body, () => "\n\n");
   // A message that is only a paste is named after the paste's first line.
   return (
-    text.replace(/^@(codex|claude)\s*/i, "").trim() ||
+    text.replace(agentMentionPattern, "").trim() ||
     (pastes[0]?.text.trimStart().split("\n", 1)[0] ?? "")
   )
     .trim()
@@ -53,7 +54,7 @@ function titleCwd() {
 export async function generateThreadTitle(input: {
   user: string;
   answer: string;
-  provider: "codex" | "claude";
+  provider: AgentProvider;
   choice: ModelChoice;
   signal: AbortSignal;
 }): Promise<string | null> {
@@ -66,9 +67,6 @@ export async function generateThreadTitle(input: {
     onText: () => {},
     purpose: "title" as const,
   };
-  const output =
-    input.provider === "codex"
-      ? await runCodex(options)
-      : await runClaude({ ...options, model: "", effort: "" });
+  const output = await agentRuntime(input.provider).run(options);
   return generatedTitle(output);
 }

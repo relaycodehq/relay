@@ -163,6 +163,8 @@ const methods = [
   "providerUsage",
   "claudeModels",
   "codexModels",
+  "agentModels",
+  "agentDefaults",
   "claudeDefaults",
   "codexDefaults",
   "openExternal",

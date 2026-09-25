@@ -1,7 +1,8 @@
 import { agentResponseSchema } from "../shared/agent-modes";
-import { presentSkill } from "./skill-presentation";
+import { agentRuntime } from "./agents";
+import { agentProviderSchema } from "../shared/agents";
 import { projectFolderSchema } from "../shared/project-folders";
-import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
+import { codexDefaults, codexModels } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import { Ci } from "./ci";
 import { createPullRequestSchema } from "../shared/pull-request-create";
@@ -64,11 +65,7 @@ import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
 import { DevOps } from "./devops";
-import {
-  claudeDefaults,
-  listClaudeCommands,
-  listClaudeModels,
-} from "./rooms/claude-project";
+import { claudeDefaults, listClaudeModels } from "./rooms/claude-project";
 import { readProviderUsage } from "./provider-usage";
 import { keepUsageHistory } from "./usage-history";
 import { ProjectChecks } from "./checks/service";
@@ -698,11 +695,14 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "projectCommands": {
       const root = await projects.root(idSchema.parse(args[0]));
-      const provider = z.enum(["codex", "claude"]).parse(args[1]);
-      return provider === "codex"
-        ? (await codexSkills(root)).map(presentSkill)
-        : listClaudeCommands(root);
+      return agentRuntime(agentProviderSchema.parse(args[1])).commands(root);
     }
+    case "agentModels":
+      return agentRuntime(agentProviderSchema.parse(args[0])).models();
+    case "agentDefaults":
+      return agentRuntime(agentProviderSchema.parse(args[1])).defaults(
+        await projects.root(idSchema.parse(args[0])),
+      );
     case "claudeDefaults":
       return claudeDefaults(await projects.root(idSchema.parse(args[0])));
     case "codexDefaults":
