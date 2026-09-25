@@ -89,8 +89,9 @@
   padding: 9px 0 0;
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: 15px minmax(0, auto) 1fr;
-  align-items: center;
+  /* Names take what's left; statuses hug their text and wrap by word. */
+  grid-template-columns: 15px minmax(0, 1fr) fit-content(60%);
+  align-items: baseline;
   gap: 5px 7px;
 }
 /* Rows share the list's columns so the workflow names line up. */
@@ -98,6 +99,8 @@
   display: contents;
 }
 .ci-card-runs svg {
+  align-self: start;
+  margin-top: 3px;
   color: var(--ci, var(--muted));
 }
 .ci-card-runs strong {
@@ -109,6 +112,7 @@
 .ci-card-runs span {
   color: var(--muted);
   font-size: 11px;
+  overflow-wrap: normal;
 }
 .ci-card-runs li[data-state="failure"] span {
   color: var(--ci-fail);
