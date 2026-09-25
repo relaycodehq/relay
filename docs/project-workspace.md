@@ -37,3 +37,13 @@ Not implemented: automatic cloning or branch synchronization, keystroke-level co
 While an answer is running, send another message to queue it for its own turn. Queued messages run in order, retain their model/mode/attachments, and can be removed or sent now. **Send now** (the arrow on a queued message) uses Codex's native active-turn steering for text with the same model, permissions and reply context. Claude, screenshots, skill invocations and selected PR lines use separate queued turns. An unavailable or rejected steer stays visible with its explanation and pauses the queue; it is never silently retried.
 
 **Stop** interrupts the active provider, preserves partial output and pauses queued work. **Resume answer** continues the selected harness’s saved session. **Send now** on a paused message restarts pending work. The × action returns its text and attachments to the composer, preserving any existing draft. The local queue survives restarts and always reopens paused. Pending prompts, attachments and private tool/reasoning traces are not shared; messages enter the shared conversation only when sent. Queue limits are 20 messages and 8 MiB of serialized content.
+
+## Composer commands and branch pull requests
+
+Use `/openpr` (or **Create PR** beside Changes) to open the current branch’s pull request or prepare a new Gitea PR. The preview includes target branch, title, description, draft status and any required push. Creation only publishes committed changes after an explicit click; it never stages local edits or force-pushes.
+
+The composer also offers `/changes`, `/files` and `/new`. With Codex selected, enabled skills are discovered from the installed Codex app-server for the project. Type `$logical` anywhere in a message to find a matching skill, or use `/skill:name`; arrow keys and Enter/Tab select it. Selected skills are sent as native Codex skill inputs. Claude currently supports Relay’s local actions, but has no skill discovery in this menu.
+
+## Virtual project folders
+
+Use the folder icon beside **Projects** (or right-click a project) to organize it under a virtual path such as `Work/Frontend`. Other projects assigned the same path share that folder. Clear the path to return a project to the top level. This never moves the checkout on disk. Folder and project expansion states are saved independently and survive app restarts.
