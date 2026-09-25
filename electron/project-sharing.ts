@@ -4,6 +4,7 @@ import type { RoomService } from "./rooms/service";
 import type { Gitea } from "./gitea";
 import type { ProjectChat, ChatMessage, ChatSummary } from "../shared/projects";
 import { roomInvitation, parseRoomInvitation } from "../shared/rooms";
+import { redacted } from "../shared/redact-secrets";
 export type SharedPage = {
   conversation: {
     id: string;
@@ -28,11 +29,11 @@ export const publicMessage = ({
 }: ChatMessage) => ({
   id,
   role,
-  body,
+  body: redacted(body),
   status,
   created,
   provider,
-  ...(error ? { error: error.slice(0, 1000) } : {}),
+  ...(error ? { error: redacted(error).slice(0, 1000) } : {}),
   version,
   ...(parentId ? { parentId } : {}),
 });
@@ -82,7 +83,7 @@ export class ProjectSharing {
     const s = await this.session(chat);
     await s.request("/v1/conversations", "POST", {
       id: chat.id,
-      title: chat.title,
+      title: redacted(chat.title),
       scope: chat.scope,
       messages: chat.messages.map(publicMessage),
     });

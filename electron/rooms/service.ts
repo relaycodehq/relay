@@ -27,6 +27,7 @@ import {
 } from "../../shared/rooms";
 import { runCodex } from "./codex";
 import { readBounded } from "../../shared/http";
+import { redacted } from "../../shared/redact-secrets";
 
 type Context = { client: Gitea; ref: PullRef; key: string; dir?: string };
 export interface RoomDelivery {
@@ -478,7 +479,12 @@ export class RoomService {
       `/v1/rooms/${room.id}/messages`,
       connection.token,
       "POST",
-      { id: input.id, body: input.body, parentId: input.parentId, context },
+      {
+        id: input.id,
+        body: redacted(input.body),
+        parentId: input.parentId,
+        context,
+      },
     );
     if (!mention) return;
     const abort = new AbortController();
@@ -615,9 +621,9 @@ export class RoomService {
             connection.token,
             "PATCH",
             {
-              body: value.status === "running" ? "" : value.body,
+              body: value.status === "running" ? "" : redacted(value.body),
               status: value.status,
-              error: value.error,
+              error: value.error && redacted(value.error),
             },
           );
         } catch {
