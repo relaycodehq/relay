@@ -215,6 +215,8 @@ export interface ChatMessage {
   changes?: TurnFileChange[];
   /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */
   forkPoint?: ForkPoint;
+  /** Local: the turn failed because Claude's login expired or was revoked. */
+  signIn?: "claude";
   ended?: number;
   author?: string;
   authorId?: string;

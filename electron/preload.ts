@@ -52,6 +52,7 @@ const methods = [
   "restartProjectTask",
   "openTerminal",
   "writeTerminal",
+  "prefillClaudeSignIn",
   "resizeTerminal",
   "ackTerminal",
   "closeTerminal",

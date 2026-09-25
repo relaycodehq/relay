@@ -46,6 +46,7 @@ import {
   turnImages,
 } from "../../shared/projects";
 import { api } from "../lib/api";
+import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { readDraft, writeDraft } from "../lib/drafts";
 import {
@@ -285,6 +286,7 @@ const Message = memo(function Message({
   replyCount = 0,
   inlineCode,
   after,
+  onSignIn,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -306,6 +308,8 @@ const Message = memo(function Message({
   inlineCode?: (value: string) => ReactNode | undefined;
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
+  /** Offered when this turn failed on Claude's expired login. */
+  onSignIn?: () => Promise<boolean>;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -482,6 +486,7 @@ const Message = memo(function Message({
           {m.error}
         </p>
       )}
+      {onSignIn && <ClaudeSignIn onSignIn={onSignIn} />}
       {m.role === "assistant" && (
         <MessageActions
           text={text}
@@ -494,6 +499,25 @@ const Message = memo(function Message({
     </article>
   );
 });
+function ClaudeSignIn({ onSignIn }: { onSignIn: () => Promise<boolean> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="claude-sign-in">
+      <button
+        className="text-button"
+        onClick={() => void onSignIn().then((typed) => setBusy(!typed))}
+      >
+        Sign in to Claude in the terminal
+      </button>
+      {busy && (
+        <small className="muted">
+          The terminal is busy. Run <code>claude auth login</code> there once
+          it's free.
+        </small>
+      )}
+    </div>
+  );
+}
 export function ProjectChat({
   onCommand,
   project,
@@ -1244,6 +1268,14 @@ export function ProjectChat({
     chatId: chat?.id,
     worktree: worktree.data,
   };
+  const threadId = chat?.id;
+  const signInToClaude = useCallback(
+    () =>
+      threadId
+        ? prefillClaudeSignIn(project.id, threadId)
+        : Promise.resolve(false),
+    [project.id, threadId],
+  );
   const openReply = useCallback((m: ChatMessage) => {
     setRootId(replyRoot(latest.current.messages, m.id).id);
   }, []);
@@ -1629,6 +1661,11 @@ export function ProjectChat({
                   projectRoot={folder}
                   onOpenFile={openFile}
                   replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
+                  onSignIn={
+                    m.signIn && m.id === listed.at(-1)?.id
+                      ? signInToClaude
+                      : undefined
+                  }
                   {...(chat && review?.report?.messageId === m.id
                     ? {
                         inlineCode: reviewCode,

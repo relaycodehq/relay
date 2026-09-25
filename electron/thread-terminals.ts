@@ -1,4 +1,4 @@
-import { join, sep } from "node:path";
+import { basename, join, sep } from "node:path";
 import type * as NodePty from "node-pty";
 import type { TerminalEvent, TerminalOpened } from "../shared/terminals";
 import { projectTasks } from "./tasks";
@@ -27,6 +27,9 @@ interface Session {
   unacked: number;
   paused: boolean;
   exitCode?: number;
+  /** The shell's own name, to tell its prompt from a command running in it. */
+  shell: string;
+  lastOutput: number;
 }
 
 function shell(): [string, string[]] {
@@ -111,6 +114,8 @@ export class ThreadTerminals {
       pending: "",
       unacked: 0,
       paused: false,
+      shell: basename(file).toLowerCase(),
+      lastOutput: Date.now(),
     };
     this.sessions.set(key, created);
     projectTasks.trackTerminal(proc.pid, chatOf(key));
@@ -128,6 +133,30 @@ export class ThreadTerminals {
   write(key: string, data: string) {
     const session = this.sessions.get(key);
     if (session && session.exitCode === undefined) session.pty.write(data);
+  }
+
+  /**
+   * Types `text` at the shell's prompt without running it. False when a
+   * command holds the shell, which would read the text instead.
+   */
+  async prefill(key: string, text: string) {
+    const session = this.sessions.get(key);
+    if (!session) return false;
+    // A shell that just started may still be printing its prompt; typing
+    // before it's ready can land ahead of it. Wait for it to go quiet.
+    const deadline = Date.now() + 5000;
+    while (Date.now() - session.lastOutput < 300 && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    if (this.sessions.get(key) !== session || session.exitCode !== undefined)
+      return false;
+    if (
+      process.platform !== "win32" &&
+      session.pty.process.replace(/^-/, "").toLowerCase() !== session.shell
+    )
+      return false;
+    // Ctrl+U first clears whatever was half-typed at the prompt.
+    session.pty.write(process.platform === "win32" ? text : `\x15${text}`);
+    return true;
   }
 
   resize(key: string, cols: number, rows: number) {
@@ -181,6 +210,7 @@ export class ThreadTerminals {
   }
 
   private output(session: Session, data: string) {
+    session.lastOutput = Date.now();
     session.backlog.push(data);
     session.backlogSize += data.length;
     while (session.backlogSize > backlogLimit && session.backlog.length > 1) {

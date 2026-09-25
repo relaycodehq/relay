@@ -2340,3 +2340,8 @@ details.agent-step > .agent-step-heading:hover {
 .project-message.assistant:has(+ .side-question) > .message-actions[inert] {
   display: none;
 }
+.claude-sign-in {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}

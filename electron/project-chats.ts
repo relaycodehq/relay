@@ -46,6 +46,7 @@ import { replyRoot, turnImages } from "../shared/projects";
 import { runCodex } from "./rooms/codex";
 import type { ProjectSharing } from "./project-sharing";
 import { runClaude } from "./rooms/claude";
+import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
 import { watchAgentWorktrees } from "./agent-worktrees";
@@ -2144,6 +2145,12 @@ export class ProjectChats {
       if (abort.signal.aborted) delete message.error;
       else {
         message.error = e instanceof Error ? e.message : String(e);
+        if (e instanceof ClaudeSignedOutError) {
+          message.signIn = "claude";
+          // The running CLI keeps the rejected login; the next turn starts one
+          // that reads the new sign-in, resuming the same conversation.
+          closeClaudeSession(sessionKey);
+        }
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
         if (fork) {

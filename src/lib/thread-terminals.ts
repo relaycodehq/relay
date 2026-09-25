@@ -136,6 +136,24 @@ export class ThreadTerminal {
     }
   }
 
+  /** Settles once the shell runs: false if it failed to start or took too long. */
+  running() {
+    return new Promise<boolean>((resolve) => {
+      const check = () => {
+        if (this.status === "running") done(true);
+        else if (this.error) done(false);
+      };
+      const done = (value: boolean) => {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(value);
+      };
+      const timer = window.setTimeout(() => done(false), 10_000);
+      const unsubscribe = this.subscribe(check);
+      check();
+    });
+  }
+
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);
@@ -206,6 +224,20 @@ export function terminalFor(projectId: string, chatId: string | null) {
     terminals.set(key, terminal);
   }
   return terminal;
+}
+
+/**
+ * Opens the thread's terminal with Claude's sign-in command typed at the
+ * prompt, for the user to run. False when a command holds the shell.
+ */
+export async function prefillClaudeSignIn(projectId: string, chatId: string) {
+  const terminal = terminalFor(projectId, chatId);
+  terminal.focusOnShow = true;
+  setTerminalOpen(terminal.key, true);
+  if (!(await terminal.running())) return false;
+  const typed = await api.prefillClaudeSignIn(terminal.key).catch(() => false);
+  terminal.term.focus();
+  return typed;
 }
 
 /** The draft's terminal becomes the new thread's, open or not. */

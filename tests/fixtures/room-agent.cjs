@@ -248,6 +248,41 @@ if (args.includes("--permission-prompt-tool")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.
         setTimeout(() => finish("The background task finished."), 300);
+      } else if (text.includes("fixture signed out")) {
+        // As Claude Code ends a turn whose OAuth refresh failed.
+        emit({
+          type: "assistant",
+          uuid: "fixture-assistant",
+          session_id: "fixture-claude",
+          parent_tool_use_id: null,
+          error: "authentication_failed",
+          message: {
+            id: "fixture-message",
+            role: "assistant",
+            content: [
+              {
+                type: "text",
+                text: "Failed to authenticate: OAuth session expired and could not be refreshed",
+              },
+            ],
+            usage: { input_tokens: 0, output_tokens: 0 },
+          },
+        });
+        emit({
+          type: "result",
+          subtype: "success",
+          uuid: "fixture-result",
+          session_id: "fixture-claude",
+          is_error: true,
+          result: "",
+          duration_ms: 1,
+          duration_api_ms: 1,
+          num_turns: 1,
+          total_cost_usd: 0,
+          usage: { input_tokens: 0, output_tokens: 0 },
+          modelUsage: {},
+          permission_denials: [],
+        });
       } else finish("Claude found the same cache guard.");
     }
   });

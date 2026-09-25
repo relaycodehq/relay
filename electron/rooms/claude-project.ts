@@ -11,6 +11,7 @@ import type {
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
+import { ClaudeSignedOutError } from "./claude-sign-in";
 import type { AgentOptions } from "./codex";
 import { claudeActivity, claudeEditedPaths } from "./activity";
 import { answeredFindings, reportedFindings } from "../../shared/deep-review";
@@ -982,6 +983,8 @@ export async function runClaudeProject(
         },
       });
     let context: ContextUsage | undefined;
+    // The CLI can end a turn it couldn't authenticate as a plain error result.
+    let signedOut = false;
     let cache: PromptCache | undefined;
     // The cache is read when a request starts, not when its reply arrives.
     let request: { id: string; at: number } | undefined;
@@ -1071,6 +1074,7 @@ export async function runClaudeProject(
         report(message.compact_metadata.post_tokens ?? 0);
       }
       if (message.type === "assistant") {
+        if (message.error === "authentication_failed") signedOut = true;
         if (!message.parent_tool_use_id) {
           // The newest entry of the main conversation is where a fork continues.
           options.session?.onPoint?.(message.uuid);
@@ -1178,7 +1182,9 @@ export async function runClaudeProject(
           continue;
         steerable = false;
         if (message.is_error || message.subtype !== "success")
-          throw new Error("Claude could not complete this turn.");
+          throw signedOut
+            ? new ClaudeSignedOutError()
+            : new Error("Claude could not complete this turn.");
         const windows = Object.values(message.modelUsage ?? {})
           .map((usage) => usage.contextWindow)
           .filter((size) => size > 0);

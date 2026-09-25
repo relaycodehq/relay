@@ -22,6 +22,8 @@ export interface TerminalApi {
     fresh?: boolean,
   ): Promise<TerminalOpened>;
   writeTerminal(key: string, data: string): Promise<void>;
+  /** Types the Claude sign-in command at the shell's prompt; false when a command holds the shell. */
+  prefillClaudeSignIn(key: string): Promise<boolean>;
   resizeTerminal(key: string, cols: number, rows: number): Promise<void>;
   ackTerminal(key: string, bytes: number): Promise<void>;
   closeTerminal(key: string): Promise<void>;

@@ -7,6 +7,7 @@ import {
   stopClaudeTask,
   wakeupTime,
 } from "../../electron/rooms/claude-project";
+import { ClaudeSignedOutError } from "../../electron/rooms/claude-sign-in";
 import type { AgentActivity, ContextUsage } from "../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
@@ -131,6 +132,24 @@ it("still reports an empty answer to the prompt itself", async () => {
     result(""),
   ]);
   await expect(run()).rejects.toThrow("Claude returned an empty answer.");
+});
+
+it("tells an expired login apart from other failed turns", async () => {
+  // As the CLI ends a turn whose OAuth refresh failed.
+  const failed = (error?: string) => (uuid: string) => [
+    lifecycle(uuid, "started"),
+    {
+      ...answer(
+        "Failed to authenticate: OAuth session expired and could not be refreshed",
+      ),
+      ...(error ? { error } : {}),
+    },
+    { ...result(""), is_error: true },
+  ];
+  claude(failed("authentication_failed"));
+  await expect(run()).rejects.toBeInstanceOf(ClaudeSignedOutError);
+  claude(failed());
+  await expect(run()).rejects.toThrow("Claude could not complete this turn.");
 });
 
 it("lists the background work and wake-ups Claude leaves running", async () => {

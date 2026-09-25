@@ -100,6 +100,7 @@ import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
+import { claudeSignInCommand } from "./rooms/claude-sign-in";
 import { draftTerminalKey } from "../shared/terminals";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
@@ -812,6 +813,11 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
           .string()
           .max(1 << 20)
           .parse(args[1]),
+      );
+    case "prefillClaudeSignIn":
+      return threadTerminals.prefill(
+        terminalKeySchema.parse(args[0]),
+        await claudeSignInCommand(),
       );
     case "resizeTerminal": {
       const size = terminalSizeSchema.parse({ cols: args[1], rows: args[2] });
