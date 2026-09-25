@@ -27,6 +27,7 @@ import {
   resumeSettingsSchema,
   projectNameSchema,
 } from "../shared/projects";
+import { chatIsEmpty } from "../shared/chat-activity";
 import { LiveSync } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
 import { digest } from "./hash";
@@ -667,6 +668,16 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       });
       return result.canceled ? null : projects.add(result.filePaths[0], client);
     }
+    case "createScratch":
+      return projects.scratch(
+        join(app.getPath("userData"), "Scratchpad"),
+        (id) => projectChats.list(id).some((c) => !chatIsEmpty(c)),
+      );
+    case "scratchChats":
+      return projects
+        .scratchIds()
+        .flatMap((id) => projectChats.list(id))
+        .sort((a, b) => b.updated - a.updated);
     case "linkProject":
       return projects.link(idSchema.parse(args[0]), requireClient());
     case "triageProjectChat":

@@ -76,6 +76,7 @@ import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
+import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
 import { workItemMessage, type WorkItem } from "../../shared/devops";
 import {
@@ -1945,7 +1946,14 @@ export function ProjectChat({
           />
         ))}
 
-        {isEmpty && (
+        {isEmpty && project.scratch && (
+          <div className="thread-introduction">
+            <h1 aria-label="What should we work on in Scratchpad?">
+              What should we work on in <ScratchpadWord />?
+            </h1>
+          </div>
+        )}
+        {isEmpty && !project.scratch && (
           <div className="thread-introduction">
             <h1
               aria-label={
@@ -2080,7 +2088,9 @@ export function ProjectChat({
                       ? "Message Claude, its background work keeps going…"
                       : pending
                         ? "Message Claude now, or wait for it to check back…"
-                        : undefined
+                        : project.scratch
+                          ? "Ask anything…"
+                          : undefined
             }
             ultraplanOffered={!root && !chat?.shared && scope.kind !== "review"}
             planProvider={

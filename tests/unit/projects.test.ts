@@ -121,3 +121,34 @@ it("opens and saves files in a folder without Git", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("reuses the Scratchpad folder no thread has used before making another", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const used = new Set<string>();
+    const scratchpad = join(dir, "Scratchpad");
+
+    const first = await projects.scratch(scratchpad, (id) => used.has(id));
+    expect(first).toMatchObject({ scratch: true, plain: true });
+    expect(first.path.startsWith(scratchpad)).toBe(true);
+    expect(await projects.scratch(scratchpad, (id) => used.has(id))).toEqual(
+      first,
+    );
+
+    used.add(first.id);
+    const second = await projects.scratch(scratchpad, (id) => used.has(id));
+    expect(second.id).not.toBe(first.id);
+    expect(second.path).not.toBe(first.path);
+    expect(projects.scratchIds()).toEqual([first.id, second.id]);
+    // Its folder is where the agent works, so it exists before the first message.
+    expect(await projects.inspect(second.id)).toEqual({
+      root: second.path,
+      plain: true,
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

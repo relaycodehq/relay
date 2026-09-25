@@ -65,6 +65,8 @@ const SHELF_PAGE = 5;
 const CMD_HINT_DELAY_MS = 500;
 const PROJECT_DRAG = "application/x-relay-project";
 const GROUP_DRAG = "application/x-relay-group";
+/** Under "project-chats", so every refresh of the chat lists reaches it too. */
+const SCRATCH_CHATS = ["project-chats", "scratchpad"];
 
 type DropTarget =
   | { kind: "project"; id: string; where: "before" | "after" }
@@ -418,6 +420,7 @@ export function ProjectSidebar({
   onChat,
   onNew,
   onPickNew,
+  onNewScratch,
   onDraft,
   onAdd,
   onShared,
@@ -435,6 +438,7 @@ export function ProjectSidebar({
   onNew: (p: Project) => void;
   /** New thread in a project still to be chosen. */
   onPickNew: () => void;
+  onNewScratch: () => void;
   /** Back to a project's unsent new thread. */
   onDraft: (p: Project) => void;
   onAdd: () => void;
@@ -447,6 +451,11 @@ export function ProjectSidebar({
 }) {
   const qc = useQueryClient();
   const now = useNow();
+  // Scratchpad chats list under their own heading, never as projects.
+  const realProjects = projects.filter((p) => !p.scratch);
+  const scratchIds = new Set(
+    projects.filter((p) => p.scratch).map((p) => p.id),
+  );
   const [search, setSearch] = useState("");
   /** The query whose results are listed past the first SEARCH_RESULTS. */
   const [allResultsFor, setAllResultsFor] = useState<string>();
@@ -547,7 +556,7 @@ export function ProjectSidebar({
       before: string | null = null;
     if (target.kind === "folder") folder = target.path;
     else {
-      const others = projects.filter((p) => p.id !== id);
+      const others = realProjects.filter((p) => p.id !== id);
       const index = others.findIndex((p) => p.id === target.id);
       if (index < 0) return;
       folder = others[index].folder ?? "";
@@ -625,11 +634,19 @@ export function ProjectSidebar({
     };
   };
   const lists = useQueries({
-    queries: projects.map((p) => ({
-      queryKey: ["project-chats", p.id],
-      queryFn: () => api.projectChats(p.id),
-      refetchInterval: 5000,
-    })),
+    queries: [
+      ...realProjects.map((p) => ({
+        queryKey: ["project-chats", p.id],
+        queryFn: () => api.projectChats(p.id),
+        refetchInterval: 5000,
+      })),
+      // One list for every Scratchpad folder: there's one per chat.
+      {
+        queryKey: SCRATCH_CHATS,
+        queryFn: () => api.scratchChats(),
+        refetchInterval: 5000,
+      },
+    ],
   });
   useEffect(
     () =>
@@ -712,7 +729,8 @@ export function ProjectSidebar({
     .sort((a, b) => b.updated - a.updated);
   const unread = useSeen(chatId, all);
   const triage = async (c: ChatSummary, action: ChatTriage) => {
-    qc.setQueryData<ChatSummary[]>(["project-chats", c.projectId], (list) =>
+    // Every list holding it: its project's, and Scratchpad's for a scratch chat.
+    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
       list?.map((entry) =>
         entry.id !== c.id
           ? entry
@@ -729,7 +747,11 @@ export function ProjectSidebar({
     try {
       await api.triageProjectChat(c.id, action);
     } finally {
-      void qc.invalidateQueries({ queryKey: ["project-chats", c.projectId] });
+      void qc.invalidateQueries({
+        queryKey: scratchIds.has(c.projectId)
+          ? ["project-chats"]
+          : ["project-chats", c.projectId],
+      });
     }
   };
   const sections = chatActivitySections(all, now);
@@ -974,7 +996,7 @@ export function ProjectSidebar({
   };
 
   const groupPaths: string[] = [];
-  const tree = projectFolderTree(projects, groups);
+  const tree = projectFolderTree(realProjects, groups);
   (function collect(node: ProjectFolderNode) {
     for (const folder of node.folders) {
       groupPaths.push(folder.path);
@@ -1508,6 +1530,60 @@ export function ProjectSidebar({
     </div>
   );
 
+  const scratch = all.filter((c) => scratchIds.has(c.projectId));
+  const moreScratch = showAll.scratchpad;
+  // The open Scratchpad chat before its first message.
+  const scratchDraft = !!projectId && scratchIds.has(projectId) && !chatId;
+  const scratchpad = (
+    <section className="sb-scratchpad">
+      <div className="sb-section-heading">
+        <h2>Scratchpad</h2>
+        <IconButton
+          label="New chat  ⌘⇧N"
+          disabled={dirty}
+          onClick={onNewScratch}
+        >
+          <Plus size={14} />
+        </IconButton>
+      </div>
+      <div className="sb-thread-list flat">
+        {scratchDraft && (
+          <div className="sb-thread-row">
+            <button className="sb-thread selected" disabled>
+              <span className="sb-thread-title">New chat</span>
+            </button>
+          </div>
+        )}
+        {(moreScratch ? scratch : scratch.slice(0, THREADS_PER_PROJECT)).map(
+          (c) => threadRow(c),
+        )}
+        {!scratch.length && !scratchDraft && (
+          <button
+            className="sb-thread sb-ghost"
+            disabled={dirty}
+            onClick={onNewScratch}
+          >
+            <span className="sb-thread-title">Ask anything</span>
+          </button>
+        )}
+        {scratch.length > THREADS_PER_PROJECT && (
+          <button
+            className="sb-thread sb-ghost"
+            onClick={() =>
+              setShowAll((s) => ({ ...s, scratchpad: !moreScratch }))
+            }
+          >
+            <span className="sb-thread-title">
+              {moreScratch
+                ? "Show less"
+                : `Show ${scratch.length - THREADS_PER_PROJECT} more`}
+            </span>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+
   const threads = (
     <div className="sb-scroll">
       <nav className="sb-nav">
@@ -1516,6 +1592,7 @@ export function ProjectSidebar({
           Pull requests
         </button>
       </nav>
+      {scratchpad}
       <div
         className={`sb-section-heading ${
           drop?.kind === "folder" && drop.path === "" ? "drop-into" : ""
@@ -1536,7 +1613,7 @@ export function ProjectSidebar({
       </div>
       {groupError && <p className="sb-note error">{groupError}</p>}
       {renderFolder(tree)}
-      {!projects.length && (
+      {!realProjects.length && (
         <p className="sb-note">Add a project folder to get started.</p>
       )}
     </div>
@@ -1596,7 +1673,7 @@ export function ProjectSidebar({
           className="sb-top-button"
           aria-label="New thread"
           title="New thread  ⌘N"
-          disabled={dirty || !projects.length}
+          disabled={dirty}
           onClick={onPickNew}
         >
           <Plus size={16} />

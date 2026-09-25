@@ -32,6 +32,8 @@ export interface Project {
   added: number;
   /** Live: the folder isn't a Git repository, so it has no branches, changes or history. Never saved. */
   plain?: true;
+  /** A Scratchpad chat's own folder in Relay's data, listed under Scratchpad instead of Projects. */
+  scratch?: true;
 }
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>
@@ -532,6 +534,10 @@ export interface ProjectApi {
 
   projects(): Promise<Project[]>;
   addProject(): Promise<Project | null>;
+  /** The Scratchpad project for a new chat: the unused one, or a fresh folder. */
+  createScratch(): Promise<Project>;
+  /** Threads in every Scratchpad folder, in one list for the sidebar. */
+  scratchChats(): Promise<ChatSummary[]>;
   linkProject(id: string): Promise<Project>;
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;

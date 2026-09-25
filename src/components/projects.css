@@ -746,6 +746,87 @@
 .thread-introduction .headline-project-trigger:focus-visible {
   border-radius: 3px;
 }
+/* A Scratchpad chat's headline word, inked left to right with a pen lift
+   between "Scratch" and "pad", then a scribbled underline. Plays once. */
+@property --scratchpad-ink {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+.scratchpad-word {
+  position: relative;
+  display: inline-block;
+  margin: 0 -4px 0 -2px;
+  color: var(--accent);
+  font-family: "Bradley Hand", "Noteworthy", "Segoe Print", cursive;
+  font-size: 1.14em;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  transform: rotate(-2deg);
+}
+.scratchpad-ink {
+  display: inline-block;
+  padding: 0 4px;
+  mask-image: linear-gradient(
+    90deg,
+    #000 calc(var(--scratchpad-ink) - 12px),
+    transparent var(--scratchpad-ink)
+  );
+  animation: scratchpad-write 480ms linear 80ms both;
+}
+@keyframes scratchpad-write {
+  0% {
+    --scratchpad-ink: 0%;
+    animation-timing-function: cubic-bezier(0.3, 0.2, 0.5, 1);
+  }
+  58% {
+    --scratchpad-ink: 66%;
+  }
+  66% {
+    --scratchpad-ink: 67%;
+    animation-timing-function: cubic-bezier(0.3, 0.2, 0.5, 1);
+  }
+  100% {
+    --scratchpad-ink: calc(100% + 12px);
+  }
+}
+.scratchpad-underline {
+  position: absolute;
+  left: 4px;
+  bottom: -9px;
+  width: calc(100% - 6px);
+  height: 11px;
+  overflow: visible;
+}
+.scratchpad-underline path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: scratchpad-underline 200ms cubic-bezier(0.4, 0, 0.6, 1) 600ms
+    forwards;
+}
+@keyframes scratchpad-underline {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scratchpad-ink {
+    animation: none;
+    mask-image: none;
+  }
+  .scratchpad-underline path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
 .headline-project-positioner {
   z-index: 150;
   max-width: calc(100vw - 24px);

@@ -1,4 +1,4 @@
-import { lstat, realpath } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
@@ -217,6 +217,45 @@ export class Projects {
       }
     }
     return withKind(project);
+  }
+  /**
+   * A new Scratchpad chat's project. The one whose folder no thread has used
+   * yet comes back, so opening and leaving chats doesn't pile up folders.
+   */
+  async scratch(dir: string, used: (id: string) => boolean) {
+    const unused = this.store
+      .get()
+      .projects?.find((p) => p.scratch && !used(p.id));
+    if (unused) {
+      await mkdir(unused.path, { recursive: true });
+      return withKind(unused);
+    }
+    const d = new Date();
+    const day = [d.getMonth() + 1, d.getDate()]
+      .map((n) => String(n).padStart(2, "0"))
+      .join("-");
+    const path = join(
+      dir,
+      `${d.getFullYear()}-${day}-${randomUUID().slice(0, 6)}`,
+    );
+    await mkdir(path, { recursive: true });
+    const project: Project = {
+      id: randomUUID(),
+      path: await realpath(path),
+      name: "Scratchpad",
+      repository: null,
+      added: Date.now(),
+      scratch: true,
+    };
+    await this.store.update((s) => {
+      (s.projects ??= []).push(project);
+    });
+    return withKind(project);
+  }
+  scratchIds() {
+    return (this.store.get().projects ?? [])
+      .filter((p) => p.scratch)
+      .map((p) => p.id);
   }
   async link(id: string, client: Gitea) {
     const root = await this.root(id),

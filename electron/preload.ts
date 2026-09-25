@@ -23,6 +23,8 @@ const methods = [
   "joinProjectConversation",
   "projects",
   "addProject",
+  "createScratch",
+  "scratchChats",
   "projectIcon",
   "projectGroups",
   "createProjectGroup",

@@ -152,7 +152,11 @@ export default function ProjectShell() {
     [browseShared, setBrowseShared] = useState(false);
   const [restoredProject, setRestoredProject] = useState<string>();
   const project =
-    projects.data?.find((p) => p.id === selected) ?? projects.data?.[0];
+    projects.data?.find((p) => p.id === selected) ??
+    projects.data?.find((p) => !p.scratch) ??
+    projects.data?.[0];
+  // Scratchpad chats have their own sidebar section and never show as projects.
+  const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
   const chats = useQuery({
     queryKey: ["project-chats", project?.id],
     queryFn: () => api.projectChats(project!.id),
@@ -328,6 +332,18 @@ export default function ProjectShell() {
         e.preventDefault();
         pickNewThread();
       }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        e.shiftKey &&
+        !e.isComposing &&
+        e.key.toLowerCase() === "n" &&
+        !dirty &&
+        !document.querySelector('dialog[open], [role="dialog"]')
+      ) {
+        e.preventDefault();
+        void newScratch();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -465,9 +481,20 @@ export default function ProjectShell() {
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pickNewThread() {
     if (dirty) return;
-    const list = projects.data ?? [];
-    if (list.length === 1) openNewThread(list[0]);
-    else if (list.length) setPickingProject(true);
+    if (realProjects.length === 1) openNewThread(realProjects[0]);
+    else if (realProjects.length) setPickingProject(true);
+    else void newScratch();
+  }
+  /** ⌘⇧N: a chat about anything, in a folder of its own. */
+  async function newScratch() {
+    if (dirty) return;
+    try {
+      const p = await api.createScratch();
+      await projects.refetch();
+      openNewThread(p);
+    } catch (e) {
+      setError(e);
+    }
   }
   function openNewThread(p: Project) {
     navigate(p, undefined, true);
@@ -498,6 +525,8 @@ export default function ProjectShell() {
       return false;
     }
     if (command === "openpr") setOpenPrRequest((n) => n + 1);
+    else if ((command === "new" || command === "clear") && project?.scratch)
+      void newScratch();
     else if ((command === "new" || command === "clear") && project)
       navigate(project, undefined, true);
     else if (command === "files" || command === "changes") openCode(command);
@@ -638,7 +667,7 @@ export default function ProjectShell() {
                 }}
               />
             ) : (
-              <strong>New thread</strong>
+              <strong>{project?.scratch ? "New chat" : "New thread"}</strong>
             )}
           </div>
         )}
@@ -744,6 +773,7 @@ export default function ProjectShell() {
             }}
             onNew={(p) => navigate(p, undefined, true)}
             onPickNew={pickNewThread}
+            onNewScratch={() => void newScratch()}
             onDraft={(p) => navigate(p, undefined, "draft")}
             onAdd={() => void add()}
             onShared={(p) => {
@@ -789,6 +819,9 @@ export default function ProjectShell() {
               <FolderPlus size={16} />
               Add project folder
             </button>
+            <button className="text-button" onClick={() => void newScratch()}>
+              Or just chat in Scratchpad
+            </button>
           </main>
         ) : (
           <div className="workspace-column">
@@ -803,7 +836,7 @@ export default function ProjectShell() {
                   key={chat?.id ?? `new:${project.id}`}
                   project={project}
                   onCommand={runCommand}
-                  projects={projects.data ?? []}
+                  projects={realProjects}
                   chat={chat}
                   draftScope={draftScope}
                   viewing={codeOpen ? viewing : NO_VIEWING}
@@ -1023,7 +1056,7 @@ export default function ProjectShell() {
       )}
       {pickingProject && (
         <NewThreadPicker
-          projects={projects.data ?? []}
+          projects={realProjects}
           current={project?.id ?? null}
           onSelect={(p) => {
             setPickingProject(false);

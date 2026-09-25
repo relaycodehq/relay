@@ -310,7 +310,7 @@ export function DevOpsProjectSettings() {
   );
   const projects = useQuery({
     queryKey: ["devops-projects"],
-    queryFn: () => api.projects(),
+    queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
   });
   const v = d.values;
   if (!v || !projects.data) return <p className="setting-muted">Loading…</p>;

@@ -164,6 +164,9 @@
   padding: 0 4px 0 10px;
   margin-bottom: 2px;
 }
+.sb-scratchpad {
+  margin-bottom: 12px;
+}
 .sb h2 {
   margin: 0;
   font-size: 11.5px;
