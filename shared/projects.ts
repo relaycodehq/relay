@@ -382,6 +382,8 @@ export const projectChatSendSchema = z
     id: idSchema,
     body: z.string().trim().min(1).max(32000),
     choice: aiSettingsSchema.shape.questions,
+    /** Claude on a 200k window; left out, the CLI picks (1M on most models). */
+    contextWindow: z.literal("200k").optional(),
     provider: z.enum(["codex", "claude"]),
     runtimeMode: runtimeModeSchema,
     interactionMode: interactionModeSchema,

@@ -1,10 +1,7 @@
-import { runClaudeProject } from "./claude-project";
+import { runClaudeProject, type ClaudeRunOptions } from "./claude-project";
 import { readFile } from "node:fs/promises";
 import { findExecutable, spawnExecutable } from "../executables";
-import type { AgentOptions } from "./codex";
-export async function runClaude(
-  options: AgentOptions & { model: string; effort: string },
-): Promise<string> {
+export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   if (options.runtimeMode && options.purpose !== "title")
     return runClaudeProject(options);
   const executable = await findExecutable("claude");

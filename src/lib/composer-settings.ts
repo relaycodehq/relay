@@ -22,7 +22,11 @@ export interface ComposerSettings {
   provider: "codex" | "claude" | "message";
   /** Codex's model; unset follows the line-question setting. */
   choice?: ModelChoice;
-  claude: { model: string; reasoningEffort: ReasoningEffort };
+  claude: {
+    model: string;
+    reasoningEffort: ReasoningEffort;
+    contextWindow?: "200k";
+  };
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
   /** Plan with a council first; see shared/ultraplan. */
@@ -61,6 +65,9 @@ export function loadComposerSettings(
       reasoningEffort: claudeEfforts.includes(saved?.claude?.reasoningEffort)
         ? reasoningEffortSchema.parse(saved.claude.reasoningEffort)
         : "",
+      ...(saved?.claude?.contextWindow === "200k"
+        ? { contextWindow: "200k" as const }
+        : {}),
     },
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
@@ -72,16 +79,24 @@ export function saveComposerSettings(key: string, settings: ComposerSettings) {
   localStorage.setItem(storageKey(key), JSON.stringify(settings));
 }
 /**
- * Puts each agent's model and effort back on Default, keeping the agent and
- * modes. A new thread's pick stays with the thread it started.
+ * Puts each agent's model and effort back on Default, keeping the agent,
+ * modes and Claude's context window. A new thread's pick stays with the
+ * thread it started.
  */
 export function resetComposerModels(key: string) {
   const saved = read(key);
   if (!saved) return;
+  const settings = loadComposerSettings(key, false);
   saveComposerSettings(key, {
-    ...loadComposerSettings(key, false),
+    ...settings,
     choice: undefined,
-    claude: { model: "", reasoningEffort: "" },
+    claude: {
+      model: "",
+      reasoningEffort: "",
+      ...(settings.claude.contextWindow
+        ? { contextWindow: settings.claude.contextWindow }
+        : {}),
+    },
   });
 }
 /**
@@ -93,7 +108,7 @@ export function saveSentSettings(
   provider: ComposerSettings["provider"],
   sent: Pick<
     ProjectChatSend,
-    "provider" | "choice" | "runtimeMode" | "interactionMode"
+    "provider" | "choice" | "contextWindow" | "runtimeMode" | "interactionMode"
   >,
 ) {
   saveComposerSettings(key, {
@@ -104,6 +119,9 @@ export function saveSentSettings(
           claude: {
             model: sent.choice.model,
             reasoningEffort: sent.choice.reasoningEffort,
+            ...(sent.contextWindow
+              ? { contextWindow: sent.contextWindow }
+              : {}),
           },
         }
       : { choice: sent.choice }),

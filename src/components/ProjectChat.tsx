@@ -1019,6 +1019,7 @@ export function ProjectChat({
       | "body"
       | "provider"
       | "choice"
+      | "contextWindow"
       | "runtimeMode"
       | "interactionMode"
       | "images"
@@ -1096,7 +1097,12 @@ export function ProjectChat({
   async function askAside(
     value: Pick<
       ProjectChatSend,
-      "body" | "provider" | "choice" | "runtimeMode" | "interactionMode"
+      | "body"
+      | "provider"
+      | "choice"
+      | "contextWindow"
+      | "runtimeMode"
+      | "interactionMode"
     >,
   ) {
     if (!chat) {

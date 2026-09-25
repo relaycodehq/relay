@@ -51,6 +51,7 @@ import { useCodexModels } from "../lib/useCodexModels";
 import { useAgentDefaults } from "../lib/useAgentDefaults";
 import {
   claudeDefaultEffort,
+  claudeDefaultModel,
   claudeDefaultModelName,
   codexDefaultEffort,
   codexDefaultModelName,
@@ -143,6 +144,7 @@ export function ProjectComposer({
       ProjectChatSend,
       | "body"
       | "choice"
+      | "contextWindow"
       | "provider"
       | "runtimeMode"
       | "interactionMode"
@@ -295,8 +297,17 @@ export function ProjectComposer({
   // Claude keeps its own model and effort; Codex-only settings never reach it.
   const choiceFor = (to: string): ModelChoice | undefined =>
     selected && to === "claude"
-      ? { ...selected, ...claude, fast: false }
+      ? {
+          ...selected,
+          model: claude.model,
+          reasoningEffort: claude.reasoningEffort,
+          fast: false,
+        }
       : selected;
+  const contextFor = (to: string) =>
+    to === "claude" && claude.contextWindow
+      ? { contextWindow: claude.contextWindow }
+      : {};
   const [pickModel, setPickModel] = useState(0);
   const selectModel = useStableCallback(function selectModel(
     next: "codex" | "claude" | "message",
@@ -310,6 +321,10 @@ export function ProjectComposer({
         reasoningEffort: efforts.includes(c.reasoningEffort)
           ? c.reasoningEffort
           : "",
+        // Picking a `[1m]` model asks for 1M.
+        ...(c.contextWindow && claudeContextWindow(model) !== "1m"
+          ? { contextWindow: c.contextWindow }
+          : {}),
       }));
     }
     if (next === "codex" && selected)
@@ -323,6 +338,9 @@ export function ProjectComposer({
     defaults.refresh();
   });
   // Default says what it runs, as each agent's own settings decide.
+  const claudeRuns = claude.model
+    ? claudeListed
+    : claudeDefaultModel(defaults.claude, claudeModels);
   const claudeDefaultLevel = claudeDefaultEffort(
     defaults.claude,
     claude.model,
@@ -381,23 +399,31 @@ export function ProjectComposer({
             },
           ]
         : []),
-      ...(claudeListed?.longContext
+      ...(claudeRuns?.longContext
         ? [
             {
               label: "Context window",
-              value: claudeContextWindow(claude.model),
+              value: claude.contextWindow ?? "1m",
               options: [
                 { value: "200k", label: "200k" },
                 { value: "1m", label: "1M" },
               ],
+              // Default stays Default; a picked model also takes the `[1m]`
+              // suffix, which accounts without 1M by default still need.
               onChange: (value: string) =>
-                setClaude((c) => ({
-                  ...c,
-                  model: withClaudeContextWindow(
-                    c.model,
-                    value === "1m" ? "1m" : "200k",
-                  ),
-                })),
+                setClaude((c) =>
+                  value === "200k"
+                    ? {
+                        ...c,
+                        model: withClaudeContextWindow(c.model, "200k"),
+                        contextWindow: "200k",
+                      }
+                    : {
+                        model:
+                          c.model && withClaudeContextWindow(c.model, "1m"),
+                        reasoningEffort: c.reasoningEffort,
+                      },
+                ),
             },
           ]
         : []),
@@ -405,7 +431,7 @@ export function ProjectComposer({
     // The efforts list is rebuilt each render; its contents are what matter.
     [
       claude,
-      claudeListed?.longContext,
+      claudeRuns?.longContext,
       claudeModelEfforts.join(),
       claudeDefaultLevel,
     ],
@@ -482,7 +508,7 @@ export function ProjectComposer({
           value === "codex"
             ? `Codex · ${codexModels.find((m) => m.id === selected?.model)?.name ?? (selected?.model || "default model")}`
             : value === "claude"
-              ? `Claude · ${claudeListed ? claudeListed.name + (claudeContextWindow(claude.model) === "1m" ? " · 1M" : "") : claude.model || "default model"}`
+              ? `Claude · ${claudeListed ? claudeListed.name + (claude.contextWindow ? " · 200k" : "") : claude.model || "default model"}`
               : "Send without running an agent",
         current: value === recipient,
       }));
@@ -699,6 +725,7 @@ export function ProjectComposer({
         body: `@${to} ${body}`,
         provider: to,
         choice,
+        ...contextFor(to),
         runtimeMode,
         interactionMode: "default",
       });
@@ -721,6 +748,7 @@ export function ProjectComposer({
           body: `@${recipient} ${btw.args}`,
           provider: recipient,
           choice: choiceFor(recipient)!,
+          ...contextFor(recipient),
           runtimeMode,
           interactionMode,
         });
@@ -773,6 +801,7 @@ export function ProjectComposer({
             ? body
             : `@${recipient} ${body}`.trim(),
         choice: choiceFor(recipient)!,
+        ...contextFor(recipient),
         provider: recipient === "claude" ? "claude" : "codex",
         runtimeMode,
         interactionMode: councilOn ? "plan" : interactionMode,
@@ -820,6 +849,7 @@ export function ProjectComposer({
                   body: `@${planProvider} Implement the plan from your previous response.`,
                   provider: planProvider,
                   choice: choiceFor(planProvider)!,
+                  ...contextFor(planProvider),
                   runtimeMode,
                   interactionMode: "default",
                 });
@@ -1031,7 +1061,7 @@ export function ProjectComposer({
           )}
           {recipient === "claude" &&
             selected &&
-            (claudeModelEfforts.length > 0 || claudeListed?.longContext) && (
+            (claudeModelEfforts.length > 0 || claudeRuns?.longContext) && (
               <>
                 <span className="composer-divider" aria-hidden />
                 <ComposerTraitsMenu

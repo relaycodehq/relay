@@ -432,4 +432,14 @@ it("moves a session with background work to new settings instead of ending it", 
   // Full access needs a session launched with it: that one still restarts.
   await turn({ effort: "max", runtimeMode: "full-access" });
   expect(close).toHaveBeenCalledTimes(1);
+  // So does a 200k window: only the CLI's environment holds it there.
+  await turn({
+    effort: "max",
+    runtimeMode: "full-access",
+    contextWindow: "200k",
+  });
+  expect(close).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(query).mock.lastCall?.[0].options?.env).toMatchObject({
+    CLAUDE_CODE_DISABLE_1M_CONTEXT: "1",
+  });
 });

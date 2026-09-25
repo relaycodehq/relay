@@ -133,10 +133,16 @@ class ClaudeFrames {
     return this.queued.shift();
   }
 }
+export type ClaudeRunOptions = AgentOptions & {
+  model: string;
+  effort: string;
+  /** Claude Code gives most models 1M; only its env switch holds them to 200k. */
+  contextWindow?: "200k";
+};
 /** A turn in flight. Claude starts unprompted ones itself, e.g. when a background task ends. */
 type ClaudeTurn = { unprompted: boolean; adopted?: boolean };
 type ClaudeSession = {
-  options: AgentOptions & { model: string; effort: string };
+  options: ClaudeRunOptions;
   signature: string;
   /** Launched in full access: only then can it switch into it later. */
   skipsPermissions: boolean;
@@ -170,14 +176,12 @@ function closeSession(session: ClaudeSession) {
  * would end the background work and wake-ups it holds. False when it can't:
  * another folder, or full access for a session launched without it.
  */
-async function retune(
-  session: ClaudeSession,
-  options: AgentOptions & { model: string; effort: string },
-) {
+async function retune(session: ClaudeSession, options: ClaudeRunOptions) {
   const before = session.options;
   const mode = claudePermissionMode(options);
   if (
     options.cwd !== before.cwd ||
+    options.contextWindow !== before.contextWindow ||
     (mode === "bypassPermissions" && !session.skipsPermissions)
   )
     return false;
@@ -633,7 +637,7 @@ export async function askClaudeSide(options: {
   }
 }
 export async function runClaudeProject(
-  options: AgentOptions & { model: string; effort: string },
+  options: ClaudeRunOptions,
 ): Promise<string> {
   const executable = await findExecutable("claude");
   options.signal.throwIfAborted();
@@ -644,6 +648,7 @@ export async function runClaudeProject(
     options.interactionMode,
     options.model,
     options.effort,
+    options.contextWindow,
   ]);
   let session = key ? sessions.get(key) : undefined;
   let turn: ClaudeTurn;
@@ -753,6 +758,9 @@ export async function runClaudeProject(
         strictMcpConfig: true,
         mcpServers: {},
         extraArgs: chromeArgs,
+        ...(options.contextWindow === "200k"
+          ? { env: { ...process.env, CLAUDE_CODE_DISABLE_1M_CONTEXT: "1" } }
+          : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.effort
           ? { effort: options.effort as NonNullable<Options["effort"]> }

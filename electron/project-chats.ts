@@ -1101,6 +1101,7 @@ export class ProjectChats {
       next.input.runtimeMode !== prior.runtimeMode ||
       next.input.interactionMode !== prior.interactionMode ||
       JSON.stringify(next.input.choice) !== JSON.stringify(prior.choice) ||
+      next.input.contextWindow !== prior.contextWindow ||
       next.input.images?.length ||
       next.input.selection ||
       /(?:^|\s)(?:\$|\/skill:)/.test(mention.question) ||
@@ -1516,20 +1517,23 @@ export class ProjectChats {
     parentId?: string,
   ): ProjectChatSend {
     const previous = chat.lastInput;
+    const same =
+      previous &&
+      (agentMention(previous.body)?.provider ?? previous.provider) === provider;
     return {
       id: randomUUID(),
       body: `@${provider}`,
       provider,
       // Matching the last turn's settings keeps the live session instead of reopening it.
       // Another provider's model id would not resolve here.
-      choice:
-        previous &&
-        (agentMention(previous.body)?.provider ?? previous.provider) ===
-          provider
-          ? previous.choice
-          : provider === "claude"
-            ? { model: "", reasoningEffort: "", fast: false }
-            : this.codexChoice(),
+      choice: same
+        ? previous.choice
+        : provider === "claude"
+          ? { model: "", reasoningEffort: "", fast: false }
+          : this.codexChoice(),
+      ...(same && previous.contextWindow
+        ? { contextWindow: previous.contextWindow }
+        : {}),
       runtimeMode: previous?.runtimeMode ?? "full-access",
       interactionMode: previous?.interactionMode ?? "default",
       ...(parentId ? { parentId } : {}),
@@ -2123,7 +2127,11 @@ export class ProjectChats {
         const body =
           message.provider === "codex"
             ? await runCodex(options)
-            : await runClaude({ ...options, ...claudeArgs(input.choice) });
+            : await runClaude({
+                ...options,
+                ...claudeArgs(input.choice),
+                contextWindow: input.contextWindow,
+              });
         message.body = body;
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
