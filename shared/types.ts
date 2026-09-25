@@ -1,3 +1,4 @@
+import type { ExtensionRef, ThemeSearchPage, VsCodeTheme } from "./open-vsx";
 import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
 import type { LiveSyncApi } from "./live-sync";
@@ -339,6 +340,13 @@ export interface Api
   }): Promise<void>;
   /** Zooms the window to the interface size, on top of the user's own zoom. */
   setInterfaceScale(scale: number): Promise<void>;
+  /**
+   * A page of colour-theme extensions on Open VSX from `offset`; an empty
+   * query lists popular ones.
+   */
+  searchThemes(query: string, offset?: number): Promise<ThemeSearchPage>;
+  /** The colour themes an Open VSX extension contributes. */
+  fetchThemes(extension: ExtensionRef): Promise<VsCodeTheme[]>;
   /** Threads needing attention, shown on the app icon; 0 clears it. */
   setBadge(count: number): Promise<void>;
   parseUrl(url: string): Promise<PullRef>;

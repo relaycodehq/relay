@@ -97,6 +97,7 @@ import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
 import { claudeSignInCommand } from "./rooms/claude-sign-in";
 import { draftTerminalKey } from "../shared/terminals";
+import { fetchThemes, searchThemes } from "../shared/open-vsx";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
 import { linuxPasswordStore } from "./linux-password-store";
@@ -1751,6 +1752,21 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       contents.setZoomFactor(own * scale);
       return;
     }
+    case "searchThemes":
+      return searchThemes(
+        z.string().max(200).parse(args[0]),
+        z.number().int().min(0).max(100_000).optional().parse(args[1]),
+      );
+    case "fetchThemes":
+      return fetchThemes(
+        z
+          .object({
+            namespace: z.string(),
+            name: z.string(),
+            version: z.string(),
+          })
+          .parse(args[0]),
+      );
     case "setBadge":
       setBadge(z.number().int().min(0).max(9999).parse(args[0]));
       return;

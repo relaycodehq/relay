@@ -174,6 +174,8 @@ const methods = [
   "installUpdate",
   "applyAppearance",
   "setInterfaceScale",
+  "searchThemes",
+  "fetchThemes",
   "setBadge",
   "parseUrl",
 ] as const satisfies readonly ApiMethod[];

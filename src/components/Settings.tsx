@@ -66,6 +66,7 @@ import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ThemeCodePreview } from "./ThemeCodePreview";
+import { ThemeImportSettings } from "./ThemeImportSettings";
 import {
   TypographyAdvancedSwitch,
   TypographySettings,
@@ -619,6 +620,17 @@ export function Settings({
       block: true,
       accessory: () => <TypographyAdvancedSwitch />,
       render: () => <TypographySettings />,
+    },
+    {
+      id: "vscode-themes",
+      category: "appearance",
+      title: "VS Code themes",
+      description:
+        "Install any colour theme from Open VSX. Its themes join the light and dark lists above, code colours included.",
+      keywords:
+        "vscode vs code open vsx import install extension marketplace cursor noir",
+      block: true,
+      render: () => <ThemeImportSettings />,
     },
     {
       id: "usage-ring",

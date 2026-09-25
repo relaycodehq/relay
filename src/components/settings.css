@@ -755,6 +755,103 @@
   }
 }
 
+/* VS Code theme import. */
+.theme-import {
+  display: grid;
+  gap: 12px;
+}
+.theme-import .settings-card + .settings-card {
+  margin-top: 0;
+}
+/* Long descriptions end in an ellipsis rather than widening the row. */
+.theme-import .settings-row-text small {
+  min-width: 0;
+}
+.theme-import-description {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.theme-import-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+}
+.theme-import-variants > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* The page being replaced stays put while the next one loads. */
+.theme-import-loading .settings-row {
+  opacity: 0.55;
+}
+.theme-import-tabs {
+  justify-self: start;
+}
+.theme-import-tabs button {
+  padding: 5px 14px;
+}
+.theme-import-installed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 10px 6px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.theme-import-installed strong {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.theme-import-installed small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.theme-import-swatches {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: 50%;
+}
+.settings-screen .theme-import-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+  cursor: pointer;
+}
+.settings-screen .theme-import-swatch:hover {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 45%, transparent);
+}
+.settings-screen .theme-import-swatch.selected {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--accent);
+}
+.theme-import-caption {
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.theme-import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Typography. */
 .setting-head {
   display: flex;

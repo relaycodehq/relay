@@ -3,6 +3,7 @@
 // them; anything missing throws, so a gap shows up instead of hanging.
 import type { Api } from "../shared/types";
 import { fallbackCodexModels, type ClaudeModel } from "../shared/settings";
+import { fetchThemes, searchThemes } from "../shared/open-vsx";
 
 const claudeModels: ClaudeModel[] = [
   {
@@ -48,6 +49,9 @@ const stub: Partial<Api> = {
   setInterfaceScale: async (scale) => {
     document.documentElement.style.zoom = String(scale);
   },
+  // Open VSX allows any origin, so previews talk to the real thing.
+  searchThemes: (query, offset) => searchThemes(query, offset),
+  fetchThemes: (extension) => fetchThemes(extension),
   // No repository icons in a preview; the letter badge stands in.
   projectIcon: async () => null,
   providerUsage: async (provider) => ({

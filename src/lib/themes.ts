@@ -327,13 +327,22 @@ export function normalizeHex(value: string): string | null {
   return /^[0-9a-f]{6}$/.test(digits) ? "#" + digits : null;
 }
 
+let imported: Theme[] = [];
+
+/** Themes installed from VS Code extensions, listed after Relay's own. */
+export function setImportedThemes(list: Theme[]) {
+  imported = list;
+}
+
+export const allThemes = (): Theme[] => [...themes, ...imported];
+
 export function themeById(id: string): Theme {
-  return themes.find((t) => t.id === id) ?? themes[0];
+  return allThemes().find((t) => t.id === id) ?? themes[0];
 }
 
 /** Themes that have a palette for `kind`. */
 export function themesFor(kind: ThemeKind): Theme[] {
-  return themes.filter((t) => t[kind]);
+  return allThemes().filter((t) => t[kind]);
 }
 
 function parseChoice(kind: ThemeKind, saved: unknown): ThemeChoice {
