@@ -15,6 +15,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { decodeText } from "./working-files";
 import { digest } from "./hash";
+import { imageSides } from "./image-pair";
 import { gitEnv } from "./git";
 import type { FilePair } from "../shared/types";
 import type { TurnFileChange } from "../shared/projects";
@@ -335,9 +336,13 @@ export async function revisionDiff(
     return { name: path, contents, cacheKey: digest(contents) };
   };
   const [old, next] = await Promise.all([read(from), read(to)]);
-  return binary
-    ? { old: null, next: null, binary: true }
-    : { old, next, binary: false };
+  if (!binary) return { old, next, binary: false };
+  const images = await imageSides(
+    root,
+    { name: path, spec: `${from}:${path}` },
+    { name: path, spec: `${to}:${path}` },
+  );
+  return { old: null, next: null, binary: true, images };
 }
 
 /** Where a rollback keeps its before/after snapshots, so it can be redone. */

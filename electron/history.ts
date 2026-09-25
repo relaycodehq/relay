@@ -1,5 +1,6 @@
 import { git, gitBytes } from "./git";
 import { digest } from "./hash";
+import { imageSides } from "./image-pair";
 import { NotText, decodeText } from "./working-files";
 import { workingPathSchema } from "../shared/working-tree";
 import type { FilePair } from "../shared/types";
@@ -139,17 +140,26 @@ export async function commitDiff(
     contents: decodeText(await gitBytes(root, ["show", spec, "--"])),
     cacheKey: "",
   });
-  const oldName = change.previousPath ?? path;
+  const oldName = change.previousPath ?? path,
+    oldSpec =
+      !parent || change.status === "A" ? null : `${parent}:${oldName}`,
+    nextSpec = change.status === "D" ? null : `${commit.sha}:${path}`;
   let old: FilePair["old"], next: FilePair["next"];
   try {
-    old =
-      !parent || change.status === "A"
-        ? null
-        : await read(`${parent}:${oldName}`, oldName);
-    next =
-      change.status === "D" ? null : await read(`${commit.sha}:${path}`, path);
+    old = oldSpec ? await read(oldSpec, oldName) : null;
+    next = nextSpec ? await read(nextSpec, path) : null;
   } catch (e) {
-    if (e instanceof NotText) return { old: null, next: null, binary: true };
+    if (e instanceof NotText)
+      return {
+        old: null,
+        next: null,
+        binary: true,
+        images: await imageSides(
+          root,
+          oldSpec ? { name: oldName, spec: oldSpec } : null,
+          nextSpec ? { name: path, spec: nextSpec } : null,
+        ),
+      };
     throw e;
   }
   for (const f of [old, next]) if (f) f.cacheKey = digest(f.contents);

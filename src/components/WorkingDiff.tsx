@@ -15,6 +15,7 @@ import { useSyntaxThemes } from "../lib/appearance";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 import { useTypography } from "../lib/typography";
 import { ErrorBox, IconButton, Loading } from "./ui";
+import { ImageDiff } from "./ImageDiff";
 export interface WorkingLineTarget {
   side: Side;
   start: number;
@@ -119,6 +120,14 @@ export function WorkingDiff({
     setSelection(null);
   };
   const body = (() => {
+    if (pair.images)
+      return (
+        <ImageDiff
+          images={pair.images}
+          sideLabels={sideLabels}
+          split={split && !(width && width < 480)}
+        />
+      );
     if (pair.binary)
       return (
         <div className="empty small">

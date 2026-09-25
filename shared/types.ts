@@ -162,6 +162,8 @@ export interface FilePair {
   old: { name: string; contents: string; cacheKey: string } | null;
   next: { name: string; contents: string; cacheKey: string } | null;
   binary: boolean;
+  /** Data URLs for a binary change to an image; null where the side is absent. */
+  images?: { old: string | null; next: string | null };
 }
 export interface LocalFolder {
   path: string;

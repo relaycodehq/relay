@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { inspectRepository } from "./repository";
 import { git, gitBytes, gitEnv, redactCredentials } from "./git";
 import { digest } from "./hash";
+import { imageSides, type FileSource } from "./image-pair";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
 import { parseNumstat } from "./turn-changes";
 import {
@@ -410,38 +411,44 @@ export async function workingDiff(
     throw new Error(
       "This file has merge conflicts. Resolve them in your editor, then stage the result.",
     );
-  const fromGit = async (spec: string, name: string, absent: boolean) =>
-    absent
-      ? null
-      : {
-          name,
-          contents: decodeText(await gitBytes(root, ["show", spec])),
-          cacheKey: "",
-        };
-  const oldName = c.previousPath ?? path;
+  const staged = area === "staged",
+    oldName = c.previousPath ?? path;
+  const oldSource: FileSource | null = staged
+      ? c.index === "A" || c.index === "?"
+        ? null
+        : { name: oldName, spec: `HEAD:${oldName}` }
+      : c.index === "?" || c.index === "D"
+        ? null
+        : { name: path, spec: `:${path}` },
+    nextSource: FileSource | null = staged
+      ? c.index === "D"
+        ? null
+        : { name: path, spec: `:${path}` }
+      : c.worktree === "D"
+        ? null
+        : { name: path, disk: true };
+  const read = async (source: FileSource | null) => {
+    if (!source) return null;
+    if ("spec" in source)
+      return {
+        name: source.name,
+        contents: decodeText(await gitBytes(root, ["show", source.spec])),
+        cacheKey: "",
+      };
+    // The shared safe reader rejects symlink parents and hardlinks.
+    const value = await readWorkingFile(root, source.name);
+    return value
+      ? { name: source.name, contents: value.contents, cacheKey: value.hash }
+      : null;
+  };
   let old: FilePair["old"], next: FilePair["next"];
   try {
-    old =
-      area === "staged"
-        ? await fromGit(
-            `HEAD:${oldName}`,
-            oldName,
-            c.index === "A" || c.index === "?",
-          )
-        : await fromGit(`:${path}`, path, c.index === "?" || c.index === "D");
-    if (area === "staged")
-      next = await fromGit(`:${path}`, path, c.index === "D");
-    else if (c.worktree === "D") next = null;
-    else {
-      // The shared safe reader rejects symlink parents and hardlinks.
-      const value = await readWorkingFile(root, path);
-      next = value
-        ? { name: path, contents: value.contents, cacheKey: value.hash }
-        : null;
-    }
+    old = await read(oldSource);
+    next = await read(nextSource);
   } catch (e) {
-    if (e instanceof NotText) return { old: null, next: null, binary: true };
-    throw e;
+    if (!(e instanceof NotText)) throw e;
+    const images = await imageSides(root, oldSource, nextSource);
+    return { old: null, next: null, binary: true, images };
   }
   for (const f of [old, next]) if (f) f.cacheKey ||= digest(f.contents);
   return { old, next, binary: false };

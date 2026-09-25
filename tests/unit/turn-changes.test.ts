@@ -178,6 +178,34 @@ it("snapshots a repository without commits", async () => {
   ]);
 });
 
+it("returns both sides of a changed image so the diff can show it", async () => {
+  const png = (tag: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, tag]);
+  await writeFile(join(root, "logo.png"), png(1));
+  await writeFile(join(root, "notes.bin"), png(1));
+  git("add", ".");
+  git("commit", "-qm", "Binaries");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  await writeFile(join(root, "logo.png"), png(2));
+  await writeFile(join(root, "notes.bin"), png(2));
+  await writeFile(join(root, "new.png"), png(3));
+  await finishTurn(root, id, before!);
+
+  const dataUrl = (tag: number) =>
+    `data:image/png;base64,${png(tag).toString("base64")}`;
+  expect((await turnDiff(root, id, "logo.png")).images).toEqual({
+    old: dataUrl(1),
+    next: dataUrl(2),
+  });
+  expect((await turnDiff(root, id, "new.png")).images).toEqual({
+    old: null,
+    next: dataUrl(3),
+  });
+  const other = await turnDiff(root, id, "notes.bin");
+  expect(other.binary).toBe(true);
+  expect(other.images).toBeUndefined();
+});
+
 it("marks binary files from numstat", () => {
   expect(parseNumstat("-\t-\timg.png\0" + "3\t0\tb.ts\0")).toEqual([
     { path: "b.ts", additions: 3, deletions: 0 },

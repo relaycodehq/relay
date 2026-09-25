@@ -142,11 +142,20 @@ it("shows changed binary and oversized files as binary instead of failing", asyn
   await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 2]));
   await writeFile(join(root, "data.json"), "2".repeat(3 * 1024 * 1024));
   const binary = { old: null, next: null, binary: true };
-  for (const path of ["logo.png", "data.json"])
-    expect(await workingDiff(root, path, "unstaged")).toEqual(binary);
+  const png = (tag: number) =>
+    `data:image/png;base64,${Buffer.from([0x89, 0x50, 0, tag]).toString("base64")}`;
+  const images = { old: png(1), next: png(2) };
+  expect(await workingDiff(root, "logo.png", "unstaged")).toEqual({
+    ...binary,
+    images,
+  });
+  expect(await workingDiff(root, "data.json", "unstaged")).toEqual(binary);
   git("add", ".");
-  for (const path of ["logo.png", "data.json"])
-    expect(await workingDiff(root, path, "staged")).toEqual(binary);
+  expect(await workingDiff(root, "logo.png", "staged")).toEqual({
+    ...binary,
+    images,
+  });
+  expect(await workingDiff(root, "data.json", "staged")).toEqual(binary);
 });
 it("rejects stale state and non-fast-forward pushes without changing the working files", async () => {
   await writeFile(join(root, "code.ts"), "local\n");
