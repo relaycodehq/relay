@@ -25,7 +25,6 @@ interface State {
   version: 1;
   account?: Account;
   encryptedToken?: string;
-  credentialName?: import("./login-profile").CredentialName;
   folders: Record<string, string>;
   progress: Record<string, Progress>;
   workspaces?: Record<string, WorkspaceState>;

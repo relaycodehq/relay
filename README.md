@@ -1,4 +1,4 @@
-> **Experimental branch: `experimental/shared-pr-rooms`.** This checkout builds **Relay** (formerly Review Relay Experimental), retaining its existing application storage and credentials. The project workspace combines local Git changes, editing, private streaming agent chats, shared conversations and PR review. Start with [the project workflow](docs/project-workspace.md), [room server setup](server/README.md), or [updating the pinned T3 streaming modules](docs/t3-streaming.md). Stable remains independent.
+> **Experimental branch: `experimental/shared-pr-rooms`.** This checkout builds **Relay** (experimental). The project workspace combines local Git changes, editing, private streaming agent chats, shared conversations and PR review. Start with [the project workflow](docs/project-workspace.md), [room server setup](server/README.md), or [updating the pinned T3 streaming modules](docs/t3-streaming.md). Stable remains independent.
 
 # Relay
 
@@ -6,9 +6,9 @@ A desktop Gitea review client for macOS and Linux. Electron + React, with actual
 
 ## Run the app
 
-- **macOS (Apple Silicon):** quit any running Relay or Review Relay Experimental, extract `release/Relay-mac-arm64.zip`, and open its `Relay.app`. You can copy it to Applications. This local build is ad-hoc signed, not Apple-notarized.
-- **Omarchy (Intel/AMD x86-64):** extract `release/Relay-Omarchy-x86_64.tar.gz`, open a terminal in the extracted folder, and run `python3 install.py` without sudo. This installs the bundled app and registers **Relay** in your app launcher; no Node, Docker or FUSE is needed. The included README covers setup, updates and removal. The installer preserves account/review data and will not overwrite unrelated installations. It requires the usual desktop libraries and enabled Linux user namespaces for Chromium's sandbox.
-- **Linux (x86-64):** make `release/Relay-0.1.0.AppImage` executable and launch it. `release/review-relay-0.1.0.tar.gz` is also provided. A desktop session and Electron's standard GTK/NSS/GBM libraries are required. AppImage may require your distribution's FUSE compatibility package. Do not disable the Chromium sandbox to work around setup problems.
+- **macOS (Apple Silicon):** quit any running Relay, extract `release/Relay-mac-arm64.zip`, and open its `Relay.app`. You can copy it to Applications. This local build is ad-hoc signed, not Apple-notarized.
+- **Omarchy (Intel/AMD x86-64):** extract `release/Relay-<version>-omarchy-x86_64.tar.gz`, open a terminal in the extracted folder, and run `python3 install.py` without sudo. This installs the bundled app and registers **Relay** in your app launcher; no Node, Docker or FUSE is needed. The included README covers setup, updates and removal. The installer preserves account/review data and will not overwrite unrelated installations. It requires the usual desktop libraries and enabled Linux user namespaces for Chromium's sandbox.
+- **Linux (x86-64):** make `release/Relay-0.1.0.AppImage` executable and launch it. `release/Relay-0.1.0-linux-x64.tar.gz` is also provided. A desktop session and Electron's standard GTK/NSS/GBM libraries are required. AppImage may require your distribution's FUSE compatibility package. Do not disable the Chromium sandbox to work around setup problems.
 
 The Linux package was cross-built; Linux runtime verification is still outstanding. See `VERIFICATION.md` for exactly what was tested.
 
@@ -35,7 +35,7 @@ The app reopens your last unfinished PR and selected file after a reload or full
 - **Finish review** submits comments, approval, or requested changes to Gitea. Replies and resolve/reopen act on existing server comments. The Conversation tab contains PR discussion and review history.
 - Viewed marks and drafts are tied to the merge-base/head revision. New commits invalidate viewed status and block stale draft submission. Old drafts remain visible for editing/removal rather than silently attaching to a different line.
 - If you already have a pending review in Gitea, finish or discard that review there before submitting here. This avoids unexpectedly publishing comments drafted in another client.
-- **Open PR by URL** accepts regular Gitea PR links, including `/files`. Installed builds also register `reviewrelay://open?url=<URL-encoded Gitea PR URL>`.
+- **Open PR by URL** accepts regular Gitea PR links, including `/files`. Installed builds also register `relay://open?url=<URL-encoded Gitea PR URL>`.
 
 | Shortcut         | Action                     |
 | ---------------- | -------------------------- |
@@ -112,7 +112,7 @@ Diff parsing and syntax highlighting run in workers. The diff, inbox, and file l
 
 Electron still has a substantial baseline footprint. In the measured 15,000-line test, only 40 code rows were mounted and the sum of process working sets was roughly 565–634 MiB across local runs (shared pages may be counted more than once). This is a measurement of one fixture, not a general memory guarantee.
 
-Local review state is stored in Electron's userData directory as `state.json`, using serialized atomic writes and private file permissions. Back up that directory to preserve local drafts. The Relay rename deliberately retains `~/Library/Application Support/Review Relay Experimental` on macOS and `$XDG_CONFIG_HOME/Review Relay Experimental` or `~/.config/Review Relay Experimental` on Linux. The bundle ID, invitation scheme and credential namespaces also remain unchanged so existing data, links and saved logins continue to work. The token is encrypted; review text and folder paths are not encrypted. Corrupt state files are preserved and surfaced as an error.
+Local review state is stored in Electron's userData directory as `state.json`, using serialized atomic writes and private file permissions. Back up that directory to preserve local drafts. That is `~/Library/Application Support/Relay Experimental` on macOS and `$XDG_CONFIG_HOME/Relay Experimental` or `~/.config/Relay Experimental` on Linux. The token is encrypted; review text and folder paths are not encrypted. Corrupt state files are preserved and surfaced as an error.
 
 ## Develop and build
 

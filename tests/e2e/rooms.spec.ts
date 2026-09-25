@@ -288,7 +288,7 @@ test("only the sender's agent starts, shares its completed answer, and receives 
   expect(calls.filter((c) => c.thread)).toHaveLength(1);
   const turn = calls.find((c) => c.turn).turn;
   expect(turn.effort).toBe("low");
-  expect(turn.permissions).toBe("review-relay-room");
+  expect(turn.permissions).toBe("relay-room");
   expect(turn.input[0].text).toContain("cancellation path");
   expect(turn.input[0].text).toContain("excerpt");
   expect(calls[0].cwd).toBe(await realpath(repo));
@@ -437,7 +437,7 @@ test("an invitation survives cold launch and sign-in, opens the correct PR, and 
     ).toBeVisible();
     await app.evaluate(
       ({ app }, url) =>
-        app.emit("second-instance", {}, ["review-relay", url], ""),
+        app.emit("second-instance", {}, ["relay-experimental", url], ""),
       roomAppUrl(invitation.code),
     );
     await page

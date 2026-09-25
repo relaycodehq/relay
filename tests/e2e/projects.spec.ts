@@ -277,7 +277,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(surface).toBeVisible();
     await surface.click();
     await page.keyboard.press("Meta+End");
-    await page.keyboard.type("// edited in Review Relay");
+    await page.keyboard.type("// edited in Relay");
     await expect(
       page.getByRole("button", { name: "Save locally", exact: true }),
     ).toBeEnabled();
@@ -286,7 +286,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .click();
     await expect
       .poll(() => readFile(join(repo, "example.ts"), "utf8"))
-      .toContain("edited in Review Relay");
+      .toContain("edited in Relay");
     await page
       .getByRole("button", { name: "Close files", exact: true })
       .click();
@@ -296,7 +296,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await expect(
       page.locator('.project-inline-editor [contenteditable="true"]').last(),
-    ).toContainText("edited in Review Relay");
+    ).toContainText("edited in Relay");
 
     await page
       .getByRole("button", { name: "New thread", exact: true })

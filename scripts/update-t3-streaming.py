@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 MANIFEST=ROOT/'t3-streaming.lock.json'
 def sha(data):return hashlib.sha256(data).hexdigest()
 def fetch(url):
-    with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'ReviewRelay-source-updater'}),timeout=30) as response:
+    with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Relay-source-updater'}),timeout=30) as response:
         data=response.read(4*1024*1024+1)
     if len(data)>4*1024*1024:raise ValueError('Upstream file exceeds the update limit')
     return data

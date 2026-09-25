@@ -91,11 +91,6 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { Store } from "./store";
-import {
-  loginProfile,
-  experimentalCredentialName,
-  type LoginProfile,
-} from "./login-profile";
 import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
 import { projectTasks } from "./tasks";
@@ -134,28 +129,11 @@ import {
   type ReviewComment,
   type Discussion,
 } from "../shared/types";
-// Keep the existing instance lock, storage and credential identities after the Relay rename.
-// On macOS, set the encryption namespace before Electron initializes Keychain;
-// restore the display name after ready, once that namespace is fixed.
-app.setName(experimentalCredentialName);
+// The name is also the instance lock and the OS credential namespace; set it before
+// Electron initializes Keychain, and restore the display name once ready.
+app.setName("Relay Experimental");
 if (!process.env.RELAY_TEST_DATA)
-  app.setPath(
-    "userData",
-    join(app.getPath("appData"), "Review Relay Experimental"),
-  );
-let startupLogin: LoginProfile = { credentialName: experimentalCredentialName };
-let startupLoginError: unknown;
-if (process.platform === "darwin") {
-  try {
-    startupLogin = loginProfile(
-      app.getPath("userData"),
-      join(app.getPath("appData"), "Review Relay"),
-    );
-    app.setName(startupLogin.credentialName);
-  } catch (error) {
-    startupLoginError = error;
-  }
-}
+  app.setPath("userData", join(app.getPath("appData"), "Relay Experimental"));
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
@@ -300,7 +278,7 @@ function receiveUrl(url: string) {
 function isAppUrl(url: string) {
   return (
     url.length <= 16384 &&
-    (url.startsWith("reviewrelay:") || url.startsWith(roomProtocol + ":"))
+    (url.startsWith("relay:") || url.startsWith(roomProtocol + ":"))
   );
 }
 const hostingSetup = process.argv.includes("--configure-room-hosting-stdin")
@@ -1778,16 +1756,8 @@ app
   .whenReady()
   .then(async () => {
     app.setName("Relay");
-    if (startupLoginError) throw startupLoginError;
     store = new Store(app.getPath("userData"));
     await store.load();
-    if (startupLogin.imported) {
-      await store.update((state) => {
-        state.account = startupLogin.imported!.account;
-        state.encryptedToken = startupLogin.imported!.encryptedToken;
-        state.credentialName = startupLogin.credentialName;
-      });
-    }
     projects = new Projects(store);
 
     rooms = new RoomService(

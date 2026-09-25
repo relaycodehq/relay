@@ -1,5 +1,5 @@
 {
-  "name": "review-relay-language-test-toolchain",
+  "name": "relay-language-test-toolchain",
   "private": true,
   "description": "Pinned project tooling for real Angular/TypeScript integration tests",
   "dependencies": {

@@ -3,7 +3,7 @@
   "productName": "Relay",
   "version": "0.1.0",
   "description": "A project workspace for agent chats, code changes and pull request reviews",
-  "author": "Review Relay contributors",
+  "author": "Relay contributors",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -69,7 +69,7 @@
     "vitest": "5.0.1"
   },
   "build": {
-    "appId": "dev.reviewrelay.experimental",
+    "appId": "dev.relay.experimental",
     "productName": "Relay",
     "directories": {
       "output": "release"
@@ -92,7 +92,7 @@
       {
         "name": "Relay project invitation",
         "schemes": [
-          "reviewrelay-room"
+          "relay-room"
         ]
       }
     ],

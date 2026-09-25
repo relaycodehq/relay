@@ -77,7 +77,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
       app.emit(
         "open-url",
         { preventDefault() {} },
-        "reviewrelay://open?url=" +
+        "relay://open?url=" +
           encodeURIComponent(
             "https://gitea.example.invalid/Web/web-store/pulls/7",
           ),

@@ -260,7 +260,7 @@ export async function classifyChanges(
 ): Promise<Classification> {
   modelChoiceSchema.parse(choice);
   signal.throwIfAborted();
-  const dir = await mkdtemp(join(tmpdir(), "review-relay-grouping-"));
+  const dir = await mkdtemp(join(tmpdir(), "relay-grouping-"));
   try {
     const schemaPath = join(dir, "schema.json");
     const instructionsPath = join(dir, "instructions.txt");

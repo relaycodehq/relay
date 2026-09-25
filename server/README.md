@@ -32,7 +32,7 @@ In the owner's desktop, use **Settings → Shared rooms → Manage hosting acces
 pbcopy < "$HOME/Library/Application Support/Review Relay Rooms/setup-key.txt"
 ```
 
-Create a local project chat, then choose **Share conversation → Verify access and share**. Copy its generated invitation to your colleague. The HTTPS landing page opens the installed app through `reviewrelay-room:`; the colleague selects the matching local clone and verifies their own Gitea account. Browsers may ask before opening the app. The app must be installed first.
+Create a local project chat, then choose **Share conversation → Verify access and share**. Copy its generated invitation to your colleague. The HTTPS landing page opens the installed app through `relay-room:`; the colleague selects the matching local clone and verifies their own Gitea account. Browsers may ask before opening the app. The app must be installed first.
 
 Stop/remove the login service without deleting data:
 

@@ -198,7 +198,7 @@ async function withAppServer<T>(
         async (wire) => {
           await wire.request("initialize", {
             clientInfo: {
-              name: "review_relay",
+              name: "relay",
               title: "Relay",
               version: "0.1.0",
             },

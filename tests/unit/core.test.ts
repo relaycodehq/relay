@@ -26,7 +26,7 @@ describe("URL and command boundaries", () => {
     ).toEqual(ref);
     expect(
       parsePullUrl(
-        "reviewrelay://open?url=" +
+        "relay://open?url=" +
           encodeURIComponent(root + "/Web/web-store/pulls/7"),
         root,
       ),

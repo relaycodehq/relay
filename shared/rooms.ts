@@ -173,7 +173,7 @@ export const connectRoomSchema = z
 export type ConnectRoom = z.infer<typeof connectRoomSchema>;
 export const roomHostingSchema = connectRoomSchema.omit({ projectId: true });
 export type RoomHosting = z.infer<typeof roomHostingSchema>;
-export const roomProtocol = "reviewrelay-room";
+export const roomProtocol = "relay-room";
 const invitationTargetSchema = z
   .object({
     project: projectSchema.extend({

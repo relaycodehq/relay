@@ -41,7 +41,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         ? []
         : [
             "-c",
-            `permissions.review-relay-room.filesystem={ ${Object.entries(
+            `permissions.relay-room.filesystem={ ${Object.entries(
               filesystem,
             )
               .map(
@@ -50,9 +50,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
               )
               .join(", ")} }`,
             "-c",
-            "permissions.review-relay-room.network.enabled=false",
+            "permissions.relay-room.network.enabled=false",
             "-c",
-            'default_permissions="review-relay-room"',
+            'default_permissions="relay-room"',
           ]),
       ...codexModelArgs(options.choice).filter(
         (_, i, a) => !(a[i] === "--model" || a[i - 1] === "--model"),
@@ -195,7 +195,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       if (!started) {
         await transport.request("initialize", {
           clientInfo: {
-            name: "review_relay",
+            name: "relay",
             title: "Relay",
             version: "0.1.0",
           },
@@ -245,7 +245,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
                   approvalsReviewer: policy.approvalsReviewer,
                 }
               : {
-                  permissions: "review-relay-room",
+                  permissions: "relay-room",
                   approvalPolicy: "never",
                 }),
             ephemeral: !options.session,
@@ -259,7 +259,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         );
         if (
           !policy &&
-          started.activePermissionProfile?.id !== "review-relay-room"
+          started.activePermissionProfile?.id !== "relay-room"
         )
           throw new Error(
             "Your Codex CLI did not apply this session’s permissions. Update Codex CLI before asking here.",
@@ -324,7 +324,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
                 },
               },
             }
-          : { approvalPolicy: "never", permissions: "review-relay-room" }),
+          : { approvalPolicy: "never", permissions: "relay-room" }),
       });
       turnId = turn.turn.id;
       options.session?.onPoint?.(turnId);

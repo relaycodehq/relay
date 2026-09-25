@@ -213,7 +213,7 @@ test("restores the PR, late-page file and filters across reload/restart; explici
     // An explicitly opened link wins over the saved PR and is consumed once.
     await app!.close();
     await launch(
-      "reviewrelay://open?url=" +
+      "relay://open?url=" +
         encodeURIComponent(fixture.serverUrl + "/Web/web-store/pulls/20"),
     );
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#20");
@@ -230,7 +230,7 @@ test("restores the PR, late-page file and filters across reload/restart; explici
       ({ app }, url) => {
         app.emit("open-url", { preventDefault() {} }, url);
       },
-      "reviewrelay://open?url=" +
+      "relay://open?url=" +
         encodeURIComponent(fixture.serverUrl + "/Web/web-store/pulls/20"),
     );
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#20");

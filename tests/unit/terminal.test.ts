@@ -23,7 +23,7 @@ it("uses the desktop's configured terminal with literal paths and repository cwd
   );
   vi.mocked(spawn).mockImplementation(() => spawned());
   const root = "/home/friend/project with 'quotes' $(nope)";
-  const script = "/home/friend/Review Relay/handoffs/test.command";
+  const script = "/home/friend/Relay/handoffs/test.command";
   await openLinuxTerminal(root, script);
   expect(findExecutable).toHaveBeenCalledTimes(1);
   expect(spawn).toHaveBeenCalledWith(

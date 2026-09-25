@@ -67,7 +67,7 @@ parsing in `src/vendor/t3code/markdownLinks.ts` comes from
 path-helper import is replaced locally. These are covered by the T3 MIT license
 above. The app keeps private commentary and tool work out of shared messages.
 
-The thread-first layout and composer proportions are also informed by ChatView.tsx and chat/ComposerSurface.tsx at the streaming commit below. Review Relay owns its presentation, persistence and collaboration components.
+The thread-first layout and composer proportions are also informed by ChatView.tsx and chat/ComposerSurface.tsx at the streaming commit below. Relay owns its presentation, persistence and collaboration components.
 
 Thread titles adapt the provider-name event handling in `CodexAdapter.ts` and
 `ProviderRuntimeIngestion.ts`, plus the separate fallback generation in
