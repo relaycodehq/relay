@@ -3,6 +3,7 @@ import { join, delimiter, dirname, extname } from "node:path";
 import { homedir } from "node:os";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
+import { pathReady } from "./shell-path";
 
 const windows = process.platform === "win32";
 
@@ -12,6 +13,7 @@ function searchPaths() {
     ...(process.env.PATH ?? "").split(delimiter),
     join(home, ".bun/bin"),
     join(home, ".local/bin"),
+    join(home, ".opencode/bin"),
     ...(windows
       ? [
           process.env.APPDATA && join(process.env.APPDATA, "npm"),
@@ -37,6 +39,7 @@ async function unwrapShim(path: string) {
 }
 
 export async function findExecutable(name: string) {
+  await pathReady();
   const extensions = windows ? [".exe", ".cmd", ".bat", ""] : [""];
   for (const dir of searchPaths()) {
     for (const extension of extensions) {

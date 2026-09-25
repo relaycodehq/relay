@@ -100,6 +100,7 @@ import { draftTerminalKey } from "../shared/terminals";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
 import { linuxPasswordStore } from "./linux-password-store";
+import { pathReady } from "./shell-path";
 import { registerAppImage } from "./linux-desktop-entry";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
@@ -141,6 +142,9 @@ if (
   const store = linuxPasswordStore(process.env);
   if (store) app.commandLine.appendSwitch("password-store", store);
 }
+// Started this early, the login shell has usually answered before the first
+// CLI lookup waits for it.
+void pathReady();
 let rooms: RoomService;
 let devops: DevOps;
 let projects: Projects;
