@@ -398,10 +398,12 @@ export function listClaudeModels(): Promise<ClaudeModel[]> {
  * A running session answers without starting another process.
  */
 export async function readClaudeUsage(): Promise<SDKControlGetUsageResponse | null> {
-  const live = sessions.values().next().value;
+  const live = [...sessions.values()].at(-1);
   if (live) {
     try {
-      return await usageFrom(live.stream, 5000);
+      const usage = await usageFrom(live.stream, 5000);
+      // Sessions left running for hours stop reporting the plan's limits.
+      if (!usage || usage.rate_limits_available) return usage;
     } catch {
       // Closing or stuck behind its turn; a fresh probe still answers.
     }
