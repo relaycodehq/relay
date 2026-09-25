@@ -1461,9 +1461,14 @@ export function ProjectChat({
     // height for the real one, and images and code load late. Stay pinned,
     // or keep the message the reader came back to where it was: the ones
     // around it only take their real heights a frame after it's placed.
-    const observer = new ResizeObserver(() => {
+    // At fractional zoom the column's height wobbles by a fraction of a pixel
+    // as the reader scrolls; re-pinning on that holds them at the bottom.
+    let height = 0;
+    const observer = new ResizeObserver(([entry]) => {
       const el = scroll.current;
-      if (!el) return;
+      const next = entry!.borderBoxSize[0]!.blockSize;
+      if (!el || Math.abs(next - height) < 1) return;
+      height = next;
       if (follow.current) el.scrollTop = el.scrollHeight;
       else if (returning.current && scrollToPlace(el, returning.current))
         placed.current = el.scrollTop;
