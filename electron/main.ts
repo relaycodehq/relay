@@ -103,6 +103,7 @@ import { threadTerminals } from "./thread-terminals";
 import { draftTerminalKey } from "../shared/terminals";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
+import { linuxPasswordStore } from "./linux-password-store";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
   bodySchema,
@@ -152,6 +153,13 @@ if (process.platform === "darwin") {
   } catch (error) {
     startupLoginError = error;
   }
+}
+if (
+  process.platform === "linux" &&
+  !app.commandLine.hasSwitch("password-store")
+) {
+  const store = linuxPasswordStore(process.env);
+  if (store) app.commandLine.appendSwitch("password-store", store);
 }
 let rooms: RoomService;
 let devops: DevOps;
