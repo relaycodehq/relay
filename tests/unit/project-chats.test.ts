@@ -1957,6 +1957,20 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
   // The main turn kept running, and nothing waited behind it.
   expect(first.saved.messages[1]!.status).toBe("streaming");
   expect(first.saved.queue ?? []).toEqual([]);
+  // Claude's side question is text only: a screenshot fails loudly, not silently.
+  await expect(
+    chats.send(chat.id, {
+      ...claude("@claude what's in this?"),
+      parentId: question.id,
+      images: [
+        {
+          name: "screen.png",
+          mimeType: "image/png",
+          dataUrl: `data:image/png;base64,${tinyPng}`,
+        },
+      ],
+    }),
+  ).rejects.toThrow("can't see screenshots in a side conversation");
   await chats.send(chat.id, {
     ...claude("@claude and why?"),
     parentId: question.id,
@@ -1988,6 +2002,13 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   const question = {
     ...input("@codex which test covers the guard?"),
     side: true as const,
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png" as const,
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
   };
   await chats.send(chat.id, question);
   await vi.waitFor(
@@ -2006,6 +2027,14 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   expect(fork.thread.sandbox).toBe("read-only");
   expect(fork.thread.developerInstructions).toContain(
     "You are in a side conversation",
+  );
+  const asked = (await captured()).find((c) =>
+    c.turn?.input.some((i: { text?: string }) =>
+      i.text?.includes("which test covers"),
+    ),
+  );
+  expect(asked.turn.input).toContainEqual(
+    expect.objectContaining({ type: "localImage" }),
   );
   await chats.cancel(chat.id);
   await vi.waitFor(

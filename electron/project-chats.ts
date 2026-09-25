@@ -1770,6 +1770,12 @@ export class ProjectChats {
           ? `${agentName(provider)} is still starting on this thread. Ask again in a moment.`
           : `${agentName(provider)} hasn't worked in this thread yet. Ask it something first.`,
       );
+    const fromSession = !!agentRuntime(provider).askSide;
+    // Asking from the session takes text only; a fork gets images like any turn.
+    if (fromSession && input.images?.length)
+      throw new Error(
+        `${agentName(provider)} can't see screenshots in a side conversation. Send it in the main thread.`,
+      );
     const user: ChatMessage = {
       id: input.id,
       role: "user",
@@ -1778,6 +1784,9 @@ export class ProjectChats {
       created: Date.now(),
       provider,
       version: 1,
+      ...(input.images?.length
+        ? { images: await this.saveImages(chat.id, input.images) }
+        : {}),
       ...(root ? { parentId: root.id } : { side: true }),
     };
     const answer: ChatMessage = {
@@ -1799,7 +1808,7 @@ export class ProjectChats {
     this.emit({ chatId: chat.id, message: answer });
     const abort = new AbortController();
     const job = (
-      agentRuntime(provider).askSide
+      fromSession
         ? this.sessionAside(
             chat,
             answer,
