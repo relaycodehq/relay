@@ -333,7 +333,7 @@ export interface Api
   onUpdate(callback: (state: UpdateState) => void): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {
-    kind: "light" | "dark";
+    mode: "system" | "light" | "dark";
     background: string;
     icon: string;
   }): Promise<void>;

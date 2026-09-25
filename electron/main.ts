@@ -1715,7 +1715,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "applyAppearance": {
       const appearance = z
         .object({
-          kind: z.enum(["light", "dark"]),
+          mode: z.enum(["system", "light", "dark"]),
           background: z.string().regex(/^#[0-9a-f]{6}$/i),
           icon: z
             .string()
@@ -1725,7 +1725,9 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         .strict()
         .parse(args[0]);
       // Native chrome (vibrancy, menus, scrollbars) follows the theme's mode.
-      nativeTheme.themeSource = appearance.kind;
+      // Pinning a resolved kind in system mode would also pin the renderer's
+      // prefers-color-scheme, so it could never see the OS go dark again.
+      nativeTheme.themeSource = appearance.mode;
       win?.setBackgroundColor(appearance.background);
       const icon = nativeImage.createFromDataURL(appearance.icon);
       if (!icon.isEmpty()) {

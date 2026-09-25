@@ -33,7 +33,7 @@ async function syncNative(current: ResolvedAppearance) {
   if (!window.relay?.applyAppearance) return;
   try {
     await window.relay.applyAppearance({
-      kind: current.palette.kind,
+      mode: value.mode,
       background: current.palette.sidebar,
       icon: await relayIconPng(current.accent),
     });
