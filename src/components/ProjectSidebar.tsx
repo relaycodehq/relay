@@ -1602,10 +1602,12 @@ export function ProjectSidebar({
         onDrop={(e) => dropOn(e, { kind: "folder", path: "" })}
       >
         <h2>Projects</h2>
-        <div className="sb-row-actions">
-          <IconButton label="New group" onClick={() => startGroup("")}>
-            <FolderPlus size={13} />
-          </IconButton>
+        <div className="sb-heading-actions">
+          <div className="sb-row-actions">
+            <IconButton label="New group" onClick={() => startGroup("")}>
+              <FolderPlus size={13} />
+            </IconButton>
+          </div>
           <IconButton label="Add project" disabled={dirty} onClick={onAdd}>
             <Plus size={14} />
           </IconButton>

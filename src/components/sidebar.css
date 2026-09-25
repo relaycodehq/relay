@@ -184,6 +184,12 @@
   opacity: 0;
   transition: opacity 0.12s;
 }
+/* "Add project" stays visible as a hint that the list grows. */
+.sb-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
 .sb-section-heading:hover .sb-row-actions,
 .sb-project-row:hover .sb-row-actions,
 .sb-project-row[data-popup-open] .sb-row-actions,
