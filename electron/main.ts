@@ -104,6 +104,7 @@ import { draftTerminalKey } from "../shared/terminals";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
 import { linuxPasswordStore } from "./linux-password-store";
+import { registerAppImage } from "./linux-desktop-entry";
 import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
 import {
   bodySchema,
@@ -1878,6 +1879,13 @@ app
         { role: "windowMenu" },
       ]),
     );
+    if (app.isPackaged && process.platform === "linux" && process.env.APPIMAGE)
+      registerAppImage({
+        appImage: process.env.APPIMAGE,
+        iconSource: join(app.getAppPath(), "assets/icon.png"),
+        iconDir: app.getPath("userData"),
+        env: process.env,
+      });
     // Use a dedicated invitation scheme; stable PR links keep their existing handler.
     if (app.isPackaged) app.setAsDefaultProtocolClient(roomProtocol);
     windowReady = true;

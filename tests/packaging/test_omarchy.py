@@ -71,6 +71,14 @@ class OmarchyInstallerTests(unittest.TestCase):
             installer.uninstall(self.prefix, self.data)
         self.assertEqual((app / "important.txt").read_text(), "keep this")
 
+    def test_takes_over_the_appimage_launcher(self):
+        desktop = self.data / "applications/review-relay-experimental.desktop"
+        desktop.parent.mkdir(parents=True)
+        desktop.write_text("[Desktop Entry]\nExec=/old/Relay.AppImage\nX-ReviewRelay-AppImage=1\n")
+        self.install()
+        self.assertIn(installer.DESKTOP_MARKER, desktop.read_text().splitlines())
+        self.assertNotIn("AppImage", desktop.read_text())
+
     def test_failed_update_restores_previous_installation(self):
         self.install()
         app, binary, desktop = installer.locations(self.prefix, self.data)

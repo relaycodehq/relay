@@ -13,6 +13,8 @@ import tempfile
 # Installation identifiers stay stable so existing installs update in place.
 MARKER = "Review Relay Experimental user installation v1\n"
 DESKTOP_MARKER = "X-ReviewRelay-Experimental-Installer=1"
+# The AppImage writes the same launcher id; installing takes it over.
+APPIMAGE_MARKER = "X-ReviewRelay-AppImage=1"
 
 
 def desktop_command(path):
@@ -37,7 +39,8 @@ def locations(prefix, data_dir):
         if not binary.is_symlink() or os.readlink(binary) != str(app / "review-relay"):
             raise RuntimeError(f"An unrelated command already exists: {binary}")
     if desktop.exists() or desktop.is_symlink():
-        if desktop.is_symlink() or DESKTOP_MARKER not in desktop.read_text().splitlines():
+        lines = [] if desktop.is_symlink() else desktop.read_text().splitlines()
+        if DESKTOP_MARKER not in lines and APPIMAGE_MARKER not in lines:
             raise RuntimeError(f"An unrelated app launcher already exists: {desktop}")
     return app, binary, desktop
 
