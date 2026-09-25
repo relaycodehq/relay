@@ -1,8 +1,7 @@
 :root {
   /* Reading column shared by the thread, its composer and new-thread cards. */
   --thread-width: 1040px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   color: #303237;
   background: #f7f7f8;
   font-size: 13px;
@@ -902,8 +901,8 @@ small {
   height: 100%;
   flex: 1;
   min-height: 0;
-  --diffs-font-size: 12px;
-  --diffs-line-height: 22px;
+  --diffs-font-size: var(--code-font-size, 12px);
+  --diffs-line-height: calc(var(--code-font-size, 12px) + 10px);
   font-family: var(--font-mono);
 }
 .diff-footer {
@@ -1085,6 +1084,12 @@ small {
 .markdown pre code {
   background: transparent;
   padding: 0;
+  /* A step under diffs, as chat code always sat. */
+  font-size: calc(var(--code-font-size, 12px) - 1px);
+}
+:root[data-wrap] .markdown pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .markdown blockquote {
   border-left: 3px solid var(--border);

@@ -171,6 +171,8 @@ let win: BrowserWindow | null = null,
   store: Store,
   triage: TriageService,
   pendingUrl: string | undefined;
+/** The typography setting's share of the window zoom; ⌘+ and ⌘− add to it. */
+let interfaceScale = 1;
 let loginRestore: "idle" | "unlocking" | "failed" = "idle";
 let restoreGeneration = 0;
 let windowReady = false;
@@ -477,10 +479,13 @@ function createWindow() {
     const page = dev && !app.isPackaged ? `${dev}/` : pathToFileURL(root).href;
     if (target?.href !== page) e.preventDefault();
   });
+  // Only the font list, for the typography settings' font pickers.
   win.webContents.session.setPermissionRequestHandler(
-    (_wc, _permission, callback) => callback(false),
+    (_wc, permission, callback) => callback(permission === "local-fonts"),
   );
-  win.webContents.session.setPermissionCheckHandler(() => false);
+  win.webContents.session.setPermissionCheckHandler(
+    (_wc, permission) => permission === "local-fonts",
+  );
   win.once("ready-to-show", showWindow);
   win.webContents.on("will-prevent-unload", (event) => {
     const choice = dialog.showMessageBoxSync(win!, {
@@ -1736,6 +1741,16 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       }
       return;
     }
+    case "setInterfaceScale": {
+      const scale = z.number().min(0.5).max(2).parse(args[0]);
+      const contents = win?.webContents;
+      if (!contents) return;
+      // Keep whatever ⌘+ and ⌘− added on top of the old size.
+      const own = contents.getZoomFactor() / interfaceScale;
+      interfaceScale = scale;
+      contents.setZoomFactor(own * scale);
+      return;
+    }
     case "setBadge":
       setBadge(z.number().int().min(0).max(9999).parse(args[0]));
       return;
@@ -1868,7 +1883,12 @@ app
             { role: "reload", accelerator: "CmdOrCtrl+Shift+R" },
             { role: "toggleDevTools" },
             { type: "separator" },
-            { role: "resetZoom" },
+            {
+              // Back to the interface size from Settings, not to 100%.
+              label: "Actual Size",
+              accelerator: "CmdOrCtrl+0",
+              click: () => win?.webContents.setZoomFactor(interfaceScale),
+            },
             { role: "zoomIn" },
             { role: "zoomOut" },
             { type: "separator" },

@@ -1758,7 +1758,8 @@ details.agent-step > .agent-step-heading:hover {
   border: 0;
   background: transparent;
   outline: none;
-  font-size: 13px;
+  font-family: var(--font-prompt, inherit);
+  font-size: var(--prompt-font-size, 13px);
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

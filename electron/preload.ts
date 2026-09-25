@@ -173,6 +173,7 @@ const methods = [
   "downloadUpdate",
   "installUpdate",
   "applyAppearance",
+  "setInterfaceScale",
   "setBadge",
   "parseUrl",
 ] as const satisfies readonly ApiMethod[];

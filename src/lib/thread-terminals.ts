@@ -37,8 +37,8 @@ export class ThreadTerminal {
   ) {
     this.element.className = "thread-terminal";
     this.term = new Terminal({
-      fontFamily: monoFont(),
-      fontSize: 12,
+      fontFamily: currentFont.family || monoFont(),
+      fontSize: currentFont.size,
       lineHeight: 1.2,
       scrollback: 5000,
       cursorBlink: true,
@@ -187,6 +187,12 @@ export class ThreadTerminal {
     );
   }
 
+  setFont(family: string, size: number) {
+    this.term.options.fontFamily = family;
+    this.term.options.fontSize = size;
+    this.fitNow();
+  }
+
   private fitNow() {
     if (!this.opened || !this.element.isConnected) return;
     // A collapsed drawer measures zero; keep the last size instead.
@@ -204,6 +210,8 @@ const terminals = new Map<string, ThreadTerminal>();
 const openKeys = new Set<string>();
 const openListeners = new Set<() => void>();
 let currentTheme: ITheme | undefined;
+/** Set from the typography settings; an empty family reads --font-mono. */
+let currentFont = { family: "", size: 12 };
 
 api.onTerminal((event) => {
   const terminal = terminals.get(event.key);
@@ -274,6 +282,11 @@ export function useTerminalOpen(key: string) {
 
 function emitOpen() {
   for (const listener of openListeners) listener();
+}
+
+export function setTerminalFont(family: string, size: number) {
+  currentFont = { family, size };
+  for (const terminal of terminals.values()) terminal.setFont(family, size);
 }
 
 export function setTerminalTheme(theme: ITheme) {

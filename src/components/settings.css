@@ -348,7 +348,7 @@
   border-radius: 11px;
   background: var(--code-background);
   color: var(--code-foreground);
-  font: 12px/1.75 var(--font-mono);
+  font: var(--code-font-size, 12px) / 1.75 var(--font-mono);
   overflow: hidden;
 }
 .theme-code-side + .theme-code-side {
@@ -753,4 +753,70 @@
   .settings-nav {
     width: 180px;
   }
+}
+
+/* Typography. */
+.setting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.typography-advanced {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 400;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.settings-row-below {
+  flex: 1 0 100%;
+  min-width: 0;
+}
+.settings-row-below .theme-code {
+  margin-top: 2px;
+}
+.typography-card .settings-row-control {
+  flex-wrap: nowrap;
+}
+.font-picker .composer-control {
+  width: 180px;
+  justify-content: space-between;
+}
+.font-picker .composer-control > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.font-picker-popup {
+  width: 300px;
+}
+.typography-prompt {
+  min-height: 0;
+  max-height: none;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.typography-terminal {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-terminal, var(--font-mono));
+  font-size: var(--terminal-font-size, 12px);
+  line-height: 1.2;
+  white-space: pre;
+  overflow: hidden;
+}
+.typography-terminal-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  vertical-align: text-bottom;
 }

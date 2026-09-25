@@ -44,6 +44,10 @@ const hour = 60 * 60 * 1000;
 const stub: Partial<Api> = {
   claudeModels: async () => claudeModels,
   codexModels: async () => fallbackCodexModels,
+  // A browser tab can't zoom itself; CSS zoom stands in for the window's.
+  setInterfaceScale: async (scale) => {
+    document.documentElement.style.zoom = String(scale);
+  },
   // No repository icons in a preview; the letter badge stands in.
   projectIcon: async () => null,
   providerUsage: async (provider) => ({

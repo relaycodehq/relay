@@ -13,6 +13,7 @@ import { useFileDiff } from "../lib/useFileDiff";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { labelDiffGapControls } from "../lib/diffGapControls";
+import { useTypography } from "../lib/typography";
 import { ErrorBox, IconButton, Loading } from "./ui";
 export interface WorkingLineTarget {
   side: Side;
@@ -66,6 +67,7 @@ export function WorkingDiff({
   onLineShown?: () => void;
 }) {
   const syntaxThemes = useSyntaxThemes();
+  const { wrap } = useTypography();
   const theme = useTheme(),
     { diff, error } = useFileDiff(pair),
     [selection, setSelection] = useState<CodeViewLineSelection | null>(null),
@@ -181,7 +183,7 @@ export function WorkingDiff({
           tokenizeMaxLength: 5000,
           tokenizeMaxLineLength: 1000,
           maxLineDiffLength: 1000,
-          overflow: "scroll",
+          overflow: wrap ? "wrap" : "scroll",
           onPostRender: (node, _instance, phase) => {
             if (phase !== "unmount") labelDiffGapControls(node);
           },

@@ -16,6 +16,7 @@ import type {
 import { api } from "../lib/api";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
+import { useTypography } from "../lib/typography";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 
@@ -366,6 +367,7 @@ function SymbolPreview({
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null),
     theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
+  const { wrap } = useTypography();
   useEffect(() => {
     let current = true;
     setSource(undefined);
@@ -456,7 +458,7 @@ function SymbolPreview({
             disableFileHeader: true,
             preferredHighlighter: "shiki-js",
             useTokenTransformer: true,
-            overflow: "scroll",
+            overflow: wrap ? "wrap" : "scroll",
             tokenizeMaxLength: 5000,
             tokenizeMaxLineLength: 1000,
             onTokenClick: (token, event) => {

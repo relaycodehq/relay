@@ -56,6 +56,7 @@ import {
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
 import { useElementWidth } from "../lib/useElementWidth";
+import { useTypography } from "../lib/typography";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
 interface Props {
@@ -98,9 +99,11 @@ export function ReviewWorkspace({
     file: ChangedFile;
     target: QuestionTarget;
   } | null>(null);
+  // The typography setting picks how diffs open; the toolbar flips it.
+  const { wrap: wrapByDefault } = useTypography();
   const [tab, setTab] = useState<"files" | "conversation" | "local">("files"),
     [chosenLayout, setLayout] = useState<"split" | "unified">("split"),
-    [wrap, setWrap] = useState(false),
+    [wrap, setWrap] = useState(wrapByDefault),
     [fullContext, setFullContext] = useState(false),
     [reviewOpen, setReviewOpen] = useState(false),
     [draftsOpen, setDraftsOpen] = useState(false),

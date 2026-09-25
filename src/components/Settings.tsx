@@ -67,6 +67,10 @@ import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import {
+  TypographyAdvancedSwitch,
+  TypographySettings,
+} from "./TypographySettings";
+import {
   SettingsCard,
   SettingsFooter,
   SettingsRow,
@@ -105,7 +109,7 @@ const categories: {
   {
     id: "appearance",
     label: "Appearance",
-    description: "Theme, colour mode, accent and app icon.",
+    description: "Theme, typography, colour mode, accent and app icon.",
     icon: Palette,
   },
   {
@@ -168,6 +172,8 @@ interface Entry {
   keywords?: string;
   /** Block entries put their control under the text instead of beside it. */
   block?: boolean;
+  /** A small control beside the title, for block entries. */
+  accessory?: () => ReactNode;
   render: () => ReactNode;
 }
 
@@ -605,6 +611,16 @@ export function Settings({
       ),
     })),
     {
+      id: "typography",
+      category: "appearance",
+      title: "Typography",
+      keywords:
+        "font family typeface size text code monospace terminal interface prompt zoom smoothing wrap",
+      block: true,
+      accessory: () => <TypographyAdvancedSwitch />,
+      render: () => <TypographySettings />,
+    },
+    {
       id: "usage-ring",
       category: "appearance",
       title: "Usage limits",
@@ -946,21 +962,33 @@ export function Settings({
   const results = words.length ? entries.filter(matches) : [];
   const current = categories.find((c) => c.id === category)!;
 
-  const row = (entry: Entry) => (
-    <section
-      key={entry.id}
-      className={`setting ${entry.block ? "block" : ""}`}
-      aria-label={entry.title}
-    >
+  const row = (entry: Entry) => {
+    const text = (
       <div className="setting-text">
         <h4>
           <Highlight text={entry.title} query={query} />
         </h4>
         {entry.description && <p>{entry.description}</p>}
       </div>
-      <div className="setting-control">{entry.render()}</div>
-    </section>
-  );
+    );
+    return (
+      <section
+        key={entry.id}
+        className={`setting ${entry.block ? "block" : ""}`}
+        aria-label={entry.title}
+      >
+        {entry.accessory ? (
+          <div className="setting-head">
+            {text}
+            {entry.accessory()}
+          </div>
+        ) : (
+          text
+        )}
+        <div className="setting-control">{entry.render()}</div>
+      </section>
+    );
+  };
 
   return (
     <dialog

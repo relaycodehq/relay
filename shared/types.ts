@@ -337,6 +337,8 @@ export interface Api
     background: string;
     icon: string;
   }): Promise<void>;
+  /** Zooms the window to the interface size, on top of the user's own zoom. */
+  setInterfaceScale(scale: number): Promise<void>;
   /** Threads needing attention, shown on the app icon; 0 clears it. */
   setBadge(count: number): Promise<void>;
   parseUrl(url: string): Promise<PullRef>;
