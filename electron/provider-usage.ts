@@ -15,6 +15,7 @@ import {
   type UsageWindow,
 } from "../shared/provider-usage";
 import { readClaudeUsage } from "./rooms/claude-project";
+import { recordUsage } from "./usage-history";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -70,8 +71,9 @@ export function readProviderUsage(
       windows: [],
       message: "Couldn't read usage",
     }))
-    .then((value) => {
-      const parsed = providerUsageSchema.parse(value);
+    .then(async (value) => {
+      const activeHours = await recordUsage(value).catch(() => null);
+      const parsed = providerUsageSchema.parse({ ...value, activeHours });
       cache.set(provider, { at: Date.now(), value: parsed });
       return parsed;
     })

@@ -302,11 +302,11 @@
   color: #e36a5c;
 }
 .usage-track {
+  position: relative;
   height: 5px;
   margin: 5px 0 4px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--muted) 28%, transparent);
-  overflow: hidden;
 }
 .usage-fill {
   display: block;
@@ -942,10 +942,23 @@
   font-variant-numeric: tabular-nums;
 }
 .usage-row-track {
+  position: relative;
   height: 4px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--muted) 24%, transparent);
-  overflow: hidden;
+}
+/* Where the fill would end at an even burn to the reset; fill left of it
+   means the limit runs out early. Taller than the track so it reads on top. */
+.usage-pace-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.7;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .usage-row-fill {
   display: block;

@@ -2,6 +2,7 @@
 // Window selection and burn-rate pacing follow OpenUsage (MIT, Robin Ebers);
 // see THIRD_PARTY_NOTICES.md. Claude Code reports its own; Relay asks Codex's.
 import { z } from "zod";
+import { activeWeight, nextHour, type ActiveHours } from "./usage-history";
 
 export const SESSION_MS = 5 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,6 +18,8 @@ export const providerUsageSchema = z
     provider: z.enum(["claude", "codex"]),
     windows: z.array(usageWindowSchema).max(2),
     message: z.string().max(160).nullable(),
+    /** Learned from Relay's own readings; see usage-history. */
+    activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
   })
   .strict();
 export type UsageKind = "session" | "weekly";
@@ -27,13 +30,17 @@ export type UsageMeter = {
   kind: UsageKind;
   label: "Session" | "Weekly";
   leftPercent: number;
+  /** Percent that would be left now at an even burn to the reset, if known. */
+  paceLeftPercent: number | null;
   pace: MeterPace;
   limitLabel: string | null;
   resetLabel: string | null;
 };
 
 const FIVE_MINUTES = 5 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR = 60 * 60 * 1000;
+// Points behind the pace mark before an early run-out turns red.
+const BEHIND_HOT = 10;
 
 export function compactDuration(ms: number): string | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
@@ -46,22 +53,35 @@ export function compactDuration(ms: number): string | null {
   return `${minutes}m`;
 }
 
-function deadline(
-  prefix: "Resets" | "Limit",
-  at: number,
-  now: number,
-): string | null {
-  if (at - now <= FIVE_MINUTES) return `${prefix} soon`;
+function resetsIn(at: number, now: number): string | null {
+  if (at - now <= FIVE_MINUTES) return "Resets soon";
   const compact = compactDuration(at - now);
-  return compact ? `${prefix} in ${compact}` : null;
+  return compact ? `Resets in ${compact}` : null;
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Whole-percent meter for one usage window, including the pace warning. */
-export function presentWindow(window: UsageWindow, now: number): UsageMeter {
+/** Time that counts toward a limit's burn between two moments. */
+type Clock = (from: number, to: number) => number;
+const wallClock: Clock = (from, to) => to - from;
+
+function clockFor(window: UsageWindow, activeHours?: ActiveHours | null) {
+  // Only the week spans nights and weekends; a session is all working time.
+  if (window.kind !== "weekly" || !activeHours) return null;
+  return ((from, to) => activeWeight(activeHours, from, to) * HOUR) as Clock;
+}
+
+/**
+ * Whole-percent meter for one usage window, including the pace warning. With
+ * the hours someone usually works, the week's burn and pace only count those.
+ */
+export function presentWindow(
+  window: UsageWindow,
+  now: number,
+  activeHours?: ActiveHours | null,
+): UsageMeter {
   const used = clamp(window.usedPercent, 0, 100);
   const leftPercent = clamp(Math.round(100 - used), 0, 100);
   const label = window.kind === "session" ? "Session" : "Weekly";
@@ -71,12 +91,24 @@ export function presentWindow(window: UsageWindow, now: number): UsageMeter {
     ? "Not started"
     : window.resetsAt == null
       ? null
-      : deadline("Resets", window.resetsAt, now);
+      : resetsIn(window.resetsAt, now);
+  const active = clockFor(window, activeHours);
+  const clock = active ?? wallClock;
+  const paceLeftPercent =
+    window.resetsAt == null
+      ? null
+      : paceLeft(
+          clock,
+          window.resetsAt - window.periodMs,
+          window.resetsAt,
+          now,
+        );
   if (fresh) {
     return {
       kind: window.kind,
       label,
       leftPercent: 100,
+      paceLeftPercent: null,
       pace: "ok",
       limitLabel: null,
       resetLabel,
@@ -87,17 +119,19 @@ export function presentWindow(window: UsageWindow, now: number): UsageMeter {
       kind: window.kind,
       label,
       leftPercent: 0,
+      paceLeftPercent,
       pace: "spent",
       limitLabel: "Limit reached",
       resetLabel,
     };
   }
-  const projected = project(used, window.resetsAt, window.periodMs, now);
+  const projected = project(used, window, now, clock, active != null);
   if (projected?.status === "ahead") {
     return {
       kind: window.kind,
       label,
       leftPercent,
+      paceLeftPercent,
       pace: "ok",
       limitLabel: null,
       resetLabel,
@@ -109,21 +143,22 @@ export function presentWindow(window: UsageWindow, now: number): UsageMeter {
       kind: window.kind,
       label,
       leftPercent,
+      paceLeftPercent,
       pace: spare >= 1 ? "warn" : "hot",
       limitLabel: spare >= 1 ? `~${spare}% spare` : null,
       resetLabel,
     };
   }
   if (projected?.status === "behind") {
+    // A few points past the pace mark is one lighter afternoon, not a fire.
+    const behind = (paceLeftPercent ?? 100) - leftPercent;
     return {
       kind: window.kind,
       label,
       leftPercent,
-      pace: "hot",
-      limitLabel:
-        projected.eta == null
-          ? null
-          : deadline("Limit", now + projected.eta, now),
+      paceLeftPercent,
+      pace: behind >= BEHIND_HOT ? "hot" : "warn",
+      limitLabel: projected.eta == null ? null : outIn(projected.eta),
       resetLabel,
     };
   }
@@ -132,31 +167,46 @@ export function presentWindow(window: UsageWindow, now: number): UsageMeter {
     kind: window.kind,
     label,
     leftPercent,
+    paceLeftPercent,
     pace: percentUsed >= 90 ? "hot" : percentUsed >= 80 ? "warn" : "ok",
     limitLabel: null,
     resetLabel,
   };
 }
 
+function outIn(ms: number) {
+  if (ms <= FIVE_MINUTES) return "Out soon";
+  const compact = compactDuration(ms);
+  return compact ? `Out in ~${compact}` : null;
+}
+
+function paceLeft(clock: Clock, start: number, end: number, now: number) {
+  const total = clock(start, end);
+  if (total <= 0) return null;
+  return clamp((clock(Math.max(now, start), end) / total) * 100, 0, 100);
+}
+
 function project(
   used: number,
-  resetsAt: number | null,
-  periodMs: number,
+  window: UsageWindow,
   now: number,
+  clock: Clock,
+  learned: boolean,
 ): {
   status: "ahead" | "onTrack" | "behind";
   projected: number;
   eta: number | null;
 } | null {
+  const { resetsAt, periodMs } = window;
   if (resetsAt == null || used <= 0 || periodMs <= 0 || now >= resetsAt)
     return null;
-  const elapsed = now - (resetsAt - periodMs);
-  // Nobody burns a weekly limit around the clock; until a full day/night
-  // cycle has passed, the average is just this morning's session.
-  const minElapsed =
-    periodMs > DAY_MS ? DAY_MS : Math.max(60_000, periodMs * 0.01);
+  const start = resetsAt - periodMs;
+  const elapsed = clock(start, now);
+  // Learned hours already skip nights, so an hour of real work is enough.
+  const minElapsed = learned ? HOUR : Math.max(60_000, periodMs * 0.01);
   if (elapsed < minElapsed) return null;
-  const projected = (used / elapsed) * periodMs;
+  const rate = used / elapsed;
+  const projected = used + rate * clock(now, resetsAt);
   const status =
     used >= 100 || projected > 100
       ? "behind"
@@ -165,14 +215,37 @@ function project(
         : "onTrack";
   if (status !== "ahead" && used < 5) return null;
   if (status !== "behind") return { status, projected, eta: null };
-  const rate = projected / periodMs;
-  const eta = rate > 0 ? (100 - used) / rate : 0;
-  const remaining = resetsAt - now;
   return {
     status,
     projected,
-    eta: eta > 0 && eta < remaining ? eta : null,
+    eta: runsOutIn(used, rate, now, resetsAt, clock),
   };
+}
+
+/** Wall time until the limit is hit at this rate, if before the reset. */
+function runsOutIn(
+  used: number,
+  rate: number,
+  now: number,
+  resetsAt: number,
+  clock: Clock,
+): number | null {
+  const need = 100 - used;
+  if (rate <= 0) return null;
+  if (need <= 0) return 0;
+  // Both clocks run evenly within an hour, so solve one hour at a time.
+  let spent = 0;
+  for (let t = now; t < resetsAt;) {
+    const next = Math.min(resetsAt, nextHour(t));
+    const burn = rate * clock(t, next);
+    if (spent + burn >= need) {
+      const at = t + ((need - spent) / burn) * (next - t);
+      return Math.round((at - now) / 1000) * 1000;
+    }
+    spent += burn;
+    t = next;
+  }
+  return null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

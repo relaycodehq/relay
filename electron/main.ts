@@ -70,6 +70,7 @@ import {
   listClaudeModels,
 } from "./rooms/claude-project";
 import { readProviderUsage } from "./provider-usage";
+import { keepUsageHistory } from "./usage-history";
 import { ProjectChecks } from "./checks/service";
 import { BlameService } from "./blame";
 import { detectProject } from "./checks/detect";
@@ -1802,6 +1803,7 @@ app
       unseal,
       join(app.getPath("userData"), "devops-relevance.json"),
     );
+    keepUsageHistory(join(app.getPath("userData"), "usage-history.json"));
     projectChats = new ProjectChats(
       store,
       projects,

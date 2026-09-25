@@ -103,7 +103,7 @@ describe("provider usage windows", () => {
       resetLabel: "Resets in 1h 25m",
     });
 
-    const earlyWeek = presentWindow(
+    const weekly = presentWindow(
       {
         kind: "weekly",
         usedPercent: 16,
@@ -112,27 +112,13 @@ describe("provider usage windows", () => {
       },
       now,
     );
-    expect(earlyWeek).toMatchObject({
-      leftPercent: 84,
-      pace: "ok",
-      limitLabel: null,
-      resetLabel: "Resets in 6d 20h",
-    });
-
-    const weekly = presentWindow(
-      {
-        kind: "weekly",
-        usedPercent: 40,
-        resetsAt: now + (5 * 24 + 12) * 60 * 60 * 1000,
-        periodMs: WEEK_MS,
-      },
-      now,
-    );
     expect(weekly).toMatchObject({
-      leftPercent: 60,
+      leftPercent: 84,
+      // 164h of the 168h week still to go.
+      paceLeftPercent: expect.closeTo(97.62, 2),
       pace: "hot",
-      limitLabel: "Limit in 2d 6h",
-      resetLabel: "Resets in 5d 12h",
+      limitLabel: "Out in ~21h",
+      resetLabel: "Resets in 6d 20h",
     });
 
     expect(

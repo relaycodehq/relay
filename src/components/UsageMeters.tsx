@@ -24,13 +24,18 @@ export function UsageMeters({
       </div>
     );
   }
-  const meters = usage.windows.map((window) => presentWindow(window, now));
+  const meters = usage.windows.map((window) =>
+    presentWindow(window, now, usage.activeHours),
+  );
   return (
     <div className="usage-footer">
       <div className="usage-meters" data-count={meters.length}>
         {meters.map((meter) => {
           const detail = [
             `${meter.label}, ${meter.leftPercent}% left`,
+            meter.paceLeftPercent == null
+              ? null
+              : `${Math.round(meter.paceLeftPercent)}% on pace`,
             meter.limitLabel,
             meter.resetLabel,
           ]
@@ -60,6 +65,12 @@ export function UsageMeters({
                   className="usage-fill"
                   style={{ width: `${meter.leftPercent}%` }}
                 />
+                {meter.paceLeftPercent != null && (
+                  <span
+                    className="usage-pace-mark"
+                    style={{ left: `${meter.paceLeftPercent}%` }}
+                  />
+                )}
               </div>
               <div className="usage-meter-bottom">
                 <span>{meter.leftPercent}% left</span>

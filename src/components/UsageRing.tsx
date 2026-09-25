@@ -25,7 +25,9 @@ export function ringState(
   now: number,
 ): { meters: UsageMeter[]; pace: MeterPace; label: string } | null {
   if (!usage?.windows.length) return null;
-  const meters = usage.windows.map((window) => presentWindow(window, now));
+  const meters = usage.windows.map((window) =>
+    presentWindow(window, now, usage.activeHours),
+  );
   const pace = meters.reduce<MeterPace>(
     (worst, m) => (PACE_RANK[m.pace] > PACE_RANK[worst] ? m.pace : worst),
     "ok",
@@ -186,6 +188,13 @@ export const UsageRing = memo(function UsageRing({
   );
 });
 
+function paceText(meter: UsageMeter) {
+  const left = `${meter.leftPercent}% left`;
+  return meter.paceLeftPercent == null
+    ? left
+    : `${left}, ${Math.round(meter.paceLeftPercent)}% on pace`;
+}
+
 function UsageRow({ meter }: { meter: UsageMeter }) {
   const hot = meter.pace === "hot" || meter.pace === "spent";
   return (
@@ -204,11 +213,18 @@ function UsageRow({ meter }: { meter: UsageMeter }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={meter.leftPercent}
+        aria-valuetext={paceText(meter)}
       >
         <span
           className="usage-row-fill"
           style={{ width: `${meter.leftPercent}%` }}
         />
+        {meter.paceLeftPercent != null && (
+          <span
+            className="usage-pace-mark"
+            style={{ left: `${meter.paceLeftPercent}%` }}
+          />
+        )}
       </div>
       <div className="usage-row-bottom">
         <span>{meter.resetLabel ?? ""}</span>
