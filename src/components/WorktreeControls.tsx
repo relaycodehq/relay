@@ -12,7 +12,7 @@ const workspaces: Record<
   ChatWorkspace,
   { label: string; icon: typeof Folder }
 > = {
-  checkout: { label: "Current checkout", icon: Folder },
+  checkout: { label: "Project folder", icon: Folder },
   worktree: { label: "New worktree", icon: FolderGit2 },
 };
 
@@ -87,10 +87,10 @@ export function CheckoutControl({
     return (
       <span
         className="composer-branch-trigger workspace-trigger static"
-        title="This thread works in the project's checkout"
+        title="Edits go straight into the project folder, alongside any other thread working there"
       >
         <Folder size={13} />
-        <span>Current checkout</span>
+        <span>Project folder</span>
       </span>
     );
   const [latest] = worktrees.slice(-1);
@@ -98,7 +98,7 @@ export function CheckoutControl({
     <Menu.Root>
       <Menu.Trigger
         className="composer-branch-trigger workspace-trigger agent-worktree-trigger"
-        title={`The agent made ${worktrees.length === 1 ? "a worktree" : "worktrees"} outside the checkout: ${worktrees
+        title={`The agent made ${worktrees.length === 1 ? "a worktree" : "worktrees"} outside the project folder: ${worktrees
           .map((w) => w.path)
           .join(", ")}`}
       >
@@ -122,9 +122,10 @@ export function CheckoutControl({
             aria-label="Worktrees the agent made"
           >
             <div className="composer-menu-label agent-worktree-note">
-              Started in the current checkout. The agent made{" "}
+              Started in the project folder. The agent made{" "}
               {worktrees.length === 1 ? "this worktree" : "these worktrees"}{" "}
-              itself; edits there aren't in the checkout until it merges them.
+              itself; edits there aren't in the project folder until it merges
+              them.
             </div>
             {worktrees.map((w) => (
               <Menu.Item
@@ -176,7 +177,7 @@ export function WorktreeMenu({
         className="composer-branch-trigger workspace-trigger static"
         title={
           status?.removed
-            ? "The next message makes a new worktree from the checkout"
+            ? "The next message makes a new worktree from the project folder"
             : "Made with the first message"
         }
       >
@@ -205,7 +206,7 @@ export function WorktreeMenu({
           !running && (
             <i
               className="worktree-dot"
-              aria-label={`${files} ${files === 1 ? "file" : "files"} not in ${status.from ?? "the checkout's branch"}`}
+              aria-label={`${files} ${files === 1 ? "file" : "files"} not in ${status.from ?? "the project folder's branch"}`}
             />
           )
         )}
@@ -292,7 +293,7 @@ export function RemoveWorktreeDialog({
     <Modal title="Remove the worktree?" onClose={onCancel}>
       <p>
         {files} {files === 1 ? "file has" : "files have"} changes that aren’t in{" "}
-        {from ?? "the checkout’s branch"}. Relay keeps a snapshot, but the
+        {from ?? "the project folder’s branch"}. Relay keeps a snapshot, but the
         worktree’s folder and branch go away.
       </p>
       <div className="modal-actions">

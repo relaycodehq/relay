@@ -72,7 +72,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await page.reload();
 
     // Pick the worktree before the first message.
-    await page.getByRole("button", { name: /Current checkout/ }).click();
+    await page.getByRole("button", { name: /Project folder/ }).click();
     await page.getByRole("menuitem", { name: "New worktree" }).click();
     await expect(
       page.getByRole("button", { name: /New worktree/ }),

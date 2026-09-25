@@ -149,7 +149,7 @@ export function RunningTasks({
             const detail = [
               displayCommand(task.command),
               task.worktree &&
-                `Runs in the worktree of ${worktree?.title ?? "a thread"}, not the checkout`,
+                `Runs in the worktree of ${worktree?.title ?? "a thread"}, not the project folder`,
               task.ports.length > 1 &&
                 `Listening on ${task.ports.map((p) => `:${p}`).join(", ")}`,
               chat
