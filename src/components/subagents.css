@@ -1,0 +1,356 @@
+/* Subagents: the indicator beside the Project folder control, its card, and
+   an agent's run as a side thread. Nothing here loops: the running turn is
+   the one thing that moves. */
+
+/* An icon and a count, left of the Project folder control. */
+.thread-context-controls .subagents-chip {
+  flex: none;
+  gap: 6px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.thread-context-controls .subagents-chip ~ .composer-branch-trigger {
+  margin-left: 0;
+}
+.subagents-chip > svg {
+  color: var(--accent);
+}
+.thread-context-controls .subagents-chip[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.subagent-status {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.subagent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.subagent-done {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+
+/* The card: the agents on the left, the one pointed at on the right. */
+.subagents-card {
+  width: 590px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 40px -16px #0009;
+  font-size: 12px;
+  outline: none;
+  overflow: hidden;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+}
+.subagents-card[data-starting-style],
+.subagents-card[data-ending-style] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+.subagents-peek {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  height: 292px;
+}
+.subagents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  padding: 5px;
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+.subagents-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.subagents-card-head b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.subagents-item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.subagents-item:hover {
+  background: var(--hover);
+}
+.subagents-item[aria-current="true"] {
+  background: var(--selected);
+}
+.subagents-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subagents-time {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.subagents-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px 10px;
+}
+.subagents-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.subagents-title b {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subagents-title span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.subagents-brief {
+  display: -webkit-box;
+  flex: none;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.subagents-now {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The latest calls sit at the bottom, by the link, as new ones push in. */
+.subagents-calls {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  overflow: hidden;
+}
+.subagents-call {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 17px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.subagents-call > svg {
+  flex: none;
+}
+.subagents-call > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subagents-call > span.mono {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.subagents-call.live {
+  color: var(--text);
+}
+.subagents-open {
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px 0 0;
+}
+
+/* The run covers the conversation, which stays laid out underneath: it
+   keeps its scroll place, and hidden, it can't take focus or clicks. */
+.project-chat.agent-open {
+  position: relative;
+}
+.project-chat.agent-open > :not(.subagent-thread) {
+  visibility: hidden;
+}
+.project-chat.agent-open > :not(.subagent-thread) * {
+  animation-play-state: paused;
+}
+.subagent-thread {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.subagent-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  width: 100%;
+  max-width: calc(var(--thread-width) + 56px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.subagent-tab {
+  flex: none;
+  gap: 6px;
+  max-width: 220px;
+  padding: 7px 8px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.subagent-tab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subagent-tab:hover {
+  background: transparent;
+  color: var(--text);
+}
+.subagent-tab[aria-current="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.subagent-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 28px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.subagent-head h2 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.subagent-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.subagent-brief {
+  margin: 14px 0 0;
+  padding: 9px 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--toolbar);
+  font-size: 12px;
+}
+.subagent-brief > header {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.subagent-brief > p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.subagent-brief > p.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.subagent-brief > .text-button {
+  padding: 3px 0 0;
+  font-size: 11px;
+}
+.project-message.subagent-message {
+  padding: 16px 0 0;
+  content-visibility: visible;
+}
+.subagent-label {
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.subagent-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+.subagent-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 56px);
+  max-width: var(--thread-width);
+  box-sizing: border-box;
+  margin: 0 auto 18px;
+  padding: 9px 10px 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--toolbar);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.subagent-foot > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.subagent-foot > [role="alert"] {
+  color: light-dark(#c4323f, #f0707a);
+}
+.subagent-foot > button {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagents-card {
+    transition: none;
+  }
+}

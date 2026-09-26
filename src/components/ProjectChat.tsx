@@ -97,6 +97,9 @@ import {
 import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
+import { SubagentsIndicator } from "./Subagents";
+import { SubagentThread } from "./SubagentThread";
+import { runningBatch } from "../../shared/subagents";
 import {
   CheckoutControl,
   RemoveWorktreeDialog,
@@ -796,6 +799,26 @@ export function ProjectChat({
   // Once Claude picks its work back up, its turn shows that instead.
   const pending = !running && chat?.pending?.length ? chat.pending : undefined;
   const stopped = !running && !pending ? chat?.stopped?.items : undefined;
+  // Subagents run on after the turn that started them; ask while any might.
+  const agents = useQuery({
+    queryKey: ["project-chat-agents", chat?.id],
+    queryFn: () => api.projectChatAgents(chat!.id),
+    enabled: !!chat,
+    refetchInterval: (query) =>
+      running ||
+      pending ||
+      query.state.data?.some((a) => a.status === "running")
+        ? 1500
+        : false,
+  });
+  // A turn can send agents off and end between two polls: look again as it
+  // starts and ends, and when the thread's background work changes.
+  useEffect(() => {
+    if (chat) void agents.refetch();
+  }, [running, chat?.pending?.length]);
+  const agentBatch = runningBatch(agents.data ?? []);
+  // The agent whose run covers the conversation, as a side thread.
+  const [agentView, setAgentView] = useState<string | null>(null);
   const sendKey = useSendKey();
   const context = latestContext(shown);
   const compacting = shown.some(
@@ -1532,7 +1555,7 @@ export function ProjectChat({
   );
   return (
     <section
-      className={`project-chat ${isEmpty ? "empty-thread" : ""}`}
+      className={`project-chat ${isEmpty ? "empty-thread" : ""}${chat && agentView ? " agent-open" : ""}`}
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
@@ -2046,7 +2069,18 @@ export function ProjectChat({
             plain={project.plain}
             projectId={project.id}
             checkoutDisabled={dirty}
-            workspace={workspaceControl}
+            workspace={
+              <>
+                {agentBatch.length > 0 && (
+                  <SubagentsIndicator
+                    batch={agentBatch}
+                    projectRoot={folder}
+                    onOpen={setAgentView}
+                  />
+                )}
+                {workspaceControl}
+              </>
+            }
             branchLabel={
               worktree.data?.path && !worktree.data.removed
                 ? worktree.data.branch
@@ -2212,6 +2246,18 @@ export function ProjectChat({
             setAgentSwitch(undefined);
             agentSwitch.resolve(proceed);
           }}
+        />
+      )}
+      {chat && agentView && (
+        <SubagentThread
+          chatId={chat.id}
+          runs={agents.data ?? []}
+          openId={agentView}
+          projectRoot={folder}
+          onSelect={setAgentView}
+          onClose={() => setAgentView(null)}
+          onOpenFile={openFile}
+          onChanges={openChanges}
         />
       )}
     </section>

@@ -230,18 +230,23 @@ export function AgentTurn({
   onOpenFile,
   onChanges,
   onOpenImage,
+  open,
 }: {
   message: ChatMessage;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
   onOpenImage?: (path: string) => void;
+  /** Stays open once it ends, where the run is what the reader came for. */
+  open?: boolean;
 }) {
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
   // Open while the turn runs, like T3 Code's work log; fold back once it ends
   // unless the reader opened or closed it themselves.
-  const [toggled, setToggled] = useState<boolean>();
+  const [toggled, setToggled] = useState<boolean | undefined>(
+    open || undefined,
+  );
   const expanded = toggled ?? live;
   if (!live && !entries.length) return null;
   const root = projectRoot.replace(/\/+$/, "") + "/";
