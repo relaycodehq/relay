@@ -23,7 +23,11 @@ export function useReviewProgress(
     progress: initial.data ?? emptyProgress(),
     seq: 0,
   });
-  const [save, setSave] = useState({ identity, state: "Saved locally" });
+  const [save, setSave] = useState({
+    identity,
+    state: "Saved locally",
+    failed: false,
+  });
   if (current.current.identity !== identity)
     current.current = {
       identity,
@@ -36,7 +40,7 @@ export function useReviewProgress(
     const next = fn(current.current.progress);
     current.current.progress = next;
     qc.setQueryData(key, next);
-    setSave({ identity, state: "Saving…" });
+    setSave({ identity, state: "Saving…", failed: false });
     const seq = ++current.current.seq;
     void api
       .saveProgress(pull, next)
@@ -45,14 +49,14 @@ export function useReviewProgress(
           current.current.identity === identity &&
           seq === current.current.seq
         )
-          setSave({ identity, state: "Saved locally" });
+          setSave({ identity, state: "Saved locally", failed: false });
       })
       .catch((e) => {
         if (
           current.current.identity === identity &&
           seq === current.current.seq
         )
-          setSave({ identity, state: "Not saved — retry" });
+          setSave({ identity, state: "Not saved — retry", failed: true });
         onError(e);
       });
     return next;
@@ -62,6 +66,7 @@ export function useReviewProgress(
     initial,
     update,
     saveState: save.identity === identity ? save.state : "Saved locally",
+    saveFailed: save.identity === identity && save.failed,
     retrySave: () => update((p) => p),
   };
 }

@@ -116,7 +116,7 @@ export function ReviewWorkspace({
       body: string;
     } | null>(null),
     [expandedRead, setExpandedRead] = useState<string | null>(null);
-  const { progress, initial, update, retrySave, saveState } =
+  const { progress, initial, update, retrySave, saveState, saveFailed } =
     progressController;
   const current = useRef(progress);
   current.current = progress;
@@ -593,12 +593,10 @@ export function ReviewWorkspace({
           <footer className="diff-footer">
             <div className="footer-left">
               <button
-                className={saveState.startsWith("Not") ? "deletions" : ""}
+                className={saveFailed ? "deletions" : ""}
                 onClick={retrySave}
               >
-                <span
-                  className={`dot ${saveState.startsWith("Not") ? "red" : "green"}`}
-                />
+                <span className={`dot ${saveFailed ? "red" : "green"}`} />
                 {saveState}
               </button>
               <span>·</span>
