@@ -41,9 +41,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         ? []
         : [
             "-c",
-            `permissions.relay-room.filesystem={ ${Object.entries(
-              filesystem,
-            )
+            `permissions.relay-room.filesystem={ ${Object.entries(filesystem)
               .map(
                 ([path, access]) =>
                   `${JSON.stringify(path)}=${JSON.stringify(access)}`,
@@ -265,10 +263,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             },
           },
         );
-        if (
-          !policy &&
-          started.activePermissionProfile?.id !== "relay-room"
-        )
+        if (!policy && started.activePermissionProfile?.id !== "relay-room")
           throw new Error(
             "Your Codex CLI did not apply this session’s permissions. Update Codex CLI before asking here.",
           );

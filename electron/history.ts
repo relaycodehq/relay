@@ -163,8 +163,7 @@ export async function commitDiff(
     cacheKey: "",
   });
   const oldName = change.previousPath ?? path,
-    oldSpec =
-      !parent || change.status === "A" ? null : `${parent}:${oldName}`,
+    oldSpec = !parent || change.status === "A" ? null : `${parent}:${oldName}`,
     nextSpec = change.status === "D" ? null : `${commit.sha}:${path}`;
   let old: FilePair["old"], next: FilePair["next"];
   try {

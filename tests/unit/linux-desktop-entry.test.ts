@@ -56,8 +56,7 @@ describe("AppImage desktop entry", () => {
   it("never repoints the installer's launcher", () => {
     const { input, entry } = setup();
     mkdirSync(join(entry, ".."), { recursive: true });
-    const installed =
-      "[Desktop Entry]\nX-Relay-Experimental-Installer=1\n";
+    const installed = "[Desktop Entry]\nX-Relay-Experimental-Installer=1\n";
     writeFileSync(entry, installed);
     expect(writeAppImageEntry(input)).toBe(false);
     expect(readFileSync(entry, "utf8")).toBe(installed);

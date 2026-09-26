@@ -86,8 +86,7 @@ export function normalizeServer(input: string): string {
 }
 export function parsePullUrl(input: string, server: string) {
   let u = new URL(input);
-  if (u.protocol === "relay:")
-    u = new URL(u.searchParams.get("url") ?? "");
+  if (u.protocol === "relay:") u = new URL(u.searchParams.get("url") ?? "");
   const root = new URL(server);
   const base = root.pathname.replace(/\/$/, "");
   if (u.origin !== root.origin || !u.pathname.startsWith(`${base}/`))
