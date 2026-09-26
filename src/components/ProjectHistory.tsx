@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { GitCommitHorizontal } from "lucide-react";
 import type { CommitSummary, HistoryScope } from "../../shared/history";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { layoutGraph, type GraphRow } from "../lib/commit-graph";
 import { CommitChanges } from "./CommitChanges";
 import { ErrorBox, Loading, relativeDate } from "./ui";
@@ -35,7 +36,7 @@ export function ProjectHistory({
   const list = useRef<HTMLDivElement>(null);
   // New commits and branch switches move HEAD; the log follows it.
   const tree = useQuery({
-    queryKey: ["working-tree", "project", projectId],
+    queryKey: workingTreeKey(projectId),
     queryFn: () => api.projectWorkingTree(projectId),
     refetchInterval: 5000,
   });

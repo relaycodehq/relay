@@ -12,6 +12,7 @@ import {
   ArrowUp,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { Spinner } from "./ui";
 import type { BranchAction } from "../../shared/branches";
 import type { WorkingTree } from "../../shared/working-tree";
@@ -36,7 +37,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
     enabled: open,
     staleTime: 0,
   });
-  const treeKey = ["working-tree", "project", projectId];
+  const treeKey = workingTreeKey(projectId);
   // A branch change can touch anything shown, but it just talked to the
   // upstream (or didn't need to), so the periodic fetch can wait its turn.
   const everythingButFetch = {

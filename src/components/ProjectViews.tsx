@@ -6,6 +6,7 @@ import type { Project } from "../../shared/projects";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { PaneResizer } from "./PaneResizer";
 import { LocalChanges } from "./LocalChanges";
@@ -100,7 +101,7 @@ export function ProjectFiles({
 }) {
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
-    queryKey: ["working-tree", "project", where],
+    queryKey: workingTreeKey(where),
     queryFn: () => api.projectWorkingTree(where),
     enabled: !project.plain,
   });

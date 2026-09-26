@@ -13,6 +13,7 @@ import type { Pull } from "../../shared/types";
 import type { ChangeArea, GitAction } from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
@@ -43,7 +44,7 @@ export function LocalChanges({
 }) {
   const qc = useQueryClient(),
     key = projectId
-      ? ["working-tree", "project", projectId]
+      ? workingTreeKey(projectId)
       : ["working-tree", pull!.owner, pull!.name];
   const storageKey = projectId ? "relay-project-changes:" + projectId : null;
   const [split, setSplit] = useSplitDiff();

@@ -13,6 +13,7 @@ import {
   type PaneSlots,
 } from "./WorkspacePanes";
 import { useWorkspacePanes, type PaneId } from "../lib/workspace-panes";
+import { workingTreeKey } from "../lib/working-tree-key";
 import {
   ShareConversation,
   JoinConversation,
@@ -203,7 +204,7 @@ export default function ProjectShell() {
   // The one poller for the working tree: panes, pickers and the chat read this
   // cache. Every polling observer would run its own round of Git commands.
   const tree = useQuery({
-    queryKey: ["working-tree", "project", where],
+    queryKey: workingTreeKey(where),
     queryFn: () => api.projectWorkingTree(where),
     enabled: !!project && !legacy && !project.plain,
     refetchInterval: 3000,

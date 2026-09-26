@@ -46,6 +46,7 @@ import {
   turnImages,
 } from "../../shared/projects";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { readDraft, writeDraft } from "../lib/drafts";
@@ -610,7 +611,7 @@ export function ProjectChat({
   });
   // Refreshed by the shell's working-tree poll.
   const checkout = useQuery({
-    queryKey: ["working-tree", "project", project.id],
+    queryKey: workingTreeKey(project.id),
     queryFn: () => api.projectWorkingTree(project.id),
     enabled: !project.plain,
   });
@@ -1409,7 +1410,7 @@ export function ProjectChat({
     } finally {
       setWorktreeBusy(false);
       void worktree.refetch();
-      void qc.invalidateQueries({ queryKey: ["working-tree", "project"] });
+      void qc.invalidateQueries({ queryKey: workingTreeKey() });
       void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
     }
   }

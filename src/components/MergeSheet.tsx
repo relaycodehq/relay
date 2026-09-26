@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import type { MergeResult } from "../../shared/branch-merge";
 import { api } from "../lib/api";
+import { parseWorkspaceId } from "../../shared/workspaces";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "./ui";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
@@ -16,7 +18,7 @@ export function MergeSheet({
 }) {
   // A worktree can't switch to a branch the checkout has open, and its own
   // branch goes with the worktree.
-  const inWorktree = where.includes("/");
+  const inWorktree = !!parseWorkspaceId(where).chatId;
   const qc = useQueryClient();
   const [base, setBase] = useState<string>();
   const plan = useQuery({
@@ -37,7 +39,7 @@ export function MergeSheet({
   const refresh = () =>
     Promise.all(
       [
-        ["working-tree", "project", where],
+        workingTreeKey(where),
         ["project-branches", where],
         ["merge-plan", where],
       ].map((queryKey) => qc.invalidateQueries({ queryKey })),

@@ -4,6 +4,7 @@ import { ArrowRight, Upload } from "lucide-react";
 import type { PullRef } from "../../shared/types";
 import type { CreatedPullRequest } from "../../shared/pull-request-create";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "./ui";
 /** A PR of the current branch of `where`: the checkout's, or a thread's worktree's. */
 export function CreatePullSheet({
@@ -57,11 +58,9 @@ export function CreatePullSheet({
       });
       setResult(created);
       await Promise.all(
-        [
-          ["worktree"],
-          ["branch-pulls", where],
-          ["working-tree", "project", where],
-        ].map((queryKey) => qc.invalidateQueries({ queryKey })),
+        [["worktree"], ["branch-pulls", where], workingTreeKey(where)].map(
+          (queryKey) => qc.invalidateQueries({ queryKey }),
+        ),
       );
     } catch (e) {
       setError(e);

@@ -13,6 +13,7 @@ import type { Project } from "../../shared/projects";
 import type { PullRef } from "../../shared/types";
 import type { GitAction, WorkingTree } from "../../shared/working-tree";
 import { api } from "../lib/api";
+import { workingTreeKey } from "../lib/working-tree-key";
 import { CreatePullSheet } from "./BranchPullRequest";
 import { MergeSheet } from "./MergeSheet";
 import { ErrorBox, IconButton, Modal, Spinner } from "./ui";
@@ -49,7 +50,7 @@ export function GitActions({
   onError: (error: unknown) => void;
 }) {
   const qc = useQueryClient();
-  const key = ["working-tree", "project", where];
+  const key = workingTreeKey(where);
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
     queryKey: key,
@@ -260,7 +261,7 @@ function CommitSheet({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const key = ["working-tree", "project", where];
+  const key = workingTreeKey(where);
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
