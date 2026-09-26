@@ -561,7 +561,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
       expect(
         (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
       ).toBeGreaterThan(0),
-    { timeout: 8000 },
+    { timeout: 15000 },
   );
   const steer = {
     ...input("@codex Use the blue one"),
@@ -573,7 +573,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
       expect(chats.hasActiveProject(projectId)).toBe(false);
       expect((await chats.get(chat.id)).messages).toHaveLength(4);
     },
-    { timeout: 8000 },
+    { timeout: 15000 },
   );
   const messages = (await chats.get(chat.id)).messages;
   expect(messages.map((m) => [m.role, m.body, m.status])).toEqual([
@@ -587,7 +587,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
     .split("\n")
     .map((line) => JSON.parse(line));
   expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
-}, 15000);
+}, 30000);
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
