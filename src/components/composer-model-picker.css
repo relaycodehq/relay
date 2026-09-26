@@ -396,14 +396,6 @@
     opacity: 0.4;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .context-ring-fill {
-    transition: none;
-  }
-  .context-meter-trigger[data-compacting] > svg {
-    animation: none;
-  }
-}
 
 /*
  * Prompt cache heat: flames rising off the ring while the cache is fresh, an
@@ -750,11 +742,6 @@
   font-size: 11px;
   line-height: 1.4;
 }
-@media (prefers-reduced-motion: reduce) {
-  .cache-meter .usage-fill {
-    transition: none;
-  }
-}
 .context-meter-popup {
   width: 236px;
   padding: 11px 5px 5px;
@@ -975,14 +962,6 @@
 .usage-row[data-pace="hot"] .usage-row-limit,
 .usage-row[data-pace="spent"] .usage-row-limit {
   color: #e36a5c;
-}
-@media (prefers-reduced-motion: reduce) {
-  .usage-ring-fill {
-    transition: none;
-  }
-  .usage-ring-refresh .spin {
-    animation: none;
-  }
 }
 .composer-menu-label:has(kbd) {
   display: flex;

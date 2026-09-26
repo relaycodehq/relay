@@ -26,5 +26,10 @@
   should reserve their height instead of mounting and unmounting; the thread
   stays pinned to the bottom, so every height change jolts it.
 - **Keep it cheap.** Move things with `transform`/`opacity`; step text shimmers
-  (`steps(...)`) instead of animating every frame. Give each loop a
-  `prefers-reduced-motion` fallback.
+  (`steps(...)`) instead of animating every frame, unless a shimmer on its own
+  layer measures as cheap as paused and steps would read as lag (the agent
+  trace's `.live-shine`).
+- **Reduced motion is global.** `src/styles.css` stops every animation and
+  transition under `prefers-reduced-motion`. Add a local block only to fix the
+  end state a stopped animation leaves wrong (a half-drawn stroke, a sheen still
+  showing) or to beat another stylesheet's `!important`.

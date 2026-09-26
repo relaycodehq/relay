@@ -140,11 +140,6 @@
     transform: translate(-50%, -50%) rotate(2turn);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .ultraplan-ring > span {
-    animation: none;
-  }
-}
 
 /* The council in the thread, on deep review's council and panes. */
 .ultraplan-council .deep-review-council-toggle > svg:first-child {

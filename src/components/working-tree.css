@@ -172,11 +172,6 @@
   text-overflow: ellipsis;
   color: var(--muted);
 }
-@media (prefers-reduced-motion: reduce) {
-  .change-section-toggle svg {
-    transition: none;
-  }
-}
 .working-commit {
   padding: 12px;
   display: flex;

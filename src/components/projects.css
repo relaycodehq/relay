@@ -81,12 +81,6 @@
   visibility: visible;
   transition: transform 180ms ease;
 }
-@media (prefers-reduced-motion: reduce) {
-  .projects-sidebar.overlay,
-  .projects-sidebar.overlay.peek {
-    transition: none;
-  }
-}
 .project-empty {
   display: flex;
   flex: 1;
@@ -1137,11 +1131,6 @@
   overflow: hidden;
   padding-top: 12px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .thread-bottom-composer .composer-prompt-input {
-    transition: none;
-  }
-}
 .project-messages {
   padding: 12px 28px;
   scrollbar-gutter: stable;
@@ -1306,11 +1295,6 @@
 }
 .chat-file-link > svg.lucide {
   color: var(--muted);
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-file-link {
-    transition: none;
-  }
 }
 .chat-file-link:focus-visible,
 .agent-run-heading:focus-visible,
@@ -2091,14 +2075,6 @@ details.agent-step > .agent-step-heading:hover {
 }
 .composer-tools .send-message:hover {
   background: color-mix(in srgb, var(--send) 88%, #fff);
-}
-@media (prefers-reduced-motion: reduce) {
-  .project-composer .composer-stop {
-    transition: none;
-  }
-  .composer-stop-esc {
-    animation: none;
-  }
 }
 
 .composer-runtime-popup {

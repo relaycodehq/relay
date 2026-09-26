@@ -108,11 +108,6 @@
 .diff-stat-del {
   color: light-dark(#c4323f, #f0707a);
 }
-@media (prefers-reduced-motion: reduce) {
-  .changed-files-chevron {
-    transition: none;
-  }
-}
 /* The turn's file list in the Changes pane. */
 .turn-file {
   align-items: center;

@@ -728,17 +728,6 @@
     opacity: 0;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .settings-screen[open],
-  .setting,
-  .settings-switch,
-  .settings-switch::before,
-  .settings-screen .theme-card,
-  .settings-screen .accent-swatch {
-    animation: none;
-    transition: none;
-  }
-}
 @media (max-width: 760px) {
   .settings-nav {
     width: 180px;

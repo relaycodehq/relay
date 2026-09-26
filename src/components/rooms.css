@@ -749,11 +749,6 @@
   font-size: 10px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .room-thinking {
-    animation: none;
-  }
-}
 .room-panel + .review-main {
   container: room-code / inline-size;
 }

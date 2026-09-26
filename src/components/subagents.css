@@ -348,9 +348,3 @@
   padding: 4px 10px;
   font-size: 11.5px;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .subagents-card {
-    transition: none;
-  }
-}

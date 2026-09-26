@@ -191,13 +191,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .live-shine {
-    animation: none;
     color: var(--muted);
     background: none;
-  }
-  .thinking-glyph::before,
-  .agent-word {
-    animation: none;
   }
 }
 
