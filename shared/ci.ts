@@ -12,7 +12,8 @@ export interface CiRun {
 }
 
 export interface CiStatus {
-  source: "github" | "gitea";
+  /** The CI host as users know it, e.g. "GitHub". */
+  source: string;
   /** The branch CI ran on: the thread's, or the default one when that has none. */
   branch: string;
   commit: { sha: string; message?: string; author?: string };
@@ -21,7 +22,8 @@ export interface CiStatus {
   ahead: number;
 }
 
-const RANK: Record<CiState, number> = {
+/** How much a run's state says about the commit: a failure outranks all. */
+export const ciRank: Record<CiState, number> = {
   skipped: -1,
   success: 0,
   running: 1,
@@ -37,7 +39,7 @@ export function ciSummary(runs: CiRun[]) {
   const counted = runs.filter((r) => r.state !== "skipped");
   if (!counted.length) return null;
   const worst = counted.reduce((a, b) =>
-    RANK[b.state] > RANK[a.state] ? b : a,
+    ciRank[b.state] > ciRank[a.state] ? b : a,
   );
   const target =
     worst.state === "success"

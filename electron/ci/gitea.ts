@@ -1,5 +1,5 @@
 import { ApiError, type Gitea } from "../gitea";
-import type { CiRun, CiState } from "../../shared/ci";
+import { ciRank, type CiRun, type CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
 
 export interface GiteaStatus {
@@ -8,13 +8,6 @@ export interface GiteaStatus {
   target_url?: string | null;
   updated_at: string;
 }
-
-const RANK: Record<CiState, number> = {
-  skipped: -1,
-  success: 0,
-  running: 1,
-  failure: 2,
-};
 
 function statusState(state: string): CiState {
   switch (state) {
@@ -56,7 +49,7 @@ export function giteaRuns(statuses: GiteaStatus[]): CiRun[] {
       continue;
     }
     run.at = Math.max(run.at, at);
-    if (RANK[state] > RANK[run.state]) {
+    if (ciRank[state] > ciRank[run.state]) {
       run.state = state;
       run.url = url || run.url;
     }

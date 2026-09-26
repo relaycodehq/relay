@@ -62,11 +62,10 @@ function RunLine({ run }: { run: CiRun }) {
 }
 
 function CommitCard({ status, target }: { status: CiStatus; target: CiRun }) {
-  const host = status.source === "github" ? "GitHub" : "Gitea";
   return (
     <div className="line-blame-tooltip ci-card">
       <div className="blame-location">
-        {status.branch} · {host} Actions
+        {status.branch} · {status.source} Actions
       </div>
       <div className="blame-commit">
         <GitCommitHorizontal size={15} />
@@ -100,7 +99,7 @@ function CommitCard({ status, target }: { status: CiStatus; target: CiRun }) {
           : target.state === "running"
             ? "running"
             : "latest"}{" "}
-        {target.workflow} run on {host}
+        {target.workflow} run on {status.source}
       </p>
     </div>
   );
