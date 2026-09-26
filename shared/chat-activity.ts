@@ -6,7 +6,13 @@ import type { ChatSummary } from "./projects";
 // answer, so comparing against it is the "raised hand" check.
 export type ChatActivitySection = "active" | "snoozed" | "settled";
 
-export function chatSettled(chat: ChatSummary): boolean {
+/** What triage reads; the phone's thread summaries carry just these. */
+type Triaged = Pick<
+  ChatSummary,
+  "running" | "waiting" | "settledAt" | "snoozedAt" | "snoozedUntil" | "updated"
+>;
+
+export function chatSettled(chat: Triaged): boolean {
   return (
     !chat.running &&
     !chat.waiting &&
@@ -15,7 +21,7 @@ export function chatSettled(chat: ChatSummary): boolean {
   );
 }
 
-export function chatSnoozed(chat: ChatSummary, now: number): boolean {
+export function chatSnoozed(chat: Triaged, now: number): boolean {
   return (
     !chat.waiting &&
     chat.snoozedUntil != null &&
@@ -25,7 +31,7 @@ export function chatSnoozed(chat: ChatSummary, now: number): boolean {
 }
 
 export function chatActivitySection(
-  chat: ChatSummary,
+  chat: Triaged,
   now: number,
 ): ChatActivitySection {
   if (chatSettled(chat)) return "settled";
@@ -36,8 +42,11 @@ export function chatActivitySection(
 /** Only the latest settled threads stay in Activity; Projects lists them all. */
 export const SETTLED_SHELF_SIZE = 15;
 
-export function chatActivitySections(chats: ChatSummary[], now: number) {
-  const sections: Record<ChatActivitySection, ChatSummary[]> = {
+export function chatActivitySections<C extends Triaged>(
+  chats: C[],
+  now: number,
+) {
+  const sections: Record<ChatActivitySection, C[]> = {
     active: [],
     snoozed: [],
     settled: [],
