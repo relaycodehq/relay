@@ -66,7 +66,7 @@ export default function ThreadScreen() {
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => (
-            <MessageView message={item} onOpenFile={openFile} />
+            <MessageView message={item} root={thread.root} onOpenFile={openFile} />
           )}
           ListHeaderComponent={
             thread.queue.length ? (

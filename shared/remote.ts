@@ -119,6 +119,8 @@ export interface RemoteChat extends Pick<
   "id" | "projectId" | "title" | "messages" | "requests" | "queuePaused"
 > {
   running: boolean;
+  /** The folder the thread works in; tool labels drop it, as on the desktop. Older desktops leave it out. */
+  root?: string;
   /** Older messages left on the desktop; a phone gets the latest `remoteHistory`. */
   earlier: number;
   queue: { id: string; body: string }[];

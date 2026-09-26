@@ -69,6 +69,7 @@ function fakeHost() {
         added: 1,
       },
     ],
+    projectPath: () => "/tmp/relay",
     chats: () => [summary],
     chat: async () => structuredClone(chat),
     create: async () => summary,

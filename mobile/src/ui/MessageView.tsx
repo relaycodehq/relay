@@ -1,34 +1,7 @@
 import { memo, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import {
-  Bot,
-  ChevronDown,
-  ChevronRight,
-  FilePen,
-  FileText,
-  Globe,
-  Search,
-  Terminal,
-  Wrench,
-} from "lucide-react-native";
-import type {
-  AgentActivity,
-  ChatMessage,
-  TurnFileChange,
-} from "../../../shared/projects";
-import {
-  doneLabel,
-  duration,
-  liveLabel,
-  summarizeActivity,
-} from "../../../shared/activity-labels";
-import { sentLabel } from "../../../shared/chat-activity";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
+import { AgentRun } from "./AgentRun";
 import { Markdown } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { mono, type, useTheme } from "./theme";
@@ -37,199 +10,132 @@ import { mono, type, useTheme } from "./theme";
 export const withoutMention = (body: string) =>
   body.replace(/^@(codex|claude|opencode)(?=\s|$)\s*/i, "");
 
-const icons = {
-  command: Terminal,
-  read: FileText,
-  file: FilePen,
-  search: Search,
-  web: Globe,
-  agent: Bot,
-  tool: Wrench,
-} satisfies Record<AgentActivity["kind"], unknown>;
-
+/** A message laid out like the desktop's (src/components/ProjectChat.tsx). */
 export const MessageView = memo(function MessageView({
-  message,
+  message: m,
+  root,
   onOpenFile,
 }: {
   message: ChatMessage;
+  /** The thread's folder, which tool labels leave out. */
+  root?: string;
   onOpenFile: (file: TurnFileChange, messageId: string) => void;
 }) {
-  return message.role === "user" ? (
-    <UserMessage message={message} />
-  ) : (
-    <AgentMessage message={message} onOpenFile={onOpenFile} />
+  const t = useTheme();
+  if (m.handoff) return <HandoffRow message={m} />;
+  if (m.compaction)
+    return (
+      <StatusRow failed={m.status === "failed"}>
+        {m.status === "streaming"
+          ? "Compacting context…"
+          : m.status === "complete"
+            ? "Context compacted"
+            : m.status === "cancelled"
+              ? "Compaction stopped"
+              : (m.error ?? "Compaction failed")}
+      </StatusRow>
+    );
+  const user = m.role === "user";
+  return (
+    <View style={styles.turn}>
+      <View style={styles.header}>
+        {!user && <ProviderIcon provider={m.provider} color={t.text} />}
+        <Text style={[styles.author, { color: t.text }]}>
+          {user ? (m.author ?? "You") : agentNames[m.provider]}
+        </Text>
+        {user && (
+          <Text style={[styles.meta, { color: t.muted }]}>
+            {new Date(m.created).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+        )}
+        {!user && m.author && (
+          <Text style={[styles.meta, { color: t.muted }]}>via {m.author}</Text>
+        )}
+        {m.unprompted && (
+          <Text style={[styles.meta, { color: t.muted }]}>started on its own</Text>
+        )}
+      </View>
+      {!user && <AgentRun message={m} root={root} />}
+      {user ? (
+        <View
+          style={[
+            styles.userBody,
+            { borderColor: t.border, backgroundColor: t.raised },
+            m.pending && styles.pending,
+          ]}
+        >
+          <Text selectable style={[styles.userText, { color: t.text }]}>
+            {withoutMention(m.body)}
+          </Text>
+        </View>
+      ) : m.body.trim() ? (
+        <Markdown text={m.body} />
+      ) : null}
+      {!!m.changes?.length && m.status !== "streaming" && (
+        <ChangedFiles files={m.changes} onOpen={(file) => onOpenFile(file, m.id)} />
+      )}
+      {m.status === "cancelled" && (
+        <Text style={[styles.note, { color: t.muted }]}>
+          Stopped · partial output kept
+        </Text>
+      )}
+      {!!m.error && m.status !== "cancelled" && (
+        <Text style={[styles.note, { color: t.danger }]}>{m.error}</Text>
+      )}
+    </View>
   );
 });
 
-function UserMessage({ message }: { message: ChatMessage }) {
+/** A line across the thread with a note in the middle, for compactions and handoffs. */
+function StatusRow({
+  children,
+  failed,
+  action,
+}: {
+  children: string;
+  failed?: boolean;
+  action?: { label: string; onPress: () => void };
+}) {
   const t = useTheme();
   return (
-    <View style={styles.turn}>
-      <View style={styles.header}>
-        <Text style={[styles.author, { color: t.text }]}>
-          {message.author ?? "You"}
-        </Text>
-        <Text style={[styles.time, { color: t.muted }]}>
-          {sentLabel(message.created, new Date())}
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.userBody,
-          { borderColor: t.border, backgroundColor: t.raised },
-          message.pending && styles.pending,
-        ]}
-      >
-        <Text selectable style={[styles.userText, { color: t.text }]}>
-          {withoutMention(message.body)}
-        </Text>
-      </View>
+    <View style={styles.status} accessibilityRole="text">
+      <View style={[styles.rule, { backgroundColor: t.border }]} />
+      <Text style={[styles.statusText, { color: failed ? t.danger : t.muted }]}>
+        {children}
+      </Text>
+      {action && (
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={action.onPress}>
+          <Text style={[styles.statusText, { color: t.accent }]}>{action.label}</Text>
+        </Pressable>
+      )}
+      <View style={[styles.rule, { backgroundColor: t.border }]} />
     </View>
   );
 }
 
-function AgentMessage({
-  message,
-  onOpenFile,
-}: {
-  message: ChatMessage;
-  onOpenFile: (file: TurnFileChange, messageId: string) => void;
-}) {
-  const t = useTheme();
-  const streaming = message.status === "streaming";
-  const calls = (
-    message.trace
-      ? message.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
-      : (message.activity ?? [])
-  ).filter((a) => !a.parentId);
-  const running = [...calls].reverse().find((a) => a.status === "running");
-  const finished = calls.filter((a) => a.status !== "running");
-  const marker = message.compaction
-    ? "Compacted the conversation"
-    : message.handoff
-      ? `Handoff from ${agentNames[message.handoff.from]} to ${agentNames[message.handoff.to]}`
-      : message.unprompted
-        ? "Started on its own"
-        : undefined;
-  return (
-    <View style={styles.turn}>
-      <View style={styles.header}>
-        <ProviderIcon provider={message.provider} color={t.text} />
-        <Text style={[styles.author, { color: t.text }]}>
-          {agentNames[message.provider]}
-        </Text>
-        {marker && (
-          <Text style={[styles.time, { color: t.muted }]}>{marker}</Text>
-        )}
-      </View>
-      {finished.length > 0 && (
-        <ActivitySummary
-          calls={finished}
-          commentary={
-            message.trace?.flatMap((e) =>
-              e.kind === "commentary" ? [e.text] : [],
-            ) ?? []
-          }
-          took={
-            !streaming && message.ended
-              ? duration(message.ended - message.created)
-              : undefined
-          }
-        />
-      )}
-      {streaming && (
-        // The one thing that moves in a turn: what the agent is doing now.
-        <View style={styles.live}>
-          <ActivityIndicator size="small" color={t.muted} />
-          <Text numberOfLines={1} style={[styles.liveText, { color: t.muted }]}>
-            {running
-              ? running.progress
-                ? `${liveLabel(running)} · ${running.progress}`
-                : liveLabel(running)
-              : message.body
-                ? "Writing…"
-                : "Thinking…"}
-          </Text>
-        </View>
-      )}
-      {!!message.body && <Markdown text={message.body} />}
-      {message.status === "failed" && (
-        <Text style={[styles.error, { color: t.danger }]}>
-          {message.error ?? "This answer failed."}
-        </Text>
-      )}
-      {message.status === "cancelled" && (
-        <Text style={[styles.time, { color: t.muted }]}>Stopped</Text>
-      )}
-      {!!message.changes?.length && (
-        <ChangedFiles
-          files={message.changes}
-          onOpen={(file) => onOpenFile(file, message.id)}
-        />
-      )}
-    </View>
-  );
-}
-
-function ActivitySummary({
-  calls,
-  commentary,
-  took,
-}: {
-  calls: AgentActivity[];
-  commentary: string[];
-  took?: string;
-}) {
+function HandoffRow({ message: m }: { message: ChatMessage }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
-  const Icon = icons[calls[0]!.kind];
+  const { from, to } = m.handoff!;
+  const switched = `Switched from ${agentNames[from]} to ${agentNames[to]}`;
+  const note = m.status === "complete" && m.body.trim();
   return (
     <View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        onPress={() => setOpen(!open)}
-        style={styles.summary}
-        hitSlop={6}
+      <StatusRow
+        action={note ? { label: open ? "Hide note" : "Show note", onPress: () => setOpen(!open) } : undefined}
       >
-        <Icon size={15} color={t.muted} />
-        <Text style={[styles.summaryText, { color: t.muted }]}>
-          {summarizeActivity(calls)}
-          {took ? `  ${took}` : ""}
-        </Text>
-        {open ? (
-          <ChevronDown size={14} color={t.faint} />
-        ) : (
-          <ChevronRight size={14} color={t.faint} />
-        )}
-      </Pressable>
-      {open && (
-        <View style={[styles.calls, { borderColor: t.border }]}>
-          {calls.map((a) => {
-            const CallIcon = icons[a.kind];
-            return (
-              <View key={a.id} style={styles.call}>
-                <CallIcon
-                  size={13}
-                  color={a.status === "failed" ? t.danger : t.faint}
-                />
-                <Text
-                  numberOfLines={2}
-                  style={[
-                    styles.callText,
-                    { color: a.status === "failed" ? t.danger : t.muted },
-                  ]}
-                >
-                  {a.kind === "command" ? a.label : doneLabel(a)}
-                </Text>
-              </View>
-            );
-          })}
-          {commentary.map((text, i) => (
-            <Text key={i} style={[styles.commentary, { color: t.muted }]}>
-              {text}
-            </Text>
-          ))}
+        {m.status === "streaming"
+          ? `${agentNames[from]} is writing a handoff note for ${agentNames[to]}…`
+          : note
+            ? switched
+            : `${switched} · no handoff note`}
+      </StatusRow>
+      {open && note && (
+        <View style={[styles.handoffNote, { borderColor: t.border }]}>
+          <Markdown text={note} small />
         </View>
       )}
     </View>
@@ -287,6 +193,7 @@ function ChangedFiles({
   );
 }
 
+
 function Counts({ add, del }: { add: number; del: number }) {
   const t = useTheme();
   return (
@@ -297,11 +204,12 @@ function Counts({ add, del }: { add: number; del: number }) {
   );
 }
 
+
 const styles = StyleSheet.create({
   turn: { gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  header: { flexDirection: "row", alignItems: "center", gap: 7 },
+  header: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   author: { fontSize: type.small, fontWeight: "600" },
-  time: { fontSize: type.tiny },
+  meta: { fontSize: type.tiny },
   userBody: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
@@ -310,21 +218,23 @@ const styles = StyleSheet.create({
   },
   pending: { opacity: 0.6 },
   userText: { fontSize: type.body, lineHeight: 22 },
-  live: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 22 },
-  liveText: { fontSize: type.small, flex: 1 },
-  summary: { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 22 },
-  summaryText: { fontSize: type.small, flexShrink: 1 },
-  calls: {
-    marginTop: 6,
-    marginLeft: 7,
-    paddingLeft: 12,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+  note: { fontSize: type.small, lineHeight: 19 },
+  status: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  call: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  callText: { fontSize: type.tiny, fontFamily: mono, flex: 1, lineHeight: 17 },
-  commentary: { fontSize: type.tiny, fontStyle: "italic", lineHeight: 17 },
-  error: { fontSize: type.small, lineHeight: 19 },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth },
+  statusText: { fontSize: type.tiny, textAlign: "center", flexShrink: 1 },
+  handoffNote: {
+    marginHorizontal: 40,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderLeftWidth: 2,
+  },
   files: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,

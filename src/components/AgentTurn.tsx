@@ -23,7 +23,6 @@ import {
 import {
   isImagePath,
   type AgentActivity,
-  type AgentTrace,
   type ChatMessage,
 } from "../../shared/projects";
 import type { ProjectFileLink } from "../lib/project-file-links";
@@ -33,6 +32,13 @@ import {
   liveLabel,
   summarizeActivity,
 } from "../../shared/activity-labels";
+import {
+  batchHead,
+  groupTrace,
+  readTurn,
+  thinkingWord,
+  turnHeading,
+} from "../../shared/agent-trace";
 import { RichText, Spinner } from "./ui";
 import "./agent-trace.css";
 
@@ -231,56 +237,41 @@ export function AgentTurn({
   onChanges: () => void;
   onOpenImage?: (path: string) => void;
 }) {
-  const live = message.status === "streaming";
+  const turn = readTurn(message);
+  const { live, entries, shown, calls, thinking } = turn;
   // Open while the turn runs, like T3 Code's work log; fold back once it ends
   // unless the reader opened or closed it themselves.
   const [toggled, setToggled] = useState<boolean>();
   const expanded = toggled ?? live;
-  const entries: AgentTrace[] =
-    message.trace ??
-    (message.activity ?? []).map((activity) => ({
-      kind: "activity" as const,
-      id: activity.id,
-      activity,
-    }));
   if (!live && !entries.length) return null;
   const root = projectRoot.replace(/\/+$/, "") + "/";
   const display = (text: string) => text.split(root).join("");
-  const { shown, calls } = nestSubagents(entries);
-  // Claude's own calls; a subagent's are counted by its agent row.
-  const activity = shown.flatMap((e) =>
-    e.kind === "activity" ? [e.activity] : [],
-  );
-  const current = live
-    ? [...activity].reverse().find((a) => a.status === "running")
-    : undefined;
-  const thinking = live && !current && !message.body;
   const ended = message.ended ?? message.created;
-  const label = live ? (
-    expanded ? (
+  const heading = turnHeading(message, expanded, turn);
+  const label =
+    heading.kind === "working" ? (
       "Working for"
-    ) : current ? (
-      display(liveLabel(current))
-    ) : message.body ? (
+    ) : heading.kind === "call" ? (
+      display(liveLabel(heading.activity))
+    ) : heading.kind === "writing" ? (
       "Writing"
-    ) : (
+    ) : heading.kind === "thinking" ? (
       <ThinkingWord seed={message.id} />
-    )
-  ) : (
-    summarizeActivity(activity) || "Thought"
-  );
+    ) : (
+      heading.text
+    );
   // Expanded, the header is the whole run and stays still; the one live row
   // below it is what moves. Folded, the header stands in for that row.
-  const last = activity.at(-1);
-  const HeaderIcon = live
-    ? expanded
+  const HeaderIcon =
+    heading.kind === "working"
       ? Clock3
-      : current
-        ? icons[current.kind]
-        : null
-    : last
-      ? icons[last.kind]
-      : Brain;
+      : heading.kind === "call"
+        ? icons[heading.activity.kind]
+        : heading.kind === "done"
+          ? heading.last
+            ? icons[heading.last.kind]
+            : Brain
+          : null;
   return (
     <details
       className={`agent-activity${live ? " live" : ""}`}
@@ -376,67 +367,6 @@ export function AgentTurn({
   );
 }
 
-/** Takes the calls subagents made out of the trace, keyed by the agent call that ran them. */
-function nestSubagents(entries: AgentTrace[]) {
-  const ids = new Set(entries.map((e) => e.id));
-  const calls = new Map<string, AgentActivity[]>();
-  const shown = entries.filter((e) => {
-    if (e.kind !== "activity") return true;
-    const parent = e.activity.parentId;
-    // An orphan, its agent row dropped from a full trace, stays in line.
-    if (!parent || !ids.has(parent)) return true;
-    calls.set(parent, [...(calls.get(parent) ?? []), e.activity]);
-    return false;
-  });
-  return { shown, calls };
-}
-
-type TracePart =
-  | { kind: "commentary"; id: string; text: string }
-  | { kind: "run"; id: string; activity: AgentActivity[] };
-
-/** Consecutive tool calls become one run; commentary splits them. */
-function groupTrace(entries: AgentTrace[]) {
-  const parts: TracePart[] = [];
-  for (const entry of entries) {
-    if (entry.kind === "commentary") {
-      parts.push(entry);
-      continue;
-    }
-    const last = parts.at(-1);
-    if (last?.kind === "run") last.activity.push(entry.activity);
-    else parts.push({ kind: "run", id: entry.id, activity: [entry.activity] });
-  }
-  return parts;
-}
-
-const thinkingWords = [
-  "Thinking",
-  "Pondering",
-  "Mulling it over",
-  "Noodling",
-  "Ruminating",
-  "Percolating",
-  "Cogitating",
-  "Brewing",
-  "Tinkering",
-  "Musing",
-  "Scheming",
-  "Untangling",
-  "Marinating",
-  "Puzzling",
-  "Chewing on it",
-  "Connecting dots",
-];
-
-const hash = (text: string) =>
-  [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7) >>> 0;
-/** The turn's word for this six-second window; the same on every remount. */
-const thinkingWord = (seed: string) =>
-  thinkingWords[
-    hash(`${seed}:${Math.floor(Date.now() / 6000)}`) % thinkingWords.length
-  ]!;
-
 /**
  * A thinking verb that changes every few seconds, so a long pause still looks
  * alive. The line comes and goes around every call; picking by turn and time
@@ -480,10 +410,7 @@ function OpenBatch({
   onChanges: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const head =
-    [...activity].reverse().find((a) => a.status === "running") ??
-    activity.at(-1)!;
-  const earlier = activity.filter((a) => a !== head);
+  const { head, earlier } = batchHead(activity);
   const running = head.status === "running";
   const Icon = icons[head.kind];
   const calls = useContext(Subagents).calls.get(head.id) ?? [];

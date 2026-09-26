@@ -1,14 +1,51 @@
-import { memo, type ReactNode } from "react";
+import { createContext, memo, useContext, type ReactNode } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { lexer, type Token, type Tokens } from "marked";
 import { mono, type, useTheme, type Palette } from "./theme";
 
 /** An agent's answer: the markdown agents actually write, drawn natively. */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({
+  text,
+  small,
+}: {
+  text: string;
+  /** The size of an agent's commentary between tool calls. */
+  small?: boolean;
+}) {
   const theme = useTheme();
   const tokens = lexer(text);
-  return <View style={styles.root}>{blocks(tokens, theme)}</View>;
+  return (
+    <View style={styles.root}>
+      <Small.Provider value={!!small}>{blocks(tokens, theme)}</Small.Provider>
+    </View>
+  );
 });
+
+const Small = createContext(false);
+
+function Bullet({ children }: { children: string }) {
+  const t = useTheme();
+  const small = useContext(Small);
+  return (
+    <Text style={[styles.body, small && styles.small, styles.bullet, { color: t.muted }]}>
+      {children}
+    </Text>
+  );
+}
+
+/** Body text; smaller inside commentary. */
+function Body({ children }: { children: ReactNode }) {
+  const t = useTheme();
+  const small = useContext(Small);
+  return (
+    <Text
+      selectable
+      style={[styles.body, small && styles.small, { color: t.text }]}
+    >
+      {children}
+    </Text>
+  );
+}
 
 function blocks(tokens: Token[], t: Palette): ReactNode[] {
   return tokens.map((token, i) => block(token, t, i)).filter(Boolean);
@@ -20,9 +57,7 @@ function block(token: Token, t: Palette, key: number): ReactNode {
       return null;
     case "paragraph":
       return (
-        <Text key={key} selectable style={[styles.body, { color: t.text }]}>
-          {inline((token as Tokens.Paragraph).tokens, t)}
-        </Text>
+        <Body key={key}>{inline((token as Tokens.Paragraph).tokens, t)}</Body>
       );
     case "heading": {
       const h = token as Tokens.Heading;
@@ -61,9 +96,9 @@ function block(token: Token, t: Palette, key: number): ReactNode {
         <View key={key} style={styles.list}>
           {list.items.map((item, i) => (
             <View key={i} style={styles.item}>
-              <Text style={[styles.body, styles.bullet, { color: t.muted }]}>
+              <Bullet>
                 {item.task ? (item.checked ? "☑" : "☐") : list.ordered ? `${start + i}.` : "•"}
-              </Text>
+              </Bullet>
               <View style={styles.itemBody}>{itemBlocks(item.tokens, t)}</View>
             </View>
           ))}
@@ -108,16 +143,12 @@ function block(token: Token, t: Palette, key: number): ReactNode {
     case "text": {
       const text = token as Tokens.Text;
       return (
-        <Text key={key} selectable style={[styles.body, { color: t.text }]}>
-          {text.tokens ? inline(text.tokens, t) : text.text}
-        </Text>
+        <Body key={key}>{text.tokens ? inline(text.tokens, t) : text.text}</Body>
       );
     }
     default:
       return "raw" in token && token.raw.trim() ? (
-        <Text key={key} selectable style={[styles.body, { color: t.text }]}>
-          {token.raw.trim()}
-        </Text>
+        <Body key={key}>{token.raw.trim()}</Body>
       ) : null;
   }
 }
@@ -126,11 +157,11 @@ function block(token: Token, t: Palette, key: number): ReactNode {
 function itemBlocks(tokens: Token[], t: Palette) {
   return tokens.map((token, i) =>
     token.type === "text" ? (
-      <Text key={i} selectable style={[styles.body, { color: t.text }]}>
+      <Body key={i}>
         {(token as Tokens.Text).tokens
           ? inline((token as Tokens.Text).tokens!, t)
           : (token as Tokens.Text).text}
-      </Text>
+      </Body>
     ) : (
       block(token, t, i)
     ),
@@ -213,6 +244,7 @@ function decode(text: string) {
 const styles = StyleSheet.create({
   root: { gap: 10 },
   body: { fontSize: type.body, lineHeight: 22 },
+  small: { fontSize: 13, lineHeight: 19 },
   heading: { fontWeight: "600", lineHeight: 24, marginTop: 4 },
   strong: { fontWeight: "600" },
   em: { fontStyle: "italic" },

@@ -41,6 +41,7 @@ import type { FilePair } from "../../shared/types";
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
   projects(): Promise<Project[]>;
+  projectPath(projectId: string): string;
   chats(projectId: string): ChatSummary[];
   chat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   create(projectId: string): Promise<ChatSummary>;
@@ -102,6 +103,10 @@ export class RemoteBridge {
         requests: patch.requests,
         queuePaused: patch.queuePaused,
         running: !!summary?.running,
+        root:
+          patch.worktree?.path && !patch.worktree.removedAt
+            ? patch.worktree.path
+            : this.host.projectPath(patch.projectId),
         queue: (patch.queue ?? []).map((q) => ({
           id: q.input.id,
           body: q.input.body,

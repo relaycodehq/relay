@@ -1866,6 +1866,7 @@ app
       unseal,
       {
         projects: () => projects.list(client),
+        projectPath: (id) => projects.get(id).path,
         chats: (id) => projectChats.list(id),
         chat: (id, known) =>
           known ? projectChats.changes(id, known) : projectChats.get(id),

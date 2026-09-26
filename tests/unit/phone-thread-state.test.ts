@@ -30,6 +30,7 @@ const chat = (messages: RemoteChat["messages"]): RemoteChat => ({
   title: "T",
   messages,
   running: true,
+  root: "/r",
   earlier: 0,
   queue: [],
 });
