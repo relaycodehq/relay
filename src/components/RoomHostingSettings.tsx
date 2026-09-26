@@ -21,8 +21,7 @@ export function RoomHostingSettings() {
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const url =
-    server ?? hosting.data?.server ?? "https://example.com/review-relay";
+  const url = server ?? hosting.data?.server ?? "";
   return (
     <>
       <SettingsCard>
@@ -39,6 +38,7 @@ export function RoomHostingSettings() {
           <SettingsRow label="Room server">
             <input
               aria-label="Room server"
+              placeholder="https://rooms.example.com"
               value={url}
               onChange={(e) => setServer(e.target.value)}
             />
@@ -73,12 +73,15 @@ export function RoomHostingSettings() {
             )}
             <button
               className="primary"
-              disabled={busy || !secret.trim()}
+              disabled={busy || !url.trim() || !secret.trim()}
               onClick={() => {
                 setBusy(true);
                 setError(undefined);
                 void api
-                  .saveRoomHosting({ server: url, secret: secret.trim() })
+                  .saveRoomHosting({
+                    server: url.trim(),
+                    secret: secret.trim(),
+                  })
                   .then(() => {
                     setSecret("");
                     return changed();

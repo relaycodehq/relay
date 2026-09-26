@@ -75,7 +75,7 @@ export class RoomService {
     let encrypted: string | null = null;
     if (input) {
       const value = roomHostingSchema.parse(input);
-      // Check authorization without creating a project or disclosing the key.
+      // Check the key with that server, without creating a project there.
       await this.request(value.server, "/v1/setup", value.secret);
       encrypted = await this.encrypt(JSON.stringify(value));
       if (!encrypted)
