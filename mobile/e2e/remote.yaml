@@ -1,0 +1,39 @@
+# The phone app against a real desktop Relay: pair, start a supervised thread,
+# approve the agent's command, answer its question. Run with e2e/run.sh.
+appId: host.exp.exponent
+---
+- openLink: ${PAIR_LINK}
+- extendedWaitUntil:
+    visible: "Pair this phone with.*"
+    timeout: 60000
+- tapOn: "Pair"
+- extendedWaitUntil:
+    visible: "No threads yet.*"
+    timeout: 20000
+- takeScreenshot: ${OUT}/1-threads
+- tapOn: "New thread"
+- tapOn: "Supervised"
+- tapOn: "What should we work on?"
+- inputText: "fixture request approval"
+- hideKeyboard
+- tapOn: "Start thread"
+- extendedWaitUntil:
+    visible: "Run this command?"
+    timeout: 20000
+- takeScreenshot: ${OUT}/2-approval
+- tapOn: "Approve"
+- extendedWaitUntil:
+    visible: "Approval flow completed."
+    timeout: 20000
+- tapOn: "Message"
+- inputText: "fixture ask question"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Which approach should the plan use?"
+    timeout: 20000
+- takeScreenshot: ${OUT}/3-question
+- tapOn: "Small change"
+- extendedWaitUntil:
+    notVisible: "Which approach should the plan use?"
+    timeout: 20000
+- takeScreenshot: ${OUT}/4-answered

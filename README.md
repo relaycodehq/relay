@@ -101,6 +101,7 @@ Rooms need a Gitea server and a room server you trust. Setup is in the [room ser
 
 - [Project workspace](docs/project-workspace.md): threads, panes, agents, permissions, queues and composer commands.
 - [Pull request review](docs/pr-review.md): Gitea sign-in, the review workflow, grouping, live checks and local data.
+- [Phone app](docs/phone.md): pairing a phone to follow and answer threads, and how the connection is secured.
 - [Development and releases](docs/development.md): tests, packaging, automatic updates and release status.
 - [Updating T3 streaming](docs/t3-streaming.md): how the vendored T3 Code modules are kept in sync.
 
