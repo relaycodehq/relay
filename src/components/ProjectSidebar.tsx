@@ -741,11 +741,12 @@ export function ProjectSidebar({
           : action.kind === "archive"
             ? { ...entry, archivedAt: Date.now() }
             : {
-              ...entry,
-              settledAt: action.kind === "settle" ? Date.now() : undefined,
-              snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
-              snoozedUntil: action.kind === "snooze" ? action.until : undefined,
-            },
+                ...entry,
+                settledAt: action.kind === "settle" ? Date.now() : undefined,
+                snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
+                snoozedUntil:
+                  action.kind === "snooze" ? action.until : undefined,
+              },
       ),
     );
     try {

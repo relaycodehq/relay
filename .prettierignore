@@ -4,7 +4,3 @@ dist/
 dist-electron/
 dist-server/
 release/
-# Being reworked in an uncommitted working tree; format them (and delete
-# these two lines) once that work is committed, to avoid merge conflicts.
-src/components/AgentTurn.tsx
-src/components/ProjectSidebar.tsx

@@ -77,7 +77,10 @@ const OpenImage = createContext<((path: string) => void) | undefined>(
 /** The path of a finished read that can open in the image preview. */
 function useImageRead(a: AgentActivity) {
   const open = useContext(OpenImage);
-  return open && a.kind === "read" && a.status === "complete" && isImagePath(a.label)
+  return open &&
+    a.kind === "read" &&
+    a.status === "complete" &&
+    isImagePath(a.label)
     ? () => open(a.label)
     : undefined;
 }
@@ -154,9 +157,7 @@ function ToolRow({
       className={`agent-step ${a.status}`}
       summary={<summary className="agent-step-heading">{heading}</summary>}
     >
-      {calls.length > 0 && (
-        <SubagentRows calls={calls} onChanges={onChanges} />
-      )}
+      {calls.length > 0 && <SubagentRows calls={calls} onChanges={onChanges} />}
       {a.detail && <pre>{a.detail}</pre>}
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
@@ -317,54 +318,54 @@ export function AgentTurn({
       {expanded && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
           <OpenImage.Provider value={onOpenImage}>
-          <div className="agent-trace" aria-label="Local agent activity">
-            {groupTrace(shown).map((part, index, parts) =>
-              part.kind === "commentary" ? (
-                <div className="agent-commentary" key={part.id}>
-                  <RichText
-                    text={part.text}
-                    projectRoot={projectRoot}
-                    onOpenFile={onOpenFile}
+            <div className="agent-trace" aria-label="Local agent activity">
+              {groupTrace(shown).map((part, index, parts) =>
+                part.kind === "commentary" ? (
+                  <div className="agent-commentary" key={part.id}>
+                    <RichText
+                      text={part.text}
+                      projectRoot={projectRoot}
+                      onOpenFile={onOpenFile}
+                    />
+                  </div>
+                ) : live && index === parts.length - 1 ? (
+                  <OpenBatch
+                    key={part.id}
+                    activity={part.activity}
+                    display={display}
+                    onChanges={onChanges}
                   />
-                </div>
-              ) : live && index === parts.length - 1 ? (
-                <OpenBatch
-                  key={part.id}
-                  activity={part.activity}
-                  display={display}
-                  onChanges={onChanges}
-                />
-              ) : part.activity.length === 1 ? (
-                <ToolRow
-                  key={part.id}
-                  activity={part.activity[0]!}
-                  label={display(part.activity[0]!.label)}
-                  onChanges={onChanges}
-                />
-              ) : (
-                <ActivityGroup
-                  key={part.id}
-                  activity={part.activity}
-                  display={display}
-                  onChanges={onChanges}
-                />
-              ),
-            )}
-            {/* The line keeps its height while a call runs, so each call
+                ) : part.activity.length === 1 ? (
+                  <ToolRow
+                    key={part.id}
+                    activity={part.activity[0]!}
+                    label={display(part.activity[0]!.label)}
+                    onChanges={onChanges}
+                  />
+                ) : (
+                  <ActivityGroup
+                    key={part.id}
+                    activity={part.activity}
+                    display={display}
+                    onChanges={onChanges}
+                  />
+                ),
+              )}
+              {/* The line keeps its height while a call runs, so each call
                 doesn't shrink the trace and jolt the thread pinned below. */}
-            {live && !message.body && (
-              <div className="agent-step agent-thinking">
-                <div className="agent-step-heading">
-                  {thinking && (
-                    <>
-                      <ThinkingGlyph provider={message.provider} />
-                      <ThinkingWord seed={message.id} />
-                    </>
-                  )}
+              {live && !message.body && (
+                <div className="agent-step agent-thinking">
+                  <div className="agent-step-heading">
+                    {thinking && (
+                      <>
+                        <ThinkingGlyph provider={message.provider} />
+                        <ThinkingWord seed={message.id} />
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           </OpenImage.Provider>
         </Subagents.Provider>
       )}
@@ -438,9 +439,7 @@ function OpenBatch({
           </span>
           <Progress activity={head} />
         </span>
-        {folded && (
-          <ChevronRight size={13} className="agent-batch-chevron" />
-        )}
+        {folded && <ChevronRight size={13} className="agent-batch-chevron" />}
       </button>
       {/* The live agent's own calls first; the batch's earlier calls fold behind it. */}
       {open && calls.length > 0 && (
