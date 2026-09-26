@@ -120,8 +120,9 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .getByRole("button", { name: "Discuss in room", exact: true })
       .click();
     await expect(page.getByLabel("Message project")).toHaveText(
-      /@codex About src\/hooks\/useReview.ts:13/,
+      /About src\/hooks\/useReview.ts:13/,
     );
+    await expect(page.getByLabel("Message project")).not.toHaveText(/@codex/);
     await page.reload();
     await expect(page.locator(".pane-header")).toHaveCount(0);
     await expect(
@@ -130,7 +131,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
         .getByRole("button", { name: "PR #7", exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel("Message project")).toHaveText(
-      /@codex About src\/hooks\/useReview.ts:13/,
+      /About src\/hooks\/useReview.ts:13/,
     );
     await expect(page.locator(".project-composer")).toContainText(
       head.slice(0, 8),

@@ -921,7 +921,7 @@ export default function ProjectShell() {
                                   .then(() => {
                                     setContextText({
                                       id: crypto.randomUUID(),
-                                      text: `@codex About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
+                                      text: `About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
                                       selection: {
                                         ...target,
                                         head: selectedPull.head.sha,
