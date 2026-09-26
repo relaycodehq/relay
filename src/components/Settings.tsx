@@ -52,6 +52,7 @@ import {
 import {
   DEFAULT_CONTRAST,
   isCustomized,
+  clearedColors,
   normalizeHex,
   resolveChoice,
   resolvePalette,
@@ -395,14 +396,7 @@ function ThemeChoiceCard({
           kind={kind}
           look={look}
           // A new theme brings its own colours; contrast is a preference.
-          onChange={(id) =>
-            change({
-              theme: id,
-              accent: undefined,
-              background: undefined,
-              foreground: undefined,
-            })
-          }
+          onChange={(id) => change({ theme: id, ...clearedColors })}
         />
       </SettingsRow>
       <SettingsRow
@@ -475,14 +469,7 @@ function ThemeChoiceCard({
       <SettingsFooter note="Code keeps the theme’s own syntax colours.">
         <button
           disabled={!isCustomized(choice)}
-          onClick={() =>
-            change({
-              accent: undefined,
-              background: undefined,
-              foreground: undefined,
-              contrast: undefined,
-            })
-          }
+          onClick={() => change({ ...clearedColors, contrast: undefined })}
         >
           <RotateCcw size={12} />
           Reset to {theme.name}

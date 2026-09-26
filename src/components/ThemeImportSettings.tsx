@@ -25,7 +25,7 @@ import {
   type ImportedExtension,
 } from "../lib/imported-themes";
 import { kindOf } from "../lib/vscode-theme";
-import { themeById, type ThemeKind } from "../lib/themes";
+import { clearedColors, themeById, type ThemeKind } from "../lib/themes";
 import { SettingsCard, SettingsFooter, SettingsRow } from "./SettingsCard";
 import { ErrorBox, IconButton, Spinner } from "./ui";
 
@@ -183,12 +183,7 @@ export function ThemeImportSettings() {
   };
 
   const use = (id: string, kind: ThemeKind) => {
-    setThemeChoice(kind, {
-      theme: id,
-      accent: undefined,
-      background: undefined,
-      foreground: undefined,
-    });
+    setThemeChoice(kind, { theme: id, ...clearedColors });
     if (kind !== appearance.palette.kind && appearance.value.mode !== "system")
       setMode(kind);
   };
@@ -219,12 +214,7 @@ export function ThemeImportSettings() {
     removeExtension(extensionKey(extension));
     for (const kind of ["light", "dark"] as const)
       if (ids.includes(appearance.value[kind].theme))
-        setThemeChoice(kind, {
-          theme: "relay",
-          accent: undefined,
-          background: undefined,
-          foreground: undefined,
-        });
+        setThemeChoice(kind, { theme: "relay", ...clearedColors });
   };
 
   const byKey = new Map(installed.map((e) => [extensionKey(e), e]));
