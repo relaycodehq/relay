@@ -568,15 +568,6 @@ export default function LocalFileEditor({
                 }
                 return;
               }
-              if (
-                (event.metaKey || event.ctrlKey) &&
-                event.key.toLowerCase() === "s"
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                void save();
-                return;
-              }
               // Match the current file's indentation when inserting a new line.
               const target = event.nativeEvent.composedPath()[0];
               if (
