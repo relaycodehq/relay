@@ -204,15 +204,18 @@ export function ReviewWorkspace({
   };
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // The code editor types inside a shadow root, where `e.target` is only its host.
+      const target = e.composedPath()[0];
       if (
         tab !== "files" ||
+        e.defaultPrevented ||
         e.ctrlKey ||
         e.metaKey ||
         e.altKey ||
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement ||
-        (e.target as HTMLElement)?.isContentEditable ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable) ||
         document.querySelector("dialog[open]")
       )
         return;
