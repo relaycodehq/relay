@@ -419,9 +419,7 @@ export function RoomPanel({
                     onClick={() => p.path && onSelect(p.path)}
                     title={p.path ?? "Reviewing this PR"}
                   >
-                    <span className="room-avatar">
-                      {p.name.slice(0, 2).toUpperCase()}
-                    </span>
+                    <RoomAvatar name={p.name} />
                     <span>
                       <strong>{p.name}</strong>
                       <small>
@@ -960,9 +958,7 @@ function RoomPeople({
       <div className="room-member-list">
         {members.data?.map((m) => (
           <div key={m.id}>
-            <span className="room-avatar">
-              {m.name.slice(0, 2).toUpperCase()}
-            </span>
+            <RoomAvatar name={m.name} />
             <span>
               <strong>{m.name}</strong>
               <small>
