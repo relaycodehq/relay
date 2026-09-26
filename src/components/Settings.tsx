@@ -34,6 +34,7 @@ import {
   type AISettings,
 } from "../../shared/settings";
 import { api } from "../lib/api";
+import { keys } from "../lib/mod-key";
 import { useAISettings } from "../lib/useAISettings";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
@@ -162,16 +163,23 @@ const categories: {
 ];
 
 const shortcuts: [string, string][] = [
-  ["Open settings", "⌘ / Ctrl ,"],
-  ["New thread", "⌘ / Ctrl N"],
-  ["View activity", "⌥⌘U"],
-  ["Open one of the first nine activity threads", "⌘1–⌘9"],
-  ["Search pull requests", "⌘ / Ctrl F"],
-  ["Open PR URL", "⌘ / Ctrl K"],
-  ["Toggle file list", "⌘ / Ctrl B"],
-  ["Toggle pull requests", "⌘ / Ctrl Shift B"],
-  ["Mark file as read", "V"],
-  ["Next / previous file", "J / K"],
+  ["Open settings", keys("⌘,", "Ctrl+,")],
+  ["New thread", keys("⌘N", "Ctrl+N")],
+  ["New Scratchpad chat", keys("⌘⇧N", "Ctrl+Shift+N")],
+  ["Show or hide the terminal", keys("⌘J or Ctrl+`", "Ctrl+`")],
+  ["Stop the answer and pause queued messages", "Esc Esc"],
+  ["View activity", keys("⌥⌘U", "Ctrl+Alt+U")],
+  [
+    "Open one of the first nine activity threads",
+    keys("⌘1–⌘9", "Ctrl+1–Ctrl+9"),
+  ],
+  ["Settle the open thread", keys("⌘E", "Ctrl+E")],
+  ["Toggle a review's file list", keys("⌘B", "Ctrl+B")],
+  ["Mark a review file as read", "V"],
+  ["Next / previous review file", "J / K"],
+  ["Search pull requests", keys("⌘F", "Ctrl+F")],
+  ["Open a pull request by URL", keys("⌘K", "Ctrl+K")],
+  ["Show or hide pull requests", keys("⌘⇧B", "Ctrl+Shift+B")],
 ];
 
 interface Entry {

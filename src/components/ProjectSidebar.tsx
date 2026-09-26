@@ -42,6 +42,7 @@ import {
   wakeLabel,
 } from "../../shared/chat-activity";
 import { api } from "../lib/api";
+import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
 import { useWindowFocused } from "../lib/window-focus";
 import { IconButton, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
@@ -662,7 +663,7 @@ export function ProjectSidebar({
   );
   useEffect(() => {
     const toggle = (e: KeyboardEvent) => {
-      if (e.metaKey && e.altKey && e.code === "KeyU") {
+      if (modOnly(e) && e.altKey && e.code === "KeyU") {
         e.preventDefault();
         setView((v) => (v === "activity" ? "threads" : "activity"));
       }
@@ -689,8 +690,11 @@ export function ProjectSidebar({
       setCmdHeld(false);
     };
     const down = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return release();
-      if (e.key !== "Meta") cancel();
+      if (!modOnly(e) || e.altKey || e.shiftKey) return release();
+      // Ctrl keys typed in a terminal belong to its shell.
+      if (!mac && (e.target as Element | null)?.closest?.(".xterm"))
+        return release();
+      if (e.key !== modKey) cancel();
       else if (reveal === undefined)
         reveal = window.setTimeout(() => setCmdHeld(true), CMD_HINT_DELAY_MS);
       const digit = /^Digit([1-9])$/.exec(e.code);
@@ -705,10 +709,10 @@ export function ProjectSidebar({
         e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
-      if (!e.metaKey) release();
+      if (!modHeld(e)) release();
     };
     const click = (e: PointerEvent) => {
-      if (e.metaKey) cancel();
+      if (modHeld(e)) cancel();
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -1351,7 +1355,7 @@ export function ProjectSidebar({
             <span className="sb-card-project">{p?.name}</span>
             {shortcut && (
               <kbd className="sb-card-shortcut" aria-hidden>
-                <span>⌘</span>
+                <span>{keys("⌘", "Ctrl")}</span>
                 {shortcut}
               </kbd>
             )}
@@ -1367,7 +1371,7 @@ export function ProjectSidebar({
             {!c.running && !c.waiting && (
               <button
                 className="sb-card-action"
-                title={`Settle${c.id === chatId ? " (⌘E)" : ""} — hide until something new happens`}
+                title={`Settle${c.id === chatId ? ` (${keys("⌘E", "Ctrl+E")})` : ""} — hide until something new happens`}
                 onClick={(e) => {
                   e.stopPropagation();
                   settle(c);
@@ -1539,7 +1543,7 @@ export function ProjectSidebar({
       <div className="sb-section-heading">
         <h2>Scratchpad</h2>
         <IconButton
-          label="New chat  ⌘⇧N"
+          label={`New chat  ${keys("⌘⇧N", "Ctrl+Shift+N")}`}
           disabled={dirty}
           onClick={onNewScratch}
         >
@@ -1674,7 +1678,7 @@ export function ProjectSidebar({
         <button
           className="sb-top-button"
           aria-label="New thread"
-          title="New thread  ⌘N"
+          title={`New thread  ${keys("⌘N", "Ctrl+N")}`}
           disabled={dirty}
           onClick={onPickNew}
         >
@@ -1684,7 +1688,7 @@ export function ProjectSidebar({
           className={`sb-top-button sb-bell ${view === "activity" ? "active" : ""}`}
           aria-pressed={view === "activity"}
           aria-label="View activity"
-          title="View activity  ⌥⌘U"
+          title={`View activity  ${keys("⌥⌘U", "Ctrl+Alt+U")}`}
           onClick={() => {
             setSearch("");
             setView((v) => (v === "activity" ? "threads" : "activity"));
