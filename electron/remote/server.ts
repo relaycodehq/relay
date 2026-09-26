@@ -65,7 +65,8 @@ export class RemoteServer {
     const server = new WebSocketServer({
       port: this.options.port,
       host: this.options.host,
-      maxPayload: 2 * 1024 * 1024,
+      // Room for three photos, each up to 1.1 MB as a data URL, once sealed.
+      maxPayload: 8 * 1024 * 1024,
       perMessageDeflate: false,
     });
     await new Promise<void>((resolve, reject) => {

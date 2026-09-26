@@ -17,7 +17,7 @@ import { branchActionSchema } from "../shared/branches";
 import { Projects, type Place } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
-import { PhoneRemote } from "./remote/phone-remote";
+import { PhoneRemote, phoneAppearanceSchema } from "./remote/phone-remote";
 import { deepReviewStartSchema } from "../shared/deep-review";
 import { git } from "./git";
 import {
@@ -1791,6 +1791,10 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return requirePhoneRemote().setEnabled(z.boolean().parse(args[0]));
     case "phonePairing":
       return requirePhoneRemote().pairing();
+    case "phoneAppearance":
+      return requirePhoneRemote().setAppearance(
+        phoneAppearanceSchema.parse(args[0]),
+      );
     case "revokePhone":
       return requirePhoneRemote().revoke(z.string().uuid().parse(args[0]));
     case "openExternal": {
@@ -1870,17 +1874,8 @@ app
         chats: (id) => projectChats.list(id),
         chat: (id, known) =>
           known ? projectChats.changes(id, known) : projectChats.get(id),
-        create: (projectId) =>
-          projectChats.create(projectId, { kind: "project" }),
-        send: (id, input) => projectChats.send(id, input),
-        cancel: (id) => projectChats.cancel(id),
-        respond: (id, requestId, response) =>
-          projectChats.respond(id, requestId, response),
-        turnDiff: (chatId, messageId, path) =>
-          projectChats.turnDiff(chatId, messageId, path),
-        triage: (id, triage) => projectChats.triage(id, triage),
-        aiSettings: () =>
-          aiSettingsSchema.parse(store.get().aiSettings ?? defaultAISettings),
+        // The bridge forwards only its allowlist; see shared/remote.ts.
+        dispatch,
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );

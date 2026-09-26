@@ -3,17 +3,47 @@ import {
   networkInterfaces,
   type NetworkInterfaceInfo,
 } from "node:os";
+import { z } from "zod";
 import type { Store } from "../store";
 import { toBase64Url } from "../../shared/remote-crypto";
 import {
   defaultRemotePort,
   pairingUrl,
+  type PhoneAppearance,
   type PhonePairing,
   type PhoneRemoteState,
 } from "../../shared/remote";
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
 import { RemoteServer } from "./server";
+
+const color = z.string().regex(/^#[0-9a-f]{6}$/i);
+const paletteSchema = z
+  .object({
+    kind: z.enum(["light", "dark"]),
+    sidebar: color,
+    surface: color,
+    toolbar: color,
+    inbox: color,
+    text: color,
+    muted: color,
+    border: color,
+    hover: color,
+    selected: color,
+    accent: color,
+    accentSoft: color,
+    onAccent: color,
+    diffAddition: color,
+    diffDeletion: color,
+  })
+  .strict();
+export const phoneAppearanceSchema = z
+  .object({
+    mode: z.enum(["system", "light", "dark"]),
+    light: paletteSchema,
+    dark: paletteSchema,
+  })
+  .strict();
 
 /** Phone access: off until the user turns it on, and only reachable while on. */
 export class PhoneRemote {
@@ -31,8 +61,9 @@ export class PhoneRemote {
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
     const name = () => hostname().replace(/\.local$/, "") || "Relay";
-    this.bridge = new RemoteBridge({ ...host, name }, (event) =>
-      this.server.broadcast(event),
+    this.bridge = new RemoteBridge(
+      { ...host, name, appearance: () => this.devices.settings.appearance },
+      (event) => this.server.broadcast(event),
     );
     this.server = new RemoteServer({
       devices: this.devices,
@@ -45,6 +76,17 @@ export class PhoneRemote {
   /** Resumes listening if phone access was on when Relay last quit. */
   async start() {
     if (this.devices.settings.enabled) await this.listen();
+  }
+  /** Keeps the window's theme for phones, and hands a change to those online. */
+  async setAppearance(appearance: PhoneAppearance) {
+    if (
+      JSON.stringify(appearance) ===
+      JSON.stringify(this.devices.settings.appearance)
+    )
+      return;
+    await this.devices.setAppearance(appearance);
+    if (this.server.listening)
+      this.server.broadcast({ kind: "appearance", appearance });
   }
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
     if (this.server.listening) this.bridge.chatEvent(event);

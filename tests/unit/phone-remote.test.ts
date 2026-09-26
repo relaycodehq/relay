@@ -21,9 +21,7 @@ import type {
   ChatMessage,
   ChatSummary,
   ProjectChat,
-  ProjectChatSend,
 } from "../../shared/projects";
-import { defaultAISettings } from "../../shared/settings";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -33,8 +31,8 @@ afterEach(async () => {
 const projectId = randomUUID(),
   chatId = randomUUID();
 
-function fakeHost() {
-  const sent: { id: string; input: ProjectChatSend }[] = [];
+function fakeHost(respond?: (method: string) => Promise<unknown>) {
+  const dispatched: { method: string; args: unknown[] }[] = [];
   const summary: ChatSummary = {
     id: chatId,
     projectId,
@@ -72,26 +70,19 @@ function fakeHost() {
     projectPath: () => "/tmp/relay",
     chats: () => [summary],
     chat: async () => structuredClone(chat),
-    create: async () => summary,
-    send: async (id, input) => {
-      sent.push({ id, input });
+    dispatch: async (method, args) => {
+      dispatched.push({ method, args });
+      return respond?.(method);
     },
-    cancel: async () => {},
-    respond: () => {},
-    turnDiff: async () => {
-      throw new Error("unused");
-    },
-    triage: async () => {},
-    aiSettings: () => defaultAISettings,
   };
-  return { host, sent, summary };
+  return { host, dispatched, summary };
 }
 
-async function desktop() {
+async function desktop(respond?: (method: string) => Promise<unknown>) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
   const store = new Store(join(dir, "state"));
   await store.load();
-  const fake = fakeHost();
+  const fake = fakeHost(respond);
   const remote = new PhoneRemote(
     store,
     async (v) => "sealed:" + v,
@@ -147,7 +138,7 @@ function phone(
 }
 
 it("pairs from the QR link, then reconnects with the saved token", async () => {
-  const { remote, sent } = await desktop();
+  const { remote, dispatched } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;
   const first = phone({ link, device: "Pixel 7" });
   await first.until("online");
@@ -165,26 +156,27 @@ it("pairs from the QR link, then reconnects with the saved token", async () => {
   // The code was single-use; the token is what brings the phone back.
   const again = phone(credentials);
   await again.until("online");
-  const id = randomUUID();
-  await again.client.call("send", chatId, { id, body: "from the train" });
-  // It carries on with the thread's agent, model and modes.
-  expect(sent).toEqual([
-    {
-      id: chatId,
-      input: {
-        id,
-        // Only a leading mention makes the agent answer.
-        body: "@claude from the train",
-        provider: "claude",
-        choice: {
-          model: "claude-opus-5-5",
-          fast: false,
-          reasoningEffort: "high",
-        },
-        runtimeMode: "approval-required",
-        interactionMode: "default",
-      },
-    },
+  // The thread carries what its next message goes out with.
+  const thread = await again.client.call("chat", chatId);
+  expect(thread.settings).toEqual({
+    provider: "claude",
+    choice: { model: "claude-opus-5-5", fast: false, reasoningEffort: "high" },
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+  });
+  expect(thread.root).toBe("/tmp/relay");
+  await again.client.desktop("cancelProjectChat", chatId);
+  // A left-out optional argument must not arrive as null, which the desktop refuses.
+  await again.client.desktop(
+    "projectChatQueueAction",
+    chatId,
+    "remove",
+    chatId,
+    undefined,
+  );
+  expect(dispatched).toEqual([
+    { method: "cancelProjectChat", args: [chatId] },
+    { method: "projectChatQueueAction", args: [chatId, "remove", chatId] },
   ]);
 });
 
@@ -236,7 +228,12 @@ it("only answers the allowlisted calls, and only after pairing", async () => {
     // @ts-expect-error: not a phone method
     p.client.call("openTerminal", "/", 80, 24),
   ).rejects.toThrow("Phones can't do that.");
-  await expect(p.client.call("stop", "not-a-uuid")).rejects.toThrow();
+  // The desktop's own calls: only those on the phone's list get through.
+  for (const blocked of ["openTerminal", "saveProjectFile", "saveAISettings"])
+    await expect(
+      p.client.call("desktop", blocked as "aiSettings", []),
+    ).rejects.toThrow();
+  await expect(p.client.call("chat", "not-a-uuid")).rejects.toThrow();
 
   // A socket that finishes the handshake but skips pairing gets turned away.
   const handshake = clientHandshake(fromBase64Url(link.key));
@@ -268,4 +265,24 @@ it("only answers the allowlisted calls, and only after pairing", async () => {
     t: "denied",
     reason: "Pair this phone first.",
   });
+});
+
+it("waits longer for calls that push or write, and not for the rest", async () => {
+  // Everything the desktop is asked takes a moment longer than a normal call may.
+  const { remote } = await desktop(async (method) => {
+    await new Promise((r) => setTimeout(r, 800));
+    return method === "projectCommitMessage" ? "Fix the flaky test" : [];
+  });
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone(
+    { link, device: "Pixel 7" },
+    { timeoutMs: 500, slowTimeoutMs: 3000 },
+  );
+  await p.until("online");
+  await expect(
+    p.client.desktop("projectCommitMessage", projectId, ["a.ts"]),
+  ).resolves.toBe("Fix the flaky test");
+  await expect(p.client.desktop("projectFiles", projectId)).rejects.toThrow(
+    "didn't answer in time",
+  );
 });

@@ -13,6 +13,10 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { RemoteClient } from "../../shared/remote-client";
 import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
+import {
+  composeSend,
+  newThreadSettings,
+} from "../../mobile/src/remote/compose";
 
 const freePort = () =>
   new Promise<number>((done) => {
@@ -115,12 +119,21 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
 
     const overview = await phone.call("overview");
     const project = overview.projects[0]!;
-    const started = await phone.call("startChat", project.id, {
-      id: randomUUID(),
-      body: "fixture request approval",
-      provider: "codex",
-      runtimeMode: "approval-required",
+    // A supervised thread started the way the phone's New thread does.
+    const supervised = {
+      ...newThreadSettings(await phone.desktop("aiSettings")),
+      runtimeMode: "approval-required" as const,
+    };
+    const started = await phone.desktop("createProjectChat", project.id, {
+      kind: "project",
     });
+    await phone.desktop(
+      "sendProjectChat",
+      started.id,
+      composeSend(supervised, "fixture request approval", {
+        id: randomUUID(),
+      }),
+    );
 
     // The desktop's thread list learns the agent is waiting; so does the phone.
     await expect
@@ -134,10 +147,15 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       .toBe(true);
     const waiting = await phone.call("chat", started.id);
     expect(waiting.requests?.[0]?.decisions).toContain("accept");
-    await phone.call("respond", started.id, waiting.requests![0]!.id, {
-      kind: "approval",
-      decision: "accept",
-    });
+    await phone.desktop(
+      "respondProjectChat",
+      started.id,
+      waiting.requests![0]!.id,
+      {
+        kind: "approval",
+        decision: "accept",
+      },
+    );
     await expect
       .poll(() =>
         events.some(
@@ -150,10 +168,12 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       .toBe(true);
 
     // What the phone sends shows in the desktop's thread.
-    await phone.call("send", started.id, {
-      id: randomUUID(),
-      body: "Sent from my phone",
-    });
+    const thread = await phone.call("chat", started.id);
+    await phone.desktop(
+      "sendProjectChat",
+      started.id,
+      composeSend(thread.settings!, "Sent from my phone", { id: randomUUID() }),
+    );
     await page
       .getByRole("button", {
         name: /fixture request approval|Cache guard behavior/,

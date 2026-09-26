@@ -4,7 +4,6 @@
  * bridge; the phone only ever talks to it. Pure types and helpers, so the
  * phone app can import this file without the desktop's dependencies.
  */
-import type { AgentResponse, RuntimeMode } from "./agent-modes";
 import type { AgentProvider } from "./agents";
 import type {
   ChatMessage,
@@ -12,7 +11,10 @@ import type {
   ChatScope,
   KnownMessages,
   ProjectChatPatch,
+  ProjectChatSend,
 } from "./projects";
+import type { Api, ApiMethod } from "./types";
+import type { ChangeArea } from "./working-tree";
 
 export const remoteProtocol = 1;
 export const remoteScheme = "relay-remote";
@@ -96,39 +98,110 @@ export interface RemoteChatSummary {
   branch?: string;
   worktree?: boolean;
   pending?: ChatPending[];
+  /** When its next scheduled message goes out. */
+  nextSend?: number;
   empty?: boolean;
 }
 
 export interface RemoteProject {
   id: string;
   name: string;
+  /** Its virtual sidebar folder, e.g. `Work/Frontend`. */
+  folder?: string;
   scratch?: boolean;
   plain?: boolean;
 }
 
+/**
+ * A project's own icon (electron/project-icon), by the hash of its data URL.
+ * The data only comes along when the phone's copy is missing or stale; a
+ * null hash means the project has none and keeps the folder.
+ */
+export type RemoteProjectIcon =
+  { hash: string; dataUrl: string } | { hash: null };
+
+/** Bumped when the bridge gains calls; a phone asks for a restart of an older desktop. */
+export const remoteBridgeVersion = 6;
+
+/** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
+export interface PhonePalette {
+  kind: "light" | "dark";
+  sidebar: string;
+  surface: string;
+  toolbar: string;
+  inbox: string;
+  text: string;
+  muted: string;
+  border: string;
+  hover: string;
+  selected: string;
+  accent: string;
+  accentSoft: string;
+  onAccent: string;
+  diffAddition: string;
+  diffDeletion: string;
+}
+/** The desktop's appearance, so a phone can wear the same theme. */
+export interface PhoneAppearance {
+  mode: "system" | "light" | "dark";
+  light: PhonePalette;
+  dark: PhonePalette;
+}
+
 export interface RemoteOverview {
   name: string;
+  /** Missing before version 2. */
+  bridge?: number;
+  /** Unknown until the desktop's window has applied its theme once. */
+  appearance?: PhoneAppearance;
   projects: RemoteProject[];
   /** Unarchived threads with messages, newest first. */
   chats: RemoteChatSummary[];
 }
 
+/** What the thread's next message goes out with, as the desktop's composer last sent it. */
+export type RemoteSettings = Pick<
+  ProjectChatSend,
+  "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
+>;
+
 /** A thread, with messages the phone already holds at the same version sent as ids. */
 export interface RemoteChat extends Pick<
   ProjectChatPatch,
-  "id" | "projectId" | "title" | "messages" | "requests" | "queuePaused"
+  | "id"
+  | "projectId"
+  | "title"
+  | "messages"
+  | "requests"
+  | "queuePaused"
+  | "scope"
+  | "stopped"
+  | "pending"
+  | "worktree"
 > {
   running: boolean;
   /** The folder the thread works in; tool labels drop it, as on the desktop. Older desktops leave it out. */
   root?: string;
   /** Older messages left on the desktop; a phone gets the latest `remoteHistory`. */
   earlier: number;
-  queue: { id: string; body: string }[];
-  /** The agent the next message goes to, and how it may act. */
-  agent?: { provider: AgentProvider; runtimeMode: RuntimeMode };
+  /** `error`: why a steer was refused; it holds the queue until dealt with. */
+  queue: { id: string; body: string; images?: number; error?: string }[];
+  /** Sent with Send later, by when they go out. */
+  scheduled: {
+    id: string;
+    body: string;
+    at: number;
+    images?: number;
+    error?: string;
+  }[];
+  settings?: RemoteSettings;
+  /** The conversation the last message went to: the main one, or a reply's root. */
+  lastParentId?: string | null;
 }
 
 export const remoteHistory = 100;
+/** The most a phone may ask for at once, a page of `remoteHistory` at a time. */
+export const maxRemoteHistory = 1000;
 
 export interface RemoteDiffLine {
   kind: "add" | "del" | "same";
@@ -144,54 +217,111 @@ export interface RemoteDiff {
   truncated: boolean;
 }
 
-export interface RemoteNewChat {
-  id: string;
-  body: string;
-  provider: AgentProvider;
-  runtimeMode: RuntimeMode;
-}
+/** Which diff a phone asks for; the desktop turns it into lines. */
+export type RemoteDiffSource =
+  | { kind: "turn"; chatId: string; messageId: string; path: string }
+  | { kind: "working"; where: string; path: string; area: ChangeArea }
+  | { kind: "commit"; where: string; sha: string; path: string }
+  | { kind: "worktree"; chatId: string; path: string };
+
+/**
+ * Desktop calls a paired phone makes as they are, validated by the desktop's
+ * own dispatch: threads, models, Git (stage, commit, push, pull, fetch,
+ * branches), read-only files, history and background tasks; only what the
+ * phone app uses. Terminals, file saves, settings, sharing and anything that
+ * opens a desktop dialog are not on the list and stay out of reach.
+ */
+export const phoneDesktopMethods = [
+  "createProjectChat",
+  "createScratch",
+  "sendProjectChat",
+  "cancelProjectChat",
+  "respondProjectChat",
+  "projectChatQueueAction",
+  "resumeProjectChat",
+  "compactProjectChat",
+  "resolveStoppedWork",
+  "stopProjectChatPending",
+  "triageProjectChat",
+  "renameProjectChat",
+  "forkProjectChat",
+  "rewindProjectTurn",
+  "projectChatImage",
+  "projectChatReadImage",
+  "agentModels",
+  "agentDefaults",
+  "aiSettings",
+  "projectWorktree",
+  "projectCommands",
+  "providerUsage",
+  "projectWorkingTree",
+  "projectGitAction",
+  "projectCiStatus",
+  "projectMergePlan",
+  "projectMergeBranch",
+  "projectCommitMessage",
+  "projectBranches",
+  "projectChangeBranch",
+  "projectHistory",
+  "projectCommit",
+  "projectFiles",
+  "projectFile",
+  "projectTasks",
+  "stopProjectTask",
+  "restartProjectTask",
+] as const satisfies readonly ApiMethod[];
+export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
 
 /** Everything a paired phone may ask of the desktop. Nothing else is reachable. */
 export interface RemoteApi {
   overview(): Promise<RemoteOverview>;
-  chat(id: string, known?: KnownMessages): Promise<RemoteChat>;
-  send(
-    chatId: string,
-    message: { id: string; body: string; parentId?: string },
-  ): Promise<void>;
-  startChat(
-    projectId: string,
-    input: RemoteNewChat,
-  ): Promise<RemoteChatSummary>;
-  stop(chatId: string): Promise<void>;
-  respond(
-    chatId: string,
-    requestId: string,
-    response: AgentResponse,
-  ): Promise<void>;
-  turnDiff(
-    chatId: string,
-    messageId: string,
-    path: string,
-  ): Promise<RemoteDiff>;
-  settle(chatId: string, settled: boolean): Promise<void>;
+  /** The thread with its latest `history` messages, `remoteHistory` by default. */
+  chat(
+    id: string,
+    known?: KnownMessages,
+    history?: number,
+  ): Promise<RemoteChat>;
+  diff(source: RemoteDiffSource): Promise<RemoteDiff>;
+  desktop(method: PhoneDesktopMethod, args: unknown[]): Promise<unknown>;
+  /** Icons that differ from the phone's `known` hashes, by project id. */
+  projectIcons(
+    known: Record<string, string | null>,
+  ): Promise<Record<string, RemoteProjectIcon>>;
 }
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
   "overview",
   "chat",
-  "send",
-  "startChat",
-  "stop",
-  "respond",
-  "turnDiff",
-  "settle",
+  "diff",
+  "desktop",
+  "projectIcons",
 ] as const satisfies readonly RemoteMethod[];
+
+/**
+ * Calls that wait on the network, git or a model: pushes, pulls and merges,
+ * written commit messages, CI and plan usage. The phone gives them the
+ * desktop's two minutes instead of its usual quarter.
+ */
+export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
+  "projectGitAction",
+  "projectCommitMessage",
+  "projectMergePlan",
+  "projectMergeBranch",
+  "projectCiStatus",
+  "providerUsage",
+];
+
+/** A desktop call's arguments and result, as the phone sees them. */
+export type DesktopCall<M extends PhoneDesktopMethod> = {
+  args: Parameters<Api[M]>;
+  result: Awaited<ReturnType<Api[M]>>;
+};
 
 export type RemoteEvent =
   | { kind: "message"; chatId: string; message: ChatMessage; title?: string }
   /** Thread states moved: something started, finished or asked a question. */
-  | { kind: "chats"; chats: RemoteChatSummary[] };
+  | { kind: "chats"; chats: RemoteChatSummary[] }
+  | { kind: "appearance"; appearance: PhoneAppearance };
 
 /** Frames inside the encrypted channel. */
 export type ClientFrame =
@@ -237,6 +367,8 @@ export interface PhonePairing {
   expiresAt: number;
 }
 export interface PhoneRemoteApi {
+  /** The window's resolved theme, passed on to paired phones. */
+  phoneAppearance(appearance: PhoneAppearance): Promise<void>;
   phoneRemoteState(): Promise<PhoneRemoteState>;
   setPhoneRemote(enabled: boolean): Promise<PhoneRemoteState>;
   /** A fresh QR link; the previous one stops working. */

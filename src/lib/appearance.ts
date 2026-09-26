@@ -5,6 +5,8 @@ import {
   applyToDocument,
   loadAppearance,
   resolveAppearance,
+  resolveChoice,
+  tokens,
   saveAppearance,
   type Appearance,
   type AppearanceMode,
@@ -13,6 +15,7 @@ import {
   type ThemeKind,
 } from "./themes";
 import { relayIconPng } from "./relay-icon";
+import type { PhonePalette } from "../../shared/remote";
 
 let value: Appearance = loadAppearance();
 let resolved: ResolvedAppearance;
@@ -33,6 +36,14 @@ function apply() {
 async function syncNative(current: ResolvedAppearance) {
   // A plain browser preview has no desktop bridge.
   if (!window.relay?.applyAppearance) return;
+  // Paired phones wear the same theme, in both modes.
+  void window.relay
+    .phoneAppearance?.({
+      mode: value.mode,
+      light: phonePalette(resolveChoice("light", value.light)),
+      dark: phonePalette(resolveChoice("dark", value.dark)),
+    })
+    .catch(() => {});
   try {
     await window.relay.applyAppearance({
       mode: value.mode,
@@ -42,6 +53,27 @@ async function syncNative(current: ResolvedAppearance) {
   } catch {
     // Cosmetic; the in-window theme already applied.
   }
+}
+
+function phonePalette(resolved: ResolvedAppearance): PhonePalette {
+  const t = tokens(resolved);
+  return {
+    kind: resolved.palette.kind,
+    sidebar: t["--sidebar"],
+    surface: t["--surface"],
+    toolbar: t["--toolbar"],
+    inbox: t["--inbox"],
+    text: t["--text"],
+    muted: t["--muted"],
+    border: t["--border"],
+    hover: t["--hover"],
+    selected: t["--selected"],
+    accent: t["--accent"],
+    accentSoft: t["--accent-soft"],
+    onAccent: t["--accent-foreground"],
+    diffAddition: t["--diff-addition"],
+    diffDeletion: t["--diff-deletion"],
+  };
 }
 
 /** Applies the saved appearance before the first render. */

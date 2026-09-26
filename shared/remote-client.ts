@@ -10,14 +10,17 @@ import {
 } from "./remote-crypto";
 import type {
   ClientFrame,
+  DesktopCall,
   HelloFrame,
   PairingLink,
   RemoteApi,
   RemoteCredentials,
   RemoteEvent,
   RemoteMethod,
+  PhoneDesktopMethod,
   ServerFrame,
 } from "./remote";
+import { slowPhoneMethods } from "./remote";
 
 export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
 
@@ -32,6 +35,8 @@ export interface RemoteClientOptions {
   onPaired?: (credentials: RemoteCredentials) => void;
   /** Per host while connecting, and per call. */
   timeoutMs?: number;
+  /** Per call for `slowPhoneMethods`. */
+  slowTimeoutMs?: number;
   /** Silence after which a link counts as dead; the desktop ticks every 15s. */
   staleMs?: number;
 }
@@ -85,6 +90,13 @@ export class RemoteClient {
     method: M,
     ...args: Parameters<RemoteApi[M]>
   ): Promise<Result<M>> {
+    return this.request(method, args, this.options.timeoutMs ?? 15000);
+  }
+  private request<M extends RemoteMethod>(
+    method: M,
+    args: unknown[],
+    timeoutMs: number,
+  ): Promise<Result<M>> {
     if (this.status !== "online" || !this.channel)
       return Promise.reject(new Error(`Not connected to ${this.name}.`));
     const id = this.nextCall++;
@@ -92,10 +104,27 @@ export class RemoteClient {
       const timer = setTimeout(() => {
         this.calls.delete(id);
         reject(new Error(`${this.name} didn't answer in time.`));
-      }, this.options.timeoutMs ?? 15000);
+      }, timeoutMs);
       this.calls.set(id, { resolve, reject, timer });
       this.sendFrame({ t: "call", id, method, args });
     });
+  }
+  /** One of the desktop's own calls on the phone's allowlist, typed as the desktop's Api. */
+  desktop<M extends PhoneDesktopMethod>(
+    method: M,
+    ...args: DesktopCall<M>["args"]
+  ): Promise<DesktopCall<M>["result"]> {
+    // JSON turns a left-out optional argument into null, which the desktop's
+    // validation rightly refuses; trailing ones simply go.
+    const sent: unknown[] = [...args];
+    while (sent.length && sent.at(-1) === undefined) sent.pop();
+    return this.request(
+      "desktop",
+      [method, sent],
+      slowPhoneMethods.includes(method)
+        ? (this.options.slowTimeoutMs ?? 120_000)
+        : (this.options.timeoutMs ?? 15000),
+    ) as Promise<DesktopCall<M>["result"]>;
   }
   private setStatus(status: RemoteStatus, detail?: string) {
     this.status = status;

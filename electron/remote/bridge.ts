@@ -1,42 +1,32 @@
+import { createHash } from "node:crypto";
 import { structuredPatch } from "diff";
 import { z } from "zod";
-import {
-  agentResponseSchema,
-  runtimeModeSchema,
-} from "../../shared/agent-modes";
-import type { AgentResponse } from "../../shared/agent-modes";
-import {
-  agentMentionPattern,
-  agentProviderSchema,
-  type AgentProvider,
-} from "../../shared/agents";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import {
   knownMessagesSchema,
   type ChatMessage,
   type ChatSummary,
-  type ChatTriage,
   type KnownMessages,
   type Project,
   type ProjectChatPatch,
-  type ProjectChatSend,
 } from "../../shared/projects";
 import {
+  phoneDesktopMethods,
+  remoteBridgeVersion,
+  maxRemoteHistory,
   remoteHistory,
+  type PhoneAppearance,
+  type PhoneDesktopMethod,
   type RemoteApi,
   type RemoteChatSummary,
   type RemoteDiff,
   type RemoteDiffLine,
   type RemoteEvent,
   type RemoteMethod,
+  type RemoteProjectIcon,
 } from "../../shared/remote";
 import { idSchema } from "../../shared/rooms";
-import {
-  codexQuestionChoice,
-  type AISettings,
-  type ModelChoice,
-} from "../../shared/settings";
-import type { FilePair } from "../../shared/types";
+import type { ApiMethod, FilePair } from "../../shared/types";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -44,23 +34,50 @@ export interface RemoteHost {
   projectPath(projectId: string): string;
   chats(projectId: string): ChatSummary[];
   chat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
-  create(projectId: string): Promise<ChatSummary>;
-  send(id: string, input: ProjectChatSend): Promise<void>;
-  cancel(id: string): Promise<void>;
-  respond(id: string, requestId: string, response: AgentResponse): void;
-  turnDiff(chatId: string, messageId: string, path: string): Promise<FilePair>;
-  triage(id: string, triage: ChatTriage): Promise<unknown>;
-  aiSettings(): AISettings;
+  /** The desktop's own dispatch, which validates every call's arguments. */
+  dispatch(method: ApiMethod, args: unknown[]): Promise<unknown>;
   name(): string;
+  appearance?(): PhoneAppearance | undefined;
 }
 
-const bodySchema = z.string().trim().min(1).max(32000);
 const pathSchema = z.string().min(1).max(1000);
+const knownIconsSchema = z
+  .record(idSchema, z.string().max(64).nullable())
+  .refine((known) => Object.keys(known).length <= 1000);
+const diffSourceSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("turn"),
+      chatId: idSchema,
+      messageId: idSchema,
+      path: pathSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("working"),
+      where: z.string().max(80),
+      path: pathSchema,
+      area: z.enum(["staged", "unstaged"]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("commit"),
+      where: z.string().max(80),
+      sha: z.string().max(64),
+      path: pathSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("worktree"), chatId: idSchema, path: pathSchema })
+    .strict(),
+]);
 const maxDiffLines = 3000;
 /** Streaming answers go out at most this often; the phone doesn't need every token. */
 const streamMs = 150;
 
-/** The phone's API: a fixed set of thread actions, each validated here. */
+/** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 export class RemoteBridge {
   private streams = new Map<
     string,
@@ -81,16 +98,21 @@ export class RemoteBridge {
       this.projectIds = projects.map((p) => p.id);
       return {
         name: this.host.name(),
+        bridge: remoteBridgeVersion,
+        ...(this.host.appearance?.()
+          ? { appearance: this.host.appearance() }
+          : {}),
         projects: projects.map((p) => ({
           id: p.id,
           name: p.name,
+          ...(p.folder ? { folder: p.folder } : {}),
           ...(p.scratch ? { scratch: true } : {}),
           ...(p.plain ? { plain: true } : {}),
         })),
         chats: this.summaries(),
       };
     },
-    chat: async (id, known) => {
+    chat: async (id, known, history = remoteHistory) => {
       const patch = await this.host.chat(id, known);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
@@ -98,8 +120,9 @@ export class RemoteBridge {
         id: patch.id,
         projectId: patch.projectId,
         title: patch.title,
-        messages: patch.messages.slice(-remoteHistory),
-        earlier: Math.max(0, patch.messages.length - remoteHistory),
+        scope: patch.scope,
+        messages: patch.messages.slice(-history),
+        earlier: Math.max(0, patch.messages.length - history),
         requests: patch.requests,
         queuePaused: patch.queuePaused,
         running: !!summary?.running,
@@ -110,61 +133,73 @@ export class RemoteBridge {
         queue: (patch.queue ?? []).map((q) => ({
           id: q.input.id,
           body: q.input.body,
+          ...(q.input.images?.length ? { images: q.input.images.length } : {}),
+          ...(q.error ? { error: q.error } : {}),
         })),
+        scheduled: (patch.scheduled ?? []).map((q) => ({
+          id: q.input.id,
+          body: q.input.body,
+          at: q.at,
+          ...(q.input.images?.length ? { images: q.input.images.length } : {}),
+          ...(q.error ? { error: q.error } : {}),
+        })),
+        ...(patch.worktree ? { worktree: patch.worktree } : {}),
+        ...(patch.stopped ? { stopped: patch.stopped } : {}),
+        ...(summary?.pending ? { pending: summary.pending } : {}),
         ...(last
           ? {
-              agent: {
+              settings: {
                 provider: last.provider,
+                choice: last.choice,
                 runtimeMode: last.runtimeMode,
+                interactionMode: last.interactionMode,
+                ...(last.contextWindow
+                  ? { contextWindow: last.contextWindow }
+                  : {}),
               },
+              lastParentId: last.parentId ?? null,
             }
           : {}),
       };
     },
-    send: async (chatId, message) => {
-      const { lastInput } = await this.host.chat(chatId);
-      const provider =
-        lastInput?.provider ?? this.host.aiSettings().threadProvider;
-      await this.host.send(chatId, {
-        id: message.id,
-        body: addressed(message.body, provider),
-        provider,
-        // The phone goes on with the thread's agent, model and modes as last sent.
-        choice: lastInput?.choice ?? this.defaultChoice(provider),
-        runtimeMode: lastInput?.runtimeMode ?? "full-access",
-        interactionMode: lastInput?.interactionMode ?? "default",
-        ...(lastInput?.contextWindow
-          ? { contextWindow: lastInput.contextWindow }
-          : {}),
-        ...(message.parentId ? { parentId: message.parentId } : {}),
-      });
-      this.refresh();
-    },
-    startChat: async (projectId, input) => {
-      const chat = await this.host.create(projectId);
-      await this.host.send(chat.id, {
-        id: input.id,
-        body: addressed(input.body, input.provider),
-        provider: input.provider,
-        choice: this.defaultChoice(input.provider),
-        runtimeMode: input.runtimeMode,
-        interactionMode: "default",
-      });
-      this.refresh();
-      return summary(
-        this.host.chats(projectId).find((c) => c.id === chat.id) ?? chat,
+    diff: async (source) => {
+      const [method, args]: [ApiMethod, unknown[]] =
+        source.kind === "turn"
+          ? ["projectTurnDiff", [source.chatId, source.messageId, source.path]]
+          : source.kind === "working"
+            ? ["projectWorkingDiff", [source.where, source.path, source.area]]
+            : source.kind === "commit"
+              ? ["projectCommitDiff", [source.where, source.sha, source.path]]
+              : ["projectWorktreeDiff", [source.chatId, source.path]];
+      return toRemoteDiff(
+        source.path,
+        (await this.host.dispatch(method, args)) as FilePair,
       );
     },
-    stop: (chatId) => this.host.cancel(chatId),
-    respond: async (chatId, requestId, response) => {
-      this.host.respond(chatId, requestId, response);
+    desktop: async (method, args) => {
+      const value = await this.host.dispatch(method, args);
+      // Sends, stops and triage move thread states; say so without waiting for the watch.
       this.refresh();
+      return value;
     },
-    turnDiff: async (chatId, messageId, path) =>
-      toRemoteDiff(path, await this.host.turnDiff(chatId, messageId, path)),
-    settle: async (chatId, settled) => {
-      await this.host.triage(chatId, { kind: settled ? "settle" : "unsettle" });
-      this.refresh();
+    projectIcons: async (known) => {
+      const projects = await this.host.projects();
+      const changed: Record<string, RemoteProjectIcon> = {};
+      // A few at a time: the first look walks each project's folders.
+      for (let i = 0; i < projects.length; i += 4)
+        await Promise.all(
+          projects.slice(i, i + 4).map(async ({ id }) => {
+            const dataUrl = (await this.host
+              .dispatch("projectIcon", [id])
+              .catch(() => null)) as string | null;
+            const hash = dataUrl
+              ? createHash("sha256").update(dataUrl).digest("hex").slice(0, 16)
+              : null;
+            if (known[id] === hash) return;
+            changed[id] = hash && dataUrl ? { hash, dataUrl } : { hash: null };
+          }),
+        );
+      return changed;
     },
   };
   async handle(method: RemoteMethod, args: unknown[]): Promise<unknown> {
@@ -176,48 +211,19 @@ export class RemoteBridge {
         return a.chat(
           idSchema.parse(args[0]),
           args[1] == null ? undefined : knownMessagesSchema.parse(args[1]),
+          args[2] == null
+            ? undefined
+            : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
         );
-      case "send":
-        return a.send(
-          idSchema.parse(args[0]),
-          z
-            .object({
-              id: idSchema,
-              body: bodySchema,
-              parentId: idSchema.optional(),
-            })
-            .strict()
-            .parse(args[1]),
+      case "diff":
+        return a.diff(diffSourceSchema.parse(args[0]));
+      case "desktop":
+        return a.desktop(
+          z.enum(phoneDesktopMethods).parse(args[0]) as PhoneDesktopMethod,
+          z.array(z.unknown()).max(10).parse(args[1]),
         );
-      case "startChat":
-        return a.startChat(
-          idSchema.parse(args[0]),
-          z
-            .object({
-              id: idSchema,
-              body: bodySchema,
-              provider: agentProviderSchema,
-              runtimeMode: runtimeModeSchema,
-            })
-            .strict()
-            .parse(args[1]),
-        );
-      case "stop":
-        return a.stop(idSchema.parse(args[0]));
-      case "respond":
-        return a.respond(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          agentResponseSchema.parse(args[2]),
-        );
-      case "turnDiff":
-        return a.turnDiff(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          pathSchema.parse(args[2]),
-        );
-      case "settle":
-        return a.settle(idSchema.parse(args[0]), z.boolean().parse(args[1]));
+      case "projectIcons":
+        return a.projectIcons(knownIconsSchema.parse(args[0] ?? {}));
       default:
         throw new Error("Phones can't do that.");
     }
@@ -292,17 +298,7 @@ export class RemoteBridge {
       .slice(0, 300)
       .map(summary);
   }
-  private defaultChoice(provider: AgentProvider): ModelChoice {
-    // An empty model follows the project's defaults, as the desktop's Default does.
-    return provider === "codex"
-      ? codexQuestionChoice(this.host.aiSettings())
-      : { model: "", fast: false, reasoningEffort: "" };
-  }
 }
-
-/** Only a leading mention makes an agent answer; the desktop's composer adds it the same way. */
-const addressed = (body: string, provider: AgentProvider) =>
-  agentMentionPattern.test(body) ? body : `@${provider} ${body}`;
 
 function summary(c: ChatSummary): RemoteChatSummary {
   return {
@@ -322,6 +318,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.branch ? { branch: c.branch } : {}),
     ...(c.worktree ? { worktree: true } : {}),
     ...(c.pending?.length ? { pending: c.pending } : {}),
+    ...(c.nextSend ? { nextSend: c.nextSend } : {}),
     ...(c.empty ? { empty: true } : {}),
   };
 }

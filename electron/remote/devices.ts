@@ -22,6 +22,8 @@ export interface RemoteSettings {
   /** The bridge's X25519 secret: sealed by the OS credential store, or `plain:` where there is none. */
   key?: string;
   devices?: RemoteDevice[];
+  /** The desktop's last theme, for phones that connect before its window draws. */
+  appearance?: import("../../shared/remote").PhoneAppearance;
 }
 
 const pairingMs = 10 * 60_000;
@@ -46,6 +48,11 @@ export class RemoteDevices {
   }
   list() {
     return this.settings.devices ?? [];
+  }
+  async setAppearance(appearance: RemoteSettings["appearance"]) {
+    await this.store.update((s) => {
+      s.phoneRemote = { ...s.phoneRemote, appearance };
+    });
   }
   async setEnabled(enabled: boolean) {
     await this.store.update((s) => {

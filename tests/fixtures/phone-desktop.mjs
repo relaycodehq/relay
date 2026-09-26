@@ -6,6 +6,7 @@
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
+// --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 import { _electron as electron } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
@@ -26,6 +27,7 @@ const arg = (name) => {
 const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
+const theme = arg("--theme");
 
 const root = await realpath(
   await mkdtemp(join(tmpdir(), "relay-phone-desktop-")),
@@ -85,6 +87,19 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 const page = await app.firstWindow();
+if (theme) {
+  await page.evaluate((theme) => {
+    localStorage.setItem(
+      "relay-appearance",
+      JSON.stringify({
+        mode: "dark",
+        light: { theme: "relay" },
+        dark: { theme },
+      }),
+    );
+  }, theme);
+  await page.reload();
+}
 await app.evaluate(({ dialog }, repo) => {
   dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [repo] });
 }, repo);
