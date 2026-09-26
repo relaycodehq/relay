@@ -258,3 +258,23 @@ it("shares private history, streams only to the requester, runs each participant
     await rm(root, { recursive: true, force: true });
   }
 }, 30000);
+it("accepts shared messages from every agent a thread can talk to", async () => {
+  const { sharedMessagesSchema } = await import("../../server/conversations");
+  const { agentProviders } = await import("../../shared/agents");
+  for (const provider of agentProviders)
+    expect(
+      sharedMessagesSchema.safeParse({
+        messages: [
+          {
+            id: randomUUID(),
+            role: "assistant",
+            body: "Done.",
+            status: "complete",
+            created: 1,
+            provider,
+            version: 1,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+});

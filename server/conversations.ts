@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentProviderSchema } from "../shared/agents";
 import { idSchema } from "../shared/rooms";
 import { chatScopeSchema, type ChatMessage } from "../shared/projects";
 import { RoomsDatabase, HttpError, type Session } from "./database";
@@ -9,7 +10,7 @@ const sharedMessage = z
     body: z.string().max(100000),
     status: z.enum(["complete", "failed", "cancelled"]),
     created: z.number().int().nonnegative(),
-    provider: z.enum(["codex", "claude"]),
+    provider: agentProviderSchema,
     error: z.string().max(1000).optional(),
     version: z.number().int().positive(),
     parentId: idSchema.nullable().optional(),
