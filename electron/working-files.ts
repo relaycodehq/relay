@@ -10,7 +10,7 @@ export interface WorkingFile {
   hash: string;
   mode: number;
 }
-/** Binary or oversized content, which diffs show as a placeholder. */
+/** Content that isn't editable text (binary, oversized, not UTF-8, a Git LFS pointer), which diffs show as a placeholder. */
 export class NotText extends Error {}
 export const tooLarge = "Text files larger than 2 MiB are not supported here.";
 export function decodeText(bytes: Buffer): string {
@@ -23,12 +23,12 @@ export function decodeText(bytes: Buffer): string {
       bytes,
     );
   } catch {
-    throw new Error(
+    throw new NotText(
       "This file is not valid UTF-8. Edit it in your IDE to preserve its encoding.",
     );
   }
   if (text.startsWith("version https://git-lfs.github.com/spec/v1"))
-    throw new Error("Git LFS files must be edited in your IDE.");
+    throw new NotText("Git LFS files must be edited in your IDE.");
   return text;
 }
 export async function safeWorkingPath(

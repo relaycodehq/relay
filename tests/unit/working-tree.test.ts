@@ -16,6 +16,7 @@ import {
   workingDiff,
   performGitAction,
 } from "../../electron/working-tree";
+import { revisionDiff } from "../../electron/turn-changes";
 let root: string, remote: string;
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", root, ...args], {
@@ -244,4 +245,22 @@ it("lists the other changes beside an untracked nested repository", async () => 
     paths: ["code.ts"],
   });
   expect(tree.changes[0]).toMatchObject({ path: "code.ts", index: "M" });
+});
+it("shows Latin-1 files and Git LFS pointers as binary in diffs instead of failing", async () => {
+  const lfs =
+    "version https://git-lfs.github.com/spec/v1\noid sha256:" +
+    "0".repeat(64) +
+    "\nsize 3\n";
+  await writeFile(join(root, "latin.txt"), Buffer.from("caf\xe9\n", "latin1"));
+  await writeFile(join(root, "big.bin"), lfs);
+  git("add", ".");
+  git("commit", "-qm", "Add odd files");
+  await writeFile(join(root, "latin.txt"), Buffer.from("caf\xe9s\n", "latin1"));
+  await writeFile(join(root, "big.bin"), lfs.replace("size 3", "size 4"));
+  for (const path of ["latin.txt", "big.bin"]) {
+    expect((await workingDiff(root, path, "unstaged")).binary).toBe(true);
+    expect((await revisionDiff(root, "HEAD~1", "HEAD", path)).binary).toBe(
+      true,
+    );
+  }
 });

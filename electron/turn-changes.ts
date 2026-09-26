@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import { decodeText } from "./working-files";
+import { NotText, decodeText } from "./working-files";
 import { digest } from "./hash";
 import { imageSides } from "./image-pair";
 import { gitEnv } from "./git";
@@ -328,11 +328,14 @@ export async function revisionDiff(
         env: gitEnv(),
       })
     ).stdout;
-    if (bytes.includes(0)) {
+    let contents: string;
+    try {
+      contents = decodeText(bytes);
+    } catch (e) {
+      if (!(e instanceof NotText)) throw e;
       binary = true;
       return null;
     }
-    const contents = decodeText(bytes);
     return { name: path, contents, cacheKey: digest(contents) };
   };
   const [old, next] = await Promise.all([read(from), read(to)]);
