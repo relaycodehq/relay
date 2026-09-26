@@ -620,7 +620,7 @@ export function ProjectSidebar({
     const id = dragging;
     clearDrag();
     if (target.kind === "project" && target.id === id) return;
-    void moveProject(id, target);
+    void changeGroups(() => moveProject(id, target));
   };
   /** Hovering a collapsed folder while dragging opens it, like Finder. */
   const openWhileDragging = (key: string, isOpen: boolean) => {
@@ -1091,7 +1091,11 @@ export function ProjectSidebar({
               key={path}
               className="sb-menu-item"
               disabled={path === (p.folder ?? "")}
-              onClick={() => void moveProject(p.id, { kind: "folder", path })}
+              onClick={() =>
+                void changeGroups(() =>
+                  moveProject(p.id, { kind: "folder", path }),
+                )
+              }
             >
               <span className="sb-menu-group">
                 {path.split("/").map((name, i, parts) => (
@@ -1110,7 +1114,9 @@ export function ProjectSidebar({
             <Menu.Item
               className="sb-menu-item"
               onClick={() =>
-                void moveProject(p.id, { kind: "folder", path: "" })
+                void changeGroups(() =>
+                  moveProject(p.id, { kind: "folder", path: "" }),
+                )
               }
             >
               <span className="sb-menu-label">
