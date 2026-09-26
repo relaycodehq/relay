@@ -1752,8 +1752,12 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       await shell.openExternal(u.href);
       return;
     }
-    default:
-      throw new Error("Unknown application method.");
+    default: {
+      // Fails to compile when the Api gains a method this switch lacks; the
+      // throw still catches names the renderer made up.
+      const unknown: never = method;
+      throw new Error(`Unknown application method: ${String(unknown)}.`);
+    }
   }
 }
 app

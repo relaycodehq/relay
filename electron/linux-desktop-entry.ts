@@ -1,4 +1,5 @@
 // Modelled on T3 Code's apps/desktop/src/app/DesktopLinuxUrlHandler.ts (MIT).
+import { roomProtocol } from "../shared/rooms";
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -39,7 +40,7 @@ export function renderAppImageEntry(appImage: string, icon: string) {
     "Terminal=false",
     "Categories=Development;",
     `StartupWMClass=${desktopId.replace(/\.desktop$/, "")}`,
-    "MimeType=x-scheme-handler/relay-room;",
+    `MimeType=x-scheme-handler/${roomProtocol};`,
     appImageMarker,
     "",
   ].join("\n");
@@ -105,7 +106,7 @@ export function registerAppImage(
   }
   execFile(
     "xdg-mime",
-    ["default", desktopId, "x-scheme-handler/relay-room"],
+    ["default", desktopId, `x-scheme-handler/${roomProtocol}`],
     () => {},
   );
 }
