@@ -60,7 +60,8 @@ import { useTypography } from "../lib/typography";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
 interface Props {
-  onSettings: () => void;
+  /** Left out where the app's own settings button is already in view. */
+  onSettings?: () => void;
   onDiscuss: (target: QuestionTarget) => void;
   checks: ChecksController;
   pull: Pull;
@@ -335,9 +336,11 @@ export function ReviewWorkspace({
                 Finish review{draftCount > 0 && <span>{draftCount}</span>}
                 <ChevronDown size={13} />
               </button>
-              <IconButton label="Open settings" onClick={onSettings}>
-                <Settings2 size={16} />
-              </IconButton>
+              {onSettings && (
+                <IconButton label="Open settings" onClick={onSettings}>
+                  <Settings2 size={16} />
+                </IconButton>
+              )}
             </div>
           </header>
 

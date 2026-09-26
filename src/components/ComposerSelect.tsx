@@ -10,6 +10,7 @@ function ComposerSelectImpl<T extends string>({
   icon,
   container,
   heading,
+  className = "",
 }: {
   label: string;
   value: T;
@@ -25,6 +26,7 @@ function ComposerSelectImpl<T extends string>({
   container?: HTMLElement;
   /** A title over the options, with keys that change it from the composer. */
   heading?: { label: string; hint?: string };
+  className?: string;
 }) {
   return (
     <Select.Root
@@ -37,7 +39,7 @@ function ComposerSelectImpl<T extends string>({
       <Select.Trigger
         type="button"
         aria-label={label}
-        className="composer-control"
+        className={`composer-control ${className}`}
       >
         {icon}
         <Select.Value />

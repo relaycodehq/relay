@@ -382,8 +382,7 @@
     gap: 0;
     padding: 6px;
   }
-  .editor-bar [aria-label="Undo code edit"],
-  .editor-bar [aria-label="Redo code edit"],
+  .editor-bar .editor-history,
   .editor-bar .divider {
     display: none;
   }
@@ -403,7 +402,7 @@
   }
   .workspace-pane .composer-tools .composer-fast,
   .workspace-pane .composer-tools .composer-interaction,
-  .workspace-pane .composer-tools .composer-control[aria-label="Runtime mode"] {
+  .workspace-pane .composer-tools .composer-runtime {
     font-size: 0;
     gap: 2px;
   }

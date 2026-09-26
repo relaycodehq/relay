@@ -69,6 +69,7 @@ export const ComposerModeControls = memo(function ComposerModeControls({
       <span className="composer-divider" aria-hidden />
       <ComposerSelect
         label="Runtime mode"
+        className="composer-runtime"
         value={runtimeMode}
         icon={<Icon size={14} />}
         onChange={onRuntimeMode}

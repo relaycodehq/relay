@@ -1073,7 +1073,7 @@ export function Connected({
           )
         ) : (
           <ReviewWorkspace
-            onSettings={() => onSettings()}
+            onSettings={embedded ? undefined : () => onSettings()}
             onDiscuss={(target) => {
               if (embedded?.onDiscuss) {
                 embedded.onDiscuss(target, pull.data!);

@@ -384,12 +384,14 @@ export default function LocalFileEditor({
           <span className="divider" />
           <IconButton
             label="Undo code edit"
+            className="editor-history"
             onClick={() => viewer.current?.getEditor(path)?.undo()}
           >
             <Undo2 size={15} />
           </IconButton>
           <IconButton
             label="Redo code edit"
+            className="editor-history"
             onClick={() => viewer.current?.getEditor(path)?.redo()}
           >
             <Redo2 size={15} />
@@ -680,12 +682,14 @@ export default function LocalFileEditor({
               </span>
               <IconButton
                 label="Undo code edit"
+                className="editor-history"
                 onClick={() => viewer.current?.getEditor(path)?.undo()}
               >
                 <Undo2 size={16} />
               </IconButton>
               <IconButton
                 label="Redo code edit"
+                className="editor-history"
                 onClick={() => viewer.current?.getEditor(path)?.redo()}
               >
                 <Redo2 size={16} />

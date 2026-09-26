@@ -1374,9 +1374,6 @@ details.agent-step > .agent-step-heading:hover {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
-.project-review .review-titlebar .icon-button[title="Open settings"] {
-  display: none;
-}
 @media (max-width: 1200px) {
   .thread-start {
     padding: 24px 22px 9vh;
