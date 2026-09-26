@@ -40,6 +40,8 @@ import { api } from "../lib/api";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, RichText } from "./ui";
 import { useTheme } from "../lib/useTheme";
+import { useAISettings } from "../lib/useAISettings";
+import { agentName } from "../../shared/agents";
 import { useSyntaxThemes } from "../lib/appearance";
 import { useFileDiff } from "../lib/useFileDiff";
 import { labelDiffGapControls } from "../lib/diffGapControls";
@@ -71,7 +73,7 @@ interface Props {
   onError: (e: unknown) => void;
   onMark: (start: number, end: number, side: Side) => void;
   onRemoveMark: (id: string) => void;
-  onAskCodex: (target: QuestionTarget) => void;
+  onAskAboutLines: (target: QuestionTarget) => void;
   onDiscuss: (target: QuestionTarget) => void;
   onEditLine: (line: number) => void;
 }
@@ -102,9 +104,12 @@ export function DiffViewer({
   onMark,
   onRemoveMark,
   onEditLine,
-  onAskCodex,
+  onAskAboutLines,
   onDiscuss,
 }: Props) {
+  const questionAgent = agentName(
+    useAISettings().data?.questionsProvider ?? "codex",
+  );
   const contents = useQuery({
     queryKey: [
       "contents",
@@ -307,16 +312,22 @@ export function DiffViewer({
             onClick={() => {
               const range = selection.range;
               if (range.endSide && range.endSide !== range.side) {
-                onError(new Error("Select lines on one side to ask Codex."));
+                onError(
+                  new Error(
+                    `Select lines on one side to ask ${questionAgent}.`,
+                  ),
+                );
                 return;
               }
               const start = Math.min(range.start, range.end),
                 end = Math.max(range.start, range.end);
               if (end - start >= 200) {
-                onError(new Error("Select up to 200 lines to ask Codex."));
+                onError(
+                  new Error(`Select up to 200 lines to ask ${questionAgent}.`),
+                );
                 return;
               }
-              onAskCodex({
+              onAskAboutLines({
                 path: file.filename,
                 start,
                 end,
@@ -324,7 +335,7 @@ export function DiffViewer({
               });
             }}
           >
-            <Terminal size={13} /> Ask Codex
+            <Terminal size={13} /> Ask {questionAgent}
           </button>
           <button
             onClick={() => {

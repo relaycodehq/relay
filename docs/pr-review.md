@@ -80,9 +80,9 @@ Install dependencies in the linked project first. Angular needs its matching `ty
 
 One disposable language-service process serves the active PR. It reuses its project graph, debounces edits, has a 768 MiB JavaScript heap limit and a 90-second check deadline, and stops on project switch, disconnect, quit, or checkout mismatch. This consumes additional memory beyond diff review. **Live checks** can be turned off per PR in the checks panel. Content hashes and buffer sequence numbers suppress stale diagnostics and navigation results. Opening older-side symbols is not supported.
 
-## Ask Codex about a line
+## Ask an agent about a line
 
-Click a code row or select a line/range in either diff gutter, then choose **Ask Codex**. Enter your question and click **Ask in Codex**. The app opens an interactive Codex CLI session at the linked repository root, carrying the exact PR revision, file path, side, selected lines and up to 25 nearby lines on each side. The session can inspect definitions, callers and tests throughout the repository; follow-up questions continue in that terminal. You can preview the included code before launching.
+Click a code row or select a line/range in either diff gutter, then choose **Ask Codex** (or **Ask Claude**, following the line-questions agent in Settings → AI models). Enter your question and click **Ask in Codex**. The app opens an interactive session of that agent's CLI at the linked repository root, carrying the exact PR revision, file path, side, selected lines and up to 25 nearby lines on each side. The session can inspect definitions, callers and tests throughout the repository; follow-up questions continue in that terminal. You can preview the included code before launching.
 
 Questions use a read-only sandbox and do not create Gitea comments or mark files viewed. A dirty or different local checkout is allowed: the prompt distinguishes it from the supplied PR snapshot. Old-side and renamed/deleted-file questions use their merge-base revision and original path. A changed PR revision, missing source or selection over 200 lines blocks the handoff rather than silently using different code. Link a local Git folder with the matching repository remote first.
 

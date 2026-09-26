@@ -8,6 +8,8 @@ export type AgentProvider = z.infer<typeof agentProviderSchema>;
 
 export interface AgentInfo {
   name: string;
+  /** The program Relay runs, as its makers call it. */
+  cli: string;
   /** Model picker placeholder when no model is picked. */
   defaultModel: string;
   /**
@@ -35,6 +37,7 @@ export interface AgentInfo {
 export const agents = {
   codex: {
     name: "Codex",
+    cli: "Codex CLI",
     defaultModel: "Codex default",
     helper: true,
     reviewCommand: "/review",
@@ -47,6 +50,7 @@ export const agents = {
   },
   claude: {
     name: "Claude",
+    cli: "Claude Code",
     defaultModel: "Claude default",
     helper: true,
     reviewCommand: "/code-review",
@@ -59,6 +63,7 @@ export const agents = {
   },
   opencode: {
     name: "OpenCode",
+    cli: "OpenCode",
     defaultModel: "OpenCode default",
     helper: false,
     fast: false,

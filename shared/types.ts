@@ -272,7 +272,7 @@ export interface Api
   /** What a project's threads run when they leave the model or effort on Default. */
   claudeDefaults(projectId: string): Promise<ClaudeDefaults | null>;
   codexDefaults(projectId: string): Promise<CodexDefaults>;
-  askCodex(ref: PullRef, question: LineQuestion): Promise<void>;
+  askAboutLines(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   retryLoginRestore(): Promise<void>;
   cancelLoginRestore(): Promise<void>;

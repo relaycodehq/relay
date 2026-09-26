@@ -356,7 +356,7 @@ test("line questions can run in a read-only Claude Code session", async () => {
   await page
     .locator('.diff-wrapper [data-additions] [data-line="13"]')
     .click({ position: { x: 60, y: 8 } });
-  await page.getByRole("button", { name: "Ask Codex", exact: true }).click();
+  await page.getByRole("button", { name: "Ask Claude", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Ask Claude", exact: true });
   await expect(dialog).toContainText("Claude · default model");
   await page.getByLabel("Question about selected code").fill("Who calls this?");

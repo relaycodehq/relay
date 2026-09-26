@@ -157,7 +157,7 @@ const methods = [
   "writeClipboard",
   "writeClipboardImage",
   "launchCodex",
-  "askCodex",
+  "askAboutLines",
   "aiSettings",
   "saveAISettings",
   "devopsStatus",

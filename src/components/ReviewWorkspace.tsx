@@ -1,5 +1,5 @@
 import { LocalChanges } from "./LocalChanges";
-import { AskCodex } from "./AskCodex";
+import { AskAboutLines } from "./AskAboutLines";
 import type { QuestionTarget } from "../../shared/questions";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { ProjectChecksButton } from "./ProjectChecks";
@@ -556,7 +556,7 @@ export function ReviewWorkspace({
               }}
               onCodex={setCodex}
               onDiscuss={onDiscuss}
-              onAskCodex={(target) =>
+              onAskAboutLines={(target) =>
                 setQuestion({ pull, file: file!, target })
               }
               onError={onError}
@@ -736,7 +736,7 @@ export function ReviewWorkspace({
         </Modal>
       )}
       {question && (
-        <AskCodex
+        <AskAboutLines
           pull={question.pull}
           file={question.file}
           target={question.target}

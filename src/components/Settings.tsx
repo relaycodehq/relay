@@ -91,6 +91,7 @@ import "./settings.css";
 import {
   agentName,
   agentProviders,
+  agents,
   type AgentProvider,
 } from "../../shared/agents";
 
@@ -773,10 +774,9 @@ export function Settings({
       id: "codex-models",
       category: "models",
       title: "Agents",
-      description:
-        "Uses your signed-in Codex CLI or Claude Code. Model availability depends on your account.",
+      description: `Uses your signed-in ${agentProviders.map((p) => agents[p].cli).join(", ")}. Model availability depends on your account.`,
       keywords:
-        "default agent new thread grouping line questions reasoning effort fast mode model codex claude ai",
+        "default agent new thread grouping line questions reasoning effort fast mode model codex claude opencode ai",
       block: true,
       render: () =>
         values ? (

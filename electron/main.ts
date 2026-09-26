@@ -1699,7 +1699,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         usageProviderSchema.parse(args[0]),
         z.boolean().optional().parse(args[1]),
       );
-    case "askCodex": {
+    case "askAboutLines": {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);
       const dir = requireFolder(ref);

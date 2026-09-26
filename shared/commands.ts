@@ -1,3 +1,5 @@
+import { agentName, agentProviders } from "./agents";
+
 export const relayCommands = [
   { name: "openpr", description: "Open this branch’s PR, or create one" },
   { name: "changes", description: "Review local uncommitted changes" },
@@ -17,7 +19,7 @@ export const relayCommands = [
   },
   {
     name: "provider",
-    description: "Switch between Codex, Claude, and messages only",
+    description: `Switch between ${agentProviders.map(agentName).join(", ")} and messages only`,
     args: "<agent>",
   },
   { name: "model", description: "Choose the model", args: "<model>" },

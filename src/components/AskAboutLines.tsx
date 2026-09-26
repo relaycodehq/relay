@@ -4,11 +4,13 @@ import { MessageSquare, Terminal } from "lucide-react";
 import type { ChangedFile, LocalFolder, Pull } from "../../shared/types";
 import { lineExcerpt, type QuestionTarget } from "../../shared/questions";
 import { choiceLabel } from "../../shared/settings";
+import { agentName, agents } from "../../shared/agents";
 import { useAISettings } from "../lib/useAISettings";
 import { api } from "../lib/api";
 import { ErrorBox, Modal } from "./ui";
 
-export function AskCodex({
+/** Opens the line-question agent in a terminal, about lines picked in a diff. */
+export function AskAboutLines({
   pull,
   file,
   target,
@@ -24,9 +26,9 @@ export function AskCodex({
   onClose: () => void;
 }) {
   const settings = useAISettings();
-  const claude = settings.data?.questionsProvider === "claude";
-  const name = claude ? "Claude" : "Codex",
-    agent = claude ? "Claude Code" : "Codex CLI";
+  const provider = settings.data?.questionsProvider ?? "codex";
+  const name = agentName(provider),
+    agent = agents[provider].cli;
   const [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
@@ -149,7 +151,7 @@ export function AskCodex({
               setBusy(true);
               setError(undefined);
               try {
-                await api.askCodex(pull, {
+                await api.askAboutLines(pull, {
                   ...target,
                   head: pull.head.sha,
                   base: pull.merge_base,
