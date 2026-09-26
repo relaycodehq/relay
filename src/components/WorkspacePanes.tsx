@@ -246,7 +246,6 @@ export function PaneHeader({
   closeDisabled,
   onSlots,
   detail,
-  children,
 }: {
   id: PaneId;
   icon: ReactNode;
@@ -256,7 +255,6 @@ export function PaneHeader({
   onClose: () => void;
   closeDisabled?: boolean;
   onSlots?: (update: (slots: PaneSlots) => PaneSlots) => void;
-  children?: ReactNode;
 }) {
   const titleRef = useCallback(
       (title: HTMLElement | null) => onSlots?.((s) => ({ ...s, title })),
@@ -284,7 +282,6 @@ export function PaneHeader({
         <div className="pane-title-slot" ref={titleRef} />
       </div>
       <div className="pane-header-actions" ref={actionsRef} />
-      {children}
       <IconButton
         label={`Close ${title.toLowerCase()}`}
         disabled={closeDisabled}

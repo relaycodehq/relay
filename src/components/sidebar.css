@@ -1162,11 +1162,6 @@
     opacity: 0;
   }
 }
-@keyframes sb-breathe {
-  50% {
-    opacity: 0.35;
-  }
-}
 @keyframes sb-enter {
   from {
     opacity: 0;

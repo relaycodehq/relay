@@ -1641,25 +1641,6 @@ body.resizing-table-column {
   height: 39px;
   font-size: 12px;
 }
-.settings-account p {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 3px;
-}
-.appearance {
-  margin: 10px 0 20px;
-}
-.appearance button {
-  text-transform: capitalize;
-  gap: 8px;
-  padding: 9px;
-}
-.about {
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  font-size: 10px !important;
-  color: var(--muted);
-}
 .conversation {
   flex: 1;
   overflow: auto;

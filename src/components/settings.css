@@ -509,10 +509,6 @@
 .settings-row:last-child {
   border-bottom: 0;
 }
-.settings-row.wide {
-  flex-direction: column;
-  align-items: stretch;
-}
 .settings-row-text {
   display: grid;
   gap: 2px;
@@ -545,12 +541,6 @@
   padding: 7px 10px;
   border-radius: 8px;
   font-size: 12.5px;
-}
-.settings-row.wide .settings-row-control {
-  justify-content: stretch;
-}
-.settings-row.wide .settings-row-control input:not([type="checkbox"]) {
-  width: 100%;
 }
 /* Colour wells: the accent's custom well and the background and foreground
    fields. Beats the generic row input rule by coming after it. */

@@ -66,8 +66,6 @@
   align-items: center;
   gap: 9px;
   min-width: 0;
-}
-.create-pull-sheet .commit-files label {
   font-weight: 400;
 }
 .commit-files input[type="checkbox"] {

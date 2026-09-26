@@ -19,19 +19,16 @@ export function SettingsRow({
   label,
   hint,
   children,
-  wide,
   below,
 }: {
   label: ReactNode;
   hint?: ReactNode;
   children?: ReactNode;
-  /** Puts the control under the text, for controls that need the full width. */
-  wide?: boolean;
   /** Full-width content under the label and control, like a sample. */
   below?: ReactNode;
 }) {
   return (
-    <div className={`settings-row ${wide ? "wide" : ""}`}>
+    <div className="settings-row">
       <div className="settings-row-text">
         <span>{label}</span>
         {hint && <small>{hint}</small>}

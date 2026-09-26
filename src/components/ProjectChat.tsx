@@ -572,7 +572,7 @@ export function ProjectChat({
   onAddProject: () => void;
   canChoosePR: boolean;
   dirty: boolean;
-  onOpenCode: (mode: "changes" | "files" | "pulls") => void;
+  onOpenCode: (mode: "changes" | "files") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   /** Where the unsent thread will work, as the picker changes. */
@@ -1550,7 +1550,7 @@ export function ProjectChat({
       {scope.kind === "pr" && (
         <button
           className="thread-review-action"
-          onClick={() => onOpenCode("pulls")}
+          onClick={() => onOpenCode("changes")}
         >
           Review changes →
         </button>

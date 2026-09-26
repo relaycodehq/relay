@@ -383,7 +383,7 @@ export default function ProjectShell() {
     else await newChat({ kind: "pr", ref });
     panes.show("chat");
   }
-  function openCode(next: "changes" | "files" | "pulls") {
+  function openCode(next: "changes" | "files") {
     panes.show(next === "files" || project?.plain ? "files" : "changes");
   }
   function togglePane(id: PaneId) {
