@@ -63,7 +63,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
         .locator(".symbol-code"),
     ).toContainText("Hello,");
     await page
-      .getByRole("button", { name: "Back to review", exact: true })
+      .getByRole("button", { name: "Back to editing", exact: true })
       .click();
     await editor.press(
       (process.platform === "darwin" ? "Meta" : "Control") + "+End",

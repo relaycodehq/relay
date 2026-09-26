@@ -49,7 +49,9 @@ export function useSymbolNavigation(
   pull: SymbolTarget,
   path: string,
   hash: string | undefined,
-  checks?: ProjectCheckState | null,
+  checks: ProjectCheckState | null | undefined,
+  /** What "Back to …" returns to, e.g. "review" or "editing". */
+  returnTo: string,
 ) {
   const [hover, setHover] = useState<{
     query: SymbolQuery;
@@ -241,12 +243,7 @@ export function useSymbolNavigation(
                 <ArrowRight size={16} />
               </IconButton>
               <span>Local project · read-only preview</span>
-              <button onClick={close}>
-                Back to{" "}
-                {document.querySelector(".local-editor-modal")
-                  ? "editing"
-                  : "review"}
-              </button>
+              <button onClick={close}>Back to {returnTo}</button>
             </div>
             {!!error && <ErrorBox error={error} />}{" "}
             {busy ? (

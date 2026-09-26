@@ -143,8 +143,9 @@ export default function LocalFileEditor({
             label: "Local checkout",
             ...(source?.original !== bufferText
               ? {
-                  unavailable:
-                    "This local version differs from the PR. Hover the PR-head line on the left for committed history.",
+                  unavailable: pull
+                    ? "This local version differs from the PR. Hover the PR-head line on the left for committed history."
+                    : "This local version differs from HEAD. Hover the HEAD line on the left for committed history.",
                 }
               : {}),
           },
@@ -158,7 +159,13 @@ export default function LocalFileEditor({
     checkState.files[path]?.hash === bufferHash
       ? checkState.files[path]
       : undefined;
-  const symbols = useSymbolNavigation(target, path, bufferHash, checkState);
+  const symbols = useSymbolNavigation(
+    target,
+    path,
+    bufferHash,
+    checkState,
+    "editing",
+  );
   const fileProblems = useMemo(
     () =>
       checkState?.status === "ready" &&

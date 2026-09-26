@@ -140,7 +140,13 @@ export function DiffViewer({
     return () => cancelAnimationFrame(frame);
   }, [problemLine]);
   const contentHash = useContentHash(contents.data?.next?.contents);
-  const symbols = useSymbolNavigation(pull, file.filename, contentHash, checks);
+  const symbols = useSymbolNavigation(
+    pull,
+    file.filename,
+    contentHash,
+    checks,
+    "review",
+  );
   const blame = useLineBlame(
     pull,
     {

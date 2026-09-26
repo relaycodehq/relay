@@ -126,17 +126,21 @@ export function ProjectChecksButton({
           onClose={() => setOpen(false)}
         >
           <p className="field-note">
-            Diagnostics appear while reviewing and update as you type. Checks
-            use the linked working tree and unsaved editor buffer. Only matching
-            file contents get inline diagnostics in the PR. Rechecking pauses
-            while an agent is working or the window is hidden, then runs once.
+            Diagnostics appear in diffs and the editor and update as you type.
+            Checks use the working tree and unsaved editor buffer. Only matching
+            file contents get inline diagnostics. Rechecking pauses while an
+            agent is working or the window is hidden, then runs once.
           </p>
           {!!checks.error && <ErrorBox error={checks.error} />}
           {!checks.info ? (
-            <p>
-              Link this PR to its local folder first. Install the project’s
-              dependencies there; live checks use its own compiler version.
-            </p>
+            checks.local ? (
+              <p>Reading the project…</p>
+            ) : (
+              <p>
+                Link this PR to its local folder first. Install the project’s
+                dependencies there; live checks use its own compiler version.
+              </p>
+            )
           ) : (
             <>
               <div className="checks-settings">

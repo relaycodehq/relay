@@ -122,6 +122,8 @@ export function useProjectChecks(
     [identity, enabled, queryKey],
   );
   return {
+    /** Checks a project's workspace rather than a PR's linked folder. */
+    local: !!local,
     info: info.data,
     state: state.data,
     enabled,
