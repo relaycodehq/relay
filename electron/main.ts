@@ -30,9 +30,8 @@ import {
   projectNameSchema,
 } from "../shared/projects";
 import { chatIsEmpty } from "../shared/chat-activity";
-import { LiveSync } from "./live-sync";
+import { LiveSyncs, type SyncWorkspace } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
-import { digest } from "./hash";
 import { gitActionSchema, workingPathSchema } from "../shared/working-tree";
 import {
   flushGitOperations,
@@ -159,12 +158,9 @@ const updater = new Updater(
     beforeQuit: () => (quitConfirmed = true),
   },
 );
-const liveSyncs = new Map<string, LiveSync>();
-const startingLiveSyncRoots = new Set<string>();
-async function stopSyncs() {
-  await Promise.all([...liveSyncs.values()].map((s) => s.stop()));
-  liveSyncs.clear();
-}
+const liveSyncs = new LiveSyncs(() =>
+  join(app.getPath("userData"), "live-sync"),
+);
 let win: BrowserWindow | null = null,
   client: Gitea | null = null,
   store: Store,
@@ -369,7 +365,8 @@ app.on("before-quit", (event) => {
   triage?.cancel();
   if (flushing) return;
   flushing = true;
-  void stopSyncs()
+  void liveSyncs
+    .stopAll()
     .then(() => phoneRemote?.close())
     .then(() => projectChats?.dispose())
     .then(() => rooms?.dispose())
@@ -749,12 +746,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
           throw new Error(
             "Stop the running agent in this project before switching branches.",
           );
-        if (
-          startingLiveSyncRoots.has(root) ||
-          [...liveSyncs.values()].some(
-            (sync) => sync.root === root && sync.status().active,
-          )
-        )
+        if (liveSyncs.busy(root))
           throw new Error("Pause live file sync before switching branches.");
         const result = await changeBranch(root, action);
         projectChecks.stop();
@@ -1180,7 +1172,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         .union([z.object({ chatId: idSchema }).strict(), refSchema])
         .parse(args[0]);
       const key = "chatId" in target ? "chat:" + target.chatId : prKey(target);
-      let sync = liveSyncs.get(key);
+      const sync = liveSyncs.get(key);
       if (method === "liveSyncState") return sync?.status() ?? idleSync;
       if (method === "liveSyncStop") {
         await sync?.stop();
@@ -1188,16 +1180,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       }
       if (method === "liveSyncStart") {
         if (sync?.status().active) return sync.status();
-        let workspace: {
-          id: string;
-          root: string;
-          validate: () => Promise<unknown>;
-          request: (
-            path: string,
-            method?: string,
-            body?: unknown,
-          ) => Promise<unknown>;
-        };
+        let workspace: SyncWorkspace;
         if ("chatId" in target)
           workspace = await projectChats.workspace(target.chatId);
         else {
@@ -1218,33 +1201,10 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
             validate: () => validateRepo(root, client.account.server, target),
           };
         }
-        const root = workspace.root;
         for (const project of store.get().projects ?? [])
-          if (project.path === root)
+          if (project.path === workspace.root)
             projects.assertCheckoutAvailable(project.id);
-        for (const [other, active] of liveSyncs)
-          if (other !== key && active.root === root && active.status().active)
-            throw new Error(
-              "This checkout is syncing another conversation. Pause it first or use a separate checkout.",
-            );
-        sync = new LiveSync(
-          root,
-          join(
-            app.getPath("userData"),
-            "live-sync",
-            digest(root + workspace.id) + ".json",
-          ),
-          workspace.request,
-          workspace.validate,
-        );
-        startingLiveSyncRoots.add(root);
-        try {
-          const state = await sync.start();
-          liveSyncs.set(key, sync);
-          return state;
-        } finally {
-          startingLiveSyncRoots.delete(root);
-        }
+        return liveSyncs.start(key, workspace);
       }
       if (!sync?.status().active)
         throw new Error("Resume live sync before resolving files.");
@@ -1288,9 +1248,9 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       if (method === "roomState") return rooms.state(context);
       if (method === "roomDisconnect") {
         // PR keys extend this repository's key: [account, owner, name, number].
-        for (const [key, sync] of liveSyncs)
-          if (key.startsWith(repoKey(ref).slice(0, -1) + ","))
-            await sync.stop();
+        await liveSyncs.stopWhere((key) =>
+          key.startsWith(repoKey(ref).slice(0, -1) + ","),
+        );
         return rooms.disconnect(context);
       }
       if (method === "roomPoll")
@@ -1396,7 +1356,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return next.account;
     }
     case "disconnect":
-      await stopSyncs();
+      await liveSyncs.stopAll();
       await rooms.dispose();
       blame.dispose();
       projectChecks.stop();
@@ -1555,8 +1515,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         throw new Error(
           "This folder’s Git remote does not match the Gitea project. Choose the correct repository.",
         );
-      for (const sync of liveSyncs.values())
-        if (sync.root === linkedFolder(r)) await sync.stop();
+      await liveSyncs.stopWhere((_, root) => root === linkedFolder(r));
       await store.update((s) => {
         s.folders[repoKey(r)] = local.path;
       });

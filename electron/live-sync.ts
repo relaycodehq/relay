@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { git, gitBytes } from "./git";
 import { digest } from "./hash";
 import { serializeRepo, ignoredPaths, gitOperation } from "./working-tree";
@@ -372,5 +372,68 @@ export class LiveSync {
       await this.save();
     });
     await this.tick();
+  }
+}
+
+/** Where a live sync runs: its checkout, and the transport to the shared copy. */
+export interface SyncWorkspace {
+  id: string;
+  root: string;
+  validate: () => Promise<unknown>;
+  request: SyncTransport;
+}
+
+/** Every live sync, by conversation or PR key. A checkout syncs one at a time. */
+export class LiveSyncs {
+  private syncs = new Map<string, LiveSync>();
+  private starting = new Set<string>();
+  /** `dir` is read when a sync starts: where each sync keeps its state. */
+  constructor(private dir: () => string) {}
+  get(key: string) {
+    return this.syncs.get(key);
+  }
+  /** A sync is starting or running in this checkout, other than `key`'s. */
+  busy(root: string, key?: string) {
+    return (
+      this.starting.has(root) ||
+      [...this.syncs].some(
+        ([other, sync]) =>
+          other !== key && sync.root === root && sync.status().active,
+      )
+    );
+  }
+  async start(key: string, workspace: SyncWorkspace) {
+    const current = this.syncs.get(key);
+    if (current?.status().active) return current.status();
+    if (this.busy(workspace.root, key))
+      throw new Error(
+        "This checkout is syncing another conversation. Pause it first or use a separate checkout.",
+      );
+    const sync = new LiveSync(
+      workspace.root,
+      join(this.dir(), digest(workspace.root + workspace.id) + ".json"),
+      workspace.request,
+      workspace.validate,
+    );
+    this.starting.add(workspace.root);
+    try {
+      const state = await sync.start();
+      this.syncs.set(key, sync);
+      return state;
+    } finally {
+      this.starting.delete(workspace.root);
+    }
+  }
+  /** Stops the syncs `where` picks by their key and checkout. */
+  async stopWhere(where: (key: string, root: string) => boolean) {
+    await Promise.all(
+      [...this.syncs]
+        .filter(([key, sync]) => where(key, sync.root))
+        .map(([, sync]) => sync.stop()),
+    );
+  }
+  async stopAll() {
+    await this.stopWhere(() => true);
+    this.syncs.clear();
   }
 }

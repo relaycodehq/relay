@@ -13,7 +13,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RoomsDatabase, token } from "../../server/database";
 import { SharedWorkspace } from "../../server/workspace";
-import { LiveSync, type SyncTransport } from "../../electron/live-sync";
+import {
+  LiveSync,
+  LiveSyncs,
+  type SyncTransport,
+} from "../../electron/live-sync";
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 let dir: string,
   a: string,
@@ -223,4 +227,26 @@ it("refuses shared files under names Windows reads as the .git folder", async ()
   await sb.tick();
   expect(await readFile(join(b, ".github/ci.yml"), "utf8")).toBe("fine\n");
   expect(await readFile(join(b, "notes:draft.md"), "utf8")).toBe("fine\n");
+});
+
+it("starts one sync per checkout even when two start at once", async () => {
+  await sa.stop();
+  const syncs = new LiveSyncs(() => dir);
+  const workspace = (id: string) => ({
+    id,
+    root: a,
+    validate: async () => {},
+    request: transport(alice),
+  });
+  const results = await Promise.allSettled([
+    syncs.start("chat:one", workspace("one")),
+    syncs.start("chat:two", workspace("two")),
+  ]);
+  expect(results.map((r) => r.status).sort()).toEqual([
+    "fulfilled",
+    "rejected",
+  ]);
+  expect(syncs.busy(a)).toBe(true);
+  await syncs.stopAll();
+  expect(syncs.busy(a)).toBe(false);
 });
