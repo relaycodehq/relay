@@ -127,7 +127,11 @@ import {
 } from "./DeepReview";
 import { UltraplanCouncil } from "./Ultraplan";
 import { councilWorking } from "../../shared/ultraplan";
-import { agentMentionPattern } from "../../shared/agents";
+import {
+  agentMentionPattern,
+  agentProviders,
+  agents as agentInfo,
+} from "../../shared/agents";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
     key: `${chatId}:${image.id}`,
@@ -956,15 +960,15 @@ export function ProjectChat({
       if (!chat || !context) return "There is no agent session to compact yet.";
       if (running || busy || compacting)
         return "Wait for the current answer before compacting.";
-      if (args && context.provider === "codex")
-        return "Codex compacts without custom instructions.";
+      if (args && !agentInfo[context.provider].compactInstructions)
+        return `${agentName(context.provider)} compacts without custom instructions.`;
       compact(args || undefined);
       return true;
     }
     // With a question and an agent picked, the composer sends it itself.
     if (command === "btw")
       return args
-        ? "Pick Claude or Codex to ask a side question."
+        ? `Pick ${agentProviders.map(agentName).join(" or ")} to ask a side question.`
         : "Type your question after /btw.";
     if (command === "context") {
       if (!chat || !context)
