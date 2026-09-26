@@ -37,6 +37,12 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
     staleTime: 0,
   });
   const treeKey = ["working-tree", "project", projectId];
+  // A branch change can touch anything shown, but it just talked to the
+  // upstream (or didn't need to), so the periodic fetch can wait its turn.
+  const everythingButFetch = {
+    predicate: (q: { queryKey: readonly unknown[] }) =>
+      q.queryKey[0] !== "project-fetch",
+  };
   const tree = useQuery({
     queryKey: treeKey,
     queryFn: () => api.projectWorkingTree(projectId),
@@ -80,7 +86,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           revision: t.revision,
         }),
       );
-      await qc.invalidateQueries();
+      await qc.invalidateQueries(everythingButFetch);
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : String(e));
       await tree.refetch();
@@ -115,7 +121,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
         current: refs.data.current,
       };
       await api.projectChangeBranch(projectId, action);
-      await qc.invalidateQueries();
+      await qc.invalidateQueries(everythingButFetch);
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
