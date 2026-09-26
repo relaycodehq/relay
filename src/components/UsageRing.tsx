@@ -10,7 +10,7 @@ import {
 import { api } from "../lib/api";
 import { RING_RADIUS } from "./ContextWindowMeter";
 import "./composer-model-picker.css";
-import { agentName } from "../../shared/agents";
+import { agentName, type UsageProvider } from "../../shared/agents";
 
 const REFRESH_MS = 60_000;
 const PACE_RANK: Record<MeterPace, number> = {
@@ -59,7 +59,7 @@ const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
 export const UsageRing = memo(function UsageRing({
   provider,
 }: {
-  provider: "codex" | "claude";
+  provider: UsageProvider;
 }) {
   const [usage, setUsage] = useState<ProviderUsage>();
   const [now, setNow] = useState(() => Date.now());

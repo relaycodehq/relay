@@ -55,7 +55,7 @@ import {
   agentProviders,
   agents,
   type AgentProvider,
-  type HelperProvider,
+  reportsUsage,
 } from "../../shared/agents";
 import { api } from "../lib/api";
 import {
@@ -1359,8 +1359,8 @@ export function ProjectComposer({
             <Paperclip size={15} />
           </button>
           <span className="spacer" />
-          {showUsage && recipient !== "message" && agents[recipient].usage && (
-            <UsageRing provider={recipient as HelperProvider} />
+          {showUsage && reportsUsage(recipient) && (
+            <UsageRing provider={recipient} />
           )}
           {running && (
             <button

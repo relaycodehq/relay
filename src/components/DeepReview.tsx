@@ -91,8 +91,6 @@ const effortName = (agent: ReviewAgent) =>
   agent.choice.reasoningEffort
     ? effortLabels[agent.choice.reasoningEffort]
     : "Default";
-const nativeReview = (agent: ReviewAgent) =>
-  agent.provider === "codex" ? "Codex /review" : "/code-review";
 
 // ——— Setup ———
 
@@ -416,7 +414,7 @@ export function DeepReviewSetup({
                       title="Runs the agent's own review"
                     >
                       <ScanSearch size={12} />
-                      {nativeReview(reviewer)}
+                      {agents[reviewer.provider].reviewCommand}
                     </span>
                     <span className="spacer" />
                     {count > 1 && (

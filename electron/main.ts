@@ -1,6 +1,6 @@
 import { agentResponseSchema } from "../shared/agent-modes";
 import { agentRuntime } from "./agents";
-import { agentProviderSchema } from "../shared/agents";
+import { agentProviderSchema, usageProviderSchema } from "../shared/agents";
 import { projectFolderSchema } from "../shared/project-folders";
 import { codexDefaults, codexModels } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
@@ -1696,7 +1696,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return codexModels();
     case "providerUsage":
       return readProviderUsage(
-        z.enum(["claude", "codex"]).parse(args[0]),
+        usageProviderSchema.parse(args[0]),
         z.boolean().optional().parse(args[1]),
       );
     case "askCodex": {

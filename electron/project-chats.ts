@@ -1315,7 +1315,7 @@ export class ProjectChats {
         );
       if (chat.shared && mention && !agents[mention.provider].helper)
         throw new Error(
-          `${agentName(mention.provider)} can't answer in shared conversations yet. Pick Codex or Claude, or start a private thread.`,
+          `${agentName(mention.provider)} can't answer in shared conversations yet. Pick ${helperProviders.map(agentName).join(" or ")}, or start a private thread.`,
         );
       if (chat.shared && input.images?.length)
         throw new Error(

@@ -2,6 +2,7 @@
 // Window selection and burn-rate pacing follow OpenUsage (MIT, Robin Ebers);
 // see THIRD_PARTY_NOTICES.md. Claude Code reports its own; Relay asks Codex's.
 import { z } from "zod";
+import { usageProviderSchema } from "./agents";
 import { activeWeight, nextHour, type ActiveHours } from "./usage-history";
 
 export const SESSION_MS = 5 * 60 * 60 * 1000;
@@ -15,7 +16,7 @@ export const usageWindowSchema = z.object({
 });
 export const providerUsageSchema = z
   .object({
-    provider: z.enum(["claude", "codex"]),
+    provider: usageProviderSchema,
     windows: z.array(usageWindowSchema).max(2),
     message: z.string().max(160).nullable(),
     /** Learned from Relay's own readings; see usage-history. */

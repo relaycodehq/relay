@@ -18,7 +18,9 @@ import {
   agents,
   type AgentModel,
   type AgentProvider,
-  type HelperProvider,
+  reportsUsage,
+  usageProviders,
+  type UsageProvider,
 } from "../../shared/agents";
 import type { ProviderUsage } from "../../shared/provider-usage";
 import {
@@ -93,9 +95,6 @@ export function ProviderIcon({ provider }: { provider: MessageProvider }) {
   const Glyph = providerIcons[provider];
   return <Glyph className="provider-glyph" aria-hidden />;
 }
-const usageProviders = agentProviders.filter(
-  (p): p is HelperProvider => agents[p].usage,
-);
 export const ComposerModelPicker = memo(function ComposerModelPicker({
   provider,
   ready = true,
@@ -138,7 +137,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const [customs, setCustoms] = useState(readCustoms);
   const search = useRef<HTMLInputElement>(null);
   const [usage, setUsage] = useState<
-    Partial<Record<HelperProvider, ProviderUsage>>
+    Partial<Record<UsageProvider, ProviderUsage>>
   >({});
   const [now, setNow] = useState(() => Date.now());
   const offered = (providers ?? agentProviders).filter((p) => catalogs[p]);
@@ -614,11 +613,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   </div>
                 </Combobox.Root>
               </div>
-              {usageProviders.some((p) => p === category) && (
-                <UsageMeters
-                  usage={usage[category as HelperProvider]}
-                  now={now}
-                />
+              {reportsUsage(category) && (
+                <UsageMeters usage={usage[category]} now={now} />
               )}
               {category === "message" && (
                 <p className="model-picker-note">

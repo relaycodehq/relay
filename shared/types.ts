@@ -9,6 +9,7 @@ import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ClaudeDefaults, CodexDefaults } from "./agent-defaults";
 import type { ProviderUsage } from "./provider-usage";
+import type { UsageProvider } from "./agents";
 import type { UpdateState } from "./updates";
 import type { LineQuestion } from "./questions";
 import type {
@@ -254,7 +255,7 @@ export interface Api
   saveAISettings(settings: AISettings): Promise<AISettings>;
   /** `force` skips the cached reading, for an explicit refresh. */
   providerUsage(
-    provider: "claude" | "codex",
+    provider: UsageProvider,
     force?: boolean,
   ): Promise<ProviderUsage>;
   claudeModels(): Promise<ClaudeModel[]>;

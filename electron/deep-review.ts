@@ -22,7 +22,7 @@ import {
   type ReviewTarget,
   type ReviewerTask,
 } from "../shared/deep-review";
-import { agentName } from "../shared/agents";
+import { agentName, agents } from "../shared/agents";
 
 /** A pull request as the forge reports it. */
 export interface PullInfo {
@@ -385,8 +385,7 @@ function agentLabel(reviewer: ReviewAgent) {
   const name = agentName(reviewer.provider);
   const model = reviewer.choice.model || "default model";
   const effort = reviewer.choice.reasoningEffort || "default effort";
-  const review =
-    reviewer.provider === "codex" ? "Codex /review" : "Claude /code-review";
+  const review = `${name} ${agents[reviewer.provider].reviewCommand}`;
   return `${name} (${model}, ${effort}) via ${review}`;
 }
 

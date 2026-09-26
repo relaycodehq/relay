@@ -15,6 +15,7 @@ import {
   type UsageWindow,
 } from "../shared/provider-usage";
 import { readClaudeUsage } from "./rooms/claude-project";
+import type { UsageProvider } from "../shared/agents";
 import { recordUsage } from "./usage-history";
 
 const exec = promisify(execFile);
@@ -25,7 +26,6 @@ const EMPTY_TTL = 8_000;
 const CLAUDE_TTL = 150_000;
 const REFRESH_SLACK = 5 * 60 * 1000;
 
-type Provider = "claude" | "codex";
 type Source =
   | { kind: "file"; path: string }
   | { kind: "keychain"; service: string; account: string | null };
@@ -45,27 +45,34 @@ type Credential = {
   }) => Promise<void>;
 };
 
-const cache = new Map<Provider, { at: number; value: ProviderUsage }>();
-const pending = new Map<Provider, Promise<ProviderUsage>>();
+const cache = new Map<UsageProvider, { at: number; value: ProviderUsage }>();
+const pending = new Map<UsageProvider, Promise<ProviderUsage>>();
 const allowedServices = new Set<string>();
 
+/** How to read each agent's usage, and how long a reading holds. */
+const readers: Record<
+  UsageProvider,
+  { load: () => Promise<ProviderUsage>; ttl?: number }
+> = {
+  claude: { load: loadClaude, ttl: CLAUDE_TTL },
+  codex: { load: loadCodex },
+};
+
 export function readProviderUsage(
-  provider: Provider,
+  provider: UsageProvider,
   force = false,
 ): Promise<ProviderUsage> {
   const hit = cache.get(provider);
   const ttl =
-    provider === "claude"
-      ? CLAUDE_TTL
-      : hit?.value.windows.length
-        ? SUCCESS_TTL
-        : EMPTY_TTL;
+    readers[provider].ttl ??
+    (hit?.value.windows.length ? SUCCESS_TTL : EMPTY_TTL);
   if (!force && hit && Date.now() - hit.at < ttl) {
     return Promise.resolve(hit.value);
   }
   const existing = pending.get(provider);
   if (existing) return existing;
-  const task = (provider === "claude" ? loadClaude() : loadCodex())
+  const task = readers[provider]
+    .load()
     .catch((): ProviderUsage => ({
       provider,
       windows: [],

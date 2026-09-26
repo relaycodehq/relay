@@ -12,11 +12,12 @@ export interface AgentInfo {
   defaultModel: string;
   /**
    * Runs Relay's own helper jobs besides threads: grouping changes, line
-   * questions, shared rooms, commit messages and thread titles.
+   * questions, shared rooms, commit messages, and thread titles when a
+   * thread's own agent can't write one.
    */
   helper: boolean;
-  /** Can lead a deep review with its own review command. */
-  reviewer: boolean;
+  /** Its own review command, which a deep review's reviewers run. */
+  reviewCommand?: string;
   /** Codex's Fast service tier. */
   fast: boolean;
   /** Codex skills, picked with `$name` or `/skill:name`. */
@@ -31,12 +32,12 @@ export interface AgentInfo {
   modelGroups: boolean;
 }
 
-export const agents: Record<AgentProvider, AgentInfo> = {
+export const agents = {
   codex: {
     name: "Codex",
     defaultModel: "Codex default",
     helper: true,
-    reviewer: true,
+    reviewCommand: "/review",
     fast: true,
     skills: true,
     commandsAlone: false,
@@ -48,7 +49,7 @@ export const agents: Record<AgentProvider, AgentInfo> = {
     name: "Claude",
     defaultModel: "Claude default",
     helper: true,
-    reviewer: true,
+    reviewCommand: "/code-review",
     fast: false,
     skills: false,
     commandsAlone: true,
@@ -60,7 +61,6 @@ export const agents: Record<AgentProvider, AgentInfo> = {
     name: "OpenCode",
     defaultModel: "OpenCode default",
     helper: false,
-    reviewer: false,
     fast: false,
     skills: false,
     commandsAlone: true,
@@ -68,21 +68,43 @@ export const agents: Record<AgentProvider, AgentInfo> = {
     usage: false,
     modelGroups: true,
   },
-};
+} as const satisfies Record<AgentProvider, AgentInfo>;
 
 export const agentName = (provider: AgentProvider) => agents[provider].name;
 
+/** The agents with `AgentInfo` field `K` on, as a type. */
+type AgentsWith<K extends keyof AgentInfo> = {
+  [P in AgentProvider]: (typeof agents)[P] extends Record<K, true | string>
+    ? P
+    : never;
+}[AgentProvider];
+/** The agents with field `K` on, and a schema that accepts only them. */
+function agentsWith<K extends keyof AgentInfo>(key: K) {
+  const list = agentProviders.filter(
+    (p): p is AgentsWith<K> => !!(agents[p] as AgentInfo)[key],
+  );
+  return { list, schema: z.enum(list as [AgentsWith<K>, ...AgentsWith<K>[]]) };
+}
+
+const helpers = agentsWith("helper");
 /** Agents that run Relay's helper jobs, see `AgentInfo.helper`. */
-export const helperProviders = agentProviders.filter((p) => agents[p].helper);
-export type HelperProvider = "codex" | "claude";
-export const helperProviderSchema = z
-  .enum(["codex", "claude"])
-  .refine((p) => agents[p].helper, "This agent can't run this job.");
+export const helperProviders = helpers.list;
+export type HelperProvider = AgentsWith<"helper">;
+export const helperProviderSchema = helpers.schema;
 /** Helper jobs fall back through the other helpers when one is unavailable. */
 export const helperFallbacks = (first: HelperProvider): HelperProvider[] => [
   first,
-  ...(helperProviders as HelperProvider[]).filter((p) => p !== first),
+  ...helperProviders.filter((p) => p !== first),
 ];
+/** Agents that report plan usage, see `AgentInfo.usage`. */
+export type UsageProvider = AgentsWith<"usage">;
+export const usageProviders = agentsWith("usage").list;
+export const usageProviderSchema = agentsWith("usage").schema;
+export const reportsUsage = (p: string): p is UsageProvider =>
+  usageProviders.some((u) => u === p);
+/** Agents a deep review can ask, see `AgentInfo.reviewCommand`. */
+export type ReviewerProvider = AgentsWith<"reviewCommand">;
+export const reviewerProviderSchema = agentsWith("reviewCommand").schema;
 
 export const isAgentProvider = (value: unknown): value is AgentProvider =>
   agentProviderSchema.safeParse(value).success;

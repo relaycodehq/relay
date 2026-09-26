@@ -2,6 +2,7 @@
 // lead agent checks what they found and fixes it with the user.
 import { z } from "zod";
 import { runtimeModeSchema, type RuntimeMode } from "./agent-modes";
+import { reviewerProviderSchema } from "./agents";
 import { aiSettingsSchema, type ModelChoice } from "./settings";
 import { filePathSchema, refSchema } from "./validation";
 
@@ -29,7 +30,7 @@ export type ReviewTarget = z.infer<typeof reviewTargetSchema>;
 
 export const reviewAgentSchema = z
   .object({
-    provider: z.enum(["codex", "claude"]),
+    provider: reviewerProviderSchema,
     choice: aiSettingsSchema.shape.questions,
   })
   .strict();
