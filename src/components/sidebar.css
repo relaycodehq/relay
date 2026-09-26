@@ -299,7 +299,7 @@
   color: var(--muted);
 }
 .sb-group-input input[aria-invalid="true"] {
-  border-color: var(--danger, #e46b73);
+  border-color: var(--danger);
 }
 
 /* An empty group invites a drop instead of disappearing. */
@@ -1004,7 +1004,7 @@
   padding: 6px 10px;
 }
 .sb-note.error {
-  color: var(--danger, #e46b73);
+  color: var(--danger);
 }
 
 /* Snooze menu. */

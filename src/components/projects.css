@@ -1044,7 +1044,7 @@
 }
 .composer-image-error {
   margin: 8px 16px 0;
-  color: var(--danger, #e46b73);
+  color: var(--danger);
   font-size: 11px;
 }
 .message-images {
@@ -1446,7 +1446,7 @@ details.agent-step > .agent-step-heading:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--danger, #e46b73);
+  color: var(--danger);
   font-size: 12px;
 }
 .branch-picker-popup {
@@ -1488,7 +1488,7 @@ details.agent-step > .agent-step-heading:hover {
   border-top: 1px solid var(--border);
 }
 .branch-picker-error {
-  color: var(--danger, #e46b73);
+  color: var(--danger);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1991,7 +1991,7 @@ details.agent-step > .agent-step-heading:hover {
   color: var(--muted);
 }
 .queued-status.error {
-  color: var(--danger, #e46b73);
+  color: var(--danger);
 }
 .queued-message small {
   color: var(--muted);
@@ -2363,7 +2363,7 @@ details.agent-step > .agent-step-heading:hover {
   background: var(--border);
 }
 .context-compaction[data-status="failed"] {
-  color: var(--danger, #e46b73);
+  color: var(--danger);
 }
 .agent-handoff .context-compaction .text-button {
   padding: 0;

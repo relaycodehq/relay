@@ -22,6 +22,8 @@
   --selected: #dedee8;
   --accent: #6565a9;
   --accent-soft: #eeeef7;
+  /* Errors and destructive actions; the same red reads on light and dark. */
+  --danger: #e46b73;
   --code-background: #fff;
   --code-foreground: #33353d;
   --background: #fff;
@@ -2412,7 +2414,7 @@ html {
 }
 .checks-button.has-errors,
 .file-check-status.has-errors {
-  color: var(--danger, #e56370);
+  color: var(--danger);
 }
 .diagnostic-badge {
   font-size: 10px;
