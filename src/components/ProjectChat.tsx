@@ -105,7 +105,10 @@ import {
   WorktreeMenu,
 } from "./WorktreeControls";
 import type { TurnDiffTarget } from "./TurnChanges";
-import { matchLink, type ProjectFileLink } from "../lib/project-file-links";
+import {
+  matchLink,
+  type ProjectFileLink,
+} from "../../shared/project-file-links";
 import type { PullRef } from "../../shared/types";
 import {
   fixRequest,

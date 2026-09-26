@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search, FileCode2 } from "lucide-react";
 import type { Project } from "../../shared/projects";
-import type { ProjectFileLink } from "../lib/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import type { ChecksController } from "../lib/useProjectChecks";

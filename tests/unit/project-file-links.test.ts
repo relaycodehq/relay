@@ -3,7 +3,7 @@ import {
   linksTo,
   matchLink,
   projectFileLink,
-} from "../../src/lib/project-file-links";
+} from "../../shared/project-file-links";
 const root = "/Users/test/workspace";
 it("resolves T3-style markdown and inline file references into the linked project", () => {
   expect(projectFileLink("src/app/main.ts:42", root)).toEqual({

@@ -45,7 +45,7 @@ import {
 import { effortLabels, findClaudeModel } from "../../shared/settings";
 import { savedRuntimeMode } from "../../shared/agent-modes";
 import type { PullRef } from "../../shared/types";
-import type { ProjectFileLink } from "../lib/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import { api } from "../lib/api";
 import { sendsMessage, useSendKey } from "../lib/send-key";
 import { FileEntryIcon, RichText } from "./ui";

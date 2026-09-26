@@ -13,7 +13,7 @@ import type { Pull } from "../../shared/types";
 import type { ChangeArea, GitAction } from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
-import { linksTo, type ProjectFileLink } from "../lib/project-file-links";
+import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
 import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";

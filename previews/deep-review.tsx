@@ -48,7 +48,7 @@ import { ProjectHeadlinePicker } from "../src/components/ProjectHeadlinePicker";
 import { AgentTurn } from "../src/components/AgentTurn";
 import { ChangedFilesCard } from "../src/components/ChangedFilesCard";
 import { FileEntryIcon, RichText } from "../src/components/ui";
-import type { ProjectFileLink } from "../src/lib/project-file-links";
+import type { ProjectFileLink } from "../shared/project-file-links";
 import type {
   AgentActivity,
   AgentTrace,

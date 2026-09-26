@@ -62,7 +62,7 @@ SOFTWARE.
 
 Relay's turn timeline also adapts `apps/web/src/components/chat/MessagesTimeline.tsx`
 and `MessagesTimeline.logic.ts` at the pinned streaming commit. File-reference
-parsing in `src/vendor/t3code/markdownLinks.ts` comes from
+parsing in `shared/vendor/t3code/markdownLinks.ts` comes from
 `packages/client-runtime/src/markdownLinks.ts` at that commit; only its shared
 path-helper import is replaced locally. These are covered by the T3 MIT license
 above. The app keeps private commentary and tool work out of shared messages.

@@ -159,9 +159,12 @@ function looksLikeHostname(segment: string, hasPosition: boolean): boolean {
  */
 export function inlineCodeFilePathCandidate(codeText: string): string | null {
   const trimmed = codeText.trim();
-  if (trimmed.length === 0 || INLINE_CODE_DISQUALIFIER_PATTERN.test(trimmed)) return null;
+  if (trimmed.length === 0 || INLINE_CODE_DISQUALIFIER_PATTERN.test(trimmed))
+    return null;
 
-  const candidate = isWindowsAbsolutePath(trimmed) ? trimmed : trimmed.replaceAll("\\", "/");
+  const candidate = isWindowsAbsolutePath(trimmed)
+    ? trimmed
+    : trimmed.replaceAll("\\", "/");
   const hasPosition = POSITION_SUFFIX_PATTERN.test(candidate);
   if (!hasPosition && !PATH_SEPARATOR_PATTERN.test(candidate)) return null;
 
@@ -193,7 +196,9 @@ export function safeDecodeURIComponent(value: string): string {
 
 export function normalizeMarkdownLinkDestination(value: string): string {
   const trimmed = value.trim();
-  return trimmed.startsWith("<") && trimmed.endsWith(">") ? trimmed.slice(1, -1) : trimmed;
+  return trimmed.startsWith("<") && trimmed.endsWith(">")
+    ? trimmed.slice(1, -1)
+    : trimmed;
 }
 
 /** Browser URL parsers write `C:/foo` as `/C:/foo` for file URLs. */
@@ -210,7 +215,8 @@ export function splitMarkdownLinkSearchAndHash(value: string): {
   const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
   const queryIndex = pathWithSearch.indexOf("?");
   return {
-    path: queryIndex >= 0 ? pathWithSearch.slice(0, queryIndex) : pathWithSearch,
+    path:
+      queryIndex >= 0 ? pathWithSearch.slice(0, queryIndex) : pathWithSearch,
     hash,
   };
 }
@@ -227,7 +233,8 @@ export function parseFileUrlHref(
     const parsed = new URL(href);
     if (parsed.protocol.toLowerCase() !== "file:") return null;
 
-    const uncHostname = parsed.hostname.toLowerCase() === "localhost" ? "" : parsed.hostname;
+    const uncHostname =
+      parsed.hostname.toLowerCase() === "localhost" ? "" : parsed.hostname;
     const path = uncHostname
       ? `\\\\${uncHostname}${parsed.pathname.replaceAll("/", "\\")}`
       : parsed.pathname;
@@ -244,13 +251,17 @@ export interface FilePathPosition {
   readonly column?: number;
 }
 
-export function splitFilePathPosition(path: string, hash = ""): FilePathPosition {
+export function splitFilePathPosition(
+  path: string,
+  hash = "",
+): FilePathPosition {
   const suffixMatch = path.match(POSITION_SUFFIX_CAPTURE_PATTERN);
   const match = suffixMatch ?? hash.match(POSITION_HASH_PATTERN);
   if (!match?.[1]) return { path };
 
   const line = Number.parseInt(match[1], 10);
-  const column = match[2] === undefined ? undefined : Number.parseInt(match[2], 10);
+  const column =
+    match[2] === undefined ? undefined : Number.parseInt(match[2], 10);
   return {
     path: suffixMatch ? path.slice(0, -suffixMatch[0].length) : path,
     ...(line > 0 ? { line } : {}),
@@ -272,10 +283,14 @@ export function isRelativeFilePath(path: string): boolean {
 
 function looksLikePosixFilesystemPath(path: string): boolean {
   if (!path.startsWith("/")) return false;
-  if (POSIX_FILE_ROOT_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+  if (POSIX_FILE_ROOT_PREFIXES.some((prefix) => path.startsWith(prefix)))
+    return true;
   if (POSITION_SUFFIX_PATTERN.test(path)) return true;
   const basename = path.slice(path.lastIndexOf("/") + 1);
-  return EXTENSIONLESS_FILE_NAMES.has(basename) || FILE_EXTENSION_PATTERN.test(basename);
+  return (
+    EXTENSIONLESS_FILE_NAMES.has(basename) ||
+    FILE_EXTENSION_PATTERN.test(basename)
+  );
 }
 
 /**
@@ -284,10 +299,14 @@ function looksLikePosixFilesystemPath(path: string): boolean {
  * anchor never turns `/chat/settings` into a file.
  */
 function looksLikeFilePath(path: string, authoredPath: string): boolean {
-  if (isWindowsAbsolutePath(path) || RELATIVE_PATH_PREFIX_PATTERN.test(path)) return true;
+  if (isWindowsAbsolutePath(path) || RELATIVE_PATH_PREFIX_PATTERN.test(path))
+    return true;
   if (path.startsWith("/")) return looksLikePosixFilesystemPath(authoredPath);
   if (EXTENSIONLESS_FILE_NAMES.has(path)) return true;
-  return RELATIVE_FILE_PATH_PATTERN.test(authoredPath) || RELATIVE_FILE_NAME_PATTERN.test(path);
+  return (
+    RELATIVE_FILE_PATH_PATTERN.test(authoredPath) ||
+    RELATIVE_FILE_NAME_PATTERN.test(path)
+  );
 }
 
 function hasExternalScheme(path: string): boolean {
@@ -301,15 +320,22 @@ function hasExternalScheme(path: string): boolean {
 
 export function parseMarkdownFileLink(href: string): FilePathPosition | null {
   const normalized = normalizeMarkdownLinkDestination(href);
-  if (normalized.length === 0 || normalized.startsWith("#") || normalized.startsWith("//")) {
+  if (
+    normalized.length === 0 ||
+    normalized.startsWith("#") ||
+    normalized.startsWith("//")
+  ) {
     return null;
   }
 
   const source =
-    (normalized.toLowerCase().startsWith("file:") ? parseFileUrlHref(normalized) : null) ??
-    splitMarkdownLinkSearchAndHash(normalized);
+    (normalized.toLowerCase().startsWith("file:")
+      ? parseFileUrlHref(normalized)
+      : null) ?? splitMarkdownLinkSearchAndHash(normalized);
   // A percent-encoded drive colon (`/c%3A/`) only becomes strippable once decoded.
-  const path = stripSlashPrefixedWindowsDrive(safeDecodeURIComponent(source.path.trim()));
+  const path = stripSlashPrefixedWindowsDrive(
+    safeDecodeURIComponent(source.path.trim()),
+  );
   const hash = safeDecodeURIComponent(source.hash.trim());
   if (path.length === 0 || hasExternalScheme(path)) return null;
 
@@ -322,7 +348,10 @@ export function fileBasename(path: string): string {
   // taking the final segment so the label is never empty.
   const trimmed = path.replace(/[/\\]+$/, "");
   if (trimmed.length === 0) return path;
-  const separatorIndex = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  const separatorIndex = Math.max(
+    trimmed.lastIndexOf("/"),
+    trimmed.lastIndexOf("\\"),
+  );
   return separatorIndex >= 0 ? trimmed.slice(separatorIndex + 1) : trimmed;
 }
 
@@ -331,13 +360,21 @@ export function workspaceRelativeFilePath(
   workspaceRoot: string | null | undefined,
 ): string | null {
   if (!workspaceRoot) return null;
-  const normalizedPath = stripSlashPrefixedWindowsDrive(path.replaceAll("\\", "/"));
+  const normalizedPath = stripSlashPrefixedWindowsDrive(
+    path.replaceAll("\\", "/"),
+  );
   const normalizedRoot = stripSlashPrefixedWindowsDrive(
     workspaceRoot.replaceAll("\\", "/"),
   ).replace(/\/+$/, "");
-  const caseInsensitive = isWindowsAbsolutePath(stripSlashPrefixedWindowsDrive(workspaceRoot));
-  const pathForCompare = caseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
-  const rootForCompare = caseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const caseInsensitive = isWindowsAbsolutePath(
+    stripSlashPrefixedWindowsDrive(workspaceRoot),
+  );
+  const pathForCompare = caseInsensitive
+    ? normalizedPath.toLowerCase()
+    : normalizedPath;
+  const rootForCompare = caseInsensitive
+    ? normalizedRoot.toLowerCase()
+    : normalizedRoot;
   if (!pathForCompare.startsWith(`${rootForCompare}/`)) return null;
   return normalizedPath.slice(normalizedRoot.length + 1);
 }

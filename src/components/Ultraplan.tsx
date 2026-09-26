@@ -23,7 +23,7 @@ import {
   type UltraplanKind,
   type UltraplanState,
 } from "../../shared/ultraplan";
-import type { ProjectFileLink } from "../lib/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ReviewerPane, useAgentName } from "./DeepReview";
 import { RichText } from "./ui";

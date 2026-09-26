@@ -48,7 +48,10 @@ import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { CodeReference } from "../../shared/code-references";
-import { matchLink, type ProjectFileLink } from "../lib/project-file-links";
+import {
+  matchLink,
+  type ProjectFileLink,
+} from "../../shared/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { NewThreadPicker } from "./NewThreadPicker";
 import { RelayMark } from "./RelayMark";

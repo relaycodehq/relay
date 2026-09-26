@@ -39,7 +39,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
-import { linksTo, type ProjectFileLink } from "./lib/project-file-links";
+import { linksTo, type ProjectFileLink } from "../shared/project-file-links";
 import type {
   Account,
   Bootstrap,

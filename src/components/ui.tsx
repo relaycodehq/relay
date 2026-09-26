@@ -24,7 +24,7 @@ import { CodeBlock } from "./CodeBlock";
 import {
   projectFileLink,
   type ProjectFileLink,
-} from "../lib/project-file-links";
+} from "../../shared/project-file-links";
 import {
   ensureFileIconSprite,
   fileIcon,

@@ -1,8 +1,8 @@
-import { filePathSchema } from "../../shared/validation";
+import { filePathSchema } from "./validation";
 import {
   inlineCodeFilePathCandidate,
   parseMarkdownFileLink,
-} from "../vendor/t3code/markdownLinks";
+} from "./vendor/t3code/markdownLinks";
 
 export type ProjectFileLink = {
   path: string;

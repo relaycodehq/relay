@@ -25,7 +25,7 @@ import {
   type AgentActivity,
   type ChatMessage,
 } from "../../shared/projects";
-import type { ProjectFileLink } from "../lib/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import {
   doneLabel,
   duration,
