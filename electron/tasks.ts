@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { readlink } from "node:fs/promises";
 import { sep } from "node:path";
+import { agentProviders, type AgentProvider } from "../shared/agents";
 import {
   commandKey,
   describeTask,
@@ -27,7 +28,7 @@ export interface Worktree {
 interface Tracked {
   id: string;
   command: string;
-  agent?: "claude" | "codex";
+  agent?: AgentProvider;
   origin: ProjectTask["origin"];
   root: number;
   started: number;
@@ -62,11 +63,9 @@ const within = (path: string, root: string) =>
 const agentName = (line: string) => {
   const [bin, arg] = line.split(/\s+/);
   const name = (/[^/]+$/.exec(bin ?? "")?.[0] ?? "").replace(/\.exe$/, "");
-  if (name === "claude") return "claude" as const;
-  if (
-    name === "codex" ||
-    (name === "node" && /\/codex(\.js)?$/.test(arg ?? ""))
-  )
+  // Each agent's CLI is named after it; Codex may also run as a Node script.
+  if (agentProviders.some((p) => p === name)) return name as AgentProvider;
+  if (name === "node" && /\/codex(\.js)?$/.test(arg ?? ""))
     return "codex" as const;
 };
 // Processes that are only incidentally in a project folder: installed apps, system daemons,

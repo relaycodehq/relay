@@ -1,3 +1,5 @@
+import type { AgentProvider } from "./agents";
+
 /** A long-running shell process in a project, started by an agent or left behind by one. */
 export interface ProjectTask {
   id: string;
@@ -6,8 +8,8 @@ export interface ProjectTask {
   kind: TaskKind;
   /** A short name for what the process is, e.g. "Vite dev server". */
   title: string;
-  agent?: "claude" | "codex";
-  /** relay: a Relay chat's agent; terminal: a thread's terminal in Relay; external: a Claude or Codex CLI outside Relay; detached: running on its own in the project. */
+  agent?: AgentProvider;
+  /** relay: a Relay chat's agent; terminal: a thread's terminal in Relay; external: an agent's CLI outside Relay; detached: running on its own in the project. */
   origin: "relay" | "terminal" | "external" | "detached";
   chatId?: string;
   /** Runs in this thread's worktree rather than the project's checkout. */

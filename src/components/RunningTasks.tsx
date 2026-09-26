@@ -14,6 +14,7 @@ import {
   Square,
   SquareTerminal,
 } from "lucide-react";
+import { agentName } from "../../shared/agents";
 import type { ChatSummary, Project } from "../../shared/projects";
 import type { ProjectTask, TaskKind } from "../../shared/tasks";
 import { api } from "../lib/api";
@@ -29,7 +30,6 @@ const icons: Record<TaskKind, typeof Globe> = {
   git: GitBranch,
   script: SquareTerminal,
 };
-const agentLabel = { claude: "Claude", codex: "Codex" };
 
 /** Drop shell plumbing that says nothing about the process, e.g. `2>&1` or a trailing `&`. */
 function displayCommand(command: string) {
@@ -129,7 +129,7 @@ export function RunningTasks({
               : undefined;
             const duplicate = seen.has(task.command);
             seen.add(task.command);
-            const agent = task.agent ? agentLabel[task.agent] : undefined;
+            const agent = task.agent ? agentName(task.agent) : undefined;
             const terminal = task.origin === "terminal";
             const source =
               task.origin === "detached"
