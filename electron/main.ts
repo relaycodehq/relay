@@ -1625,7 +1625,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         textSchema.nullable().parse(args[3]),
       );
     case "writeClipboard":
-      await clipboard.writeText(z.string().max(32768).parse(args[0]));
+      await clipboard.writeText(textSchema.parse(args[0]));
       return;
     case "writeClipboardImage": {
       const image = nativeImage.createFromDataURL(
