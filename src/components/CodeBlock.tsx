@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { ThemedToken } from "@pierre/diffs";
 import { Check, Copy } from "lucide-react";
-import { api } from "../lib/api";
+import { useCopy } from "../lib/useCopy";
 
 // Tokenizing runs on the main thread; past this a block stays plain.
 const MAX_HIGHLIGHT_LENGTH = 40_000;
@@ -73,12 +73,7 @@ export const CodeBlock = memo(function CodeBlock({
   );
   const [highlighted, setHighlighted] = useState<Highlighted | null>(null);
   const lastRun = useRef(0);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const [copied, copy] = useCopy();
   const enabled = !!lang && !!theme && code.length <= MAX_HIGHLIGHT_LENGTH;
   useEffect(() => {
     if (!enabled || !lang || !theme) return;
@@ -142,12 +137,7 @@ export const CodeBlock = memo(function CodeBlock({
         className="markdown-code-copy"
         title={copied ? "Copied" : "Copy code"}
         aria-label={copied ? "Copied" : "Copy code"}
-        onClick={() =>
-          void api
-            .writeClipboard(code)
-            .then(() => setCopied(true))
-            .catch(() => {})
-        }
+        onClick={() => copy(code)}
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>

@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../shared/chat-activity";
-import { api } from "../lib/api";
+import { useCopy } from "../lib/useCopy";
 
 /** The row under an agent's answer: copy, fork, reply, and when it was sent. */
 export function MessageActions({
@@ -18,12 +17,7 @@ export function MessageActions({
   onReply: () => void;
   onFork?: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const [copied, copy] = useCopy();
   return (
     <footer className="message-actions" inert={pending}>
       {!!text?.trim() && (
@@ -31,12 +25,7 @@ export function MessageActions({
           type="button"
           title={copied ? "Copied" : "Copy answer"}
           aria-label={copied ? "Copied" : "Copy answer"}
-          onClick={() =>
-            void api
-              .writeClipboard(text)
-              .then(() => setCopied(true))
-              .catch(() => {})
-          }
+          onClick={() => copy(text)}
         >
           {copied ? <Check size={15} /> : <Copy size={15} />}
         </button>

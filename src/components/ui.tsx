@@ -20,6 +20,7 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
+import { useCopy } from "../lib/useCopy";
 import { CodeBlock } from "./CodeBlock";
 import {
   projectFileLink,
@@ -244,12 +245,7 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
 // Quotes carry a copy button so the quoted text can be lifted without the reply around it.
 function MarkdownQuote({ children }: { children?: ReactNode }) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const [copied, copy] = useCopy();
   return (
     <blockquote className="markdown-quote">
       <div ref={contentRef}>{children}</div>
@@ -260,11 +256,7 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
         aria-label={copied ? "Copied" : "Copy quote"}
         onClick={() => {
           const text = contentRef.current?.innerText.trim();
-          if (text)
-            void api
-              .writeClipboard(text)
-              .then(() => setCopied(true))
-              .catch(() => {});
+          if (text) copy(text);
         }}
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}

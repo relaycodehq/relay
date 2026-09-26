@@ -3,6 +3,7 @@ import { Check, ClipboardPaste, Copy, X } from "lucide-react";
 import { pastedLines, type PastedText } from "../../shared/pasted-texts";
 import { Modal } from "./ui";
 import "./pasted-texts.css";
+import { useCopy } from "../lib/useCopy";
 
 /** The opening lines, dedented so pasted code does not preview as indent. */
 function preview(text: string) {
@@ -32,7 +33,7 @@ export function PastedTextDialog({
   /** Swaps the pill for the paste's text. */
   onInline?: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopy();
   return (
     <Modal
       title={label(paste)}
@@ -44,14 +45,7 @@ export function PastedTextDialog({
       </p>
       <pre className="pasted-text-full">{paste.text}</pre>
       <div className="modal-actions">
-        <button
-          type="button"
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(paste.text)
-              .then(() => setCopied(true))
-          }
-        >
+        <button type="button" onClick={() => copy(paste.text)}>
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}
         </button>
