@@ -1,0 +1,270 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { Store } from "../../electron/store";
+import { PhoneRemote } from "../../electron/remote/phone-remote";
+import type { RemoteHost } from "../../electron/remote/bridge";
+import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
+import {
+  clientHandshake,
+  fromBase64Url,
+  toBase64Url,
+} from "../../shared/remote-crypto";
+import {
+  parsePairingUrl,
+  type RemoteCredentials,
+  type RemoteEvent,
+} from "../../shared/remote";
+import type {
+  ChatMessage,
+  ChatSummary,
+  ProjectChat,
+  ProjectChatSend,
+} from "../../shared/projects";
+import { defaultAISettings } from "../../shared/settings";
+
+const cleanup: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  while (cleanup.length) await cleanup.pop()!();
+});
+
+const projectId = randomUUID(),
+  chatId = randomUUID();
+
+function fakeHost() {
+  const sent: { id: string; input: ProjectChatSend }[] = [];
+  const summary: ChatSummary = {
+    id: chatId,
+    projectId,
+    title: "Fix the flaky test",
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+  };
+  const chat: ProjectChat = {
+    ...summary,
+    messages: [],
+    lastInput: {
+      id: randomUUID(),
+      body: "earlier",
+      provider: "claude",
+      choice: {
+        model: "claude-opus-5-5",
+        fast: false,
+        reasoningEffort: "high",
+      },
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+    },
+  };
+  const host: Omit<RemoteHost, "name"> = {
+    projects: async () => [
+      {
+        id: projectId,
+        name: "Relay",
+        path: "/tmp/relay",
+        repository: null,
+        added: 1,
+      },
+    ],
+    chats: () => [summary],
+    chat: async () => structuredClone(chat),
+    create: async () => summary,
+    send: async (id, input) => {
+      sent.push({ id, input });
+    },
+    cancel: async () => {},
+    respond: () => {},
+    turnDiff: async () => {
+      throw new Error("unused");
+    },
+    triage: async () => {},
+    aiSettings: () => defaultAISettings,
+  };
+  return { host, sent, summary };
+}
+
+async function desktop() {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
+  const store = new Store(join(dir, "state"));
+  await store.load();
+  const fake = fakeHost();
+  const remote = new PhoneRemote(
+    store,
+    async (v) => "sealed:" + v,
+    async (v) => v.slice(7),
+    fake.host,
+    0,
+    () => ({
+      en0: [
+        {
+          address: "127.0.0.1",
+          family: "IPv4",
+          internal: false,
+          netmask: "255.0.0.0",
+          mac: "00:00:00:00:00:00",
+          cidr: "127.0.0.1/8",
+        },
+      ],
+    }),
+  );
+  await remote.setEnabled(true);
+  cleanup.push(async () => {
+    await remote.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  return { remote, ...fake };
+}
+
+function phone(
+  start: ConstructorParameters<typeof RemoteClient>[0]["start"],
+  extra: Partial<ConstructorParameters<typeof RemoteClient>[0]> = {},
+) {
+  const statuses: { status: RemoteStatus; detail?: string }[] = [];
+  const events: RemoteEvent[] = [];
+  let credentials: RemoteCredentials | undefined;
+  const client = new RemoteClient({
+    start,
+    timeoutMs: 2000,
+    onStatus: (status, detail) => statuses.push({ status, detail }),
+    onEvent: (e) => events.push(e),
+    onPaired: (c) => (credentials = c),
+    ...extra,
+  });
+  cleanup.push(async () => client.close());
+  client.start();
+  return {
+    client,
+    events,
+    statuses,
+    credentials: () => credentials,
+    until: (status: RemoteStatus) =>
+      vi.waitFor(() => expect(client.status).toBe(status), { timeout: 5000 }),
+  };
+}
+
+it("pairs from the QR link, then reconnects with the saved token", async () => {
+  const { remote, sent } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const first = phone({ link, device: "Pixel 7" });
+  await first.until("online");
+  const credentials = first.credentials()!;
+  expect(credentials.deviceId).toBe(remote.devices.list()[0]!.id);
+  expect(remote.state().devices[0]).toMatchObject({
+    name: "Pixel 7",
+    online: true,
+  });
+
+  const overview = await first.client.call("overview");
+  expect(overview.chats.map((c) => c.title)).toEqual(["Fix the flaky test"]);
+  first.client.close();
+
+  // The code was single-use; the token is what brings the phone back.
+  const again = phone(credentials);
+  await again.until("online");
+  const id = randomUUID();
+  await again.client.call("send", chatId, { id, body: "from the train" });
+  // It carries on with the thread's agent, model and modes.
+  expect(sent).toEqual([
+    {
+      id: chatId,
+      input: {
+        id,
+        // Only a leading mention makes the agent answer.
+        body: "@claude from the train",
+        provider: "claude",
+        choice: {
+          model: "claude-opus-5-5",
+          fast: false,
+          reasoningEffort: "high",
+        },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+      },
+    },
+  ]);
+});
+
+it("won't pair with a desktop whose key differs from the QR code's", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const other = toBase64Url(new Uint8Array(32).fill(9));
+  const p = phone({ link: { ...link, key: other }, device: "Pixel" });
+  await vi.waitFor(() =>
+    expect(p.statuses.some((s) => s.status === "offline")).toBe(true),
+  );
+  expect(p.client.status).not.toBe("online");
+  expect(remote.devices.list()).toEqual([]);
+});
+
+it("streams thread changes to the phone and cuts it off when removed", async () => {
+  const { remote, summary } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  await p.client.call("overview");
+
+  const message: ChatMessage = {
+    id: randomUUID(),
+    role: "assistant",
+    body: "Done.",
+    status: "complete",
+    created: 3,
+    provider: "claude",
+    version: 1,
+  };
+  summary.updated = 3;
+  remote.chatEvent({ chatId, message });
+  await vi.waitFor(() =>
+    expect(p.events.map((e) => e.kind)).toEqual(["message", "chats"]),
+  );
+
+  await remote.revoke(p.credentials()!.deviceId);
+  await p.until("denied");
+  expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
+});
+
+it("only answers the allowlisted calls, and only after pairing", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  await expect(
+    // @ts-expect-error: not a phone method
+    p.client.call("openTerminal", "/", 80, 24),
+  ).rejects.toThrow("Phones can't do that.");
+  await expect(p.client.call("stop", "not-a-uuid")).rejects.toThrow();
+
+  // A socket that finishes the handshake but skips pairing gets turned away.
+  const handshake = clientHandshake(fromBase64Url(link.key));
+  const socket = new WebSocket(`ws://127.0.0.1:${link.port}/`);
+  const reply = await new Promise<string>((resolve, reject) => {
+    let channel: ReturnType<typeof handshake.finish> | undefined;
+    socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+    socket.onerror = () => reject(new Error("socket error"));
+    socket.onmessage = (m) => {
+      if (!channel) {
+        channel = handshake.finish(JSON.parse(m.data));
+        socket.send(
+          toBase64Url(
+            channel.seal(
+              JSON.stringify({
+                t: "call",
+                id: 1,
+                method: "overview",
+                args: [],
+              }),
+            ),
+          ),
+        );
+      } else resolve(channel.open(fromBase64Url(m.data)));
+    };
+  });
+  socket.close();
+  expect(JSON.parse(reply)).toEqual({
+    t: "denied",
+    reason: "Pair this phone first.",
+  });
+});

@@ -17,6 +17,7 @@ import { branchActionSchema } from "../shared/branches";
 import { Projects, type Place } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
+import { PhoneRemote } from "./remote/phone-remote";
 import { deepReviewStartSchema } from "../shared/deep-review";
 import { git } from "./git";
 import {
@@ -150,6 +151,7 @@ let rooms: RoomService;
 let devops: DevOps;
 let projects: Projects;
 let projectChats: ProjectChats;
+let phoneRemote: PhoneRemote | undefined;
 const pullRequestCreation = new PullRequestCreation();
 const updater = new Updater(
   (state) => {
@@ -372,6 +374,7 @@ app.on("before-quit", (event) => {
   if (flushing) return;
   flushing = true;
   void stopSyncs()
+    .then(() => phoneRemote?.close())
     .then(() => projectChats?.dispose())
     .then(() => rooms?.dispose())
     .then(() =>
@@ -552,6 +555,10 @@ async function place(
   };
 }
 const placeRoot = async (where: unknown) => (await place(where)).root;
+function requirePhoneRemote() {
+  if (!phoneRemote) throw new Error("Relay is still starting.");
+  return phoneRemote;
+}
 async function dispatch(method: ApiMethod, args: unknown[]) {
   switch (method) {
     case "localCheckInfo":
@@ -1778,6 +1785,14 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return updater.download();
     case "installUpdate":
       return updater.installAndRestart();
+    case "phoneRemoteState":
+      return requirePhoneRemote().state();
+    case "setPhoneRemote":
+      return requirePhoneRemote().setEnabled(z.boolean().parse(args[0]));
+    case "phonePairing":
+      return requirePhoneRemote().pairing();
+    case "revokePhone":
+      return requirePhoneRemote().revoke(z.string().uuid().parse(args[0]));
     case "openExternal": {
       const u = new URL(z.string().max(4096).parse(args[0]));
       if (!["https:", "http:"].includes(u.protocol) || u.username || u.password)
@@ -1818,6 +1833,7 @@ app
       (event) => {
         if (win && !win.isDestroyed())
           win.webContents.send("relay:project-chat", event);
+        phoneRemote?.chatEvent(event);
       },
       new ProjectSharing(projects, rooms, requireClient),
       async (chat, selection) => {
@@ -1844,6 +1860,30 @@ app
       return;
     }
     triage = new TriageService(store, app.getPath("userData"));
+    phoneRemote = new PhoneRemote(
+      store,
+      seal,
+      unseal,
+      {
+        projects: () => projects.list(client),
+        chats: (id) => projectChats.list(id),
+        chat: (id, known) =>
+          known ? projectChats.changes(id, known) : projectChats.get(id),
+        create: (projectId) =>
+          projectChats.create(projectId, { kind: "project" }),
+        send: (id, input) => projectChats.send(id, input),
+        cancel: (id) => projectChats.cancel(id),
+        respond: (id, requestId, response) =>
+          projectChats.respond(id, requestId, response),
+        turnDiff: (chatId, messageId, path) =>
+          projectChats.turnDiff(chatId, messageId, path),
+        triage: (id, triage) => projectChats.triage(id, triage),
+        aiSettings: () =>
+          aiSettingsSchema.parse(store.get().aiSettings ?? defaultAISettings),
+      },
+      Number(process.env.RELAY_REMOTE_PORT) || undefined,
+    );
+    void phoneRemote.start();
     threadTerminals.connect((event) => {
       if (win && !win.isDestroyed())
         win.webContents.send("relay:terminal", event);

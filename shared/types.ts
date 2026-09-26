@@ -18,6 +18,7 @@ import type {
   SymbolResult,
 } from "./checks";
 import type { TriageState } from "./triage";
+import type { PhoneRemoteApi } from "./remote";
 export interface User {
   id: number;
   login: string;
@@ -211,7 +212,8 @@ export interface Api
     ProjectApi,
     DevOpsApi,
     TaskApi,
-    TerminalApi {
+    TerminalApi,
+    PhoneRemoteApi {
   inspectSymbol(
     ref: PullRef,
     head: string,

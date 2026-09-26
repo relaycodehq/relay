@@ -1,0 +1,275 @@
+/**
+ * The phone's connection to the desktop bridge. No React Native here: the
+ * desktop's tests drive this exact client against the real bridge.
+ */
+import {
+  clientHandshake,
+  fromBase64Url,
+  toBase64Url,
+  type Channel,
+} from "./remote-crypto";
+import type {
+  ClientFrame,
+  HelloFrame,
+  PairingLink,
+  RemoteApi,
+  RemoteCredentials,
+  RemoteEvent,
+  RemoteMethod,
+  ServerFrame,
+} from "./remote";
+
+export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
+
+type Start = { link: PairingLink; device: string } | RemoteCredentials;
+
+export interface RemoteClientOptions {
+  start: Start;
+  WebSocket?: typeof WebSocket;
+  onStatus?: (status: RemoteStatus, detail?: string) => void;
+  onEvent?: (event: RemoteEvent) => void;
+  /** First contact traded the pairing code for these; keep them to reconnect. */
+  onPaired?: (credentials: RemoteCredentials) => void;
+  /** Per host while connecting, and per call. */
+  timeoutMs?: number;
+  /** Silence after which a link counts as dead; the desktop ticks every 15s. */
+  staleMs?: number;
+}
+
+type Result<M extends RemoteMethod> = Awaited<ReturnType<RemoteApi[M]>>;
+
+export class RemoteClient {
+  status: RemoteStatus = "offline";
+  private target: Start;
+  private socket?: WebSocket;
+  private channel?: Channel;
+  private calls = new Map<
+    number,
+    { resolve: (v: any) => void; reject: (e: Error) => void; timer: any }
+  >();
+  private nextCall = 1;
+  private closed = true;
+  private retry = 0;
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  private watchdog?: ReturnType<typeof setTimeout>;
+  private preferred = 0;
+  private attempt = 0;
+  constructor(private options: RemoteClientOptions) {
+    this.target = options.start;
+  }
+  /** The desktop's name, from the link or the saved credentials. */
+  get name() {
+    return "link" in this.target ? this.target.link.name : this.target.name;
+  }
+  start() {
+    if (!this.closed) return;
+    this.closed = false;
+    void this.connect();
+  }
+  close() {
+    this.closed = true;
+    clearTimeout(this.retryTimer);
+    this.drop("Disconnected.");
+    this.setStatus("offline");
+  }
+  /** Reconnects now instead of waiting out the backoff, e.g. when the app returns to the foreground. */
+  wake() {
+    if (this.closed || this.status === "denied") return;
+    if (this.status === "offline") {
+      clearTimeout(this.retryTimer);
+      this.retry = 0;
+      void this.connect();
+    }
+  }
+  call<M extends RemoteMethod>(
+    method: M,
+    ...args: Parameters<RemoteApi[M]>
+  ): Promise<Result<M>> {
+    if (this.status !== "online" || !this.channel)
+      return Promise.reject(new Error(`Not connected to ${this.name}.`));
+    const id = this.nextCall++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.calls.delete(id);
+        reject(new Error(`${this.name} didn't answer in time.`));
+      }, this.options.timeoutMs ?? 15000);
+      this.calls.set(id, { resolve, reject, timer });
+      this.sendFrame({ t: "call", id, method, args });
+    });
+  }
+  private setStatus(status: RemoteStatus, detail?: string) {
+    this.status = status;
+    this.options.onStatus?.(status, detail);
+  }
+  private get hosts() {
+    const t = this.target;
+    return "link" in t
+      ? { hosts: t.link.hosts, port: t.link.port, key: t.link.key }
+      : { hosts: t.hosts, port: t.port, key: t.key };
+  }
+  private async connect() {
+    const attempt = ++this.attempt;
+    this.setStatus("connecting");
+    const { hosts, port, key } = this.hosts;
+    const order = [
+      ...hosts.slice(this.preferred),
+      ...hosts.slice(0, this.preferred),
+    ];
+    let reason = `Can't reach ${this.name}.`;
+    for (const host of order) {
+      if (this.closed || attempt !== this.attempt) return;
+      try {
+        await this.open(host, port, fromBase64Url(key));
+        this.preferred = hosts.indexOf(host);
+        this.retry = 0;
+        return;
+      } catch (e) {
+        this.drop("Connection lost.");
+        if (e instanceof Denied) {
+          this.closed = true;
+          this.setStatus("denied", e.message);
+          return;
+        }
+        reason = e instanceof Error ? e.message : reason;
+      }
+    }
+    if (this.closed || attempt !== this.attempt) return;
+    this.setStatus("offline", reason);
+    this.scheduleRetry();
+  }
+  private scheduleRetry() {
+    clearTimeout(this.retryTimer);
+    const delay = Math.min(15000, 1000 * 2 ** this.retry++);
+    this.retryTimer = setTimeout(() => void this.connect(), delay);
+  }
+  /** Resolves once authenticated; later failures reconnect by themselves. */
+  private open(host: string, port: number, serverKey: Uint8Array) {
+    const Socket = this.options.WebSocket ?? globalThis.WebSocket;
+    const url = `ws://${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}/`;
+    return new Promise<void>((resolve, reject) => {
+      const socket = new Socket(url);
+      this.socket = socket;
+      const handshake = clientHandshake(serverKey);
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      };
+      const timer = setTimeout(
+        () => fail(new Error(`${host} didn't answer.`)),
+        this.options.timeoutMs ?? 15000,
+      );
+      socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+      socket.onerror = () => fail(new Error(`Can't reach ${this.name}.`));
+      socket.onclose = () => {
+        if (!settled) return fail(new Error(`Can't reach ${this.name}.`));
+        if (this.socket !== socket) return;
+        this.drop("Connection lost.");
+        if (this.closed || this.status === "denied") return;
+        this.setStatus("offline", "Connection lost.");
+        this.scheduleRetry();
+      };
+      socket.onmessage = (message) => {
+        if (typeof message.data !== "string") return socket.close();
+        try {
+          if (!this.channel) {
+            this.channel = handshake.finish(
+              JSON.parse(message.data) as HelloFrame,
+            );
+            this.sendFrame(
+              "link" in this.target
+                ? {
+                    t: "pair",
+                    code: this.target.link.code,
+                    device: this.target.device,
+                  }
+                : {
+                    t: "auth",
+                    deviceId: this.target.deviceId,
+                    token: this.target.token,
+                  },
+            );
+            return;
+          }
+          const frame = JSON.parse(
+            this.channel.open(fromBase64Url(message.data)),
+          ) as ServerFrame;
+          this.keepAlive(socket);
+          if (!settled) {
+            if (frame.t === "denied") return fail(new Denied(frame.reason));
+            if (frame.t === "paired" && "link" in this.target) {
+              const { link } = this.target;
+              this.target = {
+                hosts: link.hosts,
+                port: link.port,
+                key: link.key,
+                name: frame.name,
+                deviceId: frame.deviceId,
+                token: frame.token,
+              };
+              this.options.onPaired?.(this.target);
+            } else if (frame.t === "ready") {
+              if (!("link" in this.target))
+                this.target = { ...this.target, name: frame.name };
+            } else return fail(new Error("Unexpected answer from Relay."));
+            settled = true;
+            clearTimeout(timer);
+            this.setStatus("online");
+            resolve();
+            return;
+          }
+          this.receive(frame);
+        } catch {
+          // Anything that doesn't open under the pinned key isn't our desktop.
+          fail(new Error(`Couldn't verify ${this.name}. Pair again.`));
+          socket.close();
+        }
+      };
+    });
+  }
+  private receive(frame: ServerFrame) {
+    if (frame.t === "result") {
+      const call = this.calls.get(frame.id);
+      if (!call) return;
+      this.calls.delete(frame.id);
+      clearTimeout(call.timer);
+      if (frame.ok) call.resolve(frame.value);
+      else call.reject(new Error(frame.error));
+    } else if (frame.t === "event") this.options.onEvent?.(frame.event);
+    else if (frame.t === "denied") {
+      this.closed = true;
+      this.drop(frame.reason);
+      this.setStatus("denied", frame.reason);
+    }
+  }
+  private keepAlive(socket: WebSocket) {
+    clearTimeout(this.watchdog);
+    this.watchdog = setTimeout(() => {
+      if (this.socket === socket) socket.close();
+    }, this.options.staleMs ?? 40000);
+  }
+  private sendFrame(frame: ClientFrame) {
+    this.socket?.send(toBase64Url(this.channel!.seal(JSON.stringify(frame))));
+  }
+  private drop(reason: string) {
+    clearTimeout(this.watchdog);
+    const socket = this.socket;
+    this.socket = undefined;
+    this.channel = undefined;
+    if (socket) {
+      socket.onclose = socket.onmessage = socket.onerror = socket.onopen = null;
+      try {
+        socket.close();
+      } catch {}
+    }
+    for (const call of this.calls.values()) {
+      clearTimeout(call.timer);
+      call.reject(new Error(reason));
+    }
+    this.calls.clear();
+  }
+}
+
+class Denied extends Error {}

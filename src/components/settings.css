@@ -917,3 +917,20 @@
   height: 1.1em;
   vertical-align: text-bottom;
 }
+.phone-pairing {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.phone-pairing p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.phone-qr {
+  flex: none;
+  width: 168px;
+  height: 168px;
+  border-radius: 6px;
+}

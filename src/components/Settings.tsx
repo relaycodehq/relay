@@ -24,6 +24,7 @@ import {
   Sun,
   UserRound,
   Users,
+  Smartphone,
   X,
 } from "lucide-react";
 import type { Account } from "../../shared/types";
@@ -79,6 +80,7 @@ import {
 } from "./SettingsCard";
 import { RelayMark } from "./RelayMark";
 import { RoomHostingSettings } from "./RoomHostingSettings";
+import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
   DevOpsConnectionSettings,
   DevOpsFilterSettings,
@@ -98,6 +100,7 @@ type CategoryId =
   | "models"
   | "integrations"
   | "rooms"
+  | "phone"
   | "shortcuts"
   | "about";
 
@@ -137,6 +140,12 @@ const categories: {
     label: "Shared rooms",
     description: "Host rooms for shared conversations.",
     icon: Users,
+  },
+  {
+    id: "phone",
+    label: "Phone",
+    description: "Follow and answer your threads from the Relay phone app.",
+    icon: Smartphone,
   },
   {
     id: "shortcuts",
@@ -884,6 +893,16 @@ export function Settings({
       keywords: "server share invitation setup key host",
       block: true,
       render: () => <RoomHostingSettings />,
+    },
+    {
+      id: "phone-remote",
+      category: "phone",
+      title: "Phone access",
+      description:
+        "Pair a phone to see what your agents are doing, answer their questions and send messages while you're away from the desk.",
+      keywords: "phone mobile android remote qr pair tailscale",
+      block: true,
+      render: () => <PhoneRemoteSettings />,
     },
     {
       id: "send-key",

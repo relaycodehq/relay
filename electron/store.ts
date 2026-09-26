@@ -22,6 +22,7 @@ interface State {
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;
   devopsOpenRouterKey?: string;
+  phoneRemote?: import("./remote/devices").RemoteSettings;
   version: 1;
   account?: Account;
   encryptedToken?: string;
