@@ -2,7 +2,6 @@ import { agentResponseSchema } from "../shared/agent-modes";
 import { agentRuntime } from "./agents";
 import { agentProviderSchema, usageProviderSchema } from "../shared/agents";
 import { projectFolderSchema } from "../shared/project-folders";
-import { codexDefaults, codexModels } from "./provider-commands";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import { Ci } from "./ci";
 import { createPullRequestSchema } from "../shared/pull-request-create";
@@ -64,7 +63,6 @@ import { lineQuestionSchema } from "../shared/questions";
 import { aiSettingsSchema } from "../shared/settings";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
 import { DevOps } from "./devops";
-import { claudeDefaults, listClaudeModels } from "./rooms/claude-project";
 import { readProviderUsage } from "./provider-usage";
 import { keepUsageHistory } from "./usage-history";
 import { ProjectChecks } from "./checks/service";
@@ -683,10 +681,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return agentRuntime(agentProviderSchema.parse(args[1])).defaults(
         await projects.root(idSchema.parse(args[0])),
       );
-    case "claudeDefaults":
-      return claudeDefaults(await projects.root(idSchema.parse(args[0])));
-    case "codexDefaults":
-      return codexDefaults(await projects.root(idSchema.parse(args[0])));
     case "projectCiStatus": {
       const id = idSchema.parse(args[0]);
       const chatId = idSchema.optional().parse(args[1] ?? undefined);
@@ -1603,10 +1597,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         z.boolean().optional().parse(args[1]),
       );
     }
-    case "claudeModels":
-      return listClaudeModels();
-    case "codexModels":
-      return codexModels();
     case "providerUsage":
       return readProviderUsage(
         usageProviderSchema.parse(args[0]),

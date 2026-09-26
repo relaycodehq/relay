@@ -136,8 +136,12 @@ export interface AgentModel {
   contextWindow?: number;
 }
 /** What an agent runs where a thread leaves the model or effort on Default. */
+/** What an agent runs where a thread leaves the model or effort on Default. */
 export interface AgentDefaults {
-  /** "" leaves the agent's built-in choice. */
+  /** The listed model Default runs; "" when the agent doesn't say. */
   model: string;
+  /** The effort Default runs on that model; "" when it sends none or doesn't say. */
   effort: ReasoningEffort;
+  /** The effort Default runs with each listed model picked, by model id. */
+  efforts?: Record<string, ReasoningEffort>;
 }

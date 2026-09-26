@@ -47,6 +47,7 @@ import { savedRuntimeMode } from "../../shared/agent-modes";
 import type { PullRef } from "../../shared/types";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { api } from "../lib/api";
+import { useClaudeModels } from "../lib/useClaudeModels";
 import { sendsMessage, useSendKey } from "../lib/send-key";
 import { FileEntryIcon, RichText } from "./ui";
 import { AgentTurn } from "./AgentTurn";
@@ -65,18 +66,9 @@ import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import "./deep-review.css";
 
-const claudeModelsQuery = {
-  queryKey: ["claude-models"],
-  queryFn: () => api.claudeModels(),
-  staleTime: Infinity,
-};
-function useClaudeModels() {
-  const query = useQuery(claudeModelsQuery);
-  return query.isError ? [] : query.data;
-}
 /** Names an agent by its model, as the pickers do. */
 export function useAgentName() {
-  const claude = useClaudeModels();
+  const claude = useClaudeModels().models;
   const codex = useCodexModels().models;
   return (agent: { provider: AgentProvider; choice: ReviewAgent["choice"] }) =>
     agent.provider === "codex"
@@ -161,7 +153,7 @@ export function DeepReviewSetup({
   /** Resolves true once the review has started. */
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
-  const claudeModels = useClaudeModels();
+  const claudeModels = useClaudeModels().models;
   const sendKey = useSendKey();
   const [setup, setSetup] = useState<Setup>(
     () =>

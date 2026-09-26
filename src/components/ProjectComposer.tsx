@@ -31,7 +31,6 @@ import {
   type ReasoningEffort,
   codexQuestionChoice,
   claudeEffortsFor,
-  type ClaudeModel,
   claudeContextWindow,
   findClaudeModel,
   withClaudeContextWindow,
@@ -54,25 +53,19 @@ import {
   agentName,
   agentProviders,
   agents,
+  type AgentModel,
   type AgentProvider,
   reportsUsage,
 } from "../../shared/agents";
-import { api } from "../lib/api";
 import {
   ComposerModelPicker,
   type MessageProvider,
 } from "./ComposerModelPicker";
 import { useCodexModels } from "../lib/useCodexModels";
+import { useClaudeModels } from "../lib/useClaudeModels";
 import { useAgentDefaults } from "../lib/useAgentDefaults";
 import { useDoubleEscape } from "../lib/useDoubleEscape";
-import {
-  claudeDefaultEffort,
-  claudeDefaultModel,
-  claudeDefaultModelName,
-  codexDefaultEffort,
-  codexDefaultModelName,
-  defaultEffortLabel,
-} from "../../shared/agent-defaults";
+import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
@@ -202,24 +195,9 @@ export function ProjectComposer({
   const [choice, setChoice] = useState(saved.choice);
   const [claude, setClaude] = useState(saved.claude);
   const [picks, setPicks] = useState(saved.picks);
-  const agentPicks = useAgentPicks(projectId);
-  const [claudeModels, setClaudeModels] = useState<ClaudeModel[]>();
-  const composerLive = useRef(true);
-  const loadClaudeModels = useCallback(() => {
-    void api
-      .claudeModels()
-      .catch(() => [])
-      .then((models) => {
-        if (composerLive.current) setClaudeModels(models);
-      });
-  }, []);
-  useEffect(() => {
-    composerLive.current = true;
-    loadClaudeModels();
-    return () => {
-      composerLive.current = false;
-    };
-  }, [loadClaudeModels]);
+  const agentPicks = useAgentPicks();
+  const claudeCatalog = useClaudeModels();
+  const claudeModels = claudeCatalog.models;
   const codex = useCodexModels();
   const codexModels = codex.models;
   const defaults = useAgentDefaults(projectId);
@@ -427,7 +405,7 @@ export function ProjectComposer({
   });
   const openModelPicker = useStableCallback(() => {
     // A failed first probe leaves the list empty; ask again.
-    if (!claudeModels?.length) loadClaudeModels();
+    claudeCatalog.retry();
     codex.retry();
     defaults.refresh();
     agentPicks.refresh();
@@ -435,42 +413,31 @@ export function ProjectComposer({
   // Default says what it runs, as each agent's own settings decide.
   const claudeRuns = claude.model
     ? claudeListed
-    : claudeDefaultModel(defaults.claude, claudeModels);
-  const claudeDefaultLevel = claudeDefaultEffort(
-    defaults.claude,
-    claude.model,
-    claudeModels,
+    : claudeModels?.find((m) => m.id === defaults.of("claude")?.model);
+  const claudeDefaultLevel = defaults.effort(
+    "claude",
+    claude.model ? (claudeListed?.id ?? claude.model) : "",
   );
-  const codexDefaultLevel = codexDefaultEffort(
-    defaults.codex,
-    selected?.model ?? "",
-    codexModels,
-  );
+  const codexDefaultLevel = defaults.effort("codex", selected?.model ?? "");
+  const modelsOf = (p: AgentProvider): AgentModel[] | undefined =>
+    p === "codex"
+      ? codexModels
+      : p === "claude"
+        ? claudeModels
+        : agentPicks.catalogs[p]?.models;
+  // The model each agent's Default runs, by its listed name.
+  const defaultModels = agentProviders.map((p) => defaults.of(p)?.model ?? "");
   const defaultNames = useMemo(
-    (): Partial<Record<AgentProvider, string>> => ({
-      claude: claudeDefaultModelName(defaults.claude, claudeModels),
-      codex: codexDefaultModelName(defaults.codex, codexModels),
-      ...Object.fromEntries(
-        pickAgents.flatMap((p) => {
-          const { models, defaults: runs } = agentPicks.catalogs[p] ?? {};
-          return runs?.model
-            ? [
-                [
-                  p,
-                  models?.find((m) => m.id === runs.model)?.name ?? runs.model,
-                ],
-              ]
+    (): Partial<Record<AgentProvider, string>> =>
+      Object.fromEntries(
+        agentProviders.flatMap((p, i) => {
+          const runs = defaultModels[i];
+          return runs
+            ? [[p, modelsOf(p)?.find((m) => m.id === runs)?.name ?? runs]]
             : [];
         }),
       ),
-    }),
-    [
-      defaults.claude,
-      defaults.codex,
-      claudeModels,
-      codexModels,
-      agentPicks.catalogs,
-    ],
+    [defaultModels.join("\0"), codexModels, claudeModels, agentPicks.catalogs],
   );
   const codexEffortOptions = useMemo(
     () =>
@@ -694,7 +661,7 @@ export function ProjectComposer({
           ? claudeDefaultLevel
           : recipient === "codex"
             ? codexDefaultLevel
-            : "";
+            : defaults.effort(recipient, pickOf(recipient).model);
       return [
         {
           value: "default",

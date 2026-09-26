@@ -39,7 +39,7 @@ export function useCodexModels() {
   const query = useQuery({
     queryKey: ["codex-models"],
     queryFn: async () => {
-      const models = await api.codexModels();
+      const models = await api.agentModels("codex");
       if (models.length) localStorage.setItem(savedKey, JSON.stringify(models));
       return models;
     },

@@ -20,12 +20,22 @@ import {
   openCodeModels,
 } from "./opencode/catalog";
 import type { AgentRuntime } from "./types";
+import {
+  claudeAgentDefaults,
+  codexAgentDefaults,
+} from "../../shared/agent-defaults";
 
 const codex: AgentRuntime = {
   run: runCodex,
   closeSession: (key) => closeCodexConnection(key).catch(() => {}),
   models: codexModels,
-  defaults: codexDefaults,
+  defaults: async (root) => {
+    const [defaults, models] = await Promise.all([
+      codexDefaults(root),
+      codexModels(),
+    ]);
+    return codexAgentDefaults(defaults, models);
+  },
   commands: async (root) => (await codexSkills(root)).map(presentSkill),
 };
 
@@ -34,10 +44,11 @@ const claude: AgentRuntime = {
   closeSession: async (key) => closeClaudeSession(key),
   models: listClaudeModels,
   defaults: async (root) => {
-    const defaults = await claudeDefaults(root);
-    return defaults
-      ? { model: defaults.appliedModel, effort: defaults.appliedEffort }
-      : null;
+    const [defaults, models] = await Promise.all([
+      claudeDefaults(root),
+      listClaudeModels(),
+    ]);
+    return defaults ? claudeAgentDefaults(defaults, models) : null;
   },
   commands: listClaudeCommands,
   askSide: ({ choice, ...options }) =>

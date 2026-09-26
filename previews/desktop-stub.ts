@@ -43,8 +43,12 @@ if (!localStorage.getItem("relay-appearance"))
 
 const hour = 60 * 60 * 1000;
 const stub: Partial<Api> = {
-  claudeModels: async () => claudeModels,
-  codexModels: async () => fallbackCodexModels,
+  agentModels: (async (provider: string) =>
+    provider === "claude"
+      ? claudeModels
+      : provider === "codex"
+        ? fallbackCodexModels
+        : []) as Api["agentModels"],
   // A browser tab can't zoom itself; CSS zoom stands in for the window's.
   setInterfaceScale: async (scale) => {
     document.documentElement.style.zoom = String(scale);

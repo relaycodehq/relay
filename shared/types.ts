@@ -7,7 +7,6 @@ import type { TerminalApi } from "./terminals";
 import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
-import type { ClaudeDefaults, CodexDefaults } from "./agent-defaults";
 import type { ProviderUsage } from "./provider-usage";
 import type { UsageProvider } from "./agents";
 import type { UpdateState } from "./updates";
@@ -257,20 +256,21 @@ export interface Api
     provider: UsageProvider,
     force?: boolean,
   ): Promise<ProviderUsage>;
-  claudeModels(): Promise<ClaudeModel[]>;
-  codexModels(): Promise<CodexModel[]>;
-  /** Any agent's models, in the registry's common shape. */
-  agentModels(
-    provider: import("./agents").AgentProvider,
-  ): Promise<import("./agents").AgentModel[]>;
+  /** An agent's models; Codex's and Claude's carry their own extra fields. */
+  agentModels<P extends import("./agents").AgentProvider>(
+    provider: P,
+  ): Promise<
+    P extends "codex"
+      ? CodexModel[]
+      : P extends "claude"
+        ? ClaudeModel[]
+        : import("./agents").AgentModel[]
+  >;
   /** What an agent runs in this project where a thread leaves the model on Default. */
   agentDefaults(
     projectId: string,
     provider: import("./agents").AgentProvider,
   ): Promise<import("./agents").AgentDefaults | null>;
-  /** What a project's threads run when they leave the model or effort on Default. */
-  claudeDefaults(projectId: string): Promise<ClaudeDefaults | null>;
-  codexDefaults(projectId: string): Promise<CodexDefaults>;
   askAboutLines(ref: PullRef, question: LineQuestion): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   retryLoginRestore(): Promise<void>;

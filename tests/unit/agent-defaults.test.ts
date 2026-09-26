@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
 import {
+  claudeAgentDefaults,
   claudeDefaultEffort,
-  claudeDefaultModelName,
   claudeDefaultsFrom,
+  codexAgentDefaults,
   codexDefaultEffort,
-  codexDefaultModelName,
 } from "../../shared/agent-defaults";
 import type { ClaudeModel, CodexModel } from "../../shared/settings";
 
@@ -45,7 +45,6 @@ it("reads what Claude runs on Default the way the CLI resolves it", () => {
     sources: [],
     applied: { model: "claude-fable-5-1", effort: "xhigh", advisor: null },
   });
-  expect(claudeDefaultModelName(defaults, claudeModels)).toBe("Fable 5.1");
   expect(claudeDefaultEffort(defaults, "", claudeModels)).toBe("xhigh");
   // A model's own level beats the file's, whatever its alias or window.
   expect(claudeDefaultEffort(defaults, "opus", claudeModels)).toBe("low");
@@ -54,8 +53,17 @@ it("reads what Claude runs on Default the way the CLI resolves it", () => {
   expect(claudeDefaultEffort(defaults, "my-model", claudeModels)).toBe("high");
   // Haiku takes no effort at all.
   expect(claudeDefaultEffort(defaults, "haiku", claudeModels)).toBe("");
-  // Until the models are listed there's no name to show.
-  expect(claudeDefaultModelName(defaults, undefined)).toBeUndefined();
+  // What every agent reports: the listed id, so a picker can find its name.
+  expect(claudeAgentDefaults(defaults!, claudeModels)).toEqual({
+    model: "claude-fable-5-1[1m]",
+    effort: "xhigh",
+    efforts: {
+      opus: "low",
+      "claude-fable-5-1[1m]": "xhigh",
+      sonnet: "high",
+      haiku: "",
+    },
+  });
 });
 
 it("leaves Default unnamed when Claude can't say what it runs", () => {
@@ -93,14 +101,22 @@ it("reads what Codex runs on Default from its config, then its models", () => {
     },
   ];
   const unset = { model: "", effort: "" } as const;
-  expect(codexDefaultModelName(unset, codexModels)).toBe("GPT-6-Sol");
   expect(codexDefaultEffort(unset, "", codexModels)).toBe("medium");
   expect(codexDefaultEffort(unset, "gpt-6-luna", codexModels)).toBe("low");
   // The config's model and effort win over the list's.
   const configured = { model: "gpt-6-luna", effort: "high" } as const;
-  expect(codexDefaultModelName(configured, codexModels)).toBe("GPT-6-Luna");
   expect(codexDefaultEffort(configured, "gpt-6-sol", codexModels)).toBe("high");
+  // What every agent reports: the model that runs even when the config names none.
+  expect(codexAgentDefaults(unset, codexModels)).toEqual({
+    model: "gpt-6-sol",
+    effort: "medium",
+    efforts: { "gpt-6-sol": "medium", "gpt-6-luna": "low" },
+  });
+  expect(codexAgentDefaults(configured, codexModels)).toEqual({
+    model: "gpt-6-luna",
+    effort: "high",
+    efforts: { "gpt-6-sol": "high", "gpt-6-luna": "high" },
+  });
   // Without the config the list's default may not be what runs.
-  expect(codexDefaultModelName(undefined, codexModels)).toBeUndefined();
   expect(codexDefaultEffort(undefined, "", codexModels)).toBe("");
 });

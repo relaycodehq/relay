@@ -33,8 +33,7 @@ Object.assign(window.relay as Partial<Api>, {
     new Promise<AISettings>((r) => setTimeout(() => r(aiSettings), 600)),
   saveAISettings: async (next: AISettings) => (aiSettings = next),
   updateState: async () => ({ status: "off", current: "preview" }),
-  claudeDefaults: async () => null,
-  codexDefaults: async () => ({ model: "", effort: "" }),
+  agentDefaults: async () => null,
 });
 
 const queryClient = new QueryClient();

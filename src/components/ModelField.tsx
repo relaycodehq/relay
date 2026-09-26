@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Zap } from "lucide-react";
 import {
   claudeEffortsFor,
@@ -10,7 +9,7 @@ import {
   type ReasoningEffort,
   type ModelChoice,
 } from "../../shared/settings";
-import { api } from "../lib/api";
+import { useClaudeModels } from "../lib/useClaudeModels";
 import { agents, helperProviders } from "../../shared/agents";
 import { useCodexModels } from "../lib/useCodexModels";
 import { ComposerModelPicker } from "./ComposerModelPicker";
@@ -42,14 +41,9 @@ export function ModelField({
       setContainer(el?.closest("dialog") ?? undefined),
     [],
   );
-  const claude = useQuery({
-    queryKey: ["claude-models"],
-    queryFn: () => api.claudeModels(),
-    enabled: !!provider,
-    staleTime: Infinity,
-  });
   // A failed probe lists no CLI models rather than loading forever.
-  const claudeModels = claude.isError ? [] : claude.data;
+  const claude = useClaudeModels(!!provider);
+  const claudeModels = claude.models;
   const codex = useCodexModels();
   const efforts =
     agent === "claude"
@@ -80,7 +74,7 @@ export function ModelField({
           },
         }}
         onOpen={() => {
-          if (provider && !claude.data?.length) void claude.refetch();
+          if (provider) claude.retry();
           codex.retry();
         }}
         onSelect={(next, model) => {

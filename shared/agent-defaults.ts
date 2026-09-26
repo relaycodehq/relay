@@ -7,6 +7,7 @@ import {
   type CodexModel,
   type ReasoningEffort,
 } from "./settings";
+import type { AgentDefaults } from "./agents";
 
 /**
  * What Claude Code runs where Relay leaves the model or effort on Default,
@@ -79,7 +80,7 @@ export function claudeDefaultEffort(
   return !listed || listed.efforts.includes(effort) ? effort : "";
 }
 /** The listed model Claude's Default runs. */
-export function claudeDefaultModel(
+function claudeDefaultModel(
   defaults: ClaudeDefaults | undefined,
   models: ClaudeModel[] | undefined,
 ): ClaudeModel | undefined {
@@ -88,14 +89,6 @@ export function claudeDefaultModel(
   return models?.find(
     (m) => withClaudeContextWindow(m.resolved ?? m.id, "200k") === id,
   );
-}
-/** The listed name of the model Claude's Default runs. */
-export function claudeDefaultModelName(
-  defaults: ClaudeDefaults | undefined,
-  models: ClaudeModel[] | undefined,
-): string | undefined {
-  if (!defaults?.appliedModel || !models) return undefined;
-  return claudeDefaultModel(defaults, models)?.name ?? defaults.appliedModel;
 }
 
 /** What Codex runs where Relay leaves the model or effort on Default, as its config decides. */
@@ -120,15 +113,34 @@ export function codexDefaultEffort(
   const id = model || codexDefaultModel(defaults, models);
   return models.find((m) => m.id === id)?.defaultEffort ?? "";
 }
-/** The listed name of the model Codex's Default runs. */
-export function codexDefaultModelName(
-  defaults: CodexDefaults | undefined,
-  models: CodexModel[],
-): string | undefined {
-  const id = codexDefaultModel(defaults, models);
-  return id ? (models.find((m) => m.id === id)?.name ?? id) : undefined;
-}
 
 /** "Default (Medium)", or plain "Default" when its level isn't known. */
 export const defaultEffortLabel = (effort: ReasoningEffort) =>
   effort ? `Default (${effortLabels[effort]})` : "Default";
+
+/** Codex's Default as every agent reports it: listed model, effort, per-model efforts. */
+export function codexAgentDefaults(
+  defaults: CodexDefaults,
+  models: CodexModel[],
+): AgentDefaults {
+  return {
+    model: codexDefaultModel(defaults, models) ?? "",
+    effort: codexDefaultEffort(defaults, "", models),
+    efforts: Object.fromEntries(
+      models.map((m) => [m.id, codexDefaultEffort(defaults, m.id, models)]),
+    ),
+  };
+}
+/** Claude's Default as every agent reports it: listed model, effort, per-model efforts. */
+export function claudeAgentDefaults(
+  defaults: ClaudeDefaults,
+  models: ClaudeModel[],
+): AgentDefaults {
+  return {
+    model: claudeDefaultModel(defaults, models)?.id ?? "",
+    effort: claudeDefaultEffort(defaults, "", models),
+    efforts: Object.fromEntries(
+      models.map((m) => [m.id, claudeDefaultEffort(defaults, m.id, models)]),
+    ),
+  };
+}
