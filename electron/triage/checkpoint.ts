@@ -14,11 +14,7 @@ import {
   type TriageState,
 } from "../../shared/triage";
 import { filePathSchema } from "../../shared/validation";
-import {
-  responseSchema,
-  INCOMPLETE_HUNKS_REASON,
-  INVALID_BATCH_PREFIX,
-} from "./classifier";
+import { responseSchema, failedReason } from "./classifier";
 
 const reasonSchema = z.string().max(1000);
 const pathsSchema = z.array(filePathSchema).max(1000);
@@ -187,16 +183,7 @@ export function recoverLegacy(result: TriageResult): Checkpoint {
   for (const file of result.files) {
     if (grouped.has(file.filename)) continue;
     const reason = result.ordinary[file.filename];
-    const invalid =
-      reason === INCOMPLETE_HUNKS_REASON ||
-      reason ===
-        "Luna did not account for every changed section. Review this file individually." ||
-      reason?.startsWith(
-        "Luna returned incomplete or invalid decisions for this batch.",
-      ) ||
-      reason?.startsWith(INVALID_BATCH_PREFIX) ||
-      reason ===
-        "Luna did not account for every changed hunk. The file stays in individual review.";
+    const invalid = failedReason(reason);
     if (
       !reason ||
       invalid ||
@@ -275,10 +262,7 @@ export async function readAnalysis(
       throw new Error("Inconsistent checkpoint");
     }
     result.incompleteFiles ??= Object.entries(result.ordinary)
-      .filter(
-        ([, r]) =>
-          r === INCOMPLETE_HUNKS_REASON || r.startsWith(INVALID_BATCH_PREFIX),
-      )
+      .filter(([, r]) => failedReason(r))
       .map(([p]) => p);
     if (
       result.notice ===

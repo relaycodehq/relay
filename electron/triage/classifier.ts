@@ -12,13 +12,28 @@ import { z } from "zod";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable, spawnExecutable } from "../executables";
 import { sdk as claudeSdk } from "../rooms/claude-project";
+import { agentName } from "../../shared/agents";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
 import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";
 
-export const INCOMPLETE_HUNKS_REASON =
-  "Codex did not account for every changed section. Review this file individually.";
-export const INVALID_BATCH_PREFIX =
-  "Codex returned incomplete or invalid decisions for this batch. Review this file individually.";
+/** Why a file the agent failed to classify stays in individual review. */
+export const incompleteHunksReason = (agent: string) =>
+  `${agent} did not account for every changed section. Review this file individually.`;
+export const invalidBatchReason = (agent: string, detail: string) =>
+  `${agent} returned incomplete or invalid decisions for this batch. Review this file individually. ${detail}`.slice(
+    0,
+    1000,
+  );
+/**
+ * Whether a saved reason says the agent failed on the file, so a resumed
+ * analysis retries it. Recognizes every wording analyses were saved with,
+ * back to the Luna ones.
+ */
+export const failedReason = (reason: string | undefined) =>
+  !!reason &&
+  /^\S+ (did not account for every changed (section|hunk)\.|returned incomplete or invalid decisions for this batch\.)/.test(
+    reason,
+  );
 
 function fileDecisionSchema<
   P extends z.ZodType<string>,
@@ -83,6 +98,7 @@ export function validateResponse(
   candidates: Candidate[],
   known: ClassificationResult["groups"] = [],
   mode: "discover" | "match" = "discover",
+  agent = "The agent",
 ): ClassificationResult & { rejectedFiles: string[] } {
   const r = responseSchema.parse(value);
   const expected = new Map(candidates.map((c) => [c.path, c]));
@@ -92,7 +108,7 @@ export function validateResponse(
     r.files.some((f) => !expected.has(f.path))
   )
     throw new Error(
-      "Codex returned incomplete or mismatched file decisions. No files from this batch were grouped.",
+      "Incomplete or mismatched file decisions. No files from this batch were grouped.",
     );
   const allowed = new Set([
     ...known.map((g) => g.pattern),
@@ -102,7 +118,7 @@ export function validateResponse(
     new Set(r.groups.map((g) => g.pattern)).size !== r.groups.length ||
     r.groups.some((g) => !allowed.has(g.pattern))
   )
-    throw new Error("Codex returned invalid pattern identifiers.");
+    throw new Error("Invalid pattern identifiers.");
   for (const g of r.groups) {
     const existing = known.find((k) => k.pattern === g.pattern);
     if (
@@ -112,10 +128,10 @@ export function validateResponse(
         existing.rule !== g.rule)
     )
       throw new Error(
-        "Codex changed an existing pattern instead of checking the file against it.",
+        "It changed an existing pattern instead of checking the file against it.",
       );
     if (!r.files.some((f) => f.decision === "group" && f.pattern === g.pattern))
-      throw new Error("Codex returned an unused pattern definition.");
+      throw new Error("An unused pattern definition.");
   }
   const rejectedFiles: string[] = [];
   for (const [index, f] of r.files.entries()) {
@@ -125,7 +141,7 @@ export function validateResponse(
       continue;
     }
     if (![...known, ...r.groups].some((g) => g.pattern === f.pattern))
-      throw new Error("Codex returned a group without its definition.");
+      throw new Error("A group without its definition.");
     const count = expected.get(f.path)!.hunks;
     if (
       f.coveredHunks.length !== count ||
@@ -138,7 +154,7 @@ export function validateResponse(
         decision: "normal",
         pattern: "",
         coveredHunks: [],
-        reason: INCOMPLETE_HUNKS_REASON,
+        reason: incompleteHunksReason(agent),
       };
     }
   }
@@ -339,7 +355,13 @@ export async function classifyChanges(
       usage: TriageUsage,
     ): Classification => {
       try {
-        const result = validateResponse(read(), candidates, names, mode);
+        const result = validateResponse(
+          read(),
+          candidates,
+          names,
+          mode,
+          agentName(provider),
+        );
         return { result, usage, rejectedFiles: result.rejectedFiles };
       } catch (error) {
         const detail =
@@ -353,7 +375,7 @@ export async function classifyChanges(
               : error instanceof Error
                 ? error.message
                 : "The response could not be checked.";
-        const reason = `${INVALID_BATCH_PREFIX} ${detail}`.slice(0, 1000);
+        const reason = invalidBatchReason(agentName(provider), detail);
         return {
           result: {
             groups: [],

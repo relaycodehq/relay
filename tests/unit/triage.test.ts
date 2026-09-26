@@ -14,8 +14,9 @@ import {
 import {
   validateResponse,
   classifyChanges,
-  INCOMPLETE_HUNKS_REASON,
-  INVALID_BATCH_PREFIX,
+  incompleteHunksReason,
+  invalidBatchReason,
+  failedReason,
   type ClassificationResult,
 } from "../../electron/triage/classifier";
 import { TriageService } from "../../electron/triage/service";
@@ -270,6 +271,24 @@ describe("Model decision boundaries", () => {
     rejected.files[0].coveredHunks = [];
     expect(validateResponse(rejected, [c]).groups).toEqual([]);
   });
+  it("recognizes every saved wording of a failed file, back to Luna's", () => {
+    for (const reason of [
+      incompleteHunksReason("OpenCode"),
+      invalidBatchReason("Claude", "Invalid pattern identifiers."),
+      "Luna did not account for every changed section. Review this file individually.",
+      "Luna returned incomplete or invalid decisions for this batch. Review this file individually.",
+      "Luna did not account for every changed hunk. The file stays in individual review.",
+    ])
+      expect(failedReason(reason)).toBe(true);
+    expect(failedReason("Contains unrelated behavior changes.")).toBe(false);
+  });
+  it("names the agent that grouped the changes when it fails on a file", () => {
+    const rejected = answer([c]);
+    rejected.files[0].coveredHunks = [];
+    expect(
+      validateResponse(rejected, [c], [], "discover", "Claude").files[0].reason,
+    ).toBe(incompleteHunksReason("Claude"));
+  });
   it("prevents a later batch from redefining a pattern to absorb unrelated changes", () => {
     const good = answer([c]);
     expect(() => validateResponse(good, [c], [definition])).not.toThrow();
@@ -369,7 +388,7 @@ describe("Analysis lifecycle and durable groups", () => {
               decision: "normal",
               pattern: "",
               coveredHunks: [],
-              reason: INCOMPLETE_HUNKS_REASON,
+              reason: incompleteHunksReason("Codex"),
             }
           : file,
       );
@@ -411,10 +430,12 @@ describe("Analysis lifecycle and durable groups", () => {
       cached.notice =
         "Some Luna decisions were incomplete. Valid decisions were kept; see individual-file explanations.";
       if (kind === "hunks")
-        cached.ordinary["mixed.ts"] = INCOMPLETE_HUNKS_REASON;
+        cached.ordinary["mixed.ts"] = incompleteHunksReason("Codex");
       if (kind === "batch")
-        cached.ordinary["mixed.ts"] =
-          `${INVALID_BATCH_PREFIX} The final response was not JSON.`;
+        cached.ordinary["mixed.ts"] = invalidBatchReason(
+          "Codex",
+          "The final response was not JSON.",
+        );
       await writeFile(cachedPath, JSON.stringify(cached));
       const reopened = new TriageService(f.store, f.dir, f.classify);
       const result = (await reopened.state("key", `${base}:${head}`))!.result!;
@@ -500,7 +521,7 @@ describe("Analysis lifecycle and durable groups", () => {
               reason: matches.includes(x)
                 ? "Matches the discovered transformation."
                 : calls === 1 && x.path === "one.ts"
-                  ? INCOMPLETE_HUNKS_REASON
+                  ? incompleteHunksReason("Codex")
                   : "Contains unrelated behavior changes.",
               coveredHunks: matches.includes(x)
                 ? Array.from({ length: x.hunks }, (_, i) => i + 1)
