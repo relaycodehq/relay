@@ -273,6 +273,8 @@ export function Connected({
   onDirtyChange?: (dirty: boolean) => void;
   embedded?: {
     ref: PullRef;
+    /** The thread's workspace: local changes and blame read its folder. */
+    workspace?: string;
     onPresence?: (v: {
       path: string | null;
       viewed: number;
@@ -1098,6 +1100,7 @@ export function Connected({
             onFileViewed={advanceUnread}
             paneControls={paneControls}
             slots={embedded?.slots}
+            workspace={embedded?.workspace}
             onEditFile={(path, line) =>
               embedded?.onEditFile
                 ? embedded.onEditFile(path, line)

@@ -901,6 +901,7 @@ export default function ProjectShell() {
                             key={`${project.id}:${pull.number}`}
                             embedded={{
                               ref: pull,
+                              workspace: where,
                               slots: changesSlots,
                               onEditFile: (path, line) =>
                                 openInEditor({ path, line, directory: false }),

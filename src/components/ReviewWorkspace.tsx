@@ -65,6 +65,8 @@ interface Props {
   onDiscuss: (target: QuestionTarget) => void;
   checks: ChecksController;
   pull: Pull;
+  /** A project thread's workspace, where local changes and blame are read. */
+  workspace?: string;
   file?: ChangedFile;
   files: ChangedFile[];
   progressController: ReviewProgressController;
@@ -82,6 +84,7 @@ export function ReviewWorkspace({
   onSettings,
   onDiscuss,
   checks,
+  workspace,
   pull,
   file,
   files,
@@ -414,7 +417,12 @@ export function ReviewWorkspace({
         </div>
       </div>
       {tab === "local" ? (
-        <LocalChanges key={`${pull.owner}/${pull.name}`} pull={pull} />
+        <LocalChanges
+          key={`${pull.owner}/${pull.name}`}
+          {...(workspace
+            ? { projectId: workspace, onOpenFile: onEditFile }
+            : { pull })}
+        />
       ) : tab === "files" ? (
         <>
           <div className="file-toolbar">
@@ -544,6 +552,7 @@ export function ReviewWorkspace({
               checks={checks.state}
               key={`${file.filename}:${revision}`}
               pull={pull}
+              workspace={workspace}
               file={file}
               layout={layout}
               wrap={wrap}

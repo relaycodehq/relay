@@ -98,6 +98,18 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .getByRole("button", { name: "Review changes →", exact: true })
       .click();
     await expect(page.locator("diffs-container")).toBeVisible();
+    // The review's local changes come from the thread's own workspace.
+    await writeFile(join(repo, "review-note.md"), "draft\n");
+    await page
+      .getByRole("button", { name: "Local changes", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("region", { name: "Local changes" })
+        .getByText("review-note.md"),
+    ).toBeVisible();
+    await rm(join(repo, "review-note.md"));
+    await page.getByRole("button", { name: /Files changed/ }).click();
     await page
       .getByRole("button", { name: "Edit locally", exact: true })
       .click();

@@ -46,6 +46,8 @@ import { useSyntaxThemes } from "../lib/appearance";
 import { useFileDiff } from "../lib/useFileDiff";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 interface Props {
+  /** A project thread's workspace, where blame is read instead of the PR's linked folder. */
+  workspace?: string;
   checks?: ProjectCheckState | null;
   pull: Pull;
   file: ChangedFile;
@@ -89,6 +91,7 @@ interface Annotation {
 export function DiffViewer({
   checks,
   pull,
+  workspace,
   file,
   layout,
   wrap,
@@ -148,7 +151,7 @@ export function DiffViewer({
     "review",
   );
   const blame = useLineBlame(
-    pull,
+    workspace ? { projectId: workspace } : pull,
     {
       deletions: {
         revision: pull.merge_base,
