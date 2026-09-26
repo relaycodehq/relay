@@ -624,7 +624,8 @@ export function Connected({
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
       if (!e.metaKey && !e.ctrlKey) return;
       const key = e.key.toLowerCase();
-      if (key === "k") {
+      // A thread's review stays on its own PR.
+      if (!embedded && key === "k") {
         e.preventDefault();
         setUrlOpen((v) => !v);
       }
@@ -1126,7 +1127,7 @@ export function Connected({
           }}
         />
       )}
-      {urlOpen && (
+      {!embedded && urlOpen && (
         <OpenUrl onOpen={openUrl} onClose={() => setUrlOpen(false)} />
       )}
       {editing && (
