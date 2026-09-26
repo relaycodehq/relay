@@ -176,7 +176,6 @@ export interface LocalFolder {
 }
 export interface Bootstrap {
   account: Account | null;
-  accounts: Account[];
   platform: string;
   loginRestore: "idle" | "unlocking" | "failed";
   savedServer?: string;
@@ -332,7 +331,6 @@ export interface Api
   ): Promise<void>;
   openExternal(url: string): Promise<void>;
   updateState(): Promise<UpdateState>;
-  checkForUpdates(): Promise<UpdateState>;
   downloadUpdate(): Promise<UpdateState>;
   /** Quits and hands over to the new version, which starts by itself. */
   installUpdate(): Promise<UpdateState>;

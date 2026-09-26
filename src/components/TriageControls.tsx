@@ -101,11 +101,9 @@ export function TriageControls({
             : `${state?.status === "matching" ? "Checking discovered patterns" : "Discovering patterns"} · ${state?.checked}/${state?.candidates} files`
           : result
             ? `${resume ? `Paused · ${resume.remaining} remaining · ` : ""}${result.groups.length} ${result.groups.length === 1 ? "group" : "groups"} · ${result.groups.reduce((n, g) => n + g.paths.length, 0)} files${result.usage.inputTokens ? ` · ${(result.usage.inputTokens / 1000).toFixed(1)}k input tokens` : ""}`
-            : state?.status === "cancelled"
-              ? "Cancelled · all files remain available"
-              : state?.error
-                ? "Analysis stopped · files remain available"
-                : ""}
+            : state?.error
+              ? "Analysis stopped · files remain available"
+              : ""}
       </div>
       {(error || state?.error) && (
         <p className="triage-error" role="alert">

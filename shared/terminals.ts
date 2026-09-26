@@ -26,7 +26,6 @@ export interface TerminalApi {
   prefillClaudeSignIn(key: string): Promise<boolean>;
   resizeTerminal(key: string, cols: number, rows: number): Promise<void>;
   ackTerminal(key: string, bytes: number): Promise<void>;
-  closeTerminal(key: string): Promise<void>;
   /** Hands the draft's shell to the thread its first message started. */
   adoptTerminal(projectId: string, chatId: string): Promise<void>;
   onTerminal(callback: (event: TerminalEvent) => void): () => void;

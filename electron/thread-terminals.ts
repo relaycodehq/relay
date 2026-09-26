@@ -173,11 +173,6 @@ export class ThreadTerminals {
     if (session.paused && session.unacked < resumeAt) this.resume(session);
   }
 
-  close(key: string) {
-    const session = this.sessions.get(key);
-    if (session) this.kill(session);
-  }
-
   /** A draft's shell carries over to the thread its first message started. */
   adopt(from: string, to: string) {
     const session = this.sessions.get(from);
@@ -243,7 +238,7 @@ export class ThreadTerminals {
     session.pty.resume();
   }
 
-  /** `notify` tells the window, which otherwise closed the shell itself. */
+  /** `notify` tells the window the shell is gone. */
   private kill(session: Session, notify = false) {
     clearTimeout(session.flush);
     this.sessions.delete(session.key);

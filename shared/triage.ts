@@ -38,13 +38,7 @@ export interface TriageState {
   id: string;
   revision: string;
   status:
-    | "scanning"
-    | "classifying"
-    | "matching"
-    | "paused"
-    | "complete"
-    | "cancelled"
-    | "failed";
+    "scanning" | "classifying" | "matching" | "paused" | "complete" | "failed";
   scanned: number;
   total: number;
   checked: number;

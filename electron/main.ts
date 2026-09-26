@@ -828,8 +828,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         terminalKeySchema.parse(args[0]),
         z.number().int().nonnegative().parse(args[1]),
       );
-    case "closeTerminal":
-      return threadTerminals.close(terminalKeySchema.parse(args[0]));
     case "adoptTerminal": {
       const projectId = idSchema.parse(args[0]);
       const chatId = idSchema.parse(args[1]);
@@ -1309,7 +1307,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       if (client) pendingUrl = undefined;
       return {
         account: client?.account ?? null,
-        accounts: client ? [client.account] : [],
         platform: process.platform,
         loginRestore,
         savedServer: store.get().account?.server,
@@ -1731,8 +1728,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return;
     case "updateState":
       return updater.current;
-    case "checkForUpdates":
-      return updater.check();
     case "downloadUpdate":
       return updater.download();
     case "installUpdate":
