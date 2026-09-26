@@ -9,9 +9,13 @@ export interface CommitSummary {
   author: string;
   /** Unix seconds. */
   time: number;
-  /** Decorations such as "HEAD -> main", "origin/main" and "tag: v1". */
-  refs: string[];
+  refs: CommitRef[];
   subject: string;
+}
+/** A ref pointing at a commit; `head` is the checked-out branch or a detached HEAD. */
+export interface CommitRef {
+  name: string;
+  kind: "head" | "branch" | "remote" | "tag";
 }
 export interface CommitLog {
   commits: CommitSummary[];

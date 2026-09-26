@@ -45,7 +45,7 @@ it("lays a feature branch and its merge out on two lanes", async () => {
 
   const log = await commitLog(root, "head", 50);
   expect(log.commits.map((c) => c.sha)).toEqual([merge, feature, main, base]);
-  expect(log.commits[0].refs).toContain("HEAD -> main");
+  expect(log.commits[0].refs).toContainEqual({ name: "main", kind: "head" });
   const rows = layoutGraph(log.commits);
   expect(rows.map((r) => r.lane)).toEqual([0, 1, 0, 0]);
   // The merge opens a second lane and the base closes it again.
@@ -102,4 +102,25 @@ it("shows what a commit changed against its first parent", async () => {
   await expect(commitDiff(root, second, "a.txt")).rejects.toThrow(
     "didn't change",
   );
+});
+
+it("tells a local branch with a slash from a remote one", async () => {
+  await writeFile(join(root, "a.txt"), "one\n");
+  const sha = commit("One");
+  git("branch", "feature/login");
+  git("tag", "v1");
+  git("update-ref", "refs/remotes/origin/main", sha);
+  git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+
+  const [latest] = (await commitLog(root, "all", 50)).commits;
+  expect(latest.refs).toEqual(
+    expect.arrayContaining([
+      { name: "main", kind: "head" },
+      { name: "feature/login", kind: "branch" },
+      { name: "origin/main", kind: "remote" },
+      { name: "v1", kind: "tag" },
+    ]),
+  );
+  expect(latest.refs).toHaveLength(4);
+  expect((await commitDetail(root, sha)).refs).toEqual(latest.refs);
 });

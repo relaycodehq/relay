@@ -172,7 +172,14 @@ function CommitRow({
       <CommitGraph row={row} lanes={lanes} merge={commit.parents.length > 1} />
       <span className="history-subject">
         {commit.refs.map((ref) => (
-          <RefBadge key={ref} value={ref} />
+          <span
+            key={`${ref.kind}:${ref.name}`}
+            className="history-ref"
+            data-kind={ref.kind}
+            title={ref.name}
+          >
+            {ref.name}
+          </span>
         ))}
         <span title={commit.subject}>{commit.subject}</span>
       </span>
@@ -182,25 +189,6 @@ function CommitRow({
       </time>
       <code>{commit.sha.slice(0, 7)}</code>
     </div>
-  );
-}
-
-function RefBadge({ value }: { value: string }) {
-  const head = value.startsWith("HEAD -> ");
-  const tag = value.startsWith("tag: ");
-  const name = head ? value.slice(8) : tag ? value.slice(5) : value;
-  const kind =
-    head || value === "HEAD"
-      ? "head"
-      : tag
-        ? "tag"
-        : name.includes("/")
-          ? "remote"
-          : "branch";
-  return (
-    <span className="history-ref" data-kind={kind} title={value}>
-      {name}
-    </span>
   );
 }
 
