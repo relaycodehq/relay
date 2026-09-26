@@ -46,7 +46,11 @@ export interface AgentOptions {
     mimeType: "image/png" | "image/jpeg" | "image/webp";
   }[];
   skills?: { name: string; path: string }[];
-  purpose?: "answer" | "title";
+  /**
+   * A one-off helper job (a thread title, a commit message): no tools, no
+   * session, and these system instructions in place of the chat's own.
+   */
+  helper?: { instructions: string };
   runtimeMode?: RuntimeMode;
   interactionMode?: InteractionMode;
   /** A deep review's reviewer: it may read and run anything but changes no files. */
