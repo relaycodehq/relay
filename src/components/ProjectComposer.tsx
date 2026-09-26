@@ -107,8 +107,6 @@ import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
-  /** Sends Relay's own message to an agent with the composer's settings, keeping the draft. */
-  sendToAgent: (provider: AgentProvider, body: string) => Promise<boolean>;
   /** The agent picked here and its settings; none while it only messages people. */
   agentSettings: () => ResumeSettings | undefined;
 }
@@ -257,7 +255,6 @@ export function ProjectComposer({
   ]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
-  const sendToAgent = useRef<ComposerHandle["sendToAgent"]>(async () => false);
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
   );
@@ -265,7 +262,6 @@ export function ProjectComposer({
     handleRef,
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
-      sendToAgent: (provider, body) => sendToAgent.current(provider, body),
       agentSettings: () => agentSettings.current(),
     }),
     [],
@@ -906,23 +902,6 @@ export function ProjectComposer({
           interactionMode,
         }
       : undefined;
-  };
-  sendToAgent.current = async (to, body) => {
-    const choice = choiceFor(to);
-    if (!choice || busy || running || sending.current) return false;
-    sending.current = true;
-    try {
-      return await onSend({
-        body: `@${to} ${body}`,
-        provider: to,
-        choice,
-        ...contextFor(to),
-        runtimeMode,
-        interactionMode: "default",
-      });
-    } finally {
-      sending.current = false;
-    }
   };
   /**
    * Empties the composer as the message goes out; a message that is turned
