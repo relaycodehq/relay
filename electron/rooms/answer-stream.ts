@@ -53,6 +53,12 @@ export class CodexAnswerStream {
       this.visibleCommentary.delete(finished);
     }
   }
+  /** A steer was read: what follows is a new answer, below it. */
+  restart() {
+    this.messages.clear();
+    this.visibleCommentary.clear();
+    this.answer = "";
+  }
   private publish() {
     const entries = [...this.messages.entries()];
     const final =

@@ -553,6 +553,41 @@ it.each([
   },
   15000,
 );
+it("continues Codex's answer below a steering message once Codex reads it", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture codex steer"));
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
+      ).toBeGreaterThan(0),
+    { timeout: 8000 },
+  );
+  const steer = {
+    ...input("@codex Use the blue one"),
+    delivery: "steer" as const,
+  };
+  await chats.send(chat.id, steer);
+  await vi.waitFor(
+    async () => {
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+      expect((await chats.get(chat.id)).messages).toHaveLength(4);
+    },
+    { timeout: 8000 },
+  );
+  const messages = (await chats.get(chat.id)).messages;
+  expect(messages.map((m) => [m.role, m.body, m.status])).toEqual([
+    ["user", "@codex fixture codex steer", "complete"],
+    ["assistant", "", "complete"],
+    ["user", "@codex Use the blue one", "complete"],
+    ["assistant", "Noted: Use the blue one", "complete"],
+  ]);
+  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
+}, 15000);
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({

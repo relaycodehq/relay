@@ -94,6 +94,15 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     }
     if (method === "thread/name/updated" && typeof p.threadName === "string")
       options.onTitle?.(p.threadName);
+    // A steer Codex has read: what it says next answers that message.
+    if (
+      method === "item/started" &&
+      p.item?.type === "userMessage" &&
+      typeof p.item.clientId === "string"
+    ) {
+      stream.restart();
+      options.onSteered?.(p.item.clientId);
+    }
     if (p.item?.type === "fileChange" && p.item.id && p.item.changes) {
       fileChanges.set(p.item.id, p.item.changes);
       options.onEdit?.(codexEditedPaths(p.item.changes));
@@ -328,7 +337,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       turnId = turn.turn.id;
       options.session?.onPoint?.(turnId);
       options.onControl?.({
-        steer: async (text) => {
+        steer: async (text, id) => {
           if (settled || options.signal.aborted)
             throw new Error(
               "This turn has finished. Send the queued message as a new turn.",
@@ -337,6 +346,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             threadId,
             expectedTurnId: turnId,
             input: [{ type: "text", text, text_elements: [] }],
+            // Codex echoes it on the user message item once it reads the steer.
+            ...(id ? { clientUserMessageId: id } : {}),
           });
         },
       });

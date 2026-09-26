@@ -324,6 +324,8 @@ if (args.includes("--permission-prompt-tool")) {
   const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
   let planning = false;
   let approvalGranted = false;
+  // "fixture codex steer": the turn stays open until a steer, then answers it.
+  let awaitingSteer = false;
   rl.on("line", (line) => {
     const m = JSON.parse(line);
     if (m.id === undefined) return;
@@ -426,6 +428,9 @@ if (args.includes("--permission-prompt-tool")) {
     } else if (m.method === "turn/start") {
       record({ provider: "codex", turn: m.params });
       planning = m.params.collaborationMode?.mode === "plan";
+      awaitingSteer = m.params.input.some(
+        (i) => i.type === "text" && i.text.includes("fixture codex steer"),
+      );
       send({ id: m.id, result: { turn: { id: "fixture-turn" } } });
       send({
         method: "turn/started",
@@ -728,6 +733,7 @@ if (args.includes("--permission-prompt-tool")) {
       }
       if (
         !streamed &&
+        !awaitingSteer &&
         !m.params.input[0].text.includes("wait for cancellation")
       )
         setTimeout(() => {
@@ -817,6 +823,41 @@ if (args.includes("--permission-prompt-tool")) {
     } else if (m.method === "turn/steer") {
       record({ steer: m.params });
       send({ id: m.id, result: { turnId: "fixture-turn" } });
+      if (awaitingSteer) {
+        awaitingSteer = false;
+        const text = m.params.input[0].text;
+        send({
+          method: "item/started",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-steer",
+              type: "userMessage",
+              clientId: m.params.clientUserMessageId ?? null,
+              content: m.params.input,
+            },
+          },
+        });
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-steered-answer",
+              type: "agentMessage",
+              phase: "final_answer",
+              text: "Noted: " + text,
+            },
+          },
+        });
+        send({
+          method: "turn/completed",
+          params: {
+            threadId: "fixture-thread",
+            turn: { id: "fixture-turn", status: "completed" },
+          },
+        });
+      }
     } else if (m.method === "turn/interrupt") {
       record({ interrupt: m.params });
       send({ id: m.id, result: {} });
