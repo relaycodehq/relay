@@ -145,6 +145,11 @@ interface ActiveChat {
   input?: ProjectChatSend;
   steer?: (text: string, id?: string) => Promise<void>;
 }
+/** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
+function parseSessionKey(key: string) {
+  const [, chatId, branch] = JSON.parse(key) as string[];
+  return { chatId, branch: branch === "main" ? undefined : branch };
+}
 export class ProjectChats {
   private providerSessions = new Set<string>();
   private controls = new Map<string, Promise<unknown>>();
@@ -209,10 +214,18 @@ export class ProjectChats {
     this.reviewSteps.add(step);
     void step.finally(() => this.reviewSteps.delete(step));
   }
+  /**
+   * A provider session's key: Relay's data folder, the chat, and its branch
+   * ("main", or the root message of a side thread). Runtimes key live
+   * sessions by it, so the format stays.
+   */
+  private sessionKey(chatId: string, branch?: string) {
+    return JSON.stringify([this.dir, chatId, branch ?? "main"]);
+  }
   /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
   private closeSessions(id: string) {
     for (const key of this.providerSessions)
-      if ((JSON.parse(key) as string[])[1] === id) {
+      if (parseSessionKey(key).chatId === id) {
         this.providerSessions.delete(key);
         for (const runtime of Object.values(agentRuntimes))
           void runtime.closeSession(key).catch(() => {});
@@ -353,7 +366,7 @@ export class ProjectChats {
   }
   private sessionKeys(chatId: string) {
     return [...this.providerSessions].filter(
-      (key) => (JSON.parse(key) as string[])[1] === chatId,
+      (key) => parseSessionKey(key).chatId === chatId,
     );
   }
   /** Background commands and agents still running, across every thread. */
@@ -533,9 +546,8 @@ export class ProjectChats {
    */
   private pending(chatId?: string) {
     return [...this.providerSessions].flatMap((key) => {
-      const [, id, branch] = JSON.parse(key) as string[];
+      const { chatId: id, branch: parentId } = parseSessionKey(key);
       if (chatId && id !== chatId) return [];
-      const parentId = branch === "main" ? undefined : branch;
       return claudePending(key).map((item) => ({
         key,
         chatId: id,
@@ -1887,7 +1899,7 @@ export class ProjectChats {
     });
     try {
       answer.body = await agentRuntime(answer.provider).askSide!({
-        key: JSON.stringify([this.dir, chat.id, "main"]),
+        key: this.sessionKey(chat.id),
         thread: agentSession(chat, answer.provider).thread!,
         cwd: await this.chatRoot(chat),
         choice: input.choice,
@@ -2074,11 +2086,7 @@ export class ProjectChats {
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
-    const sessionKey = JSON.stringify([
-      this.dir,
-      chat.id,
-      input.parentId ?? "main",
-    ]);
+    const sessionKey = this.sessionKey(chat.id, input.parentId ?? undefined);
     this.providerSessions.add(sessionKey);
     const provider = message.provider;
     const sessionId = agentSession(chat, provider, input.parentId).thread;
