@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   copyFile,
@@ -12,17 +11,15 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { promisify } from "node:util";
-import { NotText, decodeText } from "./working-files";
+import { NotText, decodeText, textLimit } from "./working-files";
 import { digest } from "./hash";
 import { imageSides } from "./image-pair";
-import { gitEnv } from "./git";
+import { git, gitBytes } from "./git";
 import type { FilePair } from "../shared/types";
 import type { TurnFileChange } from "../shared/projects";
 
 // Adapted from T3 Code's Git checkpoints: each agent turn snapshots the whole
 // worktree before and after; its card lists the changes the agent made itself.
-const exec = promisify(execFile);
 const identity = {
   GIT_AUTHOR_NAME: "Relay",
   GIT_AUTHOR_EMAIL: "relay@localhost",
@@ -39,22 +36,10 @@ const durable = [
 ];
 const noMonitor = ["-c", "core.fsmonitor=false"];
 const maxFiles = 1000;
-const maxText = 2 * 1024 * 1024;
 
-export async function run(
-  root: string,
-  args: string[],
-  env?: NodeJS.ProcessEnv,
-) {
-  return (
-    await exec("git", ["-C", root, ...args], {
-      timeout: 30000,
-      maxBuffer: 16 * 1024 * 1024,
-      encoding: "utf8",
-      env: gitEnv(env),
-    })
-  ).stdout;
-}
+/** Snapshots walk the whole worktree, so they get twice Git's usual time. */
+const run = (root: string, args: string[], env?: NodeJS.ProcessEnv) =>
+  git(root, args, { timeout: 30000, env });
 
 /** One ref per turn: its commit is the after snapshot, its parent the before. */
 export const turnRef = (messageId: string) => `refs/relay/turns/${messageId}`;
@@ -316,21 +301,13 @@ export async function revisionDiff(
       () => null,
     );
     if (size === null) return null;
-    if (size > maxText) {
+    if (size > textLimit) {
       binary = true;
       return null;
     }
-    const bytes = (
-      await exec("git", ["-C", root, "cat-file", "blob", spec], {
-        timeout: 15000,
-        maxBuffer: maxText + 4096,
-        encoding: "buffer",
-        env: gitEnv(),
-      })
-    ).stdout;
     let contents: string;
     try {
-      contents = decodeText(bytes);
+      contents = decodeText(await gitBytes(root, ["cat-file", "blob", spec]));
     } catch (e) {
       if (!(e instanceof NotText)) throw e;
       binary = true;
@@ -381,15 +358,8 @@ export async function worktreeId(root: string, path: string) {
 
 /** A blob as it would be checked out, line endings and filters applied. */
 export async function checkedOut(root: string, rev: string, path: string) {
-  return (
-    await exec("git", ["-C", root, "cat-file", "--filters", `${rev}:${path}`], {
-      timeout: 15000,
-      maxBuffer: maxText + 4096,
-      encoding: "buffer",
-      // Filters such as LFS may reach the network; they must not prompt.
-      env: gitEnv(),
-    })
-  ).stdout;
+  // Filters such as LFS may reach the network; gitEnv keeps them from prompting.
+  return gitBytes(root, ["cat-file", "--filters", `${rev}:${path}`]);
 }
 
 /** Undoes `from` → `to` on top of whatever the file holds now; null when it conflicts. */
@@ -401,18 +371,11 @@ async function mergeBack(root: string, path: string, from: string, to: string) {
     await writeFile(base, await checkedOut(root, from, path));
     await writeFile(other, await checkedOut(root, to, path));
     // Exits non-zero on conflicts and refuses binary files: both stay as they are.
-    return (
-      await exec(
-        "git",
-        ["-C", root, "merge-file", "-p", "-q", join(root, path), base, other],
-        {
-          timeout: 15000,
-          maxBuffer: maxText * 2,
-          encoding: "buffer",
-          env: gitEnv(),
-        },
-      )
-    ).stdout;
+    return await gitBytes(
+      root,
+      ["merge-file", "-p", "-q", join(root, path), base, other],
+      textLimit * 2,
+    );
   } catch {
     return null;
   } finally {

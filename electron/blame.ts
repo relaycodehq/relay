@@ -1,11 +1,7 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { inspectRepository } from "./repository";
-import { gitEnv } from "./git";
+import { git as gitIn } from "./git";
 import { blameQuerySchema } from "../shared/validation";
 import type { BlameQuery, LineBlame, Repo } from "../shared/types";
-
-const exec = promisify(execFile);
 
 /** Immutable, single-line lookups. A new hover cancels obsolete Git work. */
 export class BlameService {
@@ -82,15 +78,13 @@ export class BlameService {
         "The linked folder no longer matches this repository. Link the correct folder to see blame.",
       );
     signal.throwIfAborted();
-    const git = async (...args: string[]) =>
-      (
-        await exec("git", ["--literal-pathspecs", "-C", local.path, ...args], {
-          signal,
-          timeout: 10000,
-          maxBuffer: 3 * 1024 * 1024,
-          env: gitEnv({ GIT_NO_REPLACE_OBJECTS: "1", GIT_NO_LAZY_FETCH: "1" }),
-        })
-      ).stdout;
+    const git = (...args: string[]) =>
+      gitIn(local.path, args, {
+        signal,
+        timeout: 10000,
+        maxBuffer: 3 * 1024 * 1024,
+        env: { GIT_NO_REPLACE_OBJECTS: "1", GIT_NO_LAZY_FETCH: "1" },
+      });
     try {
       await git("cat-file", "-e", `${query.revision}^{commit}`);
     } catch {

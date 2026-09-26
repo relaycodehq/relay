@@ -1,12 +1,9 @@
-import { execFile } from "node:child_process";
 import { open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { extname } from "node:path";
-import { promisify } from "node:util";
-import { gitEnv } from "./git";
+import { git, gitBytes } from "./git";
 import { safeWorkingPath } from "./working-files";
 import type { FilePair } from "../shared/types";
-const exec = promisify(execFile);
 const types: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -20,22 +17,13 @@ export const imageLimit = 10 * 1024 * 1024;
 export type FileSource = { name: string } & ({ spec: string } | { disk: true });
 class TooLarge extends Error {}
 async function fromGit(root: string, spec: string): Promise<Buffer | null> {
-  const size = await exec("git", ["-C", root, "cat-file", "-s", spec], {
-    env: gitEnv(),
-  }).then(
-    ({ stdout }) => Number(stdout.trim()),
+  const size = await git(root, ["cat-file", "-s", spec]).then(
+    (stdout) => Number(stdout.trim()),
     () => null,
   );
   if (size === null) return null;
   if (size > imageLimit) throw new TooLarge();
-  return (
-    await exec("git", ["-C", root, "cat-file", "blob", spec], {
-      timeout: 15000,
-      maxBuffer: imageLimit + 4096,
-      encoding: "buffer",
-      env: gitEnv(),
-    })
-  ).stdout;
+  return gitBytes(root, ["cat-file", "blob", spec], imageLimit);
 }
 async function fromDisk(root: string, path: string): Promise<Buffer | null> {
   const full = await safeWorkingPath(root, path);

@@ -1,13 +1,10 @@
-import { execFile } from "node:child_process";
 import { lstat, mkdir, rm, stat, symlink } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { promisify } from "node:util";
-import { gitEnv } from "./git";
+import { git as gitIn } from "./git";
 import {
   commitTree,
   parseNumstat,
   revisionDiff,
-  run,
   snapshotTree,
 } from "./turn-changes";
 import type { ChatWorktree, TurnFileChange } from "../shared/projects";
@@ -17,7 +14,9 @@ import type { ChatWorktree, TurnFileChange } from "../shared/projects";
 // ordinary branch: commit, push and merge it like any other. Its changes are
 // what it has that the branch it came from doesn't.
 
-const exec = promisify(execFile);
+/** Worktree operations walk a whole checkout, so they get twice Git's usual time. */
+const git = (root: string, args: string[], timeout = 30000) =>
+  gitIn(root, args, timeout);
 export type MadeWorktree = Required<
   Pick<ChatWorktree, "path" | "branch" | "head" | "start" | "base">
 > &
@@ -43,7 +42,7 @@ const exists = (path: string) =>
 async function freeName(root: string, dir: string, name: string) {
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? name : `${name}-${n}`;
-    const taken = await run(root, [
+    const taken = await git(root, [
       "rev-parse",
       "-q",
       "--verify",
@@ -69,7 +68,7 @@ export async function createWorktree(
   name: string,
   previous?: ChatWorktree,
 ): Promise<MadeWorktree> {
-  const head = await run(root, [
+  const head = await git(root, [
     "rev-parse",
     "-q",
     "--verify",
@@ -80,7 +79,7 @@ export async function createWorktree(
       throw new Error("Make a first commit before working in a worktree.");
     },
   );
-  const from = (await run(root, ["branch", "--show-current"])).trim();
+  const from = (await git(root, ["branch", "--show-current"])).trim();
   const folder = join(dir, slug(basename(root)));
   await mkdir(folder, { recursive: true });
   const leaf =
@@ -90,16 +89,8 @@ export async function createWorktree(
   const path = join(folder, leaf);
   const branch = `relay/${leaf}`;
   // A folder deleted by hand leaves Git's record of it behind.
-  await run(root, ["worktree", "prune"]).catch(() => {});
-  await exec(
-    "git",
-    ["-C", root, "worktree", "add", "-q", "-b", branch, path, head],
-    {
-      timeout: 120000,
-      maxBuffer: 16 * 1024 * 1024,
-      env: gitEnv(),
-    },
-  );
+  await git(root, ["worktree", "prune"]).catch(() => {});
+  await git(root, ["worktree", "add", "-q", "-b", branch, path, head], 120000);
   await linkModules(root, path);
   return {
     path,
@@ -121,7 +112,7 @@ async function linkModules(root: string, path: string) {
     return;
   await symlink(source, join(path, "node_modules"), "dir").catch(() => {});
   // A link Git doesn't ignore would show up as the thread's own change.
-  const ignored = await run(path, ["check-ignore", "-q", "node_modules"]).then(
+  const ignored = await git(path, ["check-ignore", "-q", "node_modules"]).then(
     () => true,
     () => false,
   );
@@ -139,7 +130,7 @@ export const worktreeExists = (worktree: ChatWorktree) =>
  */
 async function forkPoint(worktree: ChatWorktree) {
   if (!worktree.from) return worktree.base!;
-  return run(worktree.path!, [
+  return git(worktree.path!, [
     "merge-base",
     `refs/heads/${worktree.from}`,
     "HEAD",
@@ -158,7 +149,7 @@ export async function worktreeChanges(
     forkPoint(worktree),
   ]);
   const [diff, commits] = await Promise.all([
-    run(worktree.path!, [
+    git(worktree.path!, [
       "diff",
       "--numstat",
       "-z",
@@ -169,7 +160,7 @@ export async function worktreeChanges(
       from,
       tree,
     ]),
-    run(worktree.path!, ["rev-list", "--count", `${worktree.start}..HEAD`]),
+    git(worktree.path!, ["rev-list", "--count", `${worktree.start}..HEAD`]),
   ]);
   return { tree, files: parseNumstat(diff), commits: Number(commits) };
 }
@@ -197,15 +188,15 @@ export async function removeWorktree(
         worktree.base,
         "Relay: the worktree as it was removed",
       );
-      await run(root, ["update-ref", keptRef(chatId), kept]);
+      await git(root, ["update-ref", keptRef(chatId), kept]);
     }
-    await run(root, ["worktree", "remove", "--force", worktree.path]).catch(
+    await git(root, ["worktree", "remove", "--force", worktree.path]).catch(
       async () => {
         await rm(worktree.path!, { recursive: true, force: true });
-        await run(root, ["worktree", "prune"]).catch(() => {});
+        await git(root, ["worktree", "prune"]).catch(() => {});
       },
     );
   }
   if (worktree.branch)
-    await run(root, ["branch", "-D", worktree.branch]).catch(() => {});
+    await git(root, ["branch", "-D", worktree.branch]).catch(() => {});
 }

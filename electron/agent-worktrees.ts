@@ -1,5 +1,5 @@
 import { basename, relative, isAbsolute } from "node:path";
-import { run } from "./turn-changes";
+import { git } from "./git";
 import type {
   AgentActivity,
   AgentWorktree,
@@ -43,7 +43,7 @@ type Live = Map<string, { branch?: string }>;
 /** The repository's worktrees still on disk, other than `root` and those under `skip`. */
 async function liveWorktrees(root: string, skip: string): Promise<Live> {
   const live: Live = new Map();
-  const out = await run(root, ["worktree", "list", "--porcelain"]);
+  const out = await git(root, ["worktree", "list", "--porcelain"]);
   for (const block of out.split("\n\n")) {
     const lines = block.split("\n");
     const path = lines

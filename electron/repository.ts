@@ -1,18 +1,10 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { realpath } from "node:fs/promises";
 import type { LocalFolder, Repo } from "../shared/types";
-import { gitEnv } from "./git";
-const exec = promisify(execFile);
+import { git as gitIn } from "./git";
 const git = async (path: string, args: string[], signal?: AbortSignal) =>
   (
-    await exec("git", ["-C", path, ...args], {
-      timeout: 10000,
-      maxBuffer: 1024 * 1024,
-      signal,
-      env: gitEnv(),
-    })
-  ).stdout.trim();
+    await gitIn(path, args, { timeout: 10000, maxBuffer: 1024 * 1024, signal })
+  ).trim();
 /** A remote as a URL, reading scp-style `user@host:path` as SSH. */
 export function remoteUrl(raw: string): URL | null {
   try {
