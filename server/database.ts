@@ -29,7 +29,7 @@ export interface Session {
   owner: boolean;
 }
 type Row = Record<string, any>;
-export const DISCONNECTED_RUN =
+const DISCONNECTED_RUN =
   "The sender disconnected. Any partial answer was kept. Ask again to retry.";
 export class RoomsDatabase {
   readonly db: DatabaseSync;

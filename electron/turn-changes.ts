@@ -342,14 +342,14 @@ export type Step =
   | { path: string; kind: "keep" | "restore" | "delete" }
   | { path: string; kind: "merge"; contents: Buffer };
 
-export const blobId = (root: string, rev: string, path: string) =>
+const blobId = (root: string, rev: string, path: string) =>
   run(root, ["rev-parse", "-q", "--verify", `${rev}:${path}`]).then(
     (s) => s.trim(),
     () => null,
   );
 
 /** The worktree file's blob id as `git add` would store it; "other" for anything but a file. */
-export async function worktreeId(root: string, path: string) {
+async function worktreeId(root: string, path: string) {
   const info = await lstat(join(root, path)).catch(() => null);
   if (!info) return null;
   if (!info.isFile()) return "other";
@@ -357,7 +357,7 @@ export async function worktreeId(root: string, path: string) {
 }
 
 /** A blob as it would be checked out, line endings and filters applied. */
-export async function checkedOut(root: string, rev: string, path: string) {
+async function checkedOut(root: string, rev: string, path: string) {
   // Filters such as LFS may reach the network; gitEnv keeps them from prompting.
   return gitBytes(root, ["cat-file", "--filters", `${rev}:${path}`]);
 }

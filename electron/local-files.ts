@@ -6,11 +6,9 @@ import {
   safeWorkingPath,
   readWorkingFile,
   writeWorkingFile,
-  flushWorkingFiles,
 } from "./working-files";
 import { digest } from "./hash";
 import { gitBytes } from "./git";
-export const flushLocalFiles = flushWorkingFiles;
 async function validate(
   root: string,
   server: string,

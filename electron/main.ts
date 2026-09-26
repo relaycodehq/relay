@@ -103,7 +103,8 @@ import { Updater } from "./updater";
 import { linuxPasswordStore } from "./linux-password-store";
 import { pathReady } from "./shell-path";
 import { registerAppImage } from "./linux-desktop-entry";
-import { readLocalFile, saveLocalFile, flushLocalFiles } from "./local-files";
+import { readLocalFile, saveLocalFile } from "./local-files";
+import { flushWorkingFiles } from "./working-files";
 import {
   bodySchema,
   blameQuerySchema,
@@ -371,7 +372,7 @@ app.on("before-quit", (event) => {
     .then(() => projectChats?.dispose())
     .then(() => rooms?.dispose())
     .then(() =>
-      Promise.all([store.flush(), flushLocalFiles(), flushGitOperations()]),
+      Promise.all([store.flush(), flushWorkingFiles(), flushGitOperations()]),
     )
     .then(() => {
       quitReady = true;

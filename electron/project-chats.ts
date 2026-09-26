@@ -1784,7 +1784,6 @@ export class ProjectChats {
       throw e;
     }
   }
-  /** Compacts the provider session behind the newest answer on this branch. */
   /**
    * A `/btw` question, or a follow-up in its thread. It runs beside whatever
    * the thread is doing: an agent that can answers from its session's context
@@ -1936,6 +1935,7 @@ export class ProjectChats {
       { side: true },
     );
   }
+  /** Compacts the provider session behind the newest answer on this branch. */
   compact(id: string, parentId?: string, instructions?: string) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
@@ -2018,7 +2018,7 @@ export class ProjectChats {
       skills?: CodexSkill[];
       compact?: boolean;
       adopt?: boolean;
-      /** A Codex side thread's turn: a read-only fork running beside the main answer. */
+      /** A forked side thread's turn (any agent without askSide): read-only, beside the main answer. */
       side?: boolean;
       /** The prompt told the session everything it hadn't heard yet. */
       caughtUp?: boolean;

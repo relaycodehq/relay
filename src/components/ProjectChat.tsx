@@ -65,7 +65,6 @@ import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
 import {
   AgentSwitchDialog,
-  agentName,
   agentSwitchNoticeHidden,
 } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
@@ -129,6 +128,7 @@ import { UltraplanCouncil } from "./Ultraplan";
 import { councilWorking } from "../../shared/ultraplan";
 import {
   agentMentionPattern,
+  agentName,
   agentProviders,
   agents as agentInfo,
 } from "../../shared/agents";

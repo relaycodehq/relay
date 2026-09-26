@@ -67,7 +67,7 @@ export async function validateRepo(root: string, server: string, repo: Repo) {
     );
   return local.path;
 }
-export function parseStatus(raw: string): WorkingChange[] {
+function parseStatus(raw: string): WorkingChange[] {
   const entries = raw.split("\0"),
     result: WorkingChange[] = [];
   for (let i = 0; i < entries.length; i++) {

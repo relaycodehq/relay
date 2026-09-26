@@ -334,7 +334,7 @@ export function setImportedThemes(list: Theme[]) {
   imported = list;
 }
 
-export const allThemes = (): Theme[] => [...themes, ...imported];
+const allThemes = (): Theme[] => [...themes, ...imported];
 
 export function themeById(id: string): Theme {
   return allThemes().find((t) => t.id === id) ?? themes[0];
@@ -404,7 +404,7 @@ export function saveAppearance(value: Appearance) {
   }
 }
 
-export function kindFor(mode: AppearanceMode, systemDark: boolean): ThemeKind {
+function kindFor(mode: AppearanceMode, systemDark: boolean): ThemeKind {
   return mode === "system" ? (systemDark ? "dark" : "light") : mode;
 }
 

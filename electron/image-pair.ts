@@ -12,7 +12,7 @@ const types: Record<string, string> = {
   ".webp": "image/webp",
 };
 /** Larger images stay a placeholder rather than crossing IPC as base64. */
-export const imageLimit = 10 * 1024 * 1024;
+const imageLimit = 10 * 1024 * 1024;
 /** One side of a diff: a git object, or the file on disk. */
 export type FileSource = { name: string } & ({ spec: string } | { disk: true });
 class TooLarge extends Error {}

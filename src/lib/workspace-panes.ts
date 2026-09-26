@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type PaneId = "chat" | "changes" | "files" | "history";
-export const PANE_IDS: PaneId[] = ["chat", "changes", "files", "history"];
+const PANE_IDS: PaneId[] = ["chat", "changes", "files", "history"];
 const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   chat: 0.85,
   changes: 1.6,
@@ -10,7 +10,7 @@ const DEFAULT_WEIGHTS: Record<PaneId, number> = {
 };
 const STORAGE_KEY = "relay-workspace-panes";
 
-export interface PaneLayout {
+interface PaneLayout {
   order: PaneId[];
   open: Record<PaneId, boolean>;
   weights: Record<PaneId, number>;
