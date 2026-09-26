@@ -64,6 +64,7 @@ import {
 } from "./ComposerModelPicker";
 import { useCodexModels } from "../lib/useCodexModels";
 import { useAgentDefaults } from "../lib/useAgentDefaults";
+import { useDoubleEscape } from "../lib/useDoubleEscape";
 import {
   claudeDefaultEffort,
   claudeDefaultModel,
@@ -190,6 +191,7 @@ export function ProjectComposer({
 }) {
   const draft = useDraft(draftKey);
   const settings = useAISettings();
+  const stopArmed = useDoubleEscape(running, ".project-composer", onStop);
   const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
@@ -1364,19 +1366,26 @@ export function ProjectComposer({
             <button
               type="button"
               className="composer-stop"
-              aria-label="Stop answer"
-              title="Stop answer and pause queued messages"
+              data-armed={stopArmed || undefined}
+              aria-label={
+                stopArmed ? "Press Escape again to stop" : "Stop answer"
+              }
+              title="Stop answer and pause queued messages · Esc Esc"
               onClick={onStop}
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <rect x="2" y="2" width="8" height="8" rx="1.5" />
-              </svg>
+              {stopArmed ? (
+                <span className="composer-stop-esc">esc</span>
+              ) : (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                </svg>
+              )}
             </button>
           )}
           {(!running || !!draft.trim() || !!images.length) && (

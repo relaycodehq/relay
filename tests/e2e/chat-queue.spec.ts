@@ -150,9 +150,31 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect
       .poll(async () => (await readFile(capture, "utf8")).includes('"steer"'))
       .toBe(true);
+    // Escape that closes the command menu doesn't arm the stop button.
+    const armed = page.getByRole("button", {
+      name: "Press Escape again to stop",
+      exact: true,
+    });
+    await prompt.fill("/");
+    await expect(page.getByRole("listbox", { name: "Commands" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
+      0,
+    );
+    await expect(armed).toHaveCount(0);
+    await prompt.fill("");
+    // One Escape only arms it, and it disarms on its own.
+    await page.keyboard.press("Escape");
+    await expect(armed).toHaveText("esc");
     await page
-      .getByRole("button", { name: "Stop answer", exact: true })
-      .click();
+      .locator(".composer-tools")
+      .screenshot({ path: "test-results/chat-stop-armed.png" });
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+    await expect(queue.locator(".queued-message")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
     await expect(
       page.getByText("Stopped · partial output kept", { exact: true }),
     ).toBeVisible();
