@@ -4,8 +4,10 @@ import {
   luminance,
   normalizeHex,
   resolveAppearance,
+  resolveChoice,
   resolvePalette,
   themeById,
+  tokens,
 } from "../../src/lib/themes";
 
 const store = new Map<string, string>();
@@ -124,4 +126,15 @@ describe("normalizeHex", () => {
     expect(normalizeHex("#12345")).toBeNull();
     expect(normalizeHex("blue")).toBeNull();
   });
+});
+
+it("keeps Relay's lavender Send unless a theme or a picked accent says otherwise", () => {
+  const send = (kind: "light" | "dark", theme: string, accent?: string) =>
+    tokens(resolveChoice(kind, { theme, ...(accent ? { accent } : {}) }))[
+      "--send"
+    ];
+  expect(send("light", "relay")).toBe("#aaa8e5");
+  expect(send("dark", "relay")).toBe("#aaa8e5");
+  expect(send("dark", "dracula")).toBe(themeById("dracula").dark!.accent);
+  expect(send("light", "relay", "#cc3355")).toBe("#cc3355");
 });

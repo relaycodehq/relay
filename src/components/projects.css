@@ -2084,13 +2084,13 @@ details.agent-step > .agent-step-heading:hover {
   }
 }
 .composer-tools .send-message {
-  background: #aaa8e5;
-  color: #202024;
+  background: var(--send);
+  color: var(--send-foreground);
   border: 0;
   flex: none;
 }
 .composer-tools .send-message:hover {
-  background: #b9b7ee;
+  background: color-mix(in srgb, var(--send) 88%, #fff);
 }
 @media (prefers-reduced-motion: reduce) {
   .project-composer .composer-stop {

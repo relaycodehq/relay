@@ -24,6 +24,8 @@
   --accent-soft: #eeeef7;
   /* Errors and destructive actions; the same red reads on light and dark. */
   --danger: #e46b73;
+  --send: #aaa8e5;
+  --send-foreground: #1b1b22;
   --code-background: #fff;
   --code-foreground: #33353d;
   --background: #fff;

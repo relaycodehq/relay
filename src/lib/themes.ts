@@ -21,6 +21,8 @@ export interface Palette {
   hover: string;
   selected: string;
   accent: string;
+  /** The Send button, where the theme wants it apart from the accent. */
+  send?: string;
   diffAddition: string;
   diffDeletion: string;
 }
@@ -48,6 +50,8 @@ const relayLight: Palette = {
   hover: "#e5e5e9",
   selected: "#dedee8",
   accent: "#6565a9",
+  // Relay's lavender, as in the dark theme, rather than the deeper accent.
+  send: "#aaa8e5",
   diffAddition: "#d6efdd",
   diffDeletion: "#f9dcdf",
 };
@@ -555,6 +559,8 @@ export function tokens({ palette, accent }: ResolvedAppearance) {
     palette.surface,
     palette.kind === "dark" ? 0.18 : 0.1,
   );
+  // An accent picked by hand wins over the theme's own Send colour.
+  const send = accent === palette.accent ? (palette.send ?? accent) : accent;
   return {
     "--sidebar": palette.sidebar,
     "--inbox": palette.inbox,
@@ -569,6 +575,8 @@ export function tokens({ palette, accent }: ResolvedAppearance) {
     "--accent-soft": soft,
     "--accent-foreground": readableOn(accent, "#1b1b22", "#ffffff"),
     "--primary": accent,
+    "--send": send,
+    "--send-foreground": readableOn(send, "#1b1b22", "#ffffff"),
     "--background": palette.surface,
     "--code-background": palette.surface,
     "--code-foreground": palette.text,
