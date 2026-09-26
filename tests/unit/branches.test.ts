@@ -86,3 +86,20 @@ it("creates a tracking branch for a remote ref and skips symbolic remote HEAD", 
   ).toBe("remote-feature");
   expect(git("config", "branch.remote-feature.remote")).toBe("origin");
 });
+
+it("offers origin's default branch first as the base to merge into", async () => {
+  const sha = git("rev-parse", "HEAD");
+  git("update-ref", "refs/remotes/origin/develop", sha);
+  git(
+    "symbolic-ref",
+    "refs/remotes/origin/HEAD",
+    "refs/remotes/origin/develop",
+  );
+
+  expect((await branches(root)).bases).toEqual([
+    "develop",
+    "main",
+    "master",
+    "trunk",
+  ]);
+});

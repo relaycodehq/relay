@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git";
-import { branches } from "./branches";
+import { baseCandidates, branches } from "./branches";
 import {
   gitOperation,
   pushDestination,
@@ -24,19 +24,7 @@ const revParse = async (root: string, ref: string) =>
   (await git(root, ["rev-parse", "--verify", "--quiet", ref])).trim();
 
 async function defaultBase(root: string, locals: string[]) {
-  const originHead = (
-    await git(root, [
-      "symbolic-ref",
-      "--quiet",
-      "--short",
-      "refs/remotes/origin/HEAD",
-    ]).catch(() => "")
-  )
-    .trim()
-    .replace(/^origin\//, "");
-  return [originHead, "main", "master", "trunk", "develop"].find((name) =>
-    locals.includes(name),
-  );
+  return (await baseCandidates(root)).find((name) => locals.includes(name));
 }
 
 /** Where `worktreepath` puts each local branch that some checkout has open. */

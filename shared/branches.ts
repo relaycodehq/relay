@@ -10,6 +10,8 @@ export interface BranchList {
   current: string;
   head: string;
   branches: BranchRef[];
+  /** Names work usually merges into, most likely first; see `baseCandidates`. */
+  bases: string[];
 }
 export const branchActionSchema = z
   .object({

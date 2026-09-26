@@ -1,8 +1,26 @@
 import { git } from "./git";
 import { gitOperation, serializeRepo } from "./working-tree";
 import type { BranchAction, BranchList } from "../shared/branches";
+/** The branches work usually merges into: origin's HEAD, then the usual names. */
+export async function baseCandidates(root: string) {
+  const originHead = (
+    await git(root, [
+      "symbolic-ref",
+      "--quiet",
+      "--short",
+      "refs/remotes/origin/HEAD",
+    ]).catch(() => "")
+  )
+    .trim()
+    .replace(/^origin\//, "");
+  return [
+    ...new Set(
+      [originHead, "main", "master", "trunk", "develop"].filter(Boolean),
+    ),
+  ];
+}
 export async function branches(root: string): Promise<BranchList> {
-  const [current, head, refs] = await Promise.all([
+  const [current, head, refs, bases] = await Promise.all([
     git(root, ["branch", "--show-current"]),
     git(root, ["rev-parse", "HEAD"]),
     git(root, [
@@ -12,10 +30,12 @@ export async function branches(root: string): Promise<BranchList> {
       "refs/heads/",
       "refs/remotes/",
     ]),
+    baseCandidates(root),
   ]);
   return {
     current: current.trim(),
     head: head.trim(),
+    bases,
     branches: refs
       .trimEnd()
       .split("\n")

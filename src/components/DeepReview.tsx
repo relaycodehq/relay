@@ -221,9 +221,9 @@ export function DeepReviewSetup({
   const base =
     setup.base && bases.includes(setup.base)
       ? setup.base
-      : (["main", "master", "origin/main", "origin/master"].find((b) =>
-          bases.includes(b),
-        ) ?? bases[0]);
+      : ((branches.data?.bases ?? [])
+          .flatMap((b) => [b, `origin/${b}`])
+          .find((b) => bases.includes(b)) ?? bases[0]);
   const chosenCommit = commit || commits.data?.[0]?.sha;
   const target: ReviewTarget | undefined =
     setup.kind === "uncommitted"
