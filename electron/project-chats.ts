@@ -185,6 +185,22 @@ export class ProjectChats {
   private titlesAsked = new Set<string>();
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
   private reviewSteps = new Set<Promise<void>>();
+  /**
+   * Ends a run. The finished answer moved `updated`, so the sidebar summary
+   * catches up, but only once the thread no longer counts as active; then a
+   * deep review or Ultraplan takes its next step and queued messages go out.
+   */
+  private endRun(
+    chat: ProjectChat,
+    active: ActiveChat,
+    turn?: { request?: string; answer?: string },
+  ) {
+    active.requests.close();
+    this.active.delete(chat.id);
+    if (turn) this.reviewStep(chat.id, turn);
+    void this.updateSummary(chat).catch(() => {});
+    void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+  }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
       this.reviews
@@ -1591,15 +1607,9 @@ export class ProjectChats {
       .then((last) => {
         answer = last;
       })
-      .finally(() => {
-        active.requests.close();
-        this.active.delete(chat.id);
-        this.reviewStep(chat.id, { request: input.id, answer: answer.id });
-        // The finished answer moved `updated`; refresh the sidebar summary
-        // only after the thread stops counting as active.
-        void this.updateSummary(chat).catch(() => {});
-        void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
-      });
+      .finally(() =>
+        this.endRun(chat, active, { request: input.id, answer: answer.id }),
+      );
     void active.job.catch(() => {});
   }
   /**
@@ -1728,12 +1738,7 @@ export class ProjectChats {
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       await this.answer(chat, message, root, "", input, abort, { adopt: true });
     } finally {
-      if (idle) {
-        active.requests.close();
-        this.active.delete(chat.id);
-        void this.updateSummary(chat).catch(() => {});
-        void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
-      }
+      if (idle) this.endRun(chat, active);
     }
   }
   /**
@@ -1855,7 +1860,11 @@ export class ProjectChats {
             abort,
           )
         : this.forkAside(chat, answer, earlier, mention.question, input, abort)
-    ).finally(() => this.sides.delete(key));
+    ).finally(() => {
+      this.sides.delete(key);
+      // The side answer moved `updated`, as any finished answer does.
+      void this.updateSummary(chat).catch(() => {});
+    });
     this.sides.set(key, { abort, job });
     void job.catch(() => {});
   }
@@ -1898,6 +1907,7 @@ export class ProjectChats {
         answer.error = e instanceof Error ? e.message : String(e);
     } finally {
       answer.ended = Date.now();
+      chat.updated = answer.ended;
       answer.version++;
       this.emit({ chatId: chat.id, message: structuredClone(answer) });
       await this.save(chat);
@@ -1987,11 +1997,7 @@ export class ProjectChats {
         input,
         abort,
         { compact: true },
-      ).finally(() => {
-        active.requests.close();
-        this.active.delete(id);
-        void this.control(id, () => this.drain(id)).catch(() => {});
-      });
+      ).finally(() => this.endRun(chat, active));
       void active.job.catch(() => {});
     });
   }

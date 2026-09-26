@@ -427,6 +427,28 @@ it("still tells a compacted session the notes left since its last answer", async
     .find((text) => text.startsWith("My request: Go on"))!;
   expect(prompt).toContain("Keep the old API.");
 }, 20000);
+it("brings the sidebar summary up to date when a compaction finishes", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const finished = () =>
+    vi.waitFor(
+      async () => {
+        expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+          "complete",
+        );
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 6000 },
+    );
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await finished();
+  await chats.triage(chat.id, { kind: "settle" });
+  await chats.compact(chat.id);
+  await finished();
+  await vi.waitFor(async () => {
+    const summary = chats.list(projectId).find((c) => c.id === chat.id)!;
+    expect(summary.updated).toBe((await chats.get(chat.id)).updated);
+  });
+}, 20000);
 it("generates a title for Claude conversations, which have no thread-name event", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
