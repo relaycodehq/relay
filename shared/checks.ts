@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { digestSchema, filePathSchema } from "./validation";
 export type CheckProvider = "angular" | "typescript";
 export interface CheckTarget {
   id: string;
@@ -67,13 +69,16 @@ export interface SymbolLocation {
   preview: string;
   hash: string;
 }
-export interface SymbolQuery {
-  path: string;
-  line: number;
-  column: number;
-  hash: string;
-  kind: "hover" | "definition" | "references" | "source";
-}
+export const symbolQuerySchema = z
+  .object({
+    path: filePathSchema,
+    line: z.number().int().min(1).max(500000),
+    column: z.number().int().min(1).max(2000000),
+    hash: digestSchema,
+    kind: z.enum(["hover", "definition", "references", "source"]),
+  })
+  .strict();
+export type SymbolQuery = z.infer<typeof symbolQuerySchema>;
 export interface SymbolResult {
   source?: { path: string; text: string; hash: string };
   display: string;

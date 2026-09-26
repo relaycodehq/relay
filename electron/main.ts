@@ -89,6 +89,7 @@ import {
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import { symbolQuerySchema } from "../shared/checks";
 import { Store } from "./store";
 import { Gitea } from "./gitea";
 import { launchCodex } from "./local";
@@ -515,15 +516,6 @@ function createWindow() {
     void win.loadURL(dev);
   } else void win.loadFile(root);
 }
-const symbolQuerySchema = z
-  .object({
-    path: filePathSchema,
-    line: z.number().int().min(1).max(500000),
-    column: z.number().int().min(1).max(2000000),
-    hash: digestSchema,
-    kind: z.enum(["hover", "definition", "references", "source"]),
-  })
-  .strict();
 const terminalKeySchema = z.union([
   idSchema,
   z.templateLiteral(["draft:", idSchema]),
