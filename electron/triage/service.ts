@@ -1,4 +1,3 @@
-import { aiSettingsSchema, defaultAISettings } from "../../shared/settings";
 import { randomUUID } from "node:crypto";
 import type { Gitea } from "../gitea";
 import type { Store } from "../store";
@@ -85,9 +84,7 @@ export class TriageService {
       );
     this.starting = true;
     try {
-      const settings = aiSettingsSchema.parse(
-        this.store.get().aiSettings ?? defaultAISettings,
-      );
+      const settings = this.store.aiSettings();
       const choice = {
         ...settings.grouping,
         provider: settings.groupingProvider,

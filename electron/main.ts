@@ -62,7 +62,7 @@ import {
 } from "../shared/rooms";
 import { launchLineQuestion, questionContext } from "./questions";
 import { lineQuestionSchema } from "../shared/questions";
-import { aiSettingsSchema, defaultAISettings } from "../shared/settings";
+import { aiSettingsSchema } from "../shared/settings";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
 import { DevOps } from "./devops";
 import { claudeDefaults, listClaudeModels } from "./rooms/claude-project";
@@ -900,7 +900,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return generateCommitMessage(
         await placeRoot(args[0]),
         z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
-        aiSettingsSchema.parse(store.get().aiSettings ?? defaultAISettings),
+        store.aiSettings(),
         AbortSignal.timeout(120_000),
       );
     case "projectGitAction":
@@ -1604,9 +1604,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     }
     case "aiSettings":
-      return aiSettingsSchema.parse(
-        store.get().aiSettings ?? defaultAISettings,
-      );
+      return store.aiSettings();
     case "saveAISettings": {
       const settings = aiSettingsSchema.parse(args[0]);
       await store.update((s) => {
@@ -1641,9 +1639,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);
       const dir = requireFolder(ref);
-      const settings = aiSettingsSchema.parse(
-        store.get().aiSettings ?? defaultAISettings,
-      );
+      const settings = store.aiSettings();
       await launchLineQuestion(
         requireClient(),
         dir,

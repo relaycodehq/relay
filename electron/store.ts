@@ -2,7 +2,11 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Account, Progress, WorkspaceState } from "../shared/types";
-import type { StoredAISettings } from "../shared/settings";
+import {
+  aiSettingsSchema,
+  defaultAISettings,
+  type StoredAISettings,
+} from "../shared/settings";
 interface State {
   roomAccessConsents?: Record<string, boolean>;
   projects?: import("../shared/projects").Project[];
@@ -57,6 +61,10 @@ export class Store {
   }
   get() {
     return this.state;
+  }
+  /** The saved AI settings, filled in and checked, or the defaults. */
+  aiSettings() {
+    return aiSettingsSchema.parse(this.state.aiSettings ?? defaultAISettings);
   }
   async update(fn: (s: State) => void) {
     const task = this.queue.then(async () => {

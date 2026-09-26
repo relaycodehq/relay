@@ -80,11 +80,7 @@ import type {
   FindingStatus,
   ReviewerTask,
 } from "../shared/deep-review";
-import {
-  aiSettingsSchema,
-  codexQuestionChoice,
-  defaultAISettings,
-} from "../shared/settings";
+import { codexQuestionChoice } from "../shared/settings";
 /** The checked-out branch a message was sent from; null when detached. */
 const currentBranch = (root: string) =>
   git(root, ["branch", "--show-current"]).then(
@@ -2616,11 +2612,7 @@ export class ProjectChats {
    */
   private defaultChoice(provider: AgentProvider) {
     return provider === "codex"
-      ? codexQuestionChoice(
-          aiSettingsSchema.parse(
-            this.store.get().aiSettings ?? defaultAISettings,
-          ),
-        )
+      ? codexQuestionChoice(this.store.aiSettings())
       : { model: "", reasoningEffort: "" as const, fast: false };
   }
   private async updateTitle(
