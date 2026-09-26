@@ -1,5 +1,5 @@
-/* A tab on top of the composer: Claude left work running that will start
-   its next turn. Deliberately still; nothing is working yet. */
+/* A tab on top of the composer: Claude's turn is over but it left work
+   behind, background commands or a wake-up. Deliberately still. */
 .waiting-strip {
   position: relative;
   margin: 0 18px -1px;
