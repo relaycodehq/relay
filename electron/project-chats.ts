@@ -48,7 +48,7 @@ import type { ProjectSharing } from "./project-sharing";
 import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
-import { watchAgentWorktrees } from "./agent-worktrees";
+import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
 import { git } from "./git";
 import {
   dropRevert,
@@ -798,6 +798,15 @@ export class ProjectChats {
             }
           }
           if (chat.queue?.length) chat.queuePaused = true;
+          let summaryChanged = false;
+          if (chat.agentWorktrees) {
+            const own = ownAgentWorktrees(chat);
+            if (own.length !== chat.agentWorktrees.length) {
+              if (own.length) chat.agentWorktrees = own;
+              else delete chat.agentWorktrees;
+              interrupted = summaryChanged = true;
+            }
+          }
           // A review whose agents ran in an earlier session can only be resumed,
           // and a fix that was running then left its findings open.
           const review = chat.deepReview;
@@ -853,6 +862,7 @@ export class ProjectChats {
             }
           }
           if (interrupted) await this.save(chat);
+          if (summaryChanged) await this.updateSummary(chat);
           this.cache.set(id, chat);
         })();
         this.loading.set(id, pending);

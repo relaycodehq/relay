@@ -1,10 +1,42 @@
-import { relative, isAbsolute } from "node:path";
+import { basename, relative, isAbsolute } from "node:path";
 import { run } from "./turn-changes";
-import type { AgentActivity, AgentWorktree } from "../shared/projects";
+import type {
+  AgentActivity,
+  AgentWorktree,
+  ProjectChat,
+} from "../shared/projects";
 
 // Agents sometimes make their own git worktree from a shell command and work
 // there. Relay didn't make it, so without this the thread still reads as
 // working in the checkout while its changes land somewhere else.
+//
+// Threads run side by side on one repository, so a worktree that merely
+// appeared during a turn may be another thread's. Only the command that made
+// it says whose it is.
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Whether a command is a `git worktree add` naming `path`, by its folder name since agents write it relative or without macOS's /private. */
+export function addsWorktree(command: string, path: string) {
+  if (!/\bworktree\s+add\b/.test(command)) return false;
+  return new RegExp(
+    `(^|[\\s/'"=])${escape(basename(path))}($|[\\s/'";&|)])`,
+  ).test(command);
+}
+
+/** The recorded worktrees one of the thread's own commands made; older saves credited any that appeared meanwhile. */
+export function ownAgentWorktrees(chat: ProjectChat) {
+  const commands = chat.messages.flatMap((m) =>
+    (m.trace ?? []).flatMap((e) =>
+      e.kind === "activity" && e.activity.kind === "command"
+        ? [e.activity.label]
+        : [],
+    ),
+  );
+  return (chat.agentWorktrees ?? []).filter((w) =>
+    commands.some((c) => addsWorktree(c, w.path)),
+  );
+}
 
 type Live = Map<string, { branch?: string }>;
 
@@ -46,14 +78,23 @@ export function watchAgentWorktrees(
 ) {
   const before = liveWorktrees(root, relayWorktrees).catch(() => null);
   let queue = Promise.resolve();
-  const check = async () => {
+  const check = async (command: string) => {
     const known = await before;
     if (!known) return;
     const live = await liveWorktrees(root, relayWorktrees);
-    const kept = recorded().filter((w) => live.has(w.path));
+    // A branch switched or detached since shows as it is now.
+    const kept = recorded().flatMap(({ path, at }) => {
+      const branch = live.get(path)?.branch;
+      return live.has(path)
+        ? [{ path, ...(branch ? { branch } : {}), at }]
+        : [];
+    });
     const made = [...live]
       .filter(
-        ([path]) => !known.has(path) && !kept.some((w) => w.path === path),
+        ([path]) =>
+          !known.has(path) &&
+          !kept.some((w) => w.path === path) &&
+          addsWorktree(command, path),
       )
       .map(([path, { branch }]) => ({
         path,
@@ -62,12 +103,14 @@ export function watchAgentWorktrees(
       }));
     for (const [path, value] of live) known.set(path, value);
     const next = [...kept, ...made];
-    if (next.length !== recorded().length || made.length) await onChange(next);
+    if (JSON.stringify(next) !== JSON.stringify(recorded()))
+      await onChange(next);
   };
   return (activity: AgentActivity) => {
     if (activity.kind !== "command" || activity.status === "running") return;
     if (!/worktree/i.test(activity.label) && activity.label.length < 500)
       return;
-    queue = queue.then(check).catch(() => {});
+    queue = queue.then(() => check(activity.label)).catch(() => {});
+    return queue;
   };
 }
