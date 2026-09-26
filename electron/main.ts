@@ -19,7 +19,6 @@ import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
 import { PhoneRemote, phoneAppearanceSchema } from "./remote/phone-remote";
 import { deepReviewStartSchema } from "../shared/deep-review";
-import { git } from "./git";
 import {
   chatScopeSchema,
   chatTriageSchema,
@@ -1111,20 +1110,6 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
           .parse(args[1]),
         z.enum(["open", "dismissed"]).parse(args[2]),
       );
-    case "projectRecentCommits": {
-      const log = await git(await projects.root(idSchema.parse(args[0])), [
-        "log",
-        "-40",
-        "--format=%H%x00%s",
-      ]).catch(() => "");
-      return log
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          const [sha, subject] = line.split("\0");
-          return { sha: sha!, subject: (subject ?? "").slice(0, 200) };
-        });
-    }
     case "roomHosting":
       return rooms.hostingStatus();
     case "saveRoomHosting":

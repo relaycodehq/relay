@@ -698,7 +698,6 @@ export interface ProjectApi {
     status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
   /** Recent commits on the checked-out branch, newest first. */
-  projectRecentCommits(id: string): Promise<{ sha: string; subject: string }[]>;
   onProjectChat(
     callback: (event: {
       chatId: string;

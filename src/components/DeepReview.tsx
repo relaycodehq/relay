@@ -211,7 +211,8 @@ export function DeepReviewSetup({
   });
   const commits = useQuery({
     queryKey: ["recent-commits", project.id],
-    queryFn: () => api.projectRecentCommits(project.id),
+    queryFn: async () =>
+      (await api.projectHistory(project.id, "head", 40)).commits,
     enabled: setup.kind === "commit",
   });
   const bases = (branches.data?.branches ?? [])
