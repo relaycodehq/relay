@@ -2,8 +2,6 @@ import { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   View,
@@ -17,6 +15,7 @@ import { mainMessages } from "../../remote/chat-state";
 import { Button } from "../../ui/Button";
 import { Composer } from "../../ui/Composer";
 import { ConnectionLine } from "../../ui/ConnectionLine";
+import { KeyboardAware } from "../../ui/KeyboardAware";
 import { MessageView, withoutMention } from "../../ui/MessageView";
 import { agentNames } from "../../ui/ProviderIcon";
 import { RequestCard } from "../../ui/RequestCard";
@@ -47,11 +46,7 @@ export default function ThreadScreen() {
   const online = remote.status === "online";
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
+    <KeyboardAware>
       <Stack.Screen options={{ title }} />
       <ConnectionLine />
       {!thread ? (
@@ -124,12 +119,11 @@ export default function ThreadScreen() {
         }}
         onStop={() => void remote.call("stop", id).catch(() => {})}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAware>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, padding: 24 },
   note: { fontSize: type.small, textAlign: "center" },
   grow0: { flexGrow: 0 },

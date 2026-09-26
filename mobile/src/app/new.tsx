@@ -1,7 +1,5 @@
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +13,8 @@ import type { RuntimeMode } from "../../../shared/agent-modes";
 import type { AgentProvider } from "../../../shared/agents";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "../ui/Button";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
 import { ProviderIcon, agentNames } from "../ui/ProviderIcon";
 import { type, useTheme } from "../ui/theme";
 
@@ -41,6 +41,8 @@ const providers: AgentProvider[] = ["codex", "claude", "opencode"];
 export default function NewThread() {
   const remote = useRemote();
   const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardShown();
   const overview = remote.overview;
   const recent = overview?.chats[0];
   const [projectId, setProjectId] = useState(
@@ -76,10 +78,7 @@ export default function NewThread() {
     on && { backgroundColor: t.accentSoft },
   ];
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAware>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={[styles.label, { color: t.muted }]}>Project</Text>
         <View style={styles.group}>
@@ -125,6 +124,19 @@ export default function NewThread() {
             </Pressable>
           ))}
         </View>
+      </ScrollView>
+      {/* Docked like the thread's composer, so the keyboard never covers it. */}
+      <View
+        style={[
+          styles.dock,
+          {
+            borderColor: t.border,
+            backgroundColor: t.background,
+            paddingBottom: 12 + (keyboard ? 0 : insets.bottom),
+          },
+        ]}
+      >
+        {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
         <TextInput
           accessibilityLabel="First message"
           multiline
@@ -134,21 +146,25 @@ export default function NewThread() {
           placeholderTextColor={t.faint}
           style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.raised }]}
         />
-        {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
         <Button
           label={busy ? "Starting…" : "Start thread"}
           primary
           disabled={busy || !body.trim() || !projectId || remote.status !== "online"}
           onPress={() => void start()}
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </KeyboardAware>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  content: { padding: 16, gap: 10, paddingBottom: 40 },
+  content: { padding: 16, gap: 10, paddingBottom: 16 },
+  dock: {
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   label: { fontSize: type.tiny, fontWeight: "600", marginTop: 8 },
   group: { gap: 8 },
   row: { flexDirection: "row", gap: 8 },
@@ -169,13 +185,13 @@ const styles = StyleSheet.create({
   choiceText: { fontSize: type.body },
   hint: { fontSize: type.tiny, lineHeight: 17 },
   input: {
-    minHeight: 110,
+    minHeight: 80,
+    maxHeight: 160,
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     fontSize: type.body,
     lineHeight: 21,
     textAlignVertical: "top",
-    marginTop: 8,
   },
 });

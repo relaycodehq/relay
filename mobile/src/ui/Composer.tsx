@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowUp, Square } from "lucide-react-native";
+import { useKeyboardShown } from "./KeyboardAware";
 import { type, useTheme } from "./theme";
 
 /** Send, or while the agent works: queue behind it, or stop it. */
@@ -20,6 +21,8 @@ export function Composer({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  // The keyboard covers the gesture bar, so its inset would only leave a gap.
+  const keyboard = useKeyboardShown();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -45,7 +48,7 @@ export function Composer({
         {
           borderColor: t.border,
           backgroundColor: t.background,
-          paddingBottom: 10 + insets.bottom,
+          paddingBottom: 10 + (keyboard ? 0 : insets.bottom),
         },
       ]}
     >
