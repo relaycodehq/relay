@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -120,4 +127,18 @@ it("removes the folder and branch but keeps a snapshot of what it held", async (
   expect(git(root, "show", `refs/relay/worktrees/${chatId}/kept:c.ts`)).toBe(
     "sea",
   );
+});
+
+it("links the project's ignored node_modules into a new worktree", async () => {
+  await writeFile(join(root, ".gitignore"), "node_modules\n");
+  git(root, "add", ".gitignore");
+  git(root, "commit", "-qm", "Ignore modules");
+  await mkdir(join(root, "node_modules", "left-pad"), { recursive: true });
+
+  const worktree = await made();
+
+  expect(existsSync(join(worktree.path, "node_modules", "left-pad"))).toBe(
+    true,
+  );
+  expect(await paths(worktree)).toEqual([]);
 });

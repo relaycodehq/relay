@@ -112,7 +112,10 @@ async function linkModules(root: string, path: string) {
     return;
   await symlink(source, join(path, "node_modules"), "dir").catch(() => {});
   // A link Git doesn't ignore would show up as the thread's own change.
-  const ignored = await git(path, ["check-ignore", "-q", "node_modules"]).then(
+  // check-ignore rejects literal pathspec magic outright.
+  const ignored = await gitIn(path, ["check-ignore", "-q", "node_modules"], {
+    env: { GIT_LITERAL_PATHSPECS: undefined },
+  }).then(
     () => true,
     () => false,
   );
