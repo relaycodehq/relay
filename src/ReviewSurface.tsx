@@ -701,7 +701,7 @@ export function Connected({
         aria-label="Workspace"
         hidden={!!embedded || requestsHidden}
       >
-        <PaneResizer pane="sidebar" initial={280} min={230} max={380} />
+        <PaneResizer pane="requests" initial={280} min={230} max={380} />
         <header className="titlebar sidebar-titlebar">
           <span className="traffic-space" />
           <IconButton

@@ -1947,8 +1947,8 @@ html {
 }
 .sidebar {
   position: relative;
-  width: var(--sidebar-width, 280px);
-  min-width: var(--sidebar-width, 280px);
+  width: var(--requests-width, 280px);
+  min-width: var(--requests-width, 280px);
 }
 .files-pane {
   position: relative;
