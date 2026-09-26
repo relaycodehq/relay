@@ -38,7 +38,7 @@ function fixture() {
       html_url: "https://example.invalid/team/repo/pulls/7",
       title: "Rename helper",
     })),
-    page: vi.fn(async (_path: string, page: number) => ({
+    files: vi.fn(async (_ref: unknown, page: number) => ({
       items: page === 1 ? [] : [file],
       nextPage: page === 1 ? 2 : null,
     })),

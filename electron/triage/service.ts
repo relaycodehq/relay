@@ -2,13 +2,7 @@ import { aiSettingsSchema, defaultAISettings } from "../../shared/settings";
 import { randomUUID } from "node:crypto";
 import type { Gitea } from "../gitea";
 import type { Store } from "../store";
-import type {
-  ChangedFile,
-  PullRef,
-  Review,
-  ReviewComment,
-  Page,
-} from "../../shared/types";
+import type { ChangedFile, PullRef, Review, Page } from "../../shared/types";
 import { revisionOf } from "../../shared/types";
 import {
   TRIAGE_VERSION,
@@ -152,18 +146,11 @@ export class TriageService {
         throw new Error(
           "Review history is too large to check discussions safely. Review these files normally.",
         );
-      const reviews: Page<Review> = await client.page<Review>(
-        `${client.pr(ref)}/reviews`,
-        page,
-        signal,
-      );
+      const reviews: Page<Review> = await client.reviews(ref, page, signal);
       for (const review of reviews.items) {
         signal?.throwIfAborted();
         if (review.comments_count === 0) continue;
-        const { data } = await client.request<ReviewComment[]>(
-          `${client.pr(ref)}/reviews/${review.id}/comments`,
-          { signal },
-        );
+        const data = await client.reviewComments(ref, review.id, signal);
         if (!Array.isArray(data) || review.comments_count > data.length)
           throw new Error(
             "Could not load the complete line discussions. Grouping is unavailable until they can be checked.",
@@ -230,11 +217,7 @@ export class TriageService {
     const files: ChangedFile[] = [];
     for (let page: number | null = 1; page !== null;) {
       signal.throwIfAborted();
-      const next: Page<ChangedFile> = await client.page<ChangedFile>(
-        `${client.pr(ref)}/files`,
-        page,
-        signal,
-      );
+      const next: Page<ChangedFile> = await client.files(ref, page, signal);
       for (const f of next.items) filePathSchema.parse(f.filename);
       files.push(...next.items);
       page = next.nextPage;

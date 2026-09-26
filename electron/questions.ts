@@ -22,10 +22,7 @@ export async function questionContext(
     );
   let file: ChangedFile | undefined;
   for (let page: number | null = 1, count = 0; page !== null && count++ < 20;) {
-    const next: Page<ChangedFile> = await client.page(
-      `${client.pr(ref)}/files`,
-      page,
-    );
+    const next: Page<ChangedFile> = await client.files(ref, page);
     file = next.items.find((f) => f.filename === q.path);
     if (file) break;
     page = next.nextPage;

@@ -124,13 +124,9 @@ import {
   emptyProgress,
   emptyWorkspace,
   type ApiMethod,
-  type ChangedFile,
   type Issue,
   type Pull,
   type Repo,
-  type Review,
-  type ReviewComment,
-  type Discussion,
 } from "../shared/types";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
@@ -199,9 +195,9 @@ async function pullMerged(chatId: string, number: number) {
   const gitea = client;
   const merged = await projects
     .linked(projectId, gitea)
-    .then((repo) => gitea.request<Pull>(`${gitea.repo(repo)}/pulls/${number}`))
+    .then((repo) => gitea.pull({ ...repo, number }))
     .then(
-      (r) => !!r.data.merged,
+      (pull) => !!pull.merged,
       () => false,
     );
   pullChecks.set(chatId, { at: Date.now(), merged });
@@ -1434,10 +1430,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return requireClient().pull(refSchema.parse(args[0]));
     case "files": {
       const r = refSchema.parse(args[0]);
-      return requireClient().page<ChangedFile>(
-        `${requireClient().pr(r)}/files`,
-        pageSchema.parse(args[1]),
-      );
+      return requireClient().files(r, pageSchema.parse(args[1]));
     }
     case "contents": {
       const r = refSchema.parse(args[0]),
@@ -1469,25 +1462,18 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     }
     case "reviews": {
       const r = refSchema.parse(args[0]);
-      return requireClient().page<Review>(
-        `${requireClient().pr(r)}/reviews`,
-        pageSchema.parse(args[1]),
-      );
+      return requireClient().reviews(r, pageSchema.parse(args[1]));
     }
     case "reviewComments": {
       const r = refSchema.parse(args[0]);
-      return (
-        await requireClient().request<ReviewComment[]>(
-          `${requireClient().pr(r)}/reviews/${z.number().int().positive().parse(args[1])}/comments`,
-        )
-      ).data;
+      return requireClient().reviewComments(
+        r,
+        z.number().int().positive().parse(args[1]),
+      );
     }
     case "discussion": {
       const r = refSchema.parse(args[0]);
-      return requireClient().page<Discussion>(
-        `${requireClient().repo(r)}/issues/${r.number}/comments`,
-        pageSchema.parse(args[1]),
-      );
+      return requireClient().discussion(r, pageSchema.parse(args[1]));
     }
     case "progress":
       return (
@@ -1511,29 +1497,24 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       );
     case "resolveComment": {
       const r = refSchema.parse(args[0]);
-      await requireClient().request(
-        `${requireClient().repo(r)}/pulls/comments/${z.number().int().positive().parse(args[1])}/${z.boolean().parse(args[2]) ? "resolve" : "unresolve"}`,
-        { method: "POST" },
+      await requireClient().resolveComment(
+        r,
+        z.number().int().positive().parse(args[1]),
+        z.boolean().parse(args[2]),
       );
       return;
     }
     case "reply": {
       const r = refSchema.parse(args[0]);
-      return (
-        await requireClient().request(
-          `${requireClient().pr(r)}/comments/${z.number().int().positive().parse(args[1])}/replies`,
-          { method: "POST", body: { body: bodySchema.parse(args[2]) } },
-        )
-      ).data;
+      return requireClient().reply(
+        r,
+        z.number().int().positive().parse(args[1]),
+        bodySchema.parse(args[2]),
+      );
     }
     case "comment": {
       const r = refSchema.parse(args[0]);
-      return (
-        await requireClient().request(
-          `${requireClient().repo(r)}/issues/${r.number}/comments`,
-          { method: "POST", body: { body: bodySchema.parse(args[1]) } },
-        )
-      ).data;
+      return requireClient().comment(r, bodySchema.parse(args[1]));
     }
     case "workingTree":
     case "workingDiff":

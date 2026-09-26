@@ -338,15 +338,14 @@ async function fixture(
         merge_base: base,
         changed_files: files.length,
       }) as Pull,
-    page: async (path: string) => ({
-      items: path.endsWith("/reviews")
-        ? reviewComments.length
-          ? [{ id: 1, comments_count: reviewComments.length }]
-          : []
-        : files,
+    files: async () => ({ items: files, nextPage: null }),
+    reviews: async () => ({
+      items: reviewComments.length
+        ? [{ id: 1, comments_count: reviewComments.length }]
+        : [],
       nextPage: null,
     }),
-    request: async () => ({ data: reviewComments }),
+    reviewComments: async () => reviewComments,
     contentsAt: async (_p: Pull, f: ChangedFile) =>
       pair(
         before,

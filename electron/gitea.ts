@@ -1,11 +1,13 @@
 import type {
   Account,
   ChangedFile,
+  Discussion,
   FilePair,
   Page,
   Pull,
   PullRef,
   Review,
+  ReviewComment,
   Draft,
 } from "../shared/types";
 import { networkError } from "./network-errors";
@@ -143,6 +145,49 @@ export class Gitea {
   async pull(r: PullRef, signal?: AbortSignal) {
     const p = (await this.request<Pull>(this.pr(r), { signal })).data;
     return { ...p, ...r };
+  }
+  files(r: PullRef, page: number, signal?: AbortSignal) {
+    return this.page<ChangedFile>(`${this.pr(r)}/files`, page, signal);
+  }
+  reviews(r: PullRef, page: number, signal?: AbortSignal) {
+    return this.page<Review>(`${this.pr(r)}/reviews`, page, signal);
+  }
+  async reviewComments(r: PullRef, review: number, signal?: AbortSignal) {
+    return (
+      await this.request<ReviewComment[]>(
+        `${this.pr(r)}/reviews/${review}/comments`,
+        { signal },
+      )
+    ).data;
+  }
+  /** The PR's conversation: comments outside any review. */
+  discussion(r: PullRef, page: number) {
+    return this.page<Discussion>(
+      `${this.repo(r)}/issues/${r.number}/comments`,
+      page,
+    );
+  }
+  async comment(r: PullRef, body: string) {
+    return (
+      await this.request(`${this.repo(r)}/issues/${r.number}/comments`, {
+        method: "POST",
+        body: { body },
+      })
+    ).data;
+  }
+  async reply(r: PullRef, comment: number, body: string) {
+    return (
+      await this.request(`${this.pr(r)}/comments/${comment}/replies`, {
+        method: "POST",
+        body: { body },
+      })
+    ).data;
+  }
+  async resolveComment(r: PullRef, comment: number, resolved: boolean) {
+    await this.request(
+      `${this.repo(r)}/pulls/comments/${comment}/${resolved ? "resolve" : "unresolve"}`,
+      { method: "POST" },
+    );
   }
   async contents(
     r: PullRef,
