@@ -13,6 +13,7 @@ import {
   normalizeServer,
 } from "./validation";
 import { aiSettingsSchema } from "./settings";
+import type { PullRef } from "./types";
 
 export const roomServerSchema = z
   .string()
@@ -319,62 +320,25 @@ export interface RoomState {
   room: Room | null;
 }
 export interface RoomApi {
-  roomAccessInfo(
-    ref: import("./types").PullRef,
-  ): Promise<{ server: string | null }>;
-  allowRoomAccess(
-    ref: import("./types").PullRef,
-    server: string,
-  ): Promise<void>;
+  roomAccessInfo(ref: PullRef): Promise<{ server: string | null }>;
+  allowRoomAccess(ref: PullRef, server: string): Promise<void>;
   roomHosting(): Promise<{ server: string | null }>;
   saveRoomHosting(input: RoomHosting | null): Promise<void>;
   roomAcceptInvitation(url: string): Promise<{
-    ref: { owner: string; name: string; number: number };
+    ref: PullRef;
     state: RoomState;
   }>;
-  roomConnect(
-    ref: { owner: string; name: string; number: number },
-    input: ConnectRoom,
-  ): Promise<RoomState>;
-  roomState(ref: {
-    owner: string;
-    name: string;
-    number: number;
-  }): Promise<RoomState>;
-  roomDisconnect(ref: {
-    owner: string;
-    name: string;
-    number: number;
-  }): Promise<void>;
-  roomPoll(
-    ref: { owner: string; name: string; number: number },
-    cursor: number,
-    before?: number,
-  ): Promise<RoomPage>;
-  roomSend(
-    ref: { owner: string; name: string; number: number },
-    input: SendRoom,
-  ): Promise<void>;
-  roomCancel(
-    ref: { owner: string; name: string; number: number },
-    id: string,
-  ): Promise<void>;
+  roomConnect(ref: PullRef, input: ConnectRoom): Promise<RoomState>;
+  roomState(ref: PullRef): Promise<RoomState>;
+  roomDisconnect(ref: PullRef): Promise<void>;
+  roomPoll(ref: PullRef, cursor: number, before?: number): Promise<RoomPage>;
+  roomSend(ref: PullRef, input: SendRoom): Promise<void>;
+  roomCancel(ref: PullRef, id: string): Promise<void>;
   roomPresence(
-    ref: { owner: string; name: string; number: number },
+    ref: PullRef,
     presence: z.infer<typeof presenceSchema> | null,
   ): Promise<void>;
-  roomInvite(ref: {
-    owner: string;
-    name: string;
-    number: number;
-  }): Promise<{ code: string; expiresAt: number }>;
-  roomMembers(ref: {
-    owner: string;
-    name: string;
-    number: number;
-  }): Promise<Member[]>;
-  roomRevoke(
-    ref: { owner: string; name: string; number: number },
-    memberId: string,
-  ): Promise<void>;
+  roomInvite(ref: PullRef): Promise<{ code: string; expiresAt: number }>;
+  roomMembers(ref: PullRef): Promise<Member[]>;
+  roomRevoke(ref: PullRef, memberId: string): Promise<void>;
 }
