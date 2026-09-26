@@ -529,6 +529,15 @@ export interface ProjectApi {
   resolveStoppedWork(id: string, action: "resume" | "dismiss"): Promise<void>;
   /** Stops a background task Claude left running, or cancels its wake-up. */
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
+  /** The subagents Claude started in the thread's live sessions. */
+  projectChatAgents(id: string): Promise<import("./subagents").SubagentRun[]>;
+  /** One agent's whole run; null once its session is gone. */
+  projectChatAgent(
+    id: string,
+    agentId: string,
+  ): Promise<import("./subagents").SubagentDetail | null>;
+  /** Stops one agent; Claude hears it was stopped. */
+  stopProjectChatAgent(id: string, agentId: string): Promise<void>;
   projectChatPresence(
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,

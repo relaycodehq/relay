@@ -951,6 +951,18 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         idSchema.parse(args[0]),
         z.string().min(1).max(200).parse(args[1]),
       );
+    case "projectChatAgents":
+      return projectChats.agents(idSchema.parse(args[0]));
+    case "projectChatAgent":
+      return projectChats.agentRun(
+        idSchema.parse(args[0]),
+        z.string().min(1).max(200).parse(args[1]),
+      );
+    case "stopProjectChatAgent":
+      return projectChats.stopAgent(
+        idSchema.parse(args[0]),
+        z.string().min(1).max(200).parse(args[1]),
+      );
     case "projectChatPresence":
       return projectChats.presence(
         idSchema.parse(args[0]),

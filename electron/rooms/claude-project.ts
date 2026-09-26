@@ -14,6 +14,8 @@ import { findExecutable } from "../executables";
 import { ClaudeSignedOutError } from "./claude-sign-in";
 import type { AgentOptions } from "../agents/types";
 import { claudeActivity, claudeEditedPaths } from "./activity";
+import { SubagentTracker } from "./claude-agents";
+import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 import { answeredFindings, reportedFindings } from "../../shared/deep-review";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
@@ -165,6 +167,8 @@ type ClaudeSession = {
   tasks: Map<string, Extract<ChatPending, { kind: "task" }>>;
   /** Wake-ups Claude scheduled for itself, as of the end of its last turn. */
   wakeups: Extract<ChatPending, { kind: "wakeup" }>[];
+  /** The subagents it started, followed between turns too. */
+  agents: SubagentTracker;
 };
 const sessions = new Map<string, ClaudeSession>();
 function closeSession(session: ClaudeSession) {
@@ -226,12 +230,15 @@ async function pump(
     while (true) {
       const next = await iterator.next();
       if (next.done) break;
+      // Here rather than in receive(): frames a turn leaves unread pass through that twice.
+      session.agents.observe(next.value);
       receive(session, next.value);
     }
   } catch (error) {
     // The turn reading the frames reports the stop.
     failure = error;
   } finally {
+    session.agents.close();
     session.frames.end(failure);
   }
 }
@@ -309,6 +316,24 @@ export async function stopClaudeTask(key: string, taskId: string) {
   const session = sessions.get(key);
   if (!session?.tasks.has(taskId) || session.frames.ended)
     throw new Error("That work has already finished.");
+  await session.stream.stopTask(taskId);
+}
+/** The subagents a thread's live session started, running or back. */
+export function claudeAgents(key: string): SubagentRun[] {
+  return sessions.get(key)?.agents.list() ?? [];
+}
+export function claudeAgentRun(
+  key: string,
+  id: string,
+): SubagentDetail | undefined {
+  return sessions.get(key)?.agents.detail(id);
+}
+/** Stops one agent, foreground or background; Claude hears it was stopped. */
+export async function stopClaudeAgent(key: string, id: string) {
+  const session = sessions.get(key);
+  const taskId = session?.agents.taskId(id);
+  if (!session || !taskId || session.frames.ended)
+    throw new Error("That agent has already finished.");
   await session.stream.stopTask(taskId);
 }
 /** Ends the current turn. Frames it didn't consume belong to whatever Claude does next. */
@@ -731,6 +756,7 @@ export async function runClaudeProject(
         busy: true,
         tasks: new Map(),
         wakeups: [] as ClaudeSession["wakeups"],
+        agents: new SubagentTracker(),
       } as ClaudeSession;
       const permissions = claudePermissionMode(options);
       const config: Options = {
@@ -742,6 +768,8 @@ export async function runClaudeProject(
         includePartialMessages: true,
         // A one-line "what it's doing" for each running subagent, every ~30s.
         agentProgressSummaries: true,
+        // A subagent's own text too, not only its calls, for its side thread.
+        forwardSubagentText: true,
         persistSession: true,
         ...(options.session?.id
           ? { resume: options.session.id }

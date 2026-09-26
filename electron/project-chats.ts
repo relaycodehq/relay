@@ -1,4 +1,10 @@
-import { claudePending, stopClaudeTask } from "./rooms/claude-project";
+import {
+  claudeAgentRun,
+  claudeAgents,
+  claudePending,
+  stopClaudeAgent,
+  stopClaudeTask,
+} from "./rooms/claude-project";
 import { agentRuntime, agentRuntimes } from "./agents";
 import { AgentRequests } from "./agent-requests";
 import { savedRuntimeMode, type AgentResponse } from "../shared/agent-modes";
@@ -315,6 +321,27 @@ export class ProjectChats {
         body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
       },
       true,
+    );
+  }
+  /** The subagents Claude started in a thread, its side conversations' too. */
+  agents(id: string) {
+    return this.sessionKeys(id).flatMap((key) => claudeAgents(key));
+  }
+  agentRun(id: string, agentId: string) {
+    for (const key of this.sessionKeys(id)) {
+      const run = claudeAgentRun(key, agentId);
+      if (run) return run;
+    }
+    return null;
+  }
+  async stopAgent(id: string, agentId: string) {
+    const key = this.sessionKeys(id).find((k) => claudeAgentRun(k, agentId));
+    if (!key) throw new Error("That agent has already finished.");
+    await stopClaudeAgent(key, agentId);
+  }
+  private sessionKeys(chatId: string) {
+    return [...this.providerSessions].filter(
+      (key) => (JSON.parse(key) as string[])[1] === chatId,
     );
   }
   /** Background commands and agents still running, across every thread. */
