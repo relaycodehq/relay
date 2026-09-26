@@ -1,0 +1,609 @@
+/* Subagents: the indicator beside the Project folder control, its hover
+   cards, and the read-only run view. Nothing here loops; the spinners are the
+   app's own, which already pause with the window. */
+
+/* Preview chrome: the clock, not part of the design. */
+.preview-clock {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 8px;
+}
+.preview-clock input[type="range"] {
+  width: 220px;
+  accent-color: var(--accent);
+}
+.preview-time {
+  min-width: 76px;
+  font-variant-numeric: tabular-nums;
+}
+.preview-icon {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+}
+.preview-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+}
+
+/* The indicator: an icon and a count, left of the Project folder control. */
+.thread-context-controls .agents-chip {
+  flex: none;
+  gap: 6px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.thread-context-controls .agents-chip ~ .composer-branch-trigger {
+  margin-left: 0;
+}
+.agents-chip > svg {
+  color: var(--accent);
+}
+.thread-context-controls .agents-chip[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+.agents-ticks {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.agents-ticks i {
+  width: 4px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 1.5px;
+  opacity: 0.6;
+}
+.agents-ticks i.done {
+  border-color: var(--accent);
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* The card, whichever variant. */
+.agents-popup {
+  width: 350px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 40px -16px #0009;
+  font-size: 12px;
+  outline: none;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+}
+.agents-popup[data-starting-style],
+.agents-popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+.agents-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-card-head b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.agents-status {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+.agents-done {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.agents-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.agents-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agents-type {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-time {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.agents-row,
+.agents-tail-row,
+.agents-peek-item,
+.agents-lane {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+}
+.agents-row:hover,
+.agents-tail-row:hover,
+.agents-peek-item:hover,
+.agents-lane:hover {
+  background: var(--hover);
+}
+.agents-call {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 17px;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-call > svg {
+  flex: none;
+}
+.agents-call > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agents-call > span.mono {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.agents-call.live {
+  color: var(--text);
+}
+
+/* 1 List */
+.agents-row {
+  align-items: flex-start;
+  gap: 8px;
+}
+.agents-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.agents-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.agents-row-line {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agents-row .agents-time {
+  line-height: 16px;
+}
+.agents-go {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+  opacity: 0;
+}
+.agents-row:hover .agents-go,
+.agents-row:focus-visible .agents-go {
+  opacity: 1;
+}
+
+/* 2 Live tail */
+.agents-popup[data-variant="tail"] {
+  width: 400px;
+}
+.agents-tail-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.agents-tail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* Three lines always, so a row keeps its height as calls come and go. */
+.agents-tail-lines {
+  display: flex;
+  flex-direction: column;
+  height: 51px;
+  padding-left: 24px;
+  overflow: hidden;
+}
+.agents-tail-lines.agents-tail-report {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+/* 3 Peek */
+.agents-popup[data-variant="peek"] {
+  width: 590px;
+  padding: 0;
+}
+.agents-peek-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  height: 292px;
+}
+.agents-peek-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  padding: 5px;
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+.agents-peek-item {
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+.agents-peek-item[aria-current="true"] {
+  background: var(--selected);
+}
+.agents-peek-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px 10px;
+}
+.agents-peek-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.agents-peek-title b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.agents-peek-title span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-peek-brief {
+  display: -webkit-box;
+  flex: none;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.agents-peek-now {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agents-peek-calls {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  overflow: hidden;
+}
+.agents-peek-open {
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px 0 0;
+}
+
+/* 4 Timeline */
+.agents-popup[data-variant="timeline"] {
+  width: 500px;
+}
+.agents-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.agents-lane {
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+.agents-lane .agents-name {
+  flex: none;
+  width: 175px;
+}
+.agents-lane-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--border) 50%, transparent);
+}
+.agents-lane-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: light-dark(#1a7f45, #4cc38a);
+}
+.agents-lane.running .agents-lane-bar {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--accent) 0 3px,
+    color-mix(in srgb, var(--accent) 55%, transparent) 3px 6px
+  );
+}
+.agents-lane.stopped .agents-lane-bar {
+  background: var(--muted);
+}
+.agents-lane .agents-time {
+  width: 50px;
+  text-align: right;
+}
+/* Lines up under the tracks: the lane's padding, icon, name and gaps on the
+   left (8 + 16 + 8 + 175 + 8), its gap, time and padding on the right. */
+.agents-axis {
+  display: flex;
+  padding: 2px 66px 4px 215px;
+}
+.agents-axis-track {
+  position: relative;
+  flex: 1;
+  height: 13px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.agents-axis-track > span {
+  position: absolute;
+  top: 0;
+  padding-left: 3px;
+  border-left: 1px solid var(--border);
+  line-height: 13px;
+}
+.agents-axis-track > .agents-axis-now {
+  right: 0;
+  padding: 0 3px 0 0;
+  border-left: 0;
+  border-right: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+/* 5 Glance */
+.agents-popup[data-variant="glance"] {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: auto;
+  max-width: 400px;
+  padding: 8px 10px;
+}
+.agents-glance-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.agents-glance-line .agents-name {
+  flex: none;
+  max-width: 180px;
+}
+.agents-glance-now {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agents-glance-hint {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* The run, as a panel beside the thread or in its place. */
+.agents-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 440px;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+.agents-panel-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 6px 0 14px;
+  font-size: 12px;
+}
+.agents-panel-bar > svg {
+  color: var(--accent);
+}
+.agents-panel-bar > span {
+  flex: 1;
+  font-weight: 550;
+}
+.agents-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* In the narrow panel the tabs scroll; the cut one fades instead of clipping. */
+.agents-panel .agents-tabs {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.agents-tab {
+  flex: none;
+  gap: 6px;
+  max-width: 190px;
+  padding: 7px 8px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.agents-tab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agents-tab:hover {
+  background: transparent;
+  color: var(--text);
+}
+.agents-tab[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.agents-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 18px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.agents-run-head h2 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.agents-run-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.agents-brief {
+  margin: 14px 0 0;
+  padding: 9px 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--toolbar);
+  font-size: 12px;
+}
+.agents-brief > header {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-brief > p {
+  margin: 0;
+  line-height: 1.5;
+}
+.agents-brief > p.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.agents-brief > .text-button {
+  padding: 3px 0 0;
+  font-size: 11px;
+}
+.project-message.agents-run-message {
+  padding: 16px 0 0;
+  content-visibility: visible;
+}
+.agents-run-label {
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agents-run-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+.agents-run-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.agents-run-foot > span {
+  flex: 1;
+  min-width: 0;
+}
+.agents-run-foot > button {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.agents-thread-tabs,
+.agents-thread-foot {
+  width: 100%;
+  max-width: calc(var(--thread-width) + 56px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.agents-thread-foot {
+  padding-bottom: 18px;
+}
+.agents-thread-foot .agents-run-foot {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--toolbar);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agents-popup {
+    transition: none;
+  }
+}
