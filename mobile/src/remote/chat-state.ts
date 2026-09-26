@@ -62,6 +62,36 @@ const order = (a: ChatMessage, b: ChatMessage) =>
         ? 1
         : a.created - b.created;
 
-/** The main conversation; side questions and their replies stay on the desktop for now. */
+/** The main conversation: every message but replies, with `/btw` questions in line. */
 export const mainMessages = (messages: ChatMessage[]) =>
-  messages.filter((m) => !m.side && !m.parentId);
+  messages.filter((m) => !m.parentId);
+
+/** The message a reply chain starts from; replying to a reply joins its root (shared/projects' replyRoot). */
+export function rootOf(messages: ChatMessage[], message: ChatMessage): ChatMessage {
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const seen = new Set<string>();
+  let current = message;
+  while (current.parentId && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current;
+}
+
+/** A side conversation: its root, then the replies under it in order. */
+export function sideConversation(messages: ChatMessage[], rootId: string) {
+  return messages.filter((m) => m.id === rootId || (m.parentId && rootOf(messages, m).id === rootId));
+}
+
+/** How many replies each root has. */
+export function replyCounts(messages: ChatMessage[]) {
+  const counts = new Map<string, number>();
+  for (const m of messages)
+    if (m.parentId) {
+      const root = rootOf(messages, m).id;
+      counts.set(root, (counts.get(root) ?? 0) + 1);
+    }
+  return counts;
+}

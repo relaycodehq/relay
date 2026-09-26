@@ -1,76 +1,88 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { randomUUID } from "expo-crypto";
-import type { RuntimeMode } from "../../../shared/agent-modes";
-import type { AgentProvider } from "../../../shared/agents";
+import type { ChatWorkspace } from "../../../shared/projects";
+import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
-import { Button } from "../ui/Button";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { KeyboardAware, useKeyboardShown } from "../ui/KeyboardAware";
-import { ProviderIcon, agentNames } from "../ui/ProviderIcon";
+import { composeSend, newThreadSettings } from "../remote/compose";
+import { NotebookPen } from "lucide-react-native";
+import { Composer, type Outgoing } from "../ui/Composer";
+import { ProjectIcon } from "../ui/ProjectIcon";
+import { KeyboardAware } from "../ui/KeyboardAware";
+import { Segmented } from "../ui/Rows";
 import { type, useTheme } from "../ui/theme";
 
-// The desktop's runtime modes (shared/agent-modes.ts), worded for a phone.
-const modes: { value: RuntimeMode; label: string; description: string }[] = [
-  {
-    value: "approval-required",
-    label: "Supervised",
-    description: "Asks before commands and file changes. You answer here.",
-  },
-  {
-    value: "auto-accept-edits",
-    label: "Auto-accept edits",
-    description: "Edits files freely, asks before anything else.",
-  },
-  {
-    value: "full-access",
-    label: "Full access",
-    description: "Runs commands and edits without asking.",
-  },
-];
-const providers: AgentProvider[] = ["codex", "claude", "opencode"];
-
+/** Starts a thread the way the desktop's new-thread composer does, then opens it. */
 export default function NewThread() {
+  const { project, scratch } = useLocalSearchParams<{
+    project?: string;
+    scratch?: string;
+  }>();
   const remote = useRemote();
   const t = useTheme();
-  const insets = useSafeAreaInsets();
-  const keyboard = useKeyboardShown();
   const overview = remote.overview;
-  const recent = overview?.chats[0];
-  const [projectId, setProjectId] = useState(
-    recent?.projectId ?? overview?.projects[0]?.id,
+  const real = overview?.projects.filter((p) => !p.scratch) ?? [];
+  const last = overview?.chats[0]?.projectId;
+  const [picked, setPicked] = useState<string | "scratch" | undefined>(() =>
+    scratch
+      ? "scratch"
+      : (project ??
+        (real.some((p) => p.id === last) ? last : real[0]?.id) ??
+        "scratch"),
   );
-  const [provider, setProvider] = useState<AgentProvider>(
-    recent?.provider ?? "codex",
-  );
-  const [mode, setMode] = useState<RuntimeMode>("approval-required");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const start = async () => {
-    if (!projectId || !body.trim()) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const chat = await remote.call("startChat", projectId, {
+  // The desktop's New chat: an unused Scratchpad folder, or a fresh one.
+  const [scratchId, setScratchId] = useState<string>();
+  const [scratchError, setScratchError] = useState<string>();
+  useEffect(() => {
+    if (picked !== "scratch" || scratchId || remote.status !== "online") return;
+    remote
+      .desktop("createScratch")
+      .then((p) => setScratchId(p.id))
+      .catch((e) =>
+        setScratchError(e instanceof Error ? e.message : String(e)),
+      );
+  }, [picked, scratchId, remote]);
+  const projectId = picked === "scratch" ? scratchId : picked;
+  const [workspace, setWorkspace] = useState<ChatWorkspace>("checkout");
+  const [settings, setSettings] = useState<RemoteSettings>();
+  useEffect(() => {
+    if (settings) return;
+    void remote
+      .desktop("aiSettings")
+      .then((ai) => setSettings(newThreadSettings(ai)))
+      .catch(() => setSettings(newThreadSettings(undefined)));
+  }, [remote, settings]);
+  const chosen = real.find((p) => p.id === picked);
+  const start = async ({ body, settings: using, images }: Outgoing) => {
+    if (!projectId) throw new Error(scratchError ?? "Pick a project first.");
+    const chat = await remote.desktop(
+      "createProjectChat",
+      projectId,
+      { kind: "project" },
+      !chosen || chosen.plain ? undefined : workspace,
+    );
+    await remote.desktop(
+      "sendProjectChat",
+      chat.id,
+      composeSend(using, body, {
         id: randomUUID(),
-        body: body.trim(),
-        provider,
-        runtimeMode: mode,
-      });
-      router.replace(`/chat/${chat.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    }
+        images: images.map(({ name, mimeType, dataUrl }) => ({
+          name,
+          mimeType,
+          dataUrl,
+        })),
+      }),
+    );
+    void remote.refresh();
+    router.replace(`/chat/${chat.id}`);
   };
   const choice = (on: boolean) => [
     styles.choice,
@@ -79,95 +91,99 @@ export default function NewThread() {
   ];
   return (
     <KeyboardAware>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.label, { color: t.muted }]}>Project</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onTouchStart={Keyboard.dismiss}
+      >
+        <Text style={[styles.label, { color: t.muted }]}>Where</Text>
         <View style={styles.group}>
-          {overview?.projects.map((p) => (
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: picked === "scratch" }}
+            onPress={() => setPicked("scratch")}
+            style={choice(picked === "scratch")}
+          >
+            <View style={styles.choiceRow}>
+              <NotebookPen size={17} color={t.muted} />
+              <View style={styles.choiceBody}>
+                <Text style={[styles.choiceText, { color: t.text }]}>
+                  Scratchpad
+                </Text>
+                <Text style={[styles.hint, { color: t.muted }]}>
+                  {scratchError ?? "A chat of its own, outside your projects"}
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+          {real.map((p) => (
             <Pressable
               key={p.id}
               accessibilityRole="radio"
-              accessibilityState={{ checked: p.id === projectId }}
-              onPress={() => setProjectId(p.id)}
-              style={choice(p.id === projectId)}
+              accessibilityState={{ checked: p.id === picked }}
+              onPress={() => setPicked(p.id)}
+              style={choice(p.id === picked)}
             >
-              <Text style={[styles.choiceText, { color: t.text }]}>{p.name}</Text>
+              <View style={styles.choiceRow}>
+                <ProjectIcon project={p} />
+                <View style={styles.choiceBody}>
+                  <Text style={[styles.choiceText, { color: t.text }]}>
+                    {p.name}
+                  </Text>
+                  {p.folder && (
+                    <Text style={[styles.hint, { color: t.muted }]}>
+                      {p.folder}
+                    </Text>
+                  )}
+                </View>
+              </View>
             </Pressable>
           ))}
         </View>
-        <Text style={[styles.label, { color: t.muted }]}>Agent</Text>
-        <View style={styles.row}>
-          {providers.map((p) => (
-            <Pressable
-              key={p}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: p === provider }}
-              onPress={() => setProvider(p)}
-              style={[choice(p === provider), styles.segment]}
-            >
-              <ProviderIcon provider={p} color={t.text} />
-              <Text style={[styles.choiceText, { color: t.text }]}>{agentNames[p]}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={[styles.label, { color: t.muted }]}>How it works</Text>
-        <View style={styles.group}>
-          {modes.map((m) => (
-            <Pressable
-              key={m.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: m.value === mode }}
-              onPress={() => setMode(m.value)}
-              style={choice(m.value === mode)}
-            >
-              <Text style={[styles.choiceText, { color: t.text }]}>{m.label}</Text>
-              <Text style={[styles.hint, { color: t.muted }]}>{m.description}</Text>
-            </Pressable>
-          ))}
-        </View>
+        {chosen && !chosen.plain && (
+          <>
+            <Text style={[styles.label, { color: t.muted }]}>
+              Where it works
+            </Text>
+            <Segmented
+              value={workspace}
+              onChange={setWorkspace}
+              options={[
+                { value: "checkout", label: "Project folder" },
+                { value: "worktree", label: "Its own worktree" },
+              ]}
+            />
+            <Text style={[styles.hint, { color: t.muted }]}>
+              {workspace === "worktree"
+                ? "A branch and folder of its own, made from the checkout with the first message. Your checkout stays as it is."
+                : "Works in the checkout, on whatever branch it has."}
+            </Text>
+          </>
+        )}
       </ScrollView>
-      {/* Docked like the thread's composer, so the keyboard never covers it. */}
-      <View
-        style={[
-          styles.dock,
-          {
-            borderColor: t.border,
-            backgroundColor: t.background,
-            paddingBottom: 12 + (keyboard ? 0 : insets.bottom),
-          },
-        ]}
-      >
-        {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
-        <TextInput
-          accessibilityLabel="First message"
-          multiline
-          value={body}
-          onChangeText={setBody}
-          placeholder="What should we work on?"
-          placeholderTextColor={t.faint}
-          style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.raised }]}
+      {settings && projectId && (
+        <Composer
+          projectId={projectId}
+          settings={settings}
+          onSettings={setSettings}
+          running={false}
+          disabled={remote.status !== "online"}
+          placeholder={
+            picked === "scratch" ? "Ask anything" : "What should we work on?"
+          }
+          onSend={start}
+          draftKey="new-thread"
         />
-        <Button
-          label={busy ? "Starting…" : "Start thread"}
-          primary
-          disabled={busy || !body.trim() || !projectId || remote.status !== "online"}
-          onPress={() => void start()}
-        />
-      </View>
+      )}
     </KeyboardAware>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 10, paddingBottom: 16 },
-  dock: {
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
   label: { fontSize: type.tiny, fontWeight: "600", marginTop: 8 },
   group: { gap: 8 },
-  row: { flexDirection: "row", gap: 8 },
   choice: {
     borderWidth: 1,
     borderRadius: 10,
@@ -175,23 +191,8 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     gap: 3,
   },
-  segment: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
+  choiceRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  choiceBody: { flex: 1, gap: 3 },
   choiceText: { fontSize: type.body },
   hint: { fontSize: type.tiny, lineHeight: 17 },
-  input: {
-    minHeight: 80,
-    maxHeight: 160,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: type.body,
-    lineHeight: 21,
-    textAlignVertical: "top",
-  },
 });

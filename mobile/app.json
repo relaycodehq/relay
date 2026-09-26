@@ -3,7 +3,7 @@
     "name": "Relay",
     "slug": "relay-remote",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "relay-remote",
     "userInterfaceStyle": "automatic",
@@ -30,7 +30,8 @@
         {
           "cameraPermission": "Relay uses the camera to scan the pairing code on your computer."
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true

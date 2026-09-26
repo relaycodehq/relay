@@ -1,27 +1,69 @@
-import { memo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
+import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
+import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
+import { withoutMention } from "../remote/compose";
+import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
-import { Markdown } from "./Markdown";
+import { MessageImages } from "./Images";
+import { Markdown, type OpenLink } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { mono, type, useTheme } from "./theme";
 
-/** The desktop hides the leading `@agent` that addressed a message; see shared/agents. */
-export const withoutMention = (body: string) =>
-  body.replace(/^@(codex|claude|opencode)(?=\s|$)\s*/i, "");
+export type Rewind = (
+  paths: string[] | null,
+  mode: "revert" | "redo",
+  force: boolean,
+) => Promise<{ conflicts: string[] }>;
 
 /** A message laid out like the desktop's (src/components/ProjectChat.tsx). */
 export const MessageView = memo(function MessageView({
+  chatId,
   message: m,
   root,
+  where,
+  replies,
   onOpenFile,
+  onActions,
+  onReplies,
+  onReply,
+  onFork,
+  onOpenTurn,
+  onRewind,
 }: {
+  chatId: string;
   message: ChatMessage;
   /** The thread's folder, which tool labels leave out. */
   root?: string;
+  /** Where its files are read (links.ts workspaceId); without it only files the turn changed open from the answer. */
+  where?: string;
+  /** Replies under this message, shown as a link to its side conversation. */
+  replies?: number;
   onOpenFile: (file: TurnFileChange, messageId: string) => void;
+  onActions?: (message: ChatMessage) => void;
+  onReplies?: (message: ChatMessage) => void;
+  /** Starts or opens a side conversation on this answer. */
+  onReply?: (message: ChatMessage) => void;
+  onFork?: (message: ChatMessage) => void;
+  /** Everything the turn changed, on a screen of its own. */
+  onOpenTurn?: (message: ChatMessage) => void;
+  onRewind?: (message: ChatMessage, ...args: Parameters<Rewind>) => ReturnType<Rewind>;
 }) {
   const t = useTheme();
+  const changes = m.changes;
+  const openLink = useCallback<OpenLink>(
+    (value, inline) => {
+      const target = root ? fileLinkTarget(value, inline, root, changes) : null;
+      if (target?.kind === "diff") return () => onOpenFile(target.change, m.id);
+      if (!target || !where) return;
+      const href = target.kind === "folder" ? folderHref(where, target.path) : fileHref(where, target.path);
+      return () => router.push(href);
+    },
+    [root, where, changes, m.id, onOpenFile],
+  );
   if (m.handoff) return <HandoffRow message={m} />;
   if (m.compaction)
     return (
@@ -37,7 +79,13 @@ export const MessageView = memo(function MessageView({
     );
   const user = m.role === "user";
   return (
-    <View style={styles.turn}>
+    <Pressable
+      style={styles.turn}
+      // Long-press only; its buttons and links stay separate for screen readers.
+      accessible={false}
+      onLongPress={onActions && (() => onActions(m))}
+      delayLongPress={350}
+    >
       <View style={styles.header}>
         {!user && <ProviderIcon provider={m.provider} color={t.text} />}
         <Text style={[styles.author, { color: t.text }]}>
@@ -64,6 +112,8 @@ export const MessageView = memo(function MessageView({
           style={[
             styles.userBody,
             { borderColor: t.border, backgroundColor: t.raised },
+            // A /btw question: a dashed outline and nothing else, as on the desktop.
+            m.side && [styles.side, { borderColor: t.muted, backgroundColor: t.background }],
             m.pending && styles.pending,
           ]}
         >
@@ -72,10 +122,16 @@ export const MessageView = memo(function MessageView({
           </Text>
         </View>
       ) : m.body.trim() ? (
-        <Markdown text={m.body} />
+        <Markdown text={m.body} onLink={openLink} />
       ) : null}
+      <MessageImages chatId={chatId} message={m} />
       {!!m.changes?.length && m.status !== "streaming" && (
-        <ChangedFiles files={m.changes} onOpen={(file) => onOpenFile(file, m.id)} />
+        <ChangedFiles
+          files={m.changes}
+          onOpen={(file) => onOpenFile(file, m.id)}
+          onOpenAll={onOpenTurn && (() => onOpenTurn(m))}
+          onRewind={onRewind && ((...args) => onRewind(m, ...args))}
+        />
       )}
       {m.status === "cancelled" && (
         <Text style={[styles.note, { color: t.muted }]}>
@@ -85,11 +141,73 @@ export const MessageView = memo(function MessageView({
       {!!m.error && m.status !== "cancelled" && (
         <Text style={[styles.note, { color: t.danger }]}>{m.error}</Text>
       )}
-    </View>
+      {!user && m.status !== "streaming" && (
+        <MessageActions
+          message={m}
+          onReply={onReply && (() => onReply(m))}
+          onFork={onFork && m.status === "complete" && !m.parentId && !m.side ? () => onFork(m) : undefined}
+        />
+      )}
+      {!!replies && onReplies && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => onReplies(m)}
+          hitSlop={8}
+          style={styles.replies}
+        >
+          <Reply size={13} color={t.accent} />
+          <Text style={[styles.note, { color: t.accent }]}>
+            {replies} {replies === 1 ? "reply" : "replies"}
+          </Text>
+        </Pressable>
+      )}
+    </Pressable>
   );
 });
 
 /** A line across the thread with a note in the middle, for compactions and handoffs. */
+/** The desktop's MessageActions: when it was sent, copy, fork, reply. */
+function MessageActions({
+  message,
+  onReply,
+  onFork,
+}: {
+  message: ChatMessage;
+  onReply?: () => void;
+  onFork?: () => void;
+}) {
+  const t = useTheme();
+  const [copied, setCopied] = useState(false);
+  return (
+    <View style={styles.actions}>
+      <Text style={[styles.meta, { color: t.faint }]}>{sentLabel(message.ended ?? message.created, new Date())}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copied ? "Copied" : "Copy answer"}
+        hitSlop={8}
+        onPress={() =>
+          void Clipboard.setStringAsync(message.body).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+        }
+      >
+        {copied ? <Check size={16} color={t.muted} /> : <Copy size={16} color={t.muted} />}
+      </Pressable>
+      {onFork && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Fork into a new thread" hitSlop={8} onPress={onFork}>
+          <Split size={16} color={t.muted} />
+        </Pressable>
+      )}
+      {onReply && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Reply to message" hitSlop={8} onPress={onReply}>
+          <Reply size={16} color={t.muted} />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 function StatusRow({
   children,
   failed,
@@ -145,20 +263,83 @@ function HandoffRow({ message: m }: { message: ChatMessage }) {
 function ChangedFiles({
   files,
   onOpen,
+  onOpenAll,
+  onRewind,
 }: {
   files: TurnFileChange[];
   onOpen: (file: TurnFileChange) => void;
+  onOpenAll?: () => void;
+  onRewind?: Rewind;
 }) {
   const t = useTheme();
+  const [working, setWorking] = useState(false);
   const add = files.reduce((n, f) => n + f.additions, 0),
     del = files.reduce((n, f) => n + f.deletions, 0);
+  const reverted = files.filter((f) => f.revertedBy).length;
+  const redo = reverted === files.length;
+  // The desktop's ChangedFilesCard: confirm a rollback of several files, and
+  // offer to overwrite when later edits overlap it.
+  const rewind = async (mode: "revert" | "redo", force = false) => {
+    if (!onRewind) return;
+    setWorking(true);
+    try {
+      const { conflicts } = await onRewind(null, mode, force);
+      if (conflicts.length)
+        Alert.alert(
+          "Nothing was changed",
+          `${conflicts.length === 1 ? `${conflicts[0]!.split("/").at(-1)} was` : `${conflicts.length} files were`} edited after ${mode === "revert" ? "this turn" : "the rollback"} in ways that overlap it.`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Overwrite anyway", style: "destructive", onPress: () => void rewind(mode, true) },
+          ],
+        );
+    } catch (e) {
+      Alert.alert("Couldn't roll back", e instanceof Error ? e.message : String(e));
+    } finally {
+      setWorking(false);
+    }
+  };
   return (
     <View style={[styles.files, { borderColor: t.border, backgroundColor: t.raised }]}>
       <View style={[styles.filesHeader, { borderColor: t.border }]}>
-        <Text style={[styles.filesTitle, { color: t.text }]}>
-          {files.length === 1 ? "1 file changed" : `${files.length} files changed`}
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="Opens everything this turn changed"
+          disabled={!onOpenAll}
+          onPress={onOpenAll}
+          style={styles.filesTitleWrap}
+        >
+          <Text style={[styles.filesTitle, { color: t.text }]}>
+            {files.length === 1 ? "1 file changed" : `${files.length} files changed`}
+          </Text>
+        </Pressable>
         <Counts add={add} del={del} />
+        {onRewind && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={redo ? "Redo this turn's changes" : "Roll back this turn's changes"}
+            disabled={working}
+            hitSlop={8}
+            onPress={() =>
+              redo
+                ? void rewind("redo")
+                : files.length - reverted > 1
+                  ? Alert.alert(
+                      `Roll back ${files.length - reverted} files?`,
+                      "They go back to how they were before this turn. Later edits are kept where they merge.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Roll back", style: "destructive", onPress: () => void rewind("revert") },
+                      ],
+                    )
+                  : void rewind("revert")
+            }
+            style={[styles.rewind, working && { opacity: 0.5 }]}
+          >
+            {redo ? <Redo2 size={14} color={t.muted} /> : <Undo2 size={14} color={t.muted} />}
+            <Text style={[styles.count, { color: t.muted }]}>{redo ? "Redo" : "Roll back"}</Text>
+          </Pressable>
+        )}
       </View>
       {files.map((f) => {
         const slash = f.path.lastIndexOf("/");
@@ -249,6 +430,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   filesTitle: { fontSize: type.small, fontWeight: "600" },
+  filesTitleWrap: { flex: 1 },
+  rewind: { flexDirection: "row", alignItems: "center", gap: 5, marginLeft: 12 },
+  side: { borderStyle: "dashed", borderWidth: 1 },
+  replies: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
+  actions: { flexDirection: "row", alignItems: "center", gap: 18, marginTop: 2 },
   file: {
     flexDirection: "row",
     alignItems: "center",

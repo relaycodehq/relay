@@ -1,7 +1,11 @@
-import { Platform, useColorScheme } from "react-native";
+import { createContext, useContext } from "react";
+import { Platform } from "react-native";
+import type { PhonePalette } from "../../../shared/remote";
 
-// The desktop's palettes (src/styles.css), so both apps read as one product.
+// Relay's own palettes (src/lib/themes' relayDark and relayLight), for before
+// the desktop has said which theme it wears.
 const dark = {
+  kind: "dark" as "light" | "dark",
   background: "#1e1e21",
   sidebar: "#232326",
   raised: "#28282c",
@@ -22,7 +26,9 @@ const dark = {
   danger: "#e56370",
   code: "#18181b",
 };
-const light: typeof dark = {
+export type Palette = typeof dark;
+const light: Palette = {
+  kind: "light",
   background: "#ffffff",
   sidebar: "#ececee",
   raised: "#f7f7f8",
@@ -43,10 +49,47 @@ const light: typeof dark = {
   danger: "#c9434f",
   code: "#f4f4f6",
 };
-export type Palette = typeof dark;
+export const builtIn = { dark, light };
+
+/** `a` blended into `b`; `amount` of `a`. */
+export function mix(a: string, b: string, amount: number) {
+  const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const x = channels(a),
+    y = channels(b);
+  return `#${x
+    .map((v, i) => Math.round(v * amount + y[i]! * (1 - amount)).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/** The desktop's theme in one mode, filled out to everything the phone draws. */
+export function fromDesktop(p: PhonePalette): Palette {
+  const base = builtIn[p.kind];
+  return {
+    ...base,
+    kind: p.kind,
+    background: p.surface,
+    sidebar: p.sidebar,
+    raised: p.inbox,
+    toolbar: p.toolbar,
+    text: p.text,
+    muted: p.muted,
+    faint: mix(p.muted, p.surface, 0.62),
+    border: p.border,
+    hover: p.hover,
+    selected: p.selected,
+    accent: p.accent,
+    accentSoft: p.accentSoft,
+    onAccent: p.onAccent,
+    addition: p.diffAddition,
+    deletion: p.diffDeletion,
+    code: mix(p.surface, p.kind === "dark" ? "#000000" : p.text, 0.9),
+  };
+}
+
+export const ThemeContext = createContext<Palette>(dark);
 
 export function useTheme(): Palette {
-  return useColorScheme() === "light" ? light : dark;
+  return useContext(ThemeContext);
 }
 
 export const mono = Platform.select({

@@ -3,25 +3,66 @@ import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { lexer, type Token, type Tokens } from "marked";
 import { mono, type, useTheme, type Palette } from "./theme";
 
+/**
+ * What pressing a link's destination or a piece of inline code does, when it
+ * names something the app can open; nothing leaves it as text.
+ */
+export type OpenLink = (value: string, inline: boolean) => (() => void) | undefined;
+
 /** An agent's answer: the markdown agents actually write, drawn natively. */
 export const Markdown = memo(function Markdown({
   text,
   small,
+  onLink,
 }: {
   text: string;
   /** The size of an agent's commentary between tool calls. */
   small?: boolean;
+  /** Files and folders the answer names; web links open without it. */
+  onLink?: OpenLink;
 }) {
   const theme = useTheme();
   const tokens = lexer(text);
   return (
     <View style={styles.root}>
-      <Small.Provider value={!!small}>{blocks(tokens, theme)}</Small.Provider>
+      <Small.Provider value={!!small}>
+        <Links.Provider value={onLink}>{blocks(tokens, theme)}</Links.Provider>
+      </Small.Provider>
     </View>
   );
 });
 
 const Small = createContext(false);
+const Links = createContext<OpenLink | undefined>(undefined);
+
+/** Inline code; a path in the thread's folder opens, in the accent colour. */
+function CodeSpan({ children }: { children: string }) {
+  const t = useTheme();
+  const open = useContext(Links)?.(children.trim(), true);
+  return (
+    <Text
+      accessibilityRole={open ? "link" : undefined}
+      onPress={open}
+      style={[styles.codespan, { backgroundColor: t.code, color: open ? t.accent : t.text }]}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/** A web link opens in the browser and a file on the phone; any other stays text, as on the desktop. */
+function Link({ href, children }: { href: string; children: ReactNode }) {
+  const t = useTheme();
+  const file = useContext(Links)?.(href, false);
+  const open = file ?? (/^https?:\/\//i.test(href) ? () => void Linking.openURL(href) : undefined);
+  return open ? (
+    <Text accessibilityRole="link" style={{ color: t.accent }} onPress={open}>
+      {children}
+    </Text>
+  ) : (
+    <Text>{children}</Text>
+  );
+}
 
 function Bullet({ children }: { children: string }) {
   const t = useTheme();
@@ -190,25 +231,13 @@ function inline(tokens: Token[] | undefined, t: Palette): ReactNode[] {
           </Text>
         );
       case "codespan":
-        return (
-          <Text
-            key={i}
-            style={[styles.codespan, { backgroundColor: t.code, color: t.text }]}
-          >
-            {decode((token as Tokens.Codespan).text)}
-          </Text>
-        );
+        return <CodeSpan key={i}>{decode((token as Tokens.Codespan).text)}</CodeSpan>;
       case "link": {
         const link = token as Tokens.Link;
-        const web = /^https?:\/\//i.test(link.href);
         return (
-          <Text
-            key={i}
-            style={{ color: t.accent }}
-            onPress={web ? () => void Linking.openURL(link.href) : undefined}
-          >
+          <Link key={i} href={link.href}>
             {inline(link.tokens, t)}
-          </Text>
+          </Link>
         );
       }
       case "br":

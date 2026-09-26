@@ -28,11 +28,13 @@ const chat = (messages: RemoteChat["messages"]): RemoteChat => ({
   id: "c",
   projectId: "p",
   title: "T",
+  scope: { kind: "project" },
   messages,
   running: true,
   root: "/r",
   earlier: 0,
   queue: [],
+  scheduled: [],
 });
 
 it("fills messages the desktop only named from the ones the phone holds", () => {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { maxRemoteHistory, remoteHistory } from "../../../shared/remote";
 import { useRemote } from "./RemoteProvider";
+import { loadThread, saveThread } from "./offline";
 import {
   applyMessage,
   applyPatch,
@@ -18,6 +20,19 @@ export function useThread(id: string) {
   current.current = thread;
   const loading = useRef<Promise<void> | undefined>(undefined);
   const again = useRef(false);
+  // How many of the latest messages to hold; "Load earlier" asks for a page more.
+  const [history, setHistory] = useState(remoteHistory);
+
+  // The copy from the last visit, readable before (or without) the computer.
+  useEffect(() => {
+    let live = true;
+    void loadThread(id).then(
+      (cached) => live && cached && setThread((t) => t ?? cached),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id]);
 
   const load = useCallback(async () => {
     // One fetch at a time; a request during one runs once more after it.
@@ -27,15 +42,24 @@ export function useThread(id: string) {
     }
     const run = async () => {
       try {
-        const patch = await remote.call("chat", id, knownOf(current.current));
+        const patch = await remote.call(
+          "chat",
+          id,
+          knownOf(current.current),
+          history,
+        );
         let next: Thread;
         try {
           next = applyPatch(current.current, patch);
         } catch (e) {
           if (!(e instanceof MissingMessage)) throw e;
-          next = applyPatch(undefined, await remote.call("chat", id));
+          next = applyPatch(
+            undefined,
+            await remote.call("chat", id, undefined, history),
+          );
         }
         setThread((held) => keepNewer(next, held));
+        saveThread(id, next);
         setError(undefined);
       } catch (e) {
         setError(e instanceof Error ? e : new Error(String(e)));
@@ -49,7 +73,7 @@ export function useThread(id: string) {
       loading.current = undefined;
     })();
     return loading.current;
-  }, [remote.call, id]);
+  }, [remote.call, id, history]);
 
   // Loads on open, and after every reconnect.
   useEffect(() => {
@@ -74,5 +98,16 @@ export function useThread(id: string) {
     if (signature && current.current) void load();
   }, [signature, load]);
 
-  return { thread, error, reload: load, summary };
+  const loadEarlier = useCallback(
+    () => setHistory((h) => Math.min(maxRemoteHistory, h + remoteHistory)),
+    [],
+  );
+
+  return {
+    thread,
+    error,
+    reload: load,
+    summary,
+    loadEarlier: history < maxRemoteHistory ? loadEarlier : undefined,
+  };
 }

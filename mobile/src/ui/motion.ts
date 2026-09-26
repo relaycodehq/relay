@@ -37,3 +37,20 @@ export function useTick(ms: number, enabled = true) {
   }, [ms, enabled, foreground]);
   return tick;
 }
+
+/** The time, refreshed every `ms` while the app is in front and on coming back. */
+export function useNow(ms: number) {
+  const foreground = useForeground();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!foreground) return;
+    const tick = () => setNow(Date.now());
+    const back = setTimeout(tick, 0);
+    const timer = setInterval(tick, ms);
+    return () => {
+      clearTimeout(back);
+      clearInterval(timer);
+    };
+  }, [ms, foreground]);
+  return now;
+}

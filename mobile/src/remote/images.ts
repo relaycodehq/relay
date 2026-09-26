@@ -1,0 +1,69 @@
+import * as ImagePicker from "expo-image-picker";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+
+/** A photo ready to send: the desktop takes JPEG, PNG or WebP data URLs up to 1.1 MB, three at most. */
+export interface Attachment {
+  uri: string;
+  name: string;
+  mimeType: "image/jpeg";
+  dataUrl: string;
+}
+
+export const maxImages = 3;
+const maxChars = 1_100_000;
+/** Tried in turn until the photo fits: long side in pixels, JPEG quality. */
+const steps: [number, number][] = [
+  [1600, 0.8],
+  [1280, 0.7],
+  [1024, 0.6],
+  [800, 0.5],
+];
+
+export async function pickImages(
+  from: "library" | "camera",
+  limit: number,
+): Promise<Attachment[]> {
+  if (limit < 1) return [];
+  const options: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ["images"],
+    allowsMultipleSelection: from === "library" && limit > 1,
+    selectionLimit: limit,
+    quality: 1,
+  };
+  if (from === "camera") {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) throw new Error("Relay needs the camera to take a photo.");
+  }
+  const result =
+    from === "camera"
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync(options);
+  if (result.canceled) return [];
+  return Promise.all(result.assets.slice(0, limit).map(prepare));
+}
+
+async function prepare(asset: ImagePicker.ImagePickerAsset): Promise<Attachment> {
+  const long = Math.max(asset.width, asset.height);
+  for (const [side, compress] of steps) {
+    const context = ImageManipulator.manipulate(asset.uri);
+    if (long > side)
+      context.resize(
+        asset.width >= asset.height ? { width: side } : { height: side },
+      );
+    const image = await context.renderAsync();
+    const saved = await image.saveAsync({
+      format: SaveFormat.JPEG,
+      compress,
+      base64: true,
+    });
+    const dataUrl = `data:image/jpeg;base64,${saved.base64}`;
+    if (dataUrl.length <= maxChars)
+      return {
+        uri: saved.uri,
+        name: `${(asset.fileName ?? "photo").replace(/\.[^.]+$/, "").slice(0, 100)}.jpg`,
+        mimeType: "image/jpeg",
+        dataUrl,
+      };
+  }
+  throw new Error("That photo is too large to send.");
+}

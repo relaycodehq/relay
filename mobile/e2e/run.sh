@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Runs e2e/remote.yaml on a booted Android emulator: a throwaway desktop Relay
 # (built first: vite build + build-electron in the repo), Metro, Expo Go.
+# Turn off Expo Go's floating "Tools button" (its dev menu) once per emulator:
+# it floats over the thread header and swallows taps on the ⋯ menu.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"

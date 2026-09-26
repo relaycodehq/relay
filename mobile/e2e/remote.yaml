@@ -1,22 +1,24 @@
 # The phone app against a real desktop Relay: pair, start a supervised thread,
-# approve the agent's command, answer its question. Run with e2e/run.sh.
+# approve the agent's command, answer its question, then commit what the agent
+# changed. Run with e2e/run.sh.
 appId: host.exp.exponent
 ---
 - openLink: ${PAIR_LINK}
 - extendedWaitUntil:
     visible: "Pair this phone with.*"
-    timeout: 60000
+    # A cold Expo Go loads the whole bundle first.
+    timeout: 180000
 - tapOn: "Pair"
 - extendedWaitUntil:
-    visible: "No threads yet.*"
+    visible: "Inbox zero"
     timeout: 20000
 - takeScreenshot: ${OUT}/1-threads
 - tapOn: "New thread"
-- tapOn: "Supervised"
-- tapOn: "What should we work on?"
+- tapOn: "Permissions"
+- tapOn: "Supervised.*"
+- tapOn: "Message.*"
 - inputText: "fixture request approval"
-- hideKeyboard
-- tapOn: "Start thread"
+- tapOn: "Send"
 - extendedWaitUntil:
     visible: "Run this command?"
     timeout: 20000
@@ -25,7 +27,7 @@ appId: host.exp.exponent
 - extendedWaitUntil:
     visible: "Approval flow completed."
     timeout: 20000
-- tapOn: "Message"
+- tapOn: "Message.*"
 - inputText: "fixture ask question"
 - tapOn: "Send"
 - extendedWaitUntil:
@@ -37,3 +39,22 @@ appId: host.exp.exponent
     notVisible: "Which approach should the plan use?"
     timeout: 20000
 - takeScreenshot: ${OUT}/4-answered
+- tapOn: "Message.*"
+- inputText: "fixture edit files"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: ".*2 files changed.*"
+    timeout: 30000
+- tapOn: "Thread actions"
+- tapOn: "Changes"
+- extendedWaitUntil:
+    visible: ".*Working changes.*"
+    timeout: 20000
+# The sandbox has no remote, so the one-step button just commits everything.
+- tapOn: "Commit message"
+- inputText: "Commit from the phone"
+- tapOn: "Commit"
+- extendedWaitUntil:
+    visible: ".*No uncommitted changes.*"
+    timeout: 20000
+- takeScreenshot: ${OUT}/5-committed
