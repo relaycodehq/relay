@@ -105,7 +105,7 @@
   }
 }
 
-/* While the agent thinks: Claude's turning asterisk, Codex's braille spinner. */
+/* While the agent thinks: Claude's turning asterisk, a braille spinner for the rest. */
 .thinking-glyph {
   flex: none;
   width: 14px;
@@ -114,14 +114,15 @@
   line-height: 1;
   text-align: center;
 }
-.thinking-glyph.claude::before {
-  content: "\2733";
-  animation: thinking-claude 1.5s steps(1) infinite;
-}
-.thinking-glyph.codex::before {
+.thinking-glyph::before {
   content: "\280b";
   font-size: 14px;
-  animation: thinking-codex 0.8s steps(1) infinite;
+  animation: thinking-spinner 0.8s steps(1) infinite;
+}
+.thinking-glyph.claude::before {
+  content: "\2733";
+  font-size: inherit;
+  animation: thinking-claude 1.5s steps(1) infinite;
 }
 @keyframes thinking-claude {
   0% {
@@ -155,7 +156,7 @@
     content: "\2722";
   }
 }
-@keyframes thinking-codex {
+@keyframes thinking-spinner {
   0% {
     content: "\280b";
   }

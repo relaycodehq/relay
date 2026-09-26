@@ -396,7 +396,7 @@ function ThinkingWord({ seed }: { seed: string }) {
   );
 }
 
-/** Claude's turning asterisk, or a terminal braille spinner for Codex. */
+/** Claude's turning asterisk, or a terminal braille spinner for the other agents. */
 function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
   return <span className={`thinking-glyph ${provider}`} aria-hidden />;
 }
