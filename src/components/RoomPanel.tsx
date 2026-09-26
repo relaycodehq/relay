@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import type { Pull } from "../../shared/types";
+import { agentName, agents, helperProviders } from "../../shared/agents";
 import type { QuestionTarget } from "../../shared/questions";
 import {
   roomMention,
@@ -261,8 +262,10 @@ export function RoomPanel({
         base: pull.merge_base,
         ...(draft.context ?? (attachFile && path ? { path } : {})),
       },
-      choice,
-      claude,
+      choice:
+        mention?.provider === "claude"
+          ? { model: claude.model, reasoningEffort: claude.effort, fast: false }
+          : choice,
     };
     setDraft((d) => ({ ...d, pending: submission }));
     try {
@@ -632,8 +635,11 @@ export function RoomPanel({
                   }}
                 >
                   <option value="people">People</option>
-                  <option value="codex">My Codex</option>
-                  <option value="claude">My Claude</option>
+                  {helperProviders.map((p) => (
+                    <option key={p} value={p}>
+                      My {agentName(p)}
+                    </option>
+                  ))}
                 </select>
               </label>
               <small className="room-send-hint">
@@ -696,7 +702,7 @@ export function RoomPanel({
                 >
                   <Settings2 size={13} />
                 </IconButton>
-                {mention?.provider !== "claude" && (
+                {(!mention || agents[mention.provider].fast) && (
                   <span
                     className={`room-speed ${choice.fast ? "fast" : ""}`}
                     title={choice.fast ? "Fast mode" : "Standard speed"}

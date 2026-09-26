@@ -275,23 +275,38 @@ export function roomAppUrl(value: string): string {
   );
   return `${roomProtocol}://join?server=${encodeURIComponent(invitation.server)}${new URL(link).hash}`;
 }
-export const sendRoomSchema = messageInputSchema
-  .omit({ context: true })
-  .extend({
-    context: contextSchema.safeExtend({ excerpt: z.never().optional() }),
-    choice: aiSettingsSchema.shape.questions,
-    claude: z
-      .object({
-        model: z
-          .string()
-          .max(160)
-          .regex(/^[a-zA-Z0-9._:/-]*$/),
-        effort: z.enum(["", "low", "medium", "high", "xhigh", "max"]),
-      })
-      .strict()
-      .default({ model: "", effort: "" }),
-  })
-  .strict();
+/**
+ * Sends kept in a room draft from before `choice` carried every agent's pick
+ * hold Claude's in a `claude` field; a retry folds it into `choice`.
+ */
+const legacyClaudePick = (value: unknown) => {
+  if (!value || typeof value !== "object" || !("claude" in value)) return value;
+  const { claude, ...send } = value as Record<string, unknown> & {
+    claude?: { model?: string; effort?: string };
+    body?: string;
+  };
+  return roomMention(String(send.body ?? ""))?.provider === "claude"
+    ? {
+        ...send,
+        choice: {
+          model: claude?.model ?? "",
+          reasoningEffort: claude?.effort ?? "",
+          fast: false,
+        },
+      }
+    : send;
+};
+export const sendRoomSchema = z.preprocess(
+  legacyClaudePick,
+  messageInputSchema
+    .omit({ context: true })
+    .extend({
+      context: contextSchema.safeExtend({ excerpt: z.never().optional() }),
+      /** The asked agent's model and effort. */
+      choice: aiSettingsSchema.shape.questions,
+    })
+    .strict(),
+);
 export type SendRoom = z.infer<typeof sendRoomSchema>;
 export interface RoomPage {
   messages: RoomMessage[];

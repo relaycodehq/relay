@@ -7,7 +7,8 @@ import type { PullRef } from "../../shared/types";
 import { questionContext } from "../questions";
 import { inspectFolder } from "../repository";
 import { findExecutable } from "../executables";
-import { choiceLabel, reasoningEffortSchema } from "../../shared/settings";
+import { choiceLabel } from "../../shared/settings";
+import { agentName, type HelperProvider } from "../../shared/agents";
 import {
   roomMention,
   roomInvitation,
@@ -47,6 +48,7 @@ export class RoomService {
   private active: {
     id: string;
     key: string;
+    provider: HelperProvider;
     abort: AbortController;
     job?: Promise<void>;
   } | null = null;
@@ -442,10 +444,12 @@ export class RoomService {
       throw new Error(`Write a question after @${mention.provider}.`);
     if (mention && this.active)
       throw new Error(
-        "Your Codex is answering another question. Stop it or wait before asking again.",
+        `Your ${agentName(this.active.provider)} is answering another question. Stop it or wait before asking again.`,
       );
     if (mention && !c.dir)
-      throw new Error("Link your local repository folder before asking Codex.");
+      throw new Error(
+        `Link your local repository folder before asking ${agentName(mention.provider)}.`,
+      );
     if (mention) await findExecutable(mention.provider);
     const { connection, room } = await this.ready(c);
     const pull = await c.client.pull(c.ref);
@@ -489,8 +493,15 @@ export class RoomService {
     const abort = new AbortController();
     // Lock before awaiting reservation; a double send must not launch two local processes.
     if (this.active)
-      throw new Error("Your Codex already has an active question.");
-    this.active = { id: input.id, key: c.key, abort };
+      throw new Error(
+        `Your ${agentName(this.active.provider)} already has an active question.`,
+      );
+    this.active = {
+      id: input.id,
+      key: c.key,
+      provider: mention.provider,
+      abort,
+    };
     try {
       const topic = await this.request<RoomMessage[]>(
         connection.server,
@@ -507,10 +518,7 @@ export class RoomService {
         "POST",
         {
           requestId: request.id,
-          model:
-            mention.provider === "codex"
-              ? choiceLabel(input.choice)
-              : `${input.claude.model || "Claude default"}${input.claude.effort ? ` · ${input.claude.effort}` : ""}`,
+          model: choiceLabel(input.choice, mention.provider),
         },
       );
       if (!reservation.started) {
@@ -525,6 +533,7 @@ export class RoomService {
         reservation.message.id,
         prompt,
         input,
+        mention.provider,
         abort,
       ).catch(() => {});
     } catch (e) {
@@ -538,6 +547,7 @@ export class RoomService {
     id: string,
     prompt: string,
     input: SendRoom,
+    provider: HelperProvider,
     abort: AbortController,
   ) {
     let text = "",
@@ -564,7 +574,7 @@ export class RoomService {
     };
     const heartbeat = setInterval(publish, 2000);
     try {
-      const options = {
+      text = await agentRuntime(provider).run({
         cwd: c.dir!,
         prompt,
         choice: input.choice,
@@ -572,22 +582,7 @@ export class RoomService {
         onText: (value: string) => {
           text = value;
         },
-      };
-      const provider = roomMention(input.body)?.provider ?? "codex";
-      text = await agentRuntime(provider).run(
-        provider === "claude"
-          ? {
-              ...options,
-              choice: {
-                model: input.claude.model,
-                reasoningEffort:
-                  reasoningEffortSchema.safeParse(input.claude.effort).data ??
-                  "",
-                fast: false,
-              },
-            }
-          : options,
-      );
+      });
       status = "completed";
     } catch (e) {
       status = abort.signal.aborted ? "cancelled" : "failed";
@@ -595,7 +590,7 @@ export class RoomService {
         ? "Stopped by you."
         : e instanceof Error
           ? e.message.slice(0, 1000)
-          : "Codex failed.";
+          : `${agentName(provider)} failed.`;
     } finally {
       clearInterval(heartbeat);
       publish();

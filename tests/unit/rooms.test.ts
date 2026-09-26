@@ -339,3 +339,26 @@ describe("mentions and transport", () => {
     }
   });
 });
+it("retries a room send saved with Claude's old separate pick", async () => {
+  const { sendRoomSchema } = await import("../../shared/rooms");
+  const saved = (body: string) => ({
+    id: "00000000-0000-4000-8000-000000000001",
+    body,
+    parentId: null,
+    context: { head: "a".repeat(40), base: "b".repeat(40) },
+    choice: { model: "gpt-5.5", reasoningEffort: "high", fast: true },
+    claude: { model: "opus", effort: "max" },
+  });
+  expect(sendRoomSchema.parse(saved("@claude Why?")).choice).toEqual({
+    model: "opus",
+    reasoningEffort: "max",
+    fast: false,
+  });
+  const codex = sendRoomSchema.parse(saved("@codex Why?"));
+  expect(codex.choice).toEqual({
+    model: "gpt-5.5",
+    reasoningEffort: "high",
+    fast: true,
+  });
+  expect("claude" in codex).toBe(false);
+});
