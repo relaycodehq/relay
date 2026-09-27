@@ -185,6 +185,11 @@ and pauses queued work after Stop or restart. The T3 MIT license above applies.
 
 Relay’s runtime permission labels/descriptions, Build/Plan toggle, Codex sandbox/reviewer mapping, approval action arrangement, and numbered question choices are adapted from T3 Code at the pinned reference revision (MIT license above): `runtimeModeConfig.ts`, `ChatComposer.tsx` (`ComposerFooterModeControls`), `ComposerPendingApprovalActions.tsx`, `ComposerPendingUserInputPanel.tsx`, `CodexSessionRuntime.ts` and `ClaudeAdapter.ts`. Relay supplies its own persistence, request validation, local-only approval broker and styles.
 
+## TypeScript
+
+Microsoft TypeScript 5.9.3 ships with Relay for live project checks when a project’s own compiler has no language service API. Licensed under the Apache License 2.0; the license and Microsoft’s third-party notices are included beside it in `typescript-5/`.
+Source: https://github.com/microsoft/TypeScript
+
 ## Anthropic Claude Agent SDK
 
 `@anthropic-ai/claude-agent-sdk` version 0.3.276 is used for Claude project sessions.

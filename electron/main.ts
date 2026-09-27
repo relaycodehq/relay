@@ -171,7 +171,14 @@ let loginRestore: "idle" | "unlocking" | "failed" = "idle";
 let restoreGeneration = 0;
 let windowReady = false;
 const root = join(__dirname, "../dist/index.html");
-const projectChecks = new ProjectChecks(join(__dirname, "checks-worker.mjs"));
+// The worker runs under the system Node.js, which cannot read inside app.asar.
+const projectChecks = new ProjectChecks(
+  join(__dirname, "checks-worker.mjs"),
+  join(__dirname, "typescript-5", "lib", "typescript.js").replace(
+    /app\.asar([\\/])/,
+    "app.asar.unpacked$1",
+  ),
+);
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init));
 const dev = process.env.RELAY_DEV_URL;

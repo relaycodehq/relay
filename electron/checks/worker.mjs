@@ -1,28 +1,27 @@
 // This disposable process owns TypeScript's project service and Angular's official plugin.
 // It never emits files or runs build/package scripts. Open buffers stay in memory.
+// TypeScript 7 has no JavaScript server API; its projects go to worker-lsp.mjs.
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { resolve, relative, isAbsolute, dirname, sep } from "node:path";
+import { resolve, dirname } from "node:path";
 import { createInterface } from "node:readline";
+import {
+  checkedFile,
+  hash,
+  projectPaths,
+  report,
+  send,
+  sourceResult,
+} from "./worker-shared.mjs";
+import { startLanguageServer } from "./worker-lsp.mjs";
 const root = process.argv[2],
   target = JSON.parse(process.argv[3]),
-  configFile = resolve(root, target.config);
+  configFile = resolve(root, target.config),
+  // Relay's own TypeScript 5.9 for projects whose compiler has no server API.
+  fallbackTypeScript = process.argv[5] || undefined;
 const req = createRequire(configFile),
-  send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
-const hash = (text) => createHash("sha256").update(text).digest("hex");
-const local = (path) => {
-  const p = relative(root, path);
-  return (
-    p &&
-    p !== ".." &&
-    !p.startsWith(".." + sep) &&
-    !isAbsolute(p) &&
-    !p.split(/[\\/]/).some((p) => p === "node_modules" || p === ".git")
-  );
-};
-const pathName = (path) => relative(root, path).replaceAll("\\", "/");
+  { local, pathName } = projectPaths(root);
 const configurationWatches = new Map(),
   overlays = new Map();
 let seq = 0,
@@ -38,7 +37,8 @@ let seq = 0,
   paused = process.argv[4] === "paused",
   pending = false,
   configurationReads,
-  configurationKey;
+  configurationKey,
+  engine;
 function read(path) {
   path = resolve(path);
   configurationReads?.add(path);
@@ -182,12 +182,7 @@ function check() {
       raw.push(...ls.getCompilerOptionsDiagnostics());
       // Angular's TS plugin includes external/inline template diagnostics for each component.
       for (const path of project.getFileNames(true, true)) {
-        if (
-          !local(path) ||
-          !/\.[cm]?[jt]sx?$/.test(path) ||
-          path.includes(".ngtypecheck.")
-        )
-          continue;
+        if (!local(path) || !checkedFile(path)) continue;
         checked.add(resolve(path));
         raw.push(
           ...ls.getSyntacticDiagnostics(path),
@@ -208,64 +203,17 @@ function check() {
           }
         }
     }
-    const all = [
-      ...new Map(
-        raw.map((d) => {
-          const item = serializeDiagnostic(d);
-          return [JSON.stringify(item), item];
-        }),
-      ).values(),
-    ];
-    // Errors must remain visible even when suggestions exceed the display limit.
-    const rank = { error: 0, warning: 1, info: 2 };
-    all.sort(
-      (a, b) =>
-        rank[a.severity] - rank[b.severity] ||
-        (a.path ?? "").localeCompare(b.path ?? "") ||
-        (a.line ?? 0) - (b.line ?? 0) ||
-        (a.column ?? 0) - (b.column ?? 0),
-    );
-    const files = {},
-      versions = new Map();
-    for (const path of checked) {
-      const text = snapshot(path);
-      if (text === undefined) continue;
-      const digest = hash(text);
-      versions.set(path, digest);
-      files[pathName(path)] = {
-        hash: digest,
-        errors: 0,
-        warnings: 0,
-        suggestions: 0,
-      };
-    }
-    for (const d of all)
-      if (d.path && files[d.path]) {
-        if (d.severity === "error") files[d.path].errors++;
-        if (d.severity === "warning") files[d.path].warnings++;
-        if (d.severity === "info") files[d.path].suggestions++;
-      }
-    // A concurrent disk edit invalidates these locations before they reach the UI.
-    for (const [path, digest] of versions) {
-      const text = read(path);
-      if (text === undefined || hash(text) !== digest) {
-        schedule();
-        return;
-      }
-    }
-    send({
-      type: "result",
+    const sent = report({
       seq,
-      diagnostics: all.slice(0, 1500),
-      files,
-      errors: all.filter((d) => d.severity === "error").length,
-      warnings: all.filter((d) => d.severity === "warning").length,
-      suggestions: all.filter((d) => d.severity === "info").length,
-      truncated: all.length > 1500,
-      ...(configError
-        ? { message: "Configuration errors prevent a complete project check." }
-        : {}),
+      diagnostics: raw.map(serializeDiagnostic),
+      checked,
+      pathName,
+      current: snapshot,
+      latest: read,
+      configError,
+      engine,
     });
+    if (!sent) schedule();
   } catch (e) {
     send({
       type: "failure",
@@ -312,21 +260,7 @@ function symbol(m) {
         "The file changed. Wait for live checks to catch up, then retry.",
       );
     if (m.kind === "source") {
-      if (Buffer.byteLength(text) > 2 * 1024 * 1024)
-        throw new Error("This file is too large to preview.");
-      send({
-        type: "symbol",
-        requestId: m.requestId,
-        seq,
-        result: {
-          display: "",
-          documentation: "",
-          locations: [],
-          truncated: false,
-          external: false,
-          source: { path: m.path, text, hash: hash(text) },
-        },
-      });
+      sourceResult(m, text, seq);
       return;
     }
     // Keep HTML in the selected Angular project; do not create another inferred project.
@@ -386,12 +320,25 @@ function symbol(m) {
     });
   }
 }
-try {
-  ts = req("typescript");
-  if (!ts.server?.ProjectService)
+function loadTypeScript(fallbackReason) {
+  const project = req("typescript");
+  if (project.server?.ProjectService && !fallbackReason) {
+    engine = `Checked by the project’s TypeScript ${project.version}.`;
+    return project;
+  }
+  const reason =
+    fallbackReason ??
+    `TypeScript ${project.version ?? "unknown"} has no language service API`;
+  if (!fallbackTypeScript || target.provider === "angular")
     throw new Error(
-      `TypeScript ${ts.version ?? "unknown"} does not provide the server API needed for live support. Use a project with a compatible TypeScript language service (tested with 5.9).`,
+      `${reason}. Use a project with a compatible TypeScript language service (tested with 5.9).`,
     );
+  const bundled = createRequire(fallbackTypeScript)(fallbackTypeScript);
+  engine = `Checked by Relay’s bundled TypeScript ${bundled.version} because ${reason}. Results can differ slightly from the project’s compiler.`;
+  return bundled;
+}
+async function startProjectService(fallbackReason) {
+  ts = loadTypeScript(fallbackReason);
   let angularPlugin;
   if (target.provider === "angular") {
     ng = await import(pathToFileURL(req.resolve("@angular/compiler-cli")).href);
@@ -550,11 +497,25 @@ try {
   });
   if (paused) pending = true;
   else check();
+}
+try {
+  const packageJson = req.resolve("typescript/package.json"),
+    version = JSON.parse(readFileSync(packageJson, "utf8")).version;
+  if (target.provider === "typescript" && parseInt(version) >= 7) {
+    try {
+      await startLanguageServer({ root, configFile, packageJson, paused });
+    } catch (e) {
+      await startProjectService(
+        `TypeScript ${version}’s language server did not start (${String(e?.message ?? e).slice(0, 500)})`,
+      );
+    }
+  } else await startProjectService();
 } catch (e) {
+  const missing = e?.code === "MODULE_NOT_FOUND";
   send({
     type: "failure",
     seq,
-    message: `Could not start ${target.provider === "angular" ? "Angular" : "TypeScript"} language support. Install the project’s dependencies${target.provider === "angular" ? " and a matching @angular/language-service (or @angular/language-server)" : ""}. ${String(e?.message ?? e).slice(0, 1000)}`,
+    message: `Could not start ${target.provider === "angular" ? "Angular" : "TypeScript"} language support.${missing ? ` Install the project’s dependencies${target.provider === "angular" ? " and a matching @angular/language-service (or @angular/language-server)" : ""}.` : ""} ${String(e?.message ?? e).slice(0, 1000)}`,
   });
   process.exit(1);
 }

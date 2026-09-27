@@ -1,0 +1,8 @@
+{
+  "name": "relay-checks-typescript",
+  "private": true,
+  "description": "TypeScript shipped with Relay for live checks of projects whose compiler has no language service API. Kept out of the root install so its tsc bin cannot replace the project's TypeScript 7.",
+  "dependencies": {
+    "typescript": "5.9.3"
+  }
+}

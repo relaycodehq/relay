@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
 import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -45,6 +46,35 @@ await build({
   banner: {
     js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
   },
+});
+
+// Live checks fall back to TypeScript 5.9 for projects whose compiler has no
+// language service API. It has its own install so its tsc bin stays out of
+// the root node_modules, and loads its lib.*.d.ts from beside typescript.js.
+const fallbackRoot = "packaging/checks-typescript",
+  fallback = join(fallbackRoot, "node_modules/typescript"),
+  fallbackOut = "dist-electron/typescript-5";
+if (!existsSync(fallback))
+  execFileSync(
+    "npm",
+    [
+      "ci",
+      "--prefix",
+      fallbackRoot,
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+    ],
+    { stdio: "inherit", shell: process.platform === "win32" },
+  );
+rmSync(fallbackOut, { recursive: true, force: true });
+for (const name of ["package.json", "LICENSE.txt", "ThirdPartyNoticeText.txt"])
+  cpSync(join(fallback, name), join(fallbackOut, name));
+cpSync(join(fallback, "lib"), join(fallbackOut, "lib"), {
+  filter: (path) =>
+    path === join(fallback, "lib") ||
+    /[\\/](typescript\.js|lib\.[^\\/]*\.d\.ts)$/.test(path),
+  recursive: true,
 });
 
 // node-pty loads its native binaries from beside its own lib/, so it ships as

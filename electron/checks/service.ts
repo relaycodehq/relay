@@ -1,7 +1,14 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
-import { mkdtemp, readFile, writeFile, rm, realpath } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  writeFile,
+  rm,
+  realpath,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { findExecutable } from "../executables";
@@ -49,6 +56,7 @@ const resultSchema = z.object({
   suggestions: z.number().int().nonnegative(),
   truncated: z.boolean(),
   message: z.string().max(2000).optional(),
+  engine: z.string().max(2000).optional(),
 });
 const symbolResultSchema = z.object({
   source: z
@@ -101,7 +109,14 @@ export class ProjectChecks {
   private generation = 0;
   private pendingKey?: string;
   private pausedKeys = new Set<string>();
-  constructor(private worker: string) {}
+  /**
+   * `fallbackTypeScript` is Relay's own typescript.js, used when a project's
+   * compiler has no language service API (TypeScript 7 whose server fails).
+   */
+  constructor(
+    private worker: string,
+    private fallbackTypeScript?: string,
+  ) {}
   stop(key?: string) {
     const s = this.session;
     if (key && s?.key !== key && this.pendingKey !== key) return;
@@ -215,6 +230,15 @@ export class ProjectChecks {
     const worker = join(runtime, "worker.mjs");
     try {
       await writeFile(worker, await readFile(this.worker), { mode: 0o600 });
+      // Unbundled (tests), worker.mjs imports its worker-*.mjs siblings.
+      if (basename(this.worker) === "worker.mjs")
+        for (const name of await readdir(dirname(this.worker)))
+          if (/^worker-.+\.mjs$/.test(name))
+            await writeFile(
+              join(runtime, name),
+              await readFile(join(dirname(this.worker), name)),
+              { mode: 0o600 },
+            );
     } catch (e) {
       await rm(runtime, { recursive: true, force: true });
       throw e;
@@ -240,6 +264,7 @@ export class ProjectChecks {
         local.path,
         JSON.stringify(target),
         paused ? "paused" : "",
+        this.fallbackTypeScript ?? "",
       ],
       { cwd: local.path, env, stdio: ["pipe", "pipe", "pipe"] },
     );

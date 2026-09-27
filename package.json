@@ -91,7 +91,8 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "dist-electron/node-pty/**"
+      "dist-electron/node-pty/**",
+      "dist-electron/typescript-5/**"
     ],
     "npmRebuild": false,
     "protocols": [

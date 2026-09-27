@@ -175,6 +175,7 @@ export function ProjectChecksButton({
                 {checks.info.note ??
                   "Angular TypeScript, template and compiler diagnostics. Uses your strictness settings; this does not bundle assets or run build scripts."}
               </p>
+              {s?.engine && <p className="field-note">{s.engine}</p>}
               {s?.message && <p className="checks-notice">{s.message}</p>}
               <div className="checks-summary" aria-live="polite">
                 {s?.status === "ready" && checks.enabled && !checks.error ? (

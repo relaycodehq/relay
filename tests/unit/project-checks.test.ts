@@ -28,6 +28,20 @@ afterEach(async () => {
   services.length = 0;
 });
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
+// Points the fixture at Relay's own TypeScript 7 (native compiler, no server API).
+async function useTypeScript7(root: string) {
+  await rm(join(root, "node_modules"), { recursive: true });
+  await mkdir(join(root, "node_modules"));
+  for (const name of ["typescript", "@typescript"])
+    await symlink(
+      resolve("node_modules", name),
+      join(root, "node_modules", name),
+    );
+}
+// Stands in for the TypeScript 5.9 that the build copies into the app.
+const fallbackTypeScript = resolve(
+  "tests/fixtures/language-toolchain/node_modules/typescript/lib/typescript.js",
+);
 const server = "https://git.example.test/gitea",
   ref = { owner: "Web", name: "web-store", number: 7 };
 async function ready(
@@ -278,14 +292,16 @@ describe("project language support", () => {
       })
       .toBe("failed");
   }, 30000);
-  it.each(["typescript", "angular"] as const)(
+  it.each(["typescript", "angular", "typescript 7"] as const)(
     "counts %s suggestions separately and refreshes strictness from config files",
-    async (provider) => {
+    async (variant) => {
+      const provider = variant === "angular" ? "angular" : "typescript";
       const { root, head } = await languageProject(
         server,
         provider === "angular",
       );
       roots.push(root);
+      if (variant === "typescript 7") await useTypeScript7(root);
       if (provider === "angular")
         await writeFile(join(root, "src/card.html"), "<h1>{{ title }}</h1>\n");
       const config = JSON.parse(
@@ -407,6 +423,115 @@ describe("project language support", () => {
       errors: 0,
       warnings: 0,
       suggestions: 1505,
+    });
+  }, 30000);
+  it("checks TypeScript 7 projects through its native language server", async () => {
+    const { root, head, git } = await languageProject(server);
+    roots.push(root);
+    await useTypeScript7(root);
+    const service = new ProjectChecks(resolve("electron/checks/worker.mjs"));
+    services.push(service);
+    await service.start(
+      "pr",
+      root,
+      server,
+      ref,
+      head,
+      "typescript:tsconfig.json",
+    );
+    let s = await ready(service, head);
+    expect(s.engine).toContain("TypeScript 7.0.2 language server");
+    expect(s.errors).toBe(1);
+    expect(s.diagnostics[0]).toMatchObject({
+      path: reviewPath,
+      line: 3,
+      column: 14,
+      code: "TS2322",
+    });
+    const query: SymbolQuery = {
+      path: reviewPath,
+      line: 4,
+      column: 22,
+      hash: hash(reviewCode),
+      kind: "definition",
+    };
+    const def = await service.symbol("pr", head, query);
+    expect(def.locations[0]).toMatchObject({
+      path: "src/greeting.ts",
+      line: 2,
+      preview: "export function greet(name: string) {",
+    });
+    expect(def.display).toContain("greet");
+    expect(def.documentation).toContain("friendly");
+    const refs = await service.symbol("pr", head, {
+      ...query,
+      kind: "references",
+    });
+    expect(refs.locations.length).toBeGreaterThanOrEqual(4);
+    await service.update(
+      "pr",
+      head,
+      reviewPath,
+      reviewCode.replace("= 42", '= "Ready"'),
+    );
+    s = await ready(service, head, (s) => s.errors === 0);
+    expect(s.files[reviewPath].hash).toBe(
+      hash(reviewCode.replace("= 42", '= "Ready"')),
+    );
+    await service.update("pr", head, reviewPath, null);
+    await ready(service, head, (s) => s.errors === 1);
+    // A dependency changing on disk rechecks the files that import it.
+    await writeFile(
+      join(root, "src/greeting.ts"),
+      "export function greet(name: number) { return name; }\n",
+    );
+    s = await ready(service, head, (s) => s.errors === 3);
+    expect(s.diagnostics.filter((d) => d.code === "TS2345")).toHaveLength(2);
+    expect(await readFile(join(root, reviewPath), "utf8")).toBe(reviewCode);
+    expect(git("status", "--porcelain")).toBe("M src/greeting.ts");
+  }, 60000);
+  it("falls back to Relay's TypeScript when a TypeScript 7 language server cannot start", async () => {
+    const { root, head } = await languageProject(server);
+    roots.push(root);
+    const broken = join(root, "node_modules/typescript");
+    await rm(join(root, "node_modules"), { recursive: true });
+    await mkdir(join(broken, "lib"), { recursive: true });
+    await writeFile(
+      join(broken, "package.json"),
+      JSON.stringify({
+        name: "typescript",
+        version: "7.0.2",
+        main: "lib/version.cjs",
+      }),
+    );
+    await writeFile(
+      join(broken, "lib/version.cjs"),
+      'exports.version = "7.0.2";',
+    );
+    await writeFile(
+      join(broken, "lib/getExePath.js"),
+      'export default () => { throw new Error("Unable to resolve @typescript/typescript-test"); };',
+    );
+    const service = new ProjectChecks(
+      resolve("electron/checks/worker.mjs"),
+      fallbackTypeScript,
+    );
+    services.push(service);
+    await service.start(
+      "pr",
+      root,
+      server,
+      ref,
+      head,
+      "typescript:tsconfig.json",
+    );
+    const s = await ready(service, head);
+    expect(s.engine).toContain("Relay’s bundled TypeScript 5.9.3");
+    expect(s.engine).toContain("typescript-test");
+    expect(s.errors).toBe(1);
+    expect(s.diagnostics[0]).toMatchObject({
+      path: reviewPath,
+      code: "TS2322",
     });
   }, 30000);
 });

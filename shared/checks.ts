@@ -60,6 +60,8 @@ export interface ProjectCheckState extends DiagnosticCounts {
   files: Record<string, CheckedFile>;
   truncated?: boolean;
   message?: string;
+  /** Which compiler produced the results, and why when it is Relay's fallback. */
+  engine?: string;
 }
 export interface SymbolLocation {
   path: string;
