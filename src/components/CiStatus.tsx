@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { PreviewCard } from "@base-ui/react/preview-card";
+import type { ReactNode } from "react";
 import {
   ArrowUpRight,
   CircleCheck,
   CircleDashed,
   CircleMinus,
   CircleX,
-  FolderGit2,
   GitCommitHorizontal,
   UserRound,
 } from "lucide-react";
@@ -106,16 +106,18 @@ function CommitCard({ status, target }: { status: CiStatus; target: CiRun }) {
 }
 
 /**
- * The project's folder icon in the thread header, with a dot for CI on the
- * thread's branch. Hovering shows the commit and each workflow; clicking opens
- * the run that set the colour. No CI, or none readable, leaves the plain icon.
+ * The project's icon in the thread header, with a dot for CI on the thread's
+ * branch. Hovering shows the commit and each workflow; clicking opens the run
+ * that set the colour. No CI, or none readable, leaves the plain icon.
  */
 export function CiStatusIcon({
   projectId,
   chatId,
+  children,
 }: {
   projectId: string;
   chatId?: string;
+  children: ReactNode;
 }) {
   const focused = useWindowFocused();
   const query = useQuery({
@@ -134,7 +136,7 @@ export function CiStatusIcon({
   if (!status || !summary)
     return (
       <span className="ci-plain" title={query.error?.message}>
-        <FolderGit2 size={14} />
+        {children}
       </span>
     );
   const { state, target } = summary;
@@ -152,7 +154,7 @@ export function CiStatusIcon({
           if (target.url) void api.openExternal(target.url);
         }}
       >
-        <FolderGit2 size={14} aria-hidden />
+        {children}
         <span className="sb-status ci-dot" data-state={state}>
           <i />
         </span>

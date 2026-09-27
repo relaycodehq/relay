@@ -23,7 +23,6 @@ import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Folder,
   FolderPlus,
   FolderGit2,
   MessageSquare,
@@ -54,6 +53,7 @@ import {
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
+import { ProjectBadge } from "./ProjectBadge";
 import { NewThreadPicker } from "./NewThreadPicker";
 import { RelayMark } from "./RelayMark";
 import { PaneResizer } from "./PaneResizer";
@@ -641,10 +641,12 @@ export default function ProjectShell() {
           <div className="project-window-title">
             {project?.plain ? (
               <span className="ci-plain">
-                <Folder size={14} />
+                <ProjectBadge id={project.id} name={project.name} />
               </span>
             ) : project ? (
-              <CiStatusIcon projectId={project.id} chatId={chat?.id} />
+              <CiStatusIcon projectId={project.id} chatId={chat?.id}>
+                <ProjectBadge id={project.id} name={project.name} />
+              </CiStatusIcon>
             ) : (
               <FolderGit2 size={14} />
             )}

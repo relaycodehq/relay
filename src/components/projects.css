@@ -622,6 +622,11 @@
   font-size: 12px;
   white-space: nowrap;
 }
+/* The letter badge keeps the sidebar's look under the title's span rules. */
+.project-window-title .sb-project-badge {
+  color: hsl(var(--hue) 55% 96%);
+  font-size: 9.5px;
+}
 .project-window-title strong {
   font-weight: 500;
   overflow: hidden;
