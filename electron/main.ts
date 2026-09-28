@@ -1650,6 +1650,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         .object({
           mode: z.enum(["system", "light", "dark"]),
           background: z.string().regex(/^#[0-9a-f]{6}$/i),
+          titlebar: z.string().regex(/^#[0-9a-f]{6}$/i),
+          titlebarText: z.string().regex(/^#[0-9a-f]{6}$/i),
           icon: z
             .string()
             .max(2_000_000)
@@ -1662,6 +1664,12 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       // prefers-color-scheme, so it could never see the OS go dark again.
       nativeTheme.themeSource = appearance.mode;
       win?.setBackgroundColor(appearance.background);
+      // The window controls sit on the titlebar, so they wear its colours.
+      if (process.platform !== "darwin")
+        win?.setTitleBarOverlay({
+          color: appearance.titlebar,
+          symbolColor: appearance.titlebarText,
+        });
       const icon = nativeImage.createFromDataURL(appearance.icon);
       if (!icon.isEmpty()) {
         if (process.platform === "darwin") app.dock?.setIcon(icon);

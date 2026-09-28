@@ -251,10 +251,12 @@ small {
   width: 93px;
   flex-shrink: 0;
 }
-.platform-linux .traffic-space {
+.platform-linux .traffic-space,
+.platform-win32 .traffic-space {
   width: 14px;
 }
-.platform-linux .review-titlebar {
+.platform-linux .review-titlebar,
+.platform-win32 .review-titlebar {
   padding-right: 150px;
 }
 .sidebar {
@@ -2089,7 +2091,8 @@ html {
 .platform-darwin .files-pane.is-first-pane .file-total {
   display: none;
 }
-.platform-linux .empty-titlebar {
+.platform-linux .empty-titlebar,
+.platform-win32 .empty-titlebar {
   padding-right: 150px;
 }
 

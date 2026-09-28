@@ -48,6 +48,8 @@ async function syncNative(current: ResolvedAppearance) {
     await window.relay.applyAppearance({
       mode: value.mode,
       background: current.palette.sidebar,
+      titlebar: current.palette.surface,
+      titlebarText: current.palette.text,
       icon: await relayIconPng(current.accent),
     });
   } catch {

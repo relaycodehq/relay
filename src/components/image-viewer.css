@@ -31,7 +31,8 @@
   /* Clear of the traffic lights. */
   padding: 8px 12px 8px 93px;
 }
-.platform-linux .image-viewer-bar {
+.platform-linux .image-viewer-bar,
+.platform-win32 .image-viewer-bar {
   padding: 8px 150px 8px 16px;
 }
 .image-viewer-title {

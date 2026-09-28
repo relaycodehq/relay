@@ -339,6 +339,9 @@ export interface Api
   applyAppearance(appearance: {
     mode: "system" | "light" | "dark";
     background: string;
+    /** The titlebar's background and text, for Windows and Linux window controls. */
+    titlebar: string;
+    titlebarText: string;
     icon: string;
   }): Promise<void>;
   /** Zooms the window to the interface size, on top of the user's own zoom. */

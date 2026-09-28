@@ -14,7 +14,8 @@
   width: 68px;
   flex-shrink: 0;
 }
-.platform-linux .project-titlebar > .traffic-space {
+.platform-linux .project-titlebar > .traffic-space,
+.platform-win32 .project-titlebar > .traffic-space {
   display: none;
 }
 .project-window-title {
@@ -578,6 +579,11 @@
   gap: 14px;
   background: var(--surface);
 }
+/* Clear of the window controls Windows and Linux draw over the top right. */
+.platform-linux .project-titlebar,
+.platform-win32 .project-titlebar {
+  padding-right: 150px;
+}
 .project-titlebar-brand {
   width: var(--sidebar-width, 250px);
   height: 100%;
@@ -593,7 +599,8 @@
   width: 66px;
   flex-shrink: 0;
 }
-.platform-linux .project-titlebar-brand .traffic-space {
+.platform-linux .project-titlebar-brand .traffic-space,
+.platform-win32 .project-titlebar-brand .traffic-space {
   display: none;
 }
 .project-titlebar-brand strong {
