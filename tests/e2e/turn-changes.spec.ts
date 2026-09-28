@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -83,7 +84,7 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     await expect(card).toContainText("+2");
     await expect(card).not.toContainText("notes.txt");
     await expect(card.getByRole("button", { name: /guard\.ts/ })).toBeVisible();
-    await card.screenshot({ path: "test-results/turn-changes-card.png" });
+    await screenshot(card, { path: "test-results/turn-changes-card.png" });
 
     await card.getByRole("button", { name: /guard\.ts/ }).click();
     const turn = page.getByRole("region", { name: "Turn changes" });
@@ -95,13 +96,13 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     await expect(turn.getByText("export const guard = true;")).toBeVisible();
     await turn.getByRole("button", { name: /README\.md/ }).click();
     await expect(turn.getByText("Edited by the agent.")).toBeVisible();
-    await page.screenshot({ path: "test-results/turn-changes-pane.png" });
+    await screenshot(page, { path: "test-results/turn-changes-pane.png" });
 
     // Hovering a file offers to roll back just that file.
     const readme = join(repo, "README.md"),
       guard = join(repo, "src", "guard.ts");
     await card.getByRole("button", { name: /README\.md/ }).hover();
-    await card.screenshot({ path: "test-results/turn-changes-hover.png" });
+    await screenshot(card, { path: "test-results/turn-changes-hover.png" });
     await card
       .getByRole("button", { name: "Roll back this file to before this turn" })
       .last()
@@ -113,7 +114,7 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     await card.getByRole("button", { name: "Roll back", exact: true }).click();
     await expect(card).toContainText("Rolled back");
     await expect(readFile(guard, "utf8")).rejects.toThrow();
-    await card.screenshot({ path: "test-results/turn-changes-reverted.png" });
+    await screenshot(card, { path: "test-results/turn-changes-reverted.png" });
     await card.getByRole("button", { name: "Redo", exact: true }).click();
     await expect(card).not.toContainText("Rolled back");
     expect(await readFile(readme, "utf8")).toContain("Edited by the agent.");

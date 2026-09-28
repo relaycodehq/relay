@@ -28,6 +28,12 @@ jobs:
 
   e2e:
     runs-on: ubuntu-22.04
+    # A runner draws Electron in software, about 10x slower than a desktop, so
+    # the suite splits across four runners at once instead of one taking 30 min.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,11 +51,11 @@ jobs:
       - run: npm run build
       - run: npm run test:setup
       # xvfb-run's default screen is 640x480 at 8 bits, smaller than the window.
-      - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:e2e
+      - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:e2e -- --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.shard }}
           path: test-results/
           if-no-files-found: ignore
           retention-days: 3

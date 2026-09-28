@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
 import { openInbox } from "../fixtures/navigation";
 import {
@@ -167,7 +168,7 @@ test("reviews local diffs, stages, commits and pushes only on explicit click", a
     view.getByText("// local improvement", { exact: true }),
   ).toBeVisible();
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/30-local-changes.png"),
   });
   await view
@@ -233,7 +234,7 @@ test("two hidden desktops sync local edits, show a conflict and resolve it delib
   await expect(
     bob.getByRole("dialog").locator("diffs-container"),
   ).toBeVisible();
-  await bob.screenshot({
+  await screenshot(bob, {
     path: resolve("test-results/screenshots/31-sync-conflict.png"),
   });
   await bob

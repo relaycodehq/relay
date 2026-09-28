@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -18,6 +19,9 @@ let app: ElectronApplication,
   binDir: string,
   testEnv: Record<string, string>;
 const screenshots = resolve("test-results/screenshots");
+// The tests share one app and build on each other's state, so a failure
+// stops the file instead of the rest failing on a fresh one.
+test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   await mkdir(screenshots, { recursive: true });
   fixture = await fixtureServer({ grouping: true });
@@ -110,7 +114,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
         ).read,
     ),
   ).toEqual({});
-  await page.screenshot({ path: join(screenshots, "10-groups-light.png") });
+  await screenshot(page, { path: join(screenshots, "10-groups-light.png") });
   await page
     .getByRole("button", {
       name: "About Constructor DI → inject()",
@@ -125,7 +129,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /mixed.ts/ }),
   ).toHaveCount(0);
-  await page.screenshot({ path: join(screenshots, "11-group-review.png") });
+  await screenshot(page, { path: join(screenshots, "11-group-review.png") });
   await page
     .getByRole("button", { name: "Mark 2 files viewed", exact: true })
     .click();
@@ -194,7 +198,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     .getByRole("combobox", { name: "Current file" })
     .selectOption("src/mixed.ts");
   await expect(page.locator("diffs-container")).toBeVisible();
-  await page.screenshot({
+  await screenshot(page, {
     path: join(screenshots, "12-groups-dark.png"),
     animations: "disabled",
   });
@@ -252,7 +256,7 @@ test("stale groups, cancellation and invalid model output never mark files", asy
   await expect(page.locator(".triage-explanation")).toContainText(
     "Codex returned incomplete or invalid decisions for this batch.",
   );
-  await page.screenshot({
+  await screenshot(page, {
     path: join(screenshots, "18-incomplete-analysis.png"),
     animations: "disabled",
   });
@@ -318,7 +322,7 @@ test("resumes after a full restart and only retries unfinished files", async () 
     }),
   ).toBeVisible();
   await expect(page.locator("diffs-container")).toBeVisible();
-  await page.screenshot({
+  await screenshot(page, {
     path: join(screenshots, "19-resume-checkpoint.png"),
     animations: "disabled",
   });

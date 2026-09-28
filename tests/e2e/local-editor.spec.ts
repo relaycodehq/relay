@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -151,7 +152,7 @@ test("edit the highlighted local file, use keyboard commands and save only to th
   expect(git("rev-parse", "HEAD")).toBe(head);
   expect(fixture.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/08-local-editor.png"),
   });
   await dialog.getByRole("button", { name: "Done", exact: true }).click();
@@ -236,7 +237,7 @@ test("indentation, line comments and CRLF survive real editing", async () => {
   const saved = await readFile(join(repo, path), "utf8");
   expect(saved).toContain("function fix() {\r\n  return 1;");
   expect(saved.replace(/\r\n/g, "")).not.toContain("\n");
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/09-local-editor-dark.png"),
   });
   await dialog.getByRole("button", { name: "Done", exact: true }).click();

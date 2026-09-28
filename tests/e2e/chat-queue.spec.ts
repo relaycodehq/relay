@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -90,9 +91,9 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect(
       page.getByRole("button", { name: "Send message", exact: true }),
     ).toHaveCSS("background-color", "rgb(170, 168, 229)");
-    await page
-      .locator(".composer-tools")
-      .screenshot({ path: "test-results/chat-composer-actions.png" });
+    await screenshot(page.locator(".composer-tools"), {
+      path: "test-results/chat-composer-actions.png",
+    });
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
@@ -131,8 +132,8 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
       .poll(order)
       .toEqual(["Check the cache key first", "Then explain the invalidation"]);
     await expect(page.getByLabel("Follow-up delivery")).toHaveCount(0);
-    await page.screenshot({ path: "test-results/chat-queued.png" });
-    await queue.screenshot({ path: "test-results/chat-queue-detail.png" });
+    await screenshot(page, { path: "test-results/chat-queued.png" });
+    await screenshot(queue, { path: "test-results/chat-queue-detail.png" });
     await expect(queue.locator(".chat-queue-hint")).toBeVisible();
     await queue
       .getByRole("button", { name: "Steer now", exact: true })
@@ -158,9 +159,9 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     // One Escape only arms it, and it disarms on its own.
     await page.keyboard.press("Escape");
     await expect(armed).toHaveText("esc");
-    await page
-      .locator(".composer-tools")
-      .screenshot({ path: "test-results/chat-stop-armed.png" });
+    await screenshot(page.locator(".composer-tools"), {
+      path: "test-results/chat-stop-armed.png",
+    });
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toBeVisible();
@@ -177,7 +178,7 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect(
       page.getByRole("button", { name: "Resume answer", exact: true }),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/chat-stopped.png" });
+    await screenshot(page, { path: "test-results/chat-stopped.png" });
     await page
       .getByRole("button", { name: "Resume answer", exact: true })
       .click();

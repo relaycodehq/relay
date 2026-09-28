@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -151,7 +152,7 @@ test("line-number tooltips explain linking and attribute the correct split/unifi
       document.documentElement.dataset.theme = theme;
     }, theme);
     await mkdir(resolve("test-results/screenshots"), { recursive: true });
-    await page.screenshot({
+    await screenshot(page, {
       animations: "disabled",
       path: resolve(`test-results/screenshots/22-line-blame-${theme}.png`),
     });

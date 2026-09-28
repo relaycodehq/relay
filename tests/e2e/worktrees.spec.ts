@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -76,7 +77,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await expect(
       page.getByRole("button", { name: /New worktree/ }),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/worktree-new-thread.png" });
+    await screenshot(page, { path: "test-results/worktree-new-thread.png" });
     await page.getByLabel("Message project").fill("fixture edit files");
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -119,14 +120,14 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       fileList.getByRole("button", { name: /guard\.ts/ }),
     ).toBeVisible();
     await expect(fileList).not.toContainText("notes.txt");
-    await page.screenshot({ path: "test-results/worktree-header.png" });
+    await screenshot(page, { path: "test-results/worktree-header.png" });
     await page.getByRole("button", { name: "Files", exact: true }).click();
 
     // What the branch has that main doesn't opens like a turn's diff.
     const menu = page.getByRole("button", { name: /^Worktree/ });
     await expect(menu.getByLabel("2 files not in main")).toBeVisible();
     await menu.click();
-    await page.screenshot({ path: "test-results/worktree-menu.png" });
+    await screenshot(page, { path: "test-results/worktree-menu.png" });
     await page.getByRole("menuitem", { name: "Changes against main" }).click();
     const changes = page.getByRole("region", { name: "Turn changes" });
     await expect(changes).toContainText("Changed in this worktree");
@@ -150,7 +151,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
       name: "Running processes",
     });
     await expect(running).toContainText("worktree", { timeout: 20000 });
-    await running.screenshot({ path: "test-results/worktree-running.png" });
+    await screenshot(running, { path: "test-results/worktree-running.png" });
 
     // The header's Git button commits on the worktree's branch.
     const commitIn = async (message: string) => {
@@ -186,7 +187,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await mergeIntoMain();
     const merged = page.getByRole("dialog", { name: "Merged into main" });
     await expect(merged).toBeVisible();
-    await page.screenshot({ path: "test-results/worktree-merged.png" });
+    await screenshot(page, { path: "test-results/worktree-merged.png" });
     await merged.getByRole("button", { name: "Done" }).click();
     expect(git("rev-list", "--count", "HEAD")).toBe("2");
     expect(await readFile(join(repo, "src/guard.ts"), "utf8")).toBe(
@@ -218,7 +219,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     const sheet = await mergeIntoMain();
     await expect(sheet).toContainText("These files conflict");
     expect(git("log", "-1", "--format=%s")).toBe("Mine too");
-    await page.screenshot({ path: "test-results/worktree-conflict.png" });
+    await screenshot(page, { path: "test-results/worktree-conflict.png" });
     await sheet
       .getByRole("button", { name: "Merge main into relay/fixture-edit-files" })
       .click();

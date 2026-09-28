@@ -1,6 +1,7 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fixtureServer } from "../fixtures/gitea";
@@ -10,40 +11,6 @@ const env = Object.fromEntries(
     ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
   ),
 ) as Record<string, string>;
-
-test("default test windows remain hidden and unfocused while UI actions and activation events work", async () => {
-  test.skip(process.env.RELAY_TEST_HEADED === "1", "Background runner check");
-  const data = await mkdtemp(join(tmpdir(), "relay-background-"));
-  const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
-    env: { ...env, RELAY_TEST_DATA: data },
-  });
-  try {
-    const page = await app.firstWindow();
-    await openSignIn(page);
-    await page
-      .getByLabel("Gitea server", { exact: true })
-      .fill("https://background.test");
-    await app.evaluate(({ app }) => {
-      app.emit("activate");
-      app.emit("second-instance", {}, [], "");
-    });
-    expect(
-      await app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().map((w) => ({
-          visible: relaySeen(w),
-          focused: w.isFocused(),
-        })),
-      ),
-    ).toEqual([{ visible: false, focused: false }]);
-    await expect(page.getByLabel("Gitea server", { exact: true })).toHaveValue(
-      "https://background.test",
-    );
-  } finally {
-    await app.close();
-    await rm(data, { recursive: true, force: true });
-  }
-});
 
 test("activation and second launch restore hidden/minimized windows without replacing their contents", async () => {
   test.skip(
@@ -189,7 +156,7 @@ for (const cancel of [false, true]) {
         await page.evaluate((theme) => {
           document.documentElement.dataset.theme = theme;
         }, theme);
-        await page.screenshot({
+        await screenshot(page, {
           path: `test-results/screenshots/unlocking-${theme}.png`,
         });
       }

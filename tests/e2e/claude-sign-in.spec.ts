@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -75,7 +76,7 @@ test("an expired Claude login offers its sign-in command in the thread's termina
     await signIn.click();
     await expect(drawer).toBeVisible();
     await expect(screen).toContainText(`${join(bin, "claude")} auth login`);
-    await page.screenshot({ path: "test-results/claude-sign-in.png" });
+    await screenshot(page, { path: "test-results/claude-sign-in.png" });
     await page.keyboard.press("Control+U");
     await page.keyboard.type("echo prompt-$((40+2))");
     await page.keyboard.press("Enter");

@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -79,7 +80,7 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await expect(
       page.getByRole("option", { name: /skill:Explain/ }),
     ).toBeVisible();
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/55-slash-commands.png",
       animations: "disabled",
     });
@@ -175,7 +176,7 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await dialog.getByLabel("PR title").fill("A useful PR");
     await dialog.getByLabel("PR description").fill("Reviewed locally.");
     await dialog.getByRole("checkbox").check();
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/56-create-pr.png",
       animations: "disabled",
     });

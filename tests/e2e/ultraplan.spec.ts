@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -82,7 +83,7 @@ test("plans with a council: the lead's brief, three read-only thinkers, then its
       .getByRole("button", { name: "Mode: Build", exact: true })
       .click();
     await expect(page.getByRole("menuitemradio")).toHaveCount(3);
-    await page.screenshot({ path: "test-results/ultraplan-mode-menu.png" });
+    await screenshot(page, { path: "test-results/ultraplan-mode-menu.png" });
     await page.getByRole("menuitemradio", { name: /^Ultraplan/ }).click();
     await expect(
       page.getByRole("button", { name: "Mode: Ultraplan", exact: true }),
@@ -105,7 +106,7 @@ test("plans with a council: the lead's brief, three read-only thinkers, then its
     await page
       .getByLabel("Message project")
       .fill("Plan retries for the queue.");
-    await page.screenshot({ path: "test-results/ultraplan-composer.png" });
+    await screenshot(page, { path: "test-results/ultraplan-composer.png" });
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
@@ -126,7 +127,7 @@ test("plans with a council: the lead's brief, three read-only thinkers, then its
     await expect(
       page.getByRole("button", { name: "Implement plan", exact: true }),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/ultraplan-planned.png" });
+    await screenshot(page, { path: "test-results/ultraplan-planned.png" });
     await council
       .getByRole("button", { name: /Ultraplan/, expanded: false })
       .click();
@@ -143,7 +144,7 @@ test("plans with a council: the lead's brief, three read-only thinkers, then its
       await expect(
         council.getByRole("region", { name: new RegExp(`^Thinker ${n}:`) }),
       ).toContainText("Done");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/ultraplan-council.png",
       fullPage: true,
     });

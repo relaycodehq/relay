@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -263,7 +264,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
     await alice.evaluate(
       () => (document.documentElement.dataset.theme = "dark"),
     );
-    await alice.screenshot({
+    await screenshot(alice, {
       path: "test-results/screenshots/41-shared-project-dark.png",
       animations: "disabled",
     });

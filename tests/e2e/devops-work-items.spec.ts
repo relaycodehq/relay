@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -152,7 +153,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(devops.getByRole("status")).toHaveText(
       "Connected · 3 open items assigned to you",
     );
-    await page.screenshot({ path: join(root, "settings.png") });
+    await screenshot(page, { path: join(root, "settings.png") });
 
     const filter = settings.getByRole("region", { name: "Project filter" });
     await filter
@@ -172,14 +173,14 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     const cards = page.getByRole("region", { name: "Your work items" });
     await expect(cards.locator(".work-item-card")).toHaveCount(1);
     await expect(cards).toContainText("Licensing: extend and improve search");
-    await page.screenshot({ path: join(root, "cards-matched.png") });
+    await screenshot(page, { path: join(root, "cards-matched.png") });
 
     await cards.getByRole("button", { name: /^All/ }).click();
     await expect(cards.locator(".work-item-card")).toHaveCount(3);
     await cards.getByLabel("Search work items").fill("rfid");
     await expect(cards.locator(".work-item-card")).toHaveCount(1);
     await cards.getByLabel("Search work items").fill("");
-    await page.screenshot({ path: join(root, "cards-all.png") });
+    await screenshot(page, { path: join(root, "cards-all.png") });
 
     // Projects outside Azure DevOps can hide the cards, and take it back.
     const jevCalls = async () =>
@@ -224,7 +225,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(
       page.getByRole("button", { name: "Send message" }),
     ).toBeEnabled();
-    await page.screenshot({ path: join(root, "attached.png") });
+    await screenshot(page, { path: join(root, "attached.png") });
 
     // Picking it again, or the chip's remove button, detaches it.
     await card.click();
@@ -246,7 +247,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(sent).toContainText("~");
     await expect(sent).toContainText("I am going to work on this card");
     await expect(page.locator(".work-item-chip")).toHaveCount(0);
-    await page.screenshot({ path: join(root, "sent.png") });
+    await screenshot(page, { path: join(root, "sent.png") });
     // Once before the hints were saved, once with them.
     expect(await jevCalls()).toBe(2);
     console.log("screenshots in", root);

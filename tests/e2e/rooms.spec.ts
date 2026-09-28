@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
 import { openInbox } from "../fixtures/navigation";
 import {
@@ -303,12 +304,12 @@ test("only the sender's agent starts, shares its completed answer, and receives 
   await expect(alice.locator(".room-code-context pre")).not.toContainText(
     '"pr":',
   );
-  await alice.screenshot({
+  await screenshot(alice, {
     path: "test-results/shared-pr-room.png",
     animations: "disabled",
   });
   await alice.evaluate(() => (document.documentElement.dataset.theme = "dark"));
-  await alice.screenshot({
+  await screenshot(alice, {
     path: "test-results/shared-pr-room-dark.png",
     animations: "disabled",
   });

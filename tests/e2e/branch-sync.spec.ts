@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -82,7 +83,7 @@ test("shows ahead/behind next to the branch and syncs with its upstream", async 
       name: "Pull 1 commit from upstream/review",
     });
     await expect(pull).toHaveText("1");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/branch-sync-behind.png",
       animations: "disabled",
     });

@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdir,
@@ -109,7 +110,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await expect(
       settings.getByText("Connected now", { exact: true }),
     ).toBeVisible();
-    await page.screenshot({
+    await screenshot(page, {
       path: test.info().outputPath("settings-phone.png"),
     });
     await settings

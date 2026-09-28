@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -83,7 +84,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(chip).toHaveText("0/3");
     // The first to report back moves the count, between turns.
     await expect(chip).toHaveText("1/3");
-    await page.screenshot({ path: "test-results/subagents-indicator.png" });
+    await screenshot(page, { path: "test-results/subagents-indicator.png" });
 
     // The card previews the agent pointed at: its brief and its latest calls.
     await chip.hover();
@@ -97,7 +98,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
       "It reads turns through shared/agent-trace.ts",
     );
     await expect(card).toContainText("Running vitest");
-    await card.screenshot({ path: "test-results/subagents-card.png" });
+    await screenshot(card, { path: "test-results/subagents-card.png" });
 
     // Its run covers the conversation, read-only, and can be stopped.
     await card.getByRole("button", { name: "Open its run" }).click();
@@ -111,7 +112,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(run).toContainText(
       "Read-only. Agents take instructions from Claude, not from you.",
     );
-    await page.screenshot({ path: "test-results/subagents-run.png" });
+    await screenshot(page, { path: "test-results/subagents-run.png" });
     await run.getByRole("button", { name: "Stop agent" }).click();
     await expect(run).toContainText(
       "Stopped. Claude hears it was and carries on without it.",
@@ -129,7 +130,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(report).toContainText(
       "and nestSubagents folds a subagent's calls under its row.",
     );
-    await page.screenshot({ path: "test-results/subagents-report.png" });
+    await screenshot(page, { path: "test-results/subagents-report.png" });
 
     // Escape goes back to the conversation, which kept its place.
     await page.keyboard.press("Escape");

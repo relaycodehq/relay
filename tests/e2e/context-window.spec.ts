@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -89,8 +90,8 @@ test("shows the context window and compacts the Codex session", async () => {
     const popup = page.locator(".context-meter-popup");
     await expect(popup).toContainText("194k / 258k");
     await expect(popup).toContainText("Total processed412k");
-    await page.screenshot({ path: "test-results/context-window-popup.png" });
-    await popup.screenshot({
+    await screenshot(page, { path: "test-results/context-window-popup.png" });
+    await screenshot(popup, {
       path: "test-results/context-window-popup-detail.png",
     });
     await popup
@@ -106,7 +107,7 @@ test("shows the context window and compacts the Codex session", async () => {
       .poll(async () => (await readFile(capture, "utf8")).includes('"compact"'))
       .toBe(true);
     await page.mouse.move(0, 0);
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/context-window-compacted.png",
     });
   } finally {

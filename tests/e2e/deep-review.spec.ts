@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -135,7 +136,7 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       page.getByRole("group", { name: "Lead", exact: true }),
     ).toBeVisible();
     await page.getByLabel("What to focus on").fill("the queue");
-    await page.screenshot({ path: "test-results/deep-review-setup.png" });
+    await screenshot(page, { path: "test-results/deep-review-setup.png" });
     await page
       .getByRole("button", { name: "Start deep review", exact: true })
       .click();
@@ -180,13 +181,13 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
     expect(await drawn!.evaluate((el) => el.isConnected)).toBe(true);
     // The reviewers fold away once the lead has reported, and open again.
     await expect(panes).toHaveCount(0);
-    await page.screenshot({ path: "test-results/deep-review-findings.png" });
+    await screenshot(page, { path: "test-results/deep-review-findings.png" });
     await page.getByRole("button", { name: /Council/ }).click();
     await expect(panes).toHaveCount(2);
     await expect(panes.nth(1)).toContainText(
       "Queue reorder can drop a message",
     );
-    await page.screenshot({ path: "test-results/deep-review-council.png" });
+    await screenshot(page, { path: "test-results/deep-review-council.png" });
     await page.getByRole("button", { name: /Council/ }).click();
 
     await report
@@ -196,7 +197,7 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       page.getByText("Fix this finding from the review", { exact: false }),
     ).toBeVisible();
     await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
-    await page.screenshot({ path: "test-results/deep-review-fixed.png" });
+    await screenshot(page, { path: "test-results/deep-review-fixed.png" });
     // The next review starts without this one's focus.
     await page
       .getByRole("button", { name: "New thread", exact: true })

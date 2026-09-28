@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -83,7 +84,7 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
       .click();
     const pickle = page.getByRole("option", { name: "Pickle" });
     await expect(pickle).toBeVisible();
-    await page.screenshot({ path: "test-results/opencode-picker.png" });
+    await screenshot(page, { path: "test-results/opencode-picker.png" });
     await pickle.click();
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
@@ -107,7 +108,7 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
     });
     await expect(approval).toBeVisible();
     await expect(approval).toContainText("+hello");
-    await page.screenshot({ path: "test-results/opencode-approval.png" });
+    await screenshot(page, { path: "test-results/opencode-approval.png" });
     await approval
       .getByRole("button", { name: "Approve", exact: true })
       .click();
@@ -118,7 +119,7 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
     await expect(
       page.getByRole("button", { name: /^Write notes\.md/ }).first(),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/opencode-answer.png" });
+    await screenshot(page, { path: "test-results/opencode-answer.png" });
 
     const calls = (await readFile(capture, "utf8"))
       .trim()

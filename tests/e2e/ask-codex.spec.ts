@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -147,7 +148,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   for (const theme of ["Dark", "Light"]) {
     await page.getByRole("radio", { name: theme, exact: true }).click();
-    await page.screenshot({
+    await screenshot(page, {
       path: resolve(
         `test-results/screenshots/24-settings-${theme.toLowerCase()}.png`,
       ),
@@ -246,7 +247,7 @@ test("row questions launch safely at the root with old/new revision context and 
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;
     }, theme);
-    await page.screenshot({
+    await screenshot(page, {
       path: resolve(`test-results/screenshots/25-ask-codex-${theme}.png`),
     });
   }

@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -182,7 +183,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     ).toHaveLength(1);
     expect(git("status", "--porcelain")).toBe("");
     expect(fixture.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/43-project-pr-chat.png",
     });
   } finally {
@@ -255,14 +256,14 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.evaluate(
       () => (document.documentElement.dataset.theme = "dark"),
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/44-thread-start-dark.png",
       animations: "disabled",
     });
     await page.evaluate(
       () => (document.documentElement.dataset.theme = "light"),
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/45-thread-start-light.png",
       animations: "disabled",
     });
@@ -324,14 +325,14 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.evaluate(
       () => (document.documentElement.dataset.theme = "dark"),
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/49-model-picker-dark.png",
       animations: "disabled",
     });
     await page.evaluate(
       () => (document.documentElement.dataset.theme = "light"),
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/50-model-picker-light.png",
       animations: "disabled",
     });
@@ -377,7 +378,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByRole("option", { name: "Ultra", exact: true }),
     ).toHaveCount(0);
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/51-reasoning-picker.png",
       animations: "disabled",
     });
@@ -423,7 +424,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     expect(bounds!.y).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height);
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/52-model-picker-compact.png",
       animations: "disabled",
     });
@@ -489,7 +490,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       });
     const quoteOffer = page.getByRole("button", { name: "Add to chat" });
     await expect(quoteOffer).toBeVisible();
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/48-quote-offer.png",
       animations: "disabled",
     });
@@ -547,7 +548,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(page.getByRole("tooltip")).toHaveText(
       '"The cache guard prevents duplicate requests."',
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/57-quote-pill.png",
       animations: "disabled",
     });
@@ -614,7 +615,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       page.getByText("Claude found the same cache guard.", { exact: true }),
     ).toBeVisible();
     await expect(picker).toContainText("Claude default");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/46-thread-reply.png",
     });
     expect(
@@ -706,7 +707,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.evaluate(
       () => (document.documentElement.dataset.theme = "dark"),
     );
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/47-thread-chat-dark.png",
       animations: "disabled",
     });
@@ -732,7 +733,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("combobox", { name: "Search branches" })
       .fill("new-thread");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/53-create-branch.png",
       animations: "disabled",
     });
@@ -745,7 +746,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("combobox", { name: "Search branches" })
       .fill("feature");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/54-switch-branch.png",
       animations: "disabled",
     });

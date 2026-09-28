@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
@@ -255,7 +256,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       page.getByText("14 of 72 reviewed", { exact: true }),
     ).toBeVisible();
     await mkdir(resolve("test-results/screenshots"), { recursive: true });
-    await page.screenshot({
+    await screenshot(page, {
       path: resolve("test-results/screenshots/20-group-scroll-stable.png"),
     });
     await page

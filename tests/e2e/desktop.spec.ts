@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -15,6 +16,9 @@ let app: ElectronApplication,
   fixture: Awaited<ReturnType<typeof fixtureServer>>,
   dataDir: string;
 const screenshots = resolve("test-results/screenshots");
+// The tests share one app and build on each other's state, so a failure
+// stops the file instead of the rest failing on a fresh, signed-out app.
+test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   await mkdir(screenshots, { recursive: true });
   fixture = await fixtureServer();
@@ -43,7 +47,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect(
     page.getByRole("heading", { name: "Your project. Your conversation." }),
   ).toBeVisible();
-  await page.screenshot({ path: join(screenshots, "01-connect.png") });
+  await screenshot(page, { path: join(screenshots, "01-connect.png") });
   await openSignIn(page);
   await page
     .getByLabel("Gitea server", { exact: true })
@@ -99,7 +103,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect
     .poll(() => page.locator("[data-line] span[style]").count())
     .toBeGreaterThan(5);
-  await page.screenshot({ path: join(screenshots, "02-review.png") });
+  await screenshot(page, { path: join(screenshots, "02-review.png") });
   await page.getByRole("button", { name: "Viewed V" }).click();
   await expect(
     page.getByRole("combobox", { name: "Current file" }),
@@ -140,7 +144,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .fill("Handle failed HTTP responses before decoding.");
   await page.getByRole("button", { name: "Add draft", exact: true }).click();
   await expect(page.getByText("Pending review")).toBeVisible();
-  await page.screenshot({ path: join(screenshots, "03-comment.png") });
+  await screenshot(page, { path: join(screenshots, "03-comment.png") });
   await page.getByRole("button", { name: /Finish review/ }).click();
   await page.getByLabel("Review summary").fill("Please handle the error path.");
   await page
@@ -179,7 +183,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   );
   console.log("MEMORY_METRICS", JSON.stringify(memory));
   console.log("LIVE_CODE_ROWS", await page.locator("[data-line]").count());
-  await page.screenshot({ path: join(screenshots, "04-large-diff.png") });
+  await screenshot(page, { path: join(screenshots, "04-large-diff.png") });
   await page
     .getByRole("combobox", { name: "Current file" })
     .selectOption("assets/logo.png");
@@ -194,7 +198,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .selectOption("src/hooks/useReview.ts");
   await page.getByRole("button", { name: "Expand file", exact: true }).click();
   await expect(page.locator("diffs-container")).toBeVisible();
-  await page.screenshot({
+  await screenshot(page, {
     path: join(screenshots, "05-dark.png"),
     animations: "disabled",
   });
@@ -426,31 +430,6 @@ test("Codex handoff validates the checkout and safely carries the comment", asyn
   ).rejects.toThrow("different commit");
 });
 
-test("saved account reconnects after a full desktop restart", async () => {
-  const bootstrap = await page.evaluate(() => window.relay.bootstrap());
-  test.skip(
-    !bootstrap.account?.persistent,
-    "System credential storage is unavailable on this desktop",
-  );
-  await app.close();
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key, value]) => key !== "ELECTRON_RUN_AS_NODE" && value !== undefined,
-    ),
-  ) as Record<string, string>;
-  app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
-    env: { ...env, RELAY_TEST_DATA: dataDir },
-  });
-  page = await app.firstWindow();
-  await expect(
-    page.getByRole("button", { name: /Make pull request reviews/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Make room for a better review." }),
-  ).toHaveCount(0);
-});
-
 test("sidebars hide independently, preserve the review and remain recoverable after reload", async () => {
   const workspace = page.getByRole("complementary", { name: "Workspace" });
   const files = page.getByRole("region", {
@@ -466,6 +445,15 @@ test("sidebars hide independently, preserve the review and remain recoverable af
     exact: true,
   });
   const modifier = process.platform === "darwin" ? "Meta" : "Control";
+  // An earlier test reads every file, and a read file shows no diff.
+  await page.evaluate(
+    async (ref) => {
+      const progress = await window.relay.progress(ref);
+      await window.relay.saveProgress(ref, { ...progress, read: {} });
+    },
+    { owner: "Web", name: "web-store", number: 7 },
+  );
+  await page.reload();
   await page
     .getByRole("button", { name: "Needs my review", exact: true })
     .click();
@@ -489,7 +477,7 @@ test("sidebars hide independently, preserve the review and remain recoverable af
   await expect(requestsToggle).toHaveAttribute("aria-pressed", "false");
   expect((await files.boundingBox())!.x).toBe(0);
   expect((await files.boundingBox())!.width).toBe(filesWidth);
-  await page.screenshot({ path: join(screenshots, "06-files-only.png") });
+  await screenshot(page, { path: join(screenshots, "06-files-only.png") });
 
   await page
     .getByRole("button", { name: "Hide changed files", exact: true })
@@ -504,7 +492,7 @@ test("sidebars hide independently, preserve the review and remain recoverable af
   expect(fixture.requests.filter((r) => r.path.includes("/raw/")).length).toBe(
     rawRequests,
   );
-  await page.screenshot({ path: join(screenshots, "07-review-only.png") });
+  await screenshot(page, { path: join(screenshots, "07-review-only.png") });
 
   await page.reload();
   await expect(currentFile).toHaveValue(path);

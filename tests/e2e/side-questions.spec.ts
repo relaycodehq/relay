@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -85,7 +86,7 @@ test("asks /btw beside a running turn in a side thread of its own", async () => 
     await expect(
       page.getByRole("region", { name: "Queued messages" }),
     ).toHaveCount(0);
-    await page.screenshot({ path: "test-results/side-question-thread.png" });
+    await screenshot(page, { path: "test-results/side-question-thread.png" });
 
     // Back in the thread: the question, dashed, with its reply count; the turn still runs.
     await page.getByRole("button", { name: "Back to conversation" }).click();
@@ -93,7 +94,7 @@ test("asks /btw beside a running turn in a side thread of its own", async () => 
     await expect(question).toContainText("which test covers the guard?");
     await expect(question.locator(".side-thread-bar")).toContainText("1 reply");
     await expect(stop).toBeVisible();
-    await page.screenshot({ path: "test-results/side-question-main.png" });
+    await screenshot(page, { path: "test-results/side-question-main.png" });
 
     // A follow-up goes to the same side thread.
     await question.locator(".side-thread-bar").click();

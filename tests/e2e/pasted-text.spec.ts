@@ -1,3 +1,4 @@
+import { keepScreenshots, screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -128,23 +129,28 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     await expect(card).toBeVisible();
     await expect(input).toContainText("Why does the table crash? inline bit");
     await expect(input.locator(".paste-pill")).toHaveCount(1);
-    await page
-      .locator(".project-composer")
-      .screenshot({ path: "test-results/pasted-text-composer.png" });
-    for (const mode of ["dark", "light"]) {
-      await page.evaluate((mode) => localStorage.setItem("theme", mode), mode);
-      await page.reload();
-      await expect(card).toBeVisible();
-      if (mode === "dark")
-        await page
-          .locator(".project-composer")
-          .screenshot({ path: "test-results/pasted-text-composer-dark.png" });
-    }
+    await screenshot(page.locator(".project-composer"), {
+      path: "test-results/pasted-text-composer.png",
+    });
+    // Two more reloads only to see it dark, so only when keeping screenshots.
+    if (keepScreenshots)
+      for (const mode of ["dark", "light"]) {
+        await page.evaluate(
+          (mode) => localStorage.setItem("theme", mode),
+          mode,
+        );
+        await page.reload();
+        await expect(card).toBeVisible();
+        if (mode === "dark")
+          await screenshot(page.locator(".project-composer"), {
+            path: "test-results/pasted-text-composer-dark.png",
+          });
+      }
     await card.click();
     const dialog = page.getByRole("dialog", { name: "Pasted text #1" });
     await expect(dialog).toContainText("240 lines");
     await expect(dialog.locator("pre")).toHaveText(trace);
-    await page.screenshot({ path: "test-results/pasted-text-dialog.png" });
+    await screenshot(page, { path: "test-results/pasted-text-dialog.png" });
     await dialog.getByRole("button", { name: "Close dialog" }).click();
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -167,7 +173,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     await expect(shown.locator("pre")).toHaveText(trace);
     await shown.getByRole("button", { name: "Close dialog" }).click();
     await expect(page.getByLabel("Attachments")).toHaveCount(0);
-    await page.screenshot({ path: "test-results/pasted-text-thread.png" });
+    await screenshot(page, { path: "test-results/pasted-text-thread.png" });
     const prompts = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")

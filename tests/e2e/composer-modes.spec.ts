@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -99,7 +100,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       .getByRole("combobox", { name: "Runtime mode", exact: true })
       .click();
     await expect(page.getByRole("option")).toHaveCount(4);
-    await page.screenshot({ path: "test-results/composer-runtime-menu.png" });
+    await screenshot(page, { path: "test-results/composer-runtime-menu.png" });
     await page.getByRole("option", { name: /Auto-accept edits/ }).click();
     await page
       .getByRole("button", { name: "Mode: Build", exact: true })
@@ -171,7 +172,7 @@ test("restores per-project composer settings, answers native approvals, and impl
     await expect(
       page.getByRole("menuitem", { name: "Always allow this session" }),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/composer-approval.png" });
+    await screenshot(page, { path: "test-results/composer-approval.png" });
     await page.keyboard.press("Escape");
     await approval
       .getByRole("button", { name: "Approve", exact: true })
@@ -191,14 +192,14 @@ test("restores per-project composer settings, answers native approvals, and impl
     await expect(
       questions.getByRole("button", { name: "Continue", exact: true }),
     ).toBeDisabled();
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/composer-planning-question.png",
     });
     await questions.getByRole("button", { name: /Small change/ }).click();
     await expect(
       page.getByRole("button", { name: "Implement plan", exact: true }),
     ).toBeVisible();
-    await page.screenshot({ path: "test-results/composer-proposed-plan.png" });
+    await screenshot(page, { path: "test-results/composer-proposed-plan.png" });
     await page
       .getByRole("button", { name: "Implement plan", exact: true })
       .click();
@@ -234,7 +235,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       exact: true,
     });
     await expect(switching).toBeVisible();
-    await page.screenshot({ path: "test-results/agent-switch-dialog.png" });
+    await screenshot(page, { path: "test-results/agent-switch-dialog.png" });
     await switching.getByLabel("Don’t show this again").check();
     await switching
       .getByRole("button", { name: "Switch to Claude", exact: true })
@@ -245,7 +246,7 @@ test("restores per-project composer settings, answers native approvals, and impl
       }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Show note", exact: true }).click();
-    await page.screenshot({ path: "test-results/agent-handoff-row.png" });
+    await screenshot(page, { path: "test-results/agent-handoff-row.png" });
     const claude = page.getByRole("region", { name: "Allow Bash?" });
     await expect(claude).toBeVisible();
     await claude.getByRole("button", { name: "Decline", exact: true }).click();

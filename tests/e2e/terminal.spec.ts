@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { test, expect, _electron as electron } from "@playwright/test";
 import {
   mkdtemp,
@@ -84,7 +85,7 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await expect(
       running.locator('li[title*="In a Relay terminal"]'),
     ).toHaveCount(1, { timeout: 20000 });
-    await page.screenshot({ path: "test-results/terminal-draft.png" });
+    await screenshot(page, { path: "test-results/terminal-draft.png" });
 
     // The first message makes the thread, which keeps the draft's shell.
     await page.getByLabel("Message project").fill("hello");
@@ -136,7 +137,7 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await expect(screen).toContainText(
       join(data, "worktrees", "project", "fixture-edit-files"),
     );
-    await page.screenshot({ path: "test-results/terminal-worktree.png" });
+    await screenshot(page, { path: "test-results/terminal-worktree.png" });
 
     // A reloaded window finds the shell still running, with what it printed.
     await run("echo before-$((6*7))-reload");

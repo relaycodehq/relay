@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import {
   test,
   expect,
@@ -82,7 +83,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await page.getByRole("menuitem", { name: "Move to group" }).click();
     await page.getByRole("menuitem", { name: "Work", exact: true }).click();
     await expect.poll(() => folderOf("Acme Service")).toBe("Work");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/59-organize-projects.png",
       animations: "disabled",
     });
@@ -159,7 +160,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await expect(
       page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
     ).toContainText("main");
-    await page.screenshot({
+    await screenshot(page, {
       path: "test-results/screenshots/58-project-folders.png",
       animations: "disabled",
     });

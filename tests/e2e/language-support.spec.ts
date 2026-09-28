@@ -1,3 +1,4 @@
+import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
 import {
   test,
@@ -107,7 +108,7 @@ test("existing project errors show in review; hover, Cmd-click and usages preser
     "src/greeting.ts:2",
   );
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/15-symbol-definition.png"),
   });
   await peek.getByRole("button", { name: "Back to review" }).click();
@@ -127,7 +128,7 @@ test("existing project errors show in review; hover, Cmd-click and usages preser
   await expect(usages.locator(".symbol-preview-heading")).toContainText(
     reviewPath,
   );
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/16-symbol-usages.png"),
   });
   await usages.getByRole("button", { name: "Previous symbol" }).click();
@@ -184,7 +185,7 @@ test("unsaved editor diagnostics and navigation work, then restore disk diagnost
   await page.evaluate(() => {
     document.documentElement.dataset.theme = "dark";
   });
-  await page.screenshot({
+  await screenshot(page, {
     path: resolve("test-results/screenshots/17-live-editor-errors.png"),
   });
   await editorDialog.getByRole("button", { name: "Done", exact: true }).click();
@@ -271,7 +272,7 @@ test("suggestions have their own totals, labels and icons across checks, file ba
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;
     }, theme);
-    await page.screenshot({
+    await screenshot(page, {
       animations: "disabled",
       path: resolve(
         `test-results/screenshots/21-checks-suggestions-${theme}.png`,
