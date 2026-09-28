@@ -787,7 +787,10 @@ export default function ProjectShell() {
               setBrowseShared(true);
             }}
             onAttention={setAttention}
-            onSettings={() => setSettings(true)}
+            onSettings={(category) => {
+              setSettingsCategory(category);
+              setSettings(true);
+            }}
             onAccount={() => setSignin(true)}
             onInbox={() => {
               if (account) setLegacy(true);

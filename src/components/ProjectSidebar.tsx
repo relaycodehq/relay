@@ -46,6 +46,8 @@ import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
 import { useWindowFocused } from "../lib/window-focus";
 import { IconButton, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
+import { AgentUpdateButton } from "./AgentUpdates";
+import type { SettingsCategory } from "./Settings";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import {
@@ -444,7 +446,8 @@ export function ProjectSidebar({
   onDraft: (p: Project) => void;
   onAdd: () => void;
   onShared: (p: Project) => void;
-  onSettings: () => void;
+  /** Opens Settings, at `category` when given. */
+  onSettings: (category?: SettingsCategory) => void;
   onAccount: () => void;
   onInbox: () => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -1718,7 +1721,8 @@ export function ProjectSidebar({
           <span>{account ?? "Connect Gitea"}</span>
         </button>
         <UpdateButton />
-        <IconButton label="Open settings" onClick={onSettings}>
+        <AgentUpdateButton onDetails={() => onSettings("models")} />
+        <IconButton label="Open settings" onClick={() => onSettings()}>
           <Settings2 size={15} />
         </IconButton>
       </div>

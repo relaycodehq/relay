@@ -99,6 +99,7 @@ import { draftTerminalKey } from "../shared/terminals";
 import { fetchThemes, searchThemes } from "../shared/open-vsx";
 import { inspectFolder } from "./repository";
 import { Updater } from "./updater";
+import { AgentUpdates, machineIo } from "./agent-updates";
 import { linuxPasswordStore } from "./linux-password-store";
 import { pathReady } from "./shell-path";
 import { registerAppImage } from "./linux-desktop-entry";
@@ -157,6 +158,13 @@ const updater = new Updater(
     // Restarting for an update was the user's call, tasks or not.
     beforeQuit: () => (quitConfirmed = true),
   },
+);
+const agentUpdates = new AgentUpdates(
+  (state) => {
+    if (win && !win.isDestroyed())
+      win.webContents.send("relay:agent-updates", state);
+  },
+  { ...machineIo, fetch: (url, init) => net.fetch(url, init) },
 );
 const liveSyncs = new LiveSyncs(() =>
   join(app.getPath("userData"), "live-sync"),
@@ -1761,6 +1769,12 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return updater.download();
     case "installUpdate":
       return updater.installAndRestart();
+    case "agentVersions":
+      return agentUpdates.current;
+    case "checkAgentVersions":
+      return agentUpdates.check(true);
+    case "updateAgent":
+      return agentUpdates.update(agentProviderSchema.parse(args[0]));
     case "phoneRemoteState":
       return requirePhoneRemote().state();
     case "setPhoneRemote":
@@ -1896,6 +1910,8 @@ app
     });
     projectChats.armWakeups();
     updater.start();
+    // Tests' stand-in agents only answer what a test expects of them.
+    if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([
         {

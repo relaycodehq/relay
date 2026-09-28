@@ -1,0 +1,35 @@
+import { useSyncExternalStore } from "react";
+import { api } from "./api";
+import type { AgentVersions } from "../../shared/agent-updates";
+import type { AgentProvider } from "../../shared/agents";
+
+const listeners = new Set<() => void>();
+let versions: AgentVersions | undefined;
+let listening = false;
+
+function change(next: AgentVersions) {
+  versions = next;
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void) {
+  // A renderer hot-reloaded ahead of its main process has no agent checks yet.
+  if (!listening && api.agentVersions) {
+    listening = true;
+    // An event can overtake the first answer; the newer state wins.
+    void api.agentVersions().then((state) => versions || change(state));
+    api.onAgentVersions(change);
+  }
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** The agent CLIs as the main process last found them. */
+export const useAgentVersions = () =>
+  useSyncExternalStore(subscribe, () => versions);
+
+// Failures land in the state the main process sends, so the calls only start them.
+export const checkAgentVersions = () =>
+  void api.checkAgentVersions().catch(() => {});
+export const updateAgent = (provider: AgentProvider) =>
+  void api.updateAgent(provider).catch(() => {});

@@ -172,6 +172,9 @@ const methods = [
   "checkForUpdates",
   "downloadUpdate",
   "installUpdate",
+  "agentVersions",
+  "checkAgentVersions",
+  "updateAgent",
   "applyAppearance",
   "setInterfaceScale",
   "searchThemes",
@@ -212,6 +215,11 @@ contextBridge.exposeInMainWorld("relay", {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:update", listener);
     return () => ipcRenderer.removeListener("relay:update", listener);
+  },
+  onAgentVersions: (callback: (state: unknown) => void) => {
+    const listener = (_event: unknown, value: unknown) => callback(value);
+    ipcRenderer.on("relay:agent-updates", listener);
+    return () => ipcRenderer.removeListener("relay:agent-updates", listener);
   },
   onTerminal: (callback: (event: unknown) => void) => {
     const listener = (_event: unknown, value: unknown) => callback(value);

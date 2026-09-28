@@ -82,6 +82,7 @@ import {
   Switch,
 } from "./SettingsCard";
 import { UpdateCheck, updateLine } from "./UpdateCheck";
+import { AgentVersionSettings } from "./AgentUpdates";
 import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
@@ -850,6 +851,17 @@ export function Settings({
         ) : (
           <p className="setting-muted">Loading model settings…</p>
         ),
+    },
+    {
+      id: "agent-versions",
+      category: "models",
+      title: "Installed agents",
+      description:
+        "Relay runs the agent CLIs installed on this computer and tells you when a newer release is out.",
+      keywords:
+        "version update upgrade install cli codex claude code opencode npm homebrew bun",
+      block: true,
+      render: () => <AgentVersionSettings />,
     },
     {
       id: "git",

@@ -8,8 +8,9 @@ import type { WorkingTreeApi } from "./working-tree";
 import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
-import type { UsageProvider } from "./agents";
+import type { AgentProvider, UsageProvider } from "./agents";
 import type { UpdateState } from "./updates";
+import type { AgentVersions } from "./agent-updates";
 import type { LineQuestion } from "./questions";
 import type {
   ProjectCheckInfo,
@@ -337,6 +338,13 @@ export interface Api
   /** Quits and hands over to the new version, which starts by itself. */
   installUpdate(): Promise<UpdateState>;
   onUpdate(callback: (state: UpdateState) => void): () => void;
+  /** The agent CLIs as last checked, and whether newer ones are out. */
+  agentVersions(): Promise<AgentVersions>;
+  /** Looks again now, asking the registries afresh. */
+  checkAgentVersions(): Promise<AgentVersions>;
+  /** Updates an agent's CLI with whatever installed it. */
+  updateAgent(provider: AgentProvider): Promise<AgentVersions>;
+  onAgentVersions(callback: (state: AgentVersions) => void): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {
     mode: "system" | "light" | "dark";
