@@ -903,13 +903,16 @@ small {
   flex: 1;
   position: relative;
 }
+.diff-code-view,
+.working-diff {
+  --diffs-font-size: var(--code-font-size, 12px);
+  --diffs-line-height: calc(var(--code-font-size, 12px) + 10px);
+  font-family: var(--font-mono);
+}
 .diff-code-view {
   height: 100%;
   flex: 1;
   min-height: 0;
-  --diffs-font-size: var(--code-font-size, 12px);
-  --diffs-line-height: calc(var(--code-font-size, 12px) + 10px);
-  font-family: var(--font-mono);
 }
 .diff-footer {
   height: 37px;
@@ -1076,7 +1079,7 @@ small {
   margin-bottom: 0;
 }
 .markdown code {
-  font-size: 11px;
+  font-size: calc(var(--code-font-size, 12px) - 1px);
   background: var(--inbox);
   padding: 2px 4px;
   border-radius: 4px;
@@ -2635,7 +2638,7 @@ html {
 .symbol-hover pre,
 .symbol-summary pre {
   margin: 0;
-  font: 12px/1.5 var(--font-mono);
+  font: var(--code-font-size, 12px) / 1.5 var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 100px;

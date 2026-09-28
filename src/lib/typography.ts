@@ -7,7 +7,8 @@ import { useSyncExternalStore } from "react";
  *
  * The interface size zooms the whole window, spacing included, the way
  * rem-based layouts scale; prompt, code and terminal sizes are divided back
- * out of that zoom so they stay at the size picked for them.
+ * out of that zoom so they stay at the size picked for them. The prompt is
+ * the exception until it is given a size: it then follows the interface.
  */
 export interface Typography {
   /** Empty keeps the default stack. */
@@ -15,6 +16,7 @@ export interface Typography {
   interfaceSize: number;
   /** Empty follows the interface font. */
   prompt: string;
+  /** 0 follows the interface size. */
   promptSize: number;
   mono: string;
   codeSize: number;
@@ -33,12 +35,13 @@ export const DEFAULT_MONO =
   'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 /** Relay's own base size; the interface size is measured against it. */
 const BASE_SIZE = 13;
+export const FOLLOW_INTERFACE = 0;
 
 export const defaultTypography: Typography = {
   sans: "",
   interfaceSize: BASE_SIZE,
   prompt: "",
-  promptSize: 13,
+  promptSize: FOLLOW_INTERFACE,
   mono: "",
   codeSize: 12,
   terminal: "",
@@ -52,7 +55,7 @@ const range = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
 export const sizes = {
   interfaceSize: range(11, 16),
-  promptSize: range(11, 18),
+  promptSize: [FOLLOW_INTERFACE, ...range(11, 18)],
   codeSize: range(10, 18),
   terminalSize: range(9, 20),
 };
@@ -68,13 +71,18 @@ function read(): Typography {
       typeof v === "string" ? v.trim().slice(0, 100) : "";
     const size = (key: keyof typeof sizes) =>
       sizes[key].includes(saved[key]) ? saved[key] : defaultTypography[key];
+    // Before it could follow the interface, 13 was the default that got saved
+    // along with every other change; keeping it pinned would leave the prompt
+    // behind whenever the interface size moves.
+    const promptSize =
+      saved.promptSize === 13 ? FOLLOW_INTERFACE : size("promptSize");
     const flag = (key: "smoothing" | "wrap" | "advanced") =>
       typeof saved[key] === "boolean" ? saved[key] : defaultTypography[key];
     return {
       sans: family(saved.sans),
       interfaceSize: size("interfaceSize"),
       prompt: family(saved.prompt),
-      promptSize: size("promptSize"),
+      promptSize,
       mono: family(saved.mono),
       codeSize: size("codeSize"),
       terminal: family(saved.terminal),
@@ -118,7 +126,12 @@ function apply() {
   root.setProperty("--font-mono", fontStack(value.mono, DEFAULT_MONO));
   root.setProperty("--font-prompt", fontStack(value.prompt, sans));
   root.setProperty("--font-terminal", terminalFont(value).family);
-  root.setProperty("--prompt-font-size", px(value.promptSize));
+  root.setProperty(
+    "--prompt-font-size",
+    value.promptSize === FOLLOW_INTERFACE
+      ? `${BASE_SIZE}px`
+      : px(value.promptSize),
+  );
   root.setProperty("--code-font-size", px(value.codeSize));
   root.setProperty("--terminal-font-size", px(value.terminalSize));
   root.setProperty(

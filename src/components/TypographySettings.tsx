@@ -6,6 +6,7 @@ import {
   DEFAULT_MONO,
   DEFAULT_SANS,
   defaultTypography,
+  FOLLOW_INTERFACE,
   fontStack,
   setTypography,
   sizes,
@@ -50,7 +51,7 @@ function SizeSelect({
         value={String(value)}
         options={options.map((size) => ({
           value: String(size),
-          label: `${size} px`,
+          label: size === FOLLOW_INTERFACE ? "Match interface" : `${size} px`,
         }))}
         onChange={(size) => onChange(Number(size))}
       />

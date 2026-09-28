@@ -2149,7 +2149,7 @@ details.agent-step > .agent-step-heading:hover {
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 12px/1.6 var(--font-mono);
+  font: var(--code-font-size, 12px) / 1.6 var(--font-mono);
   padding: 10px;
   margin-top: 10px;
   background: var(--toolbar);
