@@ -27,8 +27,8 @@ import { useKeyboardShown } from "./KeyboardAware";
 import { ModelSheet } from "./ModelSheet";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
-import { UsageRing, UsageSheet, hasUsage, usageLabel, useUsage } from "./Usage";
-import { type, useTheme } from "./theme";
+import { UsageBar, UsageSheet, useUsage } from "./Usage";
+import { mono, type, useTheme } from "./theme";
 
 export interface Outgoing {
   body: string;
@@ -90,6 +90,7 @@ export const Composer = forwardRef<
   // The keyboard covers the gesture bar, so its inset would only leave a gap.
   const keyboard = useKeyboardShown();
   const [text, setText] = useState("");
+  const input = useRef<TextInput>(null);
   useDraft(draftKey, text, setText);
   const [images, setImages] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
@@ -228,8 +229,6 @@ export const Composer = forwardRef<
       .then((picked) => setImages((old) => [...old, ...picked].slice(0, maxImages)))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   const stop = running && empty && onStop;
-  const used =
-    context?.maxTokens && Math.min(100, Math.round((context.usedTokens / context.maxTokens) * 100));
   const plan = settings.interactionMode === "plan";
   return (
     <View
@@ -275,6 +274,7 @@ export const Composer = forwardRef<
           </ScrollView>
         )}
         <TextInput
+          ref={input}
           accessibilityLabel="Message"
           multiline
           // Typing goes on while it reconnects; only sending waits.
@@ -310,16 +310,15 @@ export const Composer = forwardRef<
             <Text style={[styles.toolText, { color: plan ? t.accent : t.muted }]}>Plan</Text>
           </Tool>
           <View style={styles.spacer} />
-          {/* Queue and Steer both need the room while an answer runs. */}
-          {(!!used || hasUsage(provider)) && !(running && !empty) && (
+          {!text && (
             <Tool
-              label={[used ? `Context ${used}% full` : "", usageLabel(usage) ?? ""].filter(Boolean).join(", ") || "Usage"}
-              onPress={() => setSheet("usage")}
+              label="Commands"
+              onPress={() => {
+                setText("/");
+                input.current?.focus();
+              }}
             >
-              {!!used && (
-                <Text style={[styles.context, { color: used >= 85 ? t.danger : t.faint }]}>{used}%</Text>
-              )}
-              {hasUsage(provider) && <UsageRing usage={usage} size={18} />}
+              <Text style={[styles.slash, { color: t.muted }]}>/</Text>
             </Tool>
           )}
           {running && !empty && (
@@ -364,6 +363,7 @@ export const Composer = forwardRef<
           </Pressable>
         </View>
       </View>
+      <UsageBar provider={provider} usage={usage} context={context} onPress={() => setSheet("usage")} />
       <ModelSheet
         open={sheet === "model"}
         projectId={projectId}
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   tool: { flexDirection: "row", alignItems: "center", gap: 4, height: 32, paddingHorizontal: 6, borderRadius: 8, maxWidth: 140 },
   toolText: { fontSize: type.tiny, flexShrink: 1 },
   spacer: { flex: 1 },
-  context: { fontSize: type.tiny, fontVariant: ["tabular-nums"] },
+  slash: { fontFamily: mono, fontSize: 15, width: 18, textAlign: "center" },
   action: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginLeft: 4 },
   secondary: { borderWidth: 1.5 },
 });

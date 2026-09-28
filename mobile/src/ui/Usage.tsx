@@ -130,6 +130,87 @@ export function usageLabel(usage: ProviderUsage | undefined) {
   );
 }
 
+/**
+ * The composer's footer: the context window and the plan's limits as thin
+ * bars along the bottom edge, opening the usage sheet on a tap.
+ */
+export function UsageBar({
+  provider,
+  usage,
+  context,
+  onPress,
+}: {
+  provider: AgentProvider;
+  usage?: ProviderUsage;
+  context?: ContextUsage;
+  onPress: () => void;
+}) {
+  const t = useTheme();
+  const used = context?.maxTokens
+    ? Math.min(100, Math.round((context.usedTokens / context.maxTokens) * 100))
+    : undefined;
+  const list = hasUsage(provider) ? meters(usage) : [];
+  if (used == null && !list.length) return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={[used != null ? `Context ${used}% full` : "", usageLabel(usage) ?? ""]
+        .filter(Boolean)
+        .join(", ")}
+      hitSlop={6}
+      onPress={onPress}
+      style={styles.bar}
+    >
+      {used != null && (
+        <BarMeter
+          label="Context"
+          value={`${used}%`}
+          percent={used}
+          color={paceColor(used >= 90 ? "hot" : used >= 75 ? "warn" : "ok", t.muted)}
+        />
+      )}
+      {list.map((m) => (
+        <BarMeter
+          key={m.kind}
+          label={m.label}
+          value={`${m.leftPercent}% left`}
+          percent={m.leftPercent}
+          color={paceColor(m.pace, m.kind === "session" ? t.accent : t.muted)}
+        />
+      ))}
+    </Pressable>
+  );
+}
+
+function BarMeter({
+  label,
+  value,
+  percent,
+  color,
+}: {
+  label: string;
+  value: string;
+  percent: number;
+  color: string;
+}) {
+  const t = useTheme();
+  return (
+    <View style={styles.barMeter}>
+      <View style={styles.top}>
+        <Text numberOfLines={1} style={[styles.barLabel, { color: t.faint }]}>
+          {label}
+        </Text>
+        <Text numberOfLines={1} style={[styles.barLabel, styles.barValue, { color: t.muted }]}>
+          {value}
+        </Text>
+      </View>
+      <View style={[styles.barTrack, { backgroundColor: t.border }]}>
+        <View style={[styles.fill, { width: `${Math.max(0, Math.min(100, percent))}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
 function formatTokens(value: number) {
   if (value < 1_000) return `${Math.round(value)}`;
   if (value < 10_000)
@@ -313,6 +394,11 @@ const styles = StyleSheet.create({
   fill: { height: "100%", borderRadius: 3 },
   mark: { position: "absolute", top: -1, width: 2, height: 8 },
   compact: { flexGrow: 0, marginTop: 6 },
+  bar: { flexDirection: "row", gap: 14, paddingHorizontal: 8, paddingTop: 2 },
+  barMeter: { flex: 1, gap: 3 },
+  barLabel: { fontSize: 11 },
+  barValue: { fontVariant: ["tabular-nums"] },
+  barTrack: { height: 3, borderRadius: 1.5, overflow: "hidden" },
   refresh: {
     fontSize: type.small,
     fontWeight: "600",
