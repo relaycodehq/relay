@@ -94,7 +94,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().every(
-          (w) => !w.isVisible() && !w.isFocused(),
+          (w) => !relaySeen(w) && !w.isFocused(),
         ),
       ),
     ).toBe(true);

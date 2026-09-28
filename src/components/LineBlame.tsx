@@ -171,11 +171,17 @@ export function useLineBlame(
         return;
       }
       const rect = current.getBoundingClientRect();
+      // Beside the number, flipping to its left when the right is short of
+      // room: squeezed back over it, the card would swallow the click.
+      const width = Math.min(360, window.innerWidth - 24);
       const next: Hover = {
         key,
         line,
         source,
-        x: Math.max(12, Math.min(rect.right + 8, window.innerWidth - 372)),
+        x:
+          rect.right + 8 + width <= window.innerWidth - 12
+            ? rect.right + 8
+            : Math.max(12, rect.left - 8 - width),
         y: Math.max(12, Math.min(rect.top, window.innerHeight - 250)),
       };
       target.current!.element = current;

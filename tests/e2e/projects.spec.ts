@@ -268,7 +268,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/45-thread-start-light.png",
       animations: "disabled",
     });
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    await page.getByRole("button", { name: /^Changesb/ }).click();
     await expect(
       page.getByRole("button", { name: /example.ts/ }).first(),
     ).toBeVisible();
@@ -622,7 +622,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().every(
-          (w) => !w.isVisible() && !w.isFocused(),
+          (w) => !relaySeen(w) && !w.isFocused(),
         ),
       ),
     ).toBe(true);
@@ -672,16 +672,16 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .click();
     await expect(
       page.getByRole("heading", {
-        name: /What should we work on in another-project/,
+        name: /What should we work on in Another Project/,
       }),
     ).toBeVisible();
     await page
       .locator(".thread-introduction")
-      .getByRole("button", { name: "another-project", exact: true })
+      .getByRole("button", { name: "Another Project", exact: true })
       .click();
     await page.getByRole("combobox", { name: "Search projects" }).fill(repo);
     await page
-      .getByRole("option", { name: `project · ${repo}`, exact: true })
+      .getByRole("option", { name: `Project · ${repo}`, exact: true })
       .click();
     await expect(
       page.getByRole("heading", {

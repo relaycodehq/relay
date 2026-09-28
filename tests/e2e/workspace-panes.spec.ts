@@ -44,8 +44,9 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
     const toggles = page.getByRole("group", { name: "Workspace panes" });
+    // Changes carries its line counts after the label.
     const toggle = (name: string) =>
-      toggles.getByRole("button", { name, exact: true });
+      toggles.getByRole("button", { name: new RegExp(`^${name}\\b`) });
     const order = () =>
       page.evaluate(() =>
         [...document.querySelectorAll<HTMLElement>(".workspace-pane")]

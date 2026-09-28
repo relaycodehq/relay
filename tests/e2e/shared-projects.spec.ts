@@ -219,7 +219,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
     expect(calls.filter((c) => c.turn)).toHaveLength(1);
     expect(calls.find((c) => c.turn).cwd).toBe(repos[0]);
     await bob
-      .locator(".project-message")
+      .locator(".project-message.assistant")
       .first()
       .getByRole("button", { name: "Reply to message" })
       .click();
@@ -258,7 +258,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
       })
       .toContain("43");
     expect(git(repos[1], "diff", "--cached")).toBe("");
-    await alice.getByRole("button", { name: "Changes", exact: true }).click();
+    await alice.getByRole("button", { name: /^Changesb/ }).click();
     await alice.getByRole("button", { name: /Modified example.ts/ }).click();
     await expect(alice.locator("diffs-container")).toBeVisible();
     await alice.evaluate(
@@ -272,7 +272,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
       expect(
         await app.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows().every(
-            (w) => !w.isVisible() && !w.isFocused(),
+            (w) => !relaySeen(w) && !w.isFocused(),
           ),
         ),
       ).toBe(true);

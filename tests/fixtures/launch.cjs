@@ -22,11 +22,6 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
   for (const name of ["focus", "restore"])
     BrowserWindow.prototype[name] = () => {};
   app.show = app.focus = () => {};
-  /** Whether a window stayed out of sight, for tests that check it. */
-  globalThis.relayOffDesktop = (win) =>
-    !win.isVisible() ||
-    win.getOpacity() === 0 ||
-    win.getBounds().x + win.getBounds().width <= 0;
   for (const flag of [
     "disable-backgrounding-occluded-windows",
     "disable-renderer-backgrounding",
@@ -34,6 +29,15 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
   ])
     app.commandLine.appendSwitch(flag);
 }
+/**
+ * Whether a person could see the window: shown, not see-through and on the
+ * desktop. Hidden runs show windows to keep them drawing, so `isVisible()`
+ * alone no longer says it.
+ */
+globalThis.relaySeen = (win) =>
+  win.isVisible() &&
+  win.getOpacity() > 0 &&
+  win.getBounds().x + win.getBounds().width > 0;
 // Ordinary UI tests must not open the user's Keychain. This reversible fixture
 // encoding is test-only; the actual OS integration is a separate opt-in check.
 if (process.env.RELAY_TEST_NATIVE_STORAGE !== "1") {

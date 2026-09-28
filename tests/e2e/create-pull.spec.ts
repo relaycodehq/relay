@@ -112,12 +112,12 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await input.press("Enter");
     await expect(input).toHaveText("Fix the bug");
     await expect(
-      page.getByRole("button", { name: /^Plan mode/ }),
-    ).toHaveAttribute("aria-pressed", "true");
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toBeVisible();
     await input.fill("Fix the bug /plan of");
     await input.press("Enter");
     await expect(
-      page.getByRole("button", { name: /^Default mode/ }),
+      page.getByRole("button", { name: "Mode: Build", exact: true }),
     ).toBeVisible();
     // A path is only text, even one like a build folder.
     await input.fill("The output lands in /build");

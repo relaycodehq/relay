@@ -49,24 +49,24 @@ test("new threads start on the repository, and not behind an open dialog", async
         .getByRole("button", { name: `New thread in ${name}`, exact: true })
         .click();
     // In alpha, write a draft, then turn it into a deep review.
-    await newThread("alpha");
+    await newThread("Alpha");
     await page.getByLabel("Message project").fill("Check the queue");
     await context("Deep review").click();
     await expect(context("Deep review")).toHaveClass(/selected/);
-    await newThread("beta");
+    await newThread("Beta");
     await expect(context("Repository")).toHaveClass(/selected/);
     // Its draft card goes back to it as it was left...
     await page.getByRole("button", { name: "View activity" }).click();
     await page
       .locator(".sb-card.draft", { hasText: "Check the queue" })
       .click();
-    await expect(page.locator(".project-window-title")).toContainText("alpha");
+    await expect(page.locator(".project-window-title")).toContainText("Alpha");
     await expect(context("Deep review")).toHaveClass(/selected/);
     await page.getByRole("button", { name: "View activity" }).click();
     // ...while a new thread there, from another project, starts afresh.
-    await newThread("beta");
-    await newThread("alpha");
-    await expect(page.locator(".project-window-title")).toContainText("alpha");
+    await newThread("Beta");
+    await newThread("Alpha");
+    await expect(page.locator(".project-window-title")).toContainText("Alpha");
     await expect(context("Deep review")).not.toHaveClass(/selected/);
     await expect(context("Repository")).toHaveClass(/selected/);
 

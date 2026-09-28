@@ -76,12 +76,12 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await page.getByRole("menuitem", { name: "New group inside" }).click();
     await page.getByLabel("New group name").fill("Frontend");
     await page.getByLabel("New group name").press("Enter");
-    await row("web-store").dragTo(page.locator(".sb-group-empty"));
-    await expect.poll(() => folderOf("web-store")).toBe("Work/Frontend");
-    await row("acme-service").click({ button: "right" });
+    await row("Web Store").dragTo(page.locator(".sb-group-empty"));
+    await expect.poll(() => folderOf("Web Store")).toBe("Work/Frontend");
+    await row("Acme Service").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Move to group" }).click();
     await page.getByRole("menuitem", { name: "Work", exact: true }).click();
-    await expect.poll(() => folderOf("acme-service")).toBe("Work");
+    await expect.poll(() => folderOf("Acme Service")).toBe("Work");
     await page.screenshot({
       path: "test-results/screenshots/59-organize-projects.png",
       animations: "disabled",
@@ -101,13 +101,13 @@ test("organizes project groups, preserves child expansion across restart, and ce
     await expect.poll(topGroups).toEqual(["Work", "Home"]);
     await page
       .locator(".sb-project-name")
-      .filter({ hasText: "web-store" })
+      .filter({ hasText: "Web Store" })
       .click();
     await page
-      .getByRole("button", { name: "Collapse web-store", exact: true })
+      .getByRole("button", { name: "Collapse Web Store", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Expand acme-service", exact: true })
+      .getByRole("button", { name: "Expand Acme Service", exact: true })
       .click();
     await page
       .getByRole("button", {
@@ -119,7 +119,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
       .getByRole("button", { name: "Collapse group Work", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "acme-service", exact: true }),
+      page.getByRole("button", { name: "Acme Service", exact: true }),
     ).not.toBeVisible();
     await app.close();
     app = await launch();
@@ -129,15 +129,15 @@ test("organizes project groups, preserves child expansion across restart, and ce
       .getByRole("button", { name: "Expand group Work", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Collapse acme-service", exact: true }),
+      page.getByRole("button", { name: "Collapse Acme Service", exact: true }),
     ).toBeVisible();
     await page
       .getByRole("button", { name: "Expand group Work/Frontend", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Expand web-store", exact: true }),
+      page.getByRole("button", { name: "Expand Web Store", exact: true }),
     ).toBeVisible();
-    for (const name of ["Add project", "New thread in acme-service"]) {
+    for (const name of ["Add project", "New thread in Acme Service"]) {
       const button = page.getByRole("button", { name, exact: true });
       await button.hover();
       const b = (await button.boundingBox())!,
@@ -162,16 +162,16 @@ test("organizes project groups, preserves child expansion across restart, and ce
       .dblclick();
     await page.getByLabel("Group name", { exact: true }).fill("Clients");
     await page.getByLabel("Group name", { exact: true }).press("Enter");
-    await expect.poll(() => folderOf("web-store")).toBe("Clients/Frontend");
+    await expect.poll(() => folderOf("Web Store")).toBe("Clients/Frontend");
     await page
       .getByRole("button", { name: "Collapse group Clients/Frontend" })
       .click({ button: "right" });
     await page.getByRole("menuitem", { name: /Remove group/ }).click();
-    await expect.poll(() => folderOf("web-store")).toBe("Clients");
-    await row("web-store").click({ button: "right" });
+    await expect.poll(() => folderOf("Web Store")).toBe("Clients");
+    await row("Web Store").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Move to group" }).click();
     await page.getByRole("menuitem", { name: "Remove from group" }).click();
-    await expect.poll(() => folderOf("web-store")).toBeUndefined();
+    await expect.poll(() => folderOf("Web Store")).toBeUndefined();
     await expect(
       page.getByRole("button", {
         name: "Collapse group Clients/Frontend",
@@ -180,7 +180,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
     ).not.toBeVisible();
     await page
       .getByRole("button", {
-        name: "Project actions for acme-service",
+        name: "Project actions for Acme Service",
         exact: true,
       })
       .click();

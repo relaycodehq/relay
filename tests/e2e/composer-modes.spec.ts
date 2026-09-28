@@ -88,7 +88,7 @@ test("restores per-project composer settings, answers native approvals, and impl
     });
     // A project's name only folds its row; its new thread opens it.
     await page
-      .getByRole("button", { name: "New thread in web-store", exact: true })
+      .getByRole("button", { name: "New thread in Web Store", exact: true })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
@@ -112,7 +112,7 @@ test("restores per-project composer settings, answers native approvals, and impl
     // A project's name only folds its row; its new thread opens it.
     await page
       .getByRole("button", {
-        name: "New thread in personal-project",
+        name: "New thread in Personal Project",
         exact: true,
       })
       .click();
@@ -124,7 +124,7 @@ test("restores per-project composer settings, answers native approvals, and impl
     ).toBeVisible();
     // A project's name only folds its row; its new thread opens it.
     await page
-      .getByRole("button", { name: "New thread in web-store", exact: true })
+      .getByRole("button", { name: "New thread in Web Store", exact: true })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
@@ -253,10 +253,7 @@ test("restores per-project composer settings, answers native approvals, and impl
     ).toHaveCount(0);
     expect(
       await app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().every((w) =>
-          (globalThis as { relayOffDesktop?: (w: unknown) => boolean })
-            .relayOffDesktop!(w),
-        ),
+        BrowserWindow.getAllWindows().every((w) => !relaySeen(w)),
       ),
     ).toBe(true);
   } finally {

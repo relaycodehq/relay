@@ -102,7 +102,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await expect(page.getByText("relay/fixture-edit-files")).toBeVisible();
 
     // The header follows the thread: Changes and Files show the worktree.
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    await page.getByRole("button", { name: /^Changesb/ }).click();
     const local = page.getByRole("region", { name: "Local changes" });
     await expect(
       local.getByRole("button", { name: "Added src/guard.ts", exact: true }),

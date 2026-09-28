@@ -31,7 +31,7 @@ test("default test windows remain hidden and unfocused while UI actions and acti
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().map((w) => ({
-          visible: w.isVisible(),
+          visible: relaySeen(w),
           focused: w.isFocused(),
         })),
       ),
@@ -177,7 +177,7 @@ for (const cancel of [false, true]) {
       await expect
         .poll(() =>
           app.evaluate(({ BrowserWindow }) =>
-            BrowserWindow.getAllWindows()[0].isVisible(),
+            relaySeen(BrowserWindow.getAllWindows()[0]),
           ),
         )
         .toBe(process.env.RELAY_TEST_HEADED === "1");

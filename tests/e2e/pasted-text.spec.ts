@@ -101,7 +101,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     await page.reload();
     await page
       .locator(".sb-project-row")
-      .getByRole("button", { name: "web-store", exact: true })
+      .getByRole("button", { name: "Web Store", exact: true })
       .click();
     const input = page.getByLabel("Message project");
     await input.click();

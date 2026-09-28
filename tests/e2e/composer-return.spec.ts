@@ -72,7 +72,7 @@ test("a message cancelled back to its side conversation reopens there with its s
     await page.reload();
     await page
       .locator(".sb-project-row")
-      .getByRole("button", { name: "web-store", exact: true })
+      .getByRole("button", { name: "Web Store", exact: true })
       .click();
     const input = page.getByLabel("Message project");
     const picker = page.getByRole("button", {

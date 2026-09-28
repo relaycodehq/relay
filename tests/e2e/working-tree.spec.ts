@@ -247,7 +247,7 @@ test("two hidden desktops sync local edits, show a conflict and resolve it delib
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().every(
-          (w) => !w.isVisible() && !w.isFocused(),
+          (w) => !relaySeen(w) && !w.isFocused(),
         ),
       ),
     ).toBe(true);
