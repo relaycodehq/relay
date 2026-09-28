@@ -692,7 +692,13 @@ export function ProjectChat({
       api.onProjectChat((e) => {
         if (e.chatId === chat?.id) {
           setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-          if (e.message.status !== "streaming") {
+          // The thread polls only while its history holds a streaming answer.
+          // One that shows up through an event alone, like the answer after a
+          // handoff note, would otherwise leave its approvals unfetched.
+          const known = qc
+            .getQueryData<ProjectChatData>(["project-chat", chat.id])
+            ?.messages.some((m) => m.id === e.message.id);
+          if (e.message.status !== "streaming" || !known) {
             void qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
             // What Claude left running rides on the summary.
             void qc.invalidateQueries({ queryKey: ["project-chats"] });
@@ -1658,7 +1664,8 @@ export function ProjectChat({
             // Holding a message in place scrolls too; the reader scrolling
             // anywhere else lets it go.
             if (returning.current) {
-              if (e.scrollTop === placed.current) return;
+              // Within a pixel: some screens report back a rounded position.
+              if (Math.abs(e.scrollTop - placed.current) < 1) return;
               returning.current = undefined;
             }
             if (follow.current) {

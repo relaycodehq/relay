@@ -15,6 +15,7 @@ import { imageSides, type FileSource } from "./image-pair";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
 import { parseNumstat } from "./turn-changes";
 import {
+  checkoutChanged,
   workingPathSchema,
   type WorkingTree,
   type GitAction,
@@ -320,7 +321,7 @@ export async function performGitAction(root: string, action: GitAction) {
     }
     if (action.revision !== state.revision)
       throw new Error(
-        "Your checkout changed. Review the refreshed changes and try again.",
+        `${checkoutChanged} Review the refreshed changes and try again.`,
       );
     if (action.kind === "stage" || action.kind === "unstage") {
       const allPaths = withPreviousPaths(

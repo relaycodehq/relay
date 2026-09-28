@@ -15,7 +15,11 @@ import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { Spinner } from "./ui";
 import type { BranchAction } from "../../shared/branches";
-import { isGitMissing, type WorkingTree } from "../../shared/working-tree";
+import {
+  checkoutChanged,
+  isGitMissing,
+  type WorkingTree,
+} from "../../shared/working-tree";
 export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   projectId,
   branch,
@@ -81,15 +85,28 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
     if (!t || syncing || (sync !== "pull" && sync !== "push")) return;
     setSyncing(true);
     setSyncError(undefined);
+    const run = (revision: string) =>
+      api.projectGitAction(projectId, { kind: sync, revision });
     try {
-      qc.setQueryData<WorkingTree>(
-        treeKey,
-        await api.projectGitAction(projectId, {
-          kind: sync,
-          revision: t.revision,
-        }),
-      );
-      await qc.invalidateQueries(everythingButFetch);
+      let next: WorkingTree;
+      try {
+        next = await run(t.revision);
+      } catch (e) {
+        // The view can be a poll behind the checkout. Look again, and go on
+        // only if it still calls for the very same pull or push.
+        const fresh = (await tree.refetch()).data;
+        if (
+          !(e instanceof Error && e.message.startsWith(checkoutChanged)) ||
+          !fresh ||
+          fresh.branch !== t.branch ||
+          fresh.ahead !== t.ahead ||
+          fresh.behind !== t.behind
+        )
+          throw e;
+        next = await run(fresh.revision);
+      }
+      qc.setQueryData<WorkingTree>(treeKey, next);
+      void qc.invalidateQueries(everythingButFetch);
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : String(e));
       await tree.refetch();
@@ -124,8 +141,10 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
         current: refs.data.current,
       };
       await api.projectChangeBranch(projectId, action);
-      await qc.invalidateQueries(everythingButFetch);
       setOpen(false);
+      // Done once the checkout moved; the rest catches up on its own, and a
+      // slow query shouldn't hold the picker open and disabled meanwhile.
+      void qc.invalidateQueries(everythingButFetch);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       await refs.refetch();

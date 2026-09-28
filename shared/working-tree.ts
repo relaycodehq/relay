@@ -59,6 +59,8 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("fetch") }).strict(),
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
+/** Starts the refusal of an action made on a view of the checkout that's since moved on. */
+export const checkoutChanged = "Your checkout changed.";
 /** Starts every failure that means Relay has no Git to run. */
 export const gitMissing = "Git wasn’t found.";
 export const isGitMissing = (error: unknown) =>
