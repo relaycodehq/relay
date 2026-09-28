@@ -57,7 +57,13 @@ export function ModelSheet({
   const fallbackName = fallback?.model
     ? (list?.find((m) => m.id === fallback.model)?.name ?? fallback.model)
     : undefined;
-  const efforts = model?.efforts ?? [];
+  // On Default, the effort applies to whichever model the agent falls back to.
+  const effortModel = model ?? (settings.choice.model ? undefined : list?.find((m) => m.id === fallback?.model));
+  const efforts = effortModel?.efforts ?? [];
+  // What Default runs, as the agent's own settings say, like the desktop's label.
+  const defaultEffort =
+    (settings.choice.model ? fallback?.efforts?.[settings.choice.model] : fallback?.effort) ||
+    effortModel?.defaultEffort;
   const pick = (id: string) =>
     onChange({
       ...settings,
@@ -83,6 +89,35 @@ export function ModelSheet({
           onChange={(p) => onChange(settings, p)}
         />
       </View>
+      {efforts.length > 0 && (
+        <>
+          <Text style={[styles.section, styles.first, { color: t.muted }]}>Reasoning</Text>
+          <View style={styles.chips}>
+            {(["", ...efforts] as ReasoningEffort[]).map((e) => {
+              const on = e === settings.choice.reasoningEffort;
+              return (
+                <Pressable
+                  key={e || "default"}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  onPress={() =>
+                    onChange({ ...settings, choice: { ...settings.choice, reasoningEffort: e } })
+                  }
+                  style={[
+                    styles.chip,
+                    { borderColor: on ? t.accent : t.border },
+                    on && { backgroundColor: t.accentSoft },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: t.text }]}>
+                    {e ? effortLabel(e) : defaultEffort ? `Default · ${effortLabel(defaultEffort)}` : "Default"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
       {error && (
         <Text style={[styles.note, { color: t.muted }]}>
           Couldn't list {agentNames[provider]}'s models: {error}
@@ -131,35 +166,6 @@ export function ModelSheet({
               onPress={() => pick(m.id)}
             />
           ))}
-        </>
-      )}
-      {efforts.length > 0 && (
-        <>
-          <Text style={[styles.section, { color: t.muted }]}>Reasoning</Text>
-          <View style={styles.chips}>
-            {(["", ...efforts] as ReasoningEffort[]).map((e) => {
-              const on = e === settings.choice.reasoningEffort;
-              return (
-                <Pressable
-                  key={e || "default"}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
-                  onPress={() =>
-                    onChange({ ...settings, choice: { ...settings.choice, reasoningEffort: e } })
-                  }
-                  style={[
-                    styles.chip,
-                    { borderColor: on ? t.accent : t.border },
-                    on && { backgroundColor: t.accentSoft },
-                  ]}
-                >
-                  <Text style={[styles.chipText, { color: t.text }]}>
-                    {e ? effortLabel(e) : model?.defaultEffort ? `Default · ${effortLabel(model.defaultEffort)}` : "Default"}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </>
       )}
       {provider === "codex" && (
@@ -257,6 +263,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   label: { fontSize: type.body },
   hint: { fontSize: type.tiny, lineHeight: 17 },
+  first: { paddingTop: 4 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 20, paddingBottom: 8 },
   chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontSize: type.small },
