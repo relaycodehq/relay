@@ -268,7 +268,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/45-thread-start-light.png",
       animations: "disabled",
     });
-    await page.getByRole("button", { name: /^Changesb/ }).click();
+    await page.getByRole("button", { name: /^Changes\b/ }).click();
     await expect(
       page.getByRole("button", { name: /example.ts/ }).first(),
     ).toBeVisible();

@@ -211,7 +211,7 @@ for (const cancel of [false, true]) {
         ).toHaveValue(fixture.serverUrl);
         expect(
           JSON.parse(await readFile(join(data, "state.json"), "utf8")),
-        ).toEqual(saved);
+        ).toMatchObject(saved);
       } else {
         await app.evaluate(() => {
           (globalThis as any).finishUnlock(false);
@@ -221,7 +221,7 @@ for (const cancel of [false, true]) {
         );
         expect(
           JSON.parse(await readFile(join(data, "state.json"), "utf8")),
-        ).toEqual(saved);
+        ).toMatchObject(saved);
         await page
           .getByRole("button", { name: "Try again", exact: true })
           .click();

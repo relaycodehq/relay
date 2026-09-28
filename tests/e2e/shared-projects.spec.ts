@@ -258,7 +258,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
       })
       .toContain("43");
     expect(git(repos[1], "diff", "--cached")).toBe("");
-    await alice.getByRole("button", { name: /^Changesb/ }).click();
+    await alice.getByRole("button", { name: /^Changes\b/ }).click();
     await alice.getByRole("button", { name: /Modified example.ts/ }).click();
     await expect(alice.locator("diffs-container")).toBeVisible();
     await alice.evaluate(

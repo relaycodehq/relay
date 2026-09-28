@@ -44,10 +44,12 @@ jobs:
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: npm run build
       - run: npm run test:setup
-      - run: xvfb-run -a npm run test:e2e
+      # xvfb-run's default screen is 640x480 at 8 bits, smaller than the window.
+      - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: e2e-results
           path: test-results/
           if-no-files-found: ignore
+          retention-days: 3
