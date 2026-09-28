@@ -15,6 +15,7 @@ import {
   supportedChoice,
   supportsEffort,
 } from "../../shared/settings";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("../../electron/executables", async (actual) => ({
 
 // Answers like `codex app-server`: two pages, one hidden and one legacy model.
 // Signed out, it still lists the few models built into the CLI.
-const fakeCodex = (log: string, auth: string) => `#!${process.execPath}
+const fakeCodex = (log: string, auth: string) => `
 require("node:fs").appendFileSync(${JSON.stringify(log)}, "launch\\n");
 const signedIn = require("node:fs").existsSync(${JSON.stringify(auth)});
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
@@ -64,17 +65,13 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
 
 it("lists the signed-in Codex models once, and asks again after a failure or signed out", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-models-")));
-  const broken = join(root, "broken");
-  await writeFile(broken, `#!${process.execPath}\nprocess.exit(1);\n`, {
-    mode: 0o700,
-  });
+  const broken = await fakeCli(join(root, "broken"), "process.exit(1);\n");
   vi.mocked(findExecutable).mockResolvedValue(broken);
   await expect(codexModels()).rejects.toThrow();
 
-  const cli = join(root, "codex"),
-    log = join(root, "launches"),
+  const log = join(root, "launches"),
     auth = join(root, "auth.json");
-  await writeFile(cli, fakeCodex(log, auth), { mode: 0o700 });
+  const cli = await fakeCli(join(root, "codex"), fakeCodex(log, auth));
   vi.mocked(findExecutable).mockResolvedValue(cli);
   await expect(codexModels()).rejects.toThrow("Sign in to Codex");
 
@@ -126,11 +123,11 @@ it("lists the signed-in Codex models once, and asks again after a failure or sig
 
 it("reads the model and effort Codex's config gives a checkout's threads", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-defaults-")));
-  const cli = join(root, "codex"),
+  const cli = await fakeCli(
+      join(root, "codex"),
+      fakeCodex(join(root, "launches"), join(root, "auth")),
+    ),
     pinned = join(root, "pinned");
-  await writeFile(cli, fakeCodex(join(root, "launches"), join(root, "auth")), {
-    mode: 0o700,
-  });
   await mkdir(pinned);
   vi.mocked(findExecutable).mockResolvedValue(cli);
   expect(await codexDefaults(root)).toEqual({ model: "", effort: "high" });

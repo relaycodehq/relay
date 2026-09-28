@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli } from "../fixtures/fake-cli";
 
 test("a message cancelled back to its side conversation reopens there with its settings", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-return-")));
@@ -19,11 +20,9 @@ test("a message cancelled back to its side conversation reopens there with its s
     repo = join(root, "web-store");
   const app = await (async () => {
     await mkdir(bin);
-    await writeFile(
+    await fakeCli(
       join(bin, "codex"),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
     await mkdir(repo);
     execFileSync("git", ["init", "-q", "-b", "main", repo]);

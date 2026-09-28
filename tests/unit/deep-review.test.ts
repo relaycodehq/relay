@@ -24,6 +24,7 @@ import {
   type DeepReviewStart,
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "../../electron/deep-review";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -259,12 +260,9 @@ beforeEach(async () => {
     "-m",
     "Start",
   );
-  const cli = join(root, "agent");
-  await writeFile(
-    cli,
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+  const cli = await fakeCli(
+    join(root, "agent"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
@@ -278,7 +276,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true });
+  // Windows holds a folder a just-stopped agent ran in for a moment.
+  await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
 
 it("won't review a clean checkout", async () => {

@@ -331,6 +331,10 @@ test("viewed advances across file pages, skips read files and stops at completio
 });
 
 test("Codex handoff validates the checkout and safely carries the comment", async () => {
+  test.skip(
+    process.platform === "win32",
+    "Stubs Linux's terminal launcher; on Windows it would open a real terminal",
+  );
   const { execFileSync } = await import("node:child_process");
   const { writeFile, chmod } = await import("node:fs/promises");
   const repoDir = await mkdtemp(join(tmpdir(), "relay-checkout-"));

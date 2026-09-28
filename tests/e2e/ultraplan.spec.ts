@@ -10,6 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 /** Relay with fake Codex and Claude on its PATH, on a new project. */
 async function openProject() {
@@ -29,11 +30,11 @@ async function openProject() {
   git("add", ".");
   git("commit", "-qm", "Start");
   await mkdir(bin);
-  const agent =
-    `#!${process.execPath}\n` +
-    (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
-  for (const name of ["codex", "claude"])
-    await writeFile(join(bin, name), agent, { mode: 0o700 });
+  const agent = await readFile(
+    resolve("tests/fixtures/room-agent.cjs"),
+    "utf8",
+  );
+  for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -43,7 +44,7 @@ async function openProject() {
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
-      PATH: bin + ":" + env.PATH,
+      ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",

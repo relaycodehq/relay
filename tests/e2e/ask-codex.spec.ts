@@ -19,6 +19,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fixtureServer, BASE, HEAD, newCode } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 let app: ElectronApplication,
   page: Page,
   fixture: Awaited<ReturnType<typeof fixtureServer>>;
@@ -57,22 +58,20 @@ test.beforeAll(async () => {
   git("commit", "--quiet", "-m", "Fixture");
   // Questions may inspect a dirty checkout; their supplied source must still be the PR revision.
   await writeFile(join(root, file), newCode + "\n// local work in progress\n");
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(join(bin, "invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
-    { mode: 0o700 },
+    `require('node:fs').writeFileSync(${JSON.stringify(join(bin, "invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
   );
-  await writeFile(
+  await fakeCli(
     join(bin, "claude"),
-    `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(join(bin, "claude-invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
-    { mode: 0o700 },
+    `require('node:fs').writeFileSync(${JSON.stringify(join(bin, "claude-invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
   );
   env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
     ),
   ) as Record<string, string>;
-  env = { ...env, PATH: bin + ":" + env.PATH, RELAY_TEST_DATA: data };
+  env = { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data };
   await launch();
   await openSignIn(page);
   await page

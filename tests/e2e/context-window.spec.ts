@@ -4,18 +4,12 @@ import {
   _electron as electron,
   type ElectronApplication,
 } from "@playwright/test";
-import {
-  mkdtemp,
-  mkdir,
-  writeFile,
-  readFile,
-  rm,
-  realpath,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("shows the context window and compacts the Codex session", async () => {
   const root = await realpath(
@@ -38,11 +32,9 @@ test("shows the context window and compacts the Codex session", async () => {
       "origin",
       fixture.serverUrl + "/Web/web-store.git",
     ]);
-    await writeFile(
+    await fakeCli(
       join(bin, "codex"),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -53,7 +45,7 @@ test("shows the context window and compacts the Codex session", async () => {
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",

@@ -99,13 +99,19 @@ test("organizes project groups, preserves child expansion across restart, and ce
         },
       );
     await expect.poll(topGroups).toEqual(["Work", "Home"]);
-    await page
+    // The name folds and unfolds its row, whichever way it was after the
+    // drag; Web Store is left folded.
+    const cloud = page
       .locator(".sb-project-name")
-      .filter({ hasText: "Web Store" })
-      .click();
-    await page
-      .getByRole("button", { name: "Collapse Web Store", exact: true })
-      .click();
+      .filter({ hasText: "Web Store" });
+    const open = (await cloud.getAttribute("aria-expanded")) === "true";
+    await cloud.click();
+    await expect(cloud).toHaveAttribute("aria-expanded", String(!open));
+    if (!open)
+      await page
+        .getByRole("button", { name: "Collapse Web Store", exact: true })
+        .click();
+    await expect(cloud).toHaveAttribute("aria-expanded", "false");
     await page
       .getByRole("button", { name: "Expand Acme Service", exact: true })
       .click();

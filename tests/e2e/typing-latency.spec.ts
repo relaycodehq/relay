@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli } from "../fixtures/fake-cli";
 
 // A benchmark, not a check: how long a keystroke in the composer takes to
 // reach the screen, and how busy the main thread is between keystrokes, with
@@ -197,11 +198,9 @@ test("composer keystroke latency, quiet and with agents running", async () => {
     "origin",
     fixture.serverUrl + "/Web/web-store.git",
   ]);
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(

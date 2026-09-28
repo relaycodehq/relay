@@ -17,6 +17,7 @@ import {
   composeSend,
   newThreadSettings,
 } from "../../mobile/src/remote/compose";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 const freePort = () =>
   new Promise<number>((done) => {
@@ -33,11 +34,9 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
   await mkdir(folder);
   await mkdir(bin);
   await writeFile(join(folder, "README.md"), "# Project\n");
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -48,7 +47,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
-      PATH: bin + ":" + env.PATH,
+      ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",

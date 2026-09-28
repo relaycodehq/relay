@@ -28,6 +28,9 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
     "disable-backgrounding-occluded-windows",
     "disable-renderer-backgrounding",
     "disable-background-timer-throttling",
+    // Wheel steps land when sent, not over a smooth scroll a slow machine
+    // may finish after a test has read the view.
+    "disable-smooth-scrolling",
   ])
     app.commandLine.appendSwitch(flag);
 }

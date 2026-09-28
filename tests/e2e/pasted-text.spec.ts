@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 const trace = [
   "TypeError: Cannot read properties of undefined (reading 'map')",
@@ -50,11 +51,9 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
   let app: ElectronApplication | undefined;
   try {
     await mkdir(bin);
-    await writeFile(
+    await fakeCli(
       join(bin, "codex"),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
     await mkdir(repo);
     execFileSync("git", ["init", "-q", "-b", "main", repo]);
@@ -80,7 +79,7 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",

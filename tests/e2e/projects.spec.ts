@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 const screenshotPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
 test("matches a project remote, reviews its PR and sends pinned lines into its restored chat", async () => {
@@ -45,11 +46,9 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     git("commit", "-qam", "Head");
     const head = git("rev-parse", "HEAD");
     fixture.setHead(head);
-    await writeFile(
+    await fakeCli(
       join(bin, "codex"),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -60,7 +59,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",
@@ -210,15 +209,14 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
   git("add", ".");
   git("commit", "-qm", "Initial");
   await writeFile(join(repo, "example.ts"), "export const answer = 43;\n");
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  await writeFile(join(bin, "claude"), await readFile(join(bin, "codex")), {
-    mode: 0o700,
-  });
+  await fakeCli(
+    join(bin, "claude"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -230,7 +228,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
         RELAY_AGENT_CAPTURE: join(root, "capture.jsonl"),
         RELAY_TEST_HEADED: "0",
@@ -715,6 +713,11 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
+    // With two projects a new thread asks where; Enter keeps this one.
+    await page
+      .getByRole("dialog", { name: "New thread in…" })
+      .getByRole("combobox", { name: "Search projects" })
+      .press("Enter");
     await expect(page.getByLabel("Message project")).toBeFocused();
     await expect(page.locator(".thread-context-controls")).toContainText(
       "feature",

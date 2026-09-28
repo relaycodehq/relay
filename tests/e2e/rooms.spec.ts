@@ -23,6 +23,7 @@ import { fixtureServer, newCode } from "../fixtures/gitea";
 import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
 import { roomAppUrl } from "../../shared/rooms";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 let fixture: Awaited<ReturnType<typeof fixtureServer>>,
   database: RoomsDatabase,
   server: ReturnType<typeof createRoomsServer>,
@@ -93,10 +94,9 @@ test.beforeAll(async () => {
   git("add", ".");
   git("commit", "--quiet", "-m", "Test checkout");
   for (const name of ["codex", "claude"])
-    await writeFile(
+    await fakeCli(
       join(bin, name),
-      `#!${process.execPath}\nrequire(${JSON.stringify(resolve("tests/fixtures/room-agent.cjs"))});\n`,
-      { mode: 0o700 },
+      `require(${JSON.stringify(resolve("tests/fixtures/room-agent.cjs"))});\n`,
     );
   for (const person of ["alice", "bob"]) {
     const data = join(root, person);
@@ -110,7 +110,7 @@ test.beforeAll(async () => {
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
         RELAY_AGENT_CAPTURE: capture,
       },

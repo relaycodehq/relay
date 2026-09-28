@@ -1,16 +1,17 @@
-import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { findExecutable } from "../../electron/executables";
 import { runCodex } from "../../electron/rooms/codex";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
 }));
 
 // Answers like `codex app-server` whose config.toml sets `model_reasoning_effort = "xhigh"`.
-const fakeCodex = (log: string) => `#!${process.execPath}
+const fakeCodex = (log: string) => `
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const m = JSON.parse(line);
@@ -29,9 +30,8 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
 
 it("runs a turn at Codex's own effort when the default is chosen", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-codex-")));
-  const cli = join(root, "codex"),
-    log = join(root, "turn.json");
-  await writeFile(cli, fakeCodex(log), { mode: 0o700 });
+  const log = join(root, "turn.json");
+  const cli = await fakeCli(join(root, "codex"), fakeCodex(log));
   vi.mocked(findExecutable).mockResolvedValue(cli);
   const answer = await runCodex({
     cwd: root,

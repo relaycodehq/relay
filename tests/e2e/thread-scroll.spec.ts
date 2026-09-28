@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 const lorem =
   "Relay keeps the thread pinned while answers stream in and remembers where the reader left off. ";
@@ -115,11 +116,12 @@ test("reopens a long thread where the reader left it, before or after paging bac
     await mkdir(repo);
     // The fixture agent stands in for both CLIs, so nothing real starts.
     await mkdir(bin);
-    const agent =
-      `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
     for (const name of ["codex", "claude"])
-      await writeFile(join(bin, name), agent, { mode: 0o700 });
+      await fakeCli(join(bin, name), agent);
     await mkdir(join(data, "project-chats"), { recursive: true });
     execFileSync("git", ["init", "-q", "-b", "main", repo]);
     const projectId = randomUUID();
@@ -157,7 +159,7 @@ test("reopens a long thread where the reader left it, before or after paging bac
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",
@@ -191,7 +193,10 @@ test("reopens a long thread where the reader left it, before or after paging bac
     const before = (await topOfView(page))!;
     await page.getByRole("button", { name: "Earlier messages" }).click();
     await page.waitForTimeout(500);
-    expect(await offsetOf(page, before.id!)).toBe(before.offset);
+    // Within a pixel: at fractional display scaling both sides round.
+    expect(
+      Math.abs((await offsetOf(page, before.id!)) - before.offset),
+    ).toBeLessThanOrEqual(1);
 
     // Read among the earlier messages; the thread reopens there too.
     await wheel(page, -3000);
@@ -217,11 +222,12 @@ test("lets the reader scroll up while an answer streams", async () => {
   try {
     await mkdir(repo);
     await mkdir(bin);
-    const agent =
-      `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
     for (const name of ["codex", "claude"])
-      await writeFile(join(bin, name), agent, { mode: 0o700 });
+      await fakeCli(join(bin, name), agent);
     await mkdir(join(data, "project-chats"), { recursive: true });
     execFileSync("git", ["init", "-q", "-b", "main", repo]);
     const projectId = randomUUID();
@@ -257,7 +263,7 @@ test("lets the reader scroll up while an answer streams", async () => {
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",

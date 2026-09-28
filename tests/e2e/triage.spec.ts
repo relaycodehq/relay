@@ -6,17 +6,11 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import {
-  mkdtemp,
-  mkdir,
-  writeFile,
-  readFile,
-  chmod,
-  readdir,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 let app: ElectronApplication,
   page: Page,
   fixture: Awaited<ReturnType<typeof fixtureServer>>,
@@ -45,11 +39,10 @@ process.stdin.on('end',()=>{
  setTimeout(()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:JSON.stringify(result)}}));console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:1200,output_tokens:100}}));},mode==='delay'?20000:200);
 });
 `;
-  await writeFile(join(binDir, "codex"), script, { mode: 0o700 });
-  await chmod(join(binDir, "codex"), 0o700);
+  await fakeCli(join(binDir, "codex"), script);
   const env: Record<string, string | undefined> = {
     ...process.env,
-    PATH: binDir + ":" + process.env.PATH,
+    ...pathWith(process.env as Record<string, string>, binDir),
     RELAY_TEST_DATA: dataDir,
   };
   delete env.ELECTRON_RUN_AS_NODE;

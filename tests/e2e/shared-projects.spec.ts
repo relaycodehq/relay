@@ -21,6 +21,7 @@ import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
 import { roomAppUrl } from "../../shared/rooms";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("shares a private project chat, gates invitations, keeps token streaming local and syncs saved files", async () => {
   const root = await realpath(
@@ -47,11 +48,9 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
   const bin = join(root, "bin"),
     capture = join(root, "agent.jsonl");
   await mkdir(bin);
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   const git = (dir: string, ...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], {
@@ -99,7 +98,7 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
         args: ["tests/fixtures/launch.cjs"],
         env: {
           ...env,
-          PATH: bin + ":" + env.PATH,
+          ...pathWith(env, bin),
           RELAY_TEST_DATA: join(root, person + "-data"),
           RELAY_TEST_HEADED: "0",
           RELAY_TEST_NATIVE_STORAGE: "0",

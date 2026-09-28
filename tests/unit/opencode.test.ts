@@ -1,5 +1,5 @@
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { findExecutable } from "../../electron/executables";
@@ -9,6 +9,7 @@ import { permissionRules } from "../../electron/agents/opencode/permissions";
 import { openCodeModels } from "../../electron/agents/opencode/catalog";
 import { runtimeModes } from "../../shared/agent-modes";
 import type { AgentOptions } from "../../electron/agents/types";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -17,12 +18,9 @@ vi.mock("../../electron/executables", async (actual) => ({
 let root: string;
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-opencode-")));
-  const cli = join(root, "opencode");
-  await writeFile(
-    cli,
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8")),
-    { mode: 0o700 },
+  const cli = await fakeCli(
+    join(root, "opencode"),
+    await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"),
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_OPENCODE_CAPTURE", join(root, "capture.jsonl"));

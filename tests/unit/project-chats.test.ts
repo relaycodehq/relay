@@ -17,6 +17,7 @@ import { ProjectChats } from "../../electron/project-chats";
 import { findExecutable } from "../../electron/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { applyChatPatch, type ChatMessage } from "../../shared/projects";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -32,12 +33,9 @@ beforeEach(async () => {
   const repo = join(root, "repo");
   await mkdir(repo);
   execFileSync("git", ["init", "--quiet", repo]);
-  const cli = join(root, "codex");
-  await writeFile(
-    cli,
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+  const cli = await fakeCli(
+    join(root, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
@@ -53,7 +51,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true });
+  // Windows holds a folder a just-stopped agent ran in for a moment.
+  await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
 const input = (body: string) => ({
   id: randomUUID(),

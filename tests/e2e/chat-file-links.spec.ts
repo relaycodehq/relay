@@ -11,15 +11,14 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 async function launch(root: string) {
   const bin = join(root, "bin");
   await mkdir(bin);
-  await writeFile(
+  await fakeCli(
     join(bin, "codex"),
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -30,7 +29,7 @@ async function launch(root: string) {
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
-      PATH: bin + ":" + env.PATH,
+      ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",

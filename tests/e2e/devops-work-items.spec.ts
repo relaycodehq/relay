@@ -9,6 +9,7 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("assigned Azure DevOps work items appear under a new thread and Jev narrows them to the project", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-devops-"))),
@@ -26,11 +27,9 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
   const bin = join(root, "bin");
   await mkdir(bin);
   for (const name of ["codex", "claude"])
-    await writeFile(
+    await fakeCli(
       join(bin, name),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
@@ -41,7 +40,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
-      PATH: bin + ":" + env.PATH,
+      ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",

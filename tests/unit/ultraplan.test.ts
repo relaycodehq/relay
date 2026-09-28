@@ -18,6 +18,7 @@ import { findExecutable } from "../../electron/executables";
 import { leadPrompt, thinkerPrompt } from "../../electron/ultraplan";
 import { council, type UltraplanKind } from "../../shared/ultraplan";
 import type { ProjectChatSend } from "../../shared/projects";
+import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
   findExecutable: vi.fn(),
@@ -119,12 +120,9 @@ beforeEach(async () => {
   await mkdir(join(repo, "src"), { recursive: true });
   execFileSync("git", ["init", "--quiet", repo]);
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [];\n");
-  const cli = join(root, "agent");
-  await writeFile(
-    cli,
-    `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
-    { mode: 0o700 },
+  const cli = await fakeCli(
+    join(root, "agent"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
@@ -138,7 +136,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true });
+  // Windows holds a folder a just-stopped agent ran in for a moment.
+  await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
 
 it("briefs a council of hidden read-only thinkers, then plans in Plan mode", async () => {

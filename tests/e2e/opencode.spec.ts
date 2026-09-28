@@ -10,6 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("talks to OpenCode from the composer: picks its model, answers its ask, keeps the thread", async () => {
   test.setTimeout(90000);
@@ -18,16 +19,15 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
     capture = join(root, "opencode.jsonl");
   const app = await (async () => {
     await mkdir(bin);
-    const agent =
-      `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
     for (const name of ["codex", "claude"])
-      await writeFile(join(bin, name), agent, { mode: 0o700 });
-    await writeFile(
+      await fakeCli(join(bin, name), agent);
+    await fakeCli(
       join(bin, "opencode"),
-      `#!${process.execPath}\n` +
-        (await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8")),
-      { mode: 0o700 },
+      await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"),
     );
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
@@ -38,7 +38,7 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
       args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
-        PATH: bin + ":" + env.PATH,
+        ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",

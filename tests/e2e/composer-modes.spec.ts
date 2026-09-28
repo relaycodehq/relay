@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("restores per-project composer settings, answers native approvals, and implements a plan in Build mode", async () => {
   test.setTimeout(100000);
@@ -28,11 +29,12 @@ test("restores per-project composer settings, answers native approvals, and impl
   let app: ElectronApplication | undefined;
   try {
     await mkdir(bin);
-    const script =
-      `#!${process.execPath}\n` +
-      (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
+    const script = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
     for (const name of ["codex", "claude"])
-      await writeFile(join(bin, name), script, { mode: 0o700 });
+      await fakeCli(join(bin, name), script);
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
@@ -43,7 +45,7 @@ test("restores per-project composer settings, answers native approvals, and impl
         args: ["tests/fixtures/launch.cjs"],
         env: {
           ...env,
-          PATH: bin + ":" + env.PATH,
+          ...pathWith(env, bin),
           RELAY_TEST_DATA: join(root, "data"),
           RELAY_TEST_HEADED: "0",
           RELAY_TEST_NATIVE_STORAGE: "0",
