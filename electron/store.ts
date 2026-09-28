@@ -27,6 +27,8 @@ interface State {
   devopsPat?: string;
   devopsOpenRouterKey?: string;
   phoneRemote?: import("./remote/devices").RemoteSettings;
+  /** The Git executable chosen in Settings; unset, Relay finds its own. */
+  gitPath?: string;
   version: 1;
   account?: Account;
   encryptedToken?: string;

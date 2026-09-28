@@ -38,6 +38,7 @@ import {
   performGitAction,
   validateRepo,
 } from "./working-tree";
+import { gitInfo, gitVersion, setGitPath } from "./git";
 import { generateCommitMessage } from "./commit-messages";
 import {
   catchUpBranch,
@@ -444,20 +445,24 @@ function createWindow() {
     ...(process.platform === "darwin"
       ? {
           titleBarStyle: "hiddenInset" as const,
-          trafficLightPosition: { x: 20, y: 22 },
+          trafficLightPosition: { x: 20, y: 17 },
           vibrancy: "sidebar" as const,
           visualEffectState: "followWindow" as const,
         }
-      : {
-          titleBarStyle: "hidden" as const,
-          titleBarOverlay: {
-            height: 62,
-            color: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
-            symbolColor: nativeTheme.shouldUseDarkColors
-              ? "#ffffff"
-              : "#333333",
-          },
-        }),
+      : process.platform === "win32"
+        ? // The renderer draws the caption buttons (WindowControls), centred
+          // in the header; Windows' own overlay only sits flush to the top.
+          { titleBarStyle: "hidden" as const }
+        : {
+            titleBarStyle: "hidden" as const,
+            titleBarOverlay: {
+              height: 51,
+              color: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
+              symbolColor: nativeTheme.shouldUseDarkColors
+                ? "#ffffff"
+                : "#333333",
+            },
+          }),
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -468,6 +473,11 @@ function createWindow() {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // The renderer's caption buttons swap maximize for restore.
+  const sendMaximized = () =>
+    win?.webContents.send("relay:maximized", win.isMaximized());
+  win.on("maximize", sendMaximized);
+  win.on("unmaximize", sendMaximized);
   // A reloaded window starts without terminals; shells keep their output until it asks.
   win.webContents.on("did-start-navigation", (details) => {
     if (details.isMainFrame && !details.isSameDocument)
@@ -831,6 +841,32 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     }
     case "projectWorkingTree":
       return workingTree(await placeRoot(args[0]));
+    case "gitInfo":
+      return gitInfo();
+    case "chooseGit": {
+      const result = await dialog.showOpenDialog(win!, {
+        title: "Choose the Git program",
+        properties: ["openFile"],
+        filters:
+          process.platform === "win32"
+            ? [{ name: "Git", extensions: ["exe"] }]
+            : undefined,
+      });
+      if (result.canceled) return null;
+      const path = result.filePaths[0];
+      await gitVersion(path);
+      await store.update((s) => {
+        s.gitPath = path;
+      });
+      setGitPath(path);
+      return gitInfo();
+    }
+    case "resetGit":
+      await store.update((s) => {
+        delete s.gitPath;
+      });
+      setGitPath(null);
+      return gitInfo();
     case "projectWorkingDiff":
       return workingDiff(
         await placeRoot(args[0]),
@@ -1665,7 +1701,7 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       nativeTheme.themeSource = appearance.mode;
       win?.setBackgroundColor(appearance.background);
       // The window controls sit on the titlebar, so they wear its colours.
-      if (process.platform !== "darwin")
+      if (process.platform === "linux")
         win?.setTitleBarOverlay({
           color: appearance.titlebar,
           symbolColor: appearance.titlebarText,
@@ -1705,6 +1741,18 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
     case "setBadge":
       setBadge(z.number().int().min(0).max(9999).parse(args[0]));
       return;
+    case "windowControl": {
+      const action = z
+        .enum(["minimize", "toggleMaximize", "close"])
+        .parse(args[0]);
+      if (action === "minimize") win?.minimize();
+      else if (action === "close") win?.close();
+      else if (win?.isMaximized()) win.unmaximize();
+      else win?.maximize();
+      return;
+    }
+    case "isMaximized":
+      return win?.isMaximized() ?? false;
     case "updateState":
       return updater.current;
     case "downloadUpdate":
@@ -1744,6 +1792,7 @@ app
     app.setName("Relay");
     store = new Store(app.getPath("userData"));
     await store.load();
+    setGitPath(store.get().gitPath ?? null);
     projects = new Projects(store);
 
     rooms = new RoomService(

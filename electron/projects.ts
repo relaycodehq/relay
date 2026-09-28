@@ -12,6 +12,7 @@ import {
   sortGroupPaths,
 } from "../shared/project-folders";
 import { git, gitBytes } from "./git";
+import { isGitMissing } from "../shared/working-tree";
 import { folderFiles } from "./folder-files";
 import { digest } from "./hash";
 import { inspectRepository, remoteUrl } from "./repository";
@@ -38,7 +39,8 @@ async function repositoryRoot(dir: string) {
     );
   } catch (e) {
     // Without Git installed, every folder is a plain one.
-    if (/not a git repository|ENOENT/i.test((e as Error).message)) return null;
+    if (isGitMissing(e) || /not a git repository/i.test((e as Error).message))
+      return null;
     throw e;
   }
 }

@@ -2,7 +2,14 @@ import { execFile } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectRepository } from "./repository";
-import { git, gitBytes, gitEnv, redactCredentials } from "./git";
+import {
+  git,
+  gitBytes,
+  gitEnv,
+  gitError,
+  gitExecutable,
+  redactCredentials,
+} from "./git";
 import { digest } from "./hash";
 import { imageSides, type FileSource } from "./image-pair";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
@@ -20,9 +27,10 @@ export async function ignoredPaths(
   paths: string[],
 ): Promise<Set<string>> {
   if (!paths.length) return new Set();
+  const file = await gitExecutable();
   return new Promise((resolve, reject) => {
     const child = execFile(
-      "git",
+      file,
       ["-C", root, "check-ignore", "--no-index", "--stdin", "-z"],
       {
         timeout: 15000,
@@ -32,7 +40,7 @@ export async function ignoredPaths(
         env: gitEnv({ GIT_LITERAL_PATHSPECS: undefined }),
       },
       (error, stdout) => {
-        if (error && Number(error.code) !== 1) reject(error);
+        if (error && Number(error.code) !== 1) reject(gitError(error));
         else resolve(new Set(stdout.split("\0").filter(Boolean)));
       },
     );

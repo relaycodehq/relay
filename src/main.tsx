@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/ui";
 import App from "./App";
+import {
+  drawsWindowControls,
+  WindowControls,
+} from "./components/WindowControls";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
@@ -28,11 +32,14 @@ createRoot(document.getElementById("root")!).render(
     {/* The preload bridge only exists in the desktop app; a browser tab on
         the dev server would otherwise crash on the first API call. */}
     {window.relay ? (
-      <ErrorBoundary>
-        <QueryClientProvider client={client}>
-          <App />
-        </QueryClientProvider>
-      </ErrorBoundary>
+      <>
+        <ErrorBoundary>
+          <QueryClientProvider client={client}>
+            <App />
+          </QueryClientProvider>
+        </ErrorBoundary>
+        {drawsWindowControls && <WindowControls />}
+      </>
     ) : (
       <div className="empty">
         <h2>Relay runs in its desktop app</h2>

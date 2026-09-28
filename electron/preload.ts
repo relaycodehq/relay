@@ -103,6 +103,9 @@ const methods = [
   "workingTree",
   "workingDiff",
   "gitAction",
+  "gitInfo",
+  "chooseGit",
+  "resetGit",
   "roomHosting",
   "saveRoomHosting",
   "roomAcceptInvitation",
@@ -173,6 +176,8 @@ const methods = [
   "searchThemes",
   "fetchThemes",
   "setBadge",
+  "windowControl",
+  "isMaximized",
   "parseUrl",
   "phoneRemoteState",
   "setPhoneRemote",
@@ -211,6 +216,11 @@ contextBridge.exposeInMainWorld("relay", {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:terminal", listener);
     return () => ipcRenderer.removeListener("relay:terminal", listener);
+  },
+  onMaximized: (callback: (maximized: boolean) => void) => {
+    const listener = (_event: unknown, value: boolean) => callback(value);
+    ipcRenderer.on("relay:maximized", listener);
+    return () => ipcRenderer.removeListener("relay:maximized", listener);
   },
   onOpenUrl: (callback: (url: string) => void) => {
     const listener = (_event: unknown, url: string) => callback(url);

@@ -1,7 +1,86 @@
 import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
+import { delimiter, dirname } from "node:path";
 import { promisify } from "node:util";
 import { NotText, textLimit, tooLarge } from "./working-files";
+import { findExecutable } from "./executables";
+import { gitMissing, type GitInfo } from "../shared/working-tree";
 const exec = promisify(execFile);
+const missing = `${gitMissing} Install Git, or choose where it is in Settings → Integrations.`;
+/** The Git chosen in Settings; unset, Relay finds its own. */
+let chosen: string | null = null;
+let found: Promise<string> | undefined;
+export function setGitPath(path: string | null) {
+  chosen = path;
+  found = undefined;
+}
+/** The Git executable to run: the chosen one, else one on PATH or in a usual install folder. */
+export function gitExecutable(): Promise<string> {
+  if (found) return found;
+  const current = (found = (async () => {
+    const path = chosen;
+    if (path) {
+      await access(path).catch(() => {
+        throw new Error(
+          `${gitMissing} The Git chosen in Settings is gone: ${path}`,
+        );
+      });
+    }
+    const git =
+      path ??
+      (await findExecutable("git").catch(() => {
+        throw new Error(missing);
+      }));
+    // Agents and terminals run Git too, and a PATH from before Git was
+    // installed (Windows keeps the one the app started with) lacks it.
+    const dir = dirname(git),
+      paths = (process.env.PATH ?? "").split(delimiter);
+    if (!paths.includes(dir))
+      process.env.PATH = [dir, ...paths].filter(Boolean).join(delimiter);
+    return git;
+  })());
+  // A failure isn't kept, so installing Git works without a restart.
+  current.catch(() => {
+    if (found === current) found = undefined;
+  });
+  return current;
+}
+/** Git's version line; fails when `path` isn't Git. */
+export async function gitVersion(path: string) {
+  let stdout: string;
+  try {
+    // Windows refuses a file that isn't a program before any promise exists.
+    ({ stdout } = await exec(path, ["--version"], {
+      timeout: 15000,
+      encoding: "utf8",
+      env: gitEnv(),
+    }));
+  } catch {
+    throw new Error("That program didn’t run as Git.");
+  }
+  const version = stdout.trim();
+  if (!version.startsWith("git version"))
+    throw new Error("That program isn’t Git.");
+  return version;
+}
+export async function gitInfo(): Promise<GitInfo> {
+  try {
+    const path = await gitExecutable();
+    return {
+      path,
+      chosen: !!chosen,
+      version: await gitVersion(path),
+      error: null,
+    };
+  } catch (e) {
+    return {
+      path: chosen,
+      chosen: !!chosen,
+      version: null,
+      error: (e as Error).message,
+    };
+  }
+}
 /** Git never prompts, takes optional locks, or reads paths as patterns. */
 export const gitEnv = (extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
   ...process.env,
@@ -24,8 +103,13 @@ export interface GitOptions {
   signal?: AbortSignal;
 }
 /** Git's failure as the user should see it: its own message, no credentials. */
-function gitError(e: unknown) {
-  const error = e as Error & { stderr?: string | Buffer };
+export function gitError(e: unknown) {
+  const error = e as Error & { stderr?: string | Buffer; code?: unknown };
+  // The executable went away since it was found; find it again next time.
+  if (error.code === "ENOENT") {
+    found = undefined;
+    return new Error(missing);
+  }
   return new Error(
     redactCredentials(String(error.stderr || "") || error.message).slice(
       0,
@@ -45,9 +129,10 @@ export async function git(
     env,
     signal,
   } = typeof options === "number" ? { timeout: options } : options;
+  const file = await gitExecutable();
   try {
     return (
-      await exec("git", ["-C", root, ...args], {
+      await exec(file, ["-C", root, ...args], {
         timeout,
         maxBuffer,
         env: gitEnv(env),
@@ -65,9 +150,10 @@ export async function gitBytes(
   args: string[],
   limit = textLimit,
 ) {
+  const file = await gitExecutable();
   try {
     return (
-      await exec("git", ["-C", root, ...args], {
+      await exec(file, ["-C", root, ...args], {
         timeout: 15000,
         maxBuffer: limit + 4096,
         encoding: "buffer",

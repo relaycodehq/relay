@@ -1,0 +1,36 @@
+/* Windows caption buttons, centred in the 52px .titlebar. The
+   titlebars keep 150px clear on the right for them. */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+  z-index: 2000;
+  -webkit-app-region: no-drag;
+}
+.window-controls button {
+  width: 46px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  font-size: 10px;
+  transition: background-color 0.1s;
+}
+.window-controls button:hover {
+  background: var(--hover);
+}
+.window-controls .window-close:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
+:root[data-inactive] .window-controls button:not(:hover) {
+  color: var(--muted);
+}

@@ -15,7 +15,7 @@ import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { Spinner } from "./ui";
 import type { BranchAction } from "../../shared/branches";
-import type { WorkingTree } from "../../shared/working-tree";
+import { isGitMissing, type WorkingTree } from "../../shared/working-tree";
 export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   projectId,
   branch,
@@ -67,6 +67,8 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string>();
   const t = tree.data;
+  // Without it the label would say it's loading forever.
+  const branchError = branch === undefined ? tree.error : null;
   const sync =
     !t?.upstream || !t.branch || t.operation || (!t.ahead && !t.behind)
       ? null
@@ -148,16 +150,22 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           className="composer-branch-trigger"
           disabled={disabled}
           title={
-            disabled
-              ? "Save your edits and wait for the agent before switching branches"
-              : "Switch or create a branch"
+            branchError
+              ? branchError.message
+              : disabled
+                ? "Save your edits and wait for the agent before switching branches"
+                : "Switch or create a branch"
           }
         >
           <GitBranch size={13} />
           <span>
-            {branch === undefined
-              ? "Loading branch…"
-              : branch || "Detached HEAD"}
+            {branch !== undefined
+              ? branch || "Detached HEAD"
+              : !branchError
+                ? "Loading branch…"
+                : isGitMissing(branchError)
+                  ? "Git unavailable"
+                  : "Branch unavailable"}
           </span>
           <ChevronDown size={12} />
         </Popover.Trigger>

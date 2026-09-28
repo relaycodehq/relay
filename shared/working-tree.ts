@@ -59,8 +59,27 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("fetch") }).strict(),
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
+/** Starts every failure that means Relay has no Git to run. */
+export const gitMissing = "Git wasn’t found.";
+export const isGitMissing = (error: unknown) =>
+  error instanceof Error && error.message.startsWith(gitMissing);
+/** The Git Relay runs: one chosen in Settings, or the one it found. */
+export interface GitInfo {
+  /** The executable, or null when none was found. */
+  path: string | null;
+  /** Set when the user chose `path` instead of leaving it to Relay. */
+  chosen: boolean;
+  /** Git's own version line, such as "git version 2.47.1.windows.1". */
+  version: string | null;
+  error: string | null;
+}
 export interface WorkingTreeApi {
   workingTree(repo: Repo): Promise<WorkingTree>;
   workingDiff(repo: Repo, path: string, area: ChangeArea): Promise<FilePair>;
   gitAction(repo: Repo, action: GitAction): Promise<WorkingTree>;
+  gitInfo(): Promise<GitInfo>;
+  /** Asks for the Git executable and uses it if it runs; null if cancelled. */
+  chooseGit(): Promise<GitInfo | null>;
+  /** Forgets the chosen Git and finds one again. */
+  resetGit(): Promise<GitInfo>;
 }

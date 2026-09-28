@@ -355,6 +355,10 @@ export interface Api
   fetchThemes(extension: ExtensionRef): Promise<VsCodeTheme[]>;
   /** Threads needing attention, shown on the app icon; 0 clears it. */
   setBadge(count: number): Promise<void>;
+  /** The Windows caption buttons, which the renderer draws itself. */
+  windowControl(action: "minimize" | "toggleMaximize" | "close"): Promise<void>;
+  isMaximized(): Promise<boolean>;
+  onMaximized(callback: (maximized: boolean) => void): () => void;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
 }

@@ -82,6 +82,7 @@ import {
 } from "./SettingsCard";
 import { RelayMark } from "./RelayMark";
 import { RoomHostingSettings } from "./RoomHostingSettings";
+import { GitSettings } from "./GitSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
   DevOpsConnectionSettings,
@@ -135,7 +136,8 @@ const categories: {
   {
     id: "integrations",
     label: "Integrations",
-    description: "Bring your Azure DevOps work items into new threads.",
+    description:
+      "The Git Relay runs, and your Azure DevOps work items in new threads.",
     icon: ListTodo,
   },
   {
@@ -850,6 +852,16 @@ export function Settings({
         ) : (
           <p className="setting-muted">Loading model settings…</p>
         ),
+    },
+    {
+      id: "git",
+      category: "integrations",
+      title: "Git",
+      description:
+        "Branches, changes and history need Git. Relay finds it by itself; choose it here if it lives somewhere else.",
+      keywords: "git executable path program install branch folder exe",
+      block: true,
+      render: () => <GitSettings />,
     },
     {
       id: "devops",

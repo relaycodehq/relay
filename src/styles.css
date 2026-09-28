@@ -232,8 +232,8 @@ small {
   color: var(--text);
 }
 .titlebar {
-  height: 63px;
-  min-height: 63px;
+  height: 52px;
+  min-height: 52px;
   display: flex;
   align-items: center;
   -webkit-app-region: drag;
@@ -1945,7 +1945,7 @@ html {
 .pane-resizer {
   position: absolute;
   right: -3px;
-  top: 63px;
+  top: 52px;
   bottom: 0;
   width: 6px;
   z-index: 30;
