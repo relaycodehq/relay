@@ -149,9 +149,12 @@ export class ThreadTerminals {
       await new Promise((resolve) => setTimeout(resolve, 100));
     if (this.sessions.get(key) !== session || session.exitCode !== undefined)
       return false;
+    // Linux reports the foreground program by its path ("/bin/bash"), macOS
+    // by its name; a login shell's starts with "-".
     if (
       process.platform !== "win32" &&
-      session.pty.process.replace(/^-/, "").toLowerCase() !== session.shell
+      basename(session.pty.process).replace(/^-/, "").toLowerCase() !==
+        session.shell
     )
       return false;
     // Ctrl+U first clears whatever was half-typed at the prompt.

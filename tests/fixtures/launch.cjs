@@ -29,6 +29,12 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
   ])
     app.commandLine.appendSwitch(flag);
 }
+app.on("session-created", (session) =>
+  session.registerPreloadScript({
+    type: "frame",
+    filePath: require("node:path").join(__dirname, "test-preload.cjs"),
+  }),
+);
 /**
  * Whether a person could see the window: shown, not see-through and on the
  * desktop. Hidden runs show windows to keep them drawing, so `isVisible()`
