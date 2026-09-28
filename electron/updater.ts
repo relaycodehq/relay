@@ -29,6 +29,7 @@ import {
 
 const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;
+const checkTimeout = 20_000;
 const stallTimeout = 60_000;
 
 interface Install {
@@ -83,6 +84,7 @@ export class Updater {
   private manifest?: UpdateManifest;
   private staged?: { version: string; path: string };
   private busy = false;
+  private checking?: Promise<UpdateState>;
   private readonly feed: string;
 
   private waiting?: NodeJS.Timeout;
@@ -111,8 +113,13 @@ export class Updater {
 
   start() {
     if (this.state.status === "off") return;
-    setTimeout(() => void this.check(), 15_000).unref();
-    setInterval(() => void this.check(), checkEvery).unref();
+    // Offline or a missing first release: stay out of the way until the next check.
+    const quietly = () =>
+      void this.check().catch((error) =>
+        console.warn("Update check failed:", error),
+      );
+    setTimeout(quietly, 15_000).unref();
+    setInterval(quietly, checkEvery).unref();
   }
 
   private set(state: UpdateState) {
@@ -120,7 +127,17 @@ export class Updater {
     this.emit(state);
   }
 
-  async check() {
+  /**
+   * Asks the feed for a newer release, joining a check already under way. A
+   * failed check goes back to idle and rejects with the reason, which the
+   * timer keeps to the log and Settings shows.
+   */
+  check() {
+    this.checking ??= this.lookUp().finally(() => (this.checking = undefined));
+    return this.checking;
+  }
+
+  private async lookUp() {
     const current = app.getVersion();
     if (this.state.status === "off" || this.busy) return this.state;
     // A download in progress or waiting for restart shouldn't be reset by a timer.
@@ -137,10 +154,26 @@ export class Updater {
     }
     this.set({ status: "checking", current });
     try {
-      const response = await net.fetch(this.feed, { cache: "no-store" });
+      const response = await net
+        .fetch(this.feed, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(checkTimeout),
+        })
+        .catch((error) => {
+          throw new Error(`Couldn't reach ${new URL(this.feed).host}.`, {
+            cause: error,
+          });
+        });
       if (!response.ok)
         throw new Error(`The update feed answered ${response.status}.`);
-      const manifest = manifestSchema.parse(await response.json());
+      const parsed = manifestSchema.safeParse(
+        await response.json().catch(() => undefined),
+      );
+      if (!parsed.success)
+        throw new Error("The update feed sent something Relay can't read.", {
+          cause: parsed.error,
+        });
+      const manifest = parsed.data;
       this.manifest = manifest;
       const file = manifest.files[this.install.target];
       if (!newerVersion(manifest.version, current) || !file) {
@@ -156,9 +189,8 @@ export class Updater {
         });
       }
     } catch (error) {
-      // Offline or a missing first release: stay out of the way until the next check.
-      console.warn("Update check failed:", error);
       this.set({ status: "idle", current });
+      throw error;
     }
     return this.state;
   }

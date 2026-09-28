@@ -331,6 +331,8 @@ export interface Api
   ): Promise<void>;
   openExternal(url: string): Promise<void>;
   updateState(): Promise<UpdateState>;
+  /** Looks for a newer release now; rejects with the reason when it can't tell. */
+  checkForUpdates(): Promise<UpdateState>;
   downloadUpdate(): Promise<UpdateState>;
   /** Quits and hands over to the new version, which starts by itself. */
   installUpdate(): Promise<UpdateState>;

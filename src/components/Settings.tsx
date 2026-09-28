@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Info,
@@ -36,6 +36,7 @@ import {
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
 import { useAISettings } from "../lib/useAISettings";
+import { useUpdates } from "../lib/updates";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import { setUsageRing, useUsageRing } from "../lib/usage-ring";
@@ -80,7 +81,7 @@ import {
   SettingsRow,
   Switch,
 } from "./SettingsCard";
-import { RelayMark } from "./RelayMark";
+import { UpdateCheck, updateLine } from "./UpdateCheck";
 import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
@@ -524,11 +525,8 @@ export function Settings({
     }
   };
 
-  // Releases stamp their own version at build time; the app knows it.
-  const version = useQuery({
-    queryKey: ["update-state"],
-    queryFn: () => api.updateState(),
-  }).data?.current;
+  // Releases stamp their own version at build time; the updater knows it.
+  const updates = useUpdates();
   const appearance = useAppearance();
   const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
@@ -963,9 +961,9 @@ export function Settings({
       id: "version",
       category: "about",
       title: "Relay",
-      description: version && `Version ${version}`,
-      keywords: "version about",
-      render: () => <RelayMark size={28} />,
+      description: updateLine(updates),
+      keywords: "version about check for updates upgrade",
+      render: () => <UpdateCheck />,
     },
     {
       id: "credits",

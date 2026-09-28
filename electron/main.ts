@@ -1755,6 +1755,8 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
       return win?.isMaximized() ?? false;
     case "updateState":
       return updater.current;
+    case "checkForUpdates":
+      return updater.check();
     case "downloadUpdate":
       return updater.download();
     case "installUpdate":

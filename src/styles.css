@@ -1470,6 +1470,7 @@ body.resizing-table-column {
     .project-ribbon-wave,
     .project-ribbon-sheen,
     .live-shine,
+    .update-comet-spin,
     .thread-terminal .xterm-cursor-blink
   ),
 :root[data-inactive] .sb-status.waiting i::after,

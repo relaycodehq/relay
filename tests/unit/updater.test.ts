@@ -34,6 +34,53 @@ afterEach(() => {
   vi.mocked(net.fetch).mockReset();
 });
 
+/** An updater on a test feed, for a copy that can replace itself. */
+function checker(emit: (state: UpdateState) => void = () => {}) {
+  process.env.RELAY_UPDATE_FEED = "https://example.test/latest.json";
+  const updater = new Updater(emit);
+  delete process.env.RELAY_UPDATE_FEED;
+  Object.assign(updater as any, { install: { target: "linux-x64-appimage" } });
+  return updater;
+}
+const feed = (version: string) =>
+  Response.json({ version, files: { "linux-x64-appimage": release() } });
+
+it("offers a newer release, and notes the time when there's none", async () => {
+  const updater = checker();
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  expect(await updater.check()).toMatchObject({
+    status: "available",
+    version: "0.2.0",
+    install: "auto",
+  });
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.1.0"));
+  expect(await updater.check()).toMatchObject({
+    status: "idle",
+    checkedAt: expect.any(Number),
+  });
+});
+
+it("joins a check already under way", async () => {
+  const updater = checker();
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.1.0"));
+  const [first, second] = await Promise.all([updater.check(), updater.check()]);
+  expect(net.fetch).toHaveBeenCalledTimes(1);
+  expect(second).toBe(first);
+});
+
+it("says why a check failed and goes back to idle", async () => {
+  const seen: string[] = [];
+  const updater = checker((s) => seen.push(s.status));
+  vi.mocked(net.fetch).mockRejectedValueOnce(
+    new Error("net::ERR_INTERNET_DISCONNECTED"),
+  );
+  await expect(updater.check()).rejects.toThrow("Couldn't reach example.test.");
+  expect(updater.current).toEqual({ status: "idle", current: "0.1.0" });
+  expect(seen).toEqual(["checking", "idle"]);
+  vi.mocked(net.fetch).mockResolvedValueOnce(new Response("<!doctype html>"));
+  await expect(updater.check()).rejects.toThrow("can't read");
+});
+
 it("writes a verified download and reports progress", async () => {
   const dir = await mkdtemp(join(tmpdir(), "relay-update-"));
   serve(bytes);

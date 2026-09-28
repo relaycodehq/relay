@@ -1,21 +1,12 @@
-import { useEffect, useState } from "react";
 import { AlertCircle, ArrowDownToLine, Clock, RotateCw } from "lucide-react";
 import { api } from "../lib/api";
-import { releasesPage, type UpdateState } from "../../shared/updates";
+import { useUpdates } from "../lib/updates";
+import { releasesPage } from "../../shared/updates";
 import { Spinner } from "./ui";
 
 /** Sidebar footer control; stays hidden until there's a newer release. */
 export function UpdateButton() {
-  const [state, setState] = useState<UpdateState>();
-  useEffect(() => {
-    let live = true;
-    void api.updateState().then((s) => live && setState((c) => c ?? s));
-    const off = api.onUpdate(setState);
-    return () => {
-      live = false;
-      off();
-    };
-  }, []);
+  const { state } = useUpdates();
   if (!state) return null;
   switch (state.status) {
     case "available":

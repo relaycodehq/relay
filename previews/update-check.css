@@ -1,0 +1,207 @@
+/* Preview chrome: the stage around the settings sheet. */
+.preview-bar .spacer {
+  flex: 1;
+}
+.uc-reset {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+.uc-stage {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding: 28px;
+  background: color-mix(in srgb, var(--text) 4%, var(--background));
+  overflow: auto;
+}
+.uc-sheet {
+  display: flex;
+  height: 440px;
+}
+.uc-note {
+  display: flex;
+  gap: 8px;
+  max-width: 640px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.uc-note svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--accent);
+}
+
+/* Warp: the mark jumps to light speed inside a porthole while Relay asks,
+   and drops out with a flash. */
+.warp .update-orb {
+  width: 46px;
+  height: 46px;
+}
+.warp-field {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    color-mix(in srgb, var(--accent) 10%, transparent) 70%,
+    transparent
+  );
+  animation: update-fade-in 0.25s ease-out;
+  transition: opacity 0.3s ease-in;
+}
+.warp:not([data-phase="busy"]) .warp-field {
+  opacity: 0;
+}
+.warp-field i {
+  position: absolute;
+  left: calc(50% - 0.75px);
+  bottom: 50%;
+  width: 1.5px;
+  height: 11px;
+  border-radius: 1px;
+  background: linear-gradient(to top, transparent, var(--accent));
+  transform-origin: 50% 100%;
+  opacity: 0;
+  animation: warp-streak var(--t) cubic-bezier(0.55, 0, 1, 0.45) var(--d)
+    infinite;
+}
+.warp .relay-mark {
+  transition: transform 0.35s cubic-bezier(0.5, 0, 0.3, 1);
+}
+.warp[data-phase="busy"] .relay-mark {
+  transform: scale(0.74);
+}
+/* Arrival replaces Orbit's catch. */
+.update-check.warp[data-live]:not([data-phase="busy"]) .relay-mark {
+  animation: warp-arrive 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.warp-flash {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    #fff,
+    color-mix(in srgb, var(--accent) 60%, transparent) 45%,
+    transparent
+  );
+  opacity: 0;
+  animation: warp-flash 0.5s ease-out;
+}
+:root[data-inactive] .warp-field i {
+  animation-play-state: paused;
+}
+@keyframes warp-streak {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-5px) scaleY(0.15);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-25px) scaleY(1.1);
+  }
+}
+@keyframes warp-arrive {
+  from {
+    transform: scale(0.74);
+  }
+}
+@keyframes warp-flash {
+  from {
+    opacity: 0.95;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Morph: the button folds into a spinner, then unfolds into the answer. */
+.morph {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.morph-button {
+  interpolate-size: allow-keywords;
+  position: relative;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 15px;
+  transition:
+    width 0.42s cubic-bezier(0.3, 1.2, 0.4, 1),
+    padding 0.42s cubic-bezier(0.3, 1.2, 0.4, 1),
+    background-color 0.3s,
+    border-color 0.3s,
+    color 0.3s;
+}
+.morph-button:disabled {
+  opacity: 1;
+}
+.morph[data-phase="busy"] .morph-button {
+  width: 30px;
+  padding: 0;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.morph-button .spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  animation-delay: 0.15s;
+}
+.morph-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  animation: morph-label-in 0.3s ease-out 0.14s both;
+}
+.morph[data-phase="busy"] .morph-label {
+  visibility: hidden;
+}
+.morph[data-phase="latest"] .morph-button {
+  --pass: light-dark(#1a7f37, #3fb950);
+  color: var(--pass);
+  border-color: color-mix(in srgb, var(--pass) 35%, transparent);
+  background: color-mix(in srgb, var(--pass) 11%, var(--surface));
+}
+.morph-check {
+  width: 14px;
+  height: 14px;
+}
+.morph-check path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 16;
+  animation: morph-draw 0.35s ease-out 0.32s both;
+}
+.morph[data-live][data-phase="offline"] .morph-button {
+  animation: update-shake 0.42s ease-in-out 0.1s;
+}
+@keyframes morph-label-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes morph-draw {
+  from {
+    stroke-dashoffset: 16;
+  }
+}

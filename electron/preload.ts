@@ -169,6 +169,7 @@ const methods = [
   "agentDefaults",
   "openExternal",
   "updateState",
+  "checkForUpdates",
   "downloadUpdate",
   "installUpdate",
   "applyAppearance",

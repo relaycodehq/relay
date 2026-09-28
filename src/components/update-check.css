@@ -1,0 +1,219 @@
+/* Settings → About: the update button, and the mark that shows the check. */
+.update-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.update-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.update-orb > * {
+  grid-area: 1 / 1;
+}
+
+/* A comet circles the mark while Relay asks for the newest release. It turns
+   on its own layer, and falls into the mark when the answer comes. */
+.update-comet {
+  width: 100%;
+  height: 100%;
+  animation: update-comet-in 0.3s ease-out;
+  transition:
+    opacity 0.28s ease-in,
+    transform 0.28s ease-in;
+}
+.update-check:not([data-phase="busy"]) .update-comet {
+  opacity: 0;
+  transform: scale(0.45);
+}
+.update-comet-spin {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: update-orbit 1s linear infinite;
+}
+.update-comet-tail {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    transparent 0 58%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 86%,
+    var(--accent)
+  );
+  mask: radial-gradient(
+    closest-side,
+    transparent calc(100% - 2px),
+    #000 calc(100% - 1.5px)
+  );
+}
+.update-comet-head {
+  position: absolute;
+  top: -1.5px;
+  left: calc(50% - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* The download fills the comet's ring. */
+.update-ring {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+  animation: update-fade-in 0.3s ease-out;
+}
+.update-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+.update-ring-track {
+  stroke: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.update-ring-bar {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transition: stroke-dashoffset 0.4s ease-out;
+}
+
+.update-badge {
+  place-self: end;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin: 0 2px 2px 0;
+  border-radius: 50%;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.update-badge[data-kind="latest"] {
+  color: #fff;
+  background: light-dark(#1a7f37, #2ea043);
+}
+.update-badge[data-kind="offline"] {
+  color: var(--surface);
+  background: var(--muted);
+}
+.update-badge[data-kind="error"] {
+  color: #fff;
+  background: var(--danger);
+}
+
+/* The answer to a check watched from here: the mark catches the comet, then
+   a check ripples out, confetti flies for a newer release, or it shakes its
+   head. Each rests invisible, so without motion only the badge is left. */
+.update-check[data-live] .update-badge {
+  animation: update-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) 0.18s both;
+}
+.update-check[data-live]:is([data-phase="latest"], [data-phase="found"])
+  .relay-mark {
+  animation: update-catch 0.55s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.update-check[data-live][data-phase="offline"] .relay-mark {
+  animation: update-shake 0.42s ease-in-out 0.1s;
+}
+.update-ripple {
+  width: 100%;
+  height: 100%;
+  border: 1.5px solid light-dark(#1a7f37, #3fb950);
+  border-radius: 50%;
+  opacity: 0;
+  animation: update-ripple 0.75s cubic-bezier(0.2, 0.7, 0.4, 1) 0.12s;
+}
+.update-confetti {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.update-confetti i {
+  position: absolute;
+  top: calc(50% - 3px);
+  left: calc(50% - 1.5px);
+  width: 3px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--c);
+  opacity: 0;
+  animation: update-confetti 1.3s 0.1s;
+}
+
+@keyframes update-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes update-comet-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes update-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes update-pop {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+@keyframes update-catch {
+  30% {
+    transform: scale(0.84);
+  }
+}
+@keyframes update-shake {
+  20% {
+    transform: translateX(-2px);
+  }
+  45% {
+    transform: translateX(2px);
+  }
+  70% {
+    transform: translateX(-1px);
+  }
+}
+@keyframes update-ripple {
+  from {
+    opacity: 0.7;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+/* Thrown out fast, then falling as they tumble and fade. */
+@keyframes update-confetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(0.5);
+    animation-timing-function: cubic-bezier(0.1, 0.7, 0.3, 1);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), calc(var(--y) + 20px))
+      rotate(calc(var(--r) * 2));
+  }
+}
