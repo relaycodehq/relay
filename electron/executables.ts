@@ -38,7 +38,12 @@ async function unwrapShim(path: string) {
   return target ? join(dirname(path), target) : path;
 }
 
-export async function findExecutable(name: string) {
+export const findExecutable = (name: string) => locate(name);
+
+/** Git's own lookup, apart from the agent CLIs `findExecutable` finds. */
+export const findGit = () => locate("git");
+
+async function locate(name: string) {
   await pathReady();
   const extensions = windows ? [".exe", ".cmd", ".bat", ""] : [""];
   for (const dir of searchPaths()) {

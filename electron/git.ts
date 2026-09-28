@@ -3,7 +3,7 @@ import { access } from "node:fs/promises";
 import { delimiter, dirname } from "node:path";
 import { promisify } from "node:util";
 import { NotText, textLimit, tooLarge } from "./working-files";
-import { findExecutable } from "./executables";
+import { findGit } from "./executables";
 import { gitMissing, type GitInfo } from "../shared/working-tree";
 const exec = promisify(execFile);
 const missing = `${gitMissing} Install Git, or choose where it is in Settings → Integrations.`;
@@ -28,7 +28,7 @@ export function gitExecutable(): Promise<string> {
     }
     const git =
       path ??
-      (await findExecutable("git").catch(() => {
+      (await findGit().catch(() => {
         throw new Error(missing);
       }));
     // Agents and terminals run Git too, and a PATH from before Git was
