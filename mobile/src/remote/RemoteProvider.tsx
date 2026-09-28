@@ -67,6 +67,7 @@ function deviceName() {
  * connected beside the new one, reporting a status that isn't true any more.
  */
 const live = globalThis as typeof globalThis & { relayClient?: RemoteClient };
+const pairingTimeout = 15_000;
 
 export function RemoteProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -215,14 +216,31 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       outdated: !!overview && (overview.bridge ?? 1) < remoteBridgeVersion,
       pair: (link) =>
         new Promise<void>((resolve, reject) => {
-          pairing.current = { resolve, reject };
+          // An unreachable computer never answers; the client would retry forever.
+          const timer = setTimeout(() => {
+            pairing.current = undefined;
+            reject(
+              new Error(
+                `Couldn't reach ${link.name} at ${link.hosts.join(" or ")}:${link.port}. ` +
+                  "Check that Relay is open there and the phone is on the same network, or both on Tailscale.",
+              ),
+            );
+          }, pairingTimeout);
+          pairing.current = {
+            resolve: () => (clearTimeout(timer), resolve()),
+            reject: (e) => (clearTimeout(timer), reject(e)),
+          };
           setOverview(undefined);
           connect({ link, device: deviceName() });
         }).catch(async (e) => {
           // A failed pairing leaves the phone as it was.
           const saved = await loadCredentials();
           if (saved) connect(saved);
-          else setClient(undefined);
+          else {
+            live.relayClient?.close();
+            live.relayClient = undefined;
+            setClient(undefined);
+          }
           throw e;
         }),
       forget: async () => {
