@@ -42,8 +42,25 @@ jobs:
       - run: npm test
       - run: python3 -m unittest discover -s tests/packaging -v
 
-  build:
+  # The builds upload straight to a draft release, not through artifact
+  # storage: each release is ~600 MB and filled the account's quota. Nobody
+  # sees a draft until publish makes it public.
+  draft:
     needs: [version, test]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Open a draft release in ${{ env.RELEASES_REPO }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1 ||
+            gh release create "$tag" --repo "$RELEASES_REPO" --draft \
+              --title "Relay $VERSION" --notes ""
+
+  build:
+    needs: [version, draft]
     strategy:
       fail-fast: true
       matrix:
@@ -80,24 +97,27 @@ jobs:
       - name: Package
         run: ${{ matrix.package }}
         shell: bash
-      - uses: actions/upload-artifact@v4
-        with:
-          name: relay-${{ matrix.name }}
-          path: ${{ matrix.files }}
-          if-no-files-found: error
-          # Publish copies these to the releases repo in the same run; kept
-          # longer, each release's ~600 MB fills the artifact quota.
-          retention-days: 1
+      - name: Upload to the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          TAG: v${{ needs.version.outputs.version }}
+          FILES: ${{ matrix.files }}
+        # FILES stays unquoted so each pattern expands; one matching nothing fails.
+        run: |
+          shopt -s failglob
+          gh release upload "$TAG" $FILES --repo "$RELEASES_REPO" --clobber
 
   publish:
     needs: [version, build]
     runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+      TAG: v${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: out
-          merge-multiple: true
+      - name: Fetch the builds from the draft
+        run: gh release download "$TAG" --repo "$RELEASES_REPO" --dir out
       - name: Release notes
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
@@ -110,13 +130,9 @@ jobs:
         run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          tag="v$VERSION"
-          if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
-            gh release upload "$tag" out/* --repo "$RELEASES_REPO" --clobber
-          else
-            gh release create "$tag" out/* --repo "$RELEASES_REPO" \
-              --title "Relay $VERSION" --notes-file notes.md --latest
-          fi
+          gh release upload "$TAG" out/latest.json out/Relay-Omarchy-x86_64.tar.gz \
+            --repo "$RELEASES_REPO" --clobber
+          gh release edit "$TAG" --repo "$RELEASES_REPO" --draft=false --latest \
+            --title "Relay $VERSION" --notes-file notes.md
