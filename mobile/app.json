@@ -31,7 +31,15 @@
           "cameraPermission": "Relay uses the camera to scan the pairing code on your computer."
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
