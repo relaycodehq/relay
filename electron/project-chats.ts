@@ -1183,27 +1183,6 @@ export class ProjectChats {
     const images = next.input.images?.length
       ? await this.saveImages(chat.id, next.input.images)
       : [];
-    try {
-      await active.steer(
-        mention.question +
-          (next.input.viewing
-            ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
-            : ""),
-        next.input.id,
-        images.map((image) => ({
-          path: this.imagePath(chat.id, image),
-          mimeType: image.mimeType,
-        })),
-      );
-    } catch {
-      // Sent later as its own turn, which saves its images again.
-      await Promise.all(
-        images.map((image) =>
-          rm(this.imagePath(chat.id, image), { force: true }),
-        ),
-      );
-      return this.save(chat);
-    }
     const message: ChatMessage = {
       id: next.input.id,
       steered: true,
@@ -1217,7 +1196,32 @@ export class ProjectChats {
       ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
       ...(chat.shared ? { pending: true } : {}),
     };
+    // In the thread before the agent hears it: Codex can say it read the
+    // steer in the same breath as accepting it, and its answer continues
+    // below this message only if it's there to find.
     chat.messages.push(message);
+    try {
+      await active.steer(
+        mention.question +
+          (next.input.viewing
+            ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
+            : ""),
+        next.input.id,
+        images.map((image) => ({
+          path: this.imagePath(chat.id, image),
+          mimeType: image.mimeType,
+        })),
+      );
+    } catch {
+      chat.messages.splice(chat.messages.indexOf(message), 1);
+      // Sent later as its own turn, which saves its images again.
+      await Promise.all(
+        images.map((image) =>
+          rm(this.imagePath(chat.id, image), { force: true }),
+        ),
+      );
+      return this.save(chat);
+    }
     chat.queue = chat.queue!.filter((q) => q !== next);
     await this.save(chat);
     this.emit({ chatId: chat.id, message });
