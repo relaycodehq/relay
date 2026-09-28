@@ -28,9 +28,8 @@ export function ProjectRibbon() {
           x2="238"
           y2="12"
         >
-          <stop offset="0" className="ribbon-stop-mid" />
-          <stop offset="0.3" className="ribbon-stop-light" />
-          <stop offset="0.75" className="ribbon-stop-mid" />
+          <stop offset="0" className="ribbon-stop-light" />
+          <stop offset="0.4" className="ribbon-stop-mid" />
           <stop offset="1" className="ribbon-stop-end" />
         </linearGradient>
         <linearGradient
