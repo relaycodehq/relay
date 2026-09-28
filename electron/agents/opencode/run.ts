@@ -365,14 +365,16 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       (await openCode<{ name: string }[]>("GET", "/command", { directory })
         .then((list) => list.some((c) => c.name === command[1]))
         .catch(() => false));
-    const images = await Promise.all(
-      (options.images ?? []).map(async (image) => ({
-        type: "file" as const,
-        mime: image.mimeType,
-        filename: image.path.split(/[\\/]/).pop(),
-        url: `data:${image.mimeType};base64,${(await readFile(image.path)).toString("base64")}`,
-      })),
-    );
+    const imageParts = (list: AgentOptions["images"]) =>
+      Promise.all(
+        (list ?? []).map(async (image) => ({
+          type: "file" as const,
+          mime: image.mimeType,
+          filename: image.path.split(/[\\/]/).pop(),
+          url: `data:${image.mimeType};base64,${(await readFile(image.path)).toString("base64")}`,
+        })),
+      );
+    const images = await imageParts(options.images);
     signal.throwIfAborted();
     const agent = options.interactionMode === "plan" ? "plan" : "build";
     if (known && command) {
@@ -399,17 +401,18 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       });
     }
     options.onControl?.({
-      steer: async (text, id) => {
+      steer: async (text, id, steerImages) => {
         if (settled || signal.aborted)
           throw new Error(
             "This turn has finished. Send the queued message as a new turn.",
           );
+        const attached = await imageParts(steerImages);
         steers.push({ id, after: Date.now() });
         await call("POST", `/session/${sessionID}/prompt_async`, {
           agent,
           ...(model ? { model } : {}),
           ...(variant ? { variant } : {}),
-          parts: [{ type: "text", text }],
+          parts: [{ type: "text", text }, ...attached],
         });
       },
     });

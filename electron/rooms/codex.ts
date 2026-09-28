@@ -332,15 +332,24 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       turnId = turn.turn.id;
       options.session?.onPoint?.(turnId);
       options.onControl?.({
-        steer: async (text, id) => {
+        steer: async (text, id, images) => {
           if (settled || options.signal.aborted)
             throw new Error(
               "This turn has finished. Send the queued message as a new turn.",
             );
+          // A room's sandbox lists the images it may read when it starts.
+          if (images?.length && !policy)
+            throw new Error("This turn can't take new images.");
           await transport.request("turn/steer", {
             threadId,
             expectedTurnId: turnId,
-            input: [{ type: "text", text, text_elements: [] }],
+            input: [
+              { type: "text", text, text_elements: [] },
+              ...(images ?? []).map((image) => ({
+                type: "localImage",
+                path: image.path,
+              })),
+            ],
             // Codex echoes it on the user message item once it reads the steer.
             ...(id ? { clientUserMessageId: id } : {}),
           });

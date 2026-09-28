@@ -15,12 +15,14 @@ import {
   mkdir,
   readFile,
   rename,
+  rm,
   stat,
   writeFile,
 } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
+import type { AgentOptions } from "./agents/types";
 import type { Projects } from "./projects";
 import type {
   ProjectChat,
@@ -143,8 +145,9 @@ interface ActiveChat {
   abort: AbortController;
   job?: Promise<unknown>;
   input?: ProjectChatSend;
-  steer?: (text: string, id?: string) => Promise<void>;
+  steer?: AgentControl["steer"];
 }
+type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
 /** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
 function parseSessionKey(key: string) {
   const [, chatId, branch] = JSON.parse(key) as string[];
@@ -1144,7 +1147,7 @@ export class ProjectChats {
   }
   /**
    * Steers the running answer with a queued message. When it cannot steer
-   * (different agent, model or mode, attachments, not started yet), the
+   * (different agent, model or mode, a selection, not started yet), the
    * message moves to the front and goes out as soon as the answer finishes.
    */
   private async steerQueued(chat: ProjectChat, messageId: string) {
@@ -1171,12 +1174,15 @@ export class ProjectChats {
       next.input.interactionMode !== prior.interactionMode ||
       JSON.stringify(next.input.choice) !== JSON.stringify(prior.choice) ||
       next.input.contextWindow !== prior.contextWindow ||
-      next.input.images?.length ||
+      (chat.shared && next.input.images?.length) ||
       next.input.selection ||
       /(?:^|\s)(?:\$|\/skill:)/.test(mention.question) ||
       /^\s*\//.test(mention.question)
     )
       return this.save(chat);
+    const images = next.input.images?.length
+      ? await this.saveImages(chat.id, next.input.images)
+      : [];
     try {
       await active.steer(
         mention.question +
@@ -1184,8 +1190,18 @@ export class ProjectChats {
             ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
             : ""),
         next.input.id,
+        images.map((image) => ({
+          path: this.imagePath(chat.id, image),
+          mimeType: image.mimeType,
+        })),
       );
     } catch {
+      // Sent later as its own turn, which saves its images again.
+      await Promise.all(
+        images.map((image) =>
+          rm(this.imagePath(chat.id, image), { force: true }),
+        ),
+      );
       return this.save(chat);
     }
     const message: ChatMessage = {
@@ -1197,6 +1213,7 @@ export class ProjectChats {
       status: "complete",
       created: Date.now(),
       version: 1,
+      ...(images.length ? { images } : {}),
       ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
       ...(chat.shared ? { pending: true } : {}),
     };
@@ -2119,7 +2136,7 @@ export class ProjectChats {
     let point: string | undefined;
     try {
       const options = {
-        onControl: (control: { steer: (text: string) => Promise<void> }) => {
+        onControl: (control: AgentControl) => {
           const active = this.active.get(chat.id);
           if (active?.abort === abort) active.steer = control.steer;
         },

@@ -1259,6 +1259,44 @@ it("steers an active Codex turn natively and resumes its saved session after sto
   ]);
 }, 15000);
 
+it("steers an active Codex turn with a screenshot", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
+  );
+  const followup = {
+    ...input("@codex Look at this"),
+    parentId: null,
+    delivery: "steer" as const,
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png" as const,
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
+  };
+  await chats.send(chat.id, followup);
+  const saved = await chats.get(chat.id);
+  expect(saved.queue).toHaveLength(0);
+  const steered = saved.messages.find((m) => m.id === followup.id);
+  expect(steered?.steered).toBe(true);
+  expect(steered?.images).toHaveLength(1);
+  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((s) => JSON.parse(s));
+  expect(calls.find((c) => c.steer)?.steer.input).toEqual([
+    expect.objectContaining({ type: "text", text: "Look at this" }),
+    expect.objectContaining({ type: "localImage" }),
+  ]);
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+});
+
 it("resumes a stopped answer with the agent picked since", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));

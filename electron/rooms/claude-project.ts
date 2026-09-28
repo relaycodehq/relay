@@ -969,16 +969,18 @@ export async function runClaudeProject(
     session.options = options;
     session.plan = "";
     session.busy = true;
-    const images = await Promise.all(
-      (options.images ?? []).map(async (image) => ({
-        type: "image" as const,
-        source: {
-          type: "base64" as const,
-          media_type: image.mimeType,
-          data: (await readFile(image.path)).toString("base64"),
-        },
-      })),
-    );
+    const imageBlocks = (images: AgentOptions["images"]) =>
+      Promise.all(
+        (images ?? []).map(async (image) => ({
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: image.mimeType,
+            data: (await readFile(image.path)).toString("base64"),
+          },
+        })),
+      );
+    const images = await imageBlocks(options.images);
     options.signal.throwIfAborted();
     if (options.compact && !session.threadId && !options.session?.id)
       throw new Error("There is no Claude session to compact yet.");
@@ -1002,11 +1004,12 @@ export async function runClaudeProject(
     }
     if (!options.compact && !options.adopt)
       options.onControl?.({
-        steer: async (text, id) => {
+        steer: async (text, id, steerImages) => {
           if (!steerable || options.signal.aborted)
             throw new Error(
               "This turn has finished. Send the queued message as a new turn.",
             );
+          const attached = await imageBlocks(steerImages);
           const uuid = randomUUID();
           steering.set(uuid, { id });
           // "next" folds the message into the running turn at its next step.
@@ -1015,7 +1018,12 @@ export async function runClaudeProject(
             uuid,
             session_id: session!.threadId ?? "",
             parent_tool_use_id: null,
-            message: { role: "user", content: text },
+            message: {
+              role: "user",
+              content: attached.length
+                ? [{ type: "text", text }, ...attached]
+                : text,
+            },
             priority: "next",
           });
         },

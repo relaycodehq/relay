@@ -17,7 +17,11 @@ import type { ModelChoice } from "../../shared/settings";
 export interface AgentOptions {
   /** `id` names the chat message the steer came from, for `onSteered`. */
   onControl?: (control: {
-    steer: (text: string, id?: string) => Promise<void>;
+    steer: (
+      text: string,
+      id?: string,
+      images?: AgentOptions["images"],
+    ) => Promise<void>;
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
