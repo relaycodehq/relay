@@ -8,16 +8,13 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
   // A window that is never shown never draws on Windows or Linux, so
   // requestAnimationFrame stalls and Playwright waits forever for a click
   // target to hold still. Show it where nobody sees it instead: see-through
-  // where the platform can, and far off-screen where it can't (Linux). CI's
-  // Linux screen is a virtual one nobody sees, and a window off it counts as
-  // covered there, drawing only now and then, so it stays on that screen.
+  // where the platform can, and far off-screen where it can't (Linux).
   const showInactive = BrowserWindow.prototype.showInactive;
-  const offScreen = !(process.platform === "linux" && process.env.CI);
   BrowserWindow.prototype.show = BrowserWindow.prototype.showInactive =
     function () {
       this.setOpacity(0);
       this.setSkipTaskbar(true);
-      if (offScreen) this.setPosition(-20000, -20000);
+      this.setPosition(-20000, -20000);
       shownOutOfSight.add(this.id);
       showInactive.call(this);
     };
