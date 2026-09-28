@@ -685,7 +685,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .click();
     await expect(
       page.getByRole("heading", {
-        name: /What should we work on in project\?/,
+        name: /What should we work on in Project\?/,
       }),
     ).toBeVisible();
     await page

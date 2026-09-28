@@ -96,7 +96,13 @@ test("shows ahead/behind next to the branch and syncs with its upstream", async 
       name: "Push 1 commit to upstream/review",
     });
     await push.click();
-    await expect(push).toHaveCount(0);
+    // A failed push shows why beside the branch; fail with that, not a count.
+    await expect(async () => {
+      expect(
+        await page.locator(".composer-branch-error").allTextContents(),
+      ).toEqual([]);
+      expect(await push.count()).toBe(0);
+    }).toPass({ timeout: 30000 });
     expect(gitIn(bare)("rev-parse", "review")).toBe(git("rev-parse", "HEAD"));
 
     // Diverged branches are shown but never synced automatically.

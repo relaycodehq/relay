@@ -87,7 +87,20 @@ async function wheel(page: Page, pixels: number) {
     await page.mouse.wheel(0, Math.sign(pixels) * 300);
     await page.waitForTimeout(30);
   }
-  await page.waitForTimeout(500);
+  await settled(page);
+}
+
+/** Waits out wheel steps a slow machine applies late. */
+async function settled(page: Page) {
+  const scrollTop = () =>
+    page.evaluate(() => document.querySelector(".project-messages")!.scrollTop);
+  await expect
+    .poll(async () => {
+      const before = await scrollTop();
+      await page.waitForTimeout(300);
+      return (await scrollTop()) === before;
+    })
+    .toBe(true);
 }
 
 test("reopens a long thread where the reader left it, before or after paging back", async () => {
@@ -290,7 +303,7 @@ test("lets the reader scroll up while an answer streams", async () => {
       await page.mouse.wheel(0, -200);
       await page.waitForTimeout(16);
     }
-    await page.waitForTimeout(100);
+    await settled(page);
     const anchor = await topOfView(page);
     const drift: number[] = [];
     for (let i = 0; i < 40; i++) {

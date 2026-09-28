@@ -685,7 +685,9 @@ if (args.includes("--permission-prompt-tool")) {
       // can scroll the thread while it grows.
       const streamed = said.includes("fixture stream long");
       function streamLong() {
-        const text = Array.from({ length: 80 }, (_, i) =>
+        // About 45 s of streaming, still going when a slow CI runner has
+        // finished scrolling around in it.
+        const text = Array.from({ length: 240 }, (_, i) =>
           i % 7 === 3
             ? "```ts\n" +
               Array.from(
