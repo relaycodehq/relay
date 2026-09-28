@@ -7,6 +7,7 @@ import {
   ChevronRight,
   GitBranch,
   RefreshCw,
+  Split,
   SquarePen,
 } from "lucide-react";
 import type { Pull } from "../../shared/types";
@@ -17,6 +18,7 @@ import { workingTreeKey } from "../lib/working-tree-key";
 import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
+import { CommitSplitSheet } from "./CommitSplit";
 import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
 import type { PaneSlots } from "./WorkspacePanes";
 import "./working-tree.css";
@@ -73,6 +75,7 @@ export function LocalChanges({
     [error, setError] = useState<unknown>(),
     [notice, setNotice] = useState(""),
     [push, setPush] = useState(false),
+    [splitting, setSplitting] = useState(false),
     [collapsed, setCollapsed] = useState<ChangeArea[]>([]);
   // A requested file selects its row once the tree lists it; until then the
   // review says it has no local changes.
@@ -418,6 +421,23 @@ export function LocalChanges({
                 >
                   {busy ? "Working…" : "Commit staged"}
                 </button>
+                {projectId && (
+                  <button
+                    type="button"
+                    className="working-split"
+                    disabled={
+                      busy ||
+                      !tree.changes.length ||
+                      tree.changes.some((c) => c.conflict) ||
+                      !!tree.operation ||
+                      !tree.branch
+                    }
+                    onClick={() => setSplitting(true)}
+                  >
+                    <Split size={12} />
+                    Split into commits…
+                  </button>
+                )}
                 <small>
                   Commits contain staged changes only. Unsaved editor buffers
                   aren’t included.
@@ -504,6 +524,20 @@ export function LocalChanges({
             </div>
           </div>
         )
+      )}
+      {splitting && projectId && (
+        <CommitSplitSheet
+          where={projectId}
+          onClose={() => setSplitting(false)}
+          onDone={(next, made) => {
+            qc.setQueryData(key, next);
+            setSplitting(false);
+            setError(undefined);
+            setNotice(
+              `Made ${made} ${made === 1 ? "commit" : "commits"} locally. Push when you’re ready to share them.`,
+            );
+          }}
+        />
       )}
       {push && tree && (
         <Modal title="Push commits" onClose={() => !busy && setPush(false)}>

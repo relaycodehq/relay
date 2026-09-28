@@ -73,7 +73,7 @@ export function parseCommitMessage(output: string): string | null {
 
 // The model only reads the patch in the prompt, never the checkout.
 let emptyDirectory: Promise<string> | undefined;
-function emptyCwd() {
+export function emptyCwd() {
   emptyDirectory ??= mkdtemp(join(tmpdir(), "relay-commit-")).catch((e) => {
     emptyDirectory = undefined;
     throw e;

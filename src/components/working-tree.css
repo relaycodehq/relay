@@ -184,6 +184,23 @@
   resize: vertical;
   font-size: 12px;
 }
+.working-split {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.working-split:hover:not(:disabled) {
+  color: var(--text);
+}
+.working-split:disabled {
+  opacity: 0.5;
+}
 .working-commit small {
   font-size: 10px;
   color: var(--muted);

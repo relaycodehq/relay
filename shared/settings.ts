@@ -176,9 +176,16 @@ export const aiSettingsSchema = z
   .object({
     grouping: modelChoiceSchema,
     questions: questionChoiceSchema,
-    /** Which signed-in CLI runs grouping or line questions. */
+    /** Splits local changes into commits; added later, so it has a default. */
+    split: questionChoiceSchema.default({
+      model: "",
+      fast: false,
+      reasoningEffort: "medium",
+    }),
+    /** Which signed-in CLI runs grouping, line questions or commit splits. */
     groupingProvider: helperProviderSchema.default("codex"),
     questionsProvider: helperProviderSchema.default("codex"),
+    splitProvider: helperProviderSchema.default("codex"),
     /** The agent a composer starts on until it remembers one. */
     threadProvider: agentProviderSchema.default("codex"),
   })
@@ -190,6 +197,10 @@ export const aiSettingsSchema = z
   .refine((s) => claudeEffortCheck(s.questionsProvider, s.questions), {
     ...effortCheck,
     path: ["questions", "reasoningEffort"],
+  })
+  .refine((s) => claudeEffortCheck(s.splitProvider, s.split), {
+    ...effortCheck,
+    path: ["split", "reasoningEffort"],
   });
 export type ModelChoice = z.infer<typeof modelChoiceSchema>;
 export type AISettings = z.infer<typeof aiSettingsSchema>;
@@ -198,8 +209,10 @@ export type StoredAISettings = z.input<typeof aiSettingsSchema>;
 export const defaultAISettings: AISettings = {
   grouping: { model: "gpt-5.6-luna", fast: false, reasoningEffort: "medium" },
   questions: { model: "", fast: false, reasoningEffort: "" },
+  split: { model: "", fast: false, reasoningEffort: "medium" },
   groupingProvider: "codex",
   questionsProvider: "codex",
+  splitProvider: "codex",
   threadProvider: "codex",
 };
 /** Codex's line-question choice, or its defaults when questions go to Claude. */

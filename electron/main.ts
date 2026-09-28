@@ -32,6 +32,10 @@ import { LiveSyncs, type SyncWorkspace } from "./live-sync";
 import { idleSync } from "../shared/live-sync";
 import { gitActionSchema, workingPathSchema } from "../shared/working-tree";
 import {
+  applyCommitSplitSchema,
+  commitSplitNoteSchema,
+} from "../shared/commit-split";
+import {
   flushGitOperations,
   workingTree,
   workingDiff,
@@ -40,6 +44,7 @@ import {
 } from "./working-tree";
 import { gitExecutable, gitInfo, gitVersion, setGitPath } from "./git";
 import { generateCommitMessage } from "./commit-messages";
+import { applyCommitSplit, planCommitSplit } from "./commit-split";
 import {
   catchUpBranch,
   deleteMergedBranch,
@@ -938,6 +943,19 @@ async function dispatch(method: ApiMethod, args: unknown[]) {
         z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
         store.aiSettings(),
         AbortSignal.timeout(120_000),
+      );
+    case "projectPlanCommitSplit":
+      return planCommitSplit(
+        await placeRoot(args[0]),
+        commitSplitNoteSchema.optional().parse(args[1]) ?? "",
+        store.aiSettings(),
+        // Planning reads every change at the chosen effort; give it room.
+        AbortSignal.timeout(600_000),
+      );
+    case "projectApplyCommitSplit":
+      return applyCommitSplit(
+        await placeRoot(args[0]),
+        applyCommitSplitSchema.parse(args[1]),
       );
     case "projectGitAction":
       return performGitAction(

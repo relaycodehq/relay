@@ -69,6 +69,8 @@ const methods = [
   "rewindProjectTurn",
   "projectGitAction",
   "projectCommitMessage",
+  "projectPlanCommitSplit",
+  "projectApplyCommitSplit",
   "projectMergePlan",
   "projectMergeBranch",
   "projectDeleteBranch",

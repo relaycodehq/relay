@@ -613,6 +613,15 @@ export interface ProjectApi {
   projectGitAction(where: string, action: GitAction): Promise<WorkingTree>;
   /** A generated message for committing just these changed files. */
   projectCommitMessage(where: string, paths: string[]): Promise<string>;
+  /** A model's split of every uncommitted change into commits, not yet made. */
+  projectPlanCommitSplit(
+    where: string,
+    note?: string,
+  ): Promise<import("./commit-split").CommitSplitPlan>;
+  projectApplyCommitSplit(
+    where: string,
+    split: import("./commit-split").ApplyCommitSplit,
+  ): Promise<WorkingTree>;
   /** Merging the current branch into `base`, the default branch when omitted. */
   projectMergePlan(
     where: string,

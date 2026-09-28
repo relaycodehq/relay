@@ -516,7 +516,7 @@ export function Settings({
     [saved, setSaved] = useState(false);
   const values = draft ?? settings.data;
   const change = (
-    kind: "grouping" | "questions",
+    kind: "grouping" | "questions" | "split",
     value: AISettings["questions"],
     provider: HelperProvider,
   ) => {
@@ -764,7 +764,7 @@ export function Settings({
       title: "Agents",
       description: `Uses your signed-in ${agentProviders.map((p) => agents[p].cli).join(", ")}. Model availability depends on your account.`,
       keywords:
-        "default agent new thread grouping line questions reasoning effort fast mode model codex claude opencode ai",
+        "default agent new thread grouping line questions commit split reasoning effort fast mode model codex claude opencode ai",
       block: true,
       render: () =>
         values ? (
@@ -806,6 +806,18 @@ export function Settings({
                 onChange={(value, provider) =>
                   change("questions", value, provider)
                 }
+              />
+            </SettingsRow>
+            <SettingsRow
+              label="Commit splits"
+              hint="Splits your local changes into logical commits you review before they're made."
+            >
+              <ModelField
+                label="Commit splits"
+                value={values.split}
+                provider={values.splitProvider}
+                allowDefault
+                onChange={(value, provider) => change("split", value, provider)}
               />
             </SettingsRow>
             <SettingsFooter

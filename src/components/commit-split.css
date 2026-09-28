@@ -1,0 +1,98 @@
+.commit-split-sheet {
+  width: min(720px, 92vw);
+}
+.split-route,
+.split-planning {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.split-planning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.split-commits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+}
+.split-commits[aria-busy="true"] {
+  opacity: 0.55;
+}
+.split-commits > li {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--toolbar);
+}
+.split-commits > li.excluded > :not(.split-commit-head) {
+  opacity: 0.5;
+}
+.split-commit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.split-commit-head .diff-stat {
+  margin-left: auto;
+}
+.create-pull-sheet .split-commits textarea {
+  field-sizing: content;
+  min-height: 0;
+  max-height: 12lh;
+  padding: 6px 9px;
+  resize: none;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.split-commits ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.split-commits ul li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.split-commits ul .file-entry-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.split-commits ul .diff-stat {
+  margin-left: auto;
+  font-size: 10.5px;
+}
+.split-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.create-pull-sheet .split-actions input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.split-actions button {
+  flex: none;
+}
