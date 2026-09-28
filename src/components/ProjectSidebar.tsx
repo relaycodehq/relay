@@ -1365,7 +1365,9 @@ export function ProjectSidebar({
             <span className="sb-card-project">{p?.name}</span>
             {shortcut && (
               <kbd className="sb-card-shortcut" aria-hidden>
-                <span>{keys("⌘", "Ctrl")}</span>
+                <span className={mac ? "glyph" : undefined}>
+                  {keys("⌘", "Ctrl")}
+                </span>
                 {shortcut}
               </kbd>
             )}

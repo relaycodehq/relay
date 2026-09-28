@@ -1,4 +1,5 @@
 import { Files, MessageSquare, PanelLeft } from "lucide-react";
+import { keys } from "../lib/mod-key";
 
 export function PaneControls({
   requestsHidden,
@@ -22,7 +23,7 @@ export function PaneControls({
         aria-label="Toggle pull requests"
         aria-controls="requests-sidebar"
         aria-pressed={!requestsHidden}
-        title={`${requestsHidden ? "Show" : "Hide"} pull requests · ⌘ / Ctrl Shift B`}
+        title={`${requestsHidden ? "Show" : "Hide"} pull requests · ${keys("⌘⇧B", "Ctrl+Shift+B")}`}
         onClick={onToggleRequests}
       >
         <PanelLeft size={17} />
@@ -32,7 +33,7 @@ export function PaneControls({
         aria-label="Toggle changed files"
         aria-controls="files-sidebar"
         aria-pressed={!filesHidden}
-        title={`${filesHidden ? "Show" : "Hide"} changed files · ⌘ / Ctrl B`}
+        title={`${filesHidden ? "Show" : "Hide"} changed files · ${keys("⌘B", "Ctrl+B")}`}
         onClick={onToggleFiles}
       >
         <Files size={17} />

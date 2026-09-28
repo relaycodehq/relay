@@ -38,7 +38,8 @@ import {
   effortLabels,
 } from "../../shared/settings";
 import { api } from "../lib/api";
-import { sendsMessage, useSendKey } from "../lib/send-key";
+import { keys } from "../lib/mod-key";
+import { sendKeyLabel, sendsMessage, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Modal, Loading } from "./ui";
 import { RoomAvatar, RoomTranscript } from "./RoomTranscript";
 import { PaneResizer } from "./PaneResizer";
@@ -649,7 +650,7 @@ export function RoomPanel({
                 type="submit"
                 className="room-send"
                 aria-label={busy ? "Sending…" : mention ? "Ask" : "Send"}
-                title="Send · ⌘/Ctrl ↵"
+                title={`Send · ${sendKeyLabel(sendKey)}`}
                 disabled={busy || !draft.text.trim()}
               >
                 <Send size={14} />
@@ -1019,7 +1020,7 @@ function RoomPeople({
                     .catch(() =>
                       setError(
                         new Error(
-                          "Select the invitation link and copy it with ⌘C / Ctrl+C.",
+                          `Select the invitation link and copy it with ${keys("⌘C", "Ctrl+C")}.`,
                         ),
                       ),
                     );

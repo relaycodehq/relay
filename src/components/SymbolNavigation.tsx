@@ -14,6 +14,7 @@ import type {
   SymbolLocation,
 } from "../../shared/checks";
 import { api } from "../lib/api";
+import { keys } from "../lib/mod-key";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { useTypography } from "../lib/typography";
@@ -163,7 +164,7 @@ export function useSymbolNavigation(
     },
     controls: (
       <div className="symbol-actions">
-        <span>⌘ / Ctrl click · Definition</span>
+        <span>{keys("⌘", "Ctrl")} click · Definition</span>
         <button
           disabled={!ready || !selected}
           onClick={() => selected && void navigate(selected, "definition")}

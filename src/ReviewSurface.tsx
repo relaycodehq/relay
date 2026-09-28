@@ -39,6 +39,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
+import { keys } from "./lib/mod-key";
 import { linksTo, type ProjectFileLink } from "../shared/project-file-links";
 import type {
   Account,
@@ -746,7 +747,7 @@ export function Connected({
         <button className="nav-row open-link" onClick={() => setUrlOpen(true)}>
           <Link2 size={17} />
           <span>Open PR by URL</span>
-          <kbd>⌘K</kbd>
+          <kbd>{keys("⌘K", "Ctrl+K")}</kbd>
         </button>
         <div className="sidebar-divider" />
         <section className="sidebar-pulls" aria-label="Pull requests">
@@ -770,7 +771,7 @@ export function Connected({
                 maxLength={500}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <kbd>⌘F</kbd>
+              <kbd>{keys("⌘F", "Ctrl+F")}</kbd>
             </div>
             <div className="segmented">
               {(["open", "closed", "all"] as const).map((v) => (
@@ -1056,7 +1057,7 @@ export function Connected({
                 We’ll keep your place while you review.
               </p>
               <button onClick={() => setUrlOpen(true)}>
-                <Link2 size={15} /> Open a pull request <kbd>⌘K</kbd>
+                <Link2 size={15} /> Open a pull request <kbd>{keys("⌘K", "Ctrl+K")}</kbd>
               </button>
             </div>
           </>

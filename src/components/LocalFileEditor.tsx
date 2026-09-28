@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { LocalFile, Pull } from "../../shared/types";
 import { api } from "../lib/api";
+import { keys } from "../lib/mod-key";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
@@ -417,7 +418,7 @@ export default function LocalFileEditor({
           <button
             className="primary"
             aria-label="Save locally"
-            title="Save to the local folder (⌘/Ctrl S)"
+            title={`Save to the local folder (${keys("⌘S", "Ctrl+S")})`}
             disabled={!dirty || saving || loading}
             onClick={() => void save()}
           >
@@ -678,7 +679,7 @@ export default function LocalFileEditor({
                       : "Editing local checkout"}
               </span>
               <span className="editor-shortcuts">
-                ⌘ / Ctrl S · Save{large ? " · Large file, plain text" : ""}
+                {keys("⌘S", "Ctrl+S")} · Save{large ? " · Large file, plain text" : ""}
               </span>
               <IconButton
                 label="Undo code edit"

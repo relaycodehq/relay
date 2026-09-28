@@ -30,6 +30,7 @@ import {
 } from "../vendor/t3code/model-picker/ProviderIcons";
 import { scoreModelPickerSearch } from "../vendor/t3code/model-picker/modelPickerSearch";
 import { api } from "../lib/api";
+import { keys } from "../lib/mod-key";
 import { UsageMeters } from "./UsageMeters";
 import "./composer-model-picker.css";
 
@@ -548,9 +549,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                   )}
                                   {index < 9 && (
                                     <kbd>
-                                      {navigator.platform.includes("Mac")
-                                        ? "⌘"
-                                        : "Ctrl "}
+                                      {keys("⌘", "Ctrl ")}
                                       {index + 1}
                                     </kbd>
                                   )}

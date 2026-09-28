@@ -942,7 +942,7 @@ export function Settings({
           enter: "Enter sends the message. Shift+Enter adds a new line.",
           "shift-enter":
             "Shift+Enter sends the message. Enter adds a new line.",
-          "mod-enter": "⌘/Ctrl+Enter sends the message. Enter adds a new line.",
+          "mod-enter": `${keys("⌘", "Ctrl+")}Enter sends the message. Enter adds a new line.`,
         }[sendKey] +
         ` While an agent is working, this queues the message and ${steerKeyLabel(sendKey)} steers the current answer instead.`,
       keywords:
@@ -953,7 +953,7 @@ export function Settings({
             [
               ["enter", "Enter"],
               ["shift-enter", "Shift Enter"],
-              ["mod-enter", "⌘ / Ctrl Enter"],
+              ["mod-enter", `${keys("⌘", "Ctrl ")}Enter`],
             ] as [SendKey, string][]
           ).map(([value, label]) => (
             <button

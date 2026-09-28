@@ -737,8 +737,10 @@
 }
 .sb-card-shortcut {
   flex: none;
-  width: 18px;
+  min-width: 18px;
   height: 18px;
+  padding: 0 3px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -750,7 +752,7 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
   animation: sb-enter 0.12s ease-out;
 }
-.sb-card-shortcut span {
+.sb-card-shortcut .glyph {
   font-size: 11px;
 }
 .sb-cards.shortcuts .sb-card-actions {
