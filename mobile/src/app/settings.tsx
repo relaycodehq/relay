@@ -2,6 +2,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Check, Monitor } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
+import { runningUpdate, runningVersion, restartOnBuiltIn } from "../remote/self-update";
 import { ConnectionLine } from "../ui/ConnectionLine";
 import { MenuRow } from "../ui/Sheet";
 import { SectionTitle } from "../ui/Rows";
@@ -45,6 +46,24 @@ export default function Settings() {
           onPress={() => setPreference(c.value)}
         />
       ))}
+      <SectionTitle>App</SectionTitle>
+      <View style={styles.computer}>
+        <View style={styles.text}>
+          <Text style={[styles.name, { color: t.text }]}>Relay {runningVersion}</Text>
+          <Text style={[styles.hint, { color: t.muted }]}>
+            {runningUpdate
+              ? `Updated from ${remote.name}. New versions arrive from there.`
+              : `New versions arrive from ${remote.name} when Relay there is newer.`}
+          </Text>
+        </View>
+      </View>
+      {runningUpdate && (
+        <MenuRow
+          label="Go back to the built-in version"
+          hint="If an update misbehaves: restarts on the version this app was installed with."
+          onPress={() => void restartOnBuiltIn()}
+        />
+      )}
       <SectionTitle>Computer</SectionTitle>
       <View style={styles.computer}>
         <Monitor size={18} color={t.muted} />

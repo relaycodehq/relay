@@ -16,6 +16,7 @@ import {
   maxRemoteHistory,
   remoteHistory,
   type PhoneAppearance,
+  type PhoneAppRelease,
   type PhoneDesktopMethod,
   type RemoteApi,
   type RemoteChatSummary,
@@ -38,6 +39,11 @@ export interface RemoteHost {
   dispatch(method: ApiMethod, args: unknown[]): Promise<unknown>;
   name(): string;
   appearance?(): PhoneAppearance | undefined;
+  /** The phone app's code this build carries, if any; see ./phone-app. */
+  phoneApp?: {
+    release(): Promise<PhoneAppRelease | undefined>;
+    chunk(path: string, offset: number): Promise<string>;
+  };
 }
 
 const pathSchema = z.string().min(1).max(1000);
@@ -94,11 +100,15 @@ export class RemoteBridge {
   ) {}
   private api: RemoteApi = {
     overview: async () => {
-      const projects = await this.host.projects();
+      const [projects, phoneApp] = await Promise.all([
+        this.host.projects(),
+        this.host.phoneApp?.release(),
+      ]);
       this.projectIds = projects.map((p) => p.id);
       return {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
+        ...(phoneApp ? { phoneApp } : {}),
         ...(this.host.appearance?.()
           ? { appearance: this.host.appearance() }
           : {}),
@@ -182,6 +192,10 @@ export class RemoteBridge {
       this.refresh();
       return value;
     },
+    phoneAppFile: async (path, offset) => {
+      if (!this.host.phoneApp) throw new Error("This Relay has no phone app to hand out.");
+      return this.host.phoneApp.chunk(path, offset);
+    },
     projectIcons: async (known) => {
       const projects = await this.host.projects();
       const changed: Record<string, RemoteProjectIcon> = {};
@@ -224,6 +238,11 @@ export class RemoteBridge {
         );
       case "projectIcons":
         return a.projectIcons(knownIconsSchema.parse(args[0] ?? {}));
+      case "phoneAppFile":
+        return a.phoneAppFile(
+          z.string().max(200).parse(args[0]),
+          z.number().int().min(0).parse(args[1]),
+        );
       default:
         throw new Error("Phones can't do that.");
     }

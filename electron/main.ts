@@ -17,6 +17,7 @@ import { Projects, type Place } from "./projects";
 import { ProjectSharing } from "./project-sharing";
 import { ProjectChats } from "./project-chats";
 import { PhoneRemote, phoneAppearanceSchema } from "./remote/phone-remote";
+import { PhoneAppFiles } from "./remote/phone-app";
 import { deepReviewStartSchema } from "../shared/deep-review";
 import {
   chatScopeSchema,
@@ -1891,6 +1892,7 @@ app
           known ? projectChats.changes(id, known) : projectChats.get(id),
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
+        phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );

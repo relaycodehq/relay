@@ -59,8 +59,29 @@ jobs:
             gh release create "$tag" --repo "$RELEASES_REPO" --draft \
               --title "Relay $VERSION" --notes ""
 
+  # The phone app's code each desktop carries and hands to paired phones, so
+  # they update from their own computer (electron/remote/phone-app.ts).
+  phone-bundle:
+    needs: [version]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: node scripts/export-phone-bundle.mjs ${{ needs.version.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-phone
+          path: dist-phone
+          retention-days: 1
+
   build:
-    needs: [version, draft]
+    needs: [version, draft, phone-bundle]
     strategy:
       fail-fast: true
       matrix:
@@ -91,6 +112,10 @@ jobs:
       - run: npm ci
       - run: npm version ${{ needs.version.outputs.version }} --no-git-tag-version --allow-same-version
       - run: npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-phone
+          path: dist-phone
       - name: Windows-specific tests
         if: runner.os == 'Windows'
         run: npx vitest run tests/unit/platform.test.ts tests/unit/terminal.test.ts
@@ -138,6 +163,8 @@ jobs:
           RELAY_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           RELAY_ANDROID_KEY_ALIAS: relay
         run: |
+          # Before prebuild: the fingerprint must not see the generated android/.
+          export RELAY_RUNTIME="$(node scripts/runtime.mjs)"
           export RELAY_ANDROID_KEYSTORE="$RUNNER_TEMP/relay-release.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RELAY_ANDROID_KEYSTORE"
           CI=1 npx expo prebuild --platform android --no-install

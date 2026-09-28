@@ -83,6 +83,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "dist-phone/**/*",
       "package.json",
       "THIRD_PARTY_NOTICES.md",
       "LICENSE",

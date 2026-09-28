@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
+import { checkForUpdate, confirmLaunch } from "../remote/self-update";
 import {
   FullWidthContext,
   HeaderHeightContext,
@@ -45,6 +46,13 @@ function Screens() {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);
+  useEffect(confirmLaunch, []);
+  const { overview, call, status } = remote;
+  // The overview kept from last time arrives before the connection does.
+  const offer = status === "online" ? overview?.phoneApp : undefined;
+  useEffect(() => {
+    void checkForUpdate(offer, (path, offset) => call("phoneAppFile", path, offset));
+  }, [offer, call]);
   // Beside the list: an unfolded foldable or a tablet, once paired.
   const panes =
     width >= paneBreakpoint &&
