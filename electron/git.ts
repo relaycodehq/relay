@@ -10,40 +10,51 @@ const missing = `${gitMissing} Install Git, or choose where it is in Settings â†
 /** The Git chosen in Settings; unset, Relay finds its own. */
 let chosen: string | null = null;
 let found: Promise<string> | undefined;
+/**
+ * The executable once found, so a call starts Git before it returns, as a
+ * bare `execFile("git")` did: a snapshot taken then can't miss what comes next.
+ */
+let resolved: string | undefined;
 export function setGitPath(path: string | null) {
   chosen = path;
-  found = undefined;
+  found = resolved = undefined;
 }
 /** The Git executable to run: the chosen one, else one on PATH or in a usual install folder. */
 export function gitExecutable(): Promise<string> {
   if (found) return found;
-  const current = (found = (async () => {
-    const path = chosen;
-    if (path) {
-      await access(path).catch(() => {
-        throw new Error(
-          `${gitMissing} The Git chosen in Settings is gone: ${path}`,
-        );
-      });
-    }
-    const git =
-      path ??
-      (await findGit().catch(() => {
-        throw new Error(missing);
-      }));
-    // Agents and terminals run Git too, and a PATH from before Git was
-    // installed (Windows keeps the one the app started with) lacks it.
-    const dir = dirname(git),
-      paths = (process.env.PATH ?? "").split(delimiter);
-    if (!paths.includes(dir))
-      process.env.PATH = [dir, ...paths].filter(Boolean).join(delimiter);
-    return git;
-  })());
+  const current = (found = lookUpGit());
   // A failure isn't kept, so installing Git works without a restart.
-  current.catch(() => {
-    if (found === current) found = undefined;
-  });
+  current.then(
+    (git) => {
+      if (found === current) resolved = git;
+    },
+    () => {
+      if (found === current) found = undefined;
+    },
+  );
   return current;
+}
+async function lookUpGit() {
+  const path = chosen;
+  if (path) {
+    await access(path).catch(() => {
+      throw new Error(
+        `${gitMissing} The Git chosen in Settings is gone: ${path}`,
+      );
+    });
+  }
+  const git =
+    path ??
+    (await findGit().catch(() => {
+      throw new Error(missing);
+    }));
+  // Agents and terminals run Git too, and a PATH from before Git was
+  // installed (Windows keeps the one the app started with) lacks it.
+  const dir = dirname(git),
+    paths = (process.env.PATH ?? "").split(delimiter);
+  if (!paths.includes(dir))
+    process.env.PATH = [dir, ...paths].filter(Boolean).join(delimiter);
+  return git;
 }
 /** Git's version line; fails when `path` isn't Git. */
 export async function gitVersion(path: string) {
@@ -107,7 +118,7 @@ export function gitError(e: unknown) {
   const error = e as Error & { stderr?: string | Buffer; code?: unknown };
   // The executable went away since it was found; find it again next time.
   if (error.code === "ENOENT") {
-    found = undefined;
+    found = resolved = undefined;
     return new Error(missing);
   }
   return new Error(
@@ -129,7 +140,7 @@ export async function git(
     env,
     signal,
   } = typeof options === "number" ? { timeout: options } : options;
-  const file = await gitExecutable();
+  const file = resolved ?? (await gitExecutable());
   try {
     return (
       await exec(file, ["-C", root, ...args], {
@@ -150,7 +161,7 @@ export async function gitBytes(
   args: string[],
   limit = textLimit,
 ) {
-  const file = await gitExecutable();
+  const file = resolved ?? (await gitExecutable());
   try {
     return (
       await exec(file, ["-C", root, ...args], {

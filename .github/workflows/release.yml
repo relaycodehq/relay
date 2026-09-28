@@ -85,7 +85,9 @@ jobs:
           name: relay-${{ matrix.name }}
           path: ${{ matrix.files }}
           if-no-files-found: error
-          retention-days: 7
+          # Publish copies these to the releases repo in the same run; kept
+          # longer, each release's ~600 MB fills the artifact quota.
+          retention-days: 1
 
   publish:
     needs: [version, build]

@@ -38,7 +38,7 @@ import {
   performGitAction,
   validateRepo,
 } from "./working-tree";
-import { gitInfo, gitVersion, setGitPath } from "./git";
+import { gitExecutable, gitInfo, gitVersion, setGitPath } from "./git";
 import { generateCommitMessage } from "./commit-messages";
 import {
   catchUpBranch,
@@ -1793,6 +1793,8 @@ app
     store = new Store(app.getPath("userData"));
     await store.load();
     setGitPath(store.get().gitPath ?? null);
+    // Found once up front, every Git call after starts right away.
+    void gitExecutable().catch(() => {});
     projects = new Projects(store);
 
     rooms = new RoomService(

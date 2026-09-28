@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import {
   ownAgentWorktrees,
   watchAgentWorktrees,
 } from "../../electron/agent-worktrees";
+import { gitExecutable } from "../../electron/git";
 import type {
   AgentActivity,
   AgentWorktree,
@@ -45,6 +46,8 @@ function thread() {
   };
 }
 
+// Relay finds Git at startup, so a watcher's first look starts Git at once.
+beforeAll(() => gitExecutable());
 beforeEach(async () => {
   temp = await realpath(await mkdtemp(join(tmpdir(), "relay-agent-wt-")));
   root = join(temp, "project");
