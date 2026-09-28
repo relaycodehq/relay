@@ -72,9 +72,9 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     }, fixture.serverUrl);
     await page.reload();
     const input = page.getByLabel("Message project");
-    await expect(page.locator(".composer-branch-trigger")).toContainText(
-      "feature",
-    );
+    await expect(
+      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+    ).toContainText("feature");
     await input.fill("/");
     await expect(page.getByRole("listbox", { name: "Commands" })).toBeVisible();
     await expect(

@@ -253,7 +253,10 @@ test("restores per-project composer settings, answers native approvals, and impl
     ).toHaveCount(0);
     expect(
       await app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().every((w) => !w.isVisible()),
+        BrowserWindow.getAllWindows().every((w) =>
+          (globalThis as { relayOffDesktop?: (w: unknown) => boolean })
+            .relayOffDesktop!(w),
+        ),
       ),
     ).toBe(true);
   } finally {

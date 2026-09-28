@@ -73,7 +73,9 @@ test("shows ahead/behind next to the branch and syncs with its upstream", async 
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
-    await expect(page.locator(".composer-branch-trigger")).toHaveText("review");
+    await expect(
+      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+    ).toHaveText("review");
 
     // The background fetch surfaces the remote commit without user action.
     const pull = page.getByRole("button", {

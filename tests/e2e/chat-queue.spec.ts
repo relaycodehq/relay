@@ -218,7 +218,10 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     );
     expect(
       await app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().every((w) => !w.isVisible()),
+        BrowserWindow.getAllWindows().every((w) =>
+          (globalThis as { relayOffDesktop?: (w: unknown) => boolean })
+            .relayOffDesktop!(w),
+        ),
       ),
     ).toBe(true);
   } finally {

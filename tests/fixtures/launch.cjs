@@ -3,9 +3,30 @@ const { app, BrowserWindow, safeStorage } = require("electron");
 // never in the shipped app: native visibility checks explicitly opt in.
 if (process.env.RELAY_TEST_HEADED !== "1") {
   if (process.platform === "darwin") app.setActivationPolicy("prohibited");
-  for (const name of ["show", "showInactive", "focus", "restore"])
+  // A window that is never shown never draws on Windows or Linux, so
+  // requestAnimationFrame stalls and Playwright waits forever for a click
+  // target to hold still. Show it where nobody sees it instead: see-through
+  // where the platform can, and far off-screen where it can't (Linux).
+  const showInactive = BrowserWindow.prototype.showInactive;
+  const offDesktop = { x: -20000, y: -20000 };
+  BrowserWindow.prototype.show = BrowserWindow.prototype.showInactive =
+    function () {
+      this.setOpacity(0);
+      this.setSkipTaskbar(true);
+      this.setPosition(offDesktop.x, offDesktop.y);
+      showInactive.call(this);
+    };
+  // A hidden window's "ready-to-show" can come late or never, and tests start
+  // clicking as soon as the page loads, so every window shows at once.
+  app.on("browser-window-created", (_event, win) => win.show());
+  for (const name of ["focus", "restore"])
     BrowserWindow.prototype[name] = () => {};
   app.show = app.focus = () => {};
+  /** Whether a window stayed out of sight, for tests that check it. */
+  globalThis.relayOffDesktop = (win) =>
+    !win.isVisible() ||
+    win.getOpacity() === 0 ||
+    win.getBounds().x + win.getBounds().width <= 0;
   for (const flag of [
     "disable-backgrounding-occluded-windows",
     "disable-renderer-backgrounding",

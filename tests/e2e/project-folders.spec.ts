@@ -150,9 +150,9 @@ test("organizes project groups, preserves child expansion across restart, and ce
       ).toBeLessThan(1);
     }
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(page.locator(".composer-branch-trigger")).toContainText(
-      "main",
-    );
+    await expect(
+      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+    ).toContainText("main");
     await page.screenshot({
       path: "test-results/screenshots/58-project-folders.png",
       animations: "disabled",

@@ -722,7 +722,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(page.locator(".thread-context-controls")).not.toContainText(
       "reasoning",
     );
-    const branchPicker = page.locator(".composer-branch-trigger");
+    const branchPicker = page.locator(
+      ".composer-branch-trigger:not(.workspace-trigger)",
+    );
     await branchPicker.click();
     await page
       .getByRole("combobox", { name: "Search branches" })

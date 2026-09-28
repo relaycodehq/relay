@@ -62,7 +62,9 @@ test("works in a folder without Git: threads, files and saves, no Git controls",
       await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
         0,
       );
-    await expect(page.locator(".composer-branch-trigger")).toHaveCount(0);
+    await expect(
+      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+    ).toHaveCount(0);
 
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await page
