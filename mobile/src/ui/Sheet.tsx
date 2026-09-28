@@ -1,18 +1,37 @@
-import { useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, {
+  Easing,
+  interpolate,
+  scrollTo,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type, useTheme } from "./theme";
 
-/** A sheet from the bottom of the screen, for pickers, menus and small forms. */
+/**
+ * A sheet from the bottom of the screen, for pickers, menus and small forms.
+ * It drags like the platform's own: by its grip at any time, and by its
+ * content once that's scrolled to the top, handing back to the scroll when
+ * pushed up again. It closes past a third of its height or on a fling down.
+ */
 export function Sheet({
   open,
   title,
@@ -31,42 +50,132 @@ export function Sheet({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  // Stays mounted while it slides away, after `open` has gone false.
+  const [shown, setShown] = useState(open);
+  if (open && !shown) setShown(true);
+  const offscreen = Dimensions.get("window").height;
+  const y = useSharedValue(offscreen);
+  const height = useSharedValue(offscreen);
+  const gripHeight = useSharedValue(0);
+  const scrollY = useSharedValue(0);
+  const fromGrip = useSharedValue(false);
+  // Where the finger was when the content last handed the drag to the sheet.
+  const anchor = useSharedValue(0);
+  const list = useAnimatedRef<Animated.ScrollView>();
+  const hide = useCallback(() => setShown(false), []);
+
+  useEffect(() => {
+    if (!open && shown)
+      y.set(
+        withTiming(height.get(), { duration: reduced ? 0 : 200, easing: Easing.in(Easing.cubic) }, (done) => {
+          if (done) scheduleOnRN(hide);
+        }),
+      );
+  }, [open, shown, y, height, reduced, hide]);
+
+  const slideIn = () => {
+    y.set(height.get());
+    y.set(withTiming(0, { duration: reduced ? 0 : 280, easing: Easing.out(Easing.cubic) }));
+  };
+
+  const native = useMemo(() => Gesture.Native(), []);
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .failOffsetX([-16, 16])
+        .simultaneousWithExternalGesture(native)
+        .onBegin((e) => {
+          fromGrip.set(e.y <= gripHeight.get());
+          anchor.set(0);
+        })
+        // `list` is Reanimated's ref for scrollTo on the UI thread, not read while rendering.
+        // eslint-disable-next-line react-hooks/refs
+        .onUpdate((e) => {
+          const drag = e.translationY - anchor.get();
+          if (fromGrip.get()) {
+            // Past the top it only gives a little.
+            y.set(drag > 0 ? drag : drag / 6);
+            return;
+          }
+          // The content scrolls until it's at the top and pulled further down.
+          if (y.get() <= 0 && (scrollY.get() > 0 || drag < 0)) {
+            anchor.set(e.translationY);
+            y.set(0);
+            return;
+          }
+          y.set(Math.max(0, drag));
+          scrollTo(list, 0, 0, false);
+        })
+        .onEnd((e) => {
+          if (y.get() > height.get() / 3 || (y.get() > 0 && e.velocityY > 900)) scheduleOnRN(onClose);
+          else y.set(withSpring(0, { damping: 40, stiffness: 400 }));
+        }),
+    [native, fromGrip, gripHeight, anchor, y, scrollY, list, height, onClose],
+  );
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.set(e.contentOffset.y);
+  });
+
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(y.get(), [0, height.get()], [1, 0], "clamp"),
+  }));
   return (
     <Modal
-      visible={open}
+      visible={shown}
       transparent
-      animationType="slide"
+      animationType="none"
+      onShow={slideIn}
       onRequestClose={onClose}
       onDismiss={onDismiss}
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <KeyboardAvoidingView
-        style={styles.fill}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <Pressable
-          style={styles.backdrop}
-          accessibilityLabel="Close"
-          onPress={onClose}
-        />
-        <View
-          style={[
-            styles.sheet,
-            { backgroundColor: t.raised, paddingBottom: 12 + insets.bottom },
-          ]}
+      <GestureHandlerRootView style={styles.fill}>
+        <KeyboardAvoidingView
+          style={styles.end}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <View style={[styles.grip, { backgroundColor: t.border }]} />
-          {title && (
-            <Text style={[styles.title, { color: t.text }]}>{title}</Text>
-          )}
-          {scroll ? (
-            <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
-          ) : (
-            children
-          )}
-        </View>
-      </KeyboardAvoidingView>
+          <Animated.View style={[styles.backdrop, backdropStyle]}>
+            <Pressable style={styles.fill} accessibilityLabel="Close" onPress={onClose} />
+          </Animated.View>
+          <GestureDetector gesture={pan}>
+            <Animated.View
+              onLayout={(e) => height.set(e.nativeEvent.layout.height)}
+              style={[
+                styles.sheet,
+                { backgroundColor: t.raised, paddingBottom: 12 + insets.bottom },
+                sheetStyle,
+              ]}
+            >
+              <View style={styles.handle} onLayout={(e) => gripHeight.set(e.nativeEvent.layout.height)}>
+                <View style={[styles.grip, { backgroundColor: t.border }]} />
+                {title && (
+                  <Text style={[styles.title, { color: t.text }]}>{title}</Text>
+                )}
+              </View>
+              {scroll ? (
+                <GestureDetector gesture={native}>
+                  <Animated.ScrollView
+                    ref={list}
+                    keyboardShouldPersistTaps="handled"
+                    onScroll={onScroll}
+                    scrollEventThrottle={16}
+                    overScrollMode="never"
+                    bounces={false}
+                  >
+                    {children}
+                  </Animated.ScrollView>
+                </GestureDetector>
+              ) : (
+                children
+              )}
+            </Animated.View>
+          </GestureDetector>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -145,15 +254,18 @@ export function MenuRow({ label, hint, icon, destructive, checked, disabled, onP
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.45)" },
+  fill: { flex: 1 },
+  end: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
     maxHeight: "85%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    paddingTop: 8,
+    paddingTop: 2,
   },
-  grip: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, marginBottom: 8 },
+  // The whole strip is the grab area, not just the 4pt line.
+  handle: { paddingTop: 6 },
+  grip: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, marginBottom: 12 },
   title: { fontSize: type.small, fontWeight: "600", paddingHorizontal: 20, paddingVertical: 8 },
   row: {
     flexDirection: "row",
