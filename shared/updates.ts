@@ -4,6 +4,8 @@ import { z } from "zod";
 export const releasesRepo = "lubomirmolin/relay-releases";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
+/** The phone app, built with every release; the unversioned name always points at the newest. */
+export const androidAppDownload = `https://github.com/${releasesRepo}/releases/latest/download/Relay-Android.apk`;
 
 /** How the running copy was installed decides which download replaces it. */
 export type UpdateTarget =

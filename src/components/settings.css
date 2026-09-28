@@ -903,6 +903,9 @@
   padding: 16px;
   border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
+.phone-pairing + .settings-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
 .phone-pairing p {
   margin: 0 0 10px;
   line-height: 1.5;

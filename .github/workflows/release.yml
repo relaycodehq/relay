@@ -108,8 +108,51 @@ jobs:
           shopt -s failglob
           gh release upload "$TAG" $FILES --repo "$RELEASES_REPO" --clobber
 
+  # The phone app, sideloaded from the QR code in Settings → Phone. Signed
+  # with Relay's own key: Android only installs updates signed like the app.
+  android:
+    needs: [version, draft]
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Build the APK
+        env:
+          RELAY_VERSION: ${{ needs.version.outputs.version }}
+          RELAY_VERSION_CODE: ${{ github.run_number }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELAY_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELAY_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELAY_ANDROID_KEY_ALIAS: relay
+        run: |
+          export RELAY_ANDROID_KEYSTORE="$RUNNER_TEMP/relay-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RELAY_ANDROID_KEYSTORE"
+          CI=1 npx expo prebuild --platform android --no-install
+          cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --console=plain
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          apk="Relay-$VERSION-android.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          gh release upload "v$VERSION" "$apk" --repo "$RELEASES_REPO" --clobber
+
   publish:
-    needs: [version, build]
+    needs: [version, build, android]
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -124,15 +167,17 @@ jobs:
         # The commit message without trailers like Co-Authored-By.
         run: |
           printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
-      # Unversioned alias for .../releases/latest/download/ links.
-      - run: cp out/Relay-*-omarchy-x86_64.tar.gz out/Relay-Omarchy-x86_64.tar.gz
+      # Unversioned aliases for .../releases/latest/download/ links.
+      - run: |
+          cp out/Relay-*-omarchy-x86_64.tar.gz out/Relay-Omarchy-x86_64.tar.gz
+          cp out/Relay-*-android.apk out/Relay-Android.apk
       - name: Write update feed
         run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release upload "$TAG" out/latest.json out/Relay-Omarchy-x86_64.tar.gz \
+          gh release upload "$TAG" out/latest.json out/Relay-Omarchy-x86_64.tar.gz out/Relay-Android.apk \
             --repo "$RELEASES_REPO" --clobber
           gh release edit "$TAG" --repo "$RELEASES_REPO" --draft=false --latest \
             --title "Relay $VERSION" --notes-file notes.md

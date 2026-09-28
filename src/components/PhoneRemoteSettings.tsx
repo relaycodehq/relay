@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { encode } from "uqr";
 import type { PhonePairing } from "../../shared/remote";
+import { androidAppDownload } from "../../shared/updates";
 import { api } from "../lib/api";
 import { ErrorBox, relativeDate } from "./ui";
 import {
@@ -26,6 +27,7 @@ export function PhoneRemoteSettings() {
   const [switching, setSwitching] = useState<boolean>();
   const [error, setError] = useState<unknown>();
   const [copied, setCopied] = useState(false);
+  const [download, setDownload] = useState(false);
   const now = useNow(!!pairing);
   const data = state.data;
   const paired = data?.devices.length ?? 0;
@@ -45,6 +47,30 @@ export function PhoneRemoteSettings() {
   return (
     <>
       <SettingsCard className="phone-remote">
+        <SettingsRow
+          label="Relay for Android"
+          hint="Scan with the phone's camera to download the app, then pair it below."
+        >
+          <button onClick={() => setDownload((d) => !d)}>
+            {download ? "Hide code" : "Get the app"}
+          </button>
+        </SettingsRow>
+        {download && (
+          <div className="phone-pairing">
+            <QrCode text={androidAppDownload} label="Download QR code" />
+            <div>
+              <p>
+                The browser downloads the newest Relay app. Open it from the
+                download, and allow installs from the browser when Android
+                asks; it asks only the first time.
+              </p>
+              <p className="setting-muted">
+                Later versions come from this computer, so the app stays in
+                step with it.
+              </p>
+            </div>
+          </div>
+        )}
         <SettingsRow
           label="Allow phone connections"
           hint={
@@ -73,7 +99,7 @@ export function PhoneRemoteSettings() {
           <>
             {showing ? (
               <div className="phone-pairing">
-                <QrCode text={pairing.url} />
+                <QrCode text={pairing.url} label="Pairing QR code" />
                 <div>
                   <p>
                     Open the Relay app on your phone and scan this code. It
@@ -149,7 +175,7 @@ export function PhoneRemoteSettings() {
   );
 }
 
-function QrCode({ text }: { text: string }) {
+function QrCode({ text, label }: { text: string; label: string }) {
   const path = useMemo(() => {
     const { data } = encode(text, { ecc: "M", border: 2 });
     let d = "";
@@ -164,7 +190,7 @@ function QrCode({ text }: { text: string }) {
     <svg
       className="phone-qr"
       role="img"
-      aria-label="Pairing QR code"
+      aria-label={label}
       viewBox={`0 0 ${path.size} ${path.size}`}
       shapeRendering="crispEdges"
     >
