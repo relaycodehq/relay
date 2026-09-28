@@ -1,4 +1,6 @@
 const { app, BrowserWindow, safeStorage } = require("electron");
+/** Windows a hidden run showed where nobody sees them. */
+const shownOutOfSight = new Set();
 // All normal E2E runs stay off the user's desktop. Keep this in the fixture,
 // never in the shipped app: native visibility checks explicitly opt in.
 if (process.env.RELAY_TEST_HEADED !== "1") {
@@ -6,14 +8,17 @@ if (process.env.RELAY_TEST_HEADED !== "1") {
   // A window that is never shown never draws on Windows or Linux, so
   // requestAnimationFrame stalls and Playwright waits forever for a click
   // target to hold still. Show it where nobody sees it instead: see-through
-  // where the platform can, and far off-screen where it can't (Linux).
+  // where the platform can, and far off-screen where it can't (Linux). CI's
+  // Linux screen is a virtual one nobody sees, and a window off it counts as
+  // covered there, drawing only now and then, so it stays on that screen.
   const showInactive = BrowserWindow.prototype.showInactive;
-  const offDesktop = { x: -20000, y: -20000 };
+  const offScreen = !(process.platform === "linux" && process.env.CI);
   BrowserWindow.prototype.show = BrowserWindow.prototype.showInactive =
     function () {
       this.setOpacity(0);
       this.setSkipTaskbar(true);
-      this.setPosition(offDesktop.x, offDesktop.y);
+      if (offScreen) this.setPosition(-20000, -20000);
+      shownOutOfSight.add(this.id);
       showInactive.call(this);
     };
   // A hidden window's "ready-to-show" can come late or never, and tests start
@@ -36,14 +41,10 @@ app.on("session-created", (session) =>
   }),
 );
 /**
- * Whether a person could see the window: shown, not see-through and on the
- * desktop. Hidden runs show windows to keep them drawing, so `isVisible()`
- * alone no longer says it.
+ * Whether a person could see the window. Hidden runs show windows out of
+ * sight to keep them drawing, so `isVisible()` alone no longer says it.
  */
-globalThis.relaySeen = (win) =>
-  win.isVisible() &&
-  win.getOpacity() > 0 &&
-  win.getBounds().x + win.getBounds().width > 0;
+globalThis.relaySeen = (win) => win.isVisible() && !shownOutOfSight.has(win.id);
 // Ordinary UI tests must not open the user's Keychain. This reversible fixture
 // encoding is test-only; the actual OS integration is a separate opt-in check.
 if (process.env.RELAY_TEST_NATIVE_STORAGE !== "1") {
