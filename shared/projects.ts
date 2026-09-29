@@ -151,7 +151,14 @@ export interface HeldWakeup {
 /** `parentId` is the side conversation whose Claude session ran it. */
 export type StoppedWork = ChatPending & { parentId?: string };
 export type ChatPending =
-  | { kind: "task"; id: string; description: string; since: number }
+  | {
+      kind: "task";
+      id: string;
+      description: string;
+      since: number;
+      /** A subagent or workflow, which reports back, unlike a dev server. */
+      agent?: boolean;
+    }
   | {
       kind: "wakeup";
       id: string;

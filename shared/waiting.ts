@@ -27,6 +27,18 @@ export function timing(item: ChatPending, now: number) {
 }
 
 /**
+ * When the oldest subagent Claude left running started, if any. Those report
+ * back and Claude carries on, so the thread is still working, not waiting.
+ */
+export function agentsSince(pending: ChatPending[] | undefined) {
+  let since: number | undefined;
+  for (const p of pending ?? [])
+    if (p.kind === "task" && p.agent)
+      since = Math.min(since ?? p.since, p.since);
+  return since;
+}
+
+/**
  * The strip's head line. Claude's turn is over, so its background commands
  * are just running, not something it waits on: dev servers, emulators and
  * watchers never exit. Wake-ups are the only thing it really comes back for.

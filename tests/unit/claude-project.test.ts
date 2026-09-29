@@ -175,6 +175,11 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
         yield tasks(
           { task_id: "ab", task_type: "local_bash", description: "Run A/B" },
           {
+            task_id: "rev",
+            task_type: "local_agent",
+            description: "Review the diff",
+          },
+          {
             task_id: "watch",
             task_type: "monitor",
             description: "Watch logs",
@@ -223,6 +228,13 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
       id: "ab",
       description: "Run A/B",
       since: expect.any(Number),
+    },
+    {
+      kind: "task",
+      id: "rev",
+      description: "Review the diff",
+      since: expect.any(Number),
+      agent: true,
     },
     {
       kind: "wakeup",

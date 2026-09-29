@@ -70,6 +70,7 @@ import {
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 const WORKTREE_PENDING =
@@ -217,7 +218,7 @@ export default function ProjectShell() {
       ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
-    !!chats.data?.some((c) => c.running),
+    !!chats.data?.some((c) => c.running || agentsSince(c.pending)),
   );
   useEffect(() => {
     if (project) {

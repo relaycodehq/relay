@@ -8,6 +8,7 @@ import {
 import { router } from "expo-router";
 import { CircleHelp } from "lucide-react-native";
 import type { RemoteChatSummary } from "../../../shared/remote";
+import { agentsSince } from "../../../shared/waiting";
 import { ProviderIcon } from "./ProviderIcon";
 import { type, useTheme } from "./theme";
 
@@ -45,10 +46,12 @@ export function ThreadRow({
   onLongPress?: () => void;
 }) {
   const t = useTheme();
+  const agents = chat.running ? undefined : agentsSince(chat.pending);
+  const working = chat.running || !!agents;
   const state = chat.waiting
     ? "Waiting for you"
-    : chat.running
-      ? `Working · ${ago(chat.runningSince ?? chat.updated)}`
+    : working
+      ? `Working · ${ago(agents ?? chat.runningSince ?? chat.updated)}`
       : ago(chat.updated);
   return (
     <Pressable
@@ -66,7 +69,7 @@ export function ThreadRow({
       <View style={styles.glyph}>
         {chat.waiting ? (
           <CircleHelp size={17} color={t.accent} />
-        ) : chat.running ? (
+        ) : working ? (
           <ActivityIndicator size="small" color={t.muted} />
         ) : chat.provider ? (
           <ProviderIcon provider={chat.provider} size={15} color={t.muted} />

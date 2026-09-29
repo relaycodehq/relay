@@ -347,7 +347,12 @@ function receive(session: ClaudeSession, message: SDKMessage) {
 /** Replaces the live task set; the SDK sends all of it on every change. */
 function trackTasks(
   session: ClaudeSession,
-  tasks: { task_id: string; description: string; ambient?: boolean }[],
+  tasks: {
+    task_id: string;
+    task_type?: string;
+    description: string;
+    ambient?: boolean;
+  }[],
 ) {
   const previous = session.tasks;
   session.tasks = new Map();
@@ -360,8 +365,11 @@ function trackTasks(
         description: task.description.slice(0, 300),
         // The SDK sends no start time; the first sighting is close enough.
         since: previous.get(task.task_id)?.since ?? Date.now(),
+        ...(agentTask(task.task_type) && { agent: true }),
       });
 }
+const agentTask = (type?: string) =>
+  type === "local_agent" || type === "local_workflow";
 /** The wake-ups Claude listed as its turn ended. */
 function scheduled(session: ClaudeSession, input: unknown) {
   const crons =

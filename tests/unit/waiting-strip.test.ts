@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { summary } from "../../shared/waiting";
+import { agentsSince, summary } from "../../shared/waiting";
 import type { ChatPending } from "../../shared/projects";
 
 const now = Date.parse("2026-09-26T12:00:00Z");
@@ -34,4 +34,16 @@ it("counts wake-ups beside running commands, and leads with one when alone", () 
   expect(summary([emulator, metro, wakeup], now).detail).toBe(" · +1 wake-up");
   expect(summary([wakeup], now).detail).toBe(" · in 5m");
   expect(summary([wakeup], now).title).toMatch(/^Claude will check back at /);
+});
+
+it("counts a thread with subagents out as working, but not one with a dev server", () => {
+  const agent = (minutes: number): ChatPending => ({
+    kind: "task",
+    id: `agent-${minutes}`,
+    description: "Review the diff",
+    since: now - minutes * 60_000,
+    agent: true,
+  });
+  expect(agentsSince([metro, watcher])).toBeUndefined();
+  expect(agentsSince([metro, agent(5), agent(9)])).toBe(now - 9 * 60_000);
 });

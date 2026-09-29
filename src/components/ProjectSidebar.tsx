@@ -41,6 +41,7 @@ import {
   snoozePresets,
   wakeLabel,
 } from "../../shared/chat-activity";
+import { agentsSince } from "../../shared/waiting";
 import { api } from "../lib/api";
 import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
 import { useWindowFocused } from "../lib/window-focus";
@@ -155,9 +156,12 @@ function StatusMark({
         <i />
       </span>
     );
-  if (chat.running)
+  if (chat.running || agentsSince(chat.pending))
     return (
-      <span className="sb-status running" title="Working">
+      <span
+        className="sb-status running"
+        title={chat.running ? "Working" : pendingTitle(chat.pending!)}
+      >
         <Spinner size={11} steady />
       </span>
     );
@@ -252,12 +256,16 @@ function CardState({
         Needs input
       </span>
     );
-  if (chat.running)
+  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
+  if (chat.running || since)
     return (
-      <span className="sb-card-state running">
+      <span
+        className="sb-card-state running"
+        title={chat.running ? undefined : pendingTitle(chat.pending!)}
+      >
         <Spinner size={11} steady />
         Working
-        {chat.runningSince && <Elapsed since={chat.runningSince} />}
+        {since && <Elapsed since={since} />}
       </span>
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
@@ -859,7 +867,7 @@ export function ProjectSidebar({
     const isOpen = expanded[p.id] ?? p.id === projectId;
     const more = showAll[p.id];
     const visible = more ? chats : chats.slice(0, THREADS_PER_PROJECT);
-    const busy = chats.some((c) => c.running);
+    const busy = chats.some((c) => c.running || agentsSince(c.pending));
     return (
       <section
         key={p.id}

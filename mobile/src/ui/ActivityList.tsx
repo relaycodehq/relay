@@ -24,6 +24,7 @@ import {
   wakeLabel,
 } from "../../../shared/chat-activity";
 import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
+import { agentsSince } from "../../../shared/waiting";
 import { useUnread } from "../remote/seen";
 import { useNow } from "./motion";
 import { ProjectBadge } from "./ProjectIcon";
@@ -326,7 +327,8 @@ function CardState({
         </Text>
       </View>
     );
-  if (chat.running)
+  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
+  if (chat.running || since)
     return (
       <View style={styles.state}>
         <ActivityIndicator
@@ -336,7 +338,7 @@ function CardState({
         />
         <Text style={[styles.stateText, { color: t.accent }]}>
           Working
-          {chat.runningSince ? <Elapsed since={chat.runningSince} /> : null}
+          {since ? <Elapsed since={since} /> : null}
         </Text>
       </View>
     );
