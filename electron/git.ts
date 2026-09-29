@@ -155,6 +155,16 @@ export async function git(
     throw gitError(e);
   }
 }
+/** The checked-out branch; empty when HEAD is detached. */
+export async function currentBranch(root: string) {
+  return (await git(root, ["branch", "--show-current"])).trim();
+}
+/** The checked-out branch, or null when detached or Git can't say. */
+export const currentBranchOrNull = (root: string) =>
+  currentBranch(root).then(
+    (name) => name || null,
+    () => null,
+  );
 /** Git's output as bytes, up to `limit`; past it, the content isn't text Relay shows. */
 export async function gitBytes(
   root: string,

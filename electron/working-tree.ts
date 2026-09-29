@@ -1,3 +1,5 @@
+import { chunks } from "./chunks";
+import { keyedQueue } from "./keyed-queue";
 import { execFile } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -272,26 +274,12 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     ),
   };
 }
-const queue = new Map<string, Promise<unknown>>();
+const queue = keyedQueue();
 export async function flushGitOperations() {
-  await Promise.allSettled([...queue.values()]);
+  await Promise.allSettled(queue.pending());
 }
-export async function serializeRepo<T>(
-  root: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const before = queue.get(root);
-  const task = (async () => {
-    await before?.catch(() => {});
-    return run();
-  })();
-  queue.set(root, task);
-  try {
-    return await task;
-  } finally {
-    if (queue.get(root) === task) queue.delete(root);
-  }
-}
+export const serializeRepo = <T>(root: string, run: () => Promise<T>) =>
+  queue(root, run);
 function withPreviousPaths(
   changes: WorkingChange[],
   paths: string[],
@@ -330,12 +318,12 @@ export async function performGitAction(root: string, action: GitAction) {
         (c) => action.kind === "unstage" || /[RC]/.test(c.worktree),
       );
       // Bounded chunks avoid argv limits; use literal paths even for names containing Git magic.
-      for (let i = 0; i < allPaths.length; i += 100)
+      for (const part of chunks(allPaths, 100))
         await git(
           root,
           action.kind === "stage"
-            ? ["add", "--", ...allPaths.slice(i, i + 100)]
-            : ["reset", "-q", "HEAD", "--", ...allPaths.slice(i, i + 100)],
+            ? ["add", "--", ...part]
+            : ["reset", "-q", "HEAD", "--", ...part],
         );
     } else {
       if (!state.branch || state.operation)

@@ -1,5 +1,5 @@
-import { git } from "../git";
-import { remoteUrl } from "../repository";
+import { currentBranch, git } from "../git";
+import { remoteUrl, repoOf } from "../repository";
 import type { FetchRequest, Gitea } from "../gitea";
 import type { CiRun, CiStatus } from "../../shared/ci";
 import { GitHub } from "./github";
@@ -20,13 +20,8 @@ export async function remoteRepo(root: string) {
   const name = names.includes("origin") ? "origin" : names[0];
   if (!name) return null;
   const url = remoteUrl((await git(root, ["remote", "get-url", name])).trim());
-  const parts = url?.pathname
-    .replace(/\.git\/?$/, "")
-    .split("/")
-    .filter(Boolean);
-  if (!url || !parts || parts.length < 2) return null;
-  const [owner, repo] = parts.slice(-2);
-  return { host: url.hostname.toLowerCase(), owner: owner!, name: repo! };
+  const repo = url && repoOf(url);
+  return repo && { host: url.hostname.toLowerCase(), ...repo };
 }
 
 async function commitsSince(root: string, sha: string) {
@@ -87,7 +82,7 @@ export class Ci {
     if (!remote) return null;
     const source = this.sources(gitea).find((s) => s.host === remote.host);
     if (!source) return null;
-    const current = (await git(root, ["branch", "--show-current"])).trim();
+    const current = await currentBranch(root);
     let branch = current;
     let reading = current ? await source.read(remote, current) : null;
     // A branch CI hasn't seen yet shows the default branch instead.

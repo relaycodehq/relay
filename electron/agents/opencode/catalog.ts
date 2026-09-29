@@ -1,3 +1,4 @@
+import { memoOnce } from "../../memo";
 import type { AgentDefaults, AgentModel } from "../../../shared/agents";
 import type { ProviderCommand } from "../../../shared/commands";
 import {
@@ -46,59 +47,48 @@ type ProviderList = {
  */
 const hidden = new Set(["anthropic"]);
 
-let list: { at: number; models: Promise<AgentModel[]> } | undefined;
 /**
  * The models of the upstream providers OpenCode is signed in to. Asked again
  * after a minute, since connecting a provider in OpenCode adds its models.
  */
-export function openCodeModels(): Promise<AgentModel[]> {
-  if (list && Date.now() - list.at < 60000) return list.models;
-  const models = (async () => {
-    const { all, connected } = await openCode<ProviderList>("GET", "/provider");
-    const signedIn = new Set(connected);
-    return all
-      .filter(
-        (provider) => signedIn.has(provider.id) && !hidden.has(provider.id),
-      )
-      .flatMap((provider) =>
-        Object.values(provider.models).flatMap((model): AgentModel[] => {
-          const id = `${provider.id}/${model.id}`;
-          // Agents need tools; embedding, image and speech models have none.
-          if (
-            !modelSchema.safeParse(id).success ||
-            !model.capabilities?.toolcall ||
-            !model.limit?.context
-          )
-            return [];
-          return [
-            {
-              id,
-              name: model.name || model.id,
-              // A reseller's model id names its maker, e.g. `anthropic/…`.
-              description: model.id.includes("/")
-                ? model.id.slice(0, model.id.indexOf("/")).replace(/^~/, "")
-                : "",
-              group: provider.name,
-              efforts: Object.keys(model.variants ?? {}).flatMap(
-                (v): ReasoningEffort[] => {
-                  const effort = reasoningEffortSchema.safeParse(v).data;
-                  return effort ? [effort] : [];
-                },
-              ),
-              ...(model.status === "deprecated" ? { legacy: true } : {}),
-              contextWindow: model.limit.context,
-            },
-          ];
-        }),
-      )
-      .sort((a, b) => byName(a.group!, b.group!) || byName(a.name, b.name));
-  })();
-  list = { at: Date.now(), models };
-  models.catch(() => {
-    if (list?.models === models) list = undefined;
-  });
-  return models;
-}
+export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
+  const { all, connected } = await openCode<ProviderList>("GET", "/provider");
+  const signedIn = new Set(connected);
+  return all
+    .filter((provider) => signedIn.has(provider.id) && !hidden.has(provider.id))
+    .flatMap((provider) =>
+      Object.values(provider.models).flatMap((model): AgentModel[] => {
+        const id = `${provider.id}/${model.id}`;
+        // Agents need tools; embedding, image and speech models have none.
+        if (
+          !modelSchema.safeParse(id).success ||
+          !model.capabilities?.toolcall ||
+          !model.limit?.context
+        )
+          return [];
+        return [
+          {
+            id,
+            name: model.name || model.id,
+            // A reseller's model id names its maker, e.g. `anthropic/…`.
+            description: model.id.includes("/")
+              ? model.id.slice(0, model.id.indexOf("/")).replace(/^~/, "")
+              : "",
+            group: provider.name,
+            efforts: Object.keys(model.variants ?? {}).flatMap(
+              (v): ReasoningEffort[] => {
+                const effort = reasoningEffortSchema.safeParse(v).data;
+                return effort ? [effort] : [];
+              },
+            ),
+            ...(model.status === "deprecated" ? { legacy: true } : {}),
+            contextWindow: model.limit.context,
+          },
+        ];
+      }),
+    )
+    .sort((a, b) => byName(a.group!, b.group!) || byName(a.name, b.name));
+});
 
 /** The model OpenCode's config gives sessions in `root` that name none. */
 export async function openCodeDefaults(root: string): Promise<AgentDefaults> {

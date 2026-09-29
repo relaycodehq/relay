@@ -1,3 +1,4 @@
+import { keyedQueue } from "./keyed-queue";
 import {
   claudeAgentRun,
   claudeAgents,
@@ -57,7 +58,7 @@ import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
 import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
-import { git } from "./git";
+import { currentBranchOrNull } from "./git";
 import {
   dropRevert,
   finishTurn,
@@ -85,12 +86,31 @@ import type {
 } from "../shared/deep-review";
 import { codexQuestionChoice } from "../shared/settings";
 import { resolveTurnModel, type TurnModel } from "../shared/turn-model";
-/** The checked-out branch a message was sent from; null when detached. */
-const currentBranch = (root: string) =>
-  git(root, ["branch", "--show-current"]).then(
-    (out) => out.trim() || null,
-    () => null,
-  );
+/** A fresh assistant message the agent is about to stream into. */
+const streamingAnswer = (
+  provider: AgentProvider,
+  extra: Partial<ChatMessage> = {},
+): ChatMessage => ({
+  id: randomUUID(),
+  role: "assistant",
+  body: "",
+  status: "streaming",
+  provider,
+  created: Date.now(),
+  version: 1,
+  ...extra,
+});
+
+/** A turn that's about to run, with the means to stop it and answer its requests. */
+function newActive(input: ProjectChatSend): ActiveChat {
+  const abort = new AbortController();
+  return {
+    started: Date.now(),
+    abort,
+    input,
+    requests: new AgentRequests(abort.signal),
+  };
+}
 
 /** An agent's session and the last message it heard, on the main conversation or a side one. */
 function agentSession(
@@ -192,7 +212,7 @@ export class ProjectChats {
   private timers = new Map<string, NodeJS.Timeout>();
   private cache = new Map<string, ProjectChat>();
   private loading = new Map<string, Promise<void>>();
-  private writes = new Map<string, Promise<void>>();
+  private writes = keyedQueue();
   private active = new Map<string, ActiveChat>();
   /** Side questions being answered, by `chatId:rootId`; they run beside `active`. */
   private sides = new Map<
@@ -439,8 +459,7 @@ export class ProjectChats {
   }
   private async saveScheduled(chat: ProjectChat) {
     if (!chat.scheduled?.length) delete chat.scheduled;
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     this.armSend(chat.id, this.nextSend(chat.scheduled));
   }
   /** Sends the scheduled messages that are due, oldest first. */
@@ -484,8 +503,7 @@ export class ProjectChats {
   private async dropWakeup(chat: ProjectChat, id: string) {
     chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
     if (!chat.heldWakeups?.length) delete chat.heldWakeups;
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
   }
   private async fireWakeup(chatId: string, id: string) {
     if (this.disposing) return;
@@ -531,8 +549,7 @@ export class ProjectChats {
           at: now,
           items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
         };
-      await this.save(chat);
-      await this.updateSummary(chat);
+      await this.persist(chat);
     }
   }
   async resolveStoppedWork(id: string, action: "resume" | "dismiss") {
@@ -540,8 +557,7 @@ export class ProjectChats {
     const stopped = chat.stopped;
     if (!stopped) return;
     delete chat.stopped;
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     if (action === "dismiss") return;
     // Each conversation's Claude hears about the work it started.
     for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {
@@ -580,8 +596,7 @@ export class ProjectChats {
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
-    await this.load(id);
-    const chat = this.cache.get(id)!;
+    const chat = await this.load(id);
     const now = Date.now();
     if (triage.kind === "archive") {
       if (this.active.has(id) || this.councilBusy(chat))
@@ -608,8 +623,7 @@ export class ProjectChats {
           chat.worktree.removedAt = now;
         }
       }
-      await this.save(chat);
-      await this.updateSummary(chat);
+      await this.persist(chat);
       return this.summary(chat);
     }
     delete chat.snoozedAt;
@@ -622,19 +636,16 @@ export class ProjectChats {
       chat.snoozedAt = now;
       chat.snoozedUntil = triage.until;
     }
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     return this.summary(chat);
   }
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");
-    await this.load(id);
-    const chat = this.cache.get(id)!;
+    const chat = await this.load(id);
     chat.title = title;
     chat.renamed = true;
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     return this.summary(chat);
   }
   async create(
@@ -1017,22 +1028,14 @@ export class ProjectChats {
     return checked.map(({ meta }) => meta);
   }
   private async save(chat: ProjectChat) {
-    const before = this.writes.get(chat.id),
-      value = JSON.stringify(chat),
+    const value = JSON.stringify(chat),
       path = join(this.dir, chat.id + ".json");
-    const task = (async () => {
-      await before?.catch(() => {});
+    await this.writes(chat.id, async () => {
       await mkdir(this.dir, { recursive: true, mode: 0o700 });
       const tmp = path + "." + randomUUID() + ".tmp";
       await writeFile(tmp, value, { mode: 0o600 });
       await rename(tmp, path);
-    })();
-    this.writes.set(chat.id, task);
-    try {
-      await task;
-    } finally {
-      if (this.writes.get(chat.id) === task) this.writes.delete(chat.id);
-    }
+    });
   }
   /** The worktrees a project's threads work in, for its process list. */
   worktreeFolders(projectId: string) {
@@ -1075,8 +1078,7 @@ export class ProjectChats {
         }
         return;
       }
-      await this.load(id);
-      const chat = this.cache.get(id)!;
+      const chat = await this.load(id);
       if (
         chat.messages.some((m) => m.id === input.id) ||
         chat.queue?.some((q) => q.input.id === input.id)
@@ -1142,8 +1144,7 @@ export class ProjectChats {
   }
   private async drain(id: string) {
     if (this.disposing || this.active.has(id)) return;
-    await this.load(id);
-    const chat = this.cache.get(id)!;
+    const chat = await this.load(id);
     if (this.councilBusy(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
@@ -1248,8 +1249,7 @@ export class ProjectChats {
   ) {
     const sendNow = await this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      await this.load(id);
-      const chat = this.cache.get(id)!;
+      const chat = await this.load(id);
       const scheduled = chat.scheduled?.find((s) => s.input.id === messageId);
       if (scheduled && action !== "move") {
         chat.scheduled = chat.scheduled!.filter((s) => s !== scheduled);
@@ -1279,8 +1279,7 @@ export class ProjectChats {
   resume(id: string, settings?: ResumeSettings) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      await this.load(id);
-      const chat = this.cache.get(id)!;
+      const chat = await this.load(id);
       if (this.active.has(id))
         throw new Error("This thread is already running.");
       if (!chat.lastInput)
@@ -1309,17 +1308,10 @@ export class ProjectChats {
   private async sendNow(id: string, input: ProjectChatSend) {
     if (this.active.has(id))
       throw new Error("This chat already has a running answer.");
-    const abort = new AbortController();
-    const active: ActiveChat = {
-      started: Date.now(),
-      abort,
-      input,
-      requests: new AgentRequests(abort.signal),
-    };
+    const active = newActive(input);
     this.active.set(id, active);
     try {
-      await this.load(id);
-      const chat = this.cache.get(id)!;
+      const chat = await this.load(id);
       if (!chat.worktree && !chat.thinker)
         this.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.chatRoot(chat, input.body);
@@ -1407,12 +1399,11 @@ export class ProjectChats {
       chat.messages.push(user);
       this.reviews.sent(chat, input);
       chat.updated = Date.now();
-      chat.branch = (await currentBranch(root)) ?? chat.branch;
+      chat.branch = (await currentBranchOrNull(root)) ?? chat.branch;
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       this.cache.set(id, chat);
-      await this.save(chat);
-      await this.updateSummary(chat);
+      await this.persist(chat);
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!mention) {
@@ -1503,19 +1494,12 @@ export class ProjectChats {
             active,
           )
         : undefined;
-      const answer: ChatMessage = {
-        id: randomUUID(),
-        role: "assistant",
-        body: "",
-        status: "streaming",
-        provider: mention.provider,
-        created: Date.now(),
-        version: 1,
+      const answer = streamingAnswer(mention.provider, {
         // With a council, the lead's first answer is its brief.
         ...(input.ultraplan ? { brief: true } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...(chat.shared ? { pending: true } : {}),
-      };
+      });
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       if (input.ultraplan)
@@ -1728,17 +1712,10 @@ export class ProjectChats {
     active: ActiveChat,
   ): Promise<ChatMessage> {
     const input = this.sessionInput(chat, from, parentId);
-    const message: ChatMessage = {
-      id: randomUUID(),
-      role: "assistant",
+    const message = streamingAnswer(from, {
       handoff: { from, to },
-      body: "",
-      status: "streaming",
-      provider: from,
-      created: Date.now(),
-      version: 1,
       ...(parentId ? { parentId } : {}),
-    };
+    });
     chat.messages.push(message);
     await this.save(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message) });
@@ -1769,29 +1746,19 @@ export class ProjectChats {
   ) {
     if (this.disposing) throw new Error("Relay is closing.");
     const input = this.sessionInput(chat, provider, parentId);
-    const abort = new AbortController();
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
     const idle = !this.active.has(chat.id);
-    const active: ActiveChat = {
-      started: Date.now(),
-      abort,
-      input,
-      requests: new AgentRequests(abort.signal),
-    };
+    const active = newActive(input);
+    const { abort } = active;
     if (idle) this.active.set(chat.id, active);
-    const message: ChatMessage = resumed ?? {
-      id: randomUUID(),
-      role: "assistant",
-      unprompted: true,
-      body: "",
-      status: "streaming",
-      provider,
-      created: Date.now(),
-      version: 1,
-      ...(parentId ? { parentId } : {}),
-      ...(chat.shared ? { pending: true } : {}),
-    };
+    const message: ChatMessage =
+      resumed ??
+      streamingAnswer(provider, {
+        unprompted: true,
+        ...(parentId ? { parentId } : {}),
+        ...(chat.shared ? { pending: true } : {}),
+      });
     try {
       if (!resumed) {
         chat.messages.push(message);
@@ -1926,30 +1893,15 @@ export class ProjectChats {
     if (this.disposing) throw new Error("Relay is closing.");
     if (this.active.has(chat.id))
       throw new Error("This chat already has a running answer.");
-    const abort = new AbortController();
-    const active: ActiveChat = {
-      started: Date.now(),
-      abort,
-      input,
-      requests: new AgentRequests(abort.signal),
-    };
+    const active = newActive(input);
     this.active.set(chat.id, active);
-    const message: ChatMessage = {
-      id: randomUUID(),
-      role: "assistant",
-      body: "",
-      status: "streaming",
-      provider: input.provider,
-      created: Date.now(),
-      version: 1,
-    };
+    const message = streamingAnswer(input.provider);
     try {
       const root = await this.projects.root(chat.projectId);
       // Resume and later sends pick the lead's agent and settings up from here.
       chat.lastInput = input;
       chat.messages.push(message);
-      await this.save(chat);
-      await this.updateSummary(chat);
+      await this.persist(chat);
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
@@ -2003,16 +1955,7 @@ export class ProjectChats {
         : {}),
       ...(root ? { parentId: root.id } : { side: true }),
     };
-    const answer: ChatMessage = {
-      id: randomUUID(),
-      role: "assistant",
-      body: "",
-      status: "streaming",
-      provider,
-      created: Date.now(),
-      version: 1,
-      parentId: rootId,
-    };
+    const answer = streamingAnswer(provider, { parentId: rootId });
     const earlier = chat.messages.filter(
       (m) => m.id === rootId || m.parentId === rootId,
     );
@@ -2118,8 +2061,7 @@ export class ProjectChats {
       if (this.disposing) throw new Error("Relay is closing.");
       if (this.active.has(id))
         throw new Error("Wait for the current answer before compacting.");
-      await this.load(id);
-      const chat = this.cache.get(id)!;
+      const chat = await this.load(id);
       if (parentId && chat.messages.find((m) => m.id === parentId)?.side)
         throw new Error(
           "A side question has no session of its own to compact.",
@@ -2139,25 +2081,13 @@ export class ProjectChats {
           `${agentName(provider)} compacts without custom instructions.`,
         );
       const input = this.sessionInput(chat, provider, parentId);
-      const abort = new AbortController();
-      const active: ActiveChat = {
-        started: Date.now(),
-        abort,
-        input,
-        requests: new AgentRequests(abort.signal),
-      };
+      const active = newActive(input);
+      const { abort } = active;
       this.active.set(id, active);
-      const message: ChatMessage = {
-        id: randomUUID(),
-        role: "assistant",
+      const message = streamingAnswer(provider, {
         compaction: true,
-        body: "",
-        status: "streaming",
-        provider,
-        created: Date.now(),
-        version: 1,
         ...(parentId ? { parentId } : {}),
-      };
+      });
       chat.messages.push(message);
       try {
         await this.save(chat);
@@ -2292,8 +2222,7 @@ export class ProjectChats {
       async (worktrees) => {
         if (worktrees.length) chat.agentWorktrees = worktrees;
         else delete chat.agentWorktrees;
-        await this.save(chat);
-        await this.updateSummary(chat);
+        await this.persist(chat);
       },
     );
     let point: string | undefined;
@@ -2569,8 +2498,7 @@ export class ProjectChats {
       promptTitle(prompt ?? chat.title),
       worktree,
     );
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     return chat.worktree.path!;
   }
   private async worktreeOf(id: string) {
@@ -2600,7 +2528,8 @@ export class ProjectChats {
       removed: !!worktree.path && !exists,
     };
   }
-  private async saveWorktree(chat: ProjectChat) {
+  /** Saves the thread and refreshes its sidebar summary. */
+  private async persist(chat: ProjectChat) {
     await this.save(chat);
     await this.updateSummary(chat);
   }
@@ -2629,7 +2558,7 @@ export class ProjectChats {
         worktree,
       );
       worktree.removedAt = Date.now();
-      await this.saveWorktree(chat);
+      await this.persist(chat);
     });
   }
   /** Where the thread's terminal opens: its worktree, or the project's checkout. */
@@ -2675,14 +2604,14 @@ export class ProjectChats {
   async recordPull(id: string, pr: { number: number; url: string }) {
     const { chat, worktree } = await this.worktreeOf(id);
     worktree.pr = pr;
-    await this.saveWorktree(chat);
+    await this.persist(chat);
   }
   /** The worktree's PR was merged on the Git host, though the checkout may still need a pull. */
   async pullMerged(id: string) {
     const { chat, worktree } = await this.worktreeOf(id);
     if (worktree.landed?.by === "pr") return;
     worktree.landed = { at: Date.now(), by: "pr" };
-    await this.saveWorktree(chat);
+    await this.persist(chat);
   }
   async turnDiff(chatId: string, messageId: string, path: string) {
     const chat = await this.load(chatId);
@@ -2833,8 +2762,7 @@ export class ProjectChats {
     )
       return;
     chat.title = title;
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message), title });
   }
   private syncing = new Map<string, Promise<void>>();
@@ -2879,8 +2807,7 @@ export class ProjectChats {
       throw new Error(
         "Stop or finish the current answer before sharing this conversation.",
       );
-    await this.load(id);
-    const chat = this.cache.get(id)!;
+    const chat = await this.load(id);
     if (chat.messages.some((message) => message.images?.length))
       throw new Error(
         "This conversation contains private screenshots and cannot be shared yet.",
@@ -2891,8 +2818,7 @@ export class ProjectChats {
     if (!this.sharing) throw new Error("Sharing is unavailable.");
     await this.sharing.allow(chat.projectId);
     chat.shared = await this.sharing.share(chat);
-    await this.save(chat);
-    await this.updateSummary(chat);
+    await this.persist(chat);
     await this.sync(id);
     return this.summary(chat);
   }
@@ -2946,8 +2872,7 @@ export class ProjectChats {
           ]),
         );
         chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
-        await this.save(chat);
-        await this.updateSummary(chat);
+        await this.persist(chat);
       }
     })();
     this.syncing.set(id, job);
@@ -3041,7 +2966,7 @@ export class ProjectChats {
           return chat && this.save(chat);
         }),
       );
-      await Promise.allSettled([...this.writes.values()]);
+      await Promise.allSettled(this.writes.pending());
       await this.store.flush();
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
@@ -3066,7 +2991,7 @@ export class ProjectChats {
       ...this.syncing.values(),
       ...this.loading.values(),
     ]);
-    await Promise.all([...this.writes.values()]);
+    await Promise.all(this.writes.pending());
     // A finished answer refreshes its sidebar summary without waiting for it.
     await this.store.flush();
     await Promise.all(

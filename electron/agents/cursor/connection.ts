@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 import { HostedChild } from "../../agent-host/child";
 import type { AgentHosts } from "../../agent-host/client";
 import type { Entry } from "../../agent-host/protocol";
+import { withTimeout } from "../../timeout";
 import { cursorSetup } from "./sdk";
 import type { InstalledSdk } from "./sdk-install";
 import {
@@ -221,7 +222,7 @@ export async function acquireCursorConnection(
  * agent list on every update and only locks within one process, so two workers
  * sharing one lose each other's agents ("Agent … not found").
  */
-export function threadStore(key: string) {
+function threadStore(key: string) {
   const name = createHash("sha256").update(key).digest("hex").slice(0, 32);
   return join(cursorSetup().store, "threads", name);
 }
@@ -272,19 +273,13 @@ export async function cursorCall<M extends CursorMethod>(
       stdio: ["pipe", "pipe", "pipe"],
     }) as ChildProcessWithoutNullStreams,
   );
-  let timer: NodeJS.Timeout | undefined;
   try {
-    return await Promise.race([
+    return await withTimeout(
       connection.request(method, params),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`Cursor didn't answer ${method} in time.`)),
-          timeout,
-        );
-      }),
-    ]);
+      timeout,
+      `Cursor didn't answer ${method} in time.`,
+    );
   } finally {
-    clearTimeout(timer);
     connection.close();
   }
 }
@@ -334,7 +329,7 @@ export async function reattachCursorSessions(
 }
 
 /** What a turn cut off by a restart still has to hear: its updates and its reply. */
-export function cursorReplay(entries: Entry[], split: number): string[] {
+function cursorReplay(entries: Entry[], split: number): string[] {
   return entries
     .filter((entry) => entry.kind === "line" && entry.seq >= split)
     .map((entry) => (entry as Extract<Entry, { kind: "line" }>).text);

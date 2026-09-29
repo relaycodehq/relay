@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { git, gitBytes } from "./git";
+import { currentBranch, git, gitBytes } from "./git";
 import { digest } from "./hash";
 import { serializeRepo, ignoredPaths, gitOperation } from "./working-tree";
 import { decodeText, readWorkingFile, writeWorkingFile } from "./working-files";
@@ -59,7 +59,7 @@ export class LiveSync {
   }
   private async assertCheckout() {
     await this.validate();
-    const branch = (await git(this.root, ["branch", "--show-current"])).trim();
+    const branch = await currentBranch(this.root);
     if (branch !== this.checkpoint.branch)
       throw new Error(
         `Live sync paused: return to branch ${this.checkpoint.branch}, then resume.`,
@@ -81,7 +81,7 @@ export class LiveSync {
   }
   async start() {
     await this.validate();
-    const branch = (await git(this.root, ["branch", "--show-current"])).trim();
+    const branch = await currentBranch(this.root);
     if (!branch)
       throw new Error("Check out a branch before enabling live sync.");
     const head = (await git(this.root, ["rev-parse", "HEAD"])).trim();

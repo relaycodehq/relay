@@ -1,4 +1,5 @@
 // The diff a deep review covers, for a reviewer that can't run Git itself.
+import { chunks } from "./chunks";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -77,12 +78,8 @@ async function withUntracked<T>(
     )
       .split("\0")
       .filter(Boolean);
-    for (let i = 0; i < untracked.length; i += 100)
-      await git(
-        root,
-        ["add", "--intent-to-add", "--", ...untracked.slice(i, i + 100)],
-        { env },
-      );
+    for (const part of chunks(untracked, 100))
+      await git(root, ["add", "--intent-to-add", "--", ...part], { env });
     return await run(env);
   } finally {
     await rm(dir, { recursive: true, force: true });

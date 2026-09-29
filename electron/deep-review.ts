@@ -1,8 +1,8 @@
 // Runs a deep review: each reviewer in a hidden thread of its own, then the
 // lead in the review thread itself, where it fixes findings with the user.
 import { randomUUID } from "node:crypto";
-import { git } from "./git";
-import { remoteUrl } from "./repository";
+import { currentBranchOrNull, git } from "./git";
+import { isRemoteOf } from "./repository";
 import { reviewDiff } from "./review-diff";
 import type {
   ChatMessage,
@@ -24,6 +24,7 @@ import {
   type ReviewerTask,
 } from "../shared/deep-review";
 import { agentName, agents } from "../shared/agents";
+import { councilTurn, lastAnswer, startSlots } from "./council";
 
 /** A pull request as the forge reports it. */
 export interface PullInfo {
@@ -233,46 +234,34 @@ export class DeepReviews {
   private async sendReviewers(chat: ProjectChat, slots: number[]) {
     const state = chat.deepReview!;
     let diff: Promise<string> | undefined;
-    const failures = await Promise.all(
-      slots.map(async (slot) => {
+    await startSlots(
+      slots,
+      async (slot) => {
         const reviewer = state.reviewers[slot]!;
-        try {
-          const { body } = reviewerTask(
-            reviewer,
-            state.scope,
-            state.focus,
-            reviewer.provider === "cursor"
-              ? await (diff ??= this.host
-                  .root(chat.projectId)
-                  .then((root) => reviewDiff(root, state.scope)))
-              : undefined,
-          );
-          await this.host.send(reviewer.chatId, {
-            id: randomUUID(),
-            body,
-            provider: reviewer.provider,
-            choice: reviewer.choice,
-            // Reviewers can't change files whatever the mode; this one never asks.
-            runtimeMode: "approval-required",
-            interactionMode: "default",
-          });
-          return undefined;
-        } catch (e) {
-          return e;
-        }
-      }),
+        const { body } = reviewerTask(
+          reviewer,
+          state.scope,
+          state.focus,
+          reviewer.provider === "cursor"
+            ? await (diff ??= this.host
+                .root(chat.projectId)
+                .then((root) => reviewDiff(root, state.scope)))
+            : undefined,
+        );
+        await this.host.send(reviewer.chatId, {
+          id: randomUUID(),
+          body,
+          provider: reviewer.provider,
+          choice: reviewer.choice,
+          ...councilTurn,
+        });
+      },
+      () => this.reviewerDone(chat.id),
     );
-    // Reviewers that never started count as finished, so the rest can hand over.
-    if (failures.some(Boolean)) await this.reviewerDone(chat.id);
-    const failure = failures.find(Boolean);
-    if (failures.every(Boolean)) throw failure;
   }
 
-  private async lastAnswer(chatId: string) {
-    const chat = await this.host.load(chatId).catch(() => undefined);
-    return (
-      chat && [...chat.messages].reverse().find((m) => m.role === "assistant")
-    );
+  private lastAnswer(chatId: string) {
+    return lastAnswer(this.host, chatId);
   }
 
   private async reviewerDone(parentId: string) {
@@ -385,7 +374,7 @@ export function reviewerTask(
   return { body: `@claude ${reviewPrompt(scope, focus)}` };
 }
 
-export function reviewPrompt(scope: ReviewScope, focus?: string) {
+function reviewPrompt(scope: ReviewScope, focus?: string) {
   const { what, how } = describe(scope);
   return [
     `Review ${what} for correctness bugs: logic errors, broken edge cases, races, security holes and regressions. Read the code around each change to confirm a problem before you report it, and skip style nits.`,
@@ -506,7 +495,6 @@ async function forgeRemote(root: string, project: Project) {
   const repo = project.repository;
   if (!repo) throw new Error("Link this project to its repository first.");
   const host = new URL(repo.server).hostname;
-  const suffix = `/${repo.owner}/${repo.name}`.toLowerCase();
   // As configured: `remote -v` shows URLs after any insteadOf rewrite.
   const urls = await git(root, [
     "config",
@@ -516,16 +504,7 @@ async function forgeRemote(root: string, project: Project) {
   for (const row of urls.split("\n")) {
     const [key, raw] = row.split(/\s+/);
     const name = key?.slice("remote.".length, -".url".length);
-    const url = remoteUrl(raw ?? "");
-    if (
-      name &&
-      url?.hostname === host &&
-      url.pathname
-        .replace(/\.git$/, "")
-        .toLowerCase()
-        .endsWith(suffix)
-    )
-      return name;
+    if (name && isRemoteOf(raw ?? "", host, repo)) return name;
   }
   throw new Error("This checkout has no remote for the project's repository.");
 }
@@ -536,10 +515,7 @@ export async function resolveScope(
   project: Project,
   pull?: PullInfo,
 ): Promise<ReviewScope> {
-  const branch = await git(root, ["branch", "--show-current"]).then(
-    (out) => out.trim() || null,
-    () => null,
-  );
+  const branch = await currentBranchOrNull(root);
   const stats = async (from: string, to: string) =>
     parseShortstat(await git(root, ["diff", "--shortstat", from, to]));
   switch (target.kind) {

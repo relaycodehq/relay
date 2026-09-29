@@ -1,3 +1,4 @@
+import { openPath } from "./open-path";
 import { existsSync } from "node:fs";
 import { shell } from "electron";
 import { z } from "zod";
@@ -172,21 +173,15 @@ export function chatHandlers(ctx: ApiContext) {
       ),
     removeProjectWorktree: (args) =>
       projectChats.removeWorktree(idSchema.parse(args[0])),
-    revealProjectWorktree: async (args) => {
-      const error = await shell.openPath(
-        await projectChats.worktreePath(idSchema.parse(args[0])),
-      );
-      if (error) throw new Error(error);
-    },
-    revealAgentWorktree: async (args) => {
-      const error = await shell.openPath(
-        await projectChats.agentWorktreePath(
+    revealProjectWorktree: (args) =>
+      openPath(projectChats.worktreePath(idSchema.parse(args[0]))),
+    revealAgentWorktree: (args) =>
+      openPath(
+        projectChats.agentWorktreePath(
           idSchema.parse(args[0]),
           z.string().max(4096).parse(args[1]),
         ),
-      );
-      if (error) throw new Error(error);
-    },
+      ),
     projectChatPresence: (args) =>
       projectChats.presence(
         idSchema.parse(args[0]),

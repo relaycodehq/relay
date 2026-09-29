@@ -18,6 +18,32 @@ export function remoteUrl(raw: string): URL | null {
   }
 }
 
+/** The owner and name a remote's last two path segments give; null with fewer. */
+export function repoOf(remote: URL) {
+  const parts = remote.pathname
+    .replace(/\.git\/?$/, "")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  return { owner: parts.at(-2)!, name: parts.at(-1)! };
+}
+
+/** Whether `raw` is a remote of `repo` on `host`; owner and name compare without case. */
+export function isRemoteOf(
+  raw: string,
+  host: string,
+  repo: { owner: string; name: string },
+) {
+  const remote = remoteUrl(raw);
+  return (
+    remote?.hostname === host &&
+    remote.pathname
+      .replace(/\.git$/, "")
+      .toLowerCase()
+      .endsWith(`/${repo.owner}/${repo.name}`.toLowerCase())
+  );
+}
+
 /** Repository identity without scanning the working tree. */
 export async function inspectRepository(
   path: string,
@@ -31,17 +57,9 @@ export async function inspectRepository(
     throw new Error("Choose the root of the Git repository.");
   const remotes = await git(path, ["remote", "-v"], signal);
   const host = new URL(server).hostname;
-  const suffix = `${repo.owner}/${repo.name}`.toLowerCase();
-  const remoteMatches = remotes.split("\n").some((row) => {
-    const remote = remoteUrl(row.split(/\s+/)[1] ?? "");
-    return (
-      remote?.hostname === host &&
-      remote.pathname
-        .replace(/\.git$/, "")
-        .toLowerCase()
-        .endsWith(`/${suffix}`)
-    );
-  });
+  const remoteMatches = remotes
+    .split("\n")
+    .some((row) => isRemoteOf(row.split(/\s+/)[1] ?? "", host, repo));
   return { path, remoteMatches };
 }
 

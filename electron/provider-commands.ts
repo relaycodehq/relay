@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
+import { memoByKey } from "./memo";
+import { terminate } from "./terminate";
 import { findExecutable, spawnExecutable } from "./executables";
 import {
   withCodexTransport,
@@ -28,27 +30,8 @@ const skillSchema = z.object({
   shortDescription: z.string().nullable().optional(),
 });
 export type CodexSkill = z.infer<typeof skillSchema>;
-type Remembered<T> = Map<string, { expires: number; result: Promise<T> }>;
-/** Answers from `load` for a minute per checkout; a failure asks again. */
-function remember<T>(
-  cache: Remembered<T>,
-  root: string,
-  load: (root: string) => Promise<T>,
-): Promise<T> {
-  const previous = cache.get(root);
-  if (previous && previous.expires > Date.now()) return previous.result;
-  const result = load(root).catch((e) => {
-    cache.delete(root);
-    throw e;
-  });
-  if (cache.size >= 30) cache.delete(cache.keys().next().value!);
-  cache.set(root, { expires: Date.now() + 60000, result });
-  return result;
-}
-const skillLists: Remembered<CodexSkill[]> = new Map();
-export function codexSkills(root: string): Promise<CodexSkill[]> {
-  return remember(skillLists, root, discover);
-}
+/** Codex's skills for a checkout, remembered for a minute. */
+export const codexSkills = memoByKey((root) => discover(root));
 function discover(root: string): Promise<CodexSkill[]> {
   return withAppServer(root, "loading skills", async (wire) => {
     const response = await wire.request("skills/list", { cwds: [root] });
@@ -149,23 +132,20 @@ const configSchema = z.object({
     model_reasoning_effort: z.string().nullish(),
   }),
 });
-const defaultLists: Remembered<CodexDefaults> = new Map();
 /** The model and effort Codex's config gives threads in `root` that leave them on Default. */
-export function codexDefaults(root: string): Promise<CodexDefaults> {
-  return remember(defaultLists, root, (cwd) =>
-    withAppServer(cwd, "reading its config", async (wire) => {
-      const { config } = configSchema.parse(
-        await wire.request("config/read", { cwd }),
-      );
-      return {
-        model: modelSchema.safeParse(config.model).data ?? "",
-        effort:
-          reasoningEffortSchema.safeParse(config.model_reasoning_effort).data ??
-          "",
-      };
-    }),
-  );
-}
+export const codexDefaults = memoByKey<CodexDefaults>((cwd) =>
+  withAppServer(cwd, "reading its config", async (wire) => {
+    const { config } = configSchema.parse(
+      await wire.request("config/read", { cwd }),
+    );
+    return {
+      model: modelSchema.safeParse(config.model).data ?? "",
+      effort:
+        reasoningEffortSchema.safeParse(config.model_reasoning_effort).data ??
+        "",
+    };
+  }),
+);
 /** Runs one exchange with a short-lived `codex app-server`. */
 async function withAppServer<T>(
   cwd: string,
@@ -212,11 +192,6 @@ async function withAppServer<T>(
   } finally {
     clearTimeout(timer);
     child.stdin.end();
-    child.kill("SIGTERM");
-    const kill = setTimeout(() => {
-      if (child.exitCode === null) child.kill("SIGKILL");
-    }, 1500);
-    kill.unref();
-    child.once("exit", () => clearTimeout(kill));
+    terminate(child, { graceMs: 1500 });
   }
 }

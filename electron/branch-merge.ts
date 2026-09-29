@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { git } from "./git";
+import { currentBranch, git } from "./git";
 import { baseCandidates, branches } from "./branches";
 import {
   gitOperation,
@@ -263,7 +263,7 @@ export function catchUpBranch(root: string, base: string) {
 /** Deletes a branch that is already merged; Git refuses anything else. */
 export function deleteMergedBranch(root: string, name: string) {
   return serializeRepo(root, async () => {
-    if ((await git(root, ["branch", "--show-current"])).trim() === name)
+    if ((await currentBranch(root)) === name)
       throw new Error("Switch to another branch before deleting this one.");
     await git(root, ["branch", "-d", "--", name]);
   });

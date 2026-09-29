@@ -1,3 +1,4 @@
+import { memoOnce } from "../../memo";
 import type { AgentDefaults, AgentModel } from "../../../shared/agents";
 import type { ProviderCommand } from "../../../shared/commands";
 import {
@@ -29,13 +30,13 @@ const makers: [RegExp, string][] = [
   [/glm|zai/, "Z.ai"],
   [/qwen/, "Alibaba"],
 ];
-export const makerOf = (model: { id: string; name: string }) => {
+const makerOf = (model: { id: string; name: string }) => {
   const text = `${model.name} ${model.id}`.toLowerCase().trim();
   return makers.find(([pattern]) => pattern.test(text))?.[1] ?? "Other";
 };
 
 /** One SDK model as the picker lists it; its effort levels are the settings that name one. */
-export function agentModelOf(model: CursorModel): AgentModel {
+function agentModelOf(model: CursorModel): AgentModel {
   const parameter = model.parameters.find((p) => effortParameter.test(p.id));
   const efforts = (parameter?.values ?? []).flatMap((v): ReasoningEffort[] => {
     const effort = reasoningEffortSchema.safeParse(v).data;
@@ -53,35 +54,23 @@ export function agentModelOf(model: CursorModel): AgentModel {
   };
 }
 
-let list: { at: number; models: Promise<AgentModel[]> } | undefined;
-
 /**
  * The models Cursor offers this account. Asked again after a minute. It won't
  * download the SDK to answer: that's Settings' job, and an unset Cursor just
  * has no models yet.
  */
-export function cursorModels(): Promise<AgentModel[]> {
-  if (list && Date.now() - list.at < 60000) return list.models;
-  const models = (async () => {
-    const sdk = await currentSdk();
-    if (!sdk) throw new Error("Cursor isn't set up yet.");
-    const found = await cursorCall(sdk, "models", {});
-    return found
-      .filter((model) => modelSchema.safeParse(model.id).success)
-      .map(agentModelOf)
-      .sort((a, b) => byName(a.group!, b.group!) || byName(a.name, b.name));
-  })();
-  list = { at: Date.now(), models };
-  models.catch(() => {
-    if (list?.models === models) list = undefined;
-  });
-  return models;
-}
+export const cursorModels = memoOnce(async (): Promise<AgentModel[]> => {
+  const sdk = await currentSdk();
+  if (!sdk) throw new Error("Cursor isn't set up yet.");
+  const found = await cursorCall(sdk, "models", {});
+  return found
+    .filter((model) => modelSchema.safeParse(model.id).success)
+    .map(agentModelOf)
+    .sort((a, b) => byName(a.group!, b.group!) || byName(a.name, b.name));
+});
 
 /** Forgets the list, e.g. after signing in as someone else. */
-export const forgetCursorModels = () => {
-  list = undefined;
-};
+export const forgetCursorModels = cursorModels.forget;
 
 export async function cursorDefaults(): Promise<AgentDefaults | null> {
   const models = await cursorModels().catch(() => []);

@@ -1,3 +1,4 @@
+import { openPath } from "./open-path";
 import { app, dialog, nativeImage, shell } from "electron";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
@@ -94,12 +95,7 @@ export function projectHandlers(ctx: ApiContext) {
         idSchema.parse(args[0]),
         projectNameSchema.parse(args[1]),
       ),
-    revealProject: async (args) => {
-      const error = await shell.openPath(
-        await projects.root(idSchema.parse(args[0])),
-      );
-      if (error) throw new Error(error);
-    },
+    revealProject: (args) => openPath(projects.root(idSchema.parse(args[0]))),
     projects: () => projects.list(ctx.login.client),
     addProject: async () => {
       const result = await dialog.showOpenDialog(ctx.window.win!, {
@@ -157,19 +153,16 @@ export function projectHandlers(ctx: ApiContext) {
       const full = await entryPath((await place(args[0])).root, path);
       // A folder opens in Finder to show what's inside; a file is selected in its folder.
       if (await lstat(full).then((s) => s.isDirectory())) {
-        const error = await shell.openPath(full);
-        if (error) throw new Error(error);
+        await openPath(full);
       } else shell.showItemInFolder(full);
     },
-    openProjectPath: async (args) => {
-      const error = await shell.openPath(
-        await entryPath(
+    openProjectPath: async (args) =>
+      openPath(
+        entryPath(
           (await place(args[0])).root,
           workingPathSchema.parse(args[1]),
         ),
-      );
-      if (error) throw new Error(error);
-    },
+      ),
     createProjectEntry: async (args) =>
       createEntry(
         (await place(args[0])).root,

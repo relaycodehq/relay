@@ -2,6 +2,7 @@
 // a hidden read-only thread of its own, then the lead's plan in Plan mode.
 import { agentMentionPattern, agentName } from "../shared/agents";
 import { randomUUID } from "node:crypto";
+import { councilTurn, lastAnswer, startSlots } from "./council";
 import type {
   ChatMessage,
   ProjectChat,
@@ -162,41 +163,29 @@ export class Ultraplans {
     const state = chat.ultraplans![request]!;
     const asked = chat.messages.find((m) => m.id === request);
     const brief = chat.messages.find((m) => m.id === state.brief);
-    const failures = await Promise.all(
-      slots.map(async (slot) => {
+    await startSlots(
+      slots,
+      async (slot) => {
         const thinker = state.thinkers[slot]!;
-        try {
-          await this.host.send(thinker.chatId, {
-            id: randomUUID(),
-            body: `@${thinker.provider} ${thinkerPrompt(
-              thinker,
-              state.thinkers.length,
-              requestText(asked?.body ?? ""),
-              brief?.status === "complete" ? brief.body : "",
-            )}`,
-            provider: thinker.provider,
-            choice: thinker.choice,
-            // Thinkers can't change files whatever the mode; this one never asks.
-            runtimeMode: "approval-required",
-            interactionMode: "default",
-          });
-          return undefined;
-        } catch (e) {
-          return e;
-        }
-      }),
+        await this.host.send(thinker.chatId, {
+          id: randomUUID(),
+          body: `@${thinker.provider} ${thinkerPrompt(
+            thinker,
+            state.thinkers.length,
+            requestText(asked?.body ?? ""),
+            brief?.status === "complete" ? brief.body : "",
+          )}`,
+          provider: thinker.provider,
+          choice: thinker.choice,
+          ...councilTurn,
+        });
+      },
+      () => this.thinkerDone(chat.id, request),
     );
-    // Thinkers that never started count as finished, so the rest can hand over.
-    if (failures.some(Boolean)) await this.thinkerDone(chat.id, request);
-    const failure = failures.find(Boolean);
-    if (failures.every(Boolean)) throw failure;
   }
 
-  private async lastAnswer(chatId: string) {
-    const chat = await this.host.load(chatId).catch(() => undefined);
-    return (
-      chat && [...chat.messages].reverse().find((m) => m.role === "assistant")
-    );
+  private lastAnswer(chatId: string) {
+    return lastAnswer(this.host, chatId);
   }
 
   private async thinkerDone(parentId: string, request: string) {

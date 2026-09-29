@@ -1,3 +1,4 @@
+import { keyedQueue } from "./keyed-queue";
 import { constants } from "node:fs";
 import { lstat, open, realpath, rename, unlink, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -103,9 +104,9 @@ export async function readWorkingFile(
     await handle.close();
   }
 }
-const saves = new Map<string, Promise<unknown>>();
+const saves = keyedQueue();
 export async function flushWorkingFiles() {
-  await Promise.allSettled([...saves.values()]);
+  await Promise.allSettled(saves.pending());
 }
 export async function writeWorkingFile(
   root: string,
@@ -114,10 +115,7 @@ export async function writeWorkingFile(
   value: { contents: string; mode?: number } | null,
   validate?: () => Promise<unknown>,
 ) {
-  const key = join(root, path),
-    before = saves.get(key);
-  const task = (async () => {
-    await before?.catch(() => {});
+  return saves(join(root, path), async () => {
     await validate?.();
     root = await realpath(root);
     const current = await readWorkingFile(root, path);
@@ -156,11 +154,5 @@ export async function writeWorkingFile(
         if (e.code !== "ENOENT") throw e;
       });
     }
-  })();
-  saves.set(key, task);
-  try {
-    await task;
-  } finally {
-    if (saves.get(key) === task) saves.delete(key);
-  }
+  });
 }

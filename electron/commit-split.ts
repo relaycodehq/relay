@@ -1,3 +1,4 @@
+import { chunks } from "./chunks";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import { digest } from "./hash";
 import { readWorkingFile } from "./working-files";
 import { serializeRepo, workingTree } from "./working-tree";
 import { agentRuntime } from "./agents";
-import { emptyCwd } from "./commit-messages";
+import { emptyCwd, unfence } from "./helper-output";
 import { helperFallbacks } from "../shared/agents";
 import {
   choiceLabel,
@@ -51,7 +52,7 @@ interface Unit extends SplitChange {
 const hunkHeader = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/;
 
 /** A file's diff against HEAD, cut into its header and hunks. */
-export function parseFileDiff(diff: string) {
+function parseFileDiff(diff: string) {
   const lines = diff.split("\n");
   if (lines.at(-1) === "") lines.pop();
   const first = lines.findIndex((l) => l.startsWith("@@ "));
@@ -108,8 +109,8 @@ async function inBatches<T, R>(
   run: (t: T) => Promise<R>,
 ) {
   const out: R[] = [];
-  for (let i = 0; i < items.length; i += size)
-    out.push(...(await Promise.all(items.slice(i, i + size).map(run))));
+  for (const part of chunks(items, size))
+    out.push(...(await Promise.all(part.map(run))));
   return out;
 }
 
@@ -157,15 +158,9 @@ async function readUnits(root: string) {
     ).then((diff) => ({ change: c, paths, diff }));
   });
   const hashes: string[] = [];
-  for (let i = 0; i < untracked.length; i += 100)
+  for (const part of chunks(untracked, 100))
     hashes.push(
-      ...(
-        await git(root, [
-          "hash-object",
-          "--",
-          ...untracked.slice(i, i + 100).map((c) => c.path),
-        ])
-      )
+      ...(await git(root, ["hash-object", "--", ...part.map((c) => c.path)]))
         .trim()
         .split("\n"),
     );
@@ -246,7 +241,7 @@ export function parseSplitPlan(
   output: string,
   ids: number[],
 ): PlannedCommit[] | null {
-  const text = output.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const text = unfence(output);
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -366,7 +361,7 @@ export async function planCommitSplit(
  * at a hunk's new-side line and takes the nearest matching context, so stale
  * numbers put a hunk in a file of repeated lines in the wrong place.
  */
-export function hunkPatch(units: Unit[], done: ReadonlySet<Unit>) {
+function hunkPatch(units: Unit[], done: ReadonlySet<Unit>) {
   const files = new Map<string, Unit[]>();
   for (const u of units) files.set(u.path, [...(files.get(u.path) ?? []), u]);
   let patch = "";
@@ -426,10 +421,8 @@ export async function applyCommitSplit(
         const whole = [
           ...new Set(chosen.filter((u) => !u.hunk).flatMap((u) => u.paths)),
         ];
-        for (let i = 0; i < whole.length; i += 100)
-          await git(root, ["add", "-A", "--", ...whole.slice(i, i + 100)], {
-            env,
-          });
+        for (const part of chunks(whole, 100))
+          await git(root, ["add", "-A", "--", ...part], { env });
         const hunks = chosen.filter((u) => u.hunk);
         if (hunks.length) {
           const file = join(dir, "hunks.patch");
@@ -455,14 +448,8 @@ export async function applyCommitSplit(
       );
     } finally {
       const list = [...paths];
-      for (let i = 0; i < list.length; i += 100)
-        await git(root, [
-          "reset",
-          "-q",
-          "HEAD",
-          "--",
-          ...list.slice(i, i + 100),
-        ]);
+      for (const part of chunks(list, 100))
+        await git(root, ["reset", "-q", "HEAD", "--", ...part]);
       await rm(dir, { recursive: true, force: true });
     }
     return workingTree(root);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Gitea, ApiError } from "./gitea";
-import { git } from "./git";
+import { currentBranch, git } from "./git";
 import { workingTree, serializeRepo } from "./working-tree";
 import { remoteUrl } from "./repository";
 import type { Repo, Pull } from "../shared/types";
@@ -54,7 +54,7 @@ export async function branchPulls(
   client: Gitea,
   repo: Repo,
 ): Promise<BranchPull[]> {
-  const branch = (await git(root, ["branch", "--show-current"])).trim();
+  const branch = await currentBranch(root);
   if (!branch) return [];
   return (await allPages<Pull>(client, `${client.repo(repo)}/pulls?state=open`))
     .filter(

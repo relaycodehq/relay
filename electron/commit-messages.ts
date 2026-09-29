@@ -1,10 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { git } from "./git";
 import { readWorkingFile } from "./working-files";
 import { workingTree } from "./working-tree";
 import { agentRuntime } from "./agents";
+import { emptyCwd, unfence } from "./helper-output";
 import { helperFallbacks } from "../shared/agents";
 import {
   defaultAISettings,
@@ -16,7 +14,7 @@ const PATCH_LIMIT = 40_000;
 const NEW_FILE_LIMIT = 3_000;
 
 /** What the chosen files change, as the model sees it: a summary and a capped patch. */
-export async function commitContext(root: string, paths: string[]) {
+async function commitContext(root: string, paths: string[]) {
   const state = await workingTree(root);
   const changes = paths.map((path) => {
     const c = state.changes.find((c) => c.path === path);
@@ -55,8 +53,8 @@ export async function commitContext(root: string, paths: string[]) {
   };
 }
 
-export function parseCommitMessage(output: string): string | null {
-  const text = output.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+function parseCommitMessage(output: string): string | null {
+  const text = unfence(output);
   try {
     const value = JSON.parse(text);
     const subject =
@@ -69,16 +67,6 @@ export function parseCommitMessage(output: string): string | null {
   } catch {
     return null;
   }
-}
-
-// The model only reads the patch in the prompt, never the checkout.
-let emptyDirectory: Promise<string> | undefined;
-export function emptyCwd() {
-  emptyDirectory ??= mkdtemp(join(tmpdir(), "relay-commit-")).catch((e) => {
-    emptyDirectory = undefined;
-    throw e;
-  });
-  return emptyDirectory;
 }
 
 export async function generateCommitMessage(

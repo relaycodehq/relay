@@ -15,20 +15,16 @@ import { git, gitBytes } from "./git";
 import { isGitMissing } from "../shared/working-tree";
 import { folderFiles } from "./folder-files";
 import { digest } from "./hash";
-import { inspectRepository, remoteUrl } from "./repository";
+import { inspectRepository, remoteUrl, repoOf } from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
-export function repositoryFromRemote(
+function repositoryFromRemote(
   raw: string,
   server: string,
 ): Project["repository"] {
   const remote = remoteUrl(raw);
   if (!remote || remote.hostname !== new URL(server).hostname) return null;
-  const parts = remote.pathname
-    .replace(/\.git$/, "")
-    .split("/")
-    .filter(Boolean);
-  if (parts.length < 2) return null;
-  return { server, owner: parts.at(-2)!, name: parts.at(-1)! };
+  const repo = repoOf(remote);
+  return repo && { server, ...repo };
 }
 const unique = (values: string[]) => [...new Set(values)];
 /** The root of the repository `dir` is in; null when it's in none. */

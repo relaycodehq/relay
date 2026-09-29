@@ -227,44 +227,23 @@ const api = Object.fromEntries(
     },
   ]),
 );
+const subscribe =
+  <T = unknown>(channel: string) =>
+  (callback: (value: T) => void) => {
+    const listener = (_event: unknown, value: T) => callback(value);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  };
 contextBridge.exposeInMainWorld("relay", {
   ...api,
   pathForFile: (file: File) => webUtils.getPathForFile(file),
-  onProjectChat: (callback: (event: unknown) => void) => {
-    const listener = (_event: unknown, value: unknown) => callback(value);
-    ipcRenderer.on("relay:project-chat", listener);
-    return () => ipcRenderer.removeListener("relay:project-chat", listener);
-  },
-  onUpdate: (callback: (state: unknown) => void) => {
-    const listener = (_event: unknown, value: unknown) => callback(value);
-    ipcRenderer.on("relay:update", listener);
-    return () => ipcRenderer.removeListener("relay:update", listener);
-  },
-  onDictationState: (callback: (state: unknown) => void) => {
-    const listener = (_event: unknown, value: unknown) => callback(value);
-    ipcRenderer.on("relay:dictation", listener);
-    return () => ipcRenderer.removeListener("relay:dictation", listener);
-  },
-  onAgentVersions: (callback: (state: unknown) => void) => {
-    const listener = (_event: unknown, value: unknown) => callback(value);
-    ipcRenderer.on("relay:agent-updates", listener);
-    return () => ipcRenderer.removeListener("relay:agent-updates", listener);
-  },
-  onTerminal: (callback: (event: unknown) => void) => {
-    const listener = (_event: unknown, value: unknown) => callback(value);
-    ipcRenderer.on("relay:terminal", listener);
-    return () => ipcRenderer.removeListener("relay:terminal", listener);
-  },
-  onMaximized: (callback: (maximized: boolean) => void) => {
-    const listener = (_event: unknown, value: boolean) => callback(value);
-    ipcRenderer.on("relay:maximized", listener);
-    return () => ipcRenderer.removeListener("relay:maximized", listener);
-  },
-  onOpenUrl: (callback: (url: string) => void) => {
-    const listener = (_event: unknown, url: string) => callback(url);
-    ipcRenderer.on("relay:open-url", listener);
-    return () => ipcRenderer.removeListener("relay:open-url", listener);
-  },
+  onProjectChat: subscribe("relay:project-chat"),
+  onUpdate: subscribe("relay:update"),
+  onDictationState: subscribe("relay:dictation"),
+  onAgentVersions: subscribe("relay:agent-updates"),
+  onTerminal: subscribe("relay:terminal"),
+  onMaximized: subscribe<boolean>("relay:maximized"),
+  onOpenUrl: subscribe<string>("relay:open-url"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

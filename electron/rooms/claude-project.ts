@@ -24,6 +24,8 @@ import type {
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
+import { memoByKey } from "../memo";
+import { withTimeout } from "../timeout";
 import type { ClaudeModel } from "../../shared/settings";
 import {
   claudeDefaultsFrom,
@@ -55,7 +57,7 @@ export async function sdk(): Promise<
       : "@anthropic-ai/claude-agent-sdk";
   return import(specifier);
 }
-export function claudePermissionMode(
+function claudePermissionMode(
   options: Pick<AgentOptions, "runtimeMode" | "interactionMode">,
 ): PermissionMode {
   if (options.interactionMode === "plan") return "plan";
@@ -453,67 +455,70 @@ function settled(done: Promise<void>, signal: AbortSignal) {
     });
   });
 }
+/** Runs `work` on a throwaway Claude session with no prompt and no MCP servers; closed after. */
+async function withProbe<T>(
+  options: Partial<Options>,
+  work: (stream: ClaudeStream) => Promise<T>,
+): Promise<T> {
+  const [{ query }, executable] = await Promise.all([
+    sdk(),
+    findExecutable("claude"),
+  ]);
+  const input = new ClaudeInput();
+  const stream = query({
+    prompt: input.read(),
+    options: {
+      pathToClaudeCodeExecutable: executable,
+      strictMcpConfig: true,
+      mcpServers: {},
+      ...options,
+    },
+  });
+  try {
+    return await work(stream);
+  } finally {
+    input.close();
+    stream.close();
+  }
+}
 let modelList: Promise<ClaudeModel[]> | undefined;
 /** Asks the installed CLI which models this account can use, once per launch. */
 export function listClaudeModels(): Promise<ClaudeModel[]> {
-  modelList ??= (async () => {
-    const [{ query }, executable] = await Promise.all([
-      sdk(),
-      findExecutable("claude"),
-    ]);
-    const input = new ClaudeInput();
-    const stream = query({
-      prompt: input.read(),
-      options: {
-        pathToClaudeCodeExecutable: executable,
-        settingSources: ["user"],
-        strictMcpConfig: true,
-        mcpServers: {},
-      },
-    });
-    try {
-      const models = await Promise.race([
-        // Signed out, the CLI still lists the models built into it. Kept,
-        // that list would outlast signing in; failing lets the picker ask again.
-        // A CLI that reports no account isn't known to be signed out.
-        stream.accountInfo().then((account) => {
-          if (account?.tokenSource === "none" && !account.apiKeySource)
-            throw new Error("Sign in to Claude to list its models.");
-          return stream.supportedModels();
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Claude did not list models.")),
-            20000,
-          ),
-        ),
-      ]);
-      return (models ?? [])
-        .filter((m) => m.value !== "default")
-        .map((m) => {
-          // The CLI names aliases briefly ("Opus"); its description leads with
-          // the full name ("Opus 5.5 · Best for…"), so show that instead.
-          const [lead, ...rest] = (m.description ?? "").split(" · ");
-          const full = lead && m.displayName && lead.startsWith(m.displayName);
-          return {
-            id: m.value,
-            name: full ? lead : m.displayName || m.value,
-            description: full ? rest.join(" · ") : m.description,
-            ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
-            efforts:
-              m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
-            // The CLI doesn't report context sizes; every current model but
-            // Haiku accepts the `[1m]` suffix.
-            longContext:
-              m.value.endsWith("[1m]") ||
-              !/haiku/i.test(m.resolvedModel ?? m.value),
-          };
-        });
-    } finally {
-      input.close();
-      stream.close();
-    }
-  })();
+  modelList ??= withProbe({ settingSources: ["user"] }, async (stream) => {
+    const models = await withTimeout(
+      // Signed out, the CLI still lists the models built into it. Kept,
+      // that list would outlast signing in; failing lets the picker ask again.
+      // A CLI that reports no account isn't known to be signed out.
+      stream.accountInfo().then((account) => {
+        if (account?.tokenSource === "none" && !account.apiKeySource)
+          throw new Error("Sign in to Claude to list its models.");
+        return stream.supportedModels();
+      }),
+      20000,
+      "Claude did not list models.",
+    );
+    return (models ?? [])
+      .filter((m) => m.value !== "default")
+      .map((m) => {
+        // The CLI names aliases briefly ("Opus"); its description leads with
+        // the full name ("Opus 5.5 · Best for…"), so show that instead.
+        const [lead, ...rest] = (m.description ?? "").split(" · ");
+        const full = lead && m.displayName && lead.startsWith(m.displayName);
+        return {
+          id: m.value,
+          name: full ? lead : m.displayName || m.value,
+          description: full ? rest.join(" · ") : m.description,
+          ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
+          efforts:
+            m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
+          // The CLI doesn't report context sizes; every current model but
+          // Haiku accepts the `[1m]` suffix.
+          longContext:
+            m.value.endsWith("[1m]") ||
+            !/haiku/i.test(m.resolvedModel ?? m.value),
+        };
+      });
+  });
   // A failed probe (CLI missing, signed out) should be retried on next open.
   modelList.catch(() => (modelList = undefined));
   return modelList;
@@ -534,29 +539,11 @@ export async function readClaudeUsage(): Promise<SDKControlGetUsageResponse | nu
       // Closing or stuck behind its turn; a fresh probe still answers.
     }
   }
-  const [{ query }, executable] = await Promise.all([
-    sdk(),
-    findExecutable("claude"),
-  ]);
-  const input = new ClaudeInput();
-  const stream = query({
-    prompt: input.read(),
-    options: {
-      pathToClaudeCodeExecutable: executable,
-      settingSources: ["user"],
-      strictMcpConfig: true,
-      mcpServers: {},
-    },
-  });
-  try {
-    return await usageFrom(stream, 20000);
-  } finally {
-    input.close();
-    stream.close();
-  }
+  return withProbe({ settingSources: ["user"] }, (stream) =>
+    usageFrom(stream, 20000),
+  );
 }
 async function usageFrom(stream: ClaudeStream, ms: number) {
-  let timer: ReturnType<typeof setTimeout> | undefined;
   const ask = async () => {
     const account = await stream.accountInfo();
     if (account?.tokenSource === "none" && !account.apiKeySource) return null;
@@ -565,19 +552,7 @@ async function usageFrom(stream: ClaudeStream, ms: number) {
       skipBehaviors: true,
     });
   };
-  try {
-    return await Promise.race([
-      ask(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("Claude did not report usage.")),
-          ms,
-        );
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
+  return withTimeout(ask(), ms, "Claude did not report usage.");
 }
 // Relay owns these (model, effort, threads, context), or they need the
 // terminal, a long-lived loop, or account setup that the app doesn't offer.
@@ -621,49 +596,28 @@ const hiddenCommands = new Set([
 // SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
 const chromeArgs = { chrome: null };
 type ClaudeProbe = { commands: ProviderCommand[]; defaults?: ClaudeDefaults };
-const probes = new Map<
-  string,
-  { expires: number; result: Promise<ClaudeProbe> }
->();
 /** Claude's commands and skills for this checkout, as the SDK resolves them. */
 export const listClaudeCommands = (root: string) =>
   probeClaude(root).then((probe) => probe.commands);
 /** What threads in this checkout run on Default; null when Claude can't say. */
 export const claudeDefaults = (root: string) =>
   probeClaude(root).then((probe) => probe.defaults ?? null);
-function probeClaude(root: string): Promise<ClaudeProbe> {
-  const previous = probes.get(root);
-  if (previous && previous.expires > Date.now()) return previous.result;
-  const result = (async () => {
-    const [{ query }, executable] = await Promise.all([
-      sdk(),
-      findExecutable("claude"),
-    ]);
-    const input = new ClaudeInput();
-    const stream = query({
-      prompt: input.read(),
-      options: {
-        cwd: root,
-        pathToClaudeCodeExecutable: executable,
-        settingSources: ["user", "project", "local"],
-        strictMcpConfig: true,
-        mcpServers: {},
-        extraArgs: chromeArgs,
-      },
-    });
-    try {
-      const [commands, defaults] = await Promise.race([
+const probeClaude = memoByKey<ClaudeProbe>((root) =>
+  withProbe(
+    {
+      cwd: root,
+      settingSources: ["user", "project", "local"],
+      extraArgs: chromeArgs,
+    },
+    async (stream) => {
+      const [commands, defaults] = await withTimeout(
         Promise.all([
           stream.supportedCommands(),
           readSettings(stream).catch(() => undefined),
         ]),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Claude did not list commands.")),
-            20000,
-          ),
-        ),
-      ]);
+        20000,
+        "Claude did not list commands.",
+      );
       const listed = (commands ?? [])
         .filter(
           (c) =>
@@ -683,18 +637,9 @@ function probeClaude(root: string): Promise<ClaudeProbe> {
             : {}),
         }));
       return { commands: listed, defaults };
-    } finally {
-      input.close();
-      stream.close();
-    }
-  })().catch((e) => {
-    probes.delete(root);
-    throw e;
-  });
-  if (probes.size >= 30) probes.delete(probes.keys().next().value!);
-  probes.set(root, { expires: Date.now() + 60000, result });
-  return result;
-}
+    },
+  ),
+);
 export function closeClaudeSession(key: string) {
   const session = sessions.get(key);
   sessions.delete(key);

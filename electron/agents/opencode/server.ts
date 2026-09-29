@@ -6,6 +6,7 @@ import {
   findExecutable,
   spawnExecutable,
 } from "../../executables";
+import { terminate } from "../../terminate";
 import type { AgentHosts, HostedProcess } from "../../agent-host/client";
 
 /** A running `opencode serve`, reached over HTTP with Basic auth. */
@@ -222,22 +223,7 @@ function healthOf(url: string, auth: string) {
 
 function stop(process_: ChildProcess) {
   if (process_.exitCode !== null || process_.signalCode !== null) return;
-  try {
-    if (process.platform !== "win32" && process_.pid)
-      process.kill(-process_.pid, "SIGTERM");
-    else process_.kill("SIGTERM");
-  } catch {
-    process_.kill("SIGTERM");
-  }
-  const force = setTimeout(() => {
-    try {
-      if (process.platform !== "win32" && process_.pid)
-        process.kill(-process_.pid, "SIGKILL");
-      else process_.kill("SIGKILL");
-    } catch {}
-  }, 3000);
-  force.unref();
-  process_.once("exit", () => clearTimeout(force));
+  terminate(process_, { graceMs: 3000, group: true });
 }
 
 /** Stops the server, e.g. as Relay quits. */

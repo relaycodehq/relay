@@ -1,3 +1,4 @@
+import { terminate } from "../terminate";
 import { runClaudeProject, type ClaudeRunOptions } from "./claude-project";
 import { readFile } from "node:fs/promises";
 import { findExecutable, spawnExecutable } from "../executables";
@@ -58,12 +59,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
       clearTimeout(timeout);
       options.signal.removeEventListener("abort", abort);
       child.stdin.end();
-      child.kill("SIGTERM");
-      const kill = setTimeout(() => {
-        if (child.exitCode === null) child.kill("SIGKILL");
-      }, 2000);
-      kill.unref();
-      child.once("exit", () => clearTimeout(kill));
+      terminate(child);
       if (error) reject(error);
       else resolve(answer);
     };

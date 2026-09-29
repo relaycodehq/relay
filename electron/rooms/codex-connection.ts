@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { terminate } from "../terminate";
 import { executableCommand, spawnExecutable } from "../executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
 import { HostedChild } from "../agent-host/child";
@@ -15,7 +16,7 @@ export function useCodexHosts(agentHosts: AgentHosts) {
 type CodexMeta = { provider: "codex"; started?: any };
 
 /** A native session owns its approvals. Keep its process alive between project turns. */
-export class CodexConnection {
+class CodexConnection {
   child?: ChildProcessWithoutNullStreams | HostedChild;
   readonly ready: Promise<CodexTransport>;
   readonly done: Promise<void>;
@@ -106,12 +107,7 @@ export class CodexConnection {
     const child = this.child;
     if (!child) return;
     child.stdin.end();
-    child.kill("SIGTERM");
-    const kill = setTimeout(() => {
-      if (child.exitCode === null) child.kill("SIGKILL");
-    }, 2000);
-    kill.unref();
-    child.once("exit", () => clearTimeout(kill));
+    terminate(child);
   }
 }
 const sessions = new Map<string, CodexConnection>();

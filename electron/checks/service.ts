@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
+import { terminate } from "../terminate";
 import { findExecutable } from "../executables";
 import { git } from "../git";
 import { inspectFolder } from "../repository";
@@ -133,11 +134,7 @@ export class ProjectChecks {
     s.state.files = {};
     s.state.diagnostics = [];
     s.process.stdin.end();
-    s.process.kill("SIGTERM");
-    const hard = setTimeout(() => {
-      if (s.process.exitCode === null) s.process.kill("SIGKILL");
-    }, 1500);
-    hard.unref();
+    terminate(s.process, { graceMs: 1500 });
   }
   /** Hold rechecks (the language service stays warm) until resumed. */
   pause(key: string, paused: boolean) {
