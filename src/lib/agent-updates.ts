@@ -33,3 +33,12 @@ export const checkAgentVersions = () =>
   void api.checkAgentVersions().catch(() => {});
 export const updateAgent = (provider: AgentProvider) =>
   void api.updateAgent(provider).catch(() => {});
+
+/** Asks for the CLI's program; rejects when what's chosen doesn't say its version. */
+export async function linkAgent(provider: AgentProvider) {
+  const next = await api.linkAgent(provider);
+  if (next) change(next);
+}
+export async function unlinkAgent(provider: AgentProvider) {
+  change(await api.unlinkAgent(provider));
+}

@@ -216,7 +216,7 @@ describe("AgentUpdates", () => {
       installer: "bun",
       command: "bun add -g @openai/codex@latest",
     });
-    expect(agent("opencode").error).toMatch(/isn't installed/);
+    expect(agent("opencode").error).toMatch(/couldn't find OpenCode/);
   });
 
   it("updates with the installer and checks the version it left", async () => {

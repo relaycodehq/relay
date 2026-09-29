@@ -359,6 +359,10 @@ export interface Api
   checkAgentVersions(): Promise<AgentVersions>;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /** Asks for an agent CLI and links it if it says its version; null if cancelled. */
+  linkAgent(provider: AgentProvider): Promise<AgentVersions | null>;
+  /** Forgets the linked CLI and finds one again. */
+  unlinkAgent(provider: AgentProvider): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {

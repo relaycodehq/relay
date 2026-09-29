@@ -22,6 +22,7 @@ initAppearance();
 
 const codex: AgentVersion = {
   provider: "codex",
+  path: "/home/sample/.bun/bin/codex",
   current: "0.157.0",
   latest: "0.158.0",
   installer: "bun",
@@ -29,6 +30,7 @@ const codex: AgentVersion = {
 };
 const claude: AgentVersion = {
   provider: "claude",
+  path: "/home/sample/.local/bin/claude",
   current: "2.1.284",
   latest: "2.1.284",
   installer: "native",
@@ -36,11 +38,15 @@ const claude: AgentVersion = {
 };
 const opencode: AgentVersion = {
   provider: "opencode",
+  path: "/home/sample/.opencode/bin/opencode",
   current: "1.18.32",
   latest: "1.18.33",
   installer: "native",
   command: "opencode upgrade",
 };
+
+const notFound =
+  "Relay couldn't find OpenCode. If it's installed, link it here.";
 
 // Sample data, not this machine's agents.
 const samples: Record<string, AgentVersion[]> = {
@@ -50,6 +56,25 @@ const samples: Record<string, AgentVersion[]> = {
     { ...codex, installer: undefined, command: undefined },
     claude,
     { ...opencode, error: "OpenCode isn't installed.", current: undefined },
+  ],
+  "Not found": [
+    codex,
+    {
+      provider: "claude",
+      error:
+        "Relay couldn't find Claude Code. If it's installed, link it here.",
+    },
+    { ...opencode, path: undefined, current: undefined, error: notFound },
+  ],
+  "Won't say version": [
+    codex,
+    {
+      provider: "claude",
+      path: "/home/sample/.local/share/mise/shims/claude",
+      error: "Claude Code didn't say which version it is.",
+      output: "mise ERROR No version is set for shim: claude",
+    },
+    opencode,
   ],
   Updating: [
     { ...codex, update: { status: "running" } },
@@ -107,6 +132,28 @@ Object.assign(window.relay as Partial<Api>, {
     set({ ...state, checking: true });
     await new Promise((r) => setTimeout(r, 1200));
     set({ ...state, checking: false, checkedAt: Date.now() });
+    return state;
+  },
+  // The dialog is the desktop's; the sample links a mise install.
+  linkAgent: async (provider: AgentProvider) => {
+    if (provider === "opencode")
+      throw new Error(
+        "That doesn't look like OpenCode: it didn't say which version it is.\nmise ERROR No version is set for shim: opencode",
+      );
+    put({
+      provider,
+      path: `/home/sample/.local/share/mise/installs/${provider}/latest/bin/${provider}`,
+      linked: true,
+      current: "2.1.284",
+      latest: "2.1.284",
+    });
+    return state;
+  },
+  unlinkAgent: async (provider: AgentProvider) => {
+    put({
+      provider,
+      error: "Relay couldn't find it. If it's installed, link it here.",
+    });
     return state;
   },
   // Updates take a moment, then land on the newer version.

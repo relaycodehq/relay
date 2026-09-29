@@ -11,13 +11,17 @@ import {
   type AgentVersion,
   type AgentVersions,
 } from "../shared/agent-updates";
-import { findExecutable, spawnExecutable } from "./executables";
+import {
+  findExecutable,
+  linkedAgent,
+  runExecutable,
+  type Exec,
+} from "./executables";
 
 const checkEvery = 4 * 60 * 60 * 1000;
 const latestLifetime = 60 * 60 * 1000;
 const probeTimeout = 15_000;
 const updateTimeout = 5 * 60_000;
-const outputLimit = 10_000;
 
 interface AgentPackage {
   npm: string;
@@ -166,18 +170,14 @@ export function describeInstall(install: Install) {
     .join(" ");
 }
 
-export interface Exec {
-  code: number | null;
-  stdout: string;
-  /** The end of stdout and stderr together, for showing a failure. */
-  output: string;
-  timedOut: boolean;
-}
+export type { Exec };
 
 /** Everything that touches the machine, so tests can stand in for it. */
 export interface AgentUpdatesIo {
   platform: NodeJS.Platform;
   find(name: string): Promise<string>;
+  /** The path the user linked in Settings for `provider`, if any. */
+  linked?(provider: AgentProvider): string | undefined;
   realpath(path: string): Promise<string>;
   exists(path: string): Promise<boolean>;
   exec(file: string, args: string[], timeout: number): Promise<Exec>;
@@ -189,42 +189,14 @@ export interface AgentUpdatesIo {
 export const machineIo: AgentUpdatesIo = {
   platform: process.platform,
   find: findExecutable,
+  linked: linkedAgent,
   realpath,
   exists: (path) =>
     access(path).then(
       () => true,
       () => false,
     ),
-  exec: (file, args, timeout) =>
-    new Promise((resolve) => {
-      let stdout = "",
-        output = "",
-        timedOut = false;
-      const child = spawnExecutable(file, args, {
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
-      });
-      const timer = setTimeout(() => {
-        timedOut = true;
-        child.kill();
-      }, timeout);
-      const collect = (chunk: Buffer, isStdout: boolean) => {
-        const text = chunk.toString();
-        if (isStdout && stdout.length < 1_000_000) stdout += text;
-        output = (output + text).slice(-outputLimit);
-      };
-      child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
-      child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));
-      child.once("error", (error) => {
-        clearTimeout(timer);
-        resolve({ code: null, stdout, output: error.message, timedOut });
-      });
-      child.once("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, output, timedOut });
-      });
-    }),
+  exec: runExecutable,
   fetch: (url, init) => fetch(url, init),
   claudeChannel: async () => {
     const dir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
@@ -314,7 +286,16 @@ export class AgentUpdates {
   ): Promise<AgentVersion> {
     const { cli } = agents[provider];
     const path = await this.io.find(provider).catch(() => undefined);
-    if (!path) return { provider, error: `${cli} isn't installed.` };
+    const linkedPath = this.io.linked?.(provider);
+    const linked = !!linkedPath;
+    if (!path)
+      return {
+        provider,
+        linked,
+        error: linkedPath
+          ? `The ${cli} you linked is gone: ${linkedPath}`
+          : `Relay couldn't find ${cli}. If it's installed, link it here.`,
+      };
     const tag =
       provider === "claude" ? await this.io.claudeChannel() : "latest";
     const [probe, install] = await Promise.all([
@@ -324,11 +305,17 @@ export class AgentUpdates {
     const current = probe.code === 0 ? parseVersion(probe.stdout) : undefined;
     const found: AgentVersion = {
       provider,
+      path,
+      linked,
       installer: install?.installer,
       command: install && describeInstall(install),
     };
     if (!current)
-      return { ...found, error: `${cli} didn't say which version it is.` };
+      return {
+        ...found,
+        error: `${cli} didn't say which version it is.`,
+        output: probe.output.trim() || undefined,
+      };
     return {
       ...found,
       current,

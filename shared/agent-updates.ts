@@ -13,6 +13,10 @@ export type AgentUpdateRun =
 /** One agent CLI as Relay last found it. */
 export interface AgentVersion {
   provider: AgentProvider;
+  /** The program Relay runs; absent when none was found. */
+  path?: string;
+  /** Set when the user linked `path` instead of leaving it to Relay. */
+  linked?: boolean;
   /** The installed version; absent when the CLI is missing or won't say. */
   current?: string;
   /** The newest release its installer offers; absent when that couldn't be looked up. */
@@ -23,6 +27,8 @@ export interface AgentVersion {
   command?: string;
   /** Why it couldn't be checked, e.g. that it isn't installed. */
   error?: string;
+  /** What the CLI printed when it wouldn't say its version. */
+  output?: string;
   update?: AgentUpdateRun;
 }
 

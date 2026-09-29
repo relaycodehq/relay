@@ -29,6 +29,10 @@ interface State {
   phoneRemote?: import("./remote/devices").RemoteSettings;
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;
+  /** Agent CLIs linked in Settings; a missing one is found by searching. */
+  agentPaths?: Partial<
+    Record<import("../shared/agents").AgentProvider, string>
+  >;
   version: 1;
   account?: Account;
   encryptedToken?: string;

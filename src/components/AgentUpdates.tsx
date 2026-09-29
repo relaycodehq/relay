@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowDownToLine, Check, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  Check,
+  FolderOpen,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 import {
   checkAgentVersions,
+  linkAgent,
+  unlinkAgent,
   updateAgent,
   useAgentVersions,
 } from "../lib/agent-updates";
@@ -13,7 +22,7 @@ import {
 } from "../../shared/agent-updates";
 import { agents } from "../../shared/agents";
 import { SettingsCard, SettingsFooter, SettingsRow } from "./SettingsCard";
-import { Spinner } from "./ui";
+import { ErrorBox, Spinner } from "./ui";
 import "./agent-updates.css";
 
 const installers: Record<AgentInstaller, string> = {
@@ -148,6 +157,19 @@ export function AgentVersionSettings() {
 
 function AgentVersionRow({ agent }: { agent: AgentVersion }) {
   const { cli } = agents[agent.provider];
+  const [busy, setBusy] = useState(false);
+  const [linkError, setLinkError] = useState<unknown>();
+  async function relink(run: () => Promise<void>) {
+    setBusy(true);
+    setLinkError(undefined);
+    try {
+      await run();
+    } catch (error) {
+      setLinkError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
   const run = agent.update;
   const behind = isBehind(agent);
   const status = !agent.current
@@ -179,6 +201,11 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
       hint={
         <>
           {status}
+          {agent.path && (
+            <span className="agent-version-note">
+              {agent.linked ? "Linked" : "Found"}: {agent.path}
+            </span>
+          )}
           {note && (
             <span
               className="agent-version-note"
@@ -190,15 +217,41 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
         </>
       }
       below={
-        run?.status === "failed" &&
-        run.output && (
-          <details className="agent-update-output">
-            <summary>Output</summary>
-            <pre>{run.output}</pre>
-          </details>
-        )
+        <>
+          {run?.status === "failed" && run.output && (
+            <details className="agent-update-output">
+              <summary>Output</summary>
+              <pre>{run.output}</pre>
+            </details>
+          )}
+          {!agent.current && agent.output && (
+            <details className="agent-update-output">
+              <summary>What {cli} said</summary>
+              <pre>{agent.output}</pre>
+            </details>
+          )}
+          {!!linkError && <ErrorBox error={linkError} />}
+        </>
       }
     >
+      {agent.linked && (
+        <button
+          disabled={busy}
+          title="Forget the linked program and search again"
+          onClick={() => void relink(() => unlinkAgent(agent.provider))}
+        >
+          <RotateCcw size={14} />
+          Find automatically
+        </button>
+      )}
+      <button
+        className={!agent.current && !agent.linked ? "primary" : ""}
+        disabled={busy}
+        onClick={() => void relink(() => linkAgent(agent.provider))}
+      >
+        <FolderOpen size={14} />
+        {agent.path ? "Change…" : "Link…"}
+      </button>
       {run?.status === "running" ? (
         <button disabled>
           <Spinner size={12} />

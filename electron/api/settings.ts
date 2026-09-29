@@ -1,8 +1,16 @@
 import { dialog } from "electron";
+import { homedir } from "node:os";
 import { z } from "zod";
-import { agentProviderSchema, usageProviderSchema } from "../../shared/agents";
+import {
+  agentProviderSchema,
+  agents,
+  usageProviderSchema,
+  type AgentProvider,
+} from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
+import { parseVersion } from "../../shared/agent-updates";
+import { runExecutable, setLinkedAgents } from "../executables";
 import { gitInfo, gitVersion, setGitPath } from "../git";
 import { readProviderUsage } from "../provider-usage";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
@@ -15,6 +23,15 @@ export function settingsHandlers(ctx: ApiContext) {
     const phoneRemote = ctx.phoneRemote();
     if (!phoneRemote) throw new Error("Relay is still starting.");
     return phoneRemote;
+  }
+  async function relinkAgents(provider: AgentProvider, path?: string) {
+    await store.update((s) => {
+      const paths = { ...s.agentPaths };
+      if (path) paths[provider] = path;
+      else delete paths[provider];
+      s.agentPaths = paths;
+    });
+    setLinkedAgents(store.get().agentPaths ?? {});
   }
   return {
     aiSettings: () => store.aiSettings(),
@@ -77,6 +94,33 @@ export function settingsHandlers(ctx: ApiContext) {
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: (args) =>
       agentUpdates.update(agentProviderSchema.parse(args[0])),
+    linkAgent: async (args) => {
+      const provider = agentProviderSchema.parse(args[0]);
+      const { cli } = agents[provider];
+      const result = await dialog.showOpenDialog(ctx.window.win!, {
+        title: `Choose the ${cli} program`,
+        // Version managers keep their installs in hidden folders.
+        properties: ["openFile", "showHiddenFiles"],
+        defaultPath: homedir(),
+        filters:
+          process.platform === "win32"
+            ? [{ name: cli, extensions: ["exe", "cmd", "bat"] }]
+            : undefined,
+      });
+      if (result.canceled) return null;
+      const path = result.filePaths[0];
+      const run = await runExecutable(path, ["--version"], 15_000);
+      if (run.code !== 0 || !parseVersion(run.stdout))
+        throw new Error(
+          `That doesn't look like ${cli}: it didn't say which version it is.${run.output.trim() ? `\n${run.output.trim().slice(-300)}` : ""}`,
+        );
+      await relinkAgents(provider, path);
+      return agentUpdates.check(true);
+    },
+    unlinkAgent: async (args) => {
+      await relinkAgents(agentProviderSchema.parse(args[0]), undefined);
+      return agentUpdates.check(true);
+    },
     dictationState: () => dictation.current,
     downloadDictationModel: () => dictation.downloadModel(),
     cancelDictationDownload: () => dictation.cancelDownload(),

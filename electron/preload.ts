@@ -182,6 +182,8 @@ const methods = [
   "connectDictation",
   "warmDictation",
   "agentVersions",
+  "linkAgent",
+  "unlinkAgent",
   "checkAgentVersions",
   "updateAgent",
   "applyAppearance",
