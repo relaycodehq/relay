@@ -53,6 +53,8 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       RELAY_TEST_HEADED: "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_REMOTE_PORT: String(await freePort()),
+      // No Tailscale here: loopback stands in for the tailnet.
+      RELAY_REMOTE_TAILNET: "127.0.0.1",
     },
   });
   const events: RemoteEvent[] = [];
@@ -78,10 +80,10 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       .getByRole("switch", { name: "Allow phone connections" })
       .check();
     await expect(
-      settings.getByText(/Phones on this network reach Relay/),
+      settings.getByText(/Only devices on your tailnet reach Relay/),
     ).toBeVisible();
     await settings
-      .getByRole("button", { name: "Pair a phone", exact: true })
+      .getByRole("button", { name: "Show pairing code", exact: true })
       .click();
     await expect(
       settings.getByRole("img", { name: "Pairing QR code" }),
@@ -91,11 +93,11 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       .click();
     const url = await app.evaluate(({ clipboard }) => clipboard.readText());
     const link = parsePairingUrl(url)!;
-    expect(link).toBeTruthy();
+    // The code names the tailnet address alone; loopback stands in for it here.
+    expect(link.hosts).toEqual(["127.0.0.1"]);
 
-    // The phone's own client, on the loopback address instead of the LAN.
     phone = new RemoteClient({
-      start: { link: { ...link, hosts: ["127.0.0.1"] }, device: "Test phone" },
+      start: { link, device: "Test phone" },
       onEvent: (e) => events.push(e),
     });
     phone.start();

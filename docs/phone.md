@@ -17,11 +17,11 @@
 
 ## Install
 
-Android only for now. In Relay, open **Settings → Phone**, choose **Get the app** and scan the code with the phone's camera: it downloads the newest `Relay-Android.apk` from the releases repo. Then turn on **Allow phone connections**, choose **Pair a phone**, and scan that code from the app.
+Android only for now, and over [Tailscale](https://tailscale.com) only: the computer and the phone both need it, signed in to the same tailnet. **Settings → Phone** walks through it. It checks for Tailscale on the computer (and offers the download), then, once **Allow phone connections** is on, lists three steps: Tailscale on the phone (a code for Google Play; when the `tailscale` CLI answers, it also says whether a phone is on the tailnet), the app (**Get the app** downloads the newest `Relay-Android.apk` from the releases repo), and **Show pairing code**, which the app scans.
 
 ## Try it from source
 
-1. In Relay, open **Settings → Phone** and turn on **Allow phone connections**.
+1. With Tailscale on the computer and the phone, open **Settings → Phone** in Relay and turn on **Allow phone connections**.
 2. Run the app with [Expo Go](https://expo.dev/go) on your phone:
 
    ```sh
@@ -32,13 +32,15 @@ Android only for now. In Relay, open **Settings → Phone**, choose **Get the ap
 
    Scan the terminal's QR code with Expo Go (Android) or the Camera app (iOS).
 
-3. In Relay, choose **Pair a phone**, then scan that code from the phone app.
+3. In Relay, choose **Show pairing code**, then scan that code from the phone app.
 
-The phone reaches the desktop directly, so both need to be on the same network, or both on a VPN such as Tailscale. Relay lists every address it listens on under the switch; the pairing code carries all of them and the phone tries them in order.
+The phone reaches the desktop over the tailnet. Without Tailscale, `RELAY_REMOTE_TAILNET=127.0.0.1` makes the desktop treat loopback as its tailnet, which is what the tests and the Android emulator (reaching the computer as `10.0.2.2`) use.
 
 ## How it works
 
 The desktop hosts the bridge (`electron/remote/`): a WebSocket server on port 47821 that only listens while phone access is on. `RELAY_REMOTE_PORT` overrides the port.
+
+- **Tailscale only.** `electron/remote/tailscale.ts` finds this computer on Tailscale: from the `tailscale status --json` of the CLI where Tailscale installs it, or else from the interface carrying Tailscale's own IPv6 prefix (`fd7a:115c:a1e0::/48`), so a hotspot's carrier-grade NAT address in the same 100.64.0.0/10 block doesn't count. The bridge listens on that one address, never on the Wi-Fi, and drops any connection that doesn't come from the tailnet or the computer itself. Phone access won't turn on without Tailscale; if Tailscale goes off later, the bridge stops listening and comes back with it (checked every ten seconds). The pairing code carries only the tailnet address.
 
 - **Pairing.** The QR code holds the desktop's addresses, its X25519 public key and a one-time code. The code expires after ten minutes, dies after five wrong guesses, and is traded on first contact for a device token. The desktop stores only the token's SHA-256; the phone keeps it in the OS keystore (`expo-secure-store`). **Settings → Phone** lists paired phones, and removing one disconnects it at once.
 - **Encryption.** Every connection runs a Noise NK-style handshake (`shared/remote-crypto.ts`): the phone pins the desktop's key from the QR code, both sides add fresh ephemeral keys, and all frames are sealed with ChaCha20-Poly1305. A phone never talks to a computer other than the one it paired with, and a recorded session can't be replayed. This works on plain Wi-Fi without certificates.

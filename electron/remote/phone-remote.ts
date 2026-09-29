@@ -1,8 +1,4 @@
-import {
-  hostname,
-  networkInterfaces,
-  type NetworkInterfaceInfo,
-} from "node:os";
+import { hostname } from "node:os";
 import { z } from "zod";
 import type { Store } from "../store";
 import { toBase64Url } from "../../shared/remote-crypto";
@@ -16,6 +12,7 @@ import {
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
 import { RemoteServer } from "./server";
+import { tailnetProbe, type TailnetProbe } from "./tailscale";
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const paletteSchema = z
@@ -45,19 +42,25 @@ export const phoneAppearanceSchema = z
   })
   .strict();
 
-/** Phone access: off until the user turns it on, and only reachable while on. */
+/**
+ * Phone access: off until the user turns it on, and only reachable while on,
+ * and then only over Tailscale: it listens on this computer's tailnet address
+ * alone, so a phone has to be on the same tailnet.
+ */
 export class PhoneRemote {
   readonly devices: RemoteDevices;
   private bridge: RemoteBridge;
   private server: RemoteServer;
   private error?: string;
+  private watch?: NodeJS.Timeout;
+  private syncing = Promise.resolve();
   constructor(
     store: Store,
     seal: (value: string) => Promise<string | null>,
     unseal: (value: string) => Promise<string>,
     host: Omit<RemoteHost, "name">,
     port = defaultRemotePort,
-    private interfaces = networkInterfaces,
+    private tailnet: TailnetProbe = tailnetProbe(),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
     const name = () => hostname().replace(/\.local$/, "") || "Relay";
@@ -75,7 +78,7 @@ export class PhoneRemote {
   }
   /** Resumes listening if phone access was on when Relay last quit. */
   async start() {
-    if (this.devices.settings.enabled) await this.listen();
+    if (this.devices.settings.enabled) await this.follow();
   }
   /** Keeps the window's theme for phones, and hands a change to those online. */
   async setAppearance(appearance: PhoneAppearance) {
@@ -91,14 +94,16 @@ export class PhoneRemote {
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
     if (this.server.listening) this.bridge.chatEvent(event);
   }
-  state(): PhoneRemoteState {
+  async state(): Promise<PhoneRemoteState> {
+    const tailnet = await this.tailnet(true);
     const online = this.server.online();
     return {
       enabled: !!this.devices.settings.enabled,
       listening: this.server.listening,
       ...(this.error ? { error: this.error } : {}),
       port: this.server.port,
-      hosts: remoteHosts(this.interfaces()),
+      tailnet,
+      hosts: this.server.host ? [this.server.host] : [],
       devices: this.devices.list().map((d) => ({
         id: d.id,
         name: d.name,
@@ -109,25 +114,25 @@ export class PhoneRemote {
     };
   }
   async setEnabled(enabled: boolean) {
+    if (enabled && (await this.tailnet()).status !== "connected")
+      throw new Error("Connect this computer to Tailscale first.");
     await this.devices.setEnabled(enabled);
-    if (enabled) await this.listen();
+    if (enabled) await this.follow();
     else {
-      this.error = undefined;
-      this.bridge.setWatching(false);
-      await this.server.close();
+      clearInterval(this.watch);
+      this.watch = undefined;
+      await this.sync();
     }
     return this.state();
   }
   async pairing(): Promise<PhonePairing> {
-    if (!this.server.listening) throw new Error("Turn on phone access first.");
-    const hosts = remoteHosts(this.interfaces());
-    if (!hosts.length)
-      throw new Error("Connect this computer to a network first.");
+    const host = this.server.host;
+    if (!host) throw new Error("Turn on phone access first.");
     const key = await this.devices.key();
     const { code, expiresAt } = this.devices.newPairing();
     return {
       url: pairingUrl({
-        hosts,
+        hosts: [host],
         port: this.server.port,
         key: toBase64Url(key.public),
         code,
@@ -142,43 +147,37 @@ export class PhoneRemote {
     return this.state();
   }
   async close() {
+    clearInterval(this.watch);
+    this.watch = undefined;
     this.bridge.dispose();
     await this.server.close();
   }
-  private async listen() {
-    try {
-      await this.server.listen();
-      this.error = undefined;
-    } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+  /** Listens now, and keeps up as Tailscale goes off, comes back or moves. */
+  private async follow() {
+    if (!this.watch) {
+      this.watch = setInterval(() => void this.sync(), 10_000);
+      this.watch.unref();
     }
+    await this.sync();
   }
-}
-
-/**
- * IPv4 addresses a phone could reach: home and office networks first, then
- * VPNs like Tailscale (100.64.0.0/10), then anything else that isn't loopback
- * or link-local.
- */
-export function remoteHosts(
-  interfaces: NodeJS.Dict<NetworkInterfaceInfo[]>,
-): string[] {
-  const rank = (ip: string) => {
-    const [a, b] = ip.split(".").map(Number) as [number, number];
-    if (a === 192 && b === 168) return 0;
-    if (a === 10 || (a === 172 && b >= 16 && b <= 31)) return 1;
-    if (a === 100 && b >= 64 && b <= 127) return 2;
-    return 3;
-  };
-  const found = Object.values(interfaces)
-    .flat()
-    .filter(
-      (i): i is NetworkInterfaceInfo =>
-        !!i &&
-        i.family === "IPv4" &&
-        !i.internal &&
-        !i.address.startsWith("169.254."),
-    )
-    .map((i) => i.address);
-  return [...new Set(found)].sort((x, y) => rank(x) - rank(y)).slice(0, 4);
+  /** Listens on this computer's Tailscale address while phone access is on, and nowhere else. */
+  private sync() {
+    this.syncing = this.syncing.then(async () => {
+      const tailnet = this.devices.settings.enabled
+        ? await this.tailnet()
+        : undefined;
+      const host =
+        tailnet?.status === "connected" ? tailnet.addresses[0] : undefined;
+      if (host === this.server.host) return;
+      await this.server.close();
+      this.error = undefined;
+      if (!host) return;
+      try {
+        await this.server.listen(host);
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : String(e);
+      }
+    });
+    return this.syncing;
+  }
 }

@@ -15,11 +15,11 @@ import {
   type ServerFrame,
 } from "../../shared/remote";
 import type { RemoteDevices } from "./devices";
+import { tailnetPeer } from "./tailscale";
 
 export interface RemoteServerOptions {
   devices: RemoteDevices;
   port: number;
-  host?: string;
   name: () => string;
   handle: (method: RemoteMethod, args: unknown[]) => Promise<unknown>;
   /** A phone came online or went away. */
@@ -41,6 +41,7 @@ const maxConnections = 24;
 /** The desktop end of the phone remote; see shared/remote-crypto for the channel. */
 export class RemoteServer {
   private server?: WebSocketServer;
+  private bound?: string;
   private connections = new Set<Connection>();
   private timer?: NodeJS.Timeout;
   constructor(private options: RemoteServerOptions) {}
@@ -59,12 +60,16 @@ export class RemoteServer {
       [...this.connections].flatMap((c) => (c.deviceId ? [c.deviceId] : [])),
     );
   }
-  async listen() {
+  /** The address it listens on: this computer's Tailscale address. */
+  get host() {
+    return this.server ? this.bound : undefined;
+  }
+  async listen(host: string) {
     if (this.server) return;
     const key = await this.options.devices.key();
     const server = new WebSocketServer({
       port: this.options.port,
-      host: this.options.host,
+      host,
       // Room for three photos, each up to 1.1 MB as a data URL, once sealed.
       maxPayload: 8 * 1024 * 1024,
       perMessageDeflate: false,
@@ -81,7 +86,13 @@ export class RemoteServer {
       );
     });
     server.on("error", (e) => console.warn("Phone remote:", e));
-    server.on("connection", (socket) => this.accept(socket, key));
+    server.on("connection", (socket, req) => {
+      // Only the tailnet reaches this address, unless someone on the same
+      // network routes to it by hand; they get nothing either way.
+      if (!tailnetPeer(req.socket.remoteAddress)) return socket.terminate();
+      this.accept(socket, key);
+    });
+    this.bound = host;
     this.server = server;
     this.timer = setInterval(() => this.tick(), this.options.tickMs ?? 15_000);
   }

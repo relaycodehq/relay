@@ -697,6 +697,10 @@
 .settings-switch:checked::before {
   transform: translateX(14px);
 }
+.settings-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .settings-keys {
   display: flex;
   gap: 4px;
@@ -915,4 +919,52 @@
   width: 168px;
   height: 168px;
   border-radius: 6px;
+}
+.phone-remote {
+  --phone-done: light-dark(#1a7f37, #3fb950);
+}
+.phone-tailscale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.phone-tailscale svg {
+  color: var(--phone-done);
+}
+.phone-setup {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.phone-step {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 16px;
+}
+.phone-step-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--border) 70%, var(--muted));
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.phone-step.done .phone-step-mark {
+  border-color: var(--phone-done);
+  background: var(--phone-done);
+  color: #fff;
+}
+.phone-step-below {
+  grid-column: 2 / -1;
+}
+.phone-step-below .phone-pairing {
+  padding: 4px 0 6px;
+  border-top: 0;
 }

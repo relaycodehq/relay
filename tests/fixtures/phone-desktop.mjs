@@ -75,6 +75,9 @@ const app = await electron.launch({
     RELAY_TEST_HEADED: "0",
     RELAY_TEST_NATIVE_STORAGE: "0",
     RELAY_REMOTE_PORT: port,
+    // No Tailscale here: loopback stands in for the tailnet; the emulator
+    // reaches it as 10.0.2.2.
+    RELAY_REMOTE_TAILNET: "127.0.0.1",
     RELAY_AGENT_TURN_MS: process.env.RELAY_AGENT_TURN_MS ?? "1500",
   },
 });

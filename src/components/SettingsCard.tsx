@@ -58,10 +58,12 @@ export function SettingsFooter({
 export function Switch({
   label,
   checked,
+  disabled,
   onChange,
 }: {
   label: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -71,6 +73,7 @@ export function Switch({
       className="settings-switch"
       aria-label={label}
       checked={checked}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.checked)}
     />
   );

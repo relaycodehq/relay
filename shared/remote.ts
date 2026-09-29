@@ -19,6 +19,10 @@ import type { ChangeArea } from "./working-tree";
 export const remoteProtocol = 1;
 export const remoteScheme = "relay-remote";
 export const defaultRemotePort = 47821;
+/** Where to get Tailscale: its download page for computers, Google Play for phones. */
+export const tailscaleDownload = "https://tailscale.com/download";
+export const tailscaleAndroid =
+  "https://play.google.com/store/apps/details?id=com.tailscale.ipn";
 
 /** What the desktop's QR code carries; the key pins the desktop the phone may talk to. */
 export interface PairingLink {
@@ -367,13 +371,29 @@ export interface HelloFrame {
   e: string;
 }
 
+/**
+ * Tailscale on this computer. Phone access listens only on its tailnet
+ * address, so a phone reaches Relay only from the same tailnet.
+ */
+export interface PhoneTailnet {
+  /** connected: on a tailnet; stopped: installed but off or signed out; missing: not found. */
+  status: "connected" | "stopped" | "missing";
+  /** Its Tailscale IPv4 addresses. */
+  addresses: string[];
+  /** This computer's name on the tailnet, when the tailscale CLI answers. */
+  name?: string;
+  /** Phones on the tailnet, when the tailscale CLI answers. */
+  phones?: { name: string; online: boolean }[];
+}
+
 /** The desktop's own view of phone access, for Settings. */
 export interface PhoneRemoteState {
   enabled: boolean;
   listening: boolean;
   error?: string;
   port: number;
-  /** Where phones reach this computer, best first. */
+  tailnet: PhoneTailnet;
+  /** Where phones reach this computer: its Tailscale addresses. */
   hosts: string[];
   devices: {
     id: string;

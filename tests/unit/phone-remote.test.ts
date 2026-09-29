@@ -14,6 +14,7 @@ import {
 } from "../../shared/remote-crypto";
 import {
   parsePairingUrl,
+  type PhoneTailnet,
   type RemoteCredentials,
   type RemoteEvent,
 } from "../../shared/remote";
@@ -78,7 +79,12 @@ function fakeHost(respond?: (method: string) => Promise<unknown>) {
   return { host, dispatched, summary };
 }
 
-async function desktop(respond?: (method: string) => Promise<unknown>) {
+async function desktop(
+  respond?: (method: string) => Promise<unknown>,
+  tailnet: { current: PhoneTailnet } = {
+    current: { status: "connected", addresses: ["127.0.0.1"] },
+  },
+) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
   const store = new Store(join(dir, "state"));
   await store.load();
@@ -89,20 +95,9 @@ async function desktop(respond?: (method: string) => Promise<unknown>) {
     async (v) => v.slice(7),
     fake.host,
     0,
-    () => ({
-      en0: [
-        {
-          address: "127.0.0.1",
-          family: "IPv4",
-          internal: false,
-          netmask: "255.0.0.0",
-          mac: "00:00:00:00:00:00",
-          cidr: "127.0.0.1/8",
-        },
-      ],
-    }),
+    async () => tailnet.current,
   );
-  await remote.setEnabled(true);
+  if (tailnet.current.status === "connected") await remote.setEnabled(true);
   cleanup.push(async () => {
     await remote.close();
     await rm(dir, { recursive: true, force: true });
@@ -144,7 +139,7 @@ it("pairs from the QR link, then reconnects with the saved token", async () => {
   await first.until("online");
   const credentials = first.credentials()!;
   expect(credentials.deviceId).toBe(remote.devices.list()[0]!.id);
-  expect(remote.state().devices[0]).toMatchObject({
+  expect((await remote.state()).devices[0]).toMatchObject({
     name: "Pixel 7",
     online: true,
   });
@@ -178,6 +173,43 @@ it("pairs from the QR link, then reconnects with the saved token", async () => {
     { method: "cancelProjectChat", args: [chatId] },
     { method: "projectChatQueueAction", args: [chatId, "remove", chatId] },
   ]);
+});
+
+it("turns on only with Tailscale, and listens only while it's connected", async () => {
+  const tailnet = {
+    current: { status: "missing", addresses: [] } as PhoneTailnet,
+  };
+  const { remote } = await desktop(undefined, tailnet);
+  await expect(remote.setEnabled(true)).rejects.toThrow("Tailscale");
+  expect(await remote.state()).toMatchObject({
+    enabled: false,
+    listening: false,
+  });
+
+  tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
+  await remote.setEnabled(true);
+  expect((await remote.state()).hosts).toEqual(["127.0.0.1"]);
+  // The code names only the tailnet address.
+  expect(parsePairingUrl((await remote.pairing()).url)!.hosts).toEqual([
+    "127.0.0.1",
+  ]);
+
+  // Tailscale goes off: nothing listens, and access comes back with it.
+  tailnet.current = { status: "stopped", addresses: [] };
+  await remote.start();
+  expect(await remote.state()).toMatchObject({
+    enabled: true,
+    listening: false,
+    hosts: [],
+  });
+  await expect(remote.pairing()).rejects.toThrow();
+  tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
+  await remote.start();
+  const phone1 = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel 7",
+  });
+  await phone1.until("online");
 });
 
 it("won't pair with a desktop whose key differs from the QR code's", async () => {
