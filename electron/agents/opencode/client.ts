@@ -1,5 +1,9 @@
 import { request, type IncomingMessage } from "node:http";
-import { openCodeServer, stopOpenCodeServer } from "./server";
+import {
+  detachOpenCodeServer,
+  openCodeServer,
+  stopOpenCodeServer,
+} from "./server";
 
 /**
  * A request to Relay's own OpenCode child on 127.0.0.1. Plain `node:http`,
@@ -213,4 +217,11 @@ export function disposeOpenCode() {
   listeners.clear();
   stream = undefined;
   stopOpenCodeServer();
+}
+
+/** Relay is restarting: turns stay waiting, and the hosted server carries on. */
+export function detachOpenCode() {
+  listeners.clear();
+  stream = undefined;
+  detachOpenCodeServer();
 }

@@ -88,12 +88,15 @@
       "THIRD_PARTY_NOTICES.md",
       "LICENSE",
       "!node_modules/**/*",
-      "assets/icon.png"
+      "assets/icon.png",
+      "assets/trayTemplate.png",
+      "assets/trayTemplate@2x.png"
     ],
     "asar": true,
     "asarUnpack": [
       "dist-electron/node-pty/**",
-      "dist-electron/typescript-5/**"
+      "dist-electron/typescript-5/**",
+      "dist-electron/agent-host.mjs"
     ],
     "npmRebuild": false,
     "protocols": [

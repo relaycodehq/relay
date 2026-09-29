@@ -16,6 +16,7 @@ import {
 } from "./permissions";
 import { editedPaths, openCodeActivity, type ToolPart } from "./activity";
 import { openCodeModels, splitModel } from "./catalog";
+import { markOpenCodeTurn } from "./server";
 
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -51,7 +52,12 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
 
   // Rooms, titles and helper jobs leave nothing behind.
   const ephemeral = !options.session;
-  const sessionID = await openSession(options, rules, call);
+  // A turn a restart cut off carries on in the session it was running in.
+  const sessionID =
+    options.adopt && options.session?.id
+      ? options.session.id
+      : await openSession(options, rules, call);
+  const turnKey = options.session?.key;
   if (!ephemeral && sessionID !== options.session?.id)
     await options.session!.onId(sessionID);
   signal.throwIfAborted();
@@ -91,6 +97,8 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   const commentary = new Set<string>();
   /** The turn's own assistant messages. */
   const messages = new Set<string>();
+  /** Tool calls seen so far: text before one is commentary on the way. */
+  const tools = new Set<string>();
   /** Steering messages sent, until a step that started after them reads them. */
   const steers: { id?: string; after: number }[] = [];
   const publish = () => {
@@ -229,7 +237,11 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         }
         if (part.type === "tool") {
           const tool = part as ToolPart;
-          if (tool.state.status === "pending") toCommentary();
+          // Its first sighting, pending or already further along after a restart.
+          if (!tools.has(part.id)) {
+            tools.add(part.id);
+            toCommentary();
+          }
           const activity = openCodeActivity(tool);
           if (activity) options.onActivity?.(activity);
           const paths = editedPaths(tool);
@@ -348,7 +360,40 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         600000,
       );
 
+  /**
+   * Rebuilds the turn a restart cut off from what OpenCode stored: the
+   * answers after the last prompt, and the questions still waiting.
+   */
+  const pickUp = async () => {
+    const list = await call<any[]>("GET", `/session/${sessionID}/message`);
+    let prompt = -1;
+    list.forEach((m, i) => {
+      if (m.info.role === "user") prompt = i;
+    });
+    for (const m of list.slice(prompt + 1)) {
+      if (m.info.role !== "assistant") continue;
+      handle({ type: "message.updated", properties: { info: m.info } });
+      for (const part of m.parts ?? [])
+        handle({ type: "message.part.updated", properties: { part } });
+    }
+    for (const [path, type] of [
+      ["/permission", "permission.asked"],
+      ["/question", "question.asked"],
+    ])
+      for (const request of await call<any[]>("GET", path).catch(() => []))
+        if (request?.sessionID === sessionID)
+          handle({ type, properties: request });
+    const status = await call<Record<string, { type: string }>>(
+      "GET",
+      "/session/status",
+    ).catch(() => ({}) as Record<string, { type: string }>);
+    const now = status[sessionID]?.type;
+    if (now === "busy" || now === "retry") busy = true;
+    else await settle();
+  };
+
   try {
+    if (turnKey) markOpenCodeTurn(turnKey, "start");
     if (options.compact) {
       const target = model ?? (await sessionModel(call, sessionID));
       if (!target)
@@ -358,13 +403,6 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       await settle();
       return await result;
     }
-    const note = await options.context?.().catch(() => undefined);
-    const command = commandPattern.exec(options.prompt.trim());
-    const known =
-      command &&
-      (await openCode<{ name: string }[]>("GET", "/command", { directory })
-        .then((list) => list.some((c) => c.name === command[1]))
-        .catch(() => false));
     const imageParts = (list: AgentOptions["images"]) =>
       Promise.all(
         (list ?? []).map(async (image) => ({
@@ -374,31 +412,41 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           url: `data:${image.mimeType};base64,${(await readFile(image.path)).toString("base64")}`,
         })),
       );
-    const images = await imageParts(options.images);
-    signal.throwIfAborted();
     const agent = options.interactionMode === "plan" ? "plan" : "build";
-    if (known && command) {
-      busy = true;
-      await call("POST", `/session/${sessionID}/command`, {
-        command: command[1],
-        arguments: command[2] ?? "",
-        agent,
-        ...(options.choice.model ? { model: options.choice.model } : {}),
-        ...(variant ? { variant } : {}),
-        ...(images.length ? { parts: images } : {}),
-      });
-    } else {
-      await call("POST", `/session/${sessionID}/prompt_async`, {
-        agent,
-        ...(model ? { model } : {}),
-        ...(variant ? { variant } : {}),
-        system: instructions(options),
-        parts: [
-          ...(note ? [{ type: "text", text: note, synthetic: true }] : []),
-          { type: "text", text: options.prompt },
-          ...images,
-        ],
-      });
+    if (options.adopt) await pickUp();
+    else {
+      const note = await options.context?.().catch(() => undefined);
+      const command = commandPattern.exec(options.prompt.trim());
+      const known =
+        command &&
+        (await openCode<{ name: string }[]>("GET", "/command", { directory })
+          .then((list) => list.some((c) => c.name === command[1]))
+          .catch(() => false));
+      const images = await imageParts(options.images);
+      signal.throwIfAborted();
+      if (known && command) {
+        busy = true;
+        await call("POST", `/session/${sessionID}/command`, {
+          command: command[1],
+          arguments: command[2] ?? "",
+          agent,
+          ...(options.choice.model ? { model: options.choice.model } : {}),
+          ...(variant ? { variant } : {}),
+          ...(images.length ? { parts: images } : {}),
+        });
+      } else {
+        await call("POST", `/session/${sessionID}/prompt_async`, {
+          agent,
+          ...(model ? { model } : {}),
+          ...(variant ? { variant } : {}),
+          system: instructions(options),
+          parts: [
+            ...(note ? [{ type: "text", text: note, synthetic: true }] : []),
+            { type: "text", text: options.prompt },
+            ...images,
+          ],
+        });
+      }
     }
     options.onControl?.({
       steer: async (text, id, steerImages) => {
@@ -425,6 +473,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     clearTimeout(deadline);
     signal.removeEventListener("abort", abort);
     unsubscribe();
+    if (turnKey) markOpenCodeTurn(turnKey, "end");
     if (ephemeral) void call("DELETE", `/session/${sessionID}`).catch(() => {});
   }
 }

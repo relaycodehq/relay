@@ -65,12 +65,19 @@ async function locate(name: string) {
   );
 }
 
+/** The command line for a path from `findExecutable`: JavaScript entries run with Node. */
+export function executableCommand(file: string, args: readonly string[]) {
+  return /^\.[cm]?js$/i.test(extname(file))
+    ? { command: "node", args: [file, ...args] }
+    : { command: file, args: [...args] };
+}
+
 /** Runs a path from `findExecutable`, starting JavaScript entries with Node. */
 export const spawnExecutable = ((
   file: string,
   args: readonly string[],
   options: object,
-) =>
-  /^\.[cm]?js$/i.test(extname(file))
-    ? spawn("node", [file, ...args], options)
-    : spawn(file, args, options)) as typeof spawn;
+) => {
+  const line = executableCommand(file, args);
+  return spawn(line.command, line.args, options);
+}) as typeof spawn;

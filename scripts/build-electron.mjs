@@ -48,6 +48,20 @@ await build({
   },
 });
 
+// The agent host runs detached, as Node on Electron's binary, and keeps
+// Claude sessions going while Relay restarts. It carries its own SDK copy.
+await build({
+  entryPoints: ["electron/agent-host/host.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  outfile: "dist-electron/agent-host.mjs",
+  banner: {
+    js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
+  },
+});
+
 // Live checks fall back to TypeScript 5.9 for projects whose compiler has no
 // language service API. It has its own install so its tsc bin stays out of
 // the root node_modules, and loads its lib.*.d.ts from beside typescript.js.

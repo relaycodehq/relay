@@ -15,6 +15,10 @@ const capture = (entry) => {
 const clients = new Set();
 const sessions = new Map();
 const waiting = new Map();
+/** Permission requests still waiting on a reply, as `GET /permission` lists them. */
+const asked = new Map();
+/** Sessions in the middle of a turn, as `GET /session/status` lists them. */
+const busy = new Set();
 let counter = 0;
 const id = (prefix) => `${prefix}_${String(++counter).padStart(6, "0")}`;
 const emit = (type, properties) => {
@@ -30,6 +34,7 @@ async function turn(sessionID, text) {
     parts: [],
   };
   session.messages.push(user);
+  busy.add(sessionID);
   emit("session.status", { sessionID, status: { type: "busy" } });
   const first = {
     id: id("msg"),
@@ -37,7 +42,8 @@ async function turn(sessionID, text) {
     role: "assistant",
     time: { created: Date.now() },
   };
-  session.messages.push({ info: first, parts: [] });
+  const firstParts = [];
+  session.messages.push({ info: first, parts: firstParts });
   emit("message.updated", { sessionID, info: first });
   if (text.includes("abort")) {
     session.onAbort = () => {
@@ -46,6 +52,7 @@ async function turn(sessionID, text) {
         data: { message: "Aborted" },
       };
       emit("session.error", { sessionID, error: first.error });
+      busy.delete(sessionID);
       emit("session.status", { sessionID, status: { type: "idle" } });
     };
     return;
@@ -57,9 +64,11 @@ async function turn(sessionID, text) {
     type: "text",
     text: "",
   };
+  firstParts.push(note);
   emit("message.part.updated", { sessionID, part: note });
   for (const delta of ["Let me ", "check."]) {
     await tick();
+    note.text += delta;
     emit("message.part.delta", {
       sessionID,
       messageID: first.id,
@@ -77,6 +86,7 @@ async function turn(sessionID, text) {
     callID: "call_1",
     state: { status: "pending", input: {} },
   };
+  firstParts.push(tool);
   emit("message.part.updated", { sessionID, part: tool });
   tool.state = {
     status: "running",
@@ -94,8 +104,10 @@ async function turn(sessionID, text) {
   };
   const reply = await new Promise((resolve) => {
     waiting.set(permission.id, resolve);
+    asked.set(permission.id, permission);
     emit("permission.asked", permission);
   });
+  asked.delete(permission.id);
   tool.state =
     reply === "reject"
       ? { status: "error", input: tool.state.input, error: "rejected" }
@@ -169,6 +181,7 @@ async function turn(sessionID, text) {
     },
   });
   second.time.completed = Date.now();
+  busy.delete(sessionID);
   emit("session.status", { sessionID, status: { type: "idle" } });
   emit("session.idle", { sessionID });
 }
@@ -234,7 +247,14 @@ const server = http.createServer(async (req, res) => {
     });
   if (path === "/command")
     return send(200, [{ name: "init", description: "Create AGENTS.md" }]);
-  if (path === "/session/status") return send(200, {});
+  if (path === "/session/status")
+    return send(
+      200,
+      Object.fromEntries([...busy].map((id) => [id, { type: "busy" }])),
+    );
+  if (path === "/permission" && req.method === "GET")
+    return send(200, [...asked.values()]);
+  if (path === "/question" && req.method === "GET") return send(200, []);
   if (path === "/session" && req.method === "POST") {
     const session = { id: id("ses"), directory, messages: [] };
     sessions.set(session.id, session);

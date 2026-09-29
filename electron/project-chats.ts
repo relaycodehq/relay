@@ -62,6 +62,7 @@ import {
   dropRevert,
   finishTurn,
   redoRevert,
+  resumeTurn,
   revertTurn,
   startTurn,
   turnDiff,
@@ -149,6 +150,19 @@ interface ActiveChat {
   steer?: AgentControl["steer"];
 }
 type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
+/** An answer the app closed on, with what it had written so far. */
+function interrupt(m: ChatMessage) {
+  m.status = "failed";
+  m.error =
+    "The app closed before this answer finished. Partial output was kept.";
+  m.version++;
+  for (const a of m.activity ?? [])
+    if (a.status === "running") a.status = "failed";
+  for (const entry of m.trace ?? [])
+    if (entry.kind === "activity" && entry.activity.status === "running")
+      entry.activity.status = "failed";
+  m.ended = Date.now();
+}
 /** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
 function parseSessionKey(key: string) {
   const [, chatId, branch] = JSON.parse(key) as string[];
@@ -156,6 +170,10 @@ function parseSessionKey(key: string) {
 }
 export class ProjectChats {
   private providerSessions = new Set<string>();
+  /** Sessions still in the turn a restart cut off; their answers stay streaming. */
+  private resuming = new Set<string>();
+  /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
+  private reattached: Promise<void> = Promise.resolve();
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -828,6 +846,7 @@ export class ProjectChats {
   }
   /** The cached chat itself, read from disk the first time; never hand it out. */
   private async load(id: string): Promise<ProjectChat> {
+    await this.reattached;
     if (!this.store.get().chats?.some((c) => c.id === id))
       throw new Error("Chat not found.");
     if (!this.cache.has(id)) {
@@ -899,20 +918,13 @@ export class ProjectChats {
             );
             if (changes?.length) m.changes = changes;
             else delete m.changes;
-            if (m.status === "streaming") {
-              m.status = "failed";
-              m.error =
-                "The app closed before this answer finished. Partial output was kept.";
-              m.version++;
-              for (const a of m.activity ?? [])
-                if (a.status === "running") a.status = "failed";
-              for (const entry of m.trace ?? [])
-                if (
-                  entry.kind === "activity" &&
-                  entry.activity.status === "running"
-                )
-                  entry.activity.status = "failed";
-              m.ended = Date.now();
+            if (
+              m.status === "streaming" &&
+              !this.resuming.has(
+                this.sessionKey(chat.id, m.parentId ?? undefined),
+              )
+            ) {
+              interrupt(m);
               interrupted = true;
             }
           }
@@ -1752,6 +1764,8 @@ export class ProjectChats {
     root: string,
     provider: AgentProvider,
     parentId?: string,
+    /** The answer a restart cut off, carrying on where the session is. */
+    resumed?: ChatMessage,
   ) {
     if (this.disposing) throw new Error("Relay is closing.");
     const input = this.sessionInput(chat, provider, parentId);
@@ -1766,7 +1780,7 @@ export class ProjectChats {
       requests: new AgentRequests(abort.signal),
     };
     if (idle) this.active.set(chat.id, active);
-    const message: ChatMessage = {
+    const message: ChatMessage = resumed ?? {
       id: randomUUID(),
       role: "assistant",
       unprompted: true,
@@ -1779,12 +1793,125 @@ export class ProjectChats {
       ...(chat.shared ? { pending: true } : {}),
     };
     try {
-      chat.messages.push(message);
-      await this.save(chat);
+      if (!resumed) {
+        chat.messages.push(message);
+        await this.save(chat);
+      }
       this.emit({ chatId: chat.id, message: structuredClone(message) });
-      await this.answer(chat, message, root, "", input, abort, { adopt: true });
+      await this.answer(chat, message, root, "", input, abort, {
+        adopt: true,
+        resumed: !!resumed,
+      });
     } finally {
       if (idle) this.endRun(chat, active);
+    }
+  }
+  /**
+   * Takes back the agent sessions that kept running while Relay restarted.
+   * A turn one was in carries on in the answer it was writing.
+   */
+  reattach() {
+    const back = Promise.all(
+      Object.entries(agentRuntimes).map(async ([provider, runtime]) =>
+        (
+          (await runtime.reattach?.(
+            (key) => this.owns(key),
+            (key) => () => this.unpromptedFor(key),
+          )) ?? []
+        ).map((session) => ({
+          ...session,
+          provider: provider as AgentProvider,
+        })),
+      ),
+    ).then((lists) => {
+      const sessions = lists.flat();
+      for (const { key, open } of sessions) {
+        this.providerSessions.add(key);
+        if (open) this.resuming.add(key);
+      }
+      return sessions;
+    });
+    this.reattached = back.then(
+      () => {},
+      (e) => console.warn("Could not take back the running agents:", e),
+    );
+    return back.then(
+      (sessions) =>
+        void Promise.allSettled(
+          sessions
+            .filter((s) => s.open)
+            .map(({ key, provider }) => this.resumeTurn(key, provider)),
+        ),
+      () => {},
+    );
+  }
+  /** Threads with an answer running now. */
+  working() {
+    return this.active.size;
+  }
+  /** A key of this data folder's, for a thread that still exists. */
+  private owns(key: string) {
+    try {
+      const [dir, chatId] = JSON.parse(key) as string[];
+      return (
+        dir === this.dir &&
+        !!this.store.get().chats?.some((c) => c.id === chatId)
+      );
+    } catch {
+      return false;
+    }
+  }
+  private async unpromptedFor(key: string) {
+    const { chatId, branch } = parseSessionKey(key);
+    const chat = await this.load(chatId);
+    return this.unprompted(chat, await this.chatRoot(chat), "claude", branch);
+  }
+  /** Shows the rest of a turn a restart cut off, in the answer it was writing. */
+  private async resumeTurn(key: string, provider: AgentProvider) {
+    const { chatId, branch } = parseSessionKey(key);
+    let chat: ProjectChat | undefined;
+    try {
+      chat = await this.load(chatId);
+      this.resuming.delete(key);
+      const message = [...chat.messages]
+        .reverse()
+        .find(
+          (m) =>
+            m.role === "assistant" &&
+            m.status === "streaming" &&
+            m.provider === provider &&
+            (m.parentId ?? undefined) === branch,
+        );
+      // Reviewers and thinkers answer a step Relay drove; that step is gone.
+      if (chat.reviewer || chat.thinker)
+        throw new Error("This thread's turns can't be picked back up.");
+      await this.unprompted(
+        chat,
+        await this.chatRoot(chat),
+        provider,
+        branch,
+        message,
+      );
+    } catch (e) {
+      this.resuming.delete(key);
+      this.providerSessions.delete(key);
+      await agentRuntime(provider)
+        .closeSession(key)
+        .catch(() => {});
+      if (chat) {
+        let failed = false;
+        for (const m of chat.messages)
+          if (
+            m.status === "streaming" &&
+            (m.parentId ?? undefined) === branch &&
+            !this.active.has(chat.id)
+          ) {
+            interrupt(m);
+            failed = true;
+          }
+        if (failed) await this.save(chat).catch(() => {});
+      }
+      console.warn("Could not pick a turn back up:", e);
     }
   }
   /**
@@ -2062,12 +2189,15 @@ export class ProjectChats {
       skills = [],
       compact = false,
       adopt = false,
+      resumed = false,
       caughtUp = true,
       side = false,
     }: {
       skills?: CodexSkill[];
       compact?: boolean;
       adopt?: boolean;
+      /** Carries on an answer a restart cut off; its snapshot is from before. */
+      resumed?: boolean;
       /** A forked side thread's turn (any agent without askSide): read-only, beside the main answer. */
       side?: boolean;
       /** The prompt told the session everything it hadn't heard yet. */
@@ -2286,7 +2416,10 @@ export class ProjectChats {
       // Taken right before the agent starts, so the card lists only its edits.
       const first = message.id;
       // A side turn changes nothing, and edits made meanwhile are the main answer's.
-      const before = compact || side ? null : await startTurn(root, first);
+      const before =
+        compact || side
+          ? null
+          : await (resumed ? resumeTurn : startTurn)(root, first);
       try {
         // Awaited first: a steer can move the answer to a new message meanwhile.
         const body = await agentRuntime(provider).run({
@@ -2880,7 +3013,28 @@ export class ProjectChats {
     if (chat) await this.ultraplans.stop(chat);
     return chat ? this.save(chat) : undefined;
   }
-  async dispose() {
+  /**
+   * Relay is closing. `detach`: it's restarting, and the agent host keeps
+   * the agents' sessions going; running answers are saved as they stand and
+   * picked back up by `reattach`.
+   */
+  async dispose({ detach = false } = {}) {
+    if (detach) {
+      this.disposing = true;
+      for (const timer of this.timers.values()) clearTimeout(timer);
+      for (const a of this.sides.values()) a.abort.abort();
+      for (const a of this.titleJobs.values()) a.abort.abort();
+      await Promise.allSettled(
+        [...this.active.keys()].map((id) => {
+          const chat = this.cache.get(id);
+          return chat && this.save(chat);
+        }),
+      );
+      await Promise.allSettled([...this.writes.values()]);
+      await this.store.flush();
+      for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
+      return;
+    }
     await this.keepPending().catch((e) =>
       console.warn("Could not keep Claude's background work:", e),
     );

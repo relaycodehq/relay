@@ -154,6 +154,19 @@ export async function startTurn(root: string, messageId: string) {
   }
 }
 
+/** A turn picked up after a restart keeps the snapshot it started from. */
+export async function resumeTurn(root: string, messageId: string) {
+  const kept = await run(root, [
+    "rev-parse",
+    "-q",
+    "--verify",
+    turnRef(messageId),
+  ])
+    .then((out) => out.trim())
+    .catch(() => "");
+  return kept || startTurn(root, messageId);
+}
+
 /** What the agent itself did to files during a turn, as its tools reported. */
 export interface TurnClaim {
   /** Paths its file tools wrote, absolute or relative to the checkout. */

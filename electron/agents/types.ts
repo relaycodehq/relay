@@ -103,6 +103,17 @@ export interface AgentRuntime {
     history: { question: string; response: string }[];
     signal: AbortSignal;
   }): Promise<string>;
+  /**
+   * Takes back the sessions that kept running while Relay restarted: those
+   * `owns` accepts come back, the rest end. `open` ones were mid-turn and
+   * wait for an `adopt` turn; `unprompted` shows a turn one starts later.
+   */
+  reattach?(
+    owns: (key: string) => boolean,
+    unprompted: (key: string) => () => Promise<void>,
+  ): Promise<{ key: string; open: boolean }[]>;
   /** Relay is quitting. */
   dispose?(): Promise<void>;
+  /** Relay is restarting: let go, and leave what the agent host runs going. */
+  detach?(): void;
 }

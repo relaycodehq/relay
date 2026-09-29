@@ -197,7 +197,42 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   try {
     const transport = await connection.ready;
     wire = transport;
+    const steerable = () =>
+      options.onControl?.({
+        steer: async (text, id, images) => {
+          if (settled || options.signal.aborted)
+            throw new Error(
+              "This turn has finished. Send the queued message as a new turn.",
+            );
+          // A room's sandbox lists the images it may read when it starts.
+          if (images?.length && !policy)
+            throw new Error("This turn can't take new images.");
+          await transport.request("turn/steer", {
+            threadId,
+            expectedTurnId: turnId,
+            input: [
+              { type: "text", text, text_elements: [] },
+              ...(images ?? []).map((image) => ({
+                type: "localImage",
+                path: image.path,
+              })),
+            ],
+            // Codex echoes it on the user message item once it reads the steer.
+            ...(id ? { clientUserMessageId: id } : {}),
+          });
+        },
+      });
     const start = async () => {
+      // A turn a restart cut off: the server picked up again holds what it said meanwhile.
+      if (options.adopt) {
+        if (!connection.started)
+          throw new Error("Codex has no turn of its own to show.");
+        threadId = connection.started.thread.id;
+        steerable();
+        connection.resume();
+        if (options.signal.aborted) abort();
+        return result;
+      }
       let started = connection.started;
       if (!started) {
         await transport.request("initialize", {
@@ -267,7 +302,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           throw new Error(
             "Your Codex CLI did not apply this session’s permissions. Update Codex CLI before asking here.",
           );
-        connection.started = started;
+        connection.keep(started);
       }
       threadId = started.thread.id;
       await options.session?.onId(threadId);
@@ -276,11 +311,13 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         if (!options.session?.id)
           throw new Error("There is no Codex session to compact yet.");
         // Compaction runs as its own turn; turn/started and turn/completed settle it.
+        connection.mark("start");
         await transport.request("thread/compact/start", { threadId });
         if (options.signal.aborted) abort();
         return result;
       }
       if (options.review) {
+        connection.mark("start");
         const started = await transport.request("review/start", {
           threadId,
           target: options.review,
@@ -291,6 +328,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         return result;
       }
       const note = await options.context?.().catch(() => undefined);
+      connection.mark("start");
       const turn = await transport.request("turn/start", {
         threadId,
         cwd: options.cwd,
@@ -331,30 +369,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       });
       turnId = turn.turn.id;
       options.session?.onPoint?.(turnId);
-      options.onControl?.({
-        steer: async (text, id, images) => {
-          if (settled || options.signal.aborted)
-            throw new Error(
-              "This turn has finished. Send the queued message as a new turn.",
-            );
-          // A room's sandbox lists the images it may read when it starts.
-          if (images?.length && !policy)
-            throw new Error("This turn can't take new images.");
-          await transport.request("turn/steer", {
-            threadId,
-            expectedTurnId: turnId,
-            input: [
-              { type: "text", text, text_elements: [] },
-              ...(images ?? []).map((image) => ({
-                type: "localImage",
-                path: image.path,
-              })),
-            ],
-            // Codex echoes it on the user message item once it reads the steer.
-            ...(id ? { clientUserMessageId: id } : {}),
-          });
-        },
-      });
+      steerable();
       if (options.signal.aborted) abort();
       return result;
     };
@@ -372,6 +387,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     connection.busy = false;
     if (!sessionKey || !succeeded || options.signal.aborted)
       await connection.close();
+    else connection.mark("end");
   }
 }
 

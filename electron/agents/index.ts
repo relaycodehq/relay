@@ -1,7 +1,11 @@
 import type { AgentProvider } from "../../shared/agents";
 import { claudeArgs } from "../../shared/settings";
 import { runCodex } from "../rooms/codex";
-import { closeCodexConnection } from "../rooms/codex-connection";
+import {
+  closeCodexConnection,
+  reattachCodexSessions,
+  useCodexHosts,
+} from "../rooms/codex-connection";
 import { runClaude } from "../rooms/claude";
 import {
   askClaudeSide,
@@ -9,11 +13,15 @@ import {
   closeClaudeSession,
   listClaudeCommands,
   listClaudeModels,
+  reattachClaudeSessions,
+  useAgentHosts,
 } from "../rooms/claude-project";
 import { codexDefaults, codexModels, codexSkills } from "../provider-commands";
 import { presentSkill } from "../skill-presentation";
 import { runOpenCode } from "./opencode/run";
-import { disposeOpenCode } from "./opencode/client";
+import { detachOpenCode, disposeOpenCode } from "./opencode/client";
+import { reattachOpenCodeServer, useOpenCodeHosts } from "./opencode/server";
+import type { AgentHosts } from "../agent-host/client";
 import {
   openCodeCommands,
   openCodeDefaults,
@@ -37,6 +45,7 @@ const codex: AgentRuntime = {
     return codexAgentDefaults(defaults, models);
   },
   commands: async (root) => (await codexSkills(root)).map(presentSkill),
+  reattach: (owns) => reattachCodexSessions(owns),
 };
 
 const claude: AgentRuntime = {
@@ -53,6 +62,7 @@ const claude: AgentRuntime = {
   commands: listClaudeCommands,
   askSide: ({ choice, ...options }) =>
     askClaudeSide({ ...options, model: claudeArgs(choice).model }),
+  reattach: reattachClaudeSessions,
 };
 
 /**
@@ -66,6 +76,8 @@ const opencode: AgentRuntime = {
   defaults: openCodeDefaults,
   commands: openCodeCommands,
   dispose: async () => disposeOpenCode(),
+  detach: detachOpenCode,
+  reattach: (owns) => reattachOpenCodeServer(owns),
 };
 
 export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
@@ -75,3 +87,10 @@ export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
 };
 export const agentRuntime = (provider: AgentProvider) =>
   agentRuntimes[provider];
+
+/** Every agent's sessions run in the agent host from now on, so they outlive a restart of Relay. */
+export function hostAgents(hosts: AgentHosts) {
+  useAgentHosts(hosts);
+  useCodexHosts(hosts);
+  useOpenCodeHosts(hosts);
+}

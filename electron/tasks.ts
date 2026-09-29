@@ -71,7 +71,7 @@ const agentName = (line: string) => {
 // Processes that are only incidentally in a project folder: installed apps, system daemons,
 // Git's own helpers and other editors' agents.
 const ignoredOrphans =
-  /^(\/System\/|\/Applications\/|\/Users\/[^/]+\/Applications\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/)|\bgit fsmonitor--daemon\b|\bwatchman\b|\bgitstatusd\b|\bcursor-agent\b/;
+  /^(\/System\/|\/Applications\/|\/Users\/[^/]+\/Applications\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/)|\bgit fsmonitor--daemon\b|\bwatchman\b|\bgitstatusd\b|\bcursor-agent\b|--relay-agent-host\b/;
 // Skip the agent's quick commands: the list is for things that keep running.
 const minimumAge = 3000;
 /** A process's command line as something a shell can run: `ps` loses the quoting of an executable path with spaces. */
@@ -87,6 +87,8 @@ const runnable = (line: string) =>
  */
 export class ProjectTasks {
   private tracked = new Map<string, Tracked>();
+  /** The agent hosts' pids: Claude runs there, not under Relay itself. */
+  hosts: () => number[] = () => [];
   /** Every pid seen, keyed to its start time, so pid reuse never adopts a stranger. */
   private seen = new Map<number, number>();
   private cwds = new Map<string, string | null>();
@@ -334,6 +336,7 @@ export class ProjectTasks {
       if (list) list.push(p);
       else children.set(p.ppid, [p]);
     }
+    const hosts = new Set(this.hosts());
     // An agent run from Relay's terminal is as external as one in any other.
     const ours = (p: Proc) => {
       for (
@@ -342,7 +345,7 @@ export class ProjectTasks {
         c = byPid.get(c.ppid), n++
       ) {
         if (this.terminals.has(c.pid)) return false;
-        if (c.pid === process.pid) return true;
+        if (c.pid === process.pid || hosts.has(c.pid)) return true;
       }
       return false;
     };

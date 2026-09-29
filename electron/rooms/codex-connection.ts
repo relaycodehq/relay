@@ -1,9 +1,22 @@
-import { spawnExecutable } from "../executables";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { executableCommand, spawnExecutable } from "../executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
+import { HostedChild } from "../agent-host/child";
+import type { AgentHosts } from "../agent-host/client";
+import type { Entry } from "../agent-host/protocol";
+
+let hosts: AgentHosts | undefined;
+/** Runs thread sessions' app servers in the agent host, so they outlive a restart of Relay. */
+export function useCodexHosts(agentHosts: AgentHosts) {
+  hosts = agentHosts;
+}
+
+/** What a hosted app server keeps for the next Relay: the thread it started. */
+type CodexMeta = { provider: "codex"; started?: any };
 
 /** A native session owns its approvals. Keep its process alive between project turns. */
 export class CodexConnection {
-  readonly child;
+  child?: ChildProcessWithoutNullStreams | HostedChild;
   readonly ready: Promise<CodexTransport>;
   readonly done: Promise<void>;
   started?: any;
@@ -13,11 +26,9 @@ export class CodexConnection {
   onRequest?: (method: string, params: any) => Promise<unknown>;
   onError?: (error: Error) => void;
   private release!: () => void;
-  constructor(executable: string, args: string[], cwd: string) {
-    this.child = spawnExecutable(executable, args, {
-      cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+  constructor(
+    open: () => Promise<ChildProcessWithoutNullStreams | HostedChild>,
+  ) {
     let ready!: (wire: CodexTransport) => void;
     this.ready = new Promise((resolve) => {
       ready = resolve;
@@ -29,48 +40,78 @@ export class CodexConnection {
       this.onError?.(error);
       void this.close();
     };
-    this.child.on("error", (e) =>
-      fail(new Error(`Could not start Codex: ${e.message}`)),
-    );
-    this.child.on("exit", () =>
-      fail(
-        new Error(
-          "Codex stopped before finishing. Check your local Codex sign-in.",
-        ),
-      ),
-    );
-    this.child.stdin.on("error", () =>
-      fail(new Error("The Codex connection closed.")),
-    );
-    this.child.stderr.resume();
-    this.done = withCodexTransport(
-      this.child,
-      (method, params) => this.onNotification?.(method, params),
-      fail,
-      async (wire) => {
-        ready(wire);
-        await lifetime;
-      },
-      async (method, params) => {
-        if (this.onRequest) return this.onRequest(method, params);
-        if (method.endsWith("requestApproval")) return { decision: "decline" };
-        throw new Error(`No active handler for ${method}.`);
-      },
-    ).catch(fail);
+    this.done = open()
+      .then((child) => {
+        this.child = child;
+        if (this.closed) return this.stop();
+        child.on("error", (e: Error) =>
+          fail(new Error(`Could not start Codex: ${e.message}`)),
+        );
+        child.on("exit", () =>
+          fail(
+            new Error(
+              "Codex stopped before finishing. Check your local Codex sign-in.",
+            ),
+          ),
+        );
+        child.stdin.on("error", () =>
+          fail(new Error("The Codex connection closed.")),
+        );
+        child.stderr.resume();
+        return withCodexTransport(
+          // Hosted or not, it reads and writes like the child it was.
+          child as ChildProcessWithoutNullStreams,
+          (method, params) => this.onNotification?.(method, params),
+          fail,
+          async (wire) => {
+            ready(wire);
+            await lifetime;
+          },
+          async (method, params) => {
+            if (this.onRequest) return this.onRequest(method, params);
+            if (method.endsWith("requestApproval"))
+              return { decision: "decline" };
+            throw new Error(`No active handler for ${method}.`);
+          },
+        );
+      })
+      .catch(fail);
+  }
+  /** The thread it started, kept with a hosted server for the next Relay. */
+  keep(started: any) {
+    this.started = started;
+    if (this.child instanceof HostedChild)
+      this.child.hosted.keep({
+        provider: "codex",
+        started,
+      } satisfies CodexMeta);
+  }
+  /** Marks a turn in the host's log, so a restart knows one was running. */
+  mark(mark: "start" | "end") {
+    if (this.child instanceof HostedChild) this.child.hosted.mark(mark);
+  }
+  /** Lets through what a server picked up after a restart said meanwhile, once someone listens. */
+  resume() {
+    if (this.child instanceof HostedChild) this.child.release();
   }
   close() {
     if (!this.closed) {
       this.closed = true;
       this.release();
-      this.child.stdin.end();
-      this.child.kill("SIGTERM");
-      const kill = setTimeout(() => {
-        if (this.child.exitCode === null) this.child.kill("SIGKILL");
-      }, 2000);
-      kill.unref();
-      this.child.once("exit", () => clearTimeout(kill));
+      this.stop();
     }
     return this.done;
+  }
+  private stop() {
+    const child = this.child;
+    if (!child) return;
+    child.stdin.end();
+    child.kill("SIGTERM");
+    const kill = setTimeout(() => {
+      if (child.exitCode === null) child.kill("SIGKILL");
+    }, 2000);
+    kill.unref();
+    child.once("exit", () => clearTimeout(kill));
   }
 }
 const sessions = new Map<string, CodexConnection>();
@@ -84,7 +125,36 @@ export function acquireCodexConnection(
   if (connection?.busy)
     throw new Error("This Codex session is already running a turn.");
   if (!connection || connection.closed) {
-    connection = new CodexConnection(executable, args, cwd);
+    const local = () =>
+      spawnExecutable(executable, args, {
+        cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as ChildProcessWithoutNullStreams;
+    // A thread's session runs in the host; rooms and helper jobs end with their turn.
+    connection = new CodexConnection(async () => {
+      if (!key || !hosts) return local();
+      try {
+        const running = await hosts.openProcess({
+          key,
+          meta: { provider: "codex" } satisfies CodexMeta,
+          process: {
+            ...executableCommand(executable, args),
+            cwd,
+            env: { ...process.env } as Record<string, string>,
+            group: false,
+          },
+        });
+        const child = new HostedChild(running);
+        child.release();
+        return child;
+      } catch (error) {
+        console.warn(
+          "The agent host is unavailable; Codex runs in Relay:",
+          error,
+        );
+        return local();
+      }
+    });
     if (key) sessions.set(key, connection);
   }
   connection.busy = true;
@@ -94,4 +164,64 @@ export async function closeCodexConnection(key: string) {
   const connection = sessions.get(key);
   sessions.delete(key);
   await connection?.close();
+}
+
+/**
+ * Takes back the app servers the agent host kept running while Relay
+ * restarted. One that was in a turn waits, holding what it said meanwhile,
+ * for an `adopt` turn to show it.
+ */
+export async function reattachCodexSessions(
+  owns: (key: string) => boolean,
+): Promise<{ key: string; open: boolean }[]> {
+  if (!hosts) return [];
+  const back: { key: string; open: boolean }[] = [];
+  for (const found of await hosts.discover()) {
+    const { info } = found;
+    const meta = info.meta as CodexMeta | undefined;
+    if (meta?.provider !== "codex") continue;
+    if (!meta.started || !owns(info.key) || sessions.has(info.key)) {
+      found.close();
+      continue;
+    }
+    const child = new HostedChild(found.attachProcess(), (entries) =>
+      codexReplay(entries, info.split),
+    );
+    const connection = new CodexConnection(async () => child);
+    connection.started = meta.started;
+    sessions.set(info.key, connection);
+    if (!info.open) child.release();
+    back.push({ key: info.key, open: info.open });
+  }
+  return back;
+}
+
+/**
+ * What a turn cut off by a restart still has to hear: its notifications,
+ * and the questions nobody answered. Replies to the last Relay's own
+ * requests went to a transport that's gone.
+ */
+export function codexReplay(entries: Entry[], split: number): string[] {
+  const answered = new Set<string>();
+  for (const entry of entries)
+    if (entry.kind === "input")
+      try {
+        const sent = JSON.parse(entry.text);
+        if (sent?.id !== undefined && !("method" in sent))
+          answered.add(String(sent.id));
+      } catch {}
+  const lines: string[] = [];
+  for (const entry of entries) {
+    if (entry.kind !== "line" || entry.seq < split) continue;
+    let said: any;
+    try {
+      said = JSON.parse(entry.text);
+    } catch {
+      continue;
+    }
+    if (typeof said?.method !== "string") continue;
+    if (said.id !== undefined && answered.has(String(said.id))) continue;
+    lines.push(entry.text);
+  }
+  return lines;
 }
