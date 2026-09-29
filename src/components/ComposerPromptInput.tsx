@@ -28,6 +28,13 @@ import {
   pastesAfter,
   type PastedText,
 } from "../../shared/pasted-texts";
+import type { DictationTarget } from "../lib/dictation/session";
+import {
+  beginDictation,
+  ComposerDictation,
+  endDictation,
+  updateDictation,
+} from "./composer-dictation";
 export interface SkillPick {
   token: string;
   label: string;
@@ -46,6 +53,8 @@ export interface PromptInputHandle {
   removePaste: (index: number) => void;
   /** Swaps the nth paste pill for its text. */
   inlinePaste: (index: number) => void;
+  /** Where dictated words go: live at the caret, greyed while they may still change. */
+  dictation: DictationTarget;
 }
 const Skill = Node.create({
   name: "relaySkill",
@@ -370,6 +379,7 @@ export function ComposerPromptInput({
       Skill,
       Quote,
       Paste,
+      ComposerDictation,
     ],
     content: content(value, labels.current, quotes.current),
     // The composer remounts per thread, so opening one lands in its input.
@@ -633,6 +643,14 @@ export function ComposerPromptInput({
           ),
         );
         editor.commands.focus();
+      },
+      dictation: {
+        begin: () => editor?.isDestroyed === false && beginDictation(editor),
+        update: (settled, tentative) =>
+          editor?.isDestroyed === false &&
+          updateDictation(editor, settled, tentative),
+        end: (text) =>
+          editor?.isDestroyed === false && endDictation(editor, text),
       },
     }),
     [editor, draftKey],

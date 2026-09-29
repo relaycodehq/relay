@@ -12,6 +12,7 @@ import {
   Check,
   Info,
   Keyboard,
+  Mic,
   ListTodo,
   LogIn,
   LogOut,
@@ -87,6 +88,13 @@ import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
+  DictationMicrophoneSetting,
+  DictationModelSetting,
+  DictationShortcutSetting,
+  dictationModelLine,
+} from "./DictationSettings";
+import { useDictationModel } from "../lib/dictation/session";
+import {
   DevOpsConnectionSettings,
   DevOpsFilterSettings,
   DevOpsProjectSettings,
@@ -108,6 +116,7 @@ type CategoryId =
   | "integrations"
   | "rooms"
   | "phone"
+  | "dictation"
   | "shortcuts"
   | "about";
 
@@ -154,6 +163,12 @@ const categories: {
     label: "Phone",
     description: "Follow and answer your threads from the Relay phone app.",
     icon: Smartphone,
+  },
+  {
+    id: "dictation",
+    label: "Dictation",
+    description: "Speak your messages; words appear as you talk.",
+    icon: Mic,
   },
   {
     id: "shortcuts",
@@ -533,6 +548,7 @@ export function Settings({
 
   // Releases stamp their own version at build time; the updater knows it.
   const updates = useUpdates();
+  const dictationModel = useDictationModel();
   const appearance = useAppearance();
   const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
@@ -947,6 +963,31 @@ export function Settings({
       keywords: "phone mobile android remote qr pair tailscale",
       block: true,
       render: () => <PhoneRemoteSettings />,
+    },
+    {
+      id: "dictation-model",
+      category: "dictation",
+      title: "Speech model",
+      description: dictationModelLine(dictationModel),
+      keywords:
+        "dictation voice speech microphone parakeet download model transcribe",
+      render: () => <DictationModelSetting />,
+    },
+    ...(["dictation", "shortcuts"] as const).map((category) => ({
+      id: `dictation-shortcut:${category}`,
+      category,
+      title: category === "dictation" ? "Shortcut" : "Dictate",
+      description:
+        "Tap to start and tap again to finish, or hold to talk and let go. Esc discards what you said.",
+      keywords: "dictation voice speech keyboard shortcut hotkey push to talk",
+      render: () => <DictationShortcutSetting />,
+    })),
+    {
+      id: "dictation-microphone",
+      category: "dictation",
+      title: "Microphone",
+      keywords: "dictation voice input device audio mic",
+      render: () => <DictationMicrophoneSetting />,
     },
     {
       id: "send-key",

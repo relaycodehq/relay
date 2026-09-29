@@ -23,6 +23,17 @@ await build({
   external: ["electron"],
 });
 
+// Dictation's speech engine runs in its own utility process.
+await build({
+  entryPoints: ["electron/dictation/worker.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  outfile: "dist-electron/dictation-worker.cjs",
+  external: ["electron"],
+});
+
 await build({
   entryPoints: ["electron/checks/worker.mjs"],
   bundle: true,
@@ -114,3 +125,19 @@ cpSync(join(pty, native), join(ptyOut, native), {
 // every shell then fails with "posix_spawnp failed".
 const helper = join(ptyOut, native, "spawn-helper");
 if (existsSync(helper)) chmodSync(helper, 0o755);
+
+// sherpa-onnx-node finds its native addon in a sibling folder named for the
+// platform, whose libraries load from beside the addon; both ship as plain
+// files, and only this platform's addon comes along.
+const sherpaOut = "dist-electron/sherpa",
+  sherpaNative = `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
+rmSync(sherpaOut, { recursive: true, force: true });
+cpSync("node_modules/sherpa-onnx-node", join(sherpaOut, "sherpa-onnx-node"), {
+  recursive: true,
+  filter: (path) => !/\.(md|d\.ts)$/.test(path),
+});
+if (existsSync(join("node_modules", sherpaNative)))
+  cpSync(join("node_modules", sherpaNative), join(sherpaOut, sherpaNative), {
+    recursive: true,
+    filter: (path) => !/\.(md|lib|h)$/.test(path),
+  });

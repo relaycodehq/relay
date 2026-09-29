@@ -174,6 +174,13 @@ const methods = [
   "checkForUpdates",
   "downloadUpdate",
   "installUpdate",
+  "dictationState",
+  "downloadDictationModel",
+  "cancelDictationDownload",
+  "removeDictationModel",
+  "dictationMicrophone",
+  "connectDictation",
+  "warmDictation",
   "agentVersions",
   "checkAgentVersions",
   "updateAgent",
@@ -218,6 +225,11 @@ contextBridge.exposeInMainWorld("relay", {
     ipcRenderer.on("relay:update", listener);
     return () => ipcRenderer.removeListener("relay:update", listener);
   },
+  onDictationState: (callback: (state: unknown) => void) => {
+    const listener = (_event: unknown, value: unknown) => callback(value);
+    ipcRenderer.on("relay:dictation", listener);
+    return () => ipcRenderer.removeListener("relay:dictation", listener);
+  },
   onAgentVersions: (callback: (state: unknown) => void) => {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:agent-updates", listener);
@@ -238,4 +250,12 @@ contextBridge.exposeInMainWorld("relay", {
     ipcRenderer.on("relay:open-url", listener);
     return () => ipcRenderer.removeListener("relay:open-url", listener);
   },
+});
+// Ports can't cross the context bridge; a window message can carry one.
+ipcRenderer.on("relay:dictation-port", (event) => {
+  window.postMessage(
+    "relay:dictation-port",
+    location.origin === "null" ? "*" : location.origin,
+    event.ports,
+  );
 });

@@ -67,6 +67,8 @@ import { useAgentDefaults } from "../lib/useAgentDefaults";
 import { useDoubleEscape } from "../lib/useDoubleEscape";
 import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
+import { DictationButton } from "./DictationButton";
+import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import {
@@ -192,6 +194,8 @@ export function ProjectComposer({
   const draft = useDraft(draftKey);
   const settings = useAISettings();
   const stopArmed = useDoubleEscape(running, ".project-composer", onStop);
+  const [dictationOwner] = useState(() => ({}));
+  const composerForm = useRef<HTMLFormElement>(null);
   const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
@@ -965,7 +969,24 @@ export function ProjectComposer({
       },
     };
   }
+  // Sending mid-dictation waits for the last words to land in the draft.
+  const [sendAfterDictation, setSendAfterDictation] = useState<{
+    steer: boolean;
+    sendAt?: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!sendAfterDictation) return;
+    setSendAfterDictation(null);
+    void send(sendAfterDictation.steer, sendAfterDictation.sendAt);
+  }, [sendAfterDictation]);
   async function send(steer = false, sendAt?: number) {
+    const dictation = dictationSnapshot();
+    if (dictation.owner === dictationOwner && dictation.phase !== "idle") {
+      void stopDictation().then((finished) => {
+        if (finished) setSendAfterDictation({ steer, sendAt });
+      });
+      return;
+    }
     // `/btw` goes to the agent picked here, beside whatever the thread runs.
     const btw = relayCommand(draft);
     if (btw?.name === "btw" && btw.args && recipient !== "message") {
@@ -1152,6 +1173,7 @@ export function ProjectComposer({
         }}
       />
       <form
+        ref={composerForm}
         className="project-composer"
         onSubmit={(e) => {
           e.preventDefault();
@@ -1424,6 +1446,12 @@ export function ProjectComposer({
               )}
             </button>
           )}
+          <DictationButton
+            owner={dictationOwner}
+            target={() => promptInput.current?.dictation}
+            composer={composerForm}
+            resetKey={draftKey}
+          />
           {(!running || !!draft.trim() || !!images.length) && (
             <SendLaterMenu
               disabled={sendDisabled}

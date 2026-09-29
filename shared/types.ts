@@ -10,6 +10,7 @@ import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
 import type { UpdateState } from "./updates";
+import type { DictationModelState } from "./dictation";
 import type { AgentVersions } from "./agent-updates";
 import type { LineQuestion } from "./questions";
 import type {
@@ -338,6 +339,20 @@ export interface Api
   /** Quits and hands over to the new version, which starts by itself. */
   installUpdate(): Promise<UpdateState>;
   onUpdate(callback: (state: UpdateState) => void): () => void;
+  dictationState(): Promise<DictationModelState>;
+  downloadDictationModel(): Promise<DictationModelState>;
+  cancelDictationDownload(): Promise<void>;
+  removeDictationModel(): Promise<DictationModelState>;
+  /** Asks the system for the microphone where it needs asking; false when refused. */
+  dictationMicrophone(): Promise<boolean>;
+  /**
+   * Posts a port to the speech engine to the page as a "relay:dictation-port"
+   * window message; false when the model isn't downloaded.
+   */
+  connectDictation(): Promise<boolean>;
+  /** Starts loading the model so the first words don't wait for it. */
+  warmDictation(): Promise<void>;
+  onDictationState(callback: (state: DictationModelState) => void): () => void;
   /** The agent CLIs as last checked, and whether newer ones are out. */
   agentVersions(): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
