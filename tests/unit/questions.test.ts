@@ -182,6 +182,22 @@ describe("Model and speed settings", () => {
   });
 });
 
+describe("Which agents a setting takes", () => {
+  const parse = (patch: object) =>
+    aiSettingsSchema.safeParse({ ...defaultAISettings, ...patch }).success;
+  it("lets commit splits use any agent, but not the jobs that open a CLI", () => {
+    expect(parse({ splitProvider: "cursor" })).toBe(true);
+    expect(parse({ splitProvider: "opencode" })).toBe(true);
+    expect(parse({ groupingProvider: "cursor" })).toBe(false);
+    expect(parse({ questionsProvider: "opencode" })).toBe(false);
+  });
+  it("only limits Claude's efforts to the ones it lists", () => {
+    const split = { model: "", fast: false, reasoningEffort: "minimal" };
+    expect(parse({ splitProvider: "cursor", split })).toBe(true);
+    expect(parse({ splitProvider: "claude", split })).toBe(false);
+  });
+});
+
 describe("Reasoning effort", () => {
   it("preserves existing settings behavior and validates model-specific levels", () => {
     const upgraded = aiSettingsSchema.parse({

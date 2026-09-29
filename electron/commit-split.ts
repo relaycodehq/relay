@@ -12,7 +12,6 @@ import {
   choiceLabel,
   defaultAISettings,
   type AISettings,
-  type HelperProvider,
 } from "../shared/settings";
 import {
   MAX_SPLIT_COMMITS,
@@ -325,7 +324,7 @@ export async function planCommitSplit(
     ),
   ].join("\n");
   const ids = units.map((u) => u.id);
-  const first: HelperProvider = settings.splitProvider;
+  const first = settings.splitProvider;
   let lastError: unknown;
   for (const provider of helperFallbacks(first)) {
     const choice =
