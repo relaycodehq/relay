@@ -42,6 +42,7 @@ import "./deep-review.css";
 import { initAppearance, setMode, useAppearance } from "../src/lib/appearance";
 import { initWindowFocus } from "../src/lib/window-focus";
 import { ModelField } from "../src/components/ModelField";
+import { agentProviders, reviewerProviders } from "../shared/agents";
 import { ComposerSelect } from "../src/components/ComposerSelect";
 import { ProviderIcon } from "../src/components/ComposerModelPicker";
 import { ProjectHeadlinePicker } from "../src/components/ProjectHeadlinePicker";
@@ -56,7 +57,7 @@ import type {
   Project,
 } from "../shared/projects";
 import { effortLabels, type ModelChoice } from "../shared/settings";
-import type { HelperProvider as AgentProvider } from "../shared/agents";
+import type { AgentProvider } from "../shared/agents";
 
 initAppearance();
 initWindowFocus();
@@ -1239,6 +1240,7 @@ function Setup(props: {
                 <ModelField
                   label={`Reviewer ${i + 1}`}
                   provider={r.provider}
+                  providers={reviewerProviders}
                   value={r.choice}
                   allowDefault={false}
                   onChange={(choice, provider) =>
@@ -1295,6 +1297,7 @@ function Setup(props: {
           <ModelField
             label="Lead"
             provider={props.lead.provider}
+            providers={agentProviders}
             value={props.lead.choice}
             allowDefault={false}
             onChange={(choice, provider) =>
