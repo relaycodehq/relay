@@ -15,6 +15,9 @@
 :is(.quick-switch-anchor, .quick-switch-sample) [data-provider="opencode"] {
   --quick-color: #3bb88f;
 }
+:is(.quick-switch-anchor, .quick-switch-sample) [data-provider="cursor"] {
+  --quick-color: #d4d6de;
+}
 .quick-popup,
 .quick-tab {
   transition: --quick-color 240ms ease;

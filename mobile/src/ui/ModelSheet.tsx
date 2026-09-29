@@ -11,7 +11,7 @@ import { Segmented } from "./Rows";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
 
-const providers: AgentProvider[] = ["codex", "claude", "opencode"];
+const providers: AgentProvider[] = ["codex", "claude", "opencode", "cursor"];
 
 /** The desktop's model picker, for a thumb: agent tabs, its models, effort, and Fast or the 200k window. */
 export function ModelSheet({

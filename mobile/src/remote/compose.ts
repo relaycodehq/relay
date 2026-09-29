@@ -4,10 +4,10 @@ import type { RemoteSettings } from "../../../shared/remote";
 import type { AISettings } from "../../../shared/settings";
 
 /** Only a leading mention makes an agent answer (shared/agents' agentMentionPattern). */
-const mention = /^@(codex|claude|opencode)(?=\s|$)/i;
+const mention = /^@(codex|claude|opencode|cursor)(?=\s|$)/i;
 
 export const withoutMention = (body: string) =>
-  body.replace(/^@(codex|claude|opencode)(?=\s|$)\s*/i, "");
+  body.replace(/^@(codex|claude|opencode|cursor)(?=\s|$)\s*/i, "");
 
 /**
  * A new thread's composer, as the desktop starts one: the default agent,

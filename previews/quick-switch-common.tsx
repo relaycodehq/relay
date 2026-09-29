@@ -41,6 +41,13 @@ export const catalog: Record<
     ],
     efforts: [],
   },
+  cursor: {
+    models: [
+      { id: "auto", name: "Auto" },
+      { id: "composer-2.5", name: "Composer 2.5" },
+    ],
+    efforts: [],
+  },
 };
 
 export const samplePresets: Preset[] = [
