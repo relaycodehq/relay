@@ -1407,6 +1407,7 @@ export function ProjectComposer({
           )}
           {recipient !== "message" && (
             <ComposerModeControls
+              provider={recipient}
               runtimeMode={runtimeMode}
               interactionMode={interactionMode}
               ultraplan={councilOn}

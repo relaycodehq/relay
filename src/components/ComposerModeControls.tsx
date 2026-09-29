@@ -12,10 +12,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  runtimeModes,
+  runtimeModesFor,
   type RuntimeMode,
   type InteractionMode,
 } from "../../shared/agent-modes";
+import type { AgentProvider } from "../../shared/agents";
 import { ComposerSelect } from "./ComposerSelect";
 const icons = {
   "approval-required": LockKeyhole,
@@ -46,6 +47,7 @@ const modes: { value: Mode; label: string; hint: string; icon: ReactNode }[] = [
 ];
 // T3's ComposerFooterModeControls: permissions and planning are independent.
 export const ComposerModeControls = memo(function ComposerModeControls({
+  provider,
   runtimeMode,
   interactionMode,
   ultraplan = false,
@@ -53,6 +55,8 @@ export const ComposerModeControls = memo(function ComposerModeControls({
   onInteractionMode,
   onUltraplan,
 }: {
+  /** The agent that will answer; how it honors each runtime mode differs. */
+  provider?: AgentProvider;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
   ultraplan?: boolean;
@@ -73,7 +77,7 @@ export const ComposerModeControls = memo(function ComposerModeControls({
         value={runtimeMode}
         icon={<Icon size={14} />}
         onChange={onRuntimeMode}
-        options={runtimeModes.map((option) => {
+        options={runtimeModesFor(provider).map((option) => {
           const OptionIcon = icons[option.value];
           return { ...option, icon: <OptionIcon size={14} /> };
         })}
