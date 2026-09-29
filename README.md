@@ -38,7 +38,7 @@ Grab the file for your system from the [latest release](https://github.com/lubom
 
 Then:
 
-1. Install and sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), or [OpenCode](https://opencode.ai).
+1. Install and sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), or [OpenCode](https://opencode.ai). Or use Cursor: under **Settings → AI models**, choose **Set up…** to download Cursor's SDK and sign in.
 2. Open Relay and add a project folder.
 3. Type what you want done, pick the agent and model, and press **Send**.
 
@@ -57,7 +57,7 @@ Relay runs the agents on your computer with your own subscriptions. No Relay acc
 
 | | |
 |---|---|
-| **Talk to your agents** | Claude, Codex and OpenCode in one place. Pick the model and effort per thread, and switch agents mid-thread with a handoff note. |
+| **Talk to your agents** | Claude, Codex, OpenCode and Cursor in one place. Pick the model and effort per thread, and switch agents mid-thread with a handoff note. |
 | **Run many threads at once** | The Activity list shows which thread is working, which is done and which needs you. Jump between them with ⌘1–9. |
 | **Watch every step** | Commands, file reads, edits and subagents appear live, then fold away behind **Worked for…** when the answer lands. |
 | **Review every edit** | See the working tree side by side next to the conversation. Stage, commit and push without leaving the thread, and browse history in a commit graph. |
@@ -89,7 +89,7 @@ Automated tests do not cover real agent accounts, OS credential prompts, signing
 - Saved tokens are encrypted with the OS credential store (Keychain on macOS). Chat history and folder paths are not encrypted.
 - Relay never checks out, resets, pulls, force-pushes or stages files on its own. Git actions that change your checkout or remote happen only when you click them.
 - Pull request review and shared conversations currently need a Gitea server. Everything else works with any local folder, Git or not.
-- Relay is an independent project and is not affiliated with OpenAI, Anthropic or OpenCode.
+- Relay is an independent project and is not affiliated with OpenAI, Anthropic, OpenCode or Cursor (Anysphere). Cursor's SDK is not part of Relay: it is downloaded from npm on your request and is subject to Cursor's Terms of Service.
 
 ## Share a conversation
 
