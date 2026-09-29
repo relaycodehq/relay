@@ -71,6 +71,7 @@ import {
 import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
 import { MessageActions } from "./MessageActions";
+import { turnModelLabel } from "../../shared/turn-model";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
@@ -384,7 +385,13 @@ const Message = memo(function Message({
       aria-label={m.role === "user" ? "Your message" : `${m.provider} answer`}
     >
       <header>
-        <strong>
+        <strong
+          title={
+            m.role === "assistant" && m.model
+              ? turnModelLabel(m.provider, m.model)
+              : undefined
+          }
+        >
           {m.role === "assistant" && <ProviderIcon provider={m.provider} />}
           {m.role === "user" ? (m.author ?? "You") : agentName(m.provider)}
         </strong>

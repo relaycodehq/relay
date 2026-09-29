@@ -83,6 +83,7 @@ import type {
   ReviewerTask,
 } from "../shared/deep-review";
 import { codexQuestionChoice } from "../shared/settings";
+import { resolveTurnModel, type TurnModel } from "../shared/turn-model";
 /** The checked-out branch a message was sent from; null when detached. */
 const currentBranch = (root: string) =>
   git(root, ["branch", "--show-current"]).then(
@@ -1661,6 +1662,22 @@ export class ProjectChats {
       ? { point: from.forkPoint, from }
       : undefined;
   }
+  /**
+   * What a turn runs on, with Default resolved as the agent's settings stand
+   * now. Both lists are cached, as the composer keeps them warm.
+   */
+  private async turnModel(
+    provider: AgentProvider,
+    input: ProjectChatSend,
+    root: string,
+  ) {
+    const runtime = agentRuntime(provider);
+    const [models, defaults] = await Promise.all([
+      runtime.models().catch(() => []),
+      runtime.defaults(root).catch(() => null),
+    ]);
+    return resolveTurnModel(provider, input, models, defaults);
+  }
   /** A hidden turn on an existing session, with the settings that session last ran under. */
   private sessionInput(
     chat: ProjectChat,
@@ -1918,11 +1935,15 @@ export class ProjectChats {
           ]
         : [];
     });
+    const cwd = await this.chatRoot(chat);
+    void this.turnModel(answer.provider, input, cwd).then((resolved) => {
+      answer.model = resolved;
+    });
     try {
       answer.body = await agentRuntime(answer.provider).askSide!({
         key: this.sessionKey(chat.id),
         thread: agentSession(chat, answer.provider).thread!,
-        cwd: await this.chatRoot(chat),
+        cwd,
         choice: input.choice,
         question,
         history,
@@ -2072,6 +2093,7 @@ export class ProjectChats {
       message.body = body;
       changed();
     };
+    let model: TurnModel | undefined;
     // The agent read a steering message: the rest of the turn continues below
     // it, so the answer to it doesn't stream into the reply above.
     const continueBelow = (id: string) => {
@@ -2094,6 +2116,7 @@ export class ProjectChats {
           provider: message.provider,
           created: 0,
           version: 1,
+          ...(model ? { model } : {}),
           ...(message.parentId ? { parentId: message.parentId } : {}),
           ...(chat.shared ? { pending: true } : {}),
         };
@@ -2110,6 +2133,12 @@ export class ProjectChats {
     const sessionKey = this.sessionKey(chat.id, input.parentId ?? undefined);
     this.providerSessions.add(sessionKey);
     const provider = message.provider;
+    if (!compact)
+      void this.turnModel(provider, input, root).then((resolved) => {
+        model = resolved;
+        message.model = resolved;
+        changed();
+      });
     const sessionId = agentSession(chat, provider, input.parentId).thread;
     // A side thread forks the main one whole, its running turn included.
     const main = agentSession(chat, provider).thread;

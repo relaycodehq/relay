@@ -10,6 +10,7 @@ import { agentProviderSchema, type AgentProvider } from "./agents";
 import { idSchema } from "./rooms";
 import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
+import type { TurnModel } from "./turn-model";
 import type { FilePair, LocalFile, Page, Issue, Repo } from "./types";
 import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
 import type {
@@ -201,6 +202,8 @@ export interface ChatMessage {
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
   unprompted?: boolean;
   context?: ContextUsage;
+  /** Local: the model and settings this answer ran on. */
+  model?: TurnModel;
   /** Local proposed-plan action; shared chats receive the final text only. */
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
