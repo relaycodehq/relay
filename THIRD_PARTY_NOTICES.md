@@ -3,7 +3,7 @@
 Source: https://github.com/pingdotgg/t3code
 Pinned commit: 52e4b4429359904441039a286c61eaafe8474451
 
-Vendored: StyledDiffCodeView.tsx, diffRendering.ts, diffCollapse.ts, gitPatchPath.ts. Import paths adapted. DiffWorkerPoolProvider and desktop titlebar options adapted from T3 Code. Worker count and caches reduced for single-file review.
+Vendored: StyledDiffCodeView.tsx, diffRendering.ts, gitPatchPath.ts. Import paths adapted. DiffWorkerPoolProvider and desktop titlebar options adapted from T3 Code. Worker count and caches reduced for single-file review.
 
 Skill display names and source badges adapt providerSkills.ts and ComposerCommandMenu.tsx; atomic composer chips adapt ComposerSkillExtension from ComposerPromptEditorTiptap.tsx using Tiptap.
 

@@ -80,7 +80,7 @@ Relay runs the agents on your computer with your own subscriptions. No Relay acc
 | Windows x64 | Built and released from CI on every push, with Windows-specific fixes landing regularly. Less daily use than macOS. |
 | Linux x86-64 | AppImage and Omarchy bundle are cross-built. Runtime testing on real distributions is still thin. |
 
-Automated tests do not cover real agent accounts, OS credential prompts, signing or every Linux desktop. What was actually verified is in [VERIFICATION.md](VERIFICATION.md).
+Automated tests do not cover real agent accounts, OS credential prompts, signing or every Linux desktop.
 
 ## Good to know
 
