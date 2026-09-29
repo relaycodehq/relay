@@ -1,0 +1,62 @@
+/* Preview chrome: the controls above the app, not part of the design. */
+html,
+body,
+#root {
+  height: 100%;
+}
+.preview-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+  color: var(--text);
+}
+.preview-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 8px 16px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--sidebar));
+  font-size: 11px;
+  color: var(--muted);
+}
+.preview-bar > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+.preview-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-tag {
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 550;
+}
+.preview-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.preview-segmented button {
+  border: 0;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.preview-segmented button[aria-checked="true"] {
+  background: var(--selected);
+  color: var(--text);
+}

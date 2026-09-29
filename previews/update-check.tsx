@@ -27,7 +27,7 @@ import {
 import "../src/styles.css";
 import "../src/components/settings.css";
 import "../src/components/relay-mark.css";
-import "./ci-status.css";
+import "./chrome.css";
 import "./update-check.css";
 import { initAppearance, setMode, useAppearance } from "../src/lib/appearance";
 import { initWindowFocus } from "../src/lib/window-focus";

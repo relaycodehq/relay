@@ -9,7 +9,7 @@ import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { HardDriveDownload } from "lucide-react";
 import "../src/styles.css";
-import "./ci-status.css";
+import "./chrome.css";
 import "./dmg-background.css";
 import { initAppearance, setMode, useAppearance } from "../src/lib/appearance";
 import iconUrl from "../assets/icon.png";
