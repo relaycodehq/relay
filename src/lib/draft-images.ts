@@ -72,8 +72,10 @@ function jpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   );
 }
 
+export const isScreenshot = (file: File) =>
+  ["image/png", "image/jpeg", "image/webp"].includes(file.type);
 export async function prepareScreenshot(file: File): Promise<DraftImage> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+  if (!isScreenshot(file))
     throw new Error("Paste a PNG, JPEG or WebP screenshot.");
   if (!file.size || file.size > 12_000_000)
     throw new Error("Screenshot exceeds the 12 MB source limit.");
