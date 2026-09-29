@@ -1,4 +1,5 @@
 import { app, dialog, nativeImage, shell } from "electron";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
@@ -10,12 +11,23 @@ import { idSchema } from "../../shared/rooms";
 import type { Pull } from "../../shared/types";
 import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
+import { imageMime } from "../../shared/project-files";
 import { agentRuntime } from "../agents";
+import {
+  createEntry,
+  entryPath,
+  fileInfo,
+  listDirectory,
+  readImage,
+  renameEntry,
+} from "../project-files";
 import { projectIcon } from "../project-icon";
 import { branchPulls } from "../pull-request-create";
 import { pageSchema, type ApiContext, type Handlers } from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
+const folderPathSchema = workingPathSchema.or(z.literal(""));
+
 export function projectHandlers(ctx: ApiContext) {
   const {
     projects,
@@ -120,6 +132,63 @@ export function projectHandlers(ctx: ApiContext) {
         await projects.root(idSchema.parse(args[0])),
       ),
     projectFiles: async (args) => projects.files(await place(args[0])),
+    projectDirectory: async (args) => {
+      const { root, plain } = await place(args[0]);
+      return listDirectory(root, folderPathSchema.parse(args[1]), plain);
+    },
+    projectFileInfo: async (args) =>
+      fileInfo((await place(args[0])).root, workingPathSchema.parse(args[1])),
+    projectImage: async (args) =>
+      readImage((await place(args[0])).root, workingPathSchema.parse(args[1])),
+    projectThumbnail: async (args) => {
+      const { root } = await place(args[0]);
+      const path = workingPathSchema.parse(args[1]);
+      const image = imageMime(path)
+        ? nativeImage.createFromPath(await entryPath(root, path))
+        : null;
+      // What the system can't decode (SVG, say) goes as it is.
+      if (!image || image.isEmpty()) return readImage(root, path);
+      return image.getSize().width <= 320
+        ? readImage(root, path)
+        : image.resize({ width: 320, quality: "good" }).toDataURL();
+    },
+    revealProjectPath: async (args) => {
+      const path = folderPathSchema.parse(args[1]);
+      const full = await entryPath((await place(args[0])).root, path);
+      // A folder opens in Finder to show what's inside; a file is selected in its folder.
+      if (await lstat(full).then((s) => s.isDirectory())) {
+        const error = await shell.openPath(full);
+        if (error) throw new Error(error);
+      } else shell.showItemInFolder(full);
+    },
+    openProjectPath: async (args) => {
+      const error = await shell.openPath(
+        await entryPath(
+          (await place(args[0])).root,
+          workingPathSchema.parse(args[1]),
+        ),
+      );
+      if (error) throw new Error(error);
+    },
+    createProjectEntry: async (args) =>
+      createEntry(
+        (await place(args[0])).root,
+        workingPathSchema.parse(args[1]),
+        z.enum(["file", "dir"]).parse(args[2]),
+      ),
+    renameProjectEntry: async (args) =>
+      renameEntry(
+        (await place(args[0])).root,
+        workingPathSchema.parse(args[1]),
+        workingPathSchema.parse(args[2]),
+      ),
+    trashProjectEntry: async (args) =>
+      shell.trashItem(
+        await entryPath(
+          (await place(args[0])).root,
+          workingPathSchema.parse(args[1]),
+        ),
+      ),
     projectFile: async (args) =>
       projects.file(await place(args[0]), workingPathSchema.parse(args[1])),
     saveProjectFile: async (args) =>

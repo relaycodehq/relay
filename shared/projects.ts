@@ -11,6 +11,7 @@ import { idSchema } from "./rooms";
 import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
 import type { TurnModel } from "./turn-model";
+import type { DirListing, FileInfo } from "./project-files";
 import type { FilePair, LocalFile, Page, Issue, Repo } from "./types";
 import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
 import type {
@@ -607,6 +608,25 @@ export interface ProjectApi {
   linkProject(id: string): Promise<Project>;
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;
+  /** One level of a folder from disk ("" is the root), ignored files included. */
+  projectDirectory(where: string, dir: string): Promise<DirListing>;
+  projectFileInfo(where: string, path: string): Promise<FileInfo>;
+  /** An image file as a data URL. */
+  projectImage(where: string, path: string): Promise<string>;
+  /** An image scaled down for a grid; small ones and vector ones as they are. */
+  projectThumbnail(where: string, path: string): Promise<string>;
+  /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */
+  revealProjectPath(where: string, path: string): Promise<void>;
+  /** Opens a file in the app the system picks for it. */
+  openProjectPath(where: string, path: string): Promise<void>;
+  createProjectEntry(
+    where: string,
+    path: string,
+    kind: "file" | "dir",
+  ): Promise<void>;
+  renameProjectEntry(where: string, from: string, to: string): Promise<void>;
+  /** Moves to the Trash, so it can be put back. */
+  trashProjectEntry(where: string, path: string): Promise<void>;
   saveProjectFile(
     where: string,
     path: string,
