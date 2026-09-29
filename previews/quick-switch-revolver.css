@@ -1,0 +1,374 @@
+/* Revolver styles for the quick switch; they use the app's quick-switch.css too. */
+
+.rv-root [data-provider="claude"] {
+  --quick-color: #d97757;
+}
+.rv-root [data-provider="codex"] {
+  --quick-color: #7390f7;
+}
+.rv-root [data-provider="opencode"] {
+  --quick-color: #3bb88f;
+}
+.rv-trigger .quick-label {
+  animation: none;
+}
+
+/* ---------- Chambers, shared by the cylinder and the swing-out ---------- */
+
+/* Placed around the centre at --r, then turned back by the cylinder's own
+   angle on the same curve, so rounds stay upright while it spins. */
+.quick-chamber {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, #000 30%, var(--surface));
+  box-shadow: inset 0 1px 3px #0008;
+  opacity: var(--o, 1);
+  transform: rotate(var(--a)) translateY(calc(-1 * var(--r)))
+    rotate(calc(-1 * (var(--a) + var(--rot)))) scale(1, var(--unsquash, 1))
+    scale(var(--s, 1));
+  transition:
+    transform 420ms cubic-bezier(0.3, 1.35, 0.5, 1),
+    opacity 420ms ease;
+}
+.quick-chamber:disabled {
+  cursor: default;
+}
+.quick-round {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 50%;
+  background: var(--surface);
+  transition: box-shadow 200ms ease;
+}
+.quick-round .provider-glyph {
+  width: 14px;
+  height: 14px;
+}
+.quick-chamber[aria-pressed="true"] .quick-round {
+  box-shadow: 0 0 0 2px var(--quick-color);
+}
+.quick-cyl {
+  --r: 32px;
+  transform: rotate(var(--rot));
+  transition: transform 420ms cubic-bezier(0.3, 1.35, 0.5, 1);
+}
+/* Opening flicks it a whole turn: slower, easing into the stop. */
+.quick-cyl[data-spinning],
+.quick-cyl[data-spinning] .quick-chamber {
+  transition-duration: 950ms;
+  transition-timing-function: cubic-bezier(0.12, 0.8, 0.22, 1.03);
+}
+
+/* ---------- 1: Cylinder ---------- */
+
+.quick-popup.quick-cyl-popup {
+  width: 290px;
+}
+.quick-cyl-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 10px 10px 8px;
+}
+.quick-cyl-frame {
+  position: relative;
+  flex-shrink: 0;
+  width: 116px;
+  height: 116px;
+}
+.quick-cyl-popup .quick-cyl {
+  position: absolute;
+  inset: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+}
+/* The flutes between chambers, cut into the rim. */
+.quick-flute {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 18px;
+  margin: -9px 0 0 -6px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  transform: rotate(var(--a)) translateY(-53px);
+}
+.quick-axle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+}
+/* The frame's notch over the barrel; it taps down on every step. */
+.quick-cyl-sight {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: -2px;
+  width: 10px;
+  height: 7px;
+  margin-left: -5px;
+  background: var(--text);
+  opacity: 0.75;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation: quick-sight-tap 180ms ease-out;
+}
+@keyframes quick-sight-tap {
+  40% {
+    transform: translateY(2px);
+  }
+}
+.quick-cyl-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  animation: quick-info-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.quick-cyl-info[data-dir="down"] {
+  animation-name: quick-info-down;
+}
+@keyframes quick-info-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes quick-info-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+.quick-cyl-info strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-cyl-info .quick-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.quick-cyl-info small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- 2: Rounds ---------- */
+
+.quick-popup.quick-rounds {
+  width: 300px;
+}
+.quick-rounds-view {
+  --row: 30px;
+  position: relative;
+  height: 164px;
+  overflow: hidden;
+  perspective: 600px;
+}
+/* The chamber the pick sits in, with the firing pin behind it. */
+.quick-rounds-chamber {
+  position: absolute;
+  inset: 50% 2px auto;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 8px;
+}
+.quick-rounds-chamber::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  width: 5px;
+  height: 10px;
+  margin-top: -5px;
+  background: var(--text);
+  opacity: 0.7;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  animation: quick-pin-tap 180ms ease-out;
+}
+@keyframes quick-pin-tap {
+  40% {
+    transform: translateX(2px);
+  }
+}
+/* On a cylinder whose axis is 85px back: 20° a row, and a spin is 18 rows. */
+.quick-cartridge {
+  position: absolute;
+  inset: 50% 10px auto 8px;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  opacity: calc(1 - var(--ad) * 0.32);
+  transform-origin: 50% 50% -85px;
+  transform: rotateX(calc(var(--d) * -20deg));
+  backface-visibility: hidden;
+  transition:
+    transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1),
+    opacity 320ms ease;
+}
+.quick-cartridge[data-spinning] {
+  transition-duration: 950ms, 320ms;
+  transition-timing-function: cubic-bezier(0.12, 0.8, 0.22, 1.03), ease;
+}
+.quick-cartridge-rim {
+  flex-shrink: 0;
+  width: 5px;
+  height: 22px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 24%, var(--surface));
+}
+.quick-cartridge-case {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 18px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-left: 0;
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+}
+.quick-cartridge .provider-glyph {
+  width: 13px;
+  height: 13px;
+}
+/* The bullet's nose, in its agent's colour; full strength once chambered. */
+.quick-cartridge-tip {
+  flex-shrink: 0;
+  width: 22px;
+  height: 18px;
+  border-radius: 0 100% 100% 0 / 0 50% 50% 0;
+  background: color-mix(in srgb, var(--quick-color) 45%, var(--surface));
+  transition: background-color 240ms ease;
+}
+.quick-cartridge[aria-pressed="true"] .quick-cartridge-tip {
+  background: var(--quick-color);
+}
+.quick-cartridge[aria-pressed="true"] .quick-row-effort {
+  color: var(--quick-color);
+}
+.quick-cartridge .quick-fast {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* ---------- 3: Swing-out ---------- */
+
+.quick-popup.quick-swing-popup {
+  width: 280px;
+}
+.quick-swing-view {
+  position: relative;
+  height: 124px;
+  perspective: 700px;
+}
+/* Swings out from the side as it opens, like a revolver's crane. */
+.quick-swing-rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transition: transform 560ms cubic-bezier(0.2, 0.9, 0.25, 1.04);
+}
+.quick-swing-popup:not([data-open]) .quick-swing-rig {
+  transform: translateX(-70px) rotateY(-80deg);
+}
+/* The cylinder lies back: everything is drawn flat and squashed to 0.42 tall;
+   rounds undo the squash so they face you. */
+.quick-swing-plane {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 0;
+  height: 0;
+  transform: scaleY(0.42);
+}
+.quick-swing-face,
+.quick-swing-side {
+  position: absolute;
+  width: 184px;
+  height: 184px;
+  margin: -92px 0 0 -92px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.quick-swing-face {
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+}
+/* The near half of the cylinder's side, a wall from face to base. */
+.quick-swing-side {
+  background: color-mix(in srgb, var(--text) 2%, var(--surface));
+  transform: translateY(40px);
+}
+.quick-swing-side::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: 50%;
+  height: 40px;
+  margin-top: -41px;
+  border: 1px solid var(--border);
+  border-block: 0;
+  background: color-mix(in srgb, var(--text) 2%, var(--surface));
+}
+.quick-cyl.quick-swing-cyl {
+  --r: 64px;
+  --unsquash: 2.381;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.quick-swing-cyl .quick-chamber {
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+}
+.quick-swing-cyl .quick-round {
+  width: 28px;
+  height: 28px;
+}
+.quick-swing-cyl .quick-round .provider-glyph {
+  width: 15px;
+  height: 15px;
+}
+.quick-swing-label {
+  display: flex;
+  justify-content: center;
+  padding: 0 10px 9px;
+  font-size: 13px;
+}

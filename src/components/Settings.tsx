@@ -91,6 +91,7 @@ import {
   DevOpsFilterSettings,
   DevOpsProjectSettings,
 } from "./DevOpsSettings";
+import { QuickSwitchSettings } from "./QuickSwitchSettings";
 import "./settings.css";
 import {
   agentName,
@@ -180,6 +181,10 @@ const shortcuts: [string, string][] = [
     keys("⌘1–⌘9", "Ctrl+1–Ctrl+9"),
   ],
   ["Settle the open thread", keys("⌘E", "Ctrl+E")],
+  [
+    "Step reasoning effort, or your quick-switch presets",
+    keys("⌘⌥←/→", "Ctrl+Alt+←/→"),
+  ],
   ["Toggle a review's file list", keys("⌘B", "Ctrl+B")],
   ["Mark a review file as read", "V"],
   ["Next / previous review file", "J / K"],
@@ -863,6 +868,16 @@ export function Settings({
         ) : (
           <p className="setting-muted">Loading model settings…</p>
         ),
+    },
+    {
+      id: "quick-switch",
+      category: "models",
+      title: "Quick switch",
+      description: `Presets of agent, model and effort that ${keys("⌘⌥←/→", "Ctrl+Alt+←/→")} steps through in the composer.`,
+      keywords:
+        "quick switch presets favourite favorite model agent effort keyboard shortcut arrows drum style",
+      block: true,
+      render: () => <QuickSwitchSettings />,
     },
     {
       id: "agent-versions",

@@ -1,0 +1,332 @@
+import { useCallback, useState, type KeyboardEvent } from "react";
+import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
+import {
+  agentProviders,
+  type AgentProvider,
+} from "../../shared/agents";
+import {
+  claudeEffortsFor,
+  effortLabels,
+  reasoningEffortsFor,
+  type ReasoningEffort,
+} from "../../shared/settings";
+import { useAgentPicks } from "../lib/useAgentPicks";
+import { useClaudeModels } from "../lib/useClaudeModels";
+import { useCodexModels } from "../lib/useCodexModels";
+import { effortKeysLabel } from "../lib/effort-shortcut";
+import {
+  maxPresets,
+  newPresetId,
+  quickItems,
+  quickSwitchStyles,
+  setQuickSwitch,
+  stepPreset,
+  useQuickSwitch,
+  type QuickItem,
+  type QuickPreset,
+  type QuickSwitch,
+  type QuickSwitchStyle,
+} from "../lib/quick-switch";
+import { ComposerModelPicker } from "./ComposerModelPicker";
+import { ComposerSelect } from "./ComposerSelect";
+import { QuickSwitchHud } from "./QuickSwitchHud";
+import { SettingsCard, SettingsRow, Switch } from "./SettingsCard";
+
+const styleNames: Record<QuickSwitchStyle, string> = {
+  drum: "Drum",
+  list: "List",
+  track: "Track",
+  dock: "Dock",
+  tab: "Tab",
+  revolver: "Revolver",
+};
+
+/** Every agent's listed models, and the efforts a model takes. */
+function useCatalogs() {
+  const codex = useCodexModels();
+  const claude = useClaudeModels();
+  const picks = useAgentPicks();
+  const modelsOf = (p: AgentProvider) =>
+    p === "codex"
+      ? codex.models
+      : p === "claude"
+        ? claude.models
+        : picks.catalogs[p]?.models;
+  const effortsOf = (p: AgentProvider, model: string): ReasoningEffort[] =>
+    p === "codex"
+      ? reasoningEffortsFor(model, codex.models)
+      : p === "claude"
+        ? claudeEffortsFor(claude.models, model)
+        : (picks.catalogs[p]?.models?.find((m) => m.id === model)?.efforts ??
+          []);
+  const refresh = () => {
+    codex.retry();
+    claude.retry();
+    picks.refresh();
+  };
+  return { modelsOf, effortsOf, refresh };
+}
+
+/** The quick switch's settings: on or off, its style, and the presets in order. */
+export function QuickSwitchSettings() {
+  const quick = useQuickSwitch();
+  const catalogs = useCatalogs();
+  // Popups must render inside the modal <dialog> to sit in its top layer.
+  const [container, setContainer] = useState<HTMLElement>();
+  const ref = useCallback(
+    (el: HTMLElement | null) =>
+      setContainer(el?.closest("dialog") ?? undefined),
+    [],
+  );
+  const save = (next: Partial<QuickSwitch>) =>
+    setQuickSwitch({ ...quick, ...next });
+  const presets = quick.presets;
+  const update = (i: number, next: Partial<QuickPreset>) =>
+    save({ presets: presets.map((p, j) => (j === i ? { ...p, ...next } : p)) });
+  const [dragging, setDragging] = useState<number>();
+  const move = (from: number, to: number) => {
+    const next = [...presets];
+    next.splice(to, 0, ...next.splice(from, 1));
+    save({ presets: next });
+  };
+  return (
+    <div ref={ref} className="quick-settings">
+      <SettingsCard>
+        <SettingsRow
+          label="Step through presets"
+          hint={`${effortKeysLabel} in the composer moves between these. Off, or with none set up, the keys step effort like before.`}
+        >
+          <Switch
+            label="Step through presets"
+            checked={quick.enabled}
+            onChange={(enabled) => save({ enabled })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Style"
+          hint="How the switcher looks over the composer."
+          below={
+            presets.length > 0 && (
+              <StyleSample
+                style={quick.style}
+                items={quickItems(presets, catalogs.modelsOf)}
+              />
+            )
+          }
+        >
+          <div className="segmented settings-segmented">
+            {quickSwitchStyles.map((style) => (
+              <button
+                key={style}
+                type="button"
+                className={quick.style === style ? "active" : ""}
+                aria-pressed={quick.style === style}
+                onClick={() => save({ style })}
+              >
+                {styleNames[style]}
+              </button>
+            ))}
+          </div>
+        </SettingsRow>
+        {quick.style === "revolver" && (
+          <SettingsRow
+            label="Click sound"
+            hint="The revolver clicks as each chamber passes the notch."
+          >
+            <Switch
+              label="Click sound"
+              checked={quick.sound}
+              onChange={(sound) => save({ sound })}
+            />
+          </SettingsRow>
+        )}
+      </SettingsCard>
+      <SettingsCard className="quick-presets">
+        {presets.length === 0 && (
+          <p className="quick-presets-empty">
+            No presets yet. Add the agents, models and efforts you switch
+            between most.
+          </p>
+        )}
+        {presets.map((p, i) => {
+          const efforts = catalogs.effortsOf(p.provider, p.model);
+          return (
+            <div
+              key={p.id}
+              className="quick-preset"
+              data-dragging={dragging === i || undefined}
+              onDragOver={(e) => {
+                if (dragging === undefined || dragging === i) return;
+                e.preventDefault();
+                move(dragging, i);
+                setDragging(i);
+              }}
+            >
+              <span
+                className="quick-grip"
+                draggable
+                title="Drag to reorder"
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragging(i);
+                }}
+                onDragEnd={() => setDragging(undefined)}
+              >
+                <GripVertical size={14} aria-hidden />
+              </span>
+              <div className="composer-tools model-field quick-preset-fields">
+                <ComposerModelPicker
+                  label={`Preset ${i + 1}`}
+                  providers={[...agentProviders]}
+                  provider={p.provider}
+                  container={container}
+                  catalogs={Object.fromEntries(
+                    agentProviders.map((a) => [
+                      a,
+                      {
+                        models: catalogs.modelsOf(a),
+                        model: a === p.provider ? p.model : "",
+                      },
+                    ]),
+                  )}
+                  onOpen={catalogs.refresh}
+                  onSelect={(next, model) => {
+                    if (next === "message") return;
+                    // Like the composer, an effort the new model lacks falls back to default.
+                    const keep = catalogs
+                      .effortsOf(next, model)
+                      .includes(p.reasoningEffort);
+                    update(i, {
+                      provider: next,
+                      model,
+                      reasoningEffort: keep ? p.reasoningEffort : "",
+                      fast: next === "codex" && p.fast,
+                    });
+                  }}
+                />
+                {efforts.length > 0 && (
+                  <>
+                    <span className="composer-divider" aria-hidden />
+                    <ComposerSelect<ReasoningEffort>
+                      label={`Preset ${i + 1} reasoning effort`}
+                      container={container}
+                      value={p.reasoningEffort}
+                      options={[
+                        { value: "", label: "Default effort" },
+                        ...efforts.map((effort) => ({
+                          value: effort,
+                          label: effortLabels[effort],
+                        })),
+                      ]}
+                      onChange={(reasoningEffort) =>
+                        update(i, { reasoningEffort })
+                      }
+                    />
+                  </>
+                )}
+                {p.provider === "codex" && (
+                  <button
+                    type="button"
+                    className="composer-control composer-fast"
+                    aria-label={`Preset ${i + 1} Fast mode`}
+                    aria-pressed={p.fast}
+                    title={p.fast ? "Fast mode enabled" : "Enable Fast mode"}
+                    onClick={() => update(i, { fast: !p.fast })}
+                  >
+                    <Zap size={14} />
+                    Fast
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className="quick-remove"
+                aria-label={`Remove preset ${i + 1}`}
+                onClick={() => save({ presets: presets.filter((_, j) => j !== i) })}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="quick-add"
+          disabled={presets.length >= maxPresets}
+          onClick={() =>
+            save({
+              presets: [
+                ...presets,
+                {
+                  id: newPresetId(),
+                  provider: presets.at(-1)?.provider ?? "claude",
+                  model: "",
+                  reasoningEffort: "",
+                  fast: false,
+                },
+              ],
+            })
+          }
+        >
+          <Plus size={14} /> Add preset
+        </button>
+      </SettingsCard>
+    </div>
+  );
+}
+
+/** The chosen style over a sliver of composer; click it or use ←→ to try it. */
+function StyleSample({
+  style,
+  items,
+}: {
+  style: QuickSwitchStyle;
+  items: QuickItem[];
+}) {
+  const [state, setState] = useState({ at: 0, dir: 1 });
+  const at = Math.min(state.at, items.length - 1);
+  const pick = (to: number, dir?: number) =>
+    to !== at && setState({ at: to, dir: dir ?? (to < at ? -1 : 1) });
+  const go = (step: -1 | 1) =>
+    pick(stepPreset(items.length, at, step, style === "revolver"), step);
+  const onKeyDown = (e: KeyboardEvent) => {
+    const step = (
+      { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 } as const
+    )[e.key as "ArrowLeft"];
+    if (!step) return;
+    e.preventDefault();
+    go(step);
+  };
+  return (
+    <div
+      className="quick-switch-sample"
+      data-style={style}
+      tabIndex={0}
+      aria-label="Style sample; use the arrow keys to step"
+      onKeyDown={onKeyDown}
+    >
+      <QuickSwitchHud
+        // A new style starts fresh, so the Dock measures its own tiles.
+        key={style}
+        style={style}
+        open
+        items={items}
+        index={at}
+        dir={state.dir}
+        onPick={pick}
+      />
+      <div className="quick-sample-composer">
+        <button
+          type="button"
+          aria-label="Previous preset"
+          onClick={() => go(-1)}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button type="button" aria-label="Next preset" onClick={() => go(1)}>
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}

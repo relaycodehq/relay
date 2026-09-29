@@ -74,6 +74,15 @@ import {
   effortStep,
   stepEffort,
 } from "../lib/effort-shortcut";
+import {
+  presetIndex,
+  quickItems,
+  stepPreset,
+  useQuickSwitch,
+  type ComposerRun,
+  type QuickPreset,
+} from "../lib/quick-switch";
+import { QuickSwitchHud } from "./QuickSwitchHud";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import {
@@ -491,13 +500,77 @@ export function ProjectComposer({
       ...all,
       [to]: { model: all[to]?.model ?? "", reasoningEffort },
     }));
+  // Quick switch: with presets set up, ⌘⌥←/→ steps through them instead of effort.
+  const quickSwitch = useQuickSwitch();
+  const quickPresets = quickSwitch.enabled ? quickSwitch.presets : [];
+  const [quick, setQuick] = useState({ open: false, at: -1, dir: 1 });
+  const quickHover = useRef(false);
+  const quickTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(quickTimer.current), []);
+  const hideQuickSoon = () => {
+    clearTimeout(quickTimer.current);
+    quickTimer.current = setTimeout(() => {
+      if (!quickHover.current) setQuick((q) => ({ ...q, open: false }));
+    }, 1400);
+  };
+  const runNow = (): ComposerRun | undefined =>
+    recipient === "message"
+      ? undefined
+      : recipient === "codex"
+        ? selected && { provider: "codex", ...selected }
+        : recipient === "claude"
+          ? { provider: "claude", ...claude, fast: false }
+          : { provider: recipient, ...pickOf(recipient), fast: false };
+  function applyPreset(p: QuickPreset) {
+    setProvider(p.provider);
+    if (p.provider === "claude")
+      setClaude((c) => ({
+        model: p.model,
+        reasoningEffort: p.reasoningEffort,
+        ...(c.contextWindow && claudeContextWindow(p.model) !== "1m"
+          ? { contextWindow: c.contextWindow }
+          : {}),
+      }));
+    else if (p.provider === "codex")
+      setChoice(
+        supportedChoice(
+          { model: p.model, reasoningEffort: p.reasoningEffort, fast: p.fast },
+          codexModels,
+        ),
+      );
+    else
+      setPicks((all) => ({
+        ...all,
+        [p.provider]: { model: p.model, reasoningEffort: p.reasoningEffort },
+      }));
+    dropMention();
+  }
+  const pickPreset = (at: number, dir: number) => {
+    applyPreset(quickPresets[at]);
+    setQuick({ open: true, at, dir });
+    hideQuickSoon();
+  };
+  function stepQuick(step: -1 | 1) {
+    const run = runNow();
+    const from = run ? presetIndex(quickPresets, run, quick.at) : -1;
+    // The revolver goes on round past the ends; the other styles stop there.
+    const wrap = quickSwitch.style === "revolver";
+    const at = stepPreset(quickPresets.length, from, step, wrap);
+    if (at < 0) return;
+    // At an end: show where you are without changing anything.
+    if (at === from) {
+      setQuick({ open: true, at, dir: step });
+      hideQuickSoon();
+    } else pickPreset(at, step);
+  }
+  const effortHint = quickPresets.length ? undefined : effortKeysLabel;
   const claudeTraits = useMemo(
     () => [
       ...(claudeModelEfforts.length > 0
         ? [
             {
               label: "Reasoning",
-              hint: effortKeysLabel,
+              hint: effortHint,
               value: claude.reasoningEffort,
               options: [
                 { value: "", label: defaultEffortLabel(claudeDefaultLevel) },
@@ -549,6 +622,7 @@ export function ProjectComposer({
       claudeRuns?.longContext,
       claudeModelEfforts.join(),
       claudeDefaultLevel,
+      effortHint,
     ],
   );
   /** An agent was picked here, so an @mention would only override it. */
@@ -1062,6 +1136,21 @@ export function ProjectComposer({
         )}
       </div>
       {notice}
+      <QuickSwitchHud
+        style={quickSwitch.style}
+        open={quick.open && quickPresets.length > 0}
+        items={quickItems(quickPresets, modelsOf)}
+        index={quick.at}
+        dir={quick.dir}
+        onPick={(at, dir) => {
+          pickPreset(at, dir ?? (at < quick.at ? -1 : 1));
+          input.current?.focus();
+        }}
+        onHover={(over) => {
+          quickHover.current = over;
+          if (!over) hideQuickSoon();
+        }}
+      />
       <form
         className="project-composer"
         onSubmit={(e) => {
@@ -1145,7 +1234,8 @@ export function ProjectComposer({
             const step = effortStep(e);
             if (step) {
               e.preventDefault();
-              stepRecipientEffort(step);
+              if (quickPresets.length) stepQuick(step);
+              else stepRecipientEffort(step);
               return;
             }
             const action = sendAction(e, sendKey);
@@ -1217,7 +1307,7 @@ export function ProjectComposer({
                 value={selected.reasoningEffort}
                 options={codexEffortOptions}
                 onChange={setCodexEffort}
-                heading={{ label: "Reasoning", hint: effortKeysLabel }}
+                heading={{ label: "Reasoning", hint: effortHint }}
               />
               <button
                 type="button"
@@ -1259,7 +1349,7 @@ export function ProjectComposer({
                     })),
                   ]}
                   onChange={(effort) => setPickEffort(recipient, effort)}
-                  heading={{ label: "Reasoning", hint: effortKeysLabel }}
+                  heading={{ label: "Reasoning", hint: effortHint }}
                 />
               </>
             )}

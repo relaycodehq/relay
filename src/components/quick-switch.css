@@ -1,0 +1,793 @@
+/* The composer's quick switch (QuickSwitchHud). */
+
+/* One solid colour per agent, from its mark. Registered so it fades on a switch. */
+@property --quick-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #898b93;
+}
+:is(.quick-switch-anchor, .quick-switch-sample) [data-provider="claude"] {
+  --quick-color: #d97757;
+}
+:is(.quick-switch-anchor, .quick-switch-sample) [data-provider="codex"] {
+  --quick-color: #7390f7;
+}
+:is(.quick-switch-anchor, .quick-switch-sample) [data-provider="opencode"] {
+  --quick-color: #3bb88f;
+}
+.quick-popup,
+.quick-tab {
+  transition: --quick-color 240ms ease;
+}
+
+/* Zero height, right on the composer's top edge; above the composer (z-index 1). */
+.quick-switch-anchor {
+  position: relative;
+  z-index: 2;
+  height: 0;
+}
+.quick-popup-slot {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+.quick-popup-slot[data-open] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+/* Clipped rather than scrolled: an animation poking out a pixel would flash
+   the menu's scrollbar. */
+.quick-popup {
+  width: 272px;
+  overflow: hidden;
+}
+
+.quick-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+  animation: quick-in-right 200ms ease-out;
+}
+.quick-label[data-dir="left"] {
+  animation-name: quick-in-left;
+}
+@keyframes quick-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+@keyframes quick-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.quick-effort,
+.quick-fast {
+  color: var(--quick-color);
+}
+.quick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-row-effort {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+  transition: color 240ms ease;
+}
+:is(.quick-row, .quick-drum-row) .quick-fast {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+:is(.quick-row, .quick-drum-row)[aria-pressed="true"] .quick-row-effort {
+  color: var(--quick-color);
+}
+
+/* ---------- Drum ---------- */
+
+.quick-drum-view {
+  --row: 30px;
+  position: relative;
+  height: 160px;
+  overflow: hidden;
+  perspective: 600px;
+}
+.quick-drum-band {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  border-radius: 6px;
+  background: var(--hover);
+}
+/* Rows sit on a cylinder whose axis is 85px behind the band: 20° per row
+   puts neighbours one row height apart. */
+.quick-drum-row {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  opacity: calc(1 - var(--ad) * 0.32);
+  transform-origin: 50% 50% -85px;
+  transform: rotateX(calc(var(--d) * -20deg));
+  backface-visibility: hidden;
+  transition:
+    transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1),
+    opacity 320ms ease;
+}
+
+/* ---------- List ---------- */
+
+.quick-rows {
+  --row: 32px;
+  position: relative;
+}
+.quick-row-highlight {
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--row);
+  border-radius: 5px;
+  background: var(--hover);
+  transform: translateY(calc(var(--i) * var(--row)));
+  transition: transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+/* The provider tab's selection bar, in the picked agent's colour. */
+.quick-row-highlight::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--quick-color);
+}
+.quick-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--row);
+  padding: 0 10px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+/* ---------- Track ---------- */
+
+.quick-popup.quick-track-popup {
+  width: 300px;
+}
+.quick-track-body {
+  padding: 4px 10px 6px;
+}
+.quick-track-body > .quick-label {
+  display: flex;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.quick-track {
+  position: relative;
+  height: 4px;
+  margin: 0 7px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
+}
+.quick-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--quick-color);
+  transform-origin: left;
+  transform: scaleX(var(--frac));
+  transition: transform 260ms cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+.quick-stop {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--at) * 100%);
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.quick-stop::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 55%, var(--surface));
+  transition: background-color 200ms ease;
+}
+.quick-stop[data-passed]::after {
+  background: var(--quick-color);
+}
+.quick-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  transform: translateX(calc(var(--frac) * 100%));
+  transition: transform 260ms cubic-bezier(0.3, 1.2, 0.5, 1);
+  pointer-events: none;
+}
+/* The Settings switch's knob. */
+.quick-knob::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px #0004;
+}
+.quick-groups {
+  position: relative;
+  height: 14px;
+  margin: 10px 7px 0;
+}
+.quick-group {
+  position: absolute;
+  left: calc(var(--mid) * 100%);
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  transition: color 200ms ease;
+}
+.quick-group[data-edge="start"] {
+  transform: translateX(-7px);
+}
+.quick-group[data-edge="end"] {
+  transform: translateX(calc(-100% + 7px));
+}
+.quick-group[data-on] {
+  color: var(--text);
+}
+
+/* ---------- Dock ---------- */
+
+.quick-popup.quick-dock {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: auto;
+  padding: 16px 12px 15px;
+  overflow: visible;
+}
+.quick-dock-tile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
+  transform-origin: 50% 100%;
+  transition:
+    transform 360ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    background-color 200ms ease;
+}
+.quick-dock-tile .provider-glyph {
+  width: 18px;
+  height: 18px;
+  opacity: 0.6;
+  transition: opacity 200ms ease;
+}
+.quick-dock-tile:hover {
+  background: var(--hover);
+}
+.quick-dock-tile[data-near] {
+  transform: translateY(-1px) scale(1.08);
+}
+.quick-dock-tile[aria-pressed="true"] {
+  transform: translateY(-4px) scale(1.24);
+  background: var(--hover);
+}
+.quick-dock-tile[aria-pressed="true"] .provider-glyph,
+.quick-dock-tile:hover .provider-glyph {
+  opacity: 1;
+}
+.quick-dock-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 7px 3px;
+  background: var(--border);
+}
+/* The Dock's running light, under the pick. */
+.quick-dock-dot {
+  position: absolute;
+  left: 0;
+  bottom: 5px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--quick-color);
+  transform: translateX(var(--x));
+}
+.quick-dock-tip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 10px 24px -14px #000c;
+  font-size: 12.5px;
+  white-space: nowrap;
+  transform: translateX(var(--tip));
+}
+/* Points at the tile even when the label is held back from the shelf's edge. */
+.quick-dock-tip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  transform: translateX(calc(var(--x) - var(--tip) - 4px)) rotate(45deg);
+}
+.quick-dock[data-animate] :is(.quick-dock-dot, .quick-dock-tip),
+.quick-dock[data-animate] .quick-dock-tip::after {
+  transition: transform 340ms cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+/* ---------- Tab ---------- */
+
+/* Ends 1px inside the composer so the tab covers its top border and the two join. */
+.quick-tab-clip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 52px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.quick-tab {
+  position: absolute;
+  left: 34px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 13px 8px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 11px 11px 0 0;
+  background: var(--toolbar);
+  font-size: 12.5px;
+  transform: translateY(calc(100% + 12px));
+  transition: transform 320ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.quick-tab[data-open] {
+  transform: none;
+  pointer-events: auto;
+}
+/* Flared feet: each paints the composer's colour outside a quarter circle,
+   so the outline curves from the tab's side into the composer's edge. */
+.quick-tab::before,
+.quick-tab::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.quick-tab::before {
+  right: 100%;
+  border-right: 1px solid var(--border);
+  border-bottom-right-radius: 10px;
+  box-shadow: 5px 5px 0 5px var(--toolbar);
+}
+.quick-tab::after {
+  left: 100%;
+  border-left: 1px solid var(--border);
+  border-bottom-left-radius: 10px;
+  box-shadow: -5px 5px 0 5px var(--toolbar);
+}
+.quick-roll {
+  display: inline-grid;
+  overflow: hidden;
+}
+.quick-roll-size,
+.quick-roll-item {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.quick-roll-size {
+  visibility: hidden;
+}
+.quick-roll-item[data-state="in"] {
+  animation: quick-roll-in-up 300ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.quick-roll-item[data-state="out"] {
+  animation: quick-roll-out-up 300ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.quick-roll[data-dir="down"] .quick-roll-item[data-state="in"] {
+  animation-name: quick-roll-in-down;
+}
+.quick-roll[data-dir="down"] .quick-roll-item[data-state="out"] {
+  animation-name: quick-roll-out-down;
+}
+@keyframes quick-roll-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(90%);
+  }
+}
+@keyframes quick-roll-out-up {
+  to {
+    opacity: 0;
+    transform: translateY(-90%);
+  }
+}
+@keyframes quick-roll-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-90%);
+  }
+}
+@keyframes quick-roll-out-down {
+  to {
+    opacity: 0;
+    transform: translateY(90%);
+  }
+}
+/* Stopped, the leaving copy would sit on top of the new one. */
+@media (prefers-reduced-motion: reduce) {
+  .quick-roll-item[data-state="out"] {
+    visibility: hidden;
+  }
+}
+.quick-tab-ticks {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.quick-tab-ticks i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--quick-color) 38%, transparent);
+  transition:
+    transform 260ms cubic-bezier(0.3, 1.5, 0.5, 1),
+    background-color 200ms ease;
+}
+.quick-tab-ticks i[data-group-start] {
+  margin-left: 4px;
+}
+.quick-tab-ticks i[data-on] {
+  background: var(--quick-color);
+  transform: scale(1.5);
+}
+
+/* ---------- Revolver ---------- */
+
+.quick-popup.quick-revolver {
+  width: 290px;
+}
+.quick-revolver-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 10px 10px 8px;
+}
+.quick-revolver-frame {
+  position: relative;
+  flex-shrink: 0;
+  width: 116px;
+  height: 116px;
+}
+.quick-cylinder {
+  position: absolute;
+  inset: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+  transform: rotate(var(--rot));
+  transition: transform 420ms cubic-bezier(0.3, 1.35, 0.5, 1);
+}
+/* Opening flicks it a whole turn; wrapping past the end overspins two more.
+   Both start fast and ease into the stop. */
+.quick-cylinder:is([data-motion="spin"], [data-motion="overspin"]),
+.quick-cylinder:is([data-motion="spin"], [data-motion="overspin"])
+  .quick-chamber {
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1.02);
+}
+.quick-cylinder[data-motion="overspin"],
+.quick-cylinder[data-motion="overspin"] .quick-chamber {
+  transition-duration: 820ms;
+}
+/* The flutes between chambers, cut into the rim. */
+.quick-flute {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 18px;
+  margin: -9px 0 0 -6px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  transform: rotate(var(--a)) translateY(-53px);
+}
+/* Placed around the axle, then turned back by the cylinder's angle on the
+   same curve, so rounds stay upright while it spins. */
+.quick-chamber {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, #000 30%, var(--surface));
+  box-shadow: inset 0 1px 3px #0008;
+  transform: rotate(var(--a)) translateY(-32px)
+    rotate(calc(-1 * (var(--a) + var(--rot))));
+  transition: transform 420ms cubic-bezier(0.3, 1.35, 0.5, 1);
+}
+.quick-chamber:disabled {
+  cursor: default;
+}
+.quick-round {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 50%;
+  background: var(--surface);
+  transition: box-shadow 200ms ease;
+}
+.quick-round .provider-glyph {
+  width: 14px;
+  height: 14px;
+}
+.quick-chamber[aria-pressed="true"] .quick-round {
+  box-shadow: 0 0 0 2px var(--quick-color);
+}
+.quick-axle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+}
+/* The frame's notch over the barrel; it taps down on every step. */
+.quick-revolver-notch {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: -2px;
+  width: 10px;
+  height: 7px;
+  margin-left: -5px;
+  background: var(--text);
+  opacity: 0.75;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation: quick-notch-tap 180ms ease-out;
+}
+@keyframes quick-notch-tap {
+  40% {
+    transform: translateY(2px);
+  }
+}
+.quick-revolver-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  animation: quick-info-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.quick-revolver-info[data-dir="down"] {
+  animation-name: quick-info-down;
+}
+@keyframes quick-info-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes quick-info-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+.quick-revolver-info strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-revolver-info .quick-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.quick-revolver-info small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- Settings (QuickSwitchSettings) ---------- */
+
+.quick-settings .settings-card + .settings-card {
+  margin-top: 12px;
+}
+/* The chosen style over a sliver of composer. */
+.quick-switch-sample {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 18px 18px 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  overflow: hidden;
+}
+.quick-switch-sample:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.quick-switch-sample[data-style="dock"] {
+  padding-top: 62px;
+}
+.quick-switch-sample .quick-switch-anchor {
+  align-self: stretch;
+  height: auto;
+}
+.quick-switch-sample[data-style="tab"] .quick-switch-anchor {
+  height: 44px;
+}
+.quick-switch-sample .quick-popup-slot {
+  position: static;
+  margin-bottom: 8px;
+}
+.quick-sample-composer {
+  align-self: stretch;
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 34px;
+  padding: 5px 8px 0;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--toolbar);
+}
+.quick-sample-composer button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.quick-sample-composer button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.quick-presets {
+  padding: 4px 0;
+}
+.quick-presets-empty {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.quick-preset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.quick-preset[data-dragging] {
+  opacity: 0.5;
+}
+.quick-grip {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 28px;
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: grab;
+}
+.quick-preset:hover .quick-grip {
+  opacity: 1;
+}
+.quick-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.quick-remove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.quick-add {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 8px 4px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.quick-add:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
