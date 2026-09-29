@@ -1,6 +1,7 @@
 // Runs Cursor's SDK for Relay, as its own process: `worker.mjs --sdk <index.js> --store <dir>`.
 // The SDK is downloaded on first use (see sdk-install.ts), so it's loaded from
 // the path Relay names rather than bundled. See protocol.ts for what's spoken.
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import type { SDKAgent, SDKModel, Run } from "@cursor/sdk";
@@ -22,6 +23,15 @@ const flag = (name: string) => {
 };
 const sdkEntry = flag("--sdk");
 const storeDir = flag("--store");
+
+// The SDK finds its sandbox helper and ripgrep in `node_modules` above the
+// running script, and this one isn't installed beside it: without this every
+// sandboxed turn fails with "sandboxing is not supported in this environment".
+if (sdkEntry)
+  process.argv[1] = join(
+    sdkEntry.replace(/[\\/]node_modules[\\/]@cursor[\\/]sdk[\\/].*$/, ""),
+    "worker.mjs",
+  );
 
 // stdout is the protocol; whatever the SDK prints goes to stderr instead.
 const write = (message: unknown) =>
