@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Flame, RefreshCw } from "lucide-react";
 import {
+  paceGap,
   presentWindow,
   type MeterPace,
   type ProviderUsage,
@@ -189,15 +190,9 @@ export const UsageRing = memo(function UsageRing({
   );
 });
 
-function paceText(meter: UsageMeter) {
-  const left = `${meter.leftPercent}% left`;
-  return meter.paceLeftPercent == null
-    ? left
-    : `${left}, ${Math.round(meter.paceLeftPercent)}% on pace`;
-}
-
 function UsageRow({ meter }: { meter: UsageMeter }) {
   const hot = meter.pace === "hot" || meter.pace === "spent";
+  const gap = paceGap(meter);
   return (
     <div className="usage-row" data-kind={meter.kind} data-pace={meter.pace}>
       <div className="usage-row-top">
@@ -205,7 +200,10 @@ function UsageRow({ meter }: { meter: UsageMeter }) {
           <span className="usage-row-dot" aria-hidden />
           {meter.label}
         </span>
-        <span className="usage-row-left">{meter.leftPercent}% left</span>
+        <span className="usage-row-value">
+          {gap && <span className="usage-row-gap">{gap}</span>}
+          <span className="usage-row-left">{meter.leftPercent}% left</span>
+        </span>
       </div>
       <div
         className="usage-row-track"
@@ -214,7 +212,9 @@ function UsageRow({ meter }: { meter: UsageMeter }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={meter.leftPercent}
-        aria-valuetext={paceText(meter)}
+        aria-valuetext={[`${meter.leftPercent}% left`, gap]
+          .filter(Boolean)
+          .join(", ")}
       >
         <span
           className="usage-row-fill"

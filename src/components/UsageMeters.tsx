@@ -1,5 +1,9 @@
 import { Flame } from "lucide-react";
-import { presentWindow, type ProviderUsage } from "../../shared/provider-usage";
+import {
+  paceGap,
+  presentWindow,
+  type ProviderUsage,
+} from "../../shared/provider-usage";
 
 export function UsageMeters({
   usage,
@@ -33,9 +37,7 @@ export function UsageMeters({
         {meters.map((meter) => {
           const detail = [
             `${meter.label}, ${meter.leftPercent}% left`,
-            meter.paceLeftPercent == null
-              ? null
-              : `${Math.round(meter.paceLeftPercent)}% on pace`,
+            paceGap(meter),
             meter.limitLabel,
             meter.resetLabel,
           ]
@@ -73,7 +75,11 @@ export function UsageMeters({
                 )}
               </div>
               <div className="usage-meter-bottom">
-                <span>{meter.leftPercent}% left</span>
+                <span>
+                  {[paceGap(meter), `${meter.leftPercent}% left`]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
                 {meter.resetLabel && <span>{meter.resetLabel}</span>}
               </div>
             </div>

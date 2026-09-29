@@ -4,6 +4,7 @@ import {
   WEEK_MS,
   mapClaudeUsage,
   mapCodexUsage,
+  paceGap,
   presentWindow,
 } from "../../shared/provider-usage";
 
@@ -137,5 +138,18 @@ describe("provider usage windows", () => {
       limitLabel: null,
       resetLabel: "Not started",
     });
+  });
+
+  it("says how far the meter is from its pace mark", () => {
+    // Half the week gone: an even burn leaves 50%.
+    const week = (usedPercent: number) =>
+      presentWindow(
+        { kind: "weekly", usedPercent, resetsAt: now + WEEK_MS / 2, periodMs: WEEK_MS },
+        now,
+      );
+    expect(paceGap(week(45))).toBe("5% ahead");
+    expect(paceGap(week(53))).toBe("3% behind");
+    expect(paceGap(week(50))).toBe("On pace");
+    expect(paceGap(week(100))).toBeNull();
   });
 });

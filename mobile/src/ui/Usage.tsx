@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 import {
+  paceGap,
   presentWindow,
   type MeterPace,
   type ProviderUsage,
@@ -321,9 +322,7 @@ export function UsageSheet({
               />
               <Text style={[styles.hint, { color: t.muted }]}>
                 {[
-                  m.paceLeftPercent == null
-                    ? null
-                    : `${Math.round(m.paceLeftPercent)}% on pace`,
+                  paceGap(m),
                   m.limitLabel,
                   m.resetLabel,
                 ]

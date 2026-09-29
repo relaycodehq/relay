@@ -175,6 +175,17 @@ export function presentWindow(
   };
 }
 
+/**
+ * How far the meter sits from its pace mark: "5% ahead" when there's more
+ * left than an even burn would leave, "3% behind" when it's running hot.
+ */
+export function paceGap(meter: UsageMeter): string | null {
+  if (meter.paceLeftPercent == null || meter.pace === "spent") return null;
+  const gap = meter.leftPercent - Math.round(meter.paceLeftPercent);
+  if (gap === 0) return "On pace";
+  return gap > 0 ? `${gap}% ahead` : `${-gap}% behind`;
+}
+
 function outIn(ms: number) {
   if (ms <= FIVE_MINUTES) return "Out soon";
   const compact = compactDuration(ms);

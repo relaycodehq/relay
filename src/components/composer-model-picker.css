@@ -925,9 +925,17 @@
   border-radius: 50%;
   background: var(--usage-row-color);
 }
+.usage-row-value {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.usage-row-gap::after {
+  content: "·";
+  margin: 0 5px;
+}
 .usage-row-left {
   color: var(--text);
-  font-variant-numeric: tabular-nums;
 }
 .usage-row-track {
   position: relative;
