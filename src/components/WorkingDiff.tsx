@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import { useElementWidth } from "../lib/useElementWidth";
 import type {
   CodeViewDiffItem,
@@ -6,6 +7,7 @@ import type {
   SelectedLineRange,
 } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
+import { clickedLine, selectedSpan } from "../lib/diff-selection";
 import { Columns2, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../shared/types";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
@@ -25,15 +27,7 @@ export interface WorkingLineTarget {
 }
 type Viewer = CodeViewHandle<undefined, undefined>;
 /** Side-by-side or inline diffs, remembered across diff panes. */
-export function useSplitDiff() {
-  const [split, setSplit] = useState(
-    () => localStorage.getItem("relay-diff-split") !== "false",
-  );
-  useEffect(() => {
-    localStorage.setItem("relay-diff-split", String(split));
-  }, [split]);
-  return [split, setSplit] as const;
-}
+export const useSplitDiff = () => useStoredFlag("relay-diff-split", true);
 export function SplitDiffToggle({
   split,
   onChange,
@@ -100,17 +94,16 @@ export function WorkingDiff({
   }, [line, viewer, diff]);
   const ask = (range: SelectedLineRange | null) => {
     if (!range || !onAsk) return;
-    const side = range.side ?? "additions";
-    if (range.endSide && range.endSide !== side) {
-      setSelectionError("Select lines on one side to ask about them.");
+    const span = selectedSpan(range);
+    if ("error" in span) {
+      setSelectionError(
+        span.error === "two-sides"
+          ? "Select lines on one side to ask about them."
+          : "Select up to 200 lines to ask about them.",
+      );
       return;
     }
-    const start = Math.min(range.start, range.end),
-      end = Math.max(range.start, range.end);
-    if (end - start >= 200) {
-      setSelectionError("Select up to 200 lines to ask about them.");
-      return;
-    }
+    const { side, start, end } = span;
     const source = side === "deletions" ? pair.old : pair.next;
     const code = (source?.contents ?? "")
       .split(/\r?\n/)
@@ -158,28 +151,10 @@ export function WorkingDiff({
             enableGutterUtility: true,
             onGutterUtilityClick: ask,
             onLineClick: (line) => {
-              const event = line.event;
-              if (
-                line.numberColumn ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.defaultPrevented ||
-                !window.getSelection()?.isCollapsed
-              )
-                return;
+              const range = clickedLine(line);
+              if (!range) return;
               setSelectionError("");
-              setSelection({
-                id: "working",
-                range: {
-                  start: line.lineNumber,
-                  end: line.lineNumber,
-                  side:
-                    "annotationSide" in line
-                      ? line.annotationSide
-                      : "additions",
-                },
-              });
+              setSelection({ id: "working", range });
             },
           }),
           theme: syntaxThemes,

@@ -30,7 +30,7 @@ const bar = (height = 0): Bar => ({
  * gain control; this puts it near the middle, with quiet syllables low and
  * only real peaks near the top, so the bars keep their shape.
  */
-export function loudness(samples: Float32Array) {
+function loudness(samples: Float32Array) {
   let sum = 0;
   for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
   const db = 10 * Math.log10(sum / samples.length + 1e-10);
@@ -44,13 +44,10 @@ export function loudness(samples: Float32Array) {
  */
 export function DictationWave({
   analyser,
-  level,
   active,
   settling,
 }: {
   analyser?: AnalyserNode;
-  /** Loudness for previews without a microphone. */
-  level?: () => number;
   /** Listening for real (the model loaded); otherwise drawn muted. */
   active: boolean;
   /** Finishing: the bars ease down flat. */
@@ -115,7 +112,7 @@ export function DictationWave({
       else if (analyser) {
         analyser.getFloatTimeDomainData(samples);
         live = loudness(samples);
-      } else if (level) live = level();
+      }
 
       sinceBar += dt * 1000;
       while (sinceBar >= barEvery) {
@@ -200,7 +197,7 @@ export function DictationWave({
       resize.disconnect();
       element.parentElement?.style.removeProperty("--voice");
     };
-  }, [analyser, level]);
+  }, [analyser]);
 
   return <canvas ref={canvas} className="dictation-wave" aria-hidden />;
 }

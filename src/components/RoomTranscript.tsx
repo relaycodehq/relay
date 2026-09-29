@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { clock } from "../../shared/waiting";
 import { z } from "zod";
 import { ChevronDown, FileCode2, Reply, Square } from "lucide-react";
 import type { RoomMessage } from "../../shared/rooms";
@@ -212,10 +213,7 @@ function TranscriptMessage({
             dateTime={new Date(m.createdAt).toISOString()}
             title={new Date(m.createdAt).toLocaleString()}
           >
-            {new Date(m.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {clock(m.createdAt)}
           </time>
           <button
             className="room-reply-action"

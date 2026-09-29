@@ -2,13 +2,12 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { FolderOpen, SquarePen, Undo2 } from "lucide-react";
+import { FolderOpen, Undo2 } from "lucide-react";
 import type { TurnFileChange } from "../../shared/projects";
 import { api } from "../lib/api";
-import { compactCount } from "../lib/turn-diff-tree";
-import { PaneResizer } from "./PaneResizer";
-import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
-import { ErrorBox, FileEntryIcon, IconButton, Loading } from "./ui";
+import { DiffStatLabel } from "./DiffStatLabel";
+import { ChangesReview, ChangesSidebar } from "./ChangesPane";
+import { ErrorBox, FileEntryIcon } from "./ui";
 import type { PaneSlots } from "./WorkspacePanes";
 import "./changed-files.css";
 
@@ -40,7 +39,6 @@ export function TurnChanges({
 }) {
   const [path, setPath] = useState(target.path ?? target.files[0]?.path);
   const [revealError, setRevealError] = useState<string>();
-  const [split, setSplit] = useSplitDiff();
   const sides = target.worktree ? worktreeSides : turnSides;
   const diff = useQuery({
     queryKey: target.worktree
@@ -70,123 +68,76 @@ export function TurnChanges({
           slots.actions,
         )}
       <div className="working-content">
-        <aside className="working-sidebar">
-          <PaneResizer
-            pane="changes"
-            label="Resize changed files"
-            initial={250}
-            min={200}
-            max={600}
-          />
-          <div className="working-file-list">
-            <section>
-              <header>
-                <strong>
-                  {target.worktree
-                    ? "Changed in this worktree"
-                    : "Changed in this turn"}{" "}
-                  <span>{target.files.length}</span>
-                </strong>
-              </header>
-              {target.files.map((f) => (
-                <ContextMenu.Root key={f.path}>
-                  <ContextMenu.Trigger
-                    render={
-                      <div
-                        className={`working-file ${f.path === path ? "selected" : ""}`}
-                      />
-                    }
-                  >
-                    <button
-                      className="working-select turn-file"
-                      title={f.path}
-                      onClick={() => setPath(f.path)}
-                    >
-                      <FileEntryIcon path={f.path} directory={false} />
-                      <span>{f.path}</span>
-                      {!f.binary && (
-                        <span className="diff-stat">
-                          <span className="diff-stat-add">
-                            +{compactCount(f.additions)}
-                          </span>
-                          <span className="diff-stat-del">
-                            −{compactCount(f.deletions)}
-                          </span>
-                        </span>
-                      )}
-                    </button>
-                  </ContextMenu.Trigger>
-                  <ContextMenu.Portal>
-                    <ContextMenu.Positioner className="sb-menu-positioner">
-                      <ContextMenu.Popup className="sb-menu">
-                        <ContextMenu.Item
-                          className="sb-menu-item"
-                          onClick={() =>
-                            void api
-                              .revealProjectTurnFile(
-                                target.chatId,
-                                target.worktree ? null : target.messageId,
-                                f.path,
-                              )
-                              .catch((e) =>
-                                setRevealError(
-                                  e instanceof Error ? e.message : String(e),
-                                ),
-                              )
-                          }
-                        >
-                          <span className="sb-menu-label">
-                            <FolderOpen size={13} />
-                            Show in Finder
-                          </span>
-                        </ContextMenu.Item>
-                      </ContextMenu.Popup>
-                    </ContextMenu.Positioner>
-                  </ContextMenu.Portal>
-                </ContextMenu.Root>
-              ))}
-              {revealError && <ErrorBox error={new Error(revealError)} />}
-            </section>
-          </div>
-        </aside>
-        <div className="working-review">
-          {path ? (
-            <>
-              <header>
-                <strong title={path}>{path}</strong>
-                <span>
-                  {sides.deletions} → {sides.additions}
-                </span>
-                <SplitDiffToggle split={split} onChange={setSplit} />
-                <IconButton
-                  label="Open in editor"
-                  onClick={() => onOpenFile(path)}
+        <ChangesSidebar
+          title={
+            target.worktree
+              ? "Changed in this worktree"
+              : "Changed in this turn"
+          }
+          count={target.files.length}
+        >
+          {target.files.map((f) => (
+            <ContextMenu.Root key={f.path}>
+              <ContextMenu.Trigger
+                render={
+                  <div
+                    className={`working-file ${f.path === path ? "selected" : ""}`}
+                  />
+                }
+              >
+                <button
+                  className="working-select turn-file"
+                  title={f.path}
+                  onClick={() => setPath(f.path)}
                 >
-                  <SquarePen size={14} />
-                </IconButton>
-              </header>
-              {diff.error ? (
-                <ErrorBox error={diff.error} />
-              ) : diff.data ? (
-                <WorkingDiff
-                  pair={diff.data}
-                  sideLabels={sides}
-                  split={split}
-                />
-              ) : (
-                <Loading text="Loading turn diff…" />
-              )}
-            </>
-          ) : (
-            <div className="empty">
-              <h2>
-                {target.worktree
-                  ? "Nothing here that the checkout doesn’t have."
-                  : "This turn changed no files."}
-              </h2>
-            </div>
-          )}
-        </div>
+                  <FileEntryIcon path={f.path} directory={false} />
+                  <span>{f.path}</span>
+                  {!f.binary && <DiffStatLabel stat={f} />}
+                </button>
+              </ContextMenu.Trigger>
+              <ContextMenu.Portal>
+                <ContextMenu.Positioner className="sb-menu-positioner">
+                  <ContextMenu.Popup className="sb-menu">
+                    <ContextMenu.Item
+                      className="sb-menu-item"
+                      onClick={() =>
+                        void api
+                          .revealProjectTurnFile(
+                            target.chatId,
+                            target.worktree ? null : target.messageId,
+                            f.path,
+                          )
+                          .catch((e) =>
+                            setRevealError(
+                              e instanceof Error ? e.message : String(e),
+                            ),
+                          )
+                      }
+                    >
+                      <span className="sb-menu-label">
+                        <FolderOpen size={13} />
+                        Show in Finder
+                      </span>
+                    </ContextMenu.Item>
+                  </ContextMenu.Popup>
+                </ContextMenu.Positioner>
+              </ContextMenu.Portal>
+            </ContextMenu.Root>
+          ))}
+          {revealError && <ErrorBox error={new Error(revealError)} />}
+        </ChangesSidebar>
+        <ChangesReview
+          path={path}
+          sides={sides}
+          diff={diff}
+          loading="Loading turn diff…"
+          empty={
+            target.worktree
+              ? "Nothing here that the checkout doesn’t have."
+              : "This turn changed no files."
+          }
+          onOpenFile={onOpenFile}
+        />
       </div>
     </section>
   );

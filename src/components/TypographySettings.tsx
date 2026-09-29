@@ -1,4 +1,5 @@
-import { useCallback, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { RotateCcw } from "lucide-react";
 import { useAppearance } from "../lib/appearance";
 import { terminalTheme } from "../lib/terminal-theme";
@@ -22,8 +23,7 @@ import {
   Switch,
 } from "./SettingsCard";
 import { ThemeCodePreview } from "./ThemeCodePreview";
-
-const mac = navigator.platform.startsWith("Mac");
+import { mac } from "../lib/mod-key";
 
 function SizeSelect({
   label,
@@ -37,12 +37,7 @@ function SizeSelect({
   onChange: (size: number) => void;
 }) {
   // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   return (
     <div ref={ref} className="composer-tools model-field size-select">
       <ComposerSelect

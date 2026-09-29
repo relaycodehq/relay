@@ -1,23 +1,15 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
-
-const MIC_KEY = "relay-dictation-mic";
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+import { useEffect, useState } from "react";
+import { persistedStore } from "../persisted-store";
 
 /** The chosen input's deviceId, or "" for the system default. */
-export const dictationMicrophone = () => localStorage.getItem(MIC_KEY) ?? "";
-export const useDictationMicrophone = () =>
-  useSyncExternalStore(subscribe, dictationMicrophone);
-
-export function setDictationMicrophone(deviceId: string) {
-  if (deviceId) localStorage.setItem(MIC_KEY, deviceId);
-  else localStorage.removeItem(MIC_KEY);
-  for (const listener of listeners) listener();
-}
+const microphone = persistedStore(
+  "relay-dictation-mic",
+  (saved) => saved ?? "",
+  (deviceId) => deviceId || null,
+);
+export const dictationMicrophone = microphone.get;
+export const useDictationMicrophone = microphone.use;
+export const setDictationMicrophone = microphone.set;
 
 export interface MicrophoneOption {
   value: string;

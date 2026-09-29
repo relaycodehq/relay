@@ -1,4 +1,5 @@
-import { useCallback, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
 import { agentProviders } from "../../shared/agents";
 import { effortLabels, type ReasoningEffort } from "../../shared/settings";
@@ -36,12 +37,7 @@ export function QuickSwitchSettings() {
   const quick = useQuickSwitch();
   const catalogs = useCatalogs();
   // Popups must render inside the modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   const save = (next: Partial<QuickSwitch>) =>
     setQuickSwitch({ ...quick, ...next });
   const presets = quick.presets;

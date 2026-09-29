@@ -593,6 +593,5 @@ export function applyToDocument(resolved: ResolvedAppearance) {
   root.style.color = resolved.palette.text;
   root.style.colorScheme = resolved.palette.kind;
   root.dataset.theme = resolved.palette.kind;
-  root.dataset.palette = resolved.theme.id;
   root.dataset.syntax = resolved.palette.syntax;
 }

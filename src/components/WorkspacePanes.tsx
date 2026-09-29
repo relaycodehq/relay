@@ -3,6 +3,7 @@ import { GripVertical, X } from "lucide-react";
 import type { PaneId } from "../lib/workspace-panes";
 import { IconButton } from "./ui";
 import "./workspace-panes.css";
+import { dragFrom } from "../lib/dragFrom";
 
 export interface PaneSlots {
   title: HTMLElement | null;
@@ -212,23 +213,14 @@ function PaneSplitter({
         resizeBy(l + (e.key === "ArrowLeft" ? -20 : 20), total);
       }}
       onPointerDown={(e) => {
-        e.preventDefault();
         const element = e.currentTarget;
-        const start = e.clientX,
-          { l, total } = widths(element);
-        element.setPointerCapture(e.pointerId);
+        const { l, total } = widths(element);
         element.classList.add("dragging");
-        const move = (event: PointerEvent) =>
-          resizeBy(l + event.clientX - start, total);
-        const stop = () => {
-          element.classList.remove("dragging");
-          element.removeEventListener("pointermove", move);
-          element.removeEventListener("pointerup", stop);
-          element.removeEventListener("pointercancel", stop);
-        };
-        element.addEventListener("pointermove", move);
-        element.addEventListener("pointerup", stop);
-        element.addEventListener("pointercancel", stop);
+        dragFrom(
+          e,
+          (dx) => resizeBy(l + dx, total),
+          () => element.classList.remove("dragging"),
+        );
       }}
     />
   );

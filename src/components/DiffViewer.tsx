@@ -2,6 +2,7 @@ import type { QuestionTarget } from "../../shared/questions";
 import { useSymbolNavigation } from "./SymbolNavigation";
 import { useLineBlame } from "./LineBlame";
 import type { CodeViewHandle } from "@pierre/diffs/react";
+import { clickedLine, selectedSpan } from "../lib/diff-selection";
 import {
   diagnosticSummary,
   diagnosticSeverity,
@@ -319,53 +320,32 @@ export function DiffViewer({
           </span>
           <button
             onClick={() => {
-              const range = selection.range;
-              if (range.endSide && range.endSide !== range.side) {
+              const span = selectedSpan(selection.range);
+              if ("error" in span) {
                 onError(
                   new Error(
-                    `Select lines on one side to ask ${questionAgent}.`,
+                    span.error === "two-sides"
+                      ? `Select lines on one side to ask ${questionAgent}.`
+                      : `Select up to 200 lines to ask ${questionAgent}.`,
                   ),
                 );
                 return;
               }
-              const start = Math.min(range.start, range.end),
-                end = Math.max(range.start, range.end);
-              if (end - start >= 200) {
-                onError(
-                  new Error(`Select up to 200 lines to ask ${questionAgent}.`),
-                );
-                return;
-              }
-              onAskAboutLines({
-                path: file.filename,
-                start,
-                end,
-                side: range.side ?? "additions",
-              });
+              onAskAboutLines({ path: file.filename, ...span });
             }}
           >
             <Terminal size={13} /> Ask {questionAgent}
           </button>
           <button
             onClick={() => {
-              const range = selection.range,
-                start = Math.min(range.start, range.end),
-                end = Math.max(range.start, range.end);
-              if (
-                (range.endSide && range.endSide !== range.side) ||
-                end - start >= 200
-              ) {
+              const span = selectedSpan(selection.range);
+              if ("error" in span) {
                 onError(
                   new Error("Select up to 200 lines on one side to discuss."),
                 );
                 return;
               }
-              onDiscuss({
-                path: file.filename,
-                start,
-                end,
-                side: range.side ?? "additions",
-              });
+              onDiscuss({ path: file.filename, ...span });
             }}
           >
             <MessageSquare size={13} />
@@ -457,25 +437,8 @@ export function DiffViewer({
         options={{
           ...symbols.handlers,
           onLineClick: (line) => {
-            const event = line.event;
-            if (
-              line.numberColumn ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.defaultPrevented ||
-              !window.getSelection()?.isCollapsed
-            )
-              return;
-            setSelection({
-              id: file.filename,
-              range: {
-                start: line.lineNumber,
-                end: line.lineNumber,
-                side:
-                  "annotationSide" in line ? line.annotationSide : "additions",
-              },
-            });
+            const range = clickedLine(line);
+            if (range) setSelection({ id: file.filename, range });
           },
           theme: syntaxThemes,
           themeType: theme,

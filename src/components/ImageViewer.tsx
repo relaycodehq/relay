@@ -34,8 +34,8 @@ import { CopyImageMenu } from "./CopyImageMenu";
 import { imageQuery, useImageSource, type PreviewImage } from "./ImagePreview";
 import { Spinner } from "./ui";
 import "./image-viewer.css";
+import { mac } from "../lib/mod-key";
 
-const mac = navigator.platform.includes("Mac");
 const mod = mac ? "⌘" : "Ctrl+";
 
 /** "PNG · 245 KB", read off the data URL without decoding it again. */

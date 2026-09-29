@@ -1,7 +1,8 @@
 // The subagents Claude has working, beside the Project folder control: an
 // icon with how many are back, and a card previewing each. It shows only
 // while one runs; each opens its own run in a side thread.
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useNow } from "../lib/useNow";
 import { Popover } from "@base-ui/react/popover";
 import {
   Bot,
@@ -31,7 +32,7 @@ const icons = {
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
 
-export function took(ms: number) {
+function took(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -44,15 +45,6 @@ export function agentKind(run: SubagentRun) {
   return run.type && run.type !== "general-purpose"
     ? `${run.type} agent`
     : "Agent";
-}
-
-export function useNow(interval: number) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), interval);
-    return () => clearInterval(timer);
-  }, [interval]);
-  return now;
 }
 
 /**

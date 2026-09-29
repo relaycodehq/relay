@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -61,9 +62,7 @@ export function RunningTasks({
   onOpenChat: (chat: ChatSummary) => void;
 }) {
   const qc = useQueryClient();
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("relay-tasks-collapsed") === "true",
-  );
+  const [collapsed, setCollapsed] = useStoredFlag("relay-tasks-collapsed");
   const [busy, setBusy] = useState<Map<string, "stop" | "restart">>(new Map());
   const [error, setError] = useState<string>();
   const tasks = useQuery({
@@ -74,12 +73,7 @@ export function RunningTasks({
   const list = tasks.data ?? [];
   if (!list.length) return null;
   const now = Date.now();
-  const toggle = () => {
-    setCollapsed((v) => {
-      localStorage.setItem("relay-tasks-collapsed", String(!v));
-      return !v;
-    });
-  };
+  const toggle = () => setCollapsed((v) => !v);
   const act = async (task: ProjectTask, action: "stop" | "restart") => {
     setBusy((b) => new Map(b).set(task.id, action));
     setError(undefined);

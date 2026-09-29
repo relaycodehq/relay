@@ -10,6 +10,7 @@ import {
   type PhoneTailnet,
 } from "../../shared/remote";
 import { androidAppDownload } from "../../shared/updates";
+import { useCopy } from "../lib/useCopy";
 import { api } from "../lib/api";
 import { ErrorBox, relativeDate } from "./ui";
 import {
@@ -38,7 +39,7 @@ export function PhoneRemoteSettings() {
   // The switch flips at once; the state catches up when the server has.
   const [switching, setSwitching] = useState<boolean>();
   const [error, setError] = useState<unknown>();
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopy();
   const [code, setCode] = useState<"tailscale" | "app">();
   const [another, setAnother] = useState(false);
   const now = useNow(!!pairing);
@@ -167,14 +168,7 @@ export function PhoneRemoteSettings() {
                     The code also pins this computer's key, so the phone only
                     ever talks to this Relay, encrypted.
                   </p>
-                  <button
-                    onClick={() =>
-                      void api.writeClipboard(pairing.url).then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      })
-                    }
-                  >
+                  <button onClick={() => copy(pairing.url)}>
                     {copied ? "Copied" : "Copy pairing link"}
                   </button>
                 </CodePanel>

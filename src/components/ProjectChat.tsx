@@ -1,4 +1,5 @@
 import { AgentRequestCard } from "./AgentRequestCard";
+import { clock } from "../../shared/waiting";
 import type { RelayCommand } from "../../shared/commands";
 import { agentMention } from "../../shared/rooms";
 import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
@@ -14,6 +15,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LockKeyhole,
@@ -395,14 +397,7 @@ const Message = memo(function Message({
           {m.role === "assistant" && <ProviderIcon provider={m.provider} />}
           {m.role === "user" ? (m.author ?? "You") : agentName(m.provider)}
         </strong>
-        {m.role === "user" && (
-          <time>
-            {new Date(m.created).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </time>
-        )}
+        {m.role === "user" && <time>{clock(m.created)}</time>}
         {m.author && m.role === "assistant" && (
           <span className="muted">via {m.author}</span>
         )}
@@ -634,8 +629,8 @@ export function ProjectChat({
   const [composerRevision, setComposerRevision] = useState(0);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  const [sharePresence, setSharePresence] = useState(
-    () => localStorage.getItem("relay-project-presence") === "true",
+  const [sharePresence, setSharePresence] = useStoredFlag(
+    "relay-project-presence",
   );
   const [sharingOpen, setSharingOpen] = useState(false);
   const [selection, setSelection] = useState<LineQuestion | undefined>(() => {
@@ -1634,13 +1629,7 @@ export function ProjectChat({
             <input
               type="checkbox"
               checked={sharePresence}
-              onChange={(e) => {
-                setSharePresence(e.target.checked);
-                localStorage.setItem(
-                  "relay-project-presence",
-                  String(e.target.checked),
-                );
-              }}
+              onChange={(e) => setSharePresence(e.target.checked)}
             />
             Share my location
           </label>

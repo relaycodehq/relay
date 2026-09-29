@@ -1,4 +1,6 @@
-import { useSyncExternalStore, type KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
+import { mac } from "./mod-key";
+import { persistedStore } from "./persisted-store";
 
 /**
  * Which key sends a chat message: Enter (Shift+Enter for a new line),
@@ -6,40 +8,14 @@ import { useSyncExternalStore, type KeyboardEvent } from "react";
  * preference like the theme, so it lives in localStorage rather than settings.
  */
 export type SendKey = "enter" | "shift-enter" | "mod-enter";
-const STORAGE_KEY = "relay-send-key";
-const listeners = new Set<() => void>();
-let current = read();
-
-function read(): SendKey {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === "mod-enter" || saved === "shift-enter" ? saved : "enter";
-  } catch {
-    return "enter";
-  }
-}
-
-export function setSendKey(next: SendKey) {
-  current = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, next);
-  } catch {
-    // Still applies for this session.
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export const useSendKey = () =>
-  useSyncExternalStore(
-    subscribe,
-    () => current,
-    () => "enter" as const,
-  );
+const sendKey = persistedStore<SendKey>(
+  "relay-send-key",
+  (saved) =>
+    saved === "mod-enter" || saved === "shift-enter" ? saved : "enter",
+  (key) => key,
+);
+export const setSendKey = sendKey.set;
+export const useSendKey = sendKey.use;
 
 /**
  * What a keypress does in the composer. The send key sends, or queues while
@@ -65,8 +41,6 @@ export function sendsMessage(e: KeyboardEvent, sendKey: SendKey) {
   return sendAction(e, sendKey) !== null;
 }
 
-const mac =
-  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
 const mod = mac ? "⌘" : "Ctrl+";
 const shift = mac ? "⇧" : "Shift+";
 const enter = mac ? "↵" : "Enter";

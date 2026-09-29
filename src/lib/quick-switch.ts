@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { persistedStore } from "./persisted-store";
 import { z } from "zod";
 import {
   agentName,
@@ -47,51 +47,25 @@ const quickSwitchSchema = z.object({
 });
 export type QuickSwitch = z.infer<typeof quickSwitchSchema>;
 
-const STORAGE_KEY = "relay-quick-switch";
 const fallback: QuickSwitch = {
   enabled: true,
   style: "drum",
   sound: true,
   presets: [],
 };
-const listeners = new Set<() => void>();
-let current = read();
 
 export function parseQuickSwitch(value: unknown): QuickSwitch {
   const parsed = quickSwitchSchema.safeParse(value);
   return parsed.success ? parsed.data : fallback;
 }
 
-function read(): QuickSwitch {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? parseQuickSwitch(JSON.parse(saved)) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-export function setQuickSwitch(next: QuickSwitch) {
-  current = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Still applies for this session.
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export const useQuickSwitch = () =>
-  useSyncExternalStore(
-    subscribe,
-    () => current,
-    () => fallback,
-  );
+const quickSwitch = persistedStore<QuickSwitch>(
+  "relay-quick-switch",
+  (saved) => (saved ? parseQuickSwitch(JSON.parse(saved)) : fallback),
+  (value) => JSON.stringify(value),
+);
+export const setQuickSwitch = quickSwitch.set;
+export const useQuickSwitch = quickSwitch.use;
 
 export const newPresetId = () => Math.random().toString(36).slice(2, 10);
 

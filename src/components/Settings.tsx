@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -7,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -297,12 +297,7 @@ function ThemeSelect({
   onChange: (theme: string) => void;
 }) {
   // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   return (
     <div ref={ref} className="composer-tools model-field theme-select">
       <ComposerSelect
@@ -329,12 +324,7 @@ function AgentSelect({
   onChange: (provider: AgentProvider) => void;
 }) {
   // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   return (
     <div ref={ref} className="composer-tools model-field">
       <ComposerSelect<AgentProvider>

@@ -15,6 +15,7 @@ import {
 import { TriageControls } from "./components/TriageControls";
 import { isAnalyzing, notedPaths } from "../shared/triage";
 import { useEffect, useRef, useState, useMemo, lazy, Suspense } from "react";
+import { useStoredFlag } from "./lib/useStoredFlag";
 import {
   useInfiniteQuery,
   useQuery,
@@ -297,9 +298,7 @@ export function Connected({
   incomingLink?: { url: string };
 }) {
   const [roomInvitationUrl, setRoomInvitationUrl] = useState<string>();
-  const [roomOpen, setRoomOpen] = useState(
-    () => localStorage.getItem("relay-room-open") === "true",
-  );
+  const [roomOpen, setRoomOpen] = useStoredFlag("relay-room-open");
   const [roomTarget, setRoomTarget] = useState<{
     key: string;
     value: QuestionTarget;
@@ -319,12 +318,10 @@ export function Connected({
       path: initialWorkspace.file,
       reveal: true,
     }),
-    [requestsHidden, setRequestsHidden] = useState(
-      () => localStorage.getItem("relay-requests-hidden") === "true",
+    [requestsHidden, setRequestsHidden] = useStoredFlag(
+      "relay-requests-hidden",
     ),
-    [filesHidden, setFilesHidden] = useState(
-      () => localStorage.getItem("relay-files-hidden") === "true",
-    ),
+    [filesHidden, setFilesHidden] = useStoredFlag("relay-files-hidden"),
     [urlOpen, setUrlOpen] = useState(false),
     [error, setError] = useState<unknown>(),
     [fileFilter, setFileFilter] = useState("");
@@ -348,10 +345,6 @@ export function Connected({
     );
     void api.saveWorkspace(workspace).catch(setError);
   }, [selected, file, filter, query, state]);
-  useEffect(() => {
-    localStorage.setItem("relay-requests-hidden", String(requestsHidden));
-    localStorage.setItem("relay-files-hidden", String(filesHidden));
-  }, [requestsHidden, filesHidden]);
   const navigation = useRef(0);
   const selectFile = (path: string) => {
     navigation.current++;
@@ -689,10 +682,7 @@ export function Connected({
       onToggleRoom={
         pull.data && !restoring
           ? () =>
-              setRoomOpen((v) => {
-                localStorage.setItem("relay-room-open", String(!v));
-                return !v;
-              })
+              setRoomOpen((v) => !v)
           : undefined
       }
     />
@@ -1016,7 +1006,6 @@ export function Connected({
           onClearTarget={() => setRoomTarget(null)}
           onClose={() => {
             setRoomOpen(false);
-            localStorage.setItem("relay-room-open", "false");
           }}
           onSelect={selectFile}
           onLink={() => {
@@ -1125,7 +1114,6 @@ export function Connected({
           onJoined={(ref) => {
             select(ref);
             setRoomOpen(true);
-            localStorage.setItem("relay-room-open", "true");
             void qc.invalidateQueries({ queryKey: ["roomState"] });
             setRoomInvitationUrl(undefined);
           }}

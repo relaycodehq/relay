@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
 import { api } from "./api";
+import { mac } from "./mod-key";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
 
@@ -299,7 +300,6 @@ export function setTerminalTheme(theme: ITheme) {
 export function isToggleShortcut(e: KeyboardEvent) {
   if (e.type !== "keydown" || e.altKey || e.shiftKey || e.isComposing)
     return false;
-  const mac = navigator.platform.startsWith("Mac");
   return (
     (mac && e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "j") ||
     (e.ctrlKey && !e.metaKey && e.code === "Backquote")

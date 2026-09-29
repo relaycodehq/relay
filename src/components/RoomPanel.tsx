@@ -1,6 +1,7 @@
 import { LiveSyncControls } from "./LiveSyncControls";
 import type { SettingsCategory } from "./Settings";
 import { useEffect, useRef, useState } from "react";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -104,8 +105,8 @@ export function RoomPanel({
     [showPresence, setShowPresence] = useState(false),
     [more, setMore] = useState(false),
     [newMessages, setNewMessages] = useState(false);
-  const [sharePresence, setSharePresence] = useState(
-    () => localStorage.getItem("relay-share-room-presence") === "true",
+  const [sharePresence, setSharePresence] = useStoredFlag(
+    "relay-share-room-presence",
   );
   const [claude, setClaude] = useState<{
     model: string;
@@ -399,13 +400,7 @@ export function RoomPanel({
                   <input
                     type="checkbox"
                     checked={sharePresence}
-                    onChange={(e) => {
-                      setSharePresence(e.target.checked);
-                      localStorage.setItem(
-                        "relay-share-room-presence",
-                        String(e.target.checked),
-                      );
-                    }}
+                    onChange={(e) => setSharePresence(e.target.checked)}
                   />
                   Share my place
                 </label>

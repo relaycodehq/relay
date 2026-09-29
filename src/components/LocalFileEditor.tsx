@@ -1,3 +1,4 @@
+import { EditorPath } from "./EditorPath";
 import { useSymbolNavigation } from "./SymbolNavigation";
 import { useLineBlame } from "./LineBlame";
 import type { ChecksController } from "../lib/useProjectChecks";
@@ -163,6 +164,24 @@ export default function LocalFileEditor({
     checkState.files[path]?.hash === bufferHash
       ? checkState.files[path]
       : undefined;
+  const history = (size: number) => (
+    <>
+      <IconButton
+        label="Undo code edit"
+        className="editor-history"
+        onClick={() => viewer.current?.getEditor(path)?.undo()}
+      >
+        <Undo2 size={size} />
+      </IconButton>
+      <IconButton
+        label="Redo code edit"
+        className="editor-history"
+        onClick={() => viewer.current?.getEditor(path)?.redo()}
+      >
+        <Redo2 size={size} />
+      </IconButton>
+    </>
+  );
   const symbols = useSymbolNavigation(
     target,
     path,
@@ -172,12 +191,10 @@ export default function LocalFileEditor({
   );
   const fileProblems = useMemo(
     () =>
-      checkState?.status === "ready" &&
-      bufferHash &&
-      checkState.files[path]?.hash === bufferHash
+      checked && checkState
         ? checkState.diagnostics.filter((d) => d.path === path)
         : [],
-    [checkState, bufferHash, path],
+    [checked, checkState, path],
   );
   const markers = useMemo<Marker[]>(
     () =>
@@ -364,13 +381,7 @@ export default function LocalFileEditor({
       {symbols.overlay}
       {inline && (
         <div className="editor-bar">
-          <div className="editor-bar-path" title={source?.path ?? path}>
-            {path.includes("/") && (
-              <span className="editor-bar-dir">
-                <bdi dir="ltr">{path.slice(0, path.lastIndexOf("/") + 1)}</bdi>
-              </span>
-            )}
-            <strong>{path.split("/").pop()}</strong>
+          <EditorPath path={path} title={source?.path ?? path}>
             <span
               className={`editor-bar-state ${dirty ? "dirty" : ""}`}
               role="status"
@@ -383,23 +394,10 @@ export default function LocalFileEditor({
                     ? "Saved"
                     : ""}
             </span>
-          </div>
+          </EditorPath>
           {source && symbols.controls}
           <span className="divider" />
-          <IconButton
-            label="Undo code edit"
-            className="editor-history"
-            onClick={() => viewer.current?.getEditor(path)?.undo()}
-          >
-            <Undo2 size={15} />
-          </IconButton>
-          <IconButton
-            label="Redo code edit"
-            className="editor-history"
-            onClick={() => viewer.current?.getEditor(path)?.redo()}
-          >
-            <Redo2 size={15} />
-          </IconButton>
+          {history(15)}
           <IconButton
             label="Reload local file"
             disabled={saving || loading}
@@ -685,20 +683,7 @@ export default function LocalFileEditor({
               <span className="editor-shortcuts">
                 {keys("⌘S", "Ctrl+S")} · Save{large ? " · Large file, plain text" : ""}
               </span>
-              <IconButton
-                label="Undo code edit"
-                className="editor-history"
-                onClick={() => viewer.current?.getEditor(path)?.undo()}
-              >
-                <Undo2 size={16} />
-              </IconButton>
-              <IconButton
-                label="Redo code edit"
-                className="editor-history"
-                onClick={() => viewer.current?.getEditor(path)?.redo()}
-              >
-                <Redo2 size={16} />
-              </IconButton>
+              {history(16)}
               <IconButton
                 label="Reload local file"
                 disabled={saving || loading}

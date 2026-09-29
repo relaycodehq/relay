@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useNow } from "../lib/useNow";
 import {
   AlarmClock,
   ChevronDown,
@@ -8,15 +9,6 @@ import {
 import type { ChatPending } from "../../shared/projects";
 import { clock, summary, timing, wakeupTitle } from "../../shared/waiting";
 import "./waiting-strip.css";
-
-function useNow(interval: number) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), interval);
-    return () => clearInterval(timer);
-  }, [interval]);
-  return now;
-}
 
 /** "Run the A/B" reads as "…waiting on run the A/B"; acronyms keep their case. */
 function lower(text: string) {

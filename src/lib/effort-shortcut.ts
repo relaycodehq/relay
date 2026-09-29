@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ReasoningEffort } from "../../shared/settings";
+import { mac } from "./mod-key";
 
 /**
  * ⌘⌥←/→ (Ctrl+Alt elsewhere) steps effort. Plain, ⌥, ⌘ and ⇧ arrows all
@@ -7,7 +8,6 @@ import type { ReasoningEffort } from "../../shared/settings";
  */
 export function effortStep(e: KeyboardEvent): -1 | 1 | 0 {
   if (e.nativeEvent.isComposing || e.shiftKey || !e.altKey) return 0;
-  const mac = navigator.platform.startsWith("Mac");
   if (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey) return 0;
   return e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
 }
@@ -29,6 +29,4 @@ export function stepEffort(
   return efforts[Math.min(efforts.length - 1, Math.max(0, at + step))];
 }
 
-export const effortKeysLabel = navigator.platform.startsWith("Mac")
-  ? "⌘⌥ ←→"
-  : "Ctrl Alt ←→";
+export const effortKeysLabel = mac ? "⌘⌥ ←→" : "Ctrl Alt ←→";

@@ -3,6 +3,7 @@ import type { ChatMessage } from "../../shared/projects";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { RichText } from "./ui";
 import { agentMentionPattern, agentName } from "../../shared/agents";
+import { clock } from "../../shared/waiting";
 
 /** What a side question's thread holds, for the bar under it. */
 export interface SideThread {
@@ -10,9 +11,6 @@ export interface SideThread {
   last: number;
   answering: boolean;
 }
-
-const clock = (at: number) =>
-  new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 /**
  * A `/btw` question: outlined dashed, since the main session never heard it.

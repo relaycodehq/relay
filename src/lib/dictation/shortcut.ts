@@ -1,8 +1,6 @@
-import {
-  useSyncExternalStore,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { mac } from "../mod-key";
+import { persistedStore } from "../persisted-store";
 
 /**
  * The dictation key. Tap it to start and tap again to finish, or hold it and
@@ -16,7 +14,6 @@ export interface DictationShortcut {
   shift: boolean;
 }
 
-const STORAGE_KEY = "relay-dictation-shortcut";
 export const defaultDictationShortcut: DictationShortcut = {
   code: "Space",
   alt: mac,
@@ -24,37 +21,19 @@ export const defaultDictationShortcut: DictationShortcut = {
   meta: false,
   shift: false,
 };
-const listeners = new Set<() => void>();
-let current = read();
-
-function read(): DictationShortcut {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    if (saved && typeof saved.code === "string") return saved;
-  } catch {
-    // Falls back to the default.
-  }
-  return defaultDictationShortcut;
-}
-
-export function setDictationShortcut(next: DictationShortcut) {
-  current = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Still applies for this session.
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export const dictationShortcut = () => current;
-export const useDictationShortcut = () =>
-  useSyncExternalStore(subscribe, () => current);
+const shortcut = persistedStore<DictationShortcut>(
+  "relay-dictation-shortcut",
+  (saved) => {
+    const parsed = JSON.parse(saved ?? "null");
+    return parsed && typeof parsed.code === "string"
+      ? parsed
+      : defaultDictationShortcut;
+  },
+  (value) => JSON.stringify(value),
+);
+export const setDictationShortcut = shortcut.set;
+export const dictationShortcut = shortcut.get;
+export const useDictationShortcut = shortcut.use;
 
 export const matchesShortcut = (
   e: KeyboardEvent | ReactKeyboardEvent,

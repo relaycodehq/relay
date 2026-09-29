@@ -156,10 +156,6 @@
   width: 14px;
   height: 14px;
 }
-.project-message .markdown {
-  font-size: 13px;
-  line-height: 1.65;
-}
 .project-message .markdown pre {
   max-width: 100%;
   overflow: auto;
@@ -186,12 +182,6 @@
   align-items: center;
   gap: 7px;
   padding: 0 9px 8px;
-}
-.composer-tools select {
-  font-size: 10px;
-  background: transparent;
-  border: 0;
-  max-width: 150px;
 }
 .composer-tools > .primary {
   border-radius: 7px;
@@ -1078,22 +1068,6 @@
   padding: 4px 12px 12px;
   gap: 5px;
   flex-wrap: wrap;
-}
-.composer-tools select {
-  font: inherit;
-  font-size: 11px;
-  padding: 5px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  max-width: 180px;
-  border-radius: 5px;
-}
-.composer-tools select:first-child {
-  color: var(--text);
-}
-.composer-tools select:hover {
-  background: var(--hover);
 }
 .composer-tools .send-message {
   border-radius: 50%;

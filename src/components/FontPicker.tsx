@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronDown, Search } from "lucide-react";
@@ -37,12 +38,7 @@ export function FontPicker({
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
   // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   const fonts = useQuery({
     queryKey: ["installed-fonts"],
     queryFn: installedFonts,

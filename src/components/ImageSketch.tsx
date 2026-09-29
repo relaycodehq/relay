@@ -25,6 +25,7 @@ import {
   type Stroke,
 } from "../lib/sketch";
 import "./image-sketch.css";
+import { mac } from "../lib/mod-key";
 
 /** Undo / redo for one screenshot, kept while the draft lives. */
 export interface SketchHistory {
@@ -54,7 +55,6 @@ type Pointer =
 const HOLD_MS = 500;
 const HOLD_SLOP = 3;
 const RIGHT_BUTTON = 2;
-const mac = navigator.platform.includes("Mac");
 const mod = mac ? "⌘" : "Ctrl+";
 const shift = mac ? "⇧" : "Shift+";
 

@@ -31,8 +31,9 @@ import {
 import { workingTreeKey } from "../lib/working-tree-key";
 import { ErrorBox, FileEntryIcon, IconButton, Modal } from "./ui";
 import "./file-browser.css";
+import { mac } from "../lib/mod-key";
 
-export const revealLabel = navigator.platform.startsWith("Mac")
+export const revealLabel = mac
   ? "Show in Finder"
   : navigator.platform.startsWith("Win")
     ? "Show in Explorer"

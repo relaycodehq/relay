@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { dragFrom } from "../lib/dragFrom";
 export function PaneResizer({
   pane,
   label,
@@ -44,21 +45,8 @@ export function PaneResizer({
         }
       }}
       onPointerDown={(e) => {
-        e.preventDefault();
-        const element = e.currentTarget;
-        const start = e.clientX,
-          origin = width;
-        element.setPointerCapture(e.pointerId);
-        const move = (event: PointerEvent) =>
-          update(origin + event.clientX - start);
-        const stop = () => {
-          element.removeEventListener("pointermove", move);
-          element.removeEventListener("pointerup", stop);
-          element.removeEventListener("pointercancel", stop);
-        };
-        element.addEventListener("pointermove", move);
-        element.addEventListener("pointerup", stop);
-        element.addEventListener("pointercancel", stop);
+        const origin = width;
+        dragFrom(e, (dx) => update(origin + dx));
       }}
     />
   );

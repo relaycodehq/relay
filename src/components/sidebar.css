@@ -7,7 +7,6 @@
 }
 .sb {
   --sb-card: color-mix(in srgb, var(--surface) 55%, var(--sidebar));
-  --sb-card-border: color-mix(in srgb, var(--border) 70%, transparent);
   display: flex;
   flex-direction: column;
   flex: 1;

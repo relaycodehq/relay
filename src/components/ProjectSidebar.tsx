@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNow } from "../lib/useNow";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
@@ -42,6 +43,7 @@ import {
   wakeLabel,
 } from "../../shared/chat-activity";
 import { agentsSince } from "../../shared/waiting";
+import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { api } from "../lib/api";
 import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
 import { useWindowFocused } from "../lib/window-focus";
@@ -126,13 +128,23 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
     c.updated > Math.max(since, seen[c.id] ?? 0);
 }
 
-function useNow(interval = 30_000) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), interval);
-    return () => clearInterval(timer);
-  }, [interval]);
-  return now;
+/** The row that expands or collapses a long thread list. */
+function ShowMore({
+  more,
+  hidden,
+  onToggle,
+}: {
+  more: boolean;
+  hidden: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button className="sb-thread sb-ghost" onClick={onToggle}>
+      <span className="sb-thread-title">
+        {more ? "Show less" : `Show ${hidden} more`}
+      </span>
+    </button>
+  );
 }
 
 function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
@@ -207,26 +219,22 @@ function SnoozeMenu({
       >
         <Clock size={14} />
       </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner side="bottom" align="end" sideOffset={6}>
-          <Menu.Popup className="sb-menu">
-            <div className="sb-menu-heading">Snooze until…</div>
-            {presets.map((preset) => (
-              <Menu.Item
-                key={preset.id}
-                className="sb-menu-item"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSnooze(preset.until);
-                }}
-              >
-                <span>{preset.label}</span>
-                <small>{wakeLabel(preset.until, new Date(now))}</small>
-              </Menu.Item>
-            ))}
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
+      <MenuPopup side="bottom" align="end" sideOffset={6}>
+        <div className="sb-menu-heading">Snooze until…</div>
+        {presets.map((preset) => (
+          <Menu.Item
+            key={preset.id}
+            className="sb-menu-item"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSnooze(preset.until);
+            }}
+          >
+            <span>{preset.label}</span>
+            <small>{wakeLabel(preset.until, new Date(now))}</small>
+          </Menu.Item>
+        ))}
+      </MenuPopup>
     </Menu.Root>
   );
 }
@@ -462,7 +470,7 @@ export function ProjectSidebar({
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
   const qc = useQueryClient();
-  const now = useNow();
+  const now = useNow(30_000);
   // Scratchpad chats list under their own heading, never as projects.
   const realProjects = projects.filter((p) => !p.scratch);
   const scratchIds = new Set(
@@ -994,16 +1002,11 @@ export function ProjectSidebar({
               </button>
             )}
             {chats.length > THREADS_PER_PROJECT && (
-              <button
-                className="sb-thread sb-ghost"
-                onClick={() => setShowAll((s) => ({ ...s, [p.id]: !more }))}
-              >
-                <span className="sb-thread-title">
-                  {more
-                    ? "Show less"
-                    : `Show ${chats.length - THREADS_PER_PROJECT} more`}
-                </span>
-              </button>
+              <ShowMore
+                more={more}
+                hidden={chats.length - THREADS_PER_PROJECT}
+                onToggle={() => setShowAll((s) => ({ ...s, [p.id]: !more }))}
+              />
             )}
           </div>
         )}
@@ -1021,180 +1024,126 @@ export function ProjectSidebar({
   })(tree);
 
   const projectMenu = (p: Project) => (
-    <Menu.Portal>
-      <Menu.Positioner
-        side="bottom"
-        align="end"
-        className="sb-menu-positioner"
-        sideOffset={4}
+    <MenuPopup side="bottom" align="end">
+      <MenuAction
+        icon={<Pencil size={13} />}
+        onClick={() => setRenamingProject(p.id)}
       >
-        <Menu.Popup className="sb-menu">
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => setRenamingProject(p.id)}
-          >
-            <span className="sb-menu-label">
-              <Pencil size={13} />
-              Rename
-            </span>
-          </Menu.Item>
-          <Menu.Item
-            className="sb-menu-item"
-            disabled={dirty}
-            onClick={() => onNew(p)}
-          >
-            <span className="sb-menu-label">
-              <SquarePen size={13} />
-              New thread
-            </span>
-          </Menu.Item>
-          <Menu.Separator className="sb-menu-separator" />
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() =>
-              void api
-                .revealProject(p.id)
-                .catch((e) =>
-                  setGroupError(e instanceof Error ? e.message : String(e)),
-                )
-            }
-          >
-            <span className="sb-menu-label">
-              <FolderOpen size={13} />
-              Open in Finder
-            </span>
-          </Menu.Item>
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => void navigator.clipboard.writeText(p.path)}
-          >
-            <span className="sb-menu-label">
-              <Copy size={13} />
-              Copy path
-            </span>
-          </Menu.Item>
-          <Menu.Separator className="sb-menu-separator" />
-          <Menu.SubmenuRoot>
-            <Menu.SubmenuTrigger className="sb-menu-item">
-              <span className="sb-menu-label">
-                <FolderInput size={13} />
-                Move to group
-              </span>
-              <ChevronRight size={12} />
-            </Menu.SubmenuTrigger>
-            {moveMenu(p)}
-          </Menu.SubmenuRoot>
-        </Menu.Popup>
-      </Menu.Positioner>
-    </Menu.Portal>
+        Rename
+      </MenuAction>
+      <MenuAction
+        icon={<SquarePen size={13} />}
+        disabled={dirty}
+        onClick={() => onNew(p)}
+      >
+        New thread
+      </MenuAction>
+      <Menu.Separator className="sb-menu-separator" />
+      <MenuAction
+        icon={<FolderOpen size={13} />}
+        onClick={() =>
+          void api
+            .revealProject(p.id)
+            .catch((e) =>
+              setGroupError(e instanceof Error ? e.message : String(e)),
+            )
+        }
+      >
+        Open in Finder
+      </MenuAction>
+      <MenuAction
+        icon={<Copy size={13} />}
+        onClick={() => void api.writeClipboard(p.path)}
+      >
+        Copy path
+      </MenuAction>
+      <Menu.Separator className="sb-menu-separator" />
+      <Menu.SubmenuRoot>
+        <Menu.SubmenuTrigger className="sb-menu-item">
+          <span className="sb-menu-label">
+            <FolderInput size={13} />
+            Move to group
+          </span>
+          <ChevronRight size={12} />
+        </Menu.SubmenuTrigger>
+        {moveMenu(p)}
+      </Menu.SubmenuRoot>
+    </MenuPopup>
   );
 
   const moveMenu = (p: Project) => (
-    <Menu.Portal>
-      <Menu.Positioner
-        side="right"
-        align="start"
-        className="sb-menu-positioner"
-        sideOffset={4}
+    <MenuPopup side="right" align="start">
+      {groupPaths.map((path) => (
+        <Menu.Item
+          key={path}
+          className="sb-menu-item"
+          disabled={path === (p.folder ?? "")}
+          onClick={() =>
+            void changeGroups(() => moveProject(p.id, { kind: "folder", path }))
+          }
+        >
+          <span className="sb-menu-group">
+            {path.split("/").map((name, i, parts) => (
+              <span key={i} className={i < parts.length - 1 ? "parent" : ""}>
+                {name}
+              </span>
+            ))}
+          </span>
+          {path === p.folder && <Check size={13} />}
+        </Menu.Item>
+      ))}
+      {p.folder && (
+        <MenuAction
+          icon={<FolderMinus size={13} />}
+          onClick={() =>
+            void changeGroups(() =>
+              moveProject(p.id, { kind: "folder", path: "" }),
+            )
+          }
+        >
+          Remove from group
+        </MenuAction>
+      )}
+      {groupPaths.length > 0 && (
+        <Menu.Separator className="sb-menu-separator" />
+      )}
+      <MenuAction
+        icon={<FolderPlus size={13} />}
+        onClick={() => startGroup("", p.id)}
       >
-        <Menu.Popup className="sb-menu">
-          {groupPaths.map((path) => (
-            <Menu.Item
-              key={path}
-              className="sb-menu-item"
-              disabled={path === (p.folder ?? "")}
-              onClick={() =>
-                void changeGroups(() =>
-                  moveProject(p.id, { kind: "folder", path }),
-                )
-              }
-            >
-              <span className="sb-menu-group">
-                {path.split("/").map((name, i, parts) => (
-                  <span
-                    key={i}
-                    className={i < parts.length - 1 ? "parent" : ""}
-                  >
-                    {name}
-                  </span>
-                ))}
-              </span>
-              {path === p.folder && <Check size={13} />}
-            </Menu.Item>
-          ))}
-          {p.folder && (
-            <Menu.Item
-              className="sb-menu-item"
-              onClick={() =>
-                void changeGroups(() =>
-                  moveProject(p.id, { kind: "folder", path: "" }),
-                )
-              }
-            >
-              <span className="sb-menu-label">
-                <FolderMinus size={13} />
-                Remove from group
-              </span>
-            </Menu.Item>
-          )}
-          {groupPaths.length > 0 && (
-            <Menu.Separator className="sb-menu-separator" />
-          )}
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => startGroup("", p.id)}
-          >
-            <span className="sb-menu-label">
-              <FolderPlus size={13} />
-              New group…
-            </span>
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Positioner>
-    </Menu.Portal>
+        New group…
+      </MenuAction>
+    </MenuPopup>
   );
 
   const groupMenu = (folder: ProjectFolderNode) => (
-    <Menu.Portal>
-      <Menu.Positioner side="bottom" align="end" sideOffset={4}>
-        <Menu.Popup className="sb-menu">
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => {
-              setDraft(undefined);
-              setRenaming(folder.path);
-            }}
-          >
-            <span className="sb-menu-label">
-              <Pencil size={13} />
-              Rename
-            </span>
-          </Menu.Item>
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => startGroup(folder.path)}
-          >
-            <span className="sb-menu-label">
-              <FolderPlus size={13} />
-              New group inside
-            </span>
-          </Menu.Item>
-          <Menu.Separator className="sb-menu-separator" />
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() =>
-              void changeGroups(() => api.removeProjectGroup(folder.path))
-            }
-          >
-            <span className="sb-menu-label">
-              <FolderMinus size={13} />
-              Remove group
-            </span>
-            <small>Projects stay</small>
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Positioner>
-    </Menu.Portal>
+    <MenuPopup side="bottom" align="end">
+      <MenuAction
+        icon={<Pencil size={13} />}
+        onClick={() => {
+          setDraft(undefined);
+          setRenaming(folder.path);
+        }}
+      >
+        Rename
+      </MenuAction>
+      <MenuAction
+        icon={<FolderPlus size={13} />}
+        onClick={() => startGroup(folder.path)}
+      >
+        New group inside
+      </MenuAction>
+      <Menu.Separator className="sb-menu-separator" />
+      <MenuAction
+        icon={<FolderMinus size={13} />}
+        hint="Projects stay"
+        onClick={() =>
+          void changeGroups(() => api.removeProjectGroup(folder.path))
+        }
+      >
+        Remove group
+      </MenuAction>
+    </MenuPopup>
   );
 
   function renderFolder(node: ProjectFolderNode): React.ReactNode {
@@ -1591,18 +1540,13 @@ export function ProjectSidebar({
           </button>
         )}
         {scratch.length > THREADS_PER_PROJECT && (
-          <button
-            className="sb-thread sb-ghost"
-            onClick={() =>
+          <ShowMore
+            more={moreScratch}
+            hidden={scratch.length - THREADS_PER_PROJECT}
+            onToggle={() =>
               setShowAll((s) => ({ ...s, scratchpad: !moreScratch }))
             }
-          >
-            <span className="sb-thread-title">
-              {moreScratch
-                ? "Show less"
-                : `Show ${scratch.length - THREADS_PER_PROJECT} more`}
-            </span>
-          </button>
+          />
         )}
       </div>
     </section>

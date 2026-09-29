@@ -10,6 +10,7 @@ import {
 import { terminalFont, useTypography } from "../lib/typography";
 import { IconButton } from "./ui";
 import "./terminal-drawer.css";
+import { dragFrom } from "../lib/dragFrom";
 
 const heightKey = "relay-terminal-height";
 const defaultHeight = 260,
@@ -85,21 +86,8 @@ export function TerminalDrawer({
           }
         }}
         onPointerDown={(e) => {
-          e.preventDefault();
-          const handle = e.currentTarget;
-          const start = e.clientY,
-            origin = height;
-          handle.setPointerCapture(e.pointerId);
-          const move = (event: PointerEvent) =>
-            resize(origin + start - event.clientY);
-          const stop = () => {
-            handle.removeEventListener("pointermove", move);
-            handle.removeEventListener("pointerup", stop);
-            handle.removeEventListener("pointercancel", stop);
-          };
-          handle.addEventListener("pointermove", move);
-          handle.addEventListener("pointerup", stop);
-          handle.addEventListener("pointercancel", stop);
+          const origin = height;
+          dragFrom(e, (_dx, dy) => resize(origin - dy));
         }}
       />
       <header className="terminal-drawer-header">

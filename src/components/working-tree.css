@@ -88,14 +88,6 @@
   font-family: var(--font-mono);
   font-size: 10px;
 }
-.working-file > .icon-button {
-  opacity: 0;
-}
-.working-file:hover > .icon-button,
-.working-file.selected > .icon-button,
-.working-file > .icon-button:focus-visible {
-  opacity: 1;
-}
 .working-select span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;

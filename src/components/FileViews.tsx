@@ -18,11 +18,12 @@ import { api } from "../lib/api";
 import { formatSize, joinPath } from "../lib/file-tree";
 import { directoryKey } from "../lib/useFileTree";
 import { ErrorBox, FileEntryIcon, IconButton, Loading } from "./ui";
+import { EditorPath } from "./EditorPath";
 import { revealLabel } from "./FileTree";
 import "./file-browser.css";
 
 /** The path across the top of a viewer, in the editor bar's style, with room for actions. */
-export function FileBar({
+function FileBar({
   path,
   detail,
   children,
@@ -31,18 +32,11 @@ export function FileBar({
   detail?: string;
   children?: ReactNode;
 }) {
-  const name = path.split("/").pop();
   return (
     <div className="editor-bar">
-      <div className="editor-bar-path" title={path}>
-        {path.includes("/") && (
-          <span className="editor-bar-dir">
-            <bdi dir="ltr">{path.slice(0, path.lastIndexOf("/") + 1)}</bdi>
-          </span>
-        )}
-        <strong>{name}</strong>
+      <EditorPath path={path}>
         {detail && <span className="editor-bar-state">{detail}</span>}
-      </div>
+      </EditorPath>
       {children}
     </div>
   );

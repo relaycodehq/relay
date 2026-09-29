@@ -1,5 +1,6 @@
 // Deep review in a project thread: its setup, the reviewers at work, and the
 // lead's findings. See shared/deep-review.ts for how a review runs.
+import { clock } from "../../shared/waiting";
 import {
   useEffect,
   useLayoutEffect,
@@ -542,10 +543,7 @@ export function DeepReviewRequest({
       <header>
         <strong>{message.author ?? "You"}</strong>
         <time>
-          {new Date(message.created).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          {clock(message.created)}
         </time>
       </header>
       <div className="markdown">
@@ -722,10 +720,7 @@ export function ReviewerPane({
                     {agentName(m.provider)}
                   </strong>
                   <time>
-                    {new Date(m.created).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {clock(m.created)}
                   </time>
                 </header>
                 <AgentTurn

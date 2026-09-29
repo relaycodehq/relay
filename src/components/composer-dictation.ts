@@ -178,5 +178,3 @@ export function endDictation(editor: Editor, text: string | null) {
   editor.view.dispatch(tr);
   editor.view.dispatch(closeHistory(editor.state.tr));
 }
-
-export const isDictating = (state: EditorState) => !!key.getState(state);

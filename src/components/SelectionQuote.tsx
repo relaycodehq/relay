@@ -3,6 +3,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { TextQuote } from "lucide-react";
 import { selectionQuote } from "../lib/composer-quotes";
+import { mac } from "../lib/mod-key";
 
 interface Offer {
   text: string;
@@ -14,10 +15,7 @@ interface Offer {
 
 /** Room the button needs so it stays inside the window. */
 const WIDTH = 170;
-const mod =
-  typeof navigator !== "undefined" && navigator.platform.includes("Mac")
-    ? "⌘"
-    : "Ctrl";
+const mod = mac ? "⌘" : "Ctrl";
 
 export function SelectionQuote({
   container,

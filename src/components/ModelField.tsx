@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { Zap } from "lucide-react";
 import {
   effortLabels,
@@ -37,12 +37,7 @@ export function ModelField<P extends AgentProvider = AgentProvider>({
 }) {
   const agent: AgentProvider = provider ?? "codex";
   // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [container, setContainer] = useState<HTMLElement>();
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   // A failed probe lists no models rather than loading forever.
   const catalogs = useCatalogs();
   const efforts = catalogs.effortsOf(agent, value.model);

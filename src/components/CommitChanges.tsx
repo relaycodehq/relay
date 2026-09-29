@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { SquarePen, X } from "lucide-react";
+import { X } from "lucide-react";
 import { api } from "../lib/api";
-import { compactCount } from "../lib/turn-diff-tree";
-import { PaneResizer } from "./PaneResizer";
-import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
+import { DiffStatLabel } from "./DiffStatLabel";
+import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { ErrorBox, FileEntryIcon, IconButton, Loading } from "./ui";
 import "./changed-files.css";
 
@@ -21,7 +20,6 @@ export function CommitChanges({
   onOpenFile: (path: string) => void;
 }) {
   const [picked, setPicked] = useState<string>();
-  const [split, setSplit] = useSplitDiff();
   // A commit never changes, so what was read stays valid for the session.
   const detail = useQuery({
     queryKey: ["project-commit", projectId, sha],
@@ -68,87 +66,34 @@ export function CommitChanges({
         <Loading text="Reading commit…" />
       ) : (
         <div className="working-content">
-          <aside className="working-sidebar">
-            <PaneResizer
-              pane="changes"
-              label="Resize changed files"
-              initial={250}
-              min={200}
-              max={600}
-            />
-            <div className="working-file-list">
-              <section>
-                <header>
-                  <strong>
-                    Changed files <span>{commit.files.length}</span>
-                  </strong>
-                </header>
-                {commit.files.map((f) => (
-                  <div
-                    className={`working-file ${f.path === path ? "selected" : ""}`}
-                    key={f.path}
-                  >
-                    <button
-                      className="working-select turn-file"
-                      title={
-                        f.previousPath
-                          ? `${f.previousPath} → ${f.path}`
-                          : f.path
-                      }
-                      onClick={() => setPicked(f.path)}
-                    >
-                      <FileEntryIcon path={f.path} directory={false} />
-                      <span>{f.path}</span>
-                      {!f.binary && (
-                        <span className="diff-stat">
-                          <span className="diff-stat-add">
-                            +{compactCount(f.additions)}
-                          </span>
-                          <span className="diff-stat-del">
-                            −{compactCount(f.deletions)}
-                          </span>
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </section>
-            </div>
-          </aside>
-          <div className="working-review">
-            {path ? (
-              <>
-                <header>
-                  <strong title={path}>{path}</strong>
-                  <span>
-                    {sideLabels.deletions} → {sideLabels.additions}
-                  </span>
-                  <SplitDiffToggle split={split} onChange={setSplit} />
-                  <IconButton
-                    label="Open in editor"
-                    onClick={() => onOpenFile(path)}
-                  >
-                    <SquarePen size={14} />
-                  </IconButton>
-                </header>
-                {diff.error ? (
-                  <ErrorBox error={diff.error} />
-                ) : diff.data ? (
-                  <WorkingDiff
-                    pair={diff.data}
-                    sideLabels={sideLabels}
-                    split={split}
-                  />
-                ) : (
-                  <Loading text="Loading commit diff…" />
-                )}
-              </>
-            ) : (
-              <div className="empty">
-                <h2>This commit changed no files.</h2>
+          <ChangesSidebar title="Changed files" count={commit.files.length}>
+            {commit.files.map((f) => (
+              <div
+                className={`working-file ${f.path === path ? "selected" : ""}`}
+                key={f.path}
+              >
+                <button
+                  className="working-select turn-file"
+                  title={
+                    f.previousPath ? `${f.previousPath} → ${f.path}` : f.path
+                  }
+                  onClick={() => setPicked(f.path)}
+                >
+                  <FileEntryIcon path={f.path} directory={false} />
+                  <span>{f.path}</span>
+                  {!f.binary && <DiffStatLabel stat={f} />}
+                </button>
               </div>
-            )}
-          </div>
+            ))}
+          </ChangesSidebar>
+          <ChangesReview
+            path={path}
+            sides={sideLabels}
+            diff={diff}
+            loading="Loading commit diff…"
+            empty="This commit changed no files."
+            onOpenFile={onOpenFile}
+          />
         </div>
       )}
     </section>

@@ -1,5 +1,6 @@
 import { Download, Pause, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { useDialogContainer } from "../lib/useDialogContainer";
 import { dictationModel, dictationModelSize } from "../../shared/dictation";
 import { api } from "../lib/api";
 import {
@@ -115,13 +116,7 @@ export function DictationShortcutSetting() {
 export function DictationMicrophoneSetting() {
   const options = useMicrophones();
   const chosen = useDictationMicrophone();
-  const [container, setContainer] = useState<HTMLElement>();
-  // Popups must render inside a modal <dialog> to sit in its top layer.
-  const ref = useCallback(
-    (el: HTMLElement | null) =>
-      setContainer(el?.closest("dialog") ?? undefined),
-    [],
-  );
+  const [ref, container] = useDialogContainer();
   return (
     <div ref={ref} className="composer-tools model-field">
       <ComposerSelect
