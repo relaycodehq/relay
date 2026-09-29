@@ -68,6 +68,19 @@ const topOfView = (page: Page) =>
     }
   });
 
+/**
+ * The same place, within a pixel: on a 1x screen the view scrolls in whole
+ * pixels, and the heights above the message are estimates after a switch,
+ * so it can land half a pixel off, which rounds to a pixel.
+ */
+function expectSamePlace(
+  place: Awaited<ReturnType<typeof topOfView>>,
+  expected: Awaited<ReturnType<typeof topOfView>>,
+) {
+  expect(place?.id).toBe(expected!.id);
+  expect(Math.abs(place!.offset - expected!.offset)).toBeLessThanOrEqual(1);
+}
+
 /** Where a message starts, from the top of the thread's view. */
 const offsetOf = (page: Page, id: string) =>
   page
@@ -183,7 +196,7 @@ test("reopens a long thread where the reader left it, before or after paging bac
     const reading = await topOfView(page);
     await open("Short");
     await open("Long");
-    expect(await topOfView(page)).toEqual(reading);
+    expectSamePlace(await topOfView(page), reading);
 
     // Page back from the top: the message being read stays where it was.
     await page.evaluate(() => {
@@ -204,7 +217,7 @@ test("reopens a long thread where the reader left it, before or after paging bac
     expect(Number(earlier!.id!.split("-")[1])).toBeLessThan(160);
     await open("Short");
     await open("Long");
-    expect(await topOfView(page)).toEqual(earlier);
+    expectSamePlace(await topOfView(page), earlier);
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });
