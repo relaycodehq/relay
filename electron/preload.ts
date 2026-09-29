@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { ApiMethod } from "../shared/types";
 const methods = [
   "localCheckInfo",
@@ -87,6 +87,7 @@ const methods = [
   "projectChatImage",
   "projectChatReadImage",
   "revealProjectChatReadImage",
+  "revealProjectTurnFile",
   "sendProjectChat",
   "cancelProjectChat",
   "startDeepReview",
@@ -217,6 +218,7 @@ const api = Object.fromEntries(
 );
 contextBridge.exposeInMainWorld("relay", {
   ...api,
+  pathForFile: (file: File) => webUtils.getPathForFile(file),
   onProjectChat: (callback: (event: unknown) => void) => {
     const listener = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on("relay:project-chat", listener);

@@ -1789,6 +1789,24 @@ details.agent-step > .agent-step-heading:hover {
   mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M12 3 3 8v9l9 5 9-5V8L12 3ZM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5"/%3E%3C/svg%3E')
     center/contain no-repeat;
 }
+/* A file by path: the skill tag's shape, in the text's own colour. */
+.composer-file-chip {
+  border-color: var(--border);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  font-weight: 400;
+}
+.composer-file-chip.ProseMirror-selectednode {
+  outline-color: var(--muted);
+}
+.composer-file-icon {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: var(--muted);
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/%3E%3Cpath d="M14 2v4a2 2 0 0 0 2 2h4"/%3E%3C/svg%3E')
+    center/contain no-repeat;
+}
 /* A quoted passage from the conversation: one short line, × on hover. */
 .composer-quote-chip {
   display: inline-flex;

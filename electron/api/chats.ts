@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
@@ -137,6 +138,15 @@ export function chatHandlers(ctx: ApiContext) {
         idSchema.parse(args[1]),
         workingPathSchema.parse(args[2]),
       ),
+    revealProjectTurnFile: async (args) => {
+      const file = await projectChats.turnFilePath(
+        idSchema.parse(args[0]),
+        idSchema.nullable().parse(args[1]),
+        workingPathSchema.parse(args[2]),
+      );
+      if (!existsSync(file)) throw new Error("That file is gone from disk.");
+      shell.showItemInFolder(file);
+    },
     rewindProjectTurn: (args) =>
       projectChats.rewindTurn(
         idSchema.parse(args[0]),

@@ -87,7 +87,9 @@ import {
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
+import { api } from "../lib/api";
 import {
+  isScreenshot,
   loadDraftImages,
   prepareScreenshot,
   saveDraftImages,
@@ -894,6 +896,28 @@ export function ProjectComposer({
       setPreparing(false);
     }
   }
+  /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
+  function addFiles(files: File[], point?: { left: number; top: number }) {
+    const others = files.filter((file) => !isScreenshot(file));
+    if (others.length) insertPaths(others, point);
+    void addImages(files.filter(isScreenshot));
+  }
+  function insertPaths(files: File[], point?: { left: number; top: number }) {
+    if (shared) {
+      setImageError("Files in shared conversations are not supported yet.");
+      return;
+    }
+    const paths = files.map((file) => api.pathForFile(file));
+    const missing = files.find((_, i) => !paths[i]);
+    if (missing) {
+      setImageError(
+        `Relay can't tell where "${missing.name}" is saved. Save it to disk and drop it again.`,
+      );
+      return;
+    }
+    setImageError(undefined);
+    promptInput.current?.insertFiles(paths, point);
+  }
   function removeImage(id: string) {
     const next = images.filter((image) => image.id !== id);
     setImages(next);
@@ -1295,7 +1319,7 @@ export function ProjectComposer({
             if (!files.length) return;
             event.preventDefault();
             event.stopPropagation();
-            void addImages(files);
+            addFiles(files, { left: event.clientX, top: event.clientY });
           }}
           onDragOver={(event) => {
             if (event.dataTransfer.types.includes("Files"))
@@ -1394,22 +1418,21 @@ export function ProjectComposer({
           <input
             ref={filePick}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
             multiple
             hidden
             onChange={(event) => {
-              void addImages(Array.from(event.target.files ?? []));
+              addFiles(Array.from(event.target.files ?? []));
               event.target.value = "";
             }}
           />
           <button
             type="button"
             className="composer-control"
-            aria-label="Attach screenshot"
+            aria-label="Attach files"
             title={
               shared
-                ? "Screenshots in shared conversations are not supported yet"
-                : "Attach screenshots"
+                ? "Files in shared conversations are not supported yet"
+                : "Attach screenshots or files"
             }
             disabled={shared}
             onClick={() => filePick.current?.click()}

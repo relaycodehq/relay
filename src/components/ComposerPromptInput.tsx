@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
 import { Slice, type Fragment, type Node as PMNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import {
   useEffect,
   useImperativeHandle,
@@ -45,6 +45,8 @@ export interface PromptInputHandle {
   insertSkill: (skill: SkillPick) => void;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
   insertText: (range: { start: number; end: number; text: string }) => void;
+  /** Puts files in as tags where the pointer is, or at the caret without one. */
+  insertFiles: (paths: string[], point?: { left: number; top: number }) => void;
   /** Puts a quoted passage at the caret as a pill. */
   insertQuote: (text: string) => void;
   /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
@@ -170,16 +172,50 @@ const Paste = Node.create({
     return pasteMarkdown(node.attrs as PastedText);
   },
 });
+// A file on this computer, by path; sent as the path in backticks for the agent to read.
+export const FileTag = Node.create({
+  name: "relayFile",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { path: { default: "" } };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-relay-file]" }];
+  },
+  renderHTML({ node }) {
+    const path: string = node.attrs.path;
+    return [
+      "span",
+      {
+        "data-relay-file": "",
+        class: "composer-skill-chip composer-file-chip",
+        title: path,
+        contenteditable: "false",
+      },
+      ["span", { "aria-hidden": "true", class: "composer-file-icon" }],
+      ["span", {}, path.split(/[\\/]/).filter(Boolean).pop() ?? path],
+    ];
+  },
+  renderText({ node }) {
+    return fileMarkdown(node.attrs.path);
+  },
+});
+const fileMarkdown = (path: string) => "`" + path + "`";
 const leaf = (node: PMNode) =>
   node.type.name === "relaySkill"
     ? node.attrs.token
-    : node.type.name === "relayQuote"
-      ? quoteMarkdown(node.attrs.text)
-      : node.type.name === "relayPaste"
-        ? pasteMarkdown(node.attrs as PastedText)
-        : node.type.name === "hardBreak"
-          ? "\n"
-          : "";
+    : node.type.name === "relayFile"
+      ? fileMarkdown(node.attrs.path)
+      : node.type.name === "relayQuote"
+        ? quoteMarkdown(node.attrs.text)
+        : node.type.name === "relayPaste"
+          ? pasteMarkdown(node.attrs as PastedText)
+          : node.type.name === "hardBreak"
+            ? "\n"
+            : "";
 // A quote is a Markdown blockquote, so one that follows text on the same line
 // starts a line of its own; promptContent drops that break again.
 function serialize(content: Fragment, end = content.size) {
@@ -218,23 +254,27 @@ function position(doc: PMNode, offset: number) {
   return result;
 }
 /**
- * Rebuilds the editor document from the draft text. Skill tokens and
- * blockquotes only become pills when this draft registered them, so text the
- * user typed by hand stays text. Fenced pastes always do; nobody types those.
+ * Rebuilds the editor document from the draft text. Skill tokens, blockquotes
+ * and file paths only become pills when this draft registered them, so text
+ * the user typed by hand stays text. Fenced pastes always do; nobody types those.
  */
 export function promptContent(
   value: string,
   labels: Record<string, string>,
   quotes: string[] = [],
+  files: string[] = [],
 ): JSONContent {
   const nodes: JSONContent[] = [];
   const plain = (chunk: string) => {
-    const pattern = /(\n|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
+    const pattern =
+      /(\n|`(?:\/|[A-Za-z]:\\)[^`\n]*`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
     let last = 0;
     for (const m of chunk.matchAll(pattern)) {
       if (m.index! > last)
         nodes.push({ type: "text", text: chunk.slice(last, m.index) });
       if (m[0] === "\n") nodes.push({ type: "hardBreak" });
+      else if (m[0].startsWith("`") && files.includes(m[0].slice(1, -1)))
+        nodes.push({ type: "relayFile", attrs: { path: m[0].slice(1, -1) } });
       else if (
         labels[m[0]] &&
         (m.index === 0 || /\s/.test(chunk[m.index! - 1]))
@@ -345,6 +385,14 @@ export function ComposerPromptInput({
         Array.isArray(v) && v.every((q) => typeof q === "string"),
     ),
   );
+  const files = useRef<string[]>(
+    stored(
+      "file-chips:" + draftKey,
+      [],
+      (v): v is string[] =>
+        Array.isArray(v) && v.every((f) => typeof f === "string"),
+    ),
+  );
   const editor = useEditor({
     extensions: [
       Extension.create({
@@ -379,9 +427,10 @@ export function ComposerPromptInput({
       Skill,
       Quote,
       Paste,
+      FileTag,
       ComposerDictation,
     ],
-    content: content(value, labels.current, quotes.current),
+    content: content(value, labels.current, quotes.current, files.current),
     // The composer remounts per thread, so opening one lands in its input.
     autofocus: "end",
     editorProps: {
@@ -402,6 +451,7 @@ export function ComposerPromptInput({
             pastesAfter(text(view.state.doc), plain),
             labels.current,
             quotes.current,
+            files.current,
           ),
         ).firstChild!.content;
         view.dispatch(
@@ -511,7 +561,7 @@ export function ComposerPromptInput({
   useEffect(() => {
     if (editor && text(editor.state.doc) !== value)
       editor.commands.setContent(
-        content(value, labels.current, quotes.current),
+        content(value, labels.current, quotes.current, files.current),
         { emitUpdate: false },
       );
   }, [value, editor]);
@@ -570,6 +620,35 @@ export function ComposerPromptInput({
           ? chain.insertContentAt(range, { type: "text", text })
           : chain.deleteRange(range)
         ).run();
+      },
+      insertFiles(paths, point) {
+        if (!editor || !paths.length) return;
+        files.current = [...new Set([...files.current, ...paths])];
+        localStorage.setItem(
+          "file-chips:" + draftKey,
+          JSON.stringify(files.current),
+        );
+        const { doc } = editor.state;
+        const hit = point && editor.view.posAtCoords(point)?.pos;
+        // The pointer can land between blocks; the tags go in the nearest one.
+        const at =
+          hit === undefined
+            ? editor.state.selection.from
+            : TextSelection.near(doc.resolve(hit)).from;
+        const $at = doc.resolve(at);
+        // Tags keep a space on each side: two paths touching would read as one.
+        const before = $at.nodeBefore,
+          after = $at.nodeAfter;
+        const space = { type: "text", text: " " };
+        const nodes: JSONContent[] = paths.flatMap((path, i) => [
+          ...(i ? [space] : []),
+          { type: "relayFile", attrs: { path } },
+        ]);
+        if (before && !/\s$/.test(before.text ?? "")) nodes.unshift(space);
+        if (!/^\s/.test(after?.text ?? "")) nodes.push(space);
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        editor.chain().focus().insertContentAt(at, nodes).run();
+        editor.view.dispatch(closeHistory(editor.state.tr));
       },
       insertQuote(quote) {
         if (!editor || !quote) return;

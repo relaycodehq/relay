@@ -697,6 +697,12 @@ export interface ProjectApi {
     messageId: string,
     path: string,
   ): Promise<void>;
+  /** Shows a file a turn changed in Finder; a null `messageId` means a worktree file. */
+  revealProjectTurnFile(
+    chatId: string,
+    messageId: string | null,
+    path: string,
+  ): Promise<void>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;

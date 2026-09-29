@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { SquarePen, Undo2 } from "lucide-react";
+import { ContextMenu } from "@base-ui/react/context-menu";
+import { FolderOpen, SquarePen, Undo2 } from "lucide-react";
 import type { TurnFileChange } from "../../shared/projects";
 import { api } from "../lib/api";
 import { compactCount } from "../lib/turn-diff-tree";
@@ -38,6 +39,7 @@ export function TurnChanges({
   onOpenFile: (path: string) => void;
 }) {
   const [path, setPath] = useState(target.path ?? target.files[0]?.path);
+  const [revealError, setRevealError] = useState<string>();
   const [split, setSplit] = useSplitDiff();
   const sides = target.worktree ? worktreeSides : turnSides;
   const diff = useQuery({
@@ -87,30 +89,63 @@ export function TurnChanges({
                 </strong>
               </header>
               {target.files.map((f) => (
-                <div
-                  className={`working-file ${f.path === path ? "selected" : ""}`}
-                  key={f.path}
-                >
-                  <button
-                    className="working-select turn-file"
-                    title={f.path}
-                    onClick={() => setPath(f.path)}
+                <ContextMenu.Root key={f.path}>
+                  <ContextMenu.Trigger
+                    render={
+                      <div
+                        className={`working-file ${f.path === path ? "selected" : ""}`}
+                      />
+                    }
                   >
-                    <FileEntryIcon path={f.path} directory={false} />
-                    <span>{f.path}</span>
-                    {!f.binary && (
-                      <span className="diff-stat">
-                        <span className="diff-stat-add">
-                          +{compactCount(f.additions)}
+                    <button
+                      className="working-select turn-file"
+                      title={f.path}
+                      onClick={() => setPath(f.path)}
+                    >
+                      <FileEntryIcon path={f.path} directory={false} />
+                      <span>{f.path}</span>
+                      {!f.binary && (
+                        <span className="diff-stat">
+                          <span className="diff-stat-add">
+                            +{compactCount(f.additions)}
+                          </span>
+                          <span className="diff-stat-del">
+                            −{compactCount(f.deletions)}
+                          </span>
                         </span>
-                        <span className="diff-stat-del">
-                          −{compactCount(f.deletions)}
-                        </span>
-                      </span>
-                    )}
-                  </button>
-                </div>
+                      )}
+                    </button>
+                  </ContextMenu.Trigger>
+                  <ContextMenu.Portal>
+                    <ContextMenu.Positioner className="sb-menu-positioner">
+                      <ContextMenu.Popup className="sb-menu">
+                        <ContextMenu.Item
+                          className="sb-menu-item"
+                          onClick={() =>
+                            void api
+                              .revealProjectTurnFile(
+                                target.chatId,
+                                target.worktree ? null : target.messageId,
+                                f.path,
+                              )
+                              .catch((e) =>
+                                setRevealError(
+                                  e instanceof Error ? e.message : String(e),
+                                ),
+                              )
+                          }
+                        >
+                          <span className="sb-menu-label">
+                            <FolderOpen size={13} />
+                            Show in Finder
+                          </span>
+                        </ContextMenu.Item>
+                      </ContextMenu.Popup>
+                    </ContextMenu.Positioner>
+                  </ContextMenu.Portal>
+                </ContextMenu.Root>
               ))}
+              {revealError && <ErrorBox error={new Error(revealError)} />}
             </section>
           </div>
         </aside>

@@ -456,6 +456,11 @@ const Message = memo(function Message({
         <ChangedFilesCard
           files={m.changes}
           onOpen={(path) => onTurnDiff(m, path)}
+          onReveal={
+            chatId
+              ? (path) => api.revealProjectTurnFile(chatId, m.id, path)
+              : undefined
+          }
           onRewind={
             chatId
               ? (paths, mode, force) => onRewind(m, paths, mode, force)

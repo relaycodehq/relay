@@ -2691,6 +2691,17 @@ export class ProjectChats {
       throw new Error("This turn didn't change that file.");
     return turnDiff(await this.projects.root(chat.projectId), messageId, path);
   }
+  /** Where a file one turn changed sits on disk (`messageId` null: any file of the thread's worktree). */
+  async turnFilePath(chatId: string, messageId: string | null, path: string) {
+    const chat = await this.load(chatId);
+    if (messageId === null) return join(await this.worktreePath(chatId), path);
+    const message = chat.messages.find((m) => m.id === messageId);
+    if (!message?.changes?.some((f) => f.path === path))
+      throw new Error("This turn didn't change that file.");
+    const root =
+      chat.worktree?.path ?? (await this.projects.root(chat.projectId));
+    return join(root, path);
+  }
   /** Rolls back files one turn changed, or redoes that rollback. */
   rewindTurn(
     chatId: string,

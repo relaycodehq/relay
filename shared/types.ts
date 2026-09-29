@@ -323,6 +323,8 @@ export interface Api
   readClipboard(): Promise<string>;
   writeClipboard(text: string): Promise<void>;
   writeClipboardImage(dataUrl: string): Promise<void>;
+  /** Where a dropped file sits on disk; empty when no file is behind it. */
+  pathForFile(file: File): string;
   launchCodex(
     ref: PullRef,
     head: string,

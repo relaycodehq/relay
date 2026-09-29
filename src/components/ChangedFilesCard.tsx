@@ -1,6 +1,7 @@
 // Adapted from T3 Code's ChangedFilesCard: what one agent turn changed, as a
 // folder tree with line counts. Rows open that turn's diff in the Changes pane;
 // hovering one offers to roll it back.
+import { ContextMenu } from "@base-ui/react/context-menu";
 import { memo, useMemo, useState } from "react";
 import {
   ChevronRight,
@@ -66,11 +67,14 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 export const ChangedFilesCard = memo(function ChangedFilesCard({
   files,
   onOpen,
+  onReveal,
   onRewind,
 }: {
   files: TurnFileChange[];
   /** Opens this turn's diff, on a file when one was picked. */
   onOpen: (path?: string) => void;
+  /** Shows a file in Finder. */
+  onReveal?: (path: string) => Promise<void>;
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
 }) {
@@ -155,7 +159,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
         </div>
       );
     }
-    return (
+    const item = (
       <div
         key={`file:${node.path}`}
         className={`changed-files-item${node.change.revertedBy ? " reverted" : ""}`}
@@ -180,6 +184,34 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
         </button>
         {action(node)}
       </div>
+    );
+    if (!onReveal) return item;
+    return (
+      <ContextMenu.Root key={`file:${node.path}`}>
+        <ContextMenu.Trigger render={item} />
+        <ContextMenu.Portal>
+          <ContextMenu.Positioner className="sb-menu-positioner">
+            <ContextMenu.Popup className="sb-menu">
+              <ContextMenu.Item
+                className="sb-menu-item"
+                onClick={() =>
+                  void onReveal(node.path).catch((e) =>
+                    setPrompt({
+                      kind: "error",
+                      message: e instanceof Error ? e.message : String(e),
+                    }),
+                  )
+                }
+              >
+                <span className="sb-menu-label">
+                  <FolderOpen size={13} />
+                  Show in Finder
+                </span>
+              </ContextMenu.Item>
+            </ContextMenu.Popup>
+          </ContextMenu.Positioner>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>
     );
   };
   return (
