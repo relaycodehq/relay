@@ -53,7 +53,8 @@ export async function loadSherpaEngine(
       sileroVad: {
         model: join(dir, "silero_vad.onnx"),
         threshold: 0.4,
-        minSilenceDuration: 0.55,
+        // Short: the transcriber decides which pauses end a phrase.
+        minSilenceDuration: 0.3,
         minSpeechDuration: 0.2,
         windowSize: vadWindow,
       },

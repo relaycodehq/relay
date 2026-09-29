@@ -11,6 +11,8 @@ export interface SpeechEngine {
 export interface TranscriberOptions {
   /** Audio kept from before speech starts, so first syllables survive. */
   preroll?: number;
+  /** Silence that ends a phrase, in seconds; shorter ones are thinking. */
+  pause?: number;
   /** A phrase this long is closed even without a pause, in seconds. */
   maxPhrase?: number;
   /** New audio needed before the open phrase is decoded again, in seconds. */
@@ -22,6 +24,8 @@ interface Phrase {
   length: number;
   /** Samples covered by `text`. */
   decoded: number;
+  /** Samples up to the end of the last speech heard. */
+  spoken: number;
   text: string;
   closed: boolean;
   settled: boolean;
@@ -32,10 +36,11 @@ interface Phrase {
 /**
  * Turns a live microphone stream into text that grows as you speak.
  *
- * Parakeet is not a streaming model, so the voice detector cuts speech into
- * phrases at pauses; the open phrase is decoded again whenever enough new
- * audio arrived (its words are tentative), and a closed phrase gets one last
- * decode that settles its text. Decodes run one at a time and settle phrases
+ * Parakeet is not a streaming model, so speech is cut into phrases at long
+ * pauses. Each phrase is decoded on its own, which ends it like a sentence, so
+ * a pause to think must not cut one. The open phrase is decoded again whenever
+ * enough new audio arrived (its words are tentative), and a closed phrase gets
+ * one last decode that settles its text. Decodes run one at a time and settle phrases
  * in order, so settled text only ever grows.
  */
 export class Transcriber {
@@ -46,6 +51,7 @@ export class Transcriber {
   private stopped = false;
   private drained: (() => void)[] = [];
   private readonly prerollSamples: number;
+  private readonly pause: number;
   private readonly maxPhrase: number;
   private readonly partialStep: number;
 
@@ -55,6 +61,7 @@ export class Transcriber {
     options: TranscriberOptions = {},
   ) {
     this.prerollSamples = (options.preroll ?? 0.4) * rate;
+    this.pause = (options.pause ?? 2) * rate;
     this.maxPhrase = (options.maxPhrase ?? 15) * rate;
     this.partialStep = (options.partialStep ?? 0.3) * rate;
     engine.resetDetector();
@@ -67,7 +74,11 @@ export class Transcriber {
     if (open) {
       open.chunks.push(samples);
       open.length += samples.length;
-      if (!speaking) open.closed = true;
+      if (speaking) open.spoken = open.length;
+      const silent = open.length - open.spoken;
+      // Out of room in a pause: end it there, not on a split of silence.
+      if (silent >= this.pause || (silent && open.length >= this.maxPhrase))
+        this.close(open);
       else if (open.length >= this.maxPhrase) this.split(open);
     } else if (speaking) {
       this.begin([...this.preroll, samples]);
@@ -86,7 +97,8 @@ export class Transcriber {
   async stop() {
     this.stopped = true;
     const open = this.open();
-    if (open) open.closed = true;
+    if (open && hollow(open)) this.phrases.pop();
+    else if (open) open.closed = true;
     this.pump();
     if (this.busy || this.phrases.some((p) => !p.settled))
       await new Promise<void>((resolve) => this.drained.push(resolve));
@@ -94,15 +106,33 @@ export class Transcriber {
   }
 
   private begin(chunks: Float32Array[], continued = false) {
+    const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     this.phrases.push({
       chunks,
-      length: chunks.reduce((sum, chunk) => sum + chunk.length, 0),
+      length,
       decoded: 0,
+      // A split can leave nothing but the pause after the last word.
+      spoken: continued ? 0 : length,
       text: "",
       closed: false,
       settled: false,
       continued,
     });
+  }
+
+  private close(phrase: Phrase) {
+    // The detector is slow to hear speech again, so a word may already have
+    // begun in the end of the pause. Hand that end to the next phrase rather
+    // than cutting the word or hearing it twice.
+    const all = join(phrase.chunks, phrase.length),
+      cut = Math.max(phrase.spoken, all.length - this.prerollSamples);
+    phrase.chunks = [all.slice(0, cut)];
+    phrase.length = cut;
+    phrase.decoded = Math.min(phrase.decoded, cut);
+    phrase.closed = true;
+    this.preroll = [all.slice(cut)];
+    this.prerollLength = all.length - cut;
+    if (hollow(phrase)) this.phrases.pop();
   }
 
   /** Closes a phrase that ran on without a pause at its quietest recent moment, so no word is cut in half. */
@@ -112,6 +142,7 @@ export class Transcriber {
     phrase.chunks = [all.slice(0, at)];
     phrase.length = at;
     phrase.decoded = Math.min(phrase.decoded, at);
+    phrase.spoken = at;
     phrase.closed = true;
     this.begin([all.slice(at)], true);
   }
@@ -125,7 +156,9 @@ export class Transcriber {
     const unsettled = this.phrases.find((p) => !p.settled);
     if (!unsettled) return;
     if (unsettled.closed) return { phrase: unsettled, final: true };
-    if (unsettled.length - unsettled.decoded >= this.partialStep)
+    // Nothing new to hear once a decode has caught up past the last word.
+    const caughtUp = unsettled.decoded >= unsettled.spoken + this.partialStep;
+    if (!caughtUp && unsettled.length - unsettled.decoded >= this.partialStep)
       return { phrase: unsettled, final: false };
   }
 
@@ -176,6 +209,13 @@ export class Transcriber {
     this.onText(before, text.slice(before.length).trimStart());
   }
 }
+
+/**
+ * Split off after the last word, with nothing but the detector hanging on to
+ * that word; Parakeet makes words up from such a clip of silence.
+ */
+const hollow = (phrase: Phrase) =>
+  phrase.continued && phrase.spoken < 0.5 * rate;
 
 function join(chunks: Float32Array[], length: number) {
   const out = new Float32Array(length);

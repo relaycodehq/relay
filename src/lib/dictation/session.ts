@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/dictation";
 import { api } from "../api";
 import { startCapture, type Capture } from "./capture";
+import { dictationMicrophone } from "./microphones";
 
 /** Where the words go: the composer's editor. */
 export interface DictationTarget {
@@ -26,7 +27,6 @@ export interface DictationSnapshot {
   error?: string;
 }
 
-const MIC_KEY = "relay-dictation-mic";
 const listeners = new Set<() => void>();
 let snapshot: DictationSnapshot = { phase: "idle", loading: false };
 
@@ -43,12 +43,6 @@ function subscribe(listener: () => void) {
 export const dictationSnapshot = () => snapshot;
 export const useDictation = () =>
   useSyncExternalStore(subscribe, () => snapshot);
-
-export const dictationMicrophone = () => localStorage.getItem(MIC_KEY) ?? "";
-export const setDictationMicrophone = (deviceId: string) =>
-  deviceId
-    ? localStorage.setItem(MIC_KEY, deviceId)
-    : localStorage.removeItem(MIC_KEY);
 
 interface Session {
   id: number;

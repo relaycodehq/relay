@@ -1,6 +1,13 @@
+import { ContextMenu } from "@base-ui/react/context-menu";
 import { Popover } from "@base-ui/react/popover";
-import { Mic } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { Check, Mic } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type RefObject,
+} from "react";
 import { dictationModelSize } from "../../shared/dictation";
 import { api } from "../lib/api";
 import {
@@ -14,6 +21,11 @@ import {
   useDictationModel,
   type DictationTarget,
 } from "../lib/dictation/session";
+import {
+  setDictationMicrophone,
+  useDictationMicrophone,
+  useMicrophones,
+} from "../lib/dictation/microphones";
 import {
   dictationShortcut,
   matchesShortcut,
@@ -209,58 +221,61 @@ export function DictationButton({
         if (!open) clearDictationError();
       }}
     >
-      <button
-        ref={button}
-        type="button"
-        className="composer-control dictation-mic"
-        data-live={mine || undefined}
-        data-shown={shown || undefined}
-        data-downloading={downloading || undefined}
-        aria-label={label}
-        aria-pressed={mine}
-        title={
-          mine
-            ? `Finish · ${shortcut} · Esc to discard`
-            : model.status === "ready"
-              ? `Dictate · tap ${shortcut} to start and stop, or hold it to talk`
-              : label
-        }
-        disabled={disabled && !mine}
-        onPointerEnter={() => {
-          if (model.status === "ready" && !mine) void api.warmDictation();
-        }}
-        onClick={() => {
-          if (mine) void stopDictation();
-          else if (dictationModelState().status !== "ready") setPrompt(!prompt);
-          else start.current();
-        }}
-      >
-        <span className="dictation-icon" aria-hidden>
-          <Mic size={15} />
-          {progress !== undefined && (
-            <svg className="dictation-progress" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10.5" pathLength="100" />
-              <circle
-                className="dictation-progress-fill"
-                cx="12"
-                cy="12"
-                r="10.5"
-                pathLength="100"
-                strokeDasharray="100"
-                strokeDashoffset={100 * (1 - progress)}
-              />
-            </svg>
+      <MicrophoneMenu disabled={mine}>
+        <button
+          ref={button}
+          type="button"
+          className="composer-control dictation-mic"
+          data-live={mine || undefined}
+          data-shown={shown || undefined}
+          data-downloading={downloading || undefined}
+          aria-label={label}
+          aria-pressed={mine}
+          title={
+            mine
+              ? `Finish · ${shortcut} · Esc to discard`
+              : model.status === "ready"
+                ? `Dictate · tap ${shortcut} to start and stop, or hold it to talk`
+                : label
+          }
+          disabled={disabled && !mine}
+          onPointerEnter={() => {
+            if (model.status === "ready" && !mine) void api.warmDictation();
+          }}
+          onClick={() => {
+            if (mine) void stopDictation();
+            else if (dictationModelState().status !== "ready")
+              setPrompt(!prompt);
+            else start.current();
+          }}
+        >
+          <span className="dictation-icon" aria-hidden>
+            <Mic size={15} />
+            {progress !== undefined && (
+              <svg className="dictation-progress" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10.5" pathLength="100" />
+                <circle
+                  className="dictation-progress-fill"
+                  cx="12"
+                  cy="12"
+                  r="10.5"
+                  pathLength="100"
+                  strokeDasharray="100"
+                  strokeDashoffset={100 * (1 - progress)}
+                />
+              </svg>
+            )}
+          </span>
+          {shown && (
+            <DictationWave
+              analyser={session.analyser}
+              active={mine && session.phase === "listening" && !session.loading}
+              settling={!mine || session.phase === "finishing"}
+            />
           )}
-        </span>
-        {shown && (
-          <DictationWave
-            analyser={session.analyser}
-            active={mine && session.phase === "listening" && !session.loading}
-            settling={!mine || session.phase === "finishing"}
-          />
-        )}
-        <span className="dictation-finish" aria-hidden />
-      </button>
+          <span className="dictation-finish" aria-hidden />
+        </button>
+      </MicrophoneMenu>
       <Popover.Portal>
         <Popover.Positioner
           className="composer-popup-positioner"
@@ -282,6 +297,58 @@ export function DictationButton({
         </Popover.Positioner>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** Right-click on the mic: which microphone to listen to. */
+function MicrophoneMenu({
+  disabled,
+  children,
+}: {
+  disabled?: boolean;
+  /** The mic button, which becomes the trigger. */
+  children: ReactElement;
+}) {
+  // Listed up front so the menu doesn't open short and then grow.
+  const options = useMicrophones();
+  const chosen = useDictationMicrophone();
+  const value = options.some((o) => o.value === chosen) ? chosen : "";
+  return (
+    <ContextMenu.Root disabled={disabled}>
+      <ContextMenu.Trigger render={children} />
+      <ContextMenu.Portal>
+        <ContextMenu.Positioner className="composer-popup-positioner">
+          <ContextMenu.Popup
+            className="composer-select-popup"
+            aria-label="Microphone"
+          >
+            <ContextMenu.Group>
+              <ContextMenu.GroupLabel className="composer-menu-label">
+                Microphone
+              </ContextMenu.GroupLabel>
+              <ContextMenu.RadioGroup
+                value={value}
+                onValueChange={setDictationMicrophone}
+              >
+                {options.map((option) => (
+                  <ContextMenu.RadioItem
+                    className="composer-select-item"
+                    key={option.value}
+                    value={option.value}
+                    closeOnClick
+                  >
+                    {option.label}
+                    <ContextMenu.RadioItemIndicator>
+                      <Check size={13} />
+                    </ContextMenu.RadioItemIndicator>
+                  </ContextMenu.RadioItem>
+                ))}
+              </ContextMenu.RadioGroup>
+            </ContextMenu.Group>
+          </ContextMenu.Popup>
+        </ContextMenu.Positioner>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
 

@@ -1,12 +1,13 @@
 import { Download, Pause, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { dictationModel, dictationModelSize } from "../../shared/dictation";
 import { api } from "../lib/api";
 import {
-  dictationMicrophone,
   setDictationMicrophone,
-  useDictationModel,
-} from "../lib/dictation/session";
+  useDictationMicrophone,
+  useMicrophones,
+} from "../lib/dictation/microphones";
+import { useDictationModel } from "../lib/dictation/session";
 import {
   defaultDictationShortcut,
   setDictationShortcut,
@@ -112,8 +113,8 @@ export function DictationShortcutSetting() {
 }
 
 export function DictationMicrophoneSetting() {
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [chosen, setChosen] = useState(dictationMicrophone);
+  const options = useMicrophones();
+  const chosen = useDictationMicrophone();
   const [container, setContainer] = useState<HTMLElement>();
   // Popups must render inside a modal <dialog> to sit in its top layer.
   const ref = useCallback(
@@ -121,30 +122,6 @@ export function DictationMicrophoneSetting() {
       setContainer(el?.closest("dialog") ?? undefined),
     [],
   );
-  useEffect(() => {
-    const list = () =>
-      void navigator.mediaDevices
-        ?.enumerateDevices()
-        .then((all) =>
-          setDevices(
-            all.filter(
-              (d) => d.kind === "audioinput" && d.deviceId !== "default",
-            ),
-          ),
-        );
-    list();
-    navigator.mediaDevices?.addEventListener("devicechange", list);
-    return () =>
-      navigator.mediaDevices?.removeEventListener("devicechange", list);
-  }, []);
-  const options = [
-    { value: "", label: "System default" },
-    ...devices.map((device, i) => ({
-      value: device.deviceId,
-      // Names show once the microphone has been allowed.
-      label: device.label || `Microphone ${i + 1}`,
-    })),
-  ];
   return (
     <div ref={ref} className="composer-tools model-field">
       <ComposerSelect
@@ -152,10 +129,7 @@ export function DictationMicrophoneSetting() {
         container={container}
         value={options.some((o) => o.value === chosen) ? chosen : ""}
         options={options}
-        onChange={(deviceId) => {
-          setDictationMicrophone(deviceId);
-          setChosen(deviceId);
-        }}
+        onChange={setDictationMicrophone}
       />
     </div>
   );

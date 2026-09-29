@@ -50,10 +50,51 @@ it("keeps the audio from just before speech was detected", async () => {
   expect(decoded[0].some((s) => Math.abs(s - 0.3) < 1e-6)).toBe(true);
 });
 
+it("keeps a word that starts before the detector noticed the pause", async () => {
+  const { engine, decoded } = fakeEngine();
+  const transcriber = new Transcriber(engine, () => {});
+  transcriber.push(chunk(0.5, 0.9));
+  // The chunk that closes the phrase already holds the next word's onset.
+  transcriber.push(new Float32Array([...chunk(0.2, 0), ...chunk(0.1, 0.3)]));
+  transcriber.push(chunk(0.5, 0.8));
+  await transcriber.stop();
+  const next = decoded.find((d) => d.some((s) => Math.abs(s - 0.8) < 1e-6))!;
+  expect(next.some((s) => Math.abs(s - 0.3) < 1e-6)).toBe(true);
+});
+
+it("keeps talking through a pause to think in one phrase", async () => {
+  const { engine, decoded } = fakeEngine();
+  const transcriber = new Transcriber(engine, () => {});
+  transcriber.push(chunk(0.5, 0.9));
+  transcriber.push(chunk(1.2, 0));
+  transcriber.push(chunk(0.5, 0.8));
+  await transcriber.stop();
+  const last = decoded.at(-1)!;
+  expect(last.some((s) => Math.abs(s - 0.9) < 1e-6)).toBe(true);
+  expect(last.some((s) => Math.abs(s - 0.8) < 1e-6)).toBe(true);
+});
+
+it("stops decoding again while nothing is said", async () => {
+  const { engine, decoded } = fakeEngine();
+  const transcriber = new Transcriber(engine, () => {});
+  transcriber.push(chunk(0.5, 0.9));
+  await new Promise((resolve) => setTimeout(resolve));
+  const before = decoded.length;
+  for (let tenth = 0; tenth < 15; tenth++) {
+    transcriber.push(chunk(0.1, 0));
+    await new Promise((resolve) => setTimeout(resolve));
+  }
+  // One to hear the end of the last word, then quiet.
+  expect(decoded.length - before).toBeLessThanOrEqual(1);
+  await transcriber.stop();
+});
+
 it("settles phrases in order and only ever grows the settled text", async () => {
   const { engine } = fakeEngine();
   const seen: string[] = [];
-  const transcriber = new Transcriber(engine, (settled) => seen.push(settled));
+  const transcriber = new Transcriber(engine, (settled) => seen.push(settled), {
+    pause: 0.3,
+  });
   for (const value of [0.7, 0, 0.8, 0, 0.9]) {
     transcriber.push(chunk(0.4, value));
     await new Promise((resolve) => setTimeout(resolve));
@@ -73,6 +114,16 @@ it("splits a phrase with no pause at its quietest moment", async () => {
   await transcriber.stop();
   const ends = decoded.map((d) => lastSpeech(d) / rate);
   expect(ends.some((end) => end > 2.5 && end < 2.6)).toBe(true);
+});
+
+it("ends a phrase that runs out of room in a pause instead of splitting it", async () => {
+  const { engine, decoded } = fakeEngine();
+  const transcriber = new Transcriber(engine, () => {}, { maxPhrase: 1 });
+  transcriber.push(chunk(0.8, 0.9));
+  for (let tenth = 0; tenth < 10; tenth++) transcriber.push(chunk(0.1, 0));
+  await transcriber.stop();
+  // A clip of only silence is where Parakeet makes words up.
+  expect(decoded.every((d) => d.some((s) => s > 0.5))).toBe(true);
 });
 
 it("finds the quietest window", () => {
