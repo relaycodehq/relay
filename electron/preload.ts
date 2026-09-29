@@ -185,6 +185,8 @@ const methods = [
   "agentVersions",
   "linkAgent",
   "unlinkAgent",
+  "signInCursor",
+  "signOutCursor",
   "checkAgentVersions",
   "updateAgent",
   "applyAppearance",
