@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openInFileTree } from "../fixtures/navigation";
 
 test("a worktree thread is its own branch: the header follows it, commits there and merges into main", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-worktree-")));
@@ -116,8 +117,9 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     );
     await page.getByRole("button", { name: "Files", exact: true }).click();
     const fileList = page.locator(".project-file-list");
+    await openInFileTree(page, "src/guard.ts");
     await expect(
-      fileList.getByRole("button", { name: /guard\.ts/ }),
+      fileList.getByRole("treeitem", { name: "guard.ts", exact: true }),
     ).toBeVisible();
     await expect(fileList).not.toContainText("notes.txt");
     await screenshot(page, { path: "test-results/worktree-header.png" });

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { openInFileTree } from "../fixtures/navigation";
 
 test("chat, changes and files are inline panes that can be reordered", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-panes-"))),
@@ -62,10 +63,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
 
     // Opening a file happens inline and is remembered.
     await toggle("Files").click();
-    await page
-      .locator(".project-file-list")
-      .getByRole("button", { name: /b\.ts/ })
-      .click();
+    await openInFileTree(page, "src/b.ts");
     await expect(
       page.locator(".project-inline-editor").getByRole("textbox", {
         name: "src/b.ts",

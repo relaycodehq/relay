@@ -62,6 +62,7 @@ export default function LocalFileEditor({
   path,
   line,
   onClose,
+  actions,
 }: {
   checks: ChecksController;
   pull?: Pull;
@@ -72,6 +73,8 @@ export default function LocalFileEditor({
   path: string;
   line?: number;
   onClose: () => void;
+  /** Extra buttons in the inline bar, after the editing controls. */
+  actions?: ReactNode;
 }) {
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
@@ -406,6 +409,7 @@ export default function LocalFileEditor({
           >
             <RotateCw size={15} />
           </IconButton>
+          {actions}
           {!plain && (
             <IconButton
               label={`Compare with ${project ? "HEAD" : "PR head"}`}

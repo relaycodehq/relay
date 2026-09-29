@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openInFileTree } from "../fixtures/navigation";
 const screenshotPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
 test("matches a project remote, reviews its PR and sends pinned lines into its restored chat", async () => {
@@ -279,10 +280,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       page.getByText("export const answer = 43;", { exact: false }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Files", exact: true }).click();
-    await page
-      .locator(".project-file-list")
-      .getByRole("button", { name: /example.ts/ })
-      .click();
+    await openInFileTree(page, "example.ts");
     const surface = page
       .locator('.project-inline-editor [contenteditable="true"]')
       .last();

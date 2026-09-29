@@ -450,10 +450,19 @@ export default function ProjectShell() {
           staleTime: 5000,
         }),
       );
+      // Ignored files (an agent's output folder) aren't in Git's list but are on disk.
+      const onDisk =
+        !found.length &&
+        (await api.projectFileInfo(id, target.path).then(
+          () => true,
+          () => false,
+        ));
       openInEditor(
         found.length === 1
           ? { ...target, path: found[0] }
-          : { ...target, search: target.path },
+          : onDisk
+            ? target
+            : { ...target, search: target.path },
       );
     } catch (e) {
       setError(e);

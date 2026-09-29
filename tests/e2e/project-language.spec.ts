@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { languageProject, reviewPath } from "../fixtures/language-project";
+import { openInFileTree } from "../fixtures/navigation";
 test("local Angular projects run checks and symbol navigation without a Gitea account", async () => {
   const repo = await languageProject("https://gitea.example.invalid", true),
     data = await mkdtemp(join(tmpdir(), "relay-local-language-ui-"));
@@ -44,10 +45,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
     await page
       .getByRole("button", { name: "Close dialog", exact: true })
       .click();
-    await page
-      .locator(".project-file-list")
-      .getByRole("button", { name: /useReview.ts/ })
-      .click();
+    await openInFileTree(page, reviewPath);
     const editor = page.getByRole("textbox", { name: reviewPath, exact: true });
     await expect(editor).toBeVisible();
     const call = editor

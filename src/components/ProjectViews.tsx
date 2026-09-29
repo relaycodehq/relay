@@ -8,6 +8,10 @@ import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import type { ChecksController } from "../lib/useProjectChecks";
+import { ancestors } from "../lib/file-tree";
+import { useExpanded } from "../lib/useFileTree";
+import { FileTree } from "./FileTree";
+import { FolderView, ImageFile, OtherFile, RevealButtons } from "./FileViews";
 import { PaneResizer } from "./PaneResizer";
 import { LocalChanges } from "./LocalChanges";
 import { TurnChanges, type TurnDiffTarget } from "./TurnChanges";
@@ -77,7 +81,13 @@ export function ProjectChanges({
   );
 }
 
-/** The files of the folder the thread works in, with an inline editor, VS Code style. */
+type Selection =
+  { kind: "file"; path: string; line?: number } | { kind: "dir"; path: string };
+
+/**
+ * The folder the thread works in: a tree read straight from disk (ignored
+ * files included), folder and picture views, and an inline editor for text.
+ */
 export function ProjectFiles({
   project,
   where,
@@ -108,23 +118,31 @@ export function ProjectFiles({
   // Preserve an edited buffer (and its original revision) if Git moves externally.
   const editorCheckout = useRef(tree.data);
   if (!dirty) editorCheckout.current = tree.data;
-  const [file, setFile] = useState<{ path: string; line?: number } | null>(
-      () => {
-        const path = filePathSchema.safeParse(
-          localStorage.getItem("relay-project-file:" + where),
-        ).data;
-        return path ? { path } : null;
-      },
-    ),
+  const expansion = useExpanded(where);
+  const [selection, setSelection] = useState<Selection | null>(() => {
+      const path = filePathSchema.safeParse(
+        localStorage.getItem("relay-project-file:" + where),
+      ).data;
+      return path ? { kind: "file", path } : null;
+    }),
     [filter, setFilter] = useState("");
+  const file = selection?.kind === "file" ? selection : null;
+  const select = (next: Selection | null) => {
+    if (next) expansion.expand(ancestors(next.path));
+    setSelection(next);
+  };
   useEffect(() => {
     if (!openTarget || openTarget.projectId !== project.id || dirty) return;
-    if (openTarget.search !== undefined || openTarget.directory) {
-      setFilter(openTarget.search ?? openTarget.path + "/");
-      setFile(null);
+    if (openTarget.search !== undefined) {
+      setFilter(openTarget.search);
+      setSelection(null);
     } else {
       setFilter("");
-      setFile({ path: openTarget.path, line: openTarget.line });
+      if (openTarget.directory) {
+        expansion.expand([...ancestors(openTarget.path), openTarget.path]);
+        setSelection({ kind: "dir", path: openTarget.path });
+      } else
+        select({ kind: "file", path: openTarget.path, line: openTarget.line });
     }
     onOpenTargetConsumed?.();
   }, [openTarget?.request, project.id, dirty]);
@@ -133,10 +151,19 @@ export function ProjectFiles({
     else localStorage.removeItem("relay-project-file:" + where);
     onViewing({ path: file?.path ?? null, viewed: 0, total: 0 });
   }, [file?.path, onViewing]);
+  // What kind of file it is decides the viewer; a picture rewritten on disk redraws.
+  const info = useQuery({
+    queryKey: ["project-file-info", where, file?.path],
+    queryFn: () => api.projectFileInfo(where, file!.path),
+    enabled: !!file,
+    retry: false,
+    refetchInterval: (q) => (q.state.data?.kind === "text" ? false : 3000),
+  });
   const files = useQuery({
     queryKey: ["project-files", where],
     queryFn: () => api.projectFiles(where),
     refetchInterval: 5000,
+    enabled: !!filter,
   });
   const list = (files.data ?? []).filter((p) =>
       p.toLowerCase().includes(filter.toLowerCase()),
@@ -148,6 +175,8 @@ export function ProjectFiles({
     estimateSize: () => 28,
     overscan: 12,
   });
+  const [actionError, setActionError] = useState<unknown>();
+  const editorReady = !!file && (tree.data || project.plain);
   return (
     <div className="files-workspace">
       <aside className="project-file-list">
@@ -167,75 +196,134 @@ export function ProjectFiles({
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-        <div className="project-file-scroll" ref={parent}>
-          {files.error && <ErrorBox error={files.error} />}
-          <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
-            {virtual.getVirtualItems().map((row) => {
-              const path = list[row.index];
-              const slash = path.lastIndexOf("/");
-              return (
-                <button
-                  key={path}
-                  disabled={dirty && path !== file?.path}
-                  className={path === file?.path ? "selected" : ""}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: row.size,
-                    transform: `translateY(${row.start}px)`,
-                  }}
-                  title={path}
-                  onClick={() => setFile({ path })}
-                >
-                  <FileCode2 size={14} />
-                  <span>
-                    <strong>{path.slice(slash + 1)}</strong>
-                    {slash > 0 && <small>{path.slice(0, slash)}</small>}
-                  </span>
-                  {checks.state?.files[path]?.errors ? (
-                    <b className="file-errors">
-                      {checks.state.files[path].errors}
-                    </b>
-                  ) : null}
-                </button>
-              );
-            })}
+        {filter ? (
+          <div className="project-file-scroll" ref={parent}>
+            {files.error && <ErrorBox error={files.error} />}
+            <div
+              style={{ height: virtual.getTotalSize(), position: "relative" }}
+            >
+              {virtual.getVirtualItems().map((row) => {
+                const path = list[row.index];
+                const slash = path.lastIndexOf("/");
+                return (
+                  <button
+                    key={path}
+                    disabled={dirty && path !== file?.path}
+                    className={path === file?.path ? "selected" : ""}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: row.size,
+                      transform: `translateY(${row.start}px)`,
+                    }}
+                    title={path}
+                    onClick={() => select({ kind: "file", path })}
+                  >
+                    <FileCode2 size={14} />
+                    <span>
+                      <strong>{path.slice(slash + 1)}</strong>
+                      {slash > 0 && <small>{path.slice(0, slash)}</small>}
+                    </span>
+                    {checks.state?.files[path]?.errors ? (
+                      <b className="file-errors">
+                        {checks.state.files[path].errors}
+                      </b>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </aside>
-      {file && (tree.data || project.plain) ? (
-        <Suspense fallback={<Loading text="Opening editor…" />}>
-          <LocalFileEditor
-            key={`${editorCheckout.current?.head}:${editorCheckout.current?.branch}:${file.path}:${file.line ?? ""}`}
-            project={{
-              id: where,
-              head: editorCheckout.current?.head ?? tree.data?.head ?? "",
-              plain: project.plain,
+        ) : (
+          <FileTree
+            where={where}
+            title={project.name}
+            selected={selection?.path ?? null}
+            lockedPath={dirty && file ? file.path : null}
+            expansion={expansion}
+            onSelect={(path, kind) => select({ kind, path })}
+            onCreated={(path, kind) => select({ kind, path })}
+            onMoved={(from, to) => {
+              expansion.remap(from, to);
+              if (
+                selection &&
+                (selection.path === from ||
+                  selection.path.startsWith(from + "/"))
+              )
+                select({
+                  ...selection,
+                  path: to + selection.path.slice(from.length),
+                });
             }}
-            checks={checks}
-            path={file.path}
-            line={file.line}
-            inline
-            onDirtyChange={onDirtyChange}
-            onClose={() => {
-              setFile(null);
-              onDirtyChange(false);
+            onTrashed={(path) => {
+              expansion.remap(path, null);
+              if (
+                selection &&
+                (selection.path === path ||
+                  selection.path.startsWith(path + "/"))
+              )
+                setSelection(null);
             }}
           />
-        </Suspense>
+        )}
+      </aside>
+      {file ? (
+        info.error ? (
+          <div className="empty project-editor-empty">
+            <FileCode2 size={28} />
+            <h2>Can’t open this file</h2>
+            <ErrorBox error={info.error} />
+          </div>
+        ) : !info.data ? (
+          <Loading text="Opening…" />
+        ) : info.data.kind === "image" ? (
+          <ImageFile where={where} info={info.data} />
+        ) : info.data.kind === "other" ? (
+          <OtherFile where={where} info={info.data} />
+        ) : editorReady ? (
+          <div className="files-main">
+            {!!actionError && <ErrorBox error={actionError} />}
+            <Suspense fallback={<Loading text="Opening editor…" />}>
+              <LocalFileEditor
+                key={`${editorCheckout.current?.head}:${editorCheckout.current?.branch}:${file.path}:${file.line ?? ""}`}
+                project={{
+                  id: where,
+                  head: editorCheckout.current?.head ?? tree.data?.head ?? "",
+                  plain: project.plain,
+                }}
+                checks={checks}
+                path={file.path}
+                line={file.line}
+                inline
+                onDirtyChange={onDirtyChange}
+                actions={
+                  <RevealButtons
+                    where={where}
+                    path={file.path}
+                    external
+                    onError={setActionError}
+                  />
+                }
+                onClose={() => {
+                  setSelection(null);
+                  onDirtyChange(false);
+                }}
+              />
+            </Suspense>
+          </div>
+        ) : (
+          <Loading text="Opening editor…" />
+        )
       ) : (
-        <div className="empty project-editor-empty">
-          <FileCode2 size={28} />
-          <h2>Open a file</h2>
-          <p>
-            {project.plain
-              ? "Pick a file on the left."
-              : "Pick a file on the left, or open one from Changes."}
-          </p>
-          {tree.error && <ErrorBox error={tree.error} />}
-        </div>
+        <FolderView
+          key={selection?.path ?? ""}
+          where={where}
+          dir={selection?.path ?? ""}
+          title={project.name}
+          onOpen={(path, kind) => select({ kind, path })}
+        />
       )}
     </div>
   );
