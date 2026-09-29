@@ -102,7 +102,7 @@ export function fontStack(family: string, fallback: string) {
   return `"${family.replace(/["\\]/g, "")}", ${fallback}`;
 }
 
-export const interfaceScale = (t: Typography) => t.interfaceSize / BASE_SIZE;
+const interfaceScale = (t: Typography) => t.interfaceSize / BASE_SIZE;
 
 /** `size` pixels as they have to be written inside the zoomed window. */
 const unzoomed = (t: Typography, size: number) =>

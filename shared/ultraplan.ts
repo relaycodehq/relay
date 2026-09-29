@@ -49,7 +49,7 @@ export function council(kind: UltraplanKind): Thinker[] {
     : members.map((m) => ({ provider: m.provider, choice: m.choice }));
 }
 
-export type UltraplanStatus =
+type UltraplanStatus =
   "briefing" | "thinking" | "leading" | "done" | "stopped" | "failed";
 /** A council on one request, kept on the thread by that user message's id. */
 export interface UltraplanState {

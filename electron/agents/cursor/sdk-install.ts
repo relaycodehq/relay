@@ -174,7 +174,7 @@ function sameDependencies(
 }
 
 /** Throws unless `data` is what `integrity` (npm's `sha512-…` form) says. */
-export function verifyIntegrity(data: Buffer, integrity: string) {
+function verifyIntegrity(data: Buffer, integrity: string) {
   const candidates = integrity
     .split(/\s+/)
     .map((part) => /^(sha512|sha384|sha256)-(.+)$/.exec(part))

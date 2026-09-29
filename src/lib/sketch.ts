@@ -122,7 +122,7 @@ export class StrokeBuilder {
   }
 }
 
-export function shapePath(shape: Shape): Path2D {
+function shapePath(shape: Shape): Path2D {
   const path = new Path2D();
   if (shape.kind === "ellipse") {
     const { center, rx, ry, angle } = shape;

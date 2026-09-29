@@ -23,10 +23,10 @@ const MAX_DIRECTORY_BYTES = 4 << 20;
 const MAX_INCLUDE_DEPTH = 8;
 const EOCD_SEARCH = 22 + 0xffff;
 
-export type UiTheme = "vs" | "vs-dark" | "hc-black" | "hc-light";
+type UiTheme = "vs" | "vs-dark" | "hc-black" | "hc-light";
 const uiThemes: UiTheme[] = ["vs", "vs-dark", "hc-black", "hc-light"];
 
-export interface ThemeContribution {
+interface ThemeContribution {
   label: string;
   uiTheme: UiTheme;
   path: string;
@@ -48,7 +48,7 @@ export type ExtensionRef = Pick<
   "namespace" | "name" | "version"
 >;
 
-export interface TokenColor {
+interface TokenColor {
   scope?: string | string[];
   settings: { foreground?: string; background?: string; fontStyle?: string };
 }

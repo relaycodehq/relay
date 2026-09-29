@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** How long the first Escape stays armed, waiting for the second. */
-export const DOUBLE_ESCAPE_MS = 1500;
+const DOUBLE_ESCAPE_MS = 1500;
 
 // Escape pressed here belongs to them: open popups and dialogs close, and
 // other fields (search, rename, terminal, editor) cancel their own thing.

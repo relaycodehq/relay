@@ -40,7 +40,7 @@ export function summarizeActivity(activity: AgentActivity[]) {
   return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 
-export const baseName = (path: string) =>
+const baseName = (path: string) =>
   path.split("/").filter(Boolean).at(-1) ?? path;
 
 const commandWrappers = new Set([

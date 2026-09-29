@@ -33,7 +33,7 @@ export const pickAgents = agentProviders.filter(
 export const isPickAgent = (provider: string): provider is AgentProvider =>
   (pickAgents as string[]).includes(provider);
 /** A model and effort, for an agent with no settings of its own beyond them. */
-export interface AgentPick {
+interface AgentPick {
   model: string;
   reasoningEffort: ReasoningEffort;
 }

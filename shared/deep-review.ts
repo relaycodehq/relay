@@ -15,7 +15,7 @@ const branchNameSchema = z
     (v) => !v.startsWith("-") && !v.includes("..") && !/[\s~^:?*[\\]/.test(v),
     "Choose a valid branch.",
   );
-export const reviewTargetSchema = z.discriminatedUnion("kind", [
+const reviewTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("uncommitted") }).strict(),
   z.object({ kind: z.literal("branch"), base: branchNameSchema }).strict(),
   z
@@ -28,7 +28,7 @@ export const reviewTargetSchema = z.discriminatedUnion("kind", [
 ]);
 export type ReviewTarget = z.infer<typeof reviewTargetSchema>;
 
-export const reviewAgentSchema = z
+const reviewAgentSchema = z
   .object({
     provider: reviewerProviderSchema,
     choice: aiSettingsSchema.shape.questions,
@@ -36,7 +36,7 @@ export const reviewAgentSchema = z
   .strict();
 export type ReviewAgent = z.infer<typeof reviewAgentSchema>;
 /** The lead works in a thread like any other, so any agent can lead. */
-export const leadAgentSchema = reviewAgentSchema
+const leadAgentSchema = reviewAgentSchema
   .extend({ provider: agentProviderSchema })
   .strict();
 export type LeadAgent = z.infer<typeof leadAgentSchema>;
@@ -72,7 +72,7 @@ export interface ReviewScope {
 }
 
 /** Codex's review scale. */
-export const priorities = ["P0", "P1", "P2", "P3"] as const;
+const priorities = ["P0", "P1", "P2", "P3"] as const;
 export type Priority = (typeof priorities)[number];
 export const priorityMeaning: Record<Priority, string> = {
   P0: "Drop everything to fix",
@@ -89,7 +89,7 @@ const reviewerNumbersSchema = z
   .array(z.number().int().min(1).max(MAX_REVIEWERS))
   .max(MAX_REVIEWERS)
   .catch([]);
-export const findingSchema = z.object({
+const findingSchema = z.object({
   id: z.string().regex(/^F\d{1,3}$/),
   priority: z.enum(priorities),
   title: z.string().trim().min(1).max(300),
@@ -99,12 +99,11 @@ export const findingSchema = z.object({
   check: z.string().trim().max(600).optional().catch(undefined),
 });
 export type Finding = z.infer<typeof findingSchema>;
-export const droppedFindingSchema = z.object({
+const droppedFindingSchema = z.object({
   title: z.string().trim().min(1).max(300),
   reason: z.string().trim().max(600).catch(""),
   reviewers: reviewerNumbersSchema,
 });
-export type DroppedFinding = z.infer<typeof droppedFindingSchema>;
 const reportSchema = z.object({
   findings: z.array(findingSchema).max(50),
   dropped: z.array(droppedFindingSchema).max(50).catch([]),
@@ -215,7 +214,7 @@ export function fixRequest(
 }
 
 /** Claude's `/code-review` levels; Relay never asks for the paid cloud one. */
-export const claudeReviewLevels = ["low", "medium", "high", "xhigh", "max"];
+const claudeReviewLevels = ["low", "medium", "high", "xhigh", "max"];
 export function claudeReviewLevel(choice: ModelChoice) {
   return claudeReviewLevels.includes(choice.reasoningEffort)
     ? choice.reasoningEffort

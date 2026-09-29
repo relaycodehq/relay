@@ -177,7 +177,7 @@ async function answering(name: string, found: string[]) {
 }
 
 /** Whether running `path --version` prints a version. */
-export async function saysVersion(path: string) {
+async function saysVersion(path: string) {
   const run = await runExecutable(path, ["--version"], versionTimeout);
   return run.code === 0 && !!parseVersion(run.stdout);
 }

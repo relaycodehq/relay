@@ -144,7 +144,6 @@ export const usageProviderSchema = agentsWith("usage").schema;
 export const reportsUsage = (p: string): p is UsageProvider =>
   usageProviders.some((u) => u === p);
 /** Agents a deep review can ask, see `AgentInfo.reviewCommand`. */
-export type ReviewerProvider = AgentsWith<"reviewCommand">;
 export const reviewerProviderSchema = agentsWith("reviewCommand").schema;
 export const reviewerProviders = agentsWith("reviewCommand").list;
 

@@ -28,7 +28,7 @@ const hidden = new Set([".git", ".DS_Store"]);
  * A file or folder inside the checkout ("" is the checkout itself), without
  * following a link on the way. `null` when nothing is there yet.
  */
-export async function resolveEntry(
+async function resolveEntry(
   root: string,
   path: string,
 ): Promise<{ full: string; stat: Stats | null }> {

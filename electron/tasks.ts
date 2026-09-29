@@ -85,7 +85,7 @@ const runnable = (line: string) =>
  * Finds the shell commands Claude and Codex leave running, per project.
  * Uses `ps` for the process tree and `lsof` only for processes it hasn't placed yet.
  */
-export class ProjectTasks {
+class ProjectTasks {
   private tracked = new Map<string, Tracked>();
   /** The agent hosts' pids: Claude runs there, not under Relay itself. */
   hosts: () => number[] = () => [];

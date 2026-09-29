@@ -7,7 +7,7 @@ import {
 import "./code-references.css";
 
 /** Attached code lines, shown as a pill that expands to a preview. */
-export function CodeReferenceChip({
+function CodeReferenceChip({
   reference: ref,
   onRemove,
   onOpen,

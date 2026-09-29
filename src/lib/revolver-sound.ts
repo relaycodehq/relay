@@ -22,7 +22,7 @@ let sleep: ReturnType<typeof setTimeout> | undefined;
 const sleepAfterMs = 3000;
 
 /** Level and punch; keeps a fast rattle from clipping. */
-export function clickOutput(ctx: BaseAudioContext): AudioNode {
+function clickOutput(ctx: BaseAudioContext): AudioNode {
   const squeeze = ctx.createDynamicsCompressor();
   squeeze.threshold.value = -20;
   squeeze.ratio.value = 6;

@@ -7,7 +7,7 @@
 const openTurns = 1;
 const overspinTurns = 2;
 
-export type CylinderMotion = "step" | "spin" | "overspin";
+type CylinderMotion = "step" | "spin" | "overspin";
 
 export interface Cylinder {
   index: number;

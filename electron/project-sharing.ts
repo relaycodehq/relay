@@ -5,7 +5,7 @@ import type { Gitea } from "./gitea";
 import type { ProjectChat, ChatMessage, ChatSummary } from "../shared/projects";
 import { roomInvitation, parseRoomInvitation } from "../shared/rooms";
 import { redacted } from "../shared/redact-secrets";
-export type SharedPage = {
+type SharedPage = {
   conversation: {
     id: string;
     title: string;

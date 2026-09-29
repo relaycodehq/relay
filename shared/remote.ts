@@ -17,7 +17,7 @@ import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
 
 export const remoteProtocol = 1;
-export const remoteScheme = "relay-remote";
+const remoteScheme = "relay-remote";
 export const defaultRemotePort = 47821;
 /** Where to get Tailscale: its download page for computers, Google Play for phones. */
 export const tailscaleDownload = "https://tailscale.com/download";

@@ -21,7 +21,7 @@ import type {
 } from "./checks";
 import type { TriageState } from "./triage";
 import type { PhoneRemoteApi } from "./remote";
-export interface User {
+interface User {
   id: number;
   login: string;
   full_name?: string;

@@ -42,8 +42,6 @@ import {
 import { RichText, Spinner } from "./ui";
 import "./agent-trace.css";
 
-export { programName, summarizeActivity } from "../../shared/activity-labels";
-
 function WorkingTimer({ started }: { started: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {

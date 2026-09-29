@@ -8,7 +8,7 @@ import { join } from "node:path";
 // Shared with packaging/omarchy/install.py and package.json's desktopName.
 export const desktopId = "relay-experimental.desktop";
 const installerMarker = "X-Relay-Experimental-Installer=1";
-export const appImageMarker = "X-Relay-AppImage=1";
+const appImageMarker = "X-Relay-AppImage=1";
 
 const escapeString = (value: string) =>
   value
@@ -28,7 +28,7 @@ export function escapeExecArgument(value: string) {
   return escapeString(`"${quoted}"`);
 }
 
-export function renderAppImageEntry(appImage: string, icon: string) {
+function renderAppImageEntry(appImage: string, icon: string) {
   return [
     "[Desktop Entry]",
     "Type=Application",

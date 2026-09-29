@@ -38,7 +38,7 @@ export interface SubagentDetail extends SubagentRun {
 }
 
 /** Runs that overlapped in time, oldest first: one fan-out each. */
-export function subagentBatches(runs: SubagentRun[], now = Date.now()) {
+function subagentBatches(runs: SubagentRun[], now = Date.now()) {
   const batches: SubagentRun[][] = [];
   let until = -Infinity;
   for (const run of [...runs].sort((a, b) => a.started - b.started)) {

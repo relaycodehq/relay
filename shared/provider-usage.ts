@@ -8,7 +8,7 @@ import { activeWeight, nextHour, type ActiveHours } from "./usage-history";
 export const SESSION_MS = 5 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const usageWindowSchema = z.object({
+const usageWindowSchema = z.object({
   kind: z.enum(["session", "weekly"]),
   usedPercent: z.number().finite().min(0).max(100),
   resetsAt: z.number().finite().nullable(),
@@ -23,7 +23,7 @@ export const providerUsageSchema = z
     activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
   })
   .strict();
-export type UsageKind = "session" | "weekly";
+type UsageKind = "session" | "weekly";
 export type UsageWindow = z.infer<typeof usageWindowSchema>;
 export type ProviderUsage = z.infer<typeof providerUsageSchema>;
 export type MeterPace = "ok" | "warn" | "hot" | "spent";
@@ -43,7 +43,7 @@ const HOUR = 60 * 60 * 1000;
 // Points behind the pace mark before an early run-out turns red.
 const BEHIND_HOT = 10;
 
-export function compactDuration(ms: number): string | null {
+function compactDuration(ms: number): string | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
   const totalMinutes = Math.max(1, Math.ceil(ms / 60_000));
   const days = Math.floor(totalMinutes / (24 * 60));

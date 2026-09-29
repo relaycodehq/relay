@@ -107,7 +107,7 @@ export const freshCheckpoint = (paths: string[]): Checkpoint => ({
   preservedGroups: [],
   preservedOrdinary: {},
 });
-export const analysisFile = (dir: string, key: string) =>
+const analysisFile = (dir: string, key: string) =>
   join(
     dir,
     "analysis",
@@ -174,7 +174,7 @@ export function restoreState(saved: SavedAnalysis): TriageState {
 
 // The old cache omitted provisional rules and queue positions. Keep confirmed
 // groups and semantic decisions; recover unfinished work and orphaned singletons.
-export function recoverLegacy(result: TriageResult): Checkpoint {
+function recoverLegacy(result: TriageResult): Checkpoint {
   const c = freshCheckpoint([]);
   c.preservedGroups = result.groups;
   const grouped = new Set(result.groups.flatMap((g) => g.paths));

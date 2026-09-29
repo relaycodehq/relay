@@ -45,7 +45,7 @@ function shell(): [string, string[]] {
  * thread exists). Shells outlive the window's view of them: switching threads
  * or reloading the window leaves them running.
  */
-export class ThreadTerminals {
+class ThreadTerminals {
   private sessions = new Map<string, Session>();
   private attached = false;
   private send: (event: TerminalEvent) => void = () => {};

@@ -53,7 +53,7 @@ export function cursorPolicy(
 }
 
 /** Says what to do about an error the worker reported, where there's something to do. */
-export function explainCursorError(error: unknown): Error {
+function explainCursorError(error: unknown): Error {
   if (
     error instanceof CursorError &&
     (error.name === "AuthenticationError" ||

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { digestSchema, filePathSchema } from "./validation";
-export type CheckProvider = "angular" | "typescript";
+type CheckProvider = "angular" | "typescript";
 export interface CheckTarget {
   id: string;
   label: string;
@@ -46,7 +46,7 @@ export function diagnosticSeverity(counts: DiagnosticCounts) {
         ? "info"
         : undefined;
 }
-export interface CheckedFile extends DiagnosticCounts {
+interface CheckedFile extends DiagnosticCounts {
   hash: string;
 }
 export interface ProjectCheckState extends DiagnosticCounts {

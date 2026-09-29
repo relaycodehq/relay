@@ -3,7 +3,7 @@ import type { AgentModel, AgentProvider } from "../../shared/agents";
 import { pickAgents } from "./composer-settings";
 import { api } from "./api";
 
-export interface AgentPickCatalog {
+interface AgentPickCatalog {
   /** Undefined while loading; empty when the agent couldn't list any. */
   models: AgentModel[] | undefined;
 }

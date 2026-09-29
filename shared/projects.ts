@@ -197,7 +197,7 @@ export interface PromptCache {
 }
 export type { AgentProvider };
 /** Local marker: the outgoing agent wrote this note for the one taking over. */
-export interface AgentHandoff {
+interface AgentHandoff {
   from: AgentProvider;
   to: AgentProvider;
 }
@@ -323,7 +323,7 @@ export function replyRoot(messages: ChatMessage[], id: string): ChatMessage {
     throw new Error("Reply target is missing from this conversation.");
   return current;
 }
-export interface QueuedChatMessage {
+interface QueuedChatMessage {
   input: ProjectChatSend;
   created: number;
   error?: string;
@@ -359,7 +359,7 @@ export interface AgentSession {
   thread?: string;
   through?: string;
 }
-export type AgentSessions = Partial<Record<AgentProvider, AgentSession>>;
+type AgentSessions = Partial<Record<AgentProvider, AgentSession>>;
 /**
  * Saves from before the agent registry kept Claude's session and Codex's
  * (`provider…`, or bare on a side conversation) in fields of their own.

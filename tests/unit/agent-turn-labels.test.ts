@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-vi.mock("../../src/lib/api", () => ({ api: {} }));
-import { programName } from "../../src/components/AgentTurn";
+import { describe, expect, it } from "vitest";
+import { programName } from "../../shared/activity-labels";
 
 describe("programName", () => {
   it("names the first real program in a command line", () => {

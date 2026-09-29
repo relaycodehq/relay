@@ -28,7 +28,7 @@ export interface FileInfo {
   reason?: string;
 }
 
-export const imageMimes: Record<string, string> = {
+const imageMimes: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",

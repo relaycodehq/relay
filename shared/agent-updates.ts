@@ -10,7 +10,7 @@ export type AgentInstaller =
   /** Relay itself downloaded it, as it does Cursor's SDK. */
   | "relay";
 
-export type AgentUpdateRun =
+type AgentUpdateRun =
   /** Waiting for another agent's update to finish. */
   | { status: "queued" }
   | { status: "running" }

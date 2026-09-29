@@ -221,7 +221,7 @@ export const codexQuestionChoice = (settings: AISettings): ModelChoice =>
   settings.questionsProvider === "codex"
     ? settings.questions
     : defaultAISettings.questions;
-export const modelChoices = [
+const modelChoices = [
   ["gpt-5.6-luna", "Luna"],
   ["gpt-5.6-sol", "Sol"],
   ["gpt-5.6-terra", "Terra"],

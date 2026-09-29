@@ -4,7 +4,7 @@ import type { AgentActivity, AgentTrace, ChatMessage } from "./projects";
 import { summarizeActivity } from "./activity-labels";
 
 /** A turn's events in order; saves from before traces kept only the calls. */
-export function traceOf(message: ChatMessage): AgentTrace[] {
+function traceOf(message: ChatMessage): AgentTrace[] {
   return (
     message.trace ??
     (message.activity ?? []).map((activity) => ({
@@ -16,7 +16,7 @@ export function traceOf(message: ChatMessage): AgentTrace[] {
 }
 
 /** Takes the calls subagents made out of the trace, keyed by the agent call that ran them. */
-export function nestSubagents(entries: AgentTrace[]) {
+function nestSubagents(entries: AgentTrace[]) {
   const ids = new Set(entries.map((e) => e.id));
   const calls = new Map<string, AgentActivity[]>();
   const shown = entries.filter((e) => {
@@ -30,7 +30,7 @@ export function nestSubagents(entries: AgentTrace[]) {
   return { shown, calls };
 }
 
-export type TracePart =
+type TracePart =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "run"; id: string; activity: AgentActivity[] };
 
@@ -112,7 +112,7 @@ export function batchHead(activity: AgentActivity[]) {
   return { head, earlier: activity.filter((a) => a !== head) };
 }
 
-export const thinkingWords = [
+const thinkingWords = [
   "Thinking",
   "Pondering",
   "Mulling it over",

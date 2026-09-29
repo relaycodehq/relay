@@ -4,7 +4,7 @@ import type {
   RuntimeMode,
 } from "../../../shared/agent-modes";
 
-export type PermissionAction = "allow" | "ask" | "deny";
+type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRule = {
   permission: string;
   pattern: string;

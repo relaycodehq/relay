@@ -68,12 +68,12 @@ export function mergePath(
   return entries.length ? entries.join(separator) : undefined;
 }
 
-export async function readLoginShellPath(shell: string, exec: Run = run) {
+async function readLoginShellPath(shell: string, exec: Run = run) {
   const script = `printf '%s\\n' '${START}'; printenv PATH || true; printf '%s\\n' '${END}'`;
   return extractPath(await exec(shell, ["-ilc", script]));
 }
 
-export async function readLaunchctlPath(exec: Run = run) {
+async function readLaunchctlPath(exec: Run = run) {
   return (await exec("/bin/launchctl", ["getenv", "PATH"])).trim() || undefined;
 }
 

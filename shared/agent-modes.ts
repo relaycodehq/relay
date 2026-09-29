@@ -61,7 +61,7 @@ export function savedRuntimeMode(value: unknown): RuntimeMode {
   if (value === "edit") return "auto-accept-edits";
   return runtimeModeSchema.safeParse(value).data ?? "full-access";
 }
-export const decisionSchema = z.enum([
+const decisionSchema = z.enum([
   "accept",
   "acceptForSession",
   "decline",

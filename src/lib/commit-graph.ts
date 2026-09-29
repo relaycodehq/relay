@@ -1,6 +1,6 @@
 import type { CommitSummary } from "../../shared/history";
 
-export interface GraphEdge {
+interface GraphEdge {
   /** Lane the line leaves from, at the top or middle of the row. */
   from: number;
   /** Lane the line reaches, at the middle or bottom of the row. */

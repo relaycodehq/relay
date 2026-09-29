@@ -12,7 +12,7 @@ type Triaged = Pick<
   "running" | "waiting" | "settledAt" | "snoozedAt" | "snoozedUntil" | "updated"
 >;
 
-export function chatSettled(chat: Triaged): boolean {
+function chatSettled(chat: Triaged): boolean {
   return (
     !chat.running &&
     !chat.waiting &&
@@ -21,7 +21,7 @@ export function chatSettled(chat: Triaged): boolean {
   );
 }
 
-export function chatSnoozed(chat: Triaged, now: number): boolean {
+function chatSnoozed(chat: Triaged, now: number): boolean {
   return (
     !chat.waiting &&
     chat.snoozedUntil != null &&
@@ -40,7 +40,7 @@ export function chatActivitySection(
 }
 
 /** Only the latest settled threads stay in Activity; Projects lists them all. */
-export const SETTLED_SHELF_SIZE = 15;
+const SETTLED_SHELF_SIZE = 15;
 
 export function chatActivitySections<C extends Triaged>(
   chats: C[],

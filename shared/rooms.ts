@@ -49,7 +49,7 @@ export const projectSchema = refSchema
   .omit({ number: true })
   .extend({ server: z.url().max(2048) })
   .strict();
-export const contextSchema = z
+const contextSchema = z
   .object({
     head: shaSchema,
     base: shaSchema,
@@ -69,7 +69,7 @@ export const contextSchema = z
         v.end >= v.start &&
         v.end - v.start < 200),
   );
-export const roomSchema = z.object({
+const roomSchema = z.object({
   id: idSchema,
   number: z.number().int().positive(),
   title: z.string().max(500),
@@ -150,7 +150,7 @@ export interface RoomConnection {
   member: Member;
   token: string;
 }
-export type PublicConnection = Omit<RoomConnection, "token"> & {
+type PublicConnection = Omit<RoomConnection, "token"> & {
   persistent: boolean;
 };
 export const connectionSchema = z.object({

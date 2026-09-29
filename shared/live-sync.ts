@@ -2,7 +2,7 @@ import { z } from "zod";
 import { digestSchema, shaSchema, textSchema } from "./validation";
 import { workingPathSchema } from "./working-tree";
 import type { PullRef } from "./types";
-export const syncValueSchema = z
+const syncValueSchema = z
   .object({
     contents: textSchema,
     mode: z.union([z.literal(0o644), z.literal(0o755)]),
@@ -17,7 +17,7 @@ export const syncWriteSchema = z
     value: syncValueSchema,
   })
   .strict();
-export const syncFileSchema = z.object({
+const syncFileSchema = z.object({
   path: workingPathSchema,
   revision: z.number().int().positive(),
   hash: digestSchema.nullable(),
@@ -55,7 +55,7 @@ export const idleSync: SyncState = {
   conflicts: [],
   excluded: [],
 };
-export type SyncTarget = PullRef | { chatId: string };
+type SyncTarget = PullRef | { chatId: string };
 export interface LiveSyncApi {
   liveSyncState(ref: SyncTarget): Promise<SyncState>;
   liveSyncStart(ref: SyncTarget): Promise<SyncState>;

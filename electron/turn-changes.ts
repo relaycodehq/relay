@@ -117,7 +117,7 @@ export async function commitTree(
 }
 
 /** Commits the worktree, untracked files included, without touching the real index. */
-export async function snapshot(root: string, parent?: string) {
+async function snapshot(root: string, parent?: string) {
   return commitTree(
     root,
     await snapshotTree(root),

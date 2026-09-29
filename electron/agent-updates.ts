@@ -37,7 +37,7 @@ interface AgentPackage {
 
 const slashed = (path: string) => path.replaceAll("\\", "/").toLowerCase();
 
-export const agentPackages: Record<CliProvider, AgentPackage> = {
+const agentPackages: Record<CliProvider, AgentPackage> = {
   claude: {
     npm: "@anthropic-ai/claude-code",
     native: {
@@ -169,7 +169,7 @@ function npmPrefixOf(real: string, pkg: string, platform: NodeJS.Platform) {
 }
 
 /** How updating reads in a tooltip, e.g. `npm install -g @openai/codex@latest`. */
-export function describeInstall(install: Install) {
+function describeInstall(install: Install) {
   const program = basename(install.program, extname(install.program));
   return [program, ...install.args]
     .map((word) => (/^[\w./:@=-]+$/.test(word) ? word : `'${word}'`))

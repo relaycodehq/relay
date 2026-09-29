@@ -14,7 +14,7 @@ export interface CursorModel {
   defaults: { id: string; value: string }[];
 }
 
-export type CursorAuth =
+type CursorAuth =
   { status: "logged-out" } | { status: "logged-in"; email?: string };
 
 export interface CursorRun {

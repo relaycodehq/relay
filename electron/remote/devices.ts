@@ -9,7 +9,7 @@ import {
   type KeyPair,
 } from "../../shared/remote-crypto";
 
-export interface RemoteDevice {
+interface RemoteDevice {
   id: string;
   name: string;
   created: number;
