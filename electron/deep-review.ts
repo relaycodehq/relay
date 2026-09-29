@@ -353,6 +353,9 @@ export function reviewerTask(
             : { type: "custom", instructions: reviewPrompt(scope, focus) };
     return { body: "@codex /review", codex };
   }
+  // Agents without a review command of their own are given Relay's prompt.
+  if (reviewer.provider !== "claude")
+    return { body: `@${reviewer.provider} ${reviewPrompt(scope, focus)}` };
   const level = claudeReviewLevel(reviewer.choice);
   if (t.kind === "uncommitted")
     return { body: `@claude /code-review ${level}` };

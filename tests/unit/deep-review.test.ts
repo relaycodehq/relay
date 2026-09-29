@@ -193,6 +193,18 @@ describe("reviewer tasks", () => {
       ).body,
     ).toBe("@claude /code-review high");
   });
+  it("gives an agent with no review command Relay's own prompt", () => {
+    const opencode = { provider: "opencode" as const, choice };
+    const task = reviewerTask(
+      opencode,
+      { ...scope, target: { kind: "uncommitted" as const } },
+      "the queue",
+    );
+    expect(task.codex).toBeUndefined();
+    expect(task.body).toMatch(/^@opencode Review the uncommitted changes/);
+    expect(task.body).toContain("git diff HEAD");
+    expect(task.body).toContain('"the queue"');
+  });
   it("hands the lead every report as data", () => {
     const prompt = leadPrompt(
       {
