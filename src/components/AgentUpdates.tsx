@@ -4,12 +4,16 @@ import {
   ArrowDownToLine,
   Check,
   FolderOpen,
+  LogIn,
+  LogOut,
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
 import {
   checkAgentVersions,
   linkAgent,
+  signInCursor,
+  signOutCursor,
   unlinkAgent,
   updateAgent,
   useAgentVersions,
@@ -20,7 +24,7 @@ import {
   type AgentInstaller,
   type AgentVersion,
 } from "../../shared/agent-updates";
-import { agents } from "../../shared/agents";
+import { agents, isCliProvider } from "../../shared/agents";
 import { SettingsCard, SettingsFooter, SettingsRow } from "./SettingsCard";
 import { ErrorBox, Spinner } from "./ui";
 import "./agent-updates.css";
@@ -31,6 +35,7 @@ const installers: Record<AgentInstaller, string> = {
   bun: "via Bun",
   pnpm: "via pnpm",
   homebrew: "via Homebrew",
+  relay: "downloaded by Relay",
 };
 
 const names = (list: AgentVersion[]) =>
@@ -172,6 +177,8 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
   }
   const run = agent.update;
   const behind = isBehind(agent);
+  /** Runs from an SDK Relay downloads: nothing to find or link, but an account to sign in to. */
+  const sdk = !isCliProvider(agent.provider);
   const status = !agent.current
     ? agent.error
     : [
@@ -182,6 +189,10 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
           : agent.latest
             ? "Up to date"
             : "Couldn't look for a newer one",
+        agent.account &&
+          (agent.account.signedIn
+            ? `Signed in${agent.account.email ? ` as ${agent.account.email}` : ""}`
+            : "Not signed in"),
       ]
         .filter(Boolean)
         .join(" · ");
@@ -192,9 +203,11 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
         : "Updated. New threads use it; threads already open keep the old version."
       : run?.status === "failed"
         ? run.message
-        : behind && !agent.command
-          ? "Relay can't tell how it was installed, so update it the way you installed it."
-          : undefined;
+        : sdk && !agent.current
+          ? "Relay downloads it from npm the first time you set it up, and runs it on this computer."
+          : behind && !agent.command
+            ? "Relay can't tell how it was installed, so update it the way you installed it."
+            : undefined;
   return (
     <SettingsRow
       label={cli}
@@ -234,7 +247,34 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
         </>
       }
     >
-      {agent.linked && (
+      {sdk && (
+        <button
+          className={!agent.account?.signedIn ? "primary" : ""}
+          disabled={busy || isUpdating(agent)}
+          title={
+            agent.account?.signedIn
+              ? undefined
+              : "Opens Cursor's sign-in in your browser"
+          }
+          onClick={() =>
+            void relink(agent.account?.signedIn ? signOutCursor : signInCursor)
+          }
+        >
+          {busy ? (
+            <Spinner size={12} />
+          ) : agent.account?.signedIn ? (
+            <LogOut size={14} />
+          ) : (
+            <LogIn size={14} />
+          )}
+          {agent.account?.signedIn
+            ? "Sign out"
+            : agent.current
+              ? "Sign in"
+              : "Set up…"}
+        </button>
+      )}
+      {!sdk && agent.linked && (
         <button
           disabled={busy}
           title="Forget the linked program and search again"
@@ -244,14 +284,16 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
           Find automatically
         </button>
       )}
-      <button
-        className={!agent.current && !agent.linked ? "primary" : ""}
-        disabled={busy}
-        onClick={() => void relink(() => linkAgent(agent.provider))}
-      >
-        <FolderOpen size={14} />
-        {agent.path ? "Change…" : "Link…"}
-      </button>
+      {!sdk && (
+        <button
+          className={!agent.current && !agent.linked ? "primary" : ""}
+          disabled={busy}
+          onClick={() => void relink(() => linkAgent(agent.provider))}
+        >
+          <FolderOpen size={14} />
+          {agent.path ? "Change…" : "Link…"}
+        </button>
+      )}
       {run?.status === "running" ? (
         <button disabled>
           <Spinner size={12} />
@@ -266,7 +308,11 @@ function AgentVersionRow({ agent }: { agent: AgentVersion }) {
         agent.command && (
           <button
             className="primary"
-            title={`Runs ${agent.command}`}
+            title={
+              agent.installer === "relay"
+                ? "Downloads it from npm"
+                : `Runs ${agent.command}`
+            }
             onClick={() => updateAgent(agent.provider)}
           >
             {run?.status === "failed"

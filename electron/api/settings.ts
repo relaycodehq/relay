@@ -4,12 +4,14 @@ import { z } from "zod";
 import {
   agentProviderSchema,
   agents,
+  isCliProvider,
   usageProviderSchema,
   type AgentProvider,
 } from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
 import { parseVersion } from "../../shared/agent-updates";
+import { signInCursor, signOutCursor } from "../agents/cursor/account";
 import { runExecutable, setLinkedAgents } from "../executables";
 import { gitInfo, gitVersion, setGitPath } from "../git";
 import { readProviderUsage } from "../provider-usage";
@@ -23,6 +25,15 @@ export function settingsHandlers(ctx: ApiContext) {
     const phoneRemote = ctx.phoneRemote();
     if (!phoneRemote) throw new Error("Relay is still starting.");
     return phoneRemote;
+  }
+  /** Only a CLI Relay finds can be linked by hand. */
+  function cliProvider(value: unknown) {
+    const provider = agentProviderSchema.parse(value);
+    if (!isCliProvider(provider))
+      throw new Error(
+        `${agents[provider].name} runs from an SDK Relay downloads; there is nothing to link.`,
+      );
+    return provider;
   }
   async function relinkAgents(provider: AgentProvider, path?: string) {
     await store.update((s) => {
@@ -95,7 +106,7 @@ export function settingsHandlers(ctx: ApiContext) {
     updateAgent: (args) =>
       agentUpdates.update(agentProviderSchema.parse(args[0])),
     linkAgent: async (args) => {
-      const provider = agentProviderSchema.parse(args[0]);
+      const provider = cliProvider(args[0]);
       const { cli } = agents[provider];
       const result = await dialog.showOpenDialog(ctx.window.win!, {
         title: `Choose the ${cli} program`,
@@ -118,7 +129,15 @@ export function settingsHandlers(ctx: ApiContext) {
       return agentUpdates.check(true);
     },
     unlinkAgent: async (args) => {
-      await relinkAgents(agentProviderSchema.parse(args[0]), undefined);
+      await relinkAgents(cliProvider(args[0]), undefined);
+      return agentUpdates.check(true);
+    },
+    signInCursor: async () => {
+      await signInCursor();
+      return agentUpdates.check(true);
+    },
+    signOutCursor: async () => {
+      await signOutCursor();
       return agentUpdates.check(true);
     },
     dictationState: () => dictation.current,

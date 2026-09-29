@@ -1,7 +1,14 @@
 import type { AgentProvider } from "./agents";
 
 /** Who put the CLI where Relay finds it, proven from its path. */
-export type AgentInstaller = "native" | "npm" | "bun" | "pnpm" | "homebrew";
+export type AgentInstaller =
+  | "native"
+  | "npm"
+  | "bun"
+  | "pnpm"
+  | "homebrew"
+  /** Relay itself downloaded it, as it does Cursor's SDK. */
+  | "relay";
 
 export type AgentUpdateRun =
   /** Waiting for another agent's update to finish. */
@@ -29,6 +36,8 @@ export interface AgentVersion {
   error?: string;
   /** What the CLI printed when it wouldn't say its version. */
   output?: string;
+  /** Who it's signed in as, for an agent that has its own sign-in. */
+  account?: { signedIn: boolean; email?: string };
   update?: AgentUpdateRun;
 }
 

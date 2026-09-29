@@ -2,7 +2,12 @@ import { z } from "zod";
 import type { ReasoningEffort } from "./settings";
 
 /** Every agent a thread can talk to, in the order Relay offers them. */
-export const agentProviders = ["codex", "claude", "opencode"] as const;
+export const agentProviders = [
+  "codex",
+  "claude",
+  "opencode",
+  "cursor",
+] as const;
 export const agentProviderSchema = z.enum(agentProviders);
 export type AgentProvider = z.infer<typeof agentProviderSchema>;
 
@@ -18,7 +23,11 @@ export interface AgentInfo {
    * thread's own agent can't write one.
    */
   helper: boolean;
-  /** Its own review command, which a deep review's reviewers run. */
+  /**
+   * How a deep review's reviewers review with it: its own command, or a
+   * description of Relay's prompt for agents without one. Only an agent that can
+   * read a diff without changing anything can review.
+   */
   reviewCommand?: string;
   /** Codex's Fast service tier. */
   fast: boolean;
@@ -32,6 +41,8 @@ export interface AgentInfo {
   usage: boolean;
   /** Lists models from many upstream providers, so the picker groups them. */
   modelGroups: boolean;
+  /** Runs from an SDK Relay downloads, not a CLI it finds on the machine. */
+  sdk?: true;
 }
 
 export const agents = {
@@ -66,12 +77,26 @@ export const agents = {
     cli: "OpenCode",
     defaultModel: "OpenCode default",
     helper: false,
+    reviewCommand: "Relay's review prompt",
     fast: false,
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
     usage: false,
     modelGroups: true,
+  },
+  cursor: {
+    name: "Cursor",
+    cli: "Cursor SDK",
+    defaultModel: "Cursor default",
+    helper: false,
+    fast: false,
+    skills: false,
+    commandsAlone: true,
+    compactInstructions: false,
+    usage: false,
+    modelGroups: true,
+    sdk: true,
   },
 } as const satisfies Record<AgentProvider, AgentInfo>;
 
@@ -91,13 +116,23 @@ function agentsWith<K extends keyof AgentInfo>(key: K) {
   return { list, schema: z.enum(list as [AgentsWith<K>, ...AgentsWith<K>[]]) };
 }
 
+/** Agents Relay runs from a CLI it finds; the rest run from an SDK it downloads. */
+export type CliProvider = Exclude<AgentProvider, AgentsWith<"sdk">>;
+export const isCliProvider = (
+  provider: AgentProvider,
+): provider is CliProvider => !(agents[provider] as AgentInfo).sdk;
+
 const helpers = agentsWith("helper");
 /** Agents that run Relay's helper jobs, see `AgentInfo.helper`. */
 export const helperProviders = helpers.list;
 export type HelperProvider = AgentsWith<"helper">;
 export const helperProviderSchema = helpers.schema;
-/** Helper jobs fall back through the other helpers when one is unavailable. */
-export const helperFallbacks = (first: HelperProvider): HelperProvider[] => [
+/**
+ * Helper jobs fall back through the other helpers when one is unavailable. The
+ * first may be any agent that can answer a prompt with text, such as one that
+ * splits commits.
+ */
+export const helperFallbacks = (first: AgentProvider): AgentProvider[] => [
   first,
   ...helperProviders.filter((p) => p !== first),
 ];
@@ -110,6 +145,7 @@ export const reportsUsage = (p: string): p is UsageProvider =>
 /** Agents a deep review can ask, see `AgentInfo.reviewCommand`. */
 export type ReviewerProvider = AgentsWith<"reviewCommand">;
 export const reviewerProviderSchema = agentsWith("reviewCommand").schema;
+export const reviewerProviders = agentsWith("reviewCommand").list;
 
 export const isAgentProvider = (value: unknown): value is AgentProvider =>
   agentProviderSchema.safeParse(value).success;

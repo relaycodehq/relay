@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentProvider } from "./agents";
 // T3 Code runtimeModeConfig and CodexSessionRuntime (MIT); see THIRD_PARTY_NOTICES.
 export const runtimeModeSchema = z.enum([
   "approval-required",
@@ -32,6 +33,28 @@ export const runtimeModes = [
     description: "Allow commands and edits without prompts.",
   },
 ] as const;
+/**
+ * What a mode means for an agent whose SDK can limit what it does but can't
+ * stop to ask, where "Ask before commands" would be untrue.
+ */
+const limitedModes: Partial<
+  Record<AgentProvider, Partial<Record<RuntimeMode, string>>>
+> = {
+  cursor: {
+    "approval-required":
+      "Cursor can't ask. Edits stay in the project, and its safety review blocks risky actions.",
+    "auto-accept-edits":
+      "Cursor can't ask. Edits stay in the project and MCP tools are off.",
+    auto: "Cursor's safety review approves routine actions and blocks risky ones.",
+  },
+};
+/** The modes as `provider` honors them: the same four, described truthfully. */
+export const runtimeModesFor = (provider?: AgentProvider) =>
+  runtimeModes.map((mode) => ({
+    ...mode,
+    description:
+      (provider && limitedModes[provider]?.[mode.value]) || mode.description,
+  }));
 /** Upgrade persisted Relay choices without resetting them to T3's full-access default. */
 export function savedRuntimeMode(value: unknown): RuntimeMode {
   if (value === "ask") return "approval-required";

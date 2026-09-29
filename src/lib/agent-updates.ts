@@ -42,3 +42,11 @@ export async function linkAgent(provider: AgentProvider) {
 export async function unlinkAgent(provider: AgentProvider) {
   change(await api.unlinkAgent(provider));
 }
+
+/** Opens Cursor's sign-in in the browser; rejects when it isn't finished. */
+export async function signInCursor() {
+  change(await api.signInCursor());
+}
+export async function signOutCursor() {
+  change(await api.signOutCursor());
+}

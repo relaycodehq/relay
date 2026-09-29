@@ -31,6 +31,7 @@ import {
 import { scoreModelPickerSearch } from "../vendor/t3code/model-picker/modelPickerSearch";
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
+import { CursorGlyph } from "./CursorGlyph";
 import { UsageMeters } from "./UsageMeters";
 import "./composer-model-picker.css";
 
@@ -90,6 +91,7 @@ const providerIcons: Record<MessageProvider, typeof OpenAI> = {
   codex: OpenAI,
   claude: ClaudeAI,
   opencode: OpenCode,
+  cursor: CursorGlyph,
   message: MessageSquare,
 };
 export function ProviderIcon({ provider }: { provider: MessageProvider }) {
@@ -116,7 +118,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   onOpen?: () => void;
   onSelect: (provider: MessageProvider, model: string) => void;
   /** Limits the rail to these agents, without favorites or message-only. */
-  providers?: AgentProvider[];
+  providers?: readonly AgentProvider[];
   /** Offers each agent's Default row. */
   allowDefault?: boolean;
   /** Names the trigger, e.g. "Grouping" gives "Grouping model". */

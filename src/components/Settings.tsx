@@ -31,7 +31,6 @@ import {
 import type { Account } from "../../shared/types";
 import {
   aiSettingsSchema,
-  type HelperProvider,
   type AISettings,
 } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -538,7 +537,7 @@ export function Settings({
   const change = (
     kind: "grouping" | "questions" | "split",
     value: AISettings["questions"],
-    provider: HelperProvider,
+    provider: AgentProvider,
   ) => {
     if (values) {
       setDraft({ ...values, [kind]: value, [`${kind}Provider`]: provider });
@@ -785,7 +784,7 @@ export function Settings({
       title: "Agents",
       description: `Uses your signed-in ${agentProviders.map((p) => agents[p].cli).join(", ")}. Model availability depends on your account.`,
       keywords:
-        "default agent new thread grouping line questions commit split reasoning effort fast mode model codex claude opencode ai",
+        "default agent new thread grouping line questions commit split reasoning effort fast mode model codex claude opencode cursor ai",
       block: true,
       render: () =>
         values ? (
@@ -837,6 +836,7 @@ export function Settings({
                 label="Commit splits"
                 value={values.split}
                 provider={values.splitProvider}
+                providers={agentProviders}
                 allowDefault
                 onChange={(value, provider) => change("split", value, provider)}
               />
@@ -900,9 +900,9 @@ export function Settings({
       category: "models",
       title: "Installed agents",
       description:
-        "Relay runs the agent CLIs installed on this computer and tells you when a newer release is out.",
+        "Relay runs the agent CLIs installed on this computer, and Cursor's SDK, which it downloads itself, and tells you when a newer release is out.",
       keywords:
-        "version update upgrade install cli codex claude code opencode npm homebrew bun",
+        "version update upgrade install cli codex claude code opencode cursor sdk npm homebrew bun",
       block: true,
       render: () => <AgentVersionSettings />,
     },

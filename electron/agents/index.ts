@@ -22,6 +22,15 @@ import { runOpenCode } from "./opencode/run";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
 import { reattachOpenCodeServer, useOpenCodeHosts } from "./opencode/server";
 import type { AgentHosts } from "../agent-host/client";
+import { runCursor } from "./cursor/run";
+import {
+  closeCursorConnection,
+  detachCursor,
+  disposeCursor,
+  reattachCursorSessions,
+  useCursorHosts,
+} from "./cursor/connection";
+import { cursorCommands, cursorDefaults, cursorModels } from "./cursor/catalog";
 import {
   openCodeCommands,
   openCodeDefaults,
@@ -80,10 +89,26 @@ const opencode: AgentRuntime = {
   reattach: (owns) => reattachOpenCodeServer(owns),
 };
 
+/**
+ * Cursor runs its SDK in a worker Relay starts per thread; the SDK itself is
+ * downloaded on first use. Its sessions are the SDK's own agents.
+ */
+const cursor: AgentRuntime = {
+  run: runCursor,
+  closeSession: closeCursorConnection,
+  models: cursorModels,
+  defaults: cursorDefaults,
+  commands: cursorCommands,
+  dispose: async () => disposeCursor(),
+  detach: detachCursor,
+  reattach: (owns) => reattachCursorSessions(owns),
+};
+
 export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
   codex,
   claude,
   opencode,
+  cursor,
 };
 export const agentRuntime = (provider: AgentProvider) =>
   agentRuntimes[provider];
@@ -93,4 +118,5 @@ export function hostAgents(hosts: AgentHosts) {
   useAgentHosts(hosts);
   useCodexHosts(hosts);
   useOpenCodeHosts(hosts);
+  useCursorHosts(hosts);
 }

@@ -5,6 +5,8 @@ import { roomProtocol } from "../shared/rooms";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agent-updates";
 import { hostAgents } from "./agents";
+import { cursorSdkIo } from "./agents/cursor/account";
+import { configureCursor } from "./agents/cursor/sdk";
 import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
 import { AppLinks } from "./app/links";
@@ -117,9 +119,24 @@ const updater = new Updater((state) => window.send("relay:update", state), {
 const dictation = new Dictation(app.getPath("userData"), (state) =>
   window.send("relay:dictation", state),
 );
+// Cursor's SDK isn't shipped: Relay downloads it into its data folder, and
+// runs it in a worker that, like the agent host, Node must read outside the asar.
+configureCursor({
+  worker: join(__dirname, "cursor-worker.mjs").replace(
+    /app\.asar([\\/])/,
+    "app.asar.unpacked$1",
+  ),
+  root: join(app.getPath("userData"), "cursor-sdk"),
+  store: join(app.getPath("userData"), "cursor-agents"),
+  fetch: (url, init) => net.fetch(url, init),
+});
 const agentUpdates = new AgentUpdates(
   (state) => window.send("relay:agent-updates", state),
-  { ...machineIo, fetch: (url, init) => net.fetch(url, init) },
+  {
+    ...machineIo,
+    fetch: (url, init) => net.fetch(url, init),
+    cursor: cursorSdkIo,
+  },
 );
 const liveSyncs = new LiveSyncs(() =>
   join(app.getPath("userData"), "live-sync"),

@@ -1,18 +1,8 @@
 import { useCallback, useState, type KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
-import {
-  agentProviders,
-  type AgentProvider,
-} from "../../shared/agents";
-import {
-  claudeEffortsFor,
-  effortLabels,
-  reasoningEffortsFor,
-  type ReasoningEffort,
-} from "../../shared/settings";
-import { useAgentPicks } from "../lib/useAgentPicks";
-import { useClaudeModels } from "../lib/useClaudeModels";
-import { useCodexModels } from "../lib/useCodexModels";
+import { agentProviders } from "../../shared/agents";
+import { effortLabels, type ReasoningEffort } from "../../shared/settings";
+import { useCatalogs } from "../lib/useCatalogs";
 import { effortKeysLabel } from "../lib/effort-shortcut";
 import {
   maxPresets,
@@ -40,32 +30,6 @@ const styleNames: Record<QuickSwitchStyle, string> = {
   tab: "Tab",
   revolver: "Revolver",
 };
-
-/** Every agent's listed models, and the efforts a model takes. */
-function useCatalogs() {
-  const codex = useCodexModels();
-  const claude = useClaudeModels();
-  const picks = useAgentPicks();
-  const modelsOf = (p: AgentProvider) =>
-    p === "codex"
-      ? codex.models
-      : p === "claude"
-        ? claude.models
-        : picks.catalogs[p]?.models;
-  const effortsOf = (p: AgentProvider, model: string): ReasoningEffort[] =>
-    p === "codex"
-      ? reasoningEffortsFor(model, codex.models)
-      : p === "claude"
-        ? claudeEffortsFor(claude.models, model)
-        : (picks.catalogs[p]?.models?.find((m) => m.id === model)?.efforts ??
-          []);
-  const refresh = () => {
-    codex.retry();
-    claude.retry();
-    picks.refresh();
-  };
-  return { modelsOf, effortsOf, refresh };
-}
 
 /** The quick switch's settings: on or off, its style, and the presets in order. */
 export function QuickSwitchSettings() {

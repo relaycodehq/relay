@@ -2,7 +2,7 @@
 // lead agent checks what they found and fixes it with the user.
 import { z } from "zod";
 import { runtimeModeSchema, type RuntimeMode } from "./agent-modes";
-import { reviewerProviderSchema } from "./agents";
+import { agentProviderSchema, reviewerProviderSchema } from "./agents";
 import { aiSettingsSchema, type ModelChoice } from "./settings";
 import { filePathSchema, refSchema } from "./validation";
 
@@ -35,13 +35,18 @@ export const reviewAgentSchema = z
   })
   .strict();
 export type ReviewAgent = z.infer<typeof reviewAgentSchema>;
+/** The lead works in a thread like any other, so any agent can lead. */
+export const leadAgentSchema = reviewAgentSchema
+  .extend({ provider: agentProviderSchema })
+  .strict();
+export type LeadAgent = z.infer<typeof leadAgentSchema>;
 
 export const MAX_REVIEWERS = 4;
 export const deepReviewStartSchema = z
   .object({
     target: reviewTargetSchema,
     reviewers: z.array(reviewAgentSchema).min(1).max(MAX_REVIEWERS),
-    lead: reviewAgentSchema,
+    lead: leadAgentSchema,
     /** The lead may run tests and commands to confirm a finding. */
     runChecks: z.boolean(),
     focus: z.string().trim().max(4000),
@@ -113,7 +118,7 @@ export interface DeepReviewState {
   scope: ReviewScope;
   /** Each reviewer works in a hidden thread of its own. */
   reviewers: (ReviewAgent & { chatId: string })[];
-  lead: ReviewAgent;
+  lead: LeadAgent;
   runChecks: boolean;
   focus?: string;
   runtimeMode: RuntimeMode;
@@ -199,7 +204,7 @@ export function checkoutPaths(report: FindingsReport, root: string) {
 
 /** The message asking the lead to fix `findings`, with the user's note. */
 export function fixRequest(
-  provider: ReviewAgent["provider"],
+  provider: LeadAgent["provider"],
   findings: Finding[],
   note = "",
 ) {

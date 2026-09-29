@@ -73,6 +73,17 @@ await build({
   },
 });
 
+// Cursor's SDK runs in a worker of its own. The SDK isn't bundled: Relay
+// downloads it on first use and the worker imports it from where it landed.
+await build({
+  entryPoints: ["electron/agents/cursor/worker.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  outfile: "dist-electron/cursor-worker.mjs",
+});
+
 // Live checks fall back to TypeScript 5.9 for projects whose compiler has no
 // language service API. It has its own install so its tsc bin stays out of
 // the root node_modules, and loads its lib.*.d.ts from beside typescript.js.

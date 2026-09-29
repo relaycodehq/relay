@@ -363,6 +363,9 @@ export interface Api
   linkAgent(provider: AgentProvider): Promise<AgentVersions | null>;
   /** Forgets the linked CLI and finds one again. */
   unlinkAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /** Signs in to Cursor in the browser, downloading its SDK first if needed. */
+  signInCursor(): Promise<AgentVersions>;
+  signOutCursor(): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {
@@ -392,7 +395,8 @@ export interface Api
   onOpenUrl(callback: (url: string) => void): () => void;
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
-export type ApiMethod = Exclude<keyof Api, `on${string}`>;
+/** What the page asks the main process for; the rest the preload answers itself. */
+export type ApiMethod = Exclude<keyof Api, `on${string}` | "pathForFile">;
 export const emptyProgress = (): Progress => ({
   read: {},
   drafts: [],

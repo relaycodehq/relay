@@ -39,6 +39,7 @@ import {
   type DeepReviewStart,
   type DeepReviewState,
   type Finding,
+  type LeadAgent,
   type ReviewAgent,
   type ReviewTarget,
 } from "../../shared/deep-review";
@@ -58,7 +59,9 @@ import { ProviderIcon } from "./ComposerModelPicker";
 import {
   agentMentionPattern,
   agentName,
+  agentProviders,
   agents,
+  reviewerProviders,
   type AgentProvider,
 } from "../../shared/agents";
 import { useCodexModels } from "../lib/useCodexModels";
@@ -79,7 +82,7 @@ export function useAgentName() {
           (agent.choice.model || "Claude default"))
         : agent.choice.model || agents[agent.provider].defaultModel;
 }
-const effortName = (agent: ReviewAgent) =>
+const effortName = (agent: ReviewAgent | LeadAgent) =>
   agent.choice.reasoningEffort
     ? effortLabels[agent.choice.reasoningEffort]
     : "Default";
@@ -106,7 +109,7 @@ interface Setup {
   kind: ReviewTarget["kind"];
   base: string;
   reviewers: ReviewAgent[];
-  lead: ReviewAgent;
+  lead: LeadAgent;
   runChecks: boolean;
 }
 const setupKey = (projectId: string) => "deep-review-setup:" + projectId;
@@ -186,7 +189,7 @@ export function DeepReviewSetup({
   useEffect(() => {
     const opus = claudeModels?.find((m) => /opus/i.test(`${m.id} ${m.name}`));
     if (touched || !opus) return;
-    const withOpus = (a: ReviewAgent) =>
+    const withOpus = <A extends ReviewAgent | LeadAgent>(a: A): A =>
       a.provider === "claude" && !a.choice.model
         ? { ...a, choice: { ...a.choice, model: opus.id } }
         : a;
@@ -393,6 +396,7 @@ export function DeepReviewSetup({
                     <ModelField
                       label={`Reviewer ${i + 1}`}
                       provider={reviewer.provider}
+                      providers={reviewerProviders}
                       value={reviewer.choice}
                       onChange={(choice, provider) =>
                         update({
@@ -404,7 +408,11 @@ export function DeepReviewSetup({
                     />
                     <span
                       className="deep-review-native"
-                      title="Runs the agent's own review"
+                      title={
+                        agents[reviewer.provider].reviewCommand.startsWith("/")
+                          ? "Runs the agent's own review"
+                          : "Reviews with Relay's review prompt"
+                      }
                     >
                       <ScanSearch size={12} />
                       {agents[reviewer.provider].reviewCommand}
@@ -450,6 +458,7 @@ export function DeepReviewSetup({
               <ModelField
                 label="Lead"
                 provider={setup.lead.provider}
+                providers={agentProviders}
                 value={setup.lead.choice}
                 onChange={(choice, provider) =>
                   update({ lead: { provider, choice } })
@@ -504,7 +513,7 @@ export function DeepReviewSetup({
 
 // ——— In the thread ———
 
-function AgentChip({ agent, name }: { agent: ReviewAgent; name: string }) {
+function AgentChip({ agent, name }: { agent: ReviewAgent | LeadAgent; name: string }) {
   return (
     <span className="deep-review-agent">
       <ProviderIcon provider={agent.provider} />

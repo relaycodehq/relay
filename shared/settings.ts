@@ -165,10 +165,10 @@ const questionChoiceSchema = choiceSchema
   })
   .refine((choice) => supportsEffort(choice), effortCheck);
 const claudeEffortCheck = (
-  provider: HelperProvider,
+  provider: AgentProvider,
   choice: { reasoningEffort: ReasoningEffort },
 ) =>
-  provider === "codex" ||
+  provider !== "claude" ||
   !choice.reasoningEffort ||
   claudeEfforts.includes(choice.reasoningEffort);
 // Settings saved before Claude was offered used Codex for both.
@@ -185,7 +185,8 @@ export const aiSettingsSchema = z
     /** Which signed-in CLI runs grouping, line questions or commit splits. */
     groupingProvider: helperProviderSchema.default("codex"),
     questionsProvider: helperProviderSchema.default("codex"),
-    splitProvider: helperProviderSchema.default("codex"),
+    /** Commit splits only need text back, so any agent can plan them. */
+    splitProvider: agentProviderSchema.default("codex"),
     /** The agent a composer starts on until it remembers one. */
     threadProvider: agentProviderSchema.default("codex"),
   })

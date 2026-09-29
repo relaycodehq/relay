@@ -2,7 +2,13 @@
 import { access, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
-import { agentProviders, agents, type AgentProvider } from "../shared/agents";
+import {
+  agentProviders,
+  agents,
+  isCliProvider,
+  type AgentProvider,
+  type CliProvider,
+} from "../shared/agents";
 import {
   isBehind,
   isUpdating,
@@ -31,7 +37,7 @@ interface AgentPackage {
 
 const slashed = (path: string) => path.replaceAll("\\", "/").toLowerCase();
 
-export const agentPackages: Record<AgentProvider, AgentPackage> = {
+export const agentPackages: Record<CliProvider, AgentPackage> = {
   claude: {
     npm: "@anthropic-ai/claude-code",
     native: {
@@ -84,7 +90,7 @@ const pnpmGlobal = [
  * install it didn't make. `tag` is the npm dist-tag an update installs.
  */
 export function installOf(
-  provider: AgentProvider,
+  provider: CliProvider,
   path: string,
   real: string,
   tag = "latest",
@@ -172,6 +178,18 @@ export function describeInstall(install: Install) {
 
 export type { Exec };
 
+/** Cursor's SDK, which Relay downloads itself; see electron/agents/cursor. */
+export interface CursorSdkIo {
+  /** The version on disk; undefined when none is downloaded. */
+  installed(): Promise<string | undefined>;
+  /** The newest version Relay offers. */
+  newest(): Promise<string | undefined>;
+  /** Downloads `version` (the one Relay was made for by default) and switches to it. */
+  install(version?: string): Promise<void>;
+  /** Who Cursor is signed in as; undefined when that can't be asked. */
+  account(): Promise<{ signedIn: boolean; email?: string } | undefined>;
+}
+
 /** Everything that touches the machine, so tests can stand in for it. */
 export interface AgentUpdatesIo {
   platform: NodeJS.Platform;
@@ -184,6 +202,8 @@ export interface AgentUpdatesIo {
   fetch(url: string, init?: RequestInit): Promise<Response>;
   /** Claude's update channel, `latest` or `stable`. */
   claudeChannel(): Promise<string>;
+  /** Left out where Cursor isn't offered. */
+  cursor?: CursorSdkIo;
 }
 
 export const machineIo: AgentUpdatesIo = {
@@ -284,6 +304,7 @@ export class AgentUpdates {
     provider: AgentProvider,
     fresh: boolean,
   ): Promise<AgentVersion> {
+    if (!isCliProvider(provider)) return this.inspectSdk(provider, fresh);
     const { cli } = agents[provider];
     const path = await this.io.find(provider).catch(() => undefined);
     const linkedPath = this.io.linked?.(provider);
@@ -323,8 +344,73 @@ export class AgentUpdates {
     };
   }
 
+  /** An agent that runs from an SDK Relay downloads: what's on disk, and what's newer. */
+  private async inspectSdk(
+    provider: Exclude<AgentProvider, CliProvider>,
+    fresh: boolean,
+  ): Promise<AgentVersion> {
+    const found: AgentVersion = {
+      provider,
+      installer: "relay",
+      command: "Download from npm",
+    };
+    const sdk = this.io.cursor;
+    if (!sdk) return { ...found, error: "This build has no Cursor SDK." };
+    const current = await sdk.installed().catch(() => undefined);
+    const key = "cursor-sdk";
+    const cached = this.latestCache.get(key);
+    let latest = cached?.version;
+    if (fresh || !cached || Date.now() - cached.at >= latestLifetime) {
+      latest = await sdk.newest().catch(() => undefined);
+      this.latestCache.set(key, { at: Date.now(), version: latest });
+    }
+    if (!current)
+      return {
+        ...found,
+        latest,
+        error: "Cursor's SDK isn't downloaded yet.",
+      };
+    return {
+      ...found,
+      current,
+      latest,
+      account: await sdk.account().catch(() => undefined),
+    };
+  }
+
+  private async runSdkUpdate(provider: Exclude<AgentProvider, CliProvider>) {
+    const fail = (message: string) =>
+      this.put({
+        ...this.agent(provider),
+        update: { status: "failed", message, at: Date.now() },
+      });
+    try {
+      this.put({ ...this.agent(provider), update: { status: "running" } });
+      const sdk = this.io.cursor;
+      if (!sdk) return fail("This build has no Cursor SDK.");
+      const before = this.agent(provider);
+      if (before.current && !before.latest)
+        return fail("Relay couldn't look up the newest Cursor SDK.");
+      // Setting up starts from the version Relay was made for; updating goes to the newest.
+      await sdk.install(before.current ? before.latest : undefined);
+      const after = await this.inspectSdk(provider, true);
+      if (!after.current)
+        return fail("The download finished, but Cursor's SDK isn't there.");
+      this.put({
+        ...after,
+        update: { status: "updated", version: after.current, at: Date.now() },
+      });
+    } catch (error) {
+      fail(
+        error instanceof Error
+          ? error.message
+          : "Couldn't download Cursor's SDK.",
+      );
+    }
+  }
+
   /** `installOf`, checked against the machine where the path alone can't prove it. */
-  private async installAt(provider: AgentProvider, path: string, tag: string) {
+  private async installAt(provider: CliProvider, path: string, tag: string) {
     const real = await this.io.realpath(path).catch(() => path);
     const install = installOf(provider, path, real, tag, this.io.platform);
     if (install?.npmPrefix && this.io.platform === "win32") {
@@ -350,7 +436,7 @@ export class AgentUpdates {
   }
 
   private async latest(
-    provider: AgentProvider,
+    provider: CliProvider,
     tag: string,
     install: Install | undefined,
     fresh: boolean,
@@ -397,6 +483,7 @@ export class AgentUpdates {
   }
 
   private async runUpdate(provider: AgentProvider) {
+    if (!isCliProvider(provider)) return this.runSdkUpdate(provider);
     const { cli } = agents[provider];
     const fail = (message: string, output?: string) =>
       this.put({
