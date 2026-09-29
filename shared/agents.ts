@@ -90,6 +90,7 @@ export const agents = {
     cli: "Cursor SDK",
     defaultModel: "Cursor default",
     helper: false,
+    reviewCommand: "/review-bugbot",
     fast: false,
     skills: false,
     commandsAlone: true,

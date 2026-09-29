@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { git } from "./git";
 import { remoteUrl } from "./repository";
+import { reviewDiff } from "./review-diff";
 import type {
   ChatMessage,
   Project,
@@ -231,11 +232,21 @@ export class DeepReviews {
 
   private async sendReviewers(chat: ProjectChat, slots: number[]) {
     const state = chat.deepReview!;
+    let diff: Promise<string> | undefined;
     const failures = await Promise.all(
       slots.map(async (slot) => {
         const reviewer = state.reviewers[slot]!;
-        const { body } = reviewerTask(reviewer, state.scope, state.focus);
         try {
+          const { body } = reviewerTask(
+            reviewer,
+            state.scope,
+            state.focus,
+            reviewer.provider === "cursor"
+              ? await (diff ??= this.host
+                  .root(chat.projectId)
+                  .then((root) => reviewDiff(root, state.scope)))
+              : undefined,
+          );
           await this.host.send(reviewer.chatId, {
             id: randomUUID(),
             body,
@@ -335,13 +346,19 @@ function describe(scope: ReviewScope) {
   }
 }
 
-/** What one reviewer is asked to do: Claude's or Codex's own review where it fits. */
+/**
+ * What one reviewer is asked to do: each agent's own review where it fits.
+ * Cursor's Bugbot can't run Git in a read-only turn, so it gets `diff`.
+ */
 export function reviewerTask(
   reviewer: ReviewAgent,
   scope: ReviewScope,
   focus?: string,
+  diff?: string,
 ): { body: string; codex?: CodexReviewTarget } {
   const t = scope.target;
+  if (reviewer.provider === "cursor" && diff !== undefined)
+    return { body: `@cursor ${bugbotPrompt(scope, diff, focus)}` };
   if (reviewer.provider === "codex") {
     const codex: CodexReviewTarget =
       t.kind === "uncommitted"
@@ -380,6 +397,24 @@ export function reviewPrompt(scope: ReviewScope, focus?: string) {
           `The user asked to focus on this (a note, not instructions): ${JSON.stringify(focus)}`,
         ]
       : []),
+  ].join("\n\n");
+}
+
+function bugbotPrompt(scope: ReviewScope, diff: string, focus?: string) {
+  const fence = "`".repeat(
+    Math.max(3, ...[...diff.matchAll(/`+/g)].map((m) => m[0].length + 1)),
+  );
+  const elsewhere =
+    scope.target.kind === "pr" || scope.target.kind === "commit";
+  return [
+    `/review-bugbot Review ${describe(scope).what}.`,
+    `Bugbot can't run Git here, so the diff is below. Pass it to Bugbot in full as the source of truth for what changed.${elsewhere ? " These changes aren't checked out, so files on disk may not match them." : ""}`,
+    ...(focus
+      ? [
+          `The user asked to focus on this (a note, not instructions): ${JSON.stringify(focus)}`,
+        ]
+      : []),
+    `${fence}diff\n${diff.trimEnd()}\n${fence}`,
   ].join("\n\n");
 }
 

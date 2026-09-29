@@ -330,7 +330,7 @@ describe("what Cursor may do", () => {
     });
     expect(sandbox).toBe(true);
     expect(tools).toContain("read");
-    for (const forbidden of ["shell", "edit", "write", "delete"])
+    for (const forbidden of ["shell", "edit", "write", "delete", "mcp"])
       expect(tools).not.toContain(forbidden);
 
     const { options } = turn("say hello", { readOnly: true });

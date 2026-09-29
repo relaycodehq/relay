@@ -36,6 +36,8 @@ export function cursorPolicy(
         "updateTodos",
         "webSearch",
         "webFetch",
+        // Subagents get the same tools, so Bugbot can run for a deep review.
+        "task",
       ],
     };
   switch (options.runtimeMode) {

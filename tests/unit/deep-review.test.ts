@@ -205,6 +205,23 @@ describe("reviewer tasks", () => {
     expect(task.body).toContain("git diff HEAD");
     expect(task.body).toContain('"the queue"');
   });
+  it("hands Cursor's Bugbot the diff, since it can't run Git", () => {
+    const cursor = { provider: "cursor" as const, choice };
+    const diff = "+const md = ```js```;\n";
+    const pr = {
+      ...scope,
+      target: {
+        kind: "pr" as const,
+        ref: { owner: "team", name: "app", number: 4 },
+      },
+    };
+    const { body } = reviewerTask(cursor, pr, "the queue", diff);
+    expect(body).toMatch(/^@cursor \/review-bugbot Review pull request #4/);
+    expect(body).toContain("aren't checked out");
+    expect(body).toContain('"the queue"');
+    // A fence longer than any in the diff, so the diff can't close it early.
+    expect(body).toContain("````diff\n+const md = ```js```;\n````");
+  });
   it("hands the lead every report as data", () => {
     const prompt = leadPrompt(
       {
@@ -561,6 +578,33 @@ describe("what a review covers", () => {
     await expect(
       resolveScope(work, { kind: "branch", base: "nowhere" }, project),
     ).rejects.toThrow("can't find the branch nowhere");
+  });
+
+  it("diffs uncommitted changes with new files, leaving the index alone", async () => {
+    const { resolveScope } = await import("../../electron/deep-review");
+    const { reviewDiff } = await import("../../electron/review-diff");
+    await writeFile(join(work, "a.ts"), "one\nstaged\n");
+    git(work, "add", "a.ts");
+    await writeFile(join(work, "a.ts"), "one\nstaged\nunstaged\n");
+    await writeFile(join(work, "new.ts"), "brand new\n");
+    const status = git(work, "status", "--porcelain");
+    const scope = await resolveScope(work, { kind: "uncommitted" }, project);
+    const diff = await reviewDiff(work, scope);
+    expect(diff).toContain("+staged\n+unstaged");
+    expect(diff).toContain("+++ b/new.ts\n@@ -0,0 +1 @@\n+brand new");
+    expect(git(work, "status", "--porcelain")).toBe(status);
+  });
+
+  it("cuts a diff too long to hand over, listing every file", async () => {
+    const { resolveScope } = await import("../../electron/deep-review");
+    const { reviewDiff, MAX_DIFF } = await import("../../electron/review-diff");
+    const line = "x".repeat(99) + "\n";
+    await writeFile(join(work, "big.ts"), line.repeat(MAX_DIFF / 50));
+    await writeFile(join(work, "small.ts"), "tail\n");
+    const scope = await resolveScope(work, { kind: "uncommitted" }, project);
+    const diff = await reviewDiff(work, scope);
+    expect(diff.length).toBeLessThan(MAX_DIFF + 2000);
+    expect(diff).toMatch(/Relay cut the diff here[\s\S]*small\.ts/);
   });
 
   it("covers one commit, by its full id", async () => {
