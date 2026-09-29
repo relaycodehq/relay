@@ -63,7 +63,7 @@ export async function checkForUpdate(
     set({
       kind: "apk",
       version: offer.version,
-      url: `https://github.com/${releasesRepo}/releases/download/v${offer.version}/Relay-${offer.version}-android.apk`,
+      url: `https://github.com/${releasesRepo}/releases/download/v${offer.version}/Relay-Android.apk`,
     });
     return;
   }
