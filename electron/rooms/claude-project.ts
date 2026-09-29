@@ -1243,7 +1243,13 @@ export async function runClaudeProject(
           role: "user",
           content: options.compact
             ? `/compact ${options.prompt}`.trim()
-            : [{ type: "text", text: options.prompt }, ...images],
+            : [
+                // A screenshot sent alone has no text; the API refuses an empty block.
+                ...(options.prompt
+                  ? [{ type: "text" as const, text: options.prompt }]
+                  : []),
+                ...images,
+              ],
         },
       });
     }
@@ -1266,7 +1272,10 @@ export async function runClaudeProject(
             message: {
               role: "user",
               content: attached.length
-                ? [{ type: "text", text }, ...attached]
+                ? [
+                    ...(text ? [{ type: "text" as const, text }] : []),
+                    ...attached,
+                  ]
                 : text,
             },
             priority: "next",

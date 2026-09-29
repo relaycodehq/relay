@@ -152,7 +152,12 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
             parent_tool_use_id: null,
             message: {
               role: "user",
-              content: [{ type: "text", text: options.prompt }, ...images],
+              content: [
+                ...(options.prompt
+                  ? [{ type: "text", text: options.prompt }]
+                  : []),
+                ...images,
+              ],
             },
           }) + "\n"
         : options.prompt,

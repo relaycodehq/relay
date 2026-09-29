@@ -211,7 +211,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             threadId,
             expectedTurnId: turnId,
             input: [
-              { type: "text", text, text_elements: [] },
+              ...(text ? [{ type: "text", text, text_elements: [] }] : []),
               ...(images ?? []).map((image) => ({
                 type: "localImage",
                 path: image.path,
@@ -334,7 +334,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         cwd: options.cwd,
         input: [
           ...(note ? [{ type: "text", text: note, text_elements: [] }] : []),
-          { type: "text", text: options.prompt, text_elements: [] },
+          ...(options.prompt
+            ? [{ type: "text", text: options.prompt, text_elements: [] }]
+            : []),
           ...(options.skills ?? []).map((skill) => ({
             type: "skill",
             name: skill.name,

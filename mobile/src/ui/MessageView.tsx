@@ -108,19 +108,22 @@ export const MessageView = memo(function MessageView({
       </View>
       {!user && <AgentRun message={m} root={root} />}
       {user ? (
-        <View
-          style={[
-            styles.userBody,
-            { borderColor: t.border, backgroundColor: t.raised },
-            // A /btw question: a dashed outline and nothing else, as on the desktop.
-            m.side && [styles.side, { borderColor: t.muted, backgroundColor: t.background }],
-            m.pending && styles.pending,
-          ]}
-        >
-          <Text selectable style={[styles.userText, { color: t.text }]}>
-            {withoutMention(m.body)}
-          </Text>
-        </View>
+        // A screenshot sent on its own leaves nothing for the bubble to hold.
+        !!withoutMention(m.body).trim() && (
+          <View
+            style={[
+              styles.userBody,
+              { borderColor: t.border, backgroundColor: t.raised },
+              // A /btw question: a dashed outline and nothing else, as on the desktop.
+              m.side && [styles.side, { borderColor: t.muted, backgroundColor: t.background }],
+              m.pending && styles.pending,
+            ]}
+          >
+            <Text selectable style={[styles.userText, { color: t.text }]}>
+              {withoutMention(m.body)}
+            </Text>
+          </View>
+        )
       ) : m.body.trim() ? (
         <Markdown text={m.body} onLink={openLink} />
       ) : null}

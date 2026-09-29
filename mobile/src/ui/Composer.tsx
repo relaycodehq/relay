@@ -211,7 +211,7 @@ export const Composer = forwardRef<
     setText("");
     try {
       await onSend({
-        body: draft || "Describe the attached screenshot.",
+        body: draft,
         settings,
         images,
         ...(sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {}),

@@ -442,7 +442,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           system: instructions(options),
           parts: [
             ...(note ? [{ type: "text", text: note, synthetic: true }] : []),
-            { type: "text", text: options.prompt },
+            ...(options.prompt ? [{ type: "text", text: options.prompt }] : []),
             ...images,
           ],
         });
@@ -460,7 +460,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           agent,
           ...(model ? { model } : {}),
           ...(variant ? { variant } : {}),
-          parts: [{ type: "text", text }, ...attached],
+          parts: [...(text ? [{ type: "text", text }] : []), ...attached],
         });
       },
     });

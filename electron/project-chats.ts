@@ -1368,7 +1368,7 @@ export class ProjectChats {
         : undefined;
       input = { ...input, parentId: parent?.id };
       active.input = input;
-      if (mention && !mention.question)
+      if (mention && !mention.question && !input.images?.length)
         throw new Error("Add a question after the agent mention.");
       if (input.ultraplan) {
         if (!mention) throw new Error("Ultraplan needs an agent to lead it.");
@@ -1597,7 +1597,7 @@ export class ProjectChats {
       const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
       const prompt = command
         ? mention.question
-        : `My request: ${mention.question}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`;
+        : `${mention.question ? `My request: ${mention.question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`.trimStart();
       this.reply(chat, active, answer, root, prompt, input, {
         skills,
         // What a command couldn't carry, the session hears next turn.

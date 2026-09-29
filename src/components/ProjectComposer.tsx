@@ -956,6 +956,8 @@ export function ProjectComposer({
   const sendDisabled =
     busy ||
     (!draft.trim() && !images.length && !allowEmpty) ||
+    // A note to the thread has no agent to show a screenshot to.
+    (recipient === "message" && !draft.trim()) ||
     preparing ||
     !selected;
   /** `sendAt` holds the message until then (Send later). */
@@ -1038,11 +1040,7 @@ export function ProjectComposer({
     }
     if (busy || commands.interceptSend()) return;
     if (sendDisabled || sending.current) return;
-    const body =
-      mention && !mention.question && images.length
-        ? `@${mention.provider} Describe the attached screenshot.`
-        : draft.trim() ||
-          (images.length ? "Describe the attached screenshot." : "");
+    const body = draft.trim();
     sending.current = true;
     try {
       let attached: DraftImage[];

@@ -713,6 +713,43 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
 }, 10000);
+it("sends a screenshot on its own without inventing a request", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@claude"),
+    provider: "claude",
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png",
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  const saved = await chats.get(chat.id);
+  expect(saved.messages[0].body).toBe("@claude");
+  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const content = JSON.parse(
+    requests.find((r) => r.provider === "claude").prompt,
+  ).message.content;
+  expect(content.at(-1)).toMatchObject({ type: "image" });
+  for (const block of content.filter(
+    (b: { type: string }) => b.type === "text",
+  )) {
+    expect(block.text).not.toBe("");
+    expect(block.text).not.toContain("My request");
+  }
+}, 10000);
 it("sends a Claude slash command as the whole prompt so Claude runs it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
