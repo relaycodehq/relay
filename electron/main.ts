@@ -1,139 +1,45 @@
-import { agentResponseSchema } from "../shared/agent-modes";
-import { agentRuntime } from "./agents";
-import { agentProviderSchema, usageProviderSchema } from "../shared/agents";
-import { projectFolderSchema } from "../shared/project-folders";
-import { PullRequestCreation, branchPulls } from "./pull-request-create";
-import { Ci } from "./ci";
-import { createPullRequestSchema } from "../shared/pull-request-create";
-import { branches, changeBranch } from "./branches";
-import { commitDetail, commitDiff, commitLog } from "./history";
-import {
-  commitShaSchema,
-  historyLimitSchema,
-  historyScopeSchema,
-} from "../shared/history";
-import { branchActionSchema } from "../shared/branches";
-import { Projects, type Place } from "./projects";
-import { ProjectSharing } from "./project-sharing";
-import { ProjectChats } from "./project-chats";
-import { PhoneRemote, phoneAppearanceSchema } from "./remote/phone-remote";
-import { PhoneAppFiles } from "./remote/phone-app";
-import { deepReviewStartSchema } from "../shared/deep-review";
-import {
-  chatScopeSchema,
-  chatTriageSchema,
-  chatWorkspaceSchema,
-  knownMessagesSchema,
-  projectChatSendSchema,
-  resumeSettingsSchema,
-  projectNameSchema,
-} from "../shared/projects";
-import { chatIsEmpty } from "../shared/chat-activity";
-import { LiveSyncs, type SyncWorkspace } from "./live-sync";
-import { idleSync } from "../shared/live-sync";
-import { gitActionSchema, workingPathSchema } from "../shared/working-tree";
-import {
-  applyCommitSplitSchema,
-  commitSplitNoteSchema,
-} from "../shared/commit-split";
-import {
-  flushGitOperations,
-  workingTree,
-  workingDiff,
-  performGitAction,
-  validateRepo,
-} from "./working-tree";
-import { gitExecutable, gitInfo, gitVersion, setGitPath } from "./git";
-import { generateCommitMessage } from "./commit-messages";
-import { applyCommitSplit, planCommitSplit } from "./commit-split";
-import {
-  catchUpBranch,
-  deleteMergedBranch,
-  mergeBranch,
-  mergePlan,
-} from "./branch-merge";
-import { mergeBranchSchema } from "../shared/branch-merge";
-import { parseWorkspaceId, workspaceIdSchema } from "../shared/workspaces";
-import { RoomService } from "./rooms/service";
-import { readHostingSetup } from "./rooms/provision";
-import {
-  connectRoomSchema,
-  sendRoomSchema,
-  presenceSchema,
-  idSchema,
-  roomHostingSchema,
-  roomProtocol,
-  parseRoomInvitation,
-} from "../shared/rooms";
-import { launchLineQuestion, questionContext } from "./questions";
-import { lineQuestionSchema } from "../shared/questions";
-import { aiSettingsSchema } from "../shared/settings";
-import { devopsSecretsSchema, devopsSettingsSchema } from "../shared/devops";
-import { DevOps } from "./devops";
-import { readProviderUsage } from "./provider-usage";
-import { keepUsageHistory } from "./usage-history";
-import { ProjectChecks } from "./checks/service";
-import { BlameService } from "./blame";
-import { detectProject } from "./checks/detect";
-import { projectIcon } from "./project-icon";
-import { TriageService } from "./triage/service";
-import {
-  app,
-  BrowserWindow,
-  clipboard,
-  ClipboardItem,
-  dialog,
-  ipcMain,
-  Menu,
-  nativeImage,
-  nativeTheme,
-  net,
-  safeStorage,
-  shell,
-} from "electron";
+import { app, dialog, net } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { z } from "zod";
-import { symbolQuerySchema } from "../shared/checks";
+import { roomProtocol } from "../shared/rooms";
+import { AgentHosts } from "./agent-host/client";
+import { AgentUpdates, machineIo } from "./agent-updates";
+import { hostAgents } from "./agents";
+import { apiContext } from "./api/context";
+import { createDispatch, serveApi, type Dispatch } from "./api";
+import { AppLinks } from "./app/links";
+import { GiteaLogin, seal, unseal } from "./app/login";
+import { setApplicationMenu } from "./app/menu";
+import { Menubar } from "./app/menubar";
+import { Quit } from "./app/quit";
+import { AppWindow } from "./app/window";
+import { BlameService } from "./blame";
+import { Ci } from "./ci";
+import { ProjectChecks } from "./checks/service";
+import { DevOps } from "./devops";
+import { Dictation } from "./dictation/service";
+import { gitExecutable, setGitPath } from "./git";
+import { registerAppImage } from "./linux-desktop-entry";
+import { linuxPasswordStore } from "./linux-password-store";
+import { LiveSyncs } from "./live-sync";
+import { ProjectChats } from "./project-chats";
+import { ProjectSharing } from "./project-sharing";
+import { Projects } from "./projects";
+import { PullRequestCreation } from "./pull-request-create";
+import { questionContext } from "./questions";
+import { PhoneAppFiles } from "./remote/phone-app";
+import { PhoneRemote } from "./remote/phone-remote";
+import { readHostingSetup } from "./rooms/provision";
+import { RoomService } from "./rooms/service";
+import { pathReady } from "./shell-path";
 import { Store } from "./store";
-import { Gitea } from "./gitea";
-import { launchCodex } from "./local";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
-import { claudeSignInCommand } from "./rooms/claude-sign-in";
-import { draftTerminalKey } from "../shared/terminals";
-import { fetchThemes, searchThemes } from "../shared/open-vsx";
-import { inspectFolder } from "./repository";
+import { TriageService } from "./triage/service";
 import { Updater } from "./updater";
-import { AgentUpdates, machineIo } from "./agent-updates";
-import { linuxPasswordStore } from "./linux-password-store";
-import { pathReady } from "./shell-path";
-import { registerAppImage } from "./linux-desktop-entry";
-import { readLocalFile, saveLocalFile } from "./local-files";
+import { keepUsageHistory } from "./usage-history";
 import { flushWorkingFiles } from "./working-files";
-import {
-  bodySchema,
-  blameQuerySchema,
-  digestSchema,
-  draftSchema,
-  filePathSchema,
-  progressSchema,
-  refSchema,
-  repoSchema,
-  shaSchema,
-  sideSchema,
-  textSchema,
-  workspaceSchema,
-  normalizeServer,
-} from "../shared/validation";
-import {
-  emptyProgress,
-  emptyWorkspace,
-  type ApiMethod,
-  type Issue,
-  type Pull,
-  type Repo,
-} from "../shared/types";
+import { flushGitOperations } from "./working-tree";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -149,43 +55,74 @@ if (
 // Started this early, the login shell has usually answered before the first
 // CLI lookup waits for it.
 void pathReady();
-let rooms: RoomService;
-let devops: DevOps;
-let projects: Projects;
-let projectChats: ProjectChats;
+let store: Store | undefined;
+let rooms: RoomService | undefined;
+let projectChats: ProjectChats | undefined;
+let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
+/** Where the agents' sessions run, so they outlive a restart of Relay. */
+let agentHosts: AgentHosts | undefined;
+const login = new GiteaLogin();
+const window = new AppWindow({
+  closed: () => {
+    blame.dispose();
+    projectChecks.stop();
+  },
+  rendererGone: () => projectChecks.stop(),
+});
+const menubar = new Menubar(
+  () => window.open(),
+  () => projectChats?.working() ?? 0,
+);
+const quit = new Quit({
+  window,
+  started: () => !!store,
+  runningTasks: () => projectChats?.runningTasks() ?? [],
+  stopping: () => triage?.cancel(),
+  shutDown: () =>
+    liveSyncs
+      .stopAll()
+      .then(() => phoneRemote?.close())
+      .then(() => {
+        if (quit.detaching) agentHosts?.detach();
+        return projectChats?.dispose({ detach: quit.detaching });
+      })
+      .then(() => rooms?.dispose())
+      .then(() =>
+        Promise.all([
+          store!.flush(),
+          flushWorkingFiles(),
+          flushGitOperations(),
+        ]),
+      ),
+  release: () => {
+    menubar.destroy();
+    threadTerminals.closeAll();
+    blame.dispose();
+    login.client?.dispose();
+  },
+});
 const pullRequestCreation = new PullRequestCreation();
-const updater = new Updater(
-  (state) => {
-    if (win && !win.isDestroyed()) win.webContents.send("relay:update", state);
+const updater = new Updater((state) => window.send("relay:update", state), {
+  // The agent host keeps the agents' work going across the restart.
+  runningTasks: () =>
+    agentHosts ? 0 : (projectChats?.runningTasks().length ?? 0),
+  // Restarting for an update was the user's call, tasks or not.
+  beforeQuit: () => {
+    quit.confirmed = true;
+    quit.detaching = true;
   },
-  {
-    runningTasks: () => projectChats?.runningTasks().length ?? 0,
-    // Restarting for an update was the user's call, tasks or not.
-    beforeQuit: () => (quitConfirmed = true),
-  },
+});
+const dictation = new Dictation(app.getPath("userData"), (state) =>
+  window.send("relay:dictation", state),
 );
 const agentUpdates = new AgentUpdates(
-  (state) => {
-    if (win && !win.isDestroyed())
-      win.webContents.send("relay:agent-updates", state);
-  },
+  (state) => window.send("relay:agent-updates", state),
   { ...machineIo, fetch: (url, init) => net.fetch(url, init) },
 );
 const liveSyncs = new LiveSyncs(() =>
   join(app.getPath("userData"), "live-sync"),
 );
-let win: BrowserWindow | null = null,
-  client: Gitea | null = null,
-  store: Store,
-  triage: TriageService,
-  pendingUrl: string | undefined;
-/** The typography setting's share of the window zoom; ⌘+ and ⌘− add to it. */
-let interfaceScale = 1;
-let loginRestore: "idle" | "unlocking" | "failed" = "idle";
-let restoreGeneration = 0;
-let windowReady = false;
-const root = join(__dirname, "../dist/index.html");
 // The worker runs under the system Node.js, which cannot read inside app.asar.
 const projectChecks = new ProjectChecks(
   join(__dirname, "checks-worker.mjs"),
@@ -196,113 +133,6 @@ const projectChecks = new ProjectChecks(
 );
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init));
-const dev = process.env.RELAY_DEV_URL;
-const pageSchema = z.number().int().min(1).max(100000);
-const requireClient = () => {
-  if (!client) throw new Error("Connect your Gitea account first.");
-  return client;
-};
-/** Whether a worktree thread's PR was merged on Gitea; asked at most once a minute. */
-const pullChecks = new Map<string, { at: number; merged: boolean }>();
-async function pullMerged(chatId: string, number: number) {
-  const seen = pullChecks.get(chatId);
-  if (seen && Date.now() - seen.at < 60000) return seen.merged;
-  const projectId = store.get().chats?.find((c) => c.id === chatId)?.projectId;
-  if (!projectId || !client) return false;
-  const gitea = client;
-  const merged = await projects
-    .linked(projectId, gitea)
-    .then((repo) => gitea.pull({ ...repo, number }))
-    .then(
-      (pull) => !!pull.merged,
-      () => false,
-    );
-  pullChecks.set(chatId, { at: Date.now(), merged });
-  return merged;
-}
-const repoKey = (r: { owner: string; name: string }) =>
-  JSON.stringify([requireClient().account.id, r.owner, r.name]);
-const prKey = (r: { owner: string; name: string; number: number }) =>
-  JSON.stringify([requireClient().account.id, r.owner, r.name, r.number]);
-/** The checkout linked to a Gitea repository, if any. */
-const linkedFolder = (r: Repo): string | undefined =>
-  store.get().folders[repoKey(r)];
-function requireFolder(
-  r: Repo,
-  message = "Link this repository to a local folder first.",
-) {
-  const dir = linkedFolder(r);
-  if (!dir) throw new Error(message);
-  return dir;
-}
-/** Linux's basic_text backend stores plaintext; secrets then stay in memory. */
-const canEncrypt = async () =>
-  process.platform === "linux"
-    ? safeStorage.isEncryptionAvailable() &&
-      safeStorage.getSelectedStorageBackend() !== "basic_text"
-    : await safeStorage.isAsyncEncryptionAvailable();
-/** Encrypts with the OS credential store; null when it can't persist safely. */
-const seal = async (value: string) =>
-  (await canEncrypt())
-    ? (await safeStorage.encryptStringAsync(value)).toString("base64")
-    : null;
-const unseal = async (value: string) =>
-  (await safeStorage.decryptStringAsync(Buffer.from(value, "base64"))).result;
-function showWindow() {
-  // Dock activation, a second launch and deep links all restore the same window.
-  if (!win) return;
-  if (process.platform === "darwin") app.show();
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-}
-function cancelLoginRestore() {
-  restoreGeneration++;
-  loginRestore = "idle";
-}
-async function restoreSavedLogin() {
-  const saved = store.get();
-  if (
-    client ||
-    loginRestore === "unlocking" ||
-    !saved.account ||
-    !saved.encryptedToken
-  )
-    return;
-  const generation = ++restoreGeneration;
-  loginRestore = "unlocking";
-  try {
-    const result = await unseal(saved.encryptedToken);
-    // A delayed Keychain response must not undo a new sign-in or sign-out.
-    if (generation !== restoreGeneration) return;
-    if (!result) throw new Error("Empty saved credential");
-    client = new Gitea(saved.account, result, (url, options) =>
-      net.fetch(url, options),
-    );
-    loginRestore = "idle";
-  } catch {
-    // Preserve the saved credential and all review data for retry.
-    if (generation === restoreGeneration) loginRestore = "failed";
-  }
-}
-function receiveUrl(url: string) {
-  if (!isAppUrl(url)) return;
-  pendingUrl = url;
-  if (!win && windowReady) createWindow();
-  if (win) {
-    showWindow();
-    if (!win.webContents.isLoading()) {
-      if (client) pendingUrl = undefined;
-      win.webContents.send("relay:open-url", url);
-    }
-  }
-}
-function isAppUrl(url: string) {
-  return (
-    url.length <= 16384 &&
-    (url.startsWith("relay:") || url.startsWith(roomProtocol + ":"))
-  );
-}
 const hostingSetup = process.argv.includes("--configure-room-hosting-stdin")
   ? readHostingSetup(process.stdin).then(
       (value) => ({ value }),
@@ -315,1551 +145,64 @@ if (!app.requestSingleInstanceLock()) {
     app.exit(1);
   } else app.quit();
 }
-app.on("second-instance", (_event, args) => {
-  const url = args.find(isAppUrl);
-  if (url) receiveUrl(url);
-  else {
-    if (!win && windowReady) createWindow();
-    showWindow();
-  }
-});
-app.on("open-url", (e, url) => {
-  e.preventDefault();
-  receiveUrl(url);
-});
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
-let quitReady = false,
-  flushing = false,
-  quitConfirmed = false,
-  askingToQuit = false,
-  closingToQuit = false;
-app.on("before-quit", (event) => {
-  if (quitReady || !store) {
-    threadTerminals.closeAll();
-    blame.dispose();
-    client?.dispose();
-    return;
-  }
-  event.preventDefault();
-  // Quitting ends Claude's sessions, and the background work they run.
-  const tasks = quitConfirmed ? [] : (projectChats?.runningTasks() ?? []);
-  if (tasks.length) {
-    if (askingToQuit) return;
-    askingToQuit = true;
-    void dialog
-      .showMessageBox({
-        type: "warning",
-        message:
-          tasks.length === 1
-            ? "Claude is still running something in the background."
-            : `Claude is still running ${tasks.length} things in the background.`,
-        detail: [
-          ...tasks.slice(0, 5).map((t) => `• ${t.description}`),
-          "",
-          "Quitting stops it. Relay will offer to pick it back up next time.",
-        ].join("\n"),
-        buttons: ["Quit Anyway", "Keep Running"],
-        defaultId: 1,
-        cancelId: 1,
-      })
-      .then(({ response }) => {
-        askingToQuit = false;
-        if (response === 0) {
-          quitConfirmed = true;
-          return app.quit();
-        }
-        // Closing the last window quits on Windows and Linux: bring it back
-        // rather than keep the work running with no window to watch it from.
-        if (!win && windowReady) createWindow();
-      });
-    return;
-  }
-  // Its unsaved-edits prompt can still cancel the quit, so the window closes
-  // before anything shuts down; closing it asks to quit again.
-  if (win) {
-    closingToQuit = true;
-    win.close();
-    return;
-  }
-  triage?.cancel();
-  if (flushing) return;
-  flushing = true;
-  void liveSyncs
-    .stopAll()
-    .then(() => phoneRemote?.close())
-    .then(() => projectChats?.dispose())
-    .then(() => rooms?.dispose())
-    .then(() =>
-      Promise.all([store.flush(), flushWorkingFiles(), flushGitOperations()]),
-    )
-    .then(() => {
-      quitReady = true;
-      app.quit();
-    })
-    .catch(async () => {
-      flushing = false;
-      const choice = await dialog.showMessageBox({
-        type: "error",
-        title: "Review data could not be saved",
-        message: "Some local review changes have not been saved.",
-        detail:
-          "Keep the app open and retry saving, or quit and lose those unsaved changes.",
-        buttons: ["Keep open", "Quit without saving"],
-        defaultId: 0,
-        cancelId: 0,
-      });
-      if (choice.response === 1) {
-        quitReady = true;
-        app.quit();
-      }
-    });
-});
-pendingUrl = process.argv.find(isAppUrl) ?? pendingUrl;
-/** Windows has no badge count; a dot on the taskbar button stands in. */
-function badgeDot() {
-  const size = 16,
-    pixels = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2),
-        alpha = Math.max(0, Math.min(1, size / 2 - d)),
-        i = (y * size + x) * 4;
-      // BGRA, premultiplied: #e5484d with an antialiased edge.
-      pixels[i] = Math.round(0x4d * alpha);
-      pixels[i + 1] = Math.round(0x48 * alpha);
-      pixels[i + 2] = Math.round(0xe5 * alpha);
-      pixels[i + 3] = Math.round(0xff * alpha);
-    }
-  return nativeImage.createFromBitmap(pixels, { width: size, height: size });
-}
-
-function setBadge(count: number) {
-  if (process.platform === "win32")
-    win?.setOverlayIcon(
-      count ? badgeDot() : null,
-      count
-        ? `${count} ${count === 1 ? "thread needs" : "threads need"} you`
-        : "",
-    );
-  else app.setBadgeCount(count);
-}
-
-function createWindow() {
-  win = new BrowserWindow({
-    width: 1500,
-    height: 960,
-    minWidth: 1050,
-    minHeight: 650,
-    show: false,
-    title: "Relay",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
-    // Adapted from T3 Code DesktopWindow.getWindowTitleBarOptions (MIT).
-    ...(process.platform === "darwin"
-      ? {
-          titleBarStyle: "hiddenInset" as const,
-          trafficLightPosition: { x: 20, y: 17 },
-          vibrancy: "sidebar" as const,
-          visualEffectState: "followWindow" as const,
-        }
-      : process.platform === "win32"
-        ? // The renderer draws the caption buttons (WindowControls), centred
-          // in the header; Windows' own overlay only sits flush to the top.
-          { titleBarStyle: "hidden" as const }
-        : {
-            titleBarStyle: "hidden" as const,
-            titleBarOverlay: {
-              height: 51,
-              color: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
-              symbolColor: nativeTheme.shouldUseDarkColors
-                ? "#ffffff"
-                : "#333333",
-            },
-          }),
-    webPreferences: {
-      preload: join(__dirname, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      spellcheck: false,
-    },
-  });
-  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  // The renderer's caption buttons swap maximize for restore.
-  const sendMaximized = () =>
-    win?.webContents.send("relay:maximized", win.isMaximized());
-  win.on("maximize", sendMaximized);
-  win.on("unmaximize", sendMaximized);
-  // A reloaded window starts without terminals; shells keep their output until it asks.
-  win.webContents.on("did-start-navigation", (details) => {
-    if (details.isMainFrame && !details.isSameDocument)
-      threadTerminals.detach();
-  });
-  // Reloading Relay itself counts as a navigation too: Vite's full reload
-  // after re-bundling dependencies and the error screen's button need it.
-  // Every other destination stays blocked.
-  win.webContents.on("will-navigate", (e) => {
-    const target = URL.parse(e.url);
-    if (target) target.hash = "";
-    const page = dev && !app.isPackaged ? `${dev}/` : pathToFileURL(root).href;
-    if (target?.href !== page) e.preventDefault();
-  });
-  // Only the font list, for the typography settings' font pickers.
-  win.webContents.session.setPermissionRequestHandler(
-    (_wc, permission, callback) => callback(permission === "local-fonts"),
-  );
-  win.webContents.session.setPermissionCheckHandler(
-    (_wc, permission) => permission === "local-fonts",
-  );
-  win.once("ready-to-show", showWindow);
-  win.webContents.on("will-prevent-unload", (event) => {
-    const choice = dialog.showMessageBoxSync(win!, {
-      type: "warning",
-      title: "Unsaved code edits",
-      message: "Close without saving your code edits?",
-      detail: "Choose Keep editing to save or copy your changes first.",
-      buttons: ["Keep editing", "Discard edits and close"],
-      defaultId: 0,
-      cancelId: 0,
-    });
-    if (choice === 1) event.preventDefault();
-    else closingToQuit = false;
-  });
-  win.webContents.on("render-process-gone", () => projectChecks.stop());
-  win.on("closed", () => {
-    blame.dispose();
-    projectChecks.stop();
-    // Only the window knows what's unread; a closed one can't clear it later.
-    // (Windows quits with its last window, taking the overlay with it.)
-    app.setBadgeCount(0);
-    win = null;
-    if (closingToQuit) {
-      closingToQuit = false;
-      app.quit();
-    }
-  });
-  if (dev && !app.isPackaged) {
-    if (dev !== "http://127.0.0.1:5177") throw new Error("Invalid dev URL");
-    void win.loadURL(dev);
-  } else void win.loadFile(root);
-}
-const terminalKeySchema = z.union([
-  idSchema,
-  z.templateLiteral(["draft:", idSchema]),
-]);
-const terminalSizeSchema = z.object({
-  cols: z.number().int().min(2).max(1000),
-  rows: z.number().int().min(1).max(500),
-});
-/** The folder a workspace id names: the project's checkout, or a thread's worktree. */
-async function place(
-  where: unknown,
-): Promise<Place & { projectId: string; chatId?: string }> {
-  const { projectId, chatId } = parseWorkspaceId(
-    workspaceIdSchema.parse(where),
-  );
-  if (!chatId) return { ...(await projects.inspect(projectId)), projectId };
-  return {
-    root: await projectChats.worktreeRoot(projectId, chatId),
-    plain: false,
-    projectId,
-    chatId,
-  };
-}
-const placeRoot = async (where: unknown) => (await place(where)).root;
-function requirePhoneRemote() {
-  if (!phoneRemote) throw new Error("Relay is still starting.");
-  return phoneRemote;
-}
-async function dispatch(method: ApiMethod, args: unknown[]) {
-  switch (method) {
-    case "localCheckInfo":
-      return detectProject(await placeRoot(args[0]));
-    case "localCheckState":
-      return projectChecks.state(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-      );
-    case "startLocalChecks": {
-      const id = workspaceIdSchema.parse(args[0]);
-      return projectChecks.start(
-        "project:" + id,
-        await placeRoot(id),
-        null,
-        null,
-        shaSchema.parse(args[1]),
-        z.string().max(4096).parse(args[2]),
-      );
-    }
-    case "stopLocalChecks":
-      projectChecks.stop("project:" + workspaceIdSchema.parse(args[0]));
-      return;
-    case "pauseLocalChecks":
-      projectChecks.pause(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        z.boolean().parse(args[1]),
-      );
-      return;
-    case "updateLocalCheckBuffer":
-      return projectChecks.update(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-        textSchema.nullable().parse(args[3]),
-      );
-    case "inspectLocalSymbol":
-      return projectChecks.symbol(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        symbolQuerySchema.parse(args[2]),
-      );
-    case "localBlame":
-      return blame.read(
-        await placeRoot(args[0]),
-        null,
-        null,
-        blameQuerySchema.parse(args[1]),
-      );
-    case "projectIcon":
-      return projectIcon(
-        await projects.root(idSchema.parse(args[0])),
-        (path) => {
-          const image = nativeImage.createFromPath(path);
-          return image.isEmpty()
-            ? null
-            : image.resize({ width: 128, quality: "best" }).toDataURL();
-        },
-      );
-    case "projectGroups":
-      return projects.groups();
-    case "createProjectGroup":
-      return projects.createGroup(projectFolderSchema.parse(args[0]));
-    case "renameProjectGroup":
-      return projects.renameGroup(
-        projectFolderSchema.parse(args[0]),
-        projectFolderSchema.parse(args[1]),
-      );
-    case "removeProjectGroup":
-      return projects.removeGroup(projectFolderSchema.parse(args[0]));
-    case "moveProjectGroup":
-      return projects.moveGroup(
-        projectFolderSchema.parse(args[0]),
-        projectFolderSchema.nullable().parse(args[1]),
-      );
-    case "moveProject":
-      return projects.move(
-        idSchema.parse(args[0]),
-        projectFolderSchema.parse(args[1]),
-        idSchema.nullable().parse(args[2]),
-      );
-    case "renameProject":
-      return projects.rename(
-        idSchema.parse(args[0]),
-        projectNameSchema.parse(args[1]),
-      );
-    case "revealProject": {
-      const error = await shell.openPath(
-        await projects.root(idSchema.parse(args[0])),
-      );
-      if (error) throw new Error(error);
-      return;
-    }
-    case "projects":
-      return projects.list(client);
-    case "addProject": {
-      const result = await dialog.showOpenDialog(win!, {
-        title: "Add a project folder",
-        properties: ["openDirectory"],
-      });
-      return result.canceled ? null : projects.add(result.filePaths[0], client);
-    }
-    case "createScratch":
-      return projects.scratch(
-        join(app.getPath("userData"), "Scratchpad"),
-        (id) => projectChats.list(id).some((c) => !chatIsEmpty(c)),
-      );
-    case "scratchChats":
-      return projects
-        .scratchIds()
-        .flatMap((id) => projectChats.list(id))
-        .sort((a, b) => b.updated - a.updated);
-    case "linkProject":
-      return projects.link(idSchema.parse(args[0]), requireClient());
-    case "triageProjectChat":
-      return projectChats.triage(
-        idSchema.parse(args[0]),
-        chatTriageSchema.parse(args[1]),
-      );
-    case "forkProjectChat":
-      return projectChats.fork(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      );
-    case "renameProjectChat":
-      return projectChats.rename(
-        idSchema.parse(args[0]),
-        z.string().parse(args[1]),
-      );
-    case "projectCommands": {
-      const root = await projects.root(idSchema.parse(args[0]));
-      return agentRuntime(agentProviderSchema.parse(args[1])).commands(root);
-    }
-    case "agentModels":
-      return agentRuntime(agentProviderSchema.parse(args[0])).models();
-    case "agentDefaults":
-      return agentRuntime(agentProviderSchema.parse(args[1])).defaults(
-        await projects.root(idSchema.parse(args[0])),
-      );
-    case "projectCiStatus": {
-      const id = idSchema.parse(args[0]);
-      const chatId = idSchema.optional().parse(args[1] ?? undefined);
-      const chat = chatId ? await projectChats.get(chatId) : null;
-      if (chat && chat.projectId !== id)
-        throw new Error("That thread belongs to another project.");
-      // A worktree thread reports its own branch; a removed one, the checkout's.
-      const root =
-        chat?.worktree?.path && !chat.worktree.removedAt
-          ? await projectChats
-              .worktreePath(chatId!)
-              .catch(() => projects.root(id))
-          : await projects.root(id);
-      return ci.status(root, client);
-    }
-    case "projectBranchPulls":
-    case "projectPreparePull":
-    case "projectCreatePull": {
-      // A worktree thread's PR opens from its own branch.
-      const { root, projectId, chatId } = await place(args[0]);
-      const client = requireClient();
-      const repo = await projects.linked(projectId, client);
-      if (method === "projectBranchPulls")
-        return branchPulls(root, client, repo);
-      if (method === "projectPreparePull")
-        return pullRequestCreation.prepare(root, client, repo);
-      const created = await pullRequestCreation.create(
-        root,
-        client,
-        createPullRequestSchema.parse(args[1]),
-      );
-      if (chatId)
-        await projectChats.recordPull(chatId, {
-          number: created.pull.ref.number,
-          url: created.pull.url,
-        });
-      return created;
-    }
-    case "projectBranches":
-      return branches(await projects.root(idSchema.parse(args[0])));
-    case "projectChangeBranch": {
-      const id = idSchema.parse(args[0]);
-      const action = branchActionSchema.parse(args[1]);
-      projects.assertCheckoutAvailable(id);
-      projects.changingBranch.add(id);
-      try {
-        const root = await projects.root(id);
-        if (projectChats.hasActiveProject(id))
-          throw new Error(
-            "Stop the running agent in this project before switching branches.",
-          );
-        if (liveSyncs.busy(root))
-          throw new Error("Pause live file sync before switching branches.");
-        const result = await changeBranch(root, action);
-        projectChecks.stop();
-        return result;
-      } finally {
-        projects.changingBranch.delete(id);
-      }
-    }
-    case "projectFiles":
-      return projects.files(await place(args[0]));
-    case "projectFile":
-      return projects.file(
-        await place(args[0]),
-        workingPathSchema.parse(args[1]),
-      );
-    case "saveProjectFile":
-      return projects.save(
-        await place(args[0]),
-        workingPathSchema.parse(args[1]),
-        // A plain folder has no HEAD.
-        shaSchema.or(z.literal("")).parse(args[2]),
-        digestSchema.parse(args[3]),
-        textSchema.parse(args[4]),
-      );
-    case "projectTasks": {
-      const id = idSchema.parse(args[0]);
-      return projectTasks.list(
-        await projects.root(id),
-        projectChats.worktreeFolders(id),
-      );
-    }
-    case "stopProjectTask":
-    case "restartProjectTask": {
-      const id = idSchema.parse(args[0]);
-      return projectTasks[method === "stopProjectTask" ? "stop" : "restart"](
-        await projects.root(id),
-        z.string().max(64).parse(args[1]),
-        projectChats.worktreeFolders(id),
-      );
-    }
-    case "openTerminal": {
-      const projectId = idSchema.parse(args[0]);
-      const chatId = idSchema.nullable().parse(args[1]);
-      const size = terminalSizeSchema.parse(args[2]);
-      const cwd = chatId
-        ? await projectChats.terminalFolder(projectId, chatId)
-        : await projects.root(projectId);
-      return threadTerminals.open(
-        chatId ?? draftTerminalKey(projectId),
-        cwd,
-        size.cols,
-        size.rows,
-        z.boolean().optional().parse(args[3]),
-      );
-    }
-    case "writeTerminal":
-      return threadTerminals.write(
-        terminalKeySchema.parse(args[0]),
-        z
-          .string()
-          .max(1 << 20)
-          .parse(args[1]),
-      );
-    case "prefillClaudeSignIn":
-      return threadTerminals.prefill(
-        terminalKeySchema.parse(args[0]),
-        await claudeSignInCommand(),
-      );
-    case "resizeTerminal": {
-      const size = terminalSizeSchema.parse({ cols: args[1], rows: args[2] });
-      return threadTerminals.resize(
-        terminalKeySchema.parse(args[0]),
-        size.cols,
-        size.rows,
-      );
-    }
-    case "ackTerminal":
-      return threadTerminals.ack(
-        terminalKeySchema.parse(args[0]),
-        z.number().int().nonnegative().parse(args[1]),
-      );
-    case "adoptTerminal": {
-      const projectId = idSchema.parse(args[0]);
-      const chatId = idSchema.parse(args[1]);
-      // A thread in its own worktree starts its own shell there.
-      if (await projectChats.worksInCheckout(projectId, chatId))
-        threadTerminals.adopt(draftTerminalKey(projectId), chatId);
-      return;
-    }
-    case "projectWorkingTree":
-      return workingTree(await placeRoot(args[0]));
-    case "gitInfo":
-      return gitInfo();
-    case "chooseGit": {
-      const result = await dialog.showOpenDialog(win!, {
-        title: "Choose the Git program",
-        properties: ["openFile"],
-        filters:
-          process.platform === "win32"
-            ? [{ name: "Git", extensions: ["exe"] }]
-            : undefined,
-      });
-      if (result.canceled) return null;
-      const path = result.filePaths[0];
-      await gitVersion(path);
-      await store.update((s) => {
-        s.gitPath = path;
-      });
-      setGitPath(path);
-      return gitInfo();
-    }
-    case "resetGit":
-      await store.update((s) => {
-        delete s.gitPath;
-      });
-      setGitPath(null);
-      return gitInfo();
-    case "projectWorkingDiff":
-      return workingDiff(
-        await placeRoot(args[0]),
-        workingPathSchema.parse(args[1]),
-        z.enum(["staged", "unstaged"]).parse(args[2]),
-      );
-    case "projectHistory":
-      return commitLog(
-        await placeRoot(args[0]),
-        historyScopeSchema.parse(args[1]),
-        historyLimitSchema.parse(args[2]),
-      );
-    case "projectCommit":
-      return commitDetail(
-        await placeRoot(args[0]),
-        commitShaSchema.parse(args[1]),
-      );
-    case "projectCommitDiff":
-      return commitDiff(
-        await placeRoot(args[0]),
-        commitShaSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      );
-    case "projectTurnDiff":
-      return projectChats.turnDiff(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      );
-    case "rewindProjectTurn":
-      return projectChats.rewindTurn(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        z.array(workingPathSchema).max(1000).nullable().parse(args[2]),
-        z.enum(["revert", "redo"]).parse(args[3]),
-        z.boolean().parse(args[4]),
-      );
-    case "projectMergePlan":
-      return mergePlan(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).optional().parse(args[1]),
-      );
-    case "projectMergeBranch":
-      return mergeBranch(
-        await placeRoot(args[0]),
-        mergeBranchSchema.parse(args[1]),
-      );
-    case "projectCatchUp":
-      return catchUpBranch(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).parse(args[1]),
-      );
-    case "projectDeleteBranch":
-      return deleteMergedBranch(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).parse(args[1]),
-      );
-    case "projectCommitMessage":
-      return generateCommitMessage(
-        await placeRoot(args[0]),
-        z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
-        store.aiSettings(),
-        AbortSignal.timeout(120_000),
-      );
-    case "projectPlanCommitSplit":
-      return planCommitSplit(
-        await placeRoot(args[0]),
-        commitSplitNoteSchema.optional().parse(args[1]) ?? "",
-        store.aiSettings(),
-        // Planning reads every change at the chosen effort; give it room.
-        AbortSignal.timeout(600_000),
-      );
-    case "projectApplyCommitSplit":
-      return applyCommitSplit(
-        await placeRoot(args[0]),
-        applyCommitSplitSchema.parse(args[1]),
-      );
-    case "projectGitAction":
-      return performGitAction(
-        await placeRoot(args[0]),
-        gitActionSchema.parse(args[1]),
-      );
-    case "projectPulls": {
-      const client = requireClient();
-      const repo = await projects.linked(idSchema.parse(args[0]), client);
-      const page = await client.page<Pull>(
-        `${client.repo(repo)}/pulls?state=${z.enum(["open", "closed", "all"]).parse(args[1])}`,
-        pageSchema.parse(args[2]),
-      );
-      return {
-        ...page,
-        items: page.items.map((p) => ({
-          ...p,
-          repository: {
-            name: repo.name,
-            full_name: `${repo.owner}/${repo.name}`,
-            owner: repo.owner,
-          },
-          pull_request: { merged: p.merged },
-        })),
-      };
-    }
-    case "resolveStoppedWork":
-      return projectChats.resolveStoppedWork(
-        idSchema.parse(args[0]),
-        z.enum(["resume", "dismiss"]).parse(args[1]),
-      );
-    case "stopProjectChatPending":
-      return projectChats.stopPending(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      );
-    case "projectChatAgents":
-      return projectChats.agents(idSchema.parse(args[0]));
-    case "projectChatAgent":
-      return projectChats.agentRun(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      );
-    case "stopProjectChatAgent":
-      return projectChats.stopAgent(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      );
-    case "projectChatPresence":
-      return projectChats.presence(
-        idSchema.parse(args[0]),
-        presenceSchema.omit({ head: true }).nullable().parse(args[1]),
-      );
-    case "projectChatShareInfo":
-      return projectChats.shareInfo(idSchema.parse(args[0]));
-    case "shareProjectChat":
-      return projectChats.share(idSchema.parse(args[0]));
-    case "syncProjectChat": {
-      const id = idSchema.parse(args[0]);
-      return args[1] == null
-        ? projectChats.sync(id)
-        : projectChats.syncChanges(id, knownMessagesSchema.parse(args[1]));
-    }
-    case "projectChatInvite":
-      return projectChats.invite(idSchema.parse(args[0]));
-    case "sharedProjectChats":
-      return projectChats.sharedList(idSchema.parse(args[0]));
-    case "openSharedProjectChat":
-      return projectChats.openShared(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      );
-    case "joinProjectConversation":
-      return projectChats.join(
-        idSchema.parse(args[0]),
-        z.string().max(16384).parse(args[1]),
-      );
-    case "projectChats":
-      return projectChats.list(idSchema.parse(args[0]));
-    case "createProjectChat":
-      return projectChats.create(
-        idSchema.parse(args[0]),
-        chatScopeSchema.parse(args[1]),
-        chatWorkspaceSchema.optional().parse(args[2] ?? undefined),
-      );
-    case "projectWorktree": {
-      const chatId = idSchema.parse(args[0]);
-      const status = await projectChats.worktreeStatus(chatId);
-      if (status.pr && !status.landed && client)
-        if (await pullMerged(chatId, status.pr.number)) {
-          await projectChats.pullMerged(chatId);
-          return projectChats.worktreeStatus(chatId);
-        }
-      return status;
-    }
-    case "projectWorktreeDiff":
-      return projectChats.worktreeDiff(
-        idSchema.parse(args[0]),
-        workingPathSchema.parse(args[1]),
-      );
-    case "removeProjectWorktree":
-      return projectChats.removeWorktree(idSchema.parse(args[0]));
-    case "revealProjectWorktree": {
-      const error = await shell.openPath(
-        await projectChats.worktreePath(idSchema.parse(args[0])),
-      );
-      if (error) throw new Error(error);
-      return;
-    }
-    case "revealAgentWorktree": {
-      const error = await shell.openPath(
-        await projectChats.agentWorktreePath(
-          idSchema.parse(args[0]),
-          z.string().max(4096).parse(args[1]),
-        ),
-      );
-      if (error) throw new Error(error);
-      return;
-    }
-    case "projectChat": {
-      const id = idSchema.parse(args[0]);
-      const chat =
-        args[1] == null
-          ? await projectChats.get(id)
-          : await projectChats.changes(id, knownMessagesSchema.parse(args[1]));
-      projectChats.ensureTitle(id);
-      return chat;
-    }
-    case "projectChatImage":
-      return projectChats.image(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      );
-    case "projectChatReadImage":
-      return projectChats.readImage(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        z.string().min(1).max(500).parse(args[2]),
-      );
-    case "revealProjectChatReadImage":
-      shell.showItemInFolder(
-        await projectChats.turnImagePath(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          z.string().min(1).max(500).parse(args[2]),
-        ),
-      );
-      return;
-    case "sendProjectChat":
-      return projectChats.send(
-        idSchema.parse(args[0]),
-        projectChatSendSchema.parse(args[1]),
-      );
-    case "resumeProjectChat":
-      return projectChats.resume(
-        idSchema.parse(args[0]),
-        resumeSettingsSchema.optional().parse(args[1] ?? undefined),
-      );
-    case "compactProjectChat":
-      return projectChats.compact(
-        idSchema.parse(args[0]),
-        args[1] == null ? undefined : idSchema.parse(args[1]),
-        z.string().trim().max(4000).optional().parse(args[2]) || undefined,
-      );
-    case "projectChatQueueAction":
-      return projectChats.queueAction(
-        idSchema.parse(args[0]),
-        z.enum(["remove", "steer", "move"]).parse(args[1]),
-        idSchema.parse(args[2]),
-        z.number().int().min(0).max(20).optional().parse(args[3]),
-      );
-    case "respondProjectChat":
-      return projectChats.respond(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        agentResponseSchema.parse(args[2]),
-      );
-    case "cancelProjectChat":
-      return projectChats.cancel(idSchema.parse(args[0]));
-    case "startDeepReview": {
-      const id = idSchema.parse(args[0]);
-      const config = deepReviewStartSchema.parse(args[1]);
-      // The forge knows which branch a pull request merges into.
-      const pull =
-        config.target.kind === "pr"
-          ? await requireClient().pull(config.target.ref)
-          : undefined;
-      return projectChats.startDeepReview(
-        id,
-        config,
-        pull && { number: pull.number, title: pull.title, base: pull.base.ref },
-      );
-    }
-    case "resumeDeepReview":
-      return projectChats.resumeDeepReview(idSchema.parse(args[0]));
-    case "resumeUltraplan":
-      return projectChats.resumeUltraplan(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      );
-    case "setDeepReviewFinding":
-      return projectChats.setDeepReviewFinding(
-        idSchema.parse(args[0]),
-        z
-          .string()
-          .regex(/^F\d{1,3}$/)
-          .parse(args[1]),
-        z.enum(["open", "dismissed"]).parse(args[2]),
-      );
-    case "roomHosting":
-      return rooms.hostingStatus();
-    case "saveRoomHosting":
-      return rooms.saveHosting(roomHostingSchema.nullable().parse(args[0]));
-    case "roomAcceptInvitation": {
-      const invitation = parseRoomInvitation(
-        z.string().max(16384).parse(args[0]),
-      );
-      if (!invitation.project || !invitation.number)
-        throw new Error(
-          "This older invitation has no PR target. Open its repository and paste the invitation in the room.",
-        );
-      if (
-        normalizeServer(invitation.project.server) !==
-        normalizeServer(requireClient().account.server)
-      )
-        throw new Error(
-          `Sign into ${invitation.project.server} in Settings to join this project.`,
-        );
-      const ref = refSchema.parse({
-        ...invitation.project,
-        number: invitation.number,
-      });
-      const context = {
-        client: requireClient(),
-        ref,
-        key: repoKey(ref),
-        dir: linkedFolder(ref),
-      };
-      await rooms.allowAccess(context, invitation.server);
-      const state = await rooms.connect(context, {
-        server: invitation.server,
-        secret: invitation.secret,
-        projectId: invitation.projectId,
-      });
-      return { ref, state };
-    }
-    case "liveSyncState":
-    case "liveSyncStart":
-    case "liveSyncStop":
-    case "liveSyncConflict":
-    case "liveSyncResolve": {
-      const target = z
-        .union([z.object({ chatId: idSchema }).strict(), refSchema])
-        .parse(args[0]);
-      const key = "chatId" in target ? "chat:" + target.chatId : prKey(target);
-      const sync = liveSyncs.get(key);
-      if (method === "liveSyncState") return sync?.status() ?? idleSync;
-      if (method === "liveSyncStop") {
-        await sync?.stop();
-        return;
-      }
-      if (method === "liveSyncStart") {
-        if (sync?.status().active) return sync.status();
-        let workspace: SyncWorkspace;
-        if ("chatId" in target)
-          workspace = await projectChats.workspace(target.chatId);
-        else {
-          const client = requireClient();
-          const root = await validateRepo(
-            requireFolder(target),
-            client.account.server,
-            target,
-          );
-          workspace = {
-            ...(await rooms.workspace({
-              client,
-              ref: target,
-              key: repoKey(target),
-              dir: root,
-            })),
-            root,
-            validate: () => validateRepo(root, client.account.server, target),
-          };
-        }
-        for (const project of store.get().projects ?? [])
-          if (project.path === workspace.root)
-            projects.assertCheckoutAvailable(project.id);
-        return liveSyncs.start(key, workspace);
-      }
-      if (!sync?.status().active)
-        throw new Error("Resume live sync before resolving files.");
-      const path = workingPathSchema.parse(args[1]);
-      if (method === "liveSyncConflict") return sync.conflict(path);
-      return sync.resolve(
-        path,
-        z.enum(["local", "shared"]).parse(args[2]),
-        z.number().int().positive().parse(args[3]),
-        digestSchema.nullable().parse(args[4]),
-      );
-    }
-    case "roomAccessInfo":
-    case "allowRoomAccess":
-    case "roomConnect":
-    case "roomState":
-    case "roomDisconnect":
-    case "roomPoll":
-    case "roomSend":
-    case "roomCancel":
-    case "roomPresence":
-    case "roomInvite":
-    case "roomMembers":
-    case "roomRevoke": {
-      const ref = refSchema.parse(args[0]);
-      const context = {
-        client: requireClient(),
-        ref,
-        key: repoKey(ref),
-        dir: linkedFolder(ref),
-      };
-      if (method === "roomAccessInfo")
-        return { server: await rooms.projectServer(context) };
-      if (method === "allowRoomAccess")
-        return rooms.allowAccess(
-          context,
-          roomHostingSchema.shape.server.parse(args[1]),
-        );
-      if (method === "roomConnect")
-        return rooms.connect(context, connectRoomSchema.parse(args[1]));
-      if (method === "roomState") return rooms.state(context);
-      if (method === "roomDisconnect") {
-        // PR keys extend this repository's key: [account, owner, name, number].
-        await liveSyncs.stopWhere((key) =>
-          key.startsWith(repoKey(ref).slice(0, -1) + ","),
-        );
-        return rooms.disconnect(context);
-      }
-      if (method === "roomPoll")
-        return rooms.poll(
-          context,
-          z.number().int().nonnegative().parse(args[1]),
-          args[2] === undefined
-            ? undefined
-            : z.number().int().nonnegative().parse(args[2]),
-        );
-      if (method === "roomSend")
-        return rooms.send(context, sendRoomSchema.parse(args[1]));
-      if (method === "roomCancel")
-        return rooms.cancel(context, idSchema.parse(args[1]));
-      if (method === "roomPresence")
-        return rooms.presence(
-          context,
-          presenceSchema.nullable().parse(args[1]),
-        );
-      if (method === "roomInvite") return rooms.invite(context);
-      if (method === "roomMembers") return rooms.members(context);
-      return rooms.revoke(context, idSchema.parse(args[1]));
-    }
-
-    case "triageState":
-    case "startTriage":
-    case "cancelTriage":
-    case "groupPaths": {
-      const ref = refSchema.parse(args[0]),
-        head = shaSchema.parse(args[1]),
-        base = shaSchema.parse(args[2]),
-        key = prKey(ref);
-      if (method === "triageState") return triage.state(key, `${base}:${head}`);
-      if (method === "startTriage")
-        return triage.start(requireClient(), ref, key, head, base);
-      if (method === "groupPaths")
-        return triage.groupPaths(
-          requireClient(),
-          ref,
-          key,
-          head,
-          base,
-          z.string().max(100).parse(args[3]),
-        );
-      const state = await triage.state(key, `${base}:${head}`);
-      if (
-        state?.status === "scanning" ||
-        state?.status === "classifying" ||
-        state?.status === "matching"
-      )
-        triage.cancel();
-      return;
-    }
-    case "bootstrap": {
-      const url = pendingUrl;
-      if (client) pendingUrl = undefined;
-      return {
-        account: client?.account ?? null,
-        platform: process.platform,
-        loginRestore,
-        savedServer: store.get().account?.server,
-        pendingUrl: url,
-        workspace: workspaceSchema.parse(
-          (client && store.get().workspaces?.[client.account.id]) ??
-            emptyWorkspace(),
-        ),
-      };
-    }
-    case "retryLoginRestore":
-      void restoreSavedLogin();
-      return;
-    case "cancelLoginRestore":
-      cancelLoginRestore();
-      return;
-    case "saveWorkspace": {
-      const accountId = requireClient().account.id;
-      const workspace = workspaceSchema.parse(args[0]);
-      await store.update((s) => {
-        s.workspaces ??= {};
-        s.workspaces[accountId] = workspace;
-      });
-      return;
-    }
-    case "connect": {
-      const server = z.string().max(2048).parse(args[0]),
-        token = z.string().trim().min(1).max(4096).parse(args[1]);
-      cancelLoginRestore();
-      const next = await Gitea.connect(server, token, (url, options) =>
-        net.fetch(url, options),
-      );
-      const encryptedToken = (await seal(token)) ?? undefined;
-      next.account.persistent = encryptedToken !== undefined;
-      await store.update((s) => {
-        s.account = next.account;
-        s.encryptedToken = encryptedToken;
-      });
-      triage.cancel();
-      projectChecks.stop();
-      blame.dispose();
-      client?.dispose();
-      client = next;
-      return next.account;
-    }
-    case "disconnect":
-      await liveSyncs.stopAll();
-      await rooms.dispose();
-      blame.dispose();
-      projectChecks.stop();
-      cancelLoginRestore();
-      await store.update((s) => {
-        delete s.account;
-        delete s.encryptedToken;
-      });
-      triage.cancel();
-      client?.dispose();
-      client = null;
-      return;
-    case "search": {
-      const filter = z
-          .enum(["review_requested", "assigned", "created", "all"])
-          .parse(args[0]),
-        q = z.string().max(500).parse(args[1]),
-        state = z.enum(["open", "closed", "all"]).parse(args[2]),
-        page = pageSchema.parse(args[3]);
-      const query = new URLSearchParams({
-        type: "pulls",
-        state,
-        q,
-        ...(filter === "all" ? {} : { [filter]: "true" }),
-      });
-      return requireClient().page<Issue>(`/repos/issues/search?${query}`, page);
-    }
-    case "parseUrl":
-      return requireClient().parseUrl(z.string().max(4096).parse(args[0]));
-    case "pull":
-      return requireClient().pull(refSchema.parse(args[0]));
-    case "files": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().files(r, pageSchema.parse(args[1]));
-    }
-    case "contents": {
-      const r = refSchema.parse(args[0]),
-        file = z
-          .object({
-            filename: filePathSchema,
-            previous_filename: filePathSchema.optional(),
-            status: z.string().max(30),
-            additions: z.number(),
-            deletions: z.number(),
-            changes: z.number(),
-          })
-          .parse(args[1]);
-      return requireClient().contents(
-        r,
-        file,
-        shaSchema.parse(args[2]),
-        shaSchema.parse(args[3]),
-      );
-    }
-    case "blame": {
-      const r = refSchema.parse(args[0]),
-        query = blameQuerySchema.parse(args[1]),
-        dir = requireFolder(
-          r,
-          "Link this repository to a local folder to see line history.",
-        );
-      return blame.read(dir, requireClient().account.server, r, query);
-    }
-    case "reviews": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().reviews(r, pageSchema.parse(args[1]));
-    }
-    case "reviewComments": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().reviewComments(
-        r,
-        z.number().int().positive().parse(args[1]),
-      );
-    }
-    case "discussion": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().discussion(r, pageSchema.parse(args[1]));
-    }
-    case "progress":
-      return (
-        store.get().progress[prKey(refSchema.parse(args[0]))] ?? emptyProgress()
-      );
-    case "saveProgress": {
-      const key = prKey(refSchema.parse(args[0])),
-        progress = progressSchema.parse(args[1]);
-      await store.update((s) => {
-        s.progress[key] = progress;
-      });
-      return;
-    }
-    case "submitReview":
-      return requireClient().submit(
-        refSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        z.enum(["COMMENT", "APPROVED", "REQUEST_CHANGES"]).parse(args[2]),
-        z.string().max(65536).parse(args[3]),
-        z.array(draftSchema).max(1000).parse(args[4]),
-      );
-    case "resolveComment": {
-      const r = refSchema.parse(args[0]);
-      await requireClient().resolveComment(
-        r,
-        z.number().int().positive().parse(args[1]),
-        z.boolean().parse(args[2]),
-      );
-      return;
-    }
-    case "reply": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().reply(
-        r,
-        z.number().int().positive().parse(args[1]),
-        bodySchema.parse(args[2]),
-      );
-    }
-    case "comment": {
-      const r = refSchema.parse(args[0]);
-      return requireClient().comment(r, bodySchema.parse(args[1]));
-    }
-    case "workingTree":
-    case "workingDiff":
-    case "gitAction": {
-      const r = repoSchema.parse(args[0]);
-      const root = await validateRepo(
-        requireFolder(r),
-        requireClient().account.server,
-        r,
-      );
-      if (method === "workingTree") return workingTree(root);
-      if (method === "workingDiff")
-        return workingDiff(
-          root,
-          workingPathSchema.parse(args[1]),
-          z.enum(["staged", "unstaged"]).parse(args[2]),
-        );
-      return performGitAction(root, gitActionSchema.parse(args[1]));
-    }
-    case "folder": {
-      const r = repoSchema.parse(args[0]),
-        dir = linkedFolder(r);
-      return dir ? inspectFolder(dir, requireClient().account.server, r) : null;
-    }
-    case "linkFolder": {
-      const r = repoSchema.parse(args[0]);
-      const result = await dialog.showOpenDialog(win!, {
-        title: "Link local Git repository",
-        properties: ["openDirectory"],
-      });
-      if (result.canceled) return null;
-      const local = await inspectFolder(
-        result.filePaths[0],
-        requireClient().account.server,
-        r,
-      );
-      if (!local.remoteMatches)
-        throw new Error(
-          "This folder’s Git remote does not match the Gitea project. Choose the correct repository.",
-        );
-      await liveSyncs.stopWhere((_, root) => root === linkedFolder(r));
-      await store.update((s) => {
-        s.folders[repoKey(r)] = local.path;
-      });
-      return local;
-    }
-    case "inspectSymbol":
-      return projectChecks.symbol(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-        symbolQuerySchema.parse(args[2]),
-      );
-    case "projectCheckInfo": {
-      const dir = linkedFolder(refSchema.parse(args[0]));
-      return dir ? detectProject(dir) : null;
-    }
-    case "projectCheckState":
-      return projectChecks.state(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-      );
-    case "stopProjectChecks":
-      projectChecks.stop(prKey(refSchema.parse(args[0])));
-      return;
-    case "pauseProjectChecks":
-      projectChecks.pause(
-        prKey(refSchema.parse(args[0])),
-        z.boolean().parse(args[1]),
-      );
-      return;
-    case "startProjectChecks": {
-      const r = refSchema.parse(args[0]),
-        head = shaSchema.parse(args[1]);
-      return projectChecks.start(
-        prKey(r),
-        requireFolder(r),
-        requireClient().account.server,
-        r,
-        head,
-        z.string().max(4096).parse(args[2]),
-      );
-    }
-    case "updateCheckBuffer":
-      return projectChecks.update(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-        filePathSchema.parse(args[2]),
-        textSchema.nullable().parse(args[3]),
-      );
-    case "writeClipboard":
-      await clipboard.writeText(textSchema.parse(args[0]));
-      return;
-    case "writeClipboardImage": {
-      const image = nativeImage.createFromDataURL(
-        z
-          .string()
-          .max(64 * 1024 * 1024)
-          .startsWith("data:image/")
-          .parse(args[0]),
-      );
-      if (image.isEmpty()) throw new Error("Couldn't read that image.");
-      const png = new Blob([new Uint8Array(image.toPNG())]);
-      await clipboard.write([new ClipboardItem({ "image/png": png })]);
-      return;
-    }
-    case "readClipboard":
-      return clipboard.readText();
-    case "readLocalFile":
-    case "saveLocalFile": {
-      const r = refSchema.parse(args[0]);
-      const dir = requireFolder(r);
-      const head = shaSchema.parse(args[1]);
-      const path = filePathSchema.parse(args[2]);
-      if ((await requireClient().pull(r)).head.sha !== head)
-        throw new Error(
-          "This PR has new commits. Refresh it and check out the new head before editing.",
-        );
-      const server = requireClient().account.server;
-      if (method === "readLocalFile")
-        return readLocalFile(dir, server, r, head, path);
-      return saveLocalFile(
-        dir,
-        server,
-        r,
-        head,
-        path,
-        digestSchema.parse(args[3]),
-        textSchema.parse(args[4]),
-      );
-    }
-    case "aiSettings":
-      return store.aiSettings();
-    case "saveAISettings": {
-      const settings = aiSettingsSchema.parse(args[0]);
-      await store.update((s) => {
-        s.aiSettings = settings;
-      });
-      return settings;
-    }
-    case "devopsStatus":
-      return devops.status();
-    case "saveDevOpsSettings":
-      return devops.save(
-        devopsSettingsSchema.parse(args[0]),
-        devopsSecretsSchema.parse(args[1] ?? {}),
-      );
-    case "devopsWorkItems": {
-      const id = z.string().max(200).nullable().parse(args[0]);
-      return devops.workItems(
-        id ? projects.get(id) : null,
-        z.boolean().optional().parse(args[1]),
-      );
-    }
-    case "providerUsage":
-      return readProviderUsage(
-        usageProviderSchema.parse(args[0]),
-        z.boolean().optional().parse(args[1]),
-      );
-    case "askAboutLines": {
-      const ref = refSchema.parse(args[0]),
-        question = lineQuestionSchema.parse(args[1]);
-      const dir = requireFolder(ref);
-      const settings = store.aiSettings();
-      await launchLineQuestion(
-        requireClient(),
-        dir,
-        app.getPath("userData"),
-        ref,
-        question,
-        settings.questions,
-        settings.questionsProvider,
-      );
-      return;
-    }
-    case "launchCodex": {
-      const r = refSchema.parse(args[0]),
-        dir = requireFolder(r);
-      const head = shaSchema.parse(args[1]);
-      const p = await requireClient().pull(r);
-      if (p.head.sha !== head)
-        throw new Error("This PR changed. Refresh before starting Codex.");
-      await launchCodex(
-        dir,
-        app.getPath("userData"),
-        r,
-        head,
-        filePathSchema.parse(args[2]),
-        z.number().int().positive().parse(args[3]),
-        sideSchema.parse(args[4]),
-        bodySchema.parse(args[5]),
-        requireClient().account.server,
-      );
-      return;
-    }
-    case "applyAppearance": {
-      const appearance = z
-        .object({
-          mode: z.enum(["system", "light", "dark"]),
-          background: z.string().regex(/^#[0-9a-f]{6}$/i),
-          titlebar: z.string().regex(/^#[0-9a-f]{6}$/i),
-          titlebarText: z.string().regex(/^#[0-9a-f]{6}$/i),
-          icon: z
-            .string()
-            .max(2_000_000)
-            .regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
-        })
-        .strict()
-        .parse(args[0]);
-      // Native chrome (vibrancy, menus, scrollbars) follows the theme's mode.
-      // Pinning a resolved kind in system mode would also pin the renderer's
-      // prefers-color-scheme, so it could never see the OS go dark again.
-      nativeTheme.themeSource = appearance.mode;
-      win?.setBackgroundColor(appearance.background);
-      // The window controls sit on the titlebar, so they wear its colours.
-      if (process.platform === "linux")
-        win?.setTitleBarOverlay({
-          color: appearance.titlebar,
-          symbolColor: appearance.titlebarText,
-        });
-      const icon = nativeImage.createFromDataURL(appearance.icon);
-      if (!icon.isEmpty()) {
-        if (process.platform === "darwin") app.dock?.setIcon(icon);
-        else win?.setIcon(icon);
-      }
-      return;
-    }
-    case "setInterfaceScale": {
-      const scale = z.number().min(0.5).max(2).parse(args[0]);
-      const contents = win?.webContents;
-      if (!contents) return;
-      // Keep whatever ⌘+ and ⌘− added on top of the old size.
-      const own = contents.getZoomFactor() / interfaceScale;
-      interfaceScale = scale;
-      contents.setZoomFactor(own * scale);
-      return;
-    }
-    case "searchThemes":
-      return searchThemes(
-        z.string().max(200).parse(args[0]),
-        z.number().int().min(0).max(100_000).optional().parse(args[1]),
-      );
-    case "fetchThemes":
-      return fetchThemes(
-        z
-          .object({
-            namespace: z.string(),
-            name: z.string(),
-            version: z.string(),
-          })
-          .parse(args[0]),
-      );
-    case "setBadge":
-      setBadge(z.number().int().min(0).max(9999).parse(args[0]));
-      return;
-    case "windowControl": {
-      const action = z
-        .enum(["minimize", "toggleMaximize", "close"])
-        .parse(args[0]);
-      if (action === "minimize") win?.minimize();
-      else if (action === "close") win?.close();
-      else if (win?.isMaximized()) win.unmaximize();
-      else win?.maximize();
-      return;
-    }
-    case "isMaximized":
-      return win?.isMaximized() ?? false;
-    case "updateState":
-      return updater.current;
-    case "checkForUpdates":
-      return updater.check();
-    case "downloadUpdate":
-      return updater.download();
-    case "installUpdate":
-      return updater.installAndRestart();
-    case "agentVersions":
-      return agentUpdates.current;
-    case "checkAgentVersions":
-      return agentUpdates.check(true);
-    case "updateAgent":
-      return agentUpdates.update(agentProviderSchema.parse(args[0]));
-    case "phoneRemoteState":
-      return requirePhoneRemote().state();
-    case "setPhoneRemote":
-      return requirePhoneRemote().setEnabled(z.boolean().parse(args[0]));
-    case "phonePairing":
-      return requirePhoneRemote().pairing();
-    case "phoneAppearance":
-      return requirePhoneRemote().setAppearance(
-        phoneAppearanceSchema.parse(args[0]),
-      );
-    case "revokePhone":
-      return requirePhoneRemote().revoke(z.string().uuid().parse(args[0]));
-    case "openExternal": {
-      const u = new URL(z.string().max(4096).parse(args[0]));
-      if (!["https:", "http:"].includes(u.protocol) || u.username || u.password)
-        throw new Error("Unsupported URL.");
-      await shell.openExternal(u.href);
-      return;
-    }
-    default: {
-      // Fails to compile when the Api gains a method this switch lacks; the
-      // throw still catches names the renderer made up.
-      const unknown: never = method;
-      throw new Error(`Unknown application method: ${String(unknown)}.`);
-    }
-  }
-}
+const links = new AppLinks(window, () => !!login.client);
+links.listen();
+quit.listen();
 app
   .whenReady()
   .then(async () => {
     app.setName("Relay");
-    store = new Store(app.getPath("userData"));
-    await store.load();
-    setGitPath(store.get().gitPath ?? null);
+    quit.detachOnSignals();
+    const loaded = new Store(app.getPath("userData"));
+    store = loaded;
+    await loaded.load();
+    // The host runs from a plain file: Node can't start a module inside app.asar.
+    const hostScript = join(__dirname, "agent-host.mjs").replace(
+      /app\.asar([\\/])/,
+      "app.asar.unpacked$1",
+    );
+    if (existsSync(hostScript)) {
+      const hosts = new AgentHosts(
+        join(app.getPath("userData"), "agent-host"),
+        hostScript,
+      );
+      agentHosts = hosts;
+      hostAgents(hosts);
+      projectTasks.hosts = () => hosts.pids();
+    }
+    setGitPath(loaded.get().gitPath ?? null);
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});
-    projects = new Projects(store);
-
-    rooms = new RoomService(
-      store,
+    const projects = new Projects(loaded);
+    const roomService = new RoomService(
+      loaded,
       (url, init) => net.fetch(url, init),
       seal,
       unseal,
     );
-    devops = new DevOps(
-      store,
+    rooms = roomService;
+    const devops = new DevOps(
+      loaded,
       (url, init) => net.fetch(url, init),
       seal,
       unseal,
       join(app.getPath("userData"), "devops-relevance.json"),
     );
     keepUsageHistory(join(app.getPath("userData"), "usage-history.json"));
-    projectChats = new ProjectChats(
-      store,
+    const chats = new ProjectChats(
+      loaded,
       projects,
       join(app.getPath("userData"), "project-chats"),
       (event) => {
-        if (win && !win.isDestroyed())
-          win.webContents.send("relay:project-chat", event);
+        window.send("relay:project-chat", event);
         phoneRemote?.chatEvent(event);
+        menubar.refresh();
       },
-      new ProjectSharing(projects, rooms, requireClient),
+      new ProjectSharing(projects, roomService, () => login.require()),
       async (chat, selection) => {
         if (chat.scope.kind !== "pr")
           throw new Error("This is not a pull request conversation.");
-        const client = requireClient(),
+        const client = login.require(),
           repo = await projects.linked(chat.projectId, client);
         if (
           repo.owner !== chat.scope.ref.owner ||
@@ -1869,27 +212,51 @@ app
         return questionContext(client, chat.scope.ref, selection);
       },
     );
+    projectChats = chats;
     if (hostingSetup) {
       const input = await hostingSetup;
       if ("error" in input) throw input.error;
-      await rooms.saveHosting(input.value);
-      await store.flush();
+      await roomService.saveHosting(input.value);
+      await loaded.flush();
       console.log("Shared-room hosting access saved securely.");
-      quitReady = true;
+      quit.ready = true;
       app.quit();
       return;
     }
-    triage = new TriageService(store, app.getPath("userData"));
+    const triageService = new TriageService(loaded, app.getPath("userData"));
+    triage = triageService;
+    const dispatch: Dispatch = createDispatch(
+      apiContext({
+        store: loaded,
+        projects,
+        projectChats: chats,
+        rooms: roomService,
+        devops,
+        triage: triageService,
+        phoneRemote: () => phoneRemote,
+        login,
+        window,
+        menubar,
+        links,
+        projectChecks,
+        blame,
+        ci,
+        liveSyncs,
+        pullRequestCreation,
+        updater,
+        dictation,
+        agentUpdates,
+      }),
+    );
     phoneRemote = new PhoneRemote(
-      store,
+      loaded,
       seal,
       unseal,
       {
-        projects: () => projects.list(client),
+        projects: () => projects.list(login.client),
         projectPath: (id) => projects.get(id).path,
-        chats: (id) => projectChats.list(id),
-        chat: (id, known) =>
-          known ? projectChats.changes(id, known) : projectChats.get(id),
+        chats: (id) => chats.list(id),
+        chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
         phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
@@ -1897,78 +264,15 @@ app
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );
     void phoneRemote.start();
-    threadTerminals.connect((event) => {
-      if (win && !win.isDestroyed())
-        win.webContents.send("relay:terminal", event);
-    });
-    ipcMain.handle("relay:invoke", async (event, method, args) => {
-      const source = event.senderFrame?.url;
-      if (
-        event.sender !== win?.webContents ||
-        event.senderFrame !== win?.webContents.mainFrame ||
-        !(
-          source === pathToFileURL(root).href ||
-          (!app.isPackaged && source === `${dev}/`)
-        )
-      )
-        throw new Error("Untrusted IPC sender");
-      try {
-        return {
-          ok: true,
-          // Unknown names fall through to dispatch's default case.
-          value: await dispatch(
-            z.string().parse(method) as ApiMethod,
-            z.array(z.unknown()).max(10).parse(args),
-          ),
-        };
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : "Unexpected error",
-        };
-      }
-    });
-    projectChats.armWakeups();
+    threadTerminals.connect((event) => window.send("relay:terminal", event));
+    serveApi(window, dispatch);
+    // Agent sessions that kept running through a restart come back before the window does.
+    await chats.reattach();
+    chats.armWakeups();
     updater.start();
     // Tests' stand-in agents only answer what a test expects of them.
     if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
-    Menu.setApplicationMenu(
-      Menu.buildFromTemplate([
-        {
-          label: "Relay",
-          submenu: [
-            { role: "about" },
-            { type: "separator" },
-            { role: "hide" },
-            { role: "hideOthers" },
-            { role: "unhide" },
-            { type: "separator" },
-            { role: "quit" },
-          ],
-        },
-        { role: "editMenu" },
-        {
-          label: "View",
-          submenu: [
-            // Cmd/Ctrl R belongs to Replace in the local code editor.
-            { role: "reload", accelerator: "CmdOrCtrl+Shift+R" },
-            { role: "toggleDevTools" },
-            { type: "separator" },
-            {
-              // Back to the interface size from Settings, not to 100%.
-              label: "Actual Size",
-              accelerator: "CmdOrCtrl+0",
-              click: () => win?.webContents.setZoomFactor(interfaceScale),
-            },
-            { role: "zoomIn" },
-            { role: "zoomOut" },
-            { type: "separator" },
-            { role: "togglefullscreen" },
-          ],
-        },
-        { role: "windowMenu" },
-      ]),
-    );
+    setApplicationMenu(window);
     if (app.isPackaged && process.platform === "linux" && process.env.APPIMAGE)
       registerAppImage({
         appImage: process.env.APPIMAGE,
@@ -1978,12 +282,15 @@ app
       });
     // Use a dedicated invitation scheme; stable PR links keep their existing handler.
     if (app.isPackaged) app.setAsDefaultProtocolClient(roomProtocol);
-    windowReady = true;
-    createWindow();
-    void restoreSavedLogin();
+    window.ready = true;
+    // Test runs stay off the user's menubar, as their windows stay off the desktop.
+    if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
+      menubar.start();
+    window.create();
+    void login.restoreSaved(loaded);
     app.on("activate", () => {
-      if (!win) createWindow();
-      else showWindow();
+      if (!window.win) window.create();
+      else window.show();
     });
   })
   .catch((e) => {
