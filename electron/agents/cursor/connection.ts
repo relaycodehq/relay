@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -196,7 +197,9 @@ export async function acquireCursorConnection(
     throw new Error("This Cursor session is already running a turn.");
   if (!connection || connection.closed) {
     if (key) {
-      connection = new CursorConnection(await launch(key, cwd, sdk));
+      connection = new CursorConnection(
+        await launch(key, cwd, sdk, threadStore(key)),
+      );
       sessions.set(key, connection);
     } else {
       // A one-off job leaves no agent behind: its history goes with it.
@@ -211,6 +214,16 @@ export async function acquireCursorConnection(
   }
   connection.busy = true;
   return connection;
+}
+
+/**
+ * Each thread's worker keeps its own store: the SDK rewrites a store's whole
+ * agent list on every update and only locks within one process, so two workers
+ * sharing one lose each other's agents ("Agent … not found").
+ */
+export function threadStore(key: string) {
+  const name = createHash("sha256").update(key).digest("hex").slice(0, 32);
+  return join(cursorSetup().store, "threads", name);
 }
 
 async function launch(

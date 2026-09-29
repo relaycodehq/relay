@@ -24,6 +24,7 @@ import {
   cursorDefaults,
   cursorModels,
 } from "../../electron/agents/cursor/catalog";
+import { closeCursorConnection } from "../../electron/agents/cursor/connection";
 import { cursorPolicy, runCursor } from "../../electron/agents/cursor/run";
 import { configureCursor } from "../../electron/agents/cursor/sdk";
 import { runtimeModesFor } from "../../shared/agent-modes";
@@ -137,6 +138,20 @@ describe("a Cursor turn", () => {
     ]);
     expect(sent.options.local.sandboxOptions).toBeUndefined();
     expect(sent.options.local.autoReview).toBeUndefined();
+  });
+
+  it("keeps each thread's agents in a store of its own, since the SDK's store only locks within one worker", async () => {
+    const thread = (key: string) =>
+      turn("say hello", { session: { key, onId: async () => {} } }).options;
+    try {
+      await Promise.all([runCursor(thread("a")), runCursor(thread("b"))]);
+      const stores = (await asked()).map((sent) => sent.options.local.store.dir);
+      expect(new Set(stores).size).toBe(2);
+      for (const store of stores) expect(store).toContain(join("store", "threads"));
+    } finally {
+      await closeCursorConnection("a");
+      await closeCursorConnection("b");
+    }
   });
 
   it("names tool calls by what they touched, and calls what came before them commentary", async () => {
