@@ -28,7 +28,6 @@ describe("update feed", () => {
       "Relay-0.1.7-win-x64.exe",
       "Relay-0.1.7-linux-x86_64.AppImage",
       "Relay-0.1.7-omarchy-x86_64.tar.gz",
-      "Relay-Omarchy-x86_64.tar.gz",
     ])
       await writeFile(join(dir, name), name);
     await run(process.execPath, [

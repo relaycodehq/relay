@@ -169,14 +169,14 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RELAY_ANDROID_KEYSTORE"
           CI=1 npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --console=plain
+      # One unversioned name: Settings → Phone links .../releases/latest/download/Relay-Android.apk.
       - name: Upload to the draft release
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          apk="Relay-$VERSION-android.apk"
-          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
-          gh release upload "v$VERSION" "$apk" --repo "$RELEASES_REPO" --clobber
+          cp android/app/build/outputs/apk/release/app-release.apk Relay-Android.apk
+          gh release upload "v$VERSION" Relay-Android.apk --repo "$RELEASES_REPO" --clobber
 
   publish:
     needs: [version, build, android]
@@ -194,17 +194,12 @@ jobs:
         # The commit message without trailers like Co-Authored-By.
         run: |
           printf '%s\n' "$MESSAGE" | sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
-      # Unversioned aliases for .../releases/latest/download/ links.
-      - run: |
-          cp out/Relay-*-omarchy-x86_64.tar.gz out/Relay-Omarchy-x86_64.tar.gz
-          cp out/Relay-*-android.apk out/Relay-Android.apk
       - name: Write update feed
         run: node scripts/release-manifest.mjs out "${{ needs.version.outputs.version }}" "$RELEASES_REPO" "$(cat notes.md)"
       - name: Publish to ${{ env.RELEASES_REPO }}
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release upload "$TAG" out/latest.json out/Relay-Omarchy-x86_64.tar.gz out/Relay-Android.apk \
-            --repo "$RELEASES_REPO" --clobber
+          gh release upload "$TAG" out/latest.json --repo "$RELEASES_REPO" --clobber
           gh release edit "$TAG" --repo "$RELEASES_REPO" --draft=false --latest \
             --title "Relay $VERSION" --notes-file notes.md
