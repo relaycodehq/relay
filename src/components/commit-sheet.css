@@ -1,0 +1,168 @@
+.commit-sheet-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: -6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.commit-sheet-route code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.commit-files-fieldset {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  border: 0;
+}
+.commit-files {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--toolbar);
+  overflow: hidden;
+}
+.commit-files-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.create-pull-sheet .commit-files-head > label {
+  flex: 1;
+}
+.commit-lines {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.commit-lines .added {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.commit-lines .deleted {
+  margin-left: 6px;
+  color: light-dark(#c4323f, #f0707a);
+}
+.commit-files-view {
+  display: flex;
+  gap: 1px;
+}
+.commit-files-view .icon-button {
+  padding: 4px;
+}
+.commit-files-list {
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px 0;
+}
+
+/* The global label rule stacks fields with margins; these are rows. */
+.create-pull-sheet .commit-files label {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.commit-files input[type="checkbox"] {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+}
+.create-pull-sheet .commit-folder {
+  margin: 6px 4px 1px;
+  padding: 3px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.commit-files-list > [role="group"]:first-child .commit-folder {
+  margin-top: 2px;
+}
+.create-pull-sheet .commit-file {
+  margin: 0 4px;
+  padding: 4px 6px;
+  border-radius: 5px;
+}
+.create-pull-sheet .commit-file.nested {
+  padding-left: 26px;
+}
+.commit-file:hover {
+  background: var(--hover);
+}
+.commit-file .file-entry-icon {
+  width: 14px;
+  height: 14px;
+}
+.commit-file.excluded .file-entry-icon,
+.commit-file.excluded .commit-file-name,
+.commit-file.excluded .commit-file-folder {
+  opacity: 0.45;
+}
+.commit-file-name {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.commit-file-name.modified {
+  color: var(--accent);
+}
+.commit-file-name.added {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.commit-file-name.deleted {
+  color: light-dark(#c4323f, #f0707a);
+  text-decoration: line-through;
+}
+.commit-file-folder {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.commit-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.commit-message-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.commit-message-label > span:first-child {
+  flex: 1;
+}
+.commit-subject-length {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.commit-subject-length.long {
+  color: light-dark(#a15c00, #e8b35a);
+}
+
+.create-pull-sheet form > button.commit-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.commit-submit kbd {
+  color: inherit;
+  opacity: 0.7;
+  font-size: 12px;
+}
