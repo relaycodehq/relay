@@ -11,8 +11,10 @@ import { ClaudeSignedOutError } from "../../electron/rooms/claude-sign-in";
 import type { AgentActivity, ContextUsage } from "../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+let claudeInstall = "1.0.0";
 vi.mock("../../electron/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
+  installStamp: async (path: string) => `${path} ${claudeInstall}`,
 }));
 
 const session_id = "session";
@@ -345,7 +347,7 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
   expect(agent.every((a) => !a.parentId)).toBe(true);
 });
 
-it("asks Claude for its models again once the user signs in", async () => {
+it("asks Claude for its models again once the user signs in or updates it", async () => {
   // Signed out, the CLI still lists the models built into it.
   const cli = (tokenSource: string | undefined, models: string[]) =>
     vi.mocked(query).mockImplementation(
@@ -368,6 +370,14 @@ it("asks Claude for its models again once the user signs in", async () => {
     "opus",
     "claude-opus-5",
   ]);
+  cli(undefined, ["opus", "claude-opus-6"]);
+  expect((await listClaudeModels()).map((m) => m.id)).toContain(
+    "claude-opus-5",
+  );
+  claudeInstall = "1.1.0";
+  expect((await listClaudeModels()).map((m) => m.id)).toContain(
+    "claude-opus-6",
+  );
 });
 
 it("moves a session with background work to new settings instead of ending it", async () => {

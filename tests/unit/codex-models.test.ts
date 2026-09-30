@@ -121,6 +121,26 @@ it("lists the signed-in Codex models once, and asks again after a failure or sig
   expect(supportedChoice(low, models)).toBe(low);
 });
 
+it("asks Codex again once it's updated, and not before", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-update-")));
+  const log = join(root, "launches"),
+    auth = join(root, "auth.json");
+  await writeFile(auth, "{}");
+  const cli = await fakeCli(join(root, "codex"), fakeCodex(log, auth));
+  vi.mocked(findExecutable).mockResolvedValue(cli);
+  const ids = async () => (await codexModels()).map((m) => m.id);
+  expect(await ids()).toEqual(["gpt-6-sol", "gpt-5.5"]);
+  expect(await ids()).toEqual(["gpt-6-sol", "gpt-5.5"]);
+  expect(await readFile(log, "utf8")).toBe("launch\n");
+
+  await fakeCli(
+    cli,
+    fakeCodex(log, auth).replaceAll("gpt-6-sol", "gpt-6.1-sol"),
+  );
+  expect(await ids()).toEqual(["gpt-6.1-sol", "gpt-5.5"]);
+  expect(await readFile(log, "utf8")).toBe("launch\n".repeat(2));
+});
+
 it("reads the model and effort Codex's config gives a checkout's threads", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-defaults-")));
   const cli = await fakeCli(

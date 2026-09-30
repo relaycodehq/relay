@@ -3,7 +3,8 @@ import { api } from "./api";
 
 /**
  * The models Claude Code lists: undefined while it's asked, empty when it
- * couldn't answer. `retry` asks again, e.g. once the user signed in.
+ * couldn't answer. `refresh` asks again, e.g. once the user signed in or
+ * updated Claude Code.
  */
 export function useClaudeModels(enabled = true) {
   const query = useQuery({
@@ -15,8 +16,6 @@ export function useClaudeModels(enabled = true) {
   });
   return {
     models: query.isError ? [] : query.data,
-    retry: () => {
-      if (query.isError || !query.data?.length) void query.refetch();
-    },
+    refresh: () => void query.refetch(),
   };
 }

@@ -419,9 +419,9 @@ export function ProjectComposer({
     dropMention();
   });
   const openModelPicker = useStableCallback(() => {
-    // A failed first probe leaves the list empty; ask again.
-    claudeCatalog.retry();
-    codex.retry();
+    // Signing in or updating a CLI changes its list; ask again.
+    claudeCatalog.refresh();
+    codex.refresh();
     defaults.refresh();
     agentPicks.refresh();
   });

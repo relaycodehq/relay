@@ -48,9 +48,7 @@ export function useCodexModels() {
   });
   return {
     models: query.data?.length ? query.data : (saved ?? fallbackCodexModels),
-    /** Asks again after a failed listing, e.g. once the user signed in. */
-    retry: () => {
-      if (query.isError) void query.refetch();
-    },
+    /** Asks again: after signing in, or once Codex was updated. */
+    refresh: () => void query.refetch(),
   };
 }

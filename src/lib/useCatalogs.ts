@@ -27,8 +27,8 @@ export function useCatalogs() {
         : (picks.catalogs[p]?.models?.find((m) => m.id === model)?.efforts ??
           []);
   const refresh = () => {
-    codex.retry();
-    claude.retry();
+    codex.refresh();
+    claude.refresh();
     picks.refresh();
   };
   return { modelsOf, effortsOf, refresh };

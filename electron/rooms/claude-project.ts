@@ -10,7 +10,7 @@ import type {
   SDKControlGetUsageResponse,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { findExecutable } from "../executables";
+import { findExecutable, installStamp } from "../executables";
 import { ClaudeSignedOutError } from "./claude-sign-in";
 import type { AgentOptions } from "../agents/types";
 import { claudeActivity, claudeEditedPaths } from "./activity";
@@ -24,7 +24,7 @@ import type {
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
-import { memoByKey } from "../memo";
+import { memoByKey, memoWhileStamp } from "../memo";
 import { withTimeout } from "../timeout";
 import type { ClaudeModel } from "../../shared/settings";
 import {
@@ -481,48 +481,49 @@ async function withProbe<T>(
     stream.close();
   }
 }
-let modelList: Promise<ClaudeModel[]> | undefined;
-/** Asks the installed CLI which models this account can use, once per launch. */
-export function listClaudeModels(): Promise<ClaudeModel[]> {
-  modelList ??= withProbe({ settingSources: ["user"] }, async (stream) => {
-    const models = await withTimeout(
-      // Signed out, the CLI still lists the models built into it. Kept,
-      // that list would outlast signing in; failing lets the picker ask again.
-      // A CLI that reports no account isn't known to be signed out.
-      stream.accountInfo().then((account) => {
-        if (account?.tokenSource === "none" && !account.apiKeySource)
-          throw new Error("Sign in to Claude to list its models.");
-        return stream.supportedModels();
-      }),
-      20000,
-      "Claude did not list models.",
-    );
-    return (models ?? [])
-      .filter((m) => m.value !== "default")
-      .map((m) => {
-        // The CLI names aliases briefly ("Opus"); its description leads with
-        // the full name ("Opus 5.5 · Best for…"), so show that instead.
-        const [lead, ...rest] = (m.description ?? "").split(" · ");
-        const full = lead && m.displayName && lead.startsWith(m.displayName);
-        return {
-          id: m.value,
-          name: full ? lead : m.displayName || m.value,
-          description: full ? rest.join(" · ") : m.description,
-          ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
-          efforts:
-            m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
-          // The CLI doesn't report context sizes; every current model but
-          // Haiku accepts the `[1m]` suffix.
-          longContext:
-            m.value.endsWith("[1m]") ||
-            !/haiku/i.test(m.resolvedModel ?? m.value),
-        };
-      });
-  });
-  // A failed probe (CLI missing, signed out) should be retried on next open.
-  modelList.catch(() => (modelList = undefined));
-  return modelList;
-}
+/**
+ * Asks the installed CLI which models this account can use, again once it's
+ * updated: a new version brings new models.
+ */
+export const listClaudeModels = memoWhileStamp(
+  () => findExecutable("claude").then(installStamp),
+  (): Promise<ClaudeModel[]> =>
+    withProbe({ settingSources: ["user"] }, async (stream) => {
+      const models = await withTimeout(
+        // Signed out, the CLI still lists the models built into it. Kept,
+        // that list would outlast signing in; failing lets the picker ask again.
+        // A CLI that reports no account isn't known to be signed out.
+        stream.accountInfo().then((account) => {
+          if (account?.tokenSource === "none" && !account.apiKeySource)
+            throw new Error("Sign in to Claude to list its models.");
+          return stream.supportedModels();
+        }),
+        20000,
+        "Claude did not list models.",
+      );
+      return (models ?? [])
+        .filter((m) => m.value !== "default")
+        .map((m) => {
+          // The CLI names aliases briefly ("Opus"); its description leads with
+          // the full name ("Opus 5.5 · Best for…"), so show that instead.
+          const [lead, ...rest] = (m.description ?? "").split(" · ");
+          const full = lead && m.displayName && lead.startsWith(m.displayName);
+          return {
+            id: m.value,
+            name: full ? lead : m.displayName || m.value,
+            description: full ? rest.join(" · ") : m.description,
+            ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
+            efforts:
+              m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
+            // The CLI doesn't report context sizes; every current model but
+            // Haiku accepts the `[1m]` suffix.
+            longContext:
+              m.value.endsWith("[1m]") ||
+              !/haiku/i.test(m.resolvedModel ?? m.value),
+          };
+        });
+    }),
+);
 /**
  * The data behind Claude Code's /usage, fetched by the CLI with its own
  * sign-in; Relay never handles the token. Null when the CLI is signed out.

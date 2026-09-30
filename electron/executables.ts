@@ -1,4 +1,4 @@
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { join, delimiter, dirname, extname } from "node:path";
 import { homedir } from "node:os";
 import { constants } from "node:fs";
@@ -81,6 +81,16 @@ async function unwrapShim(path: string) {
 }
 
 export const findExecutable = (name: string) => locate(name);
+
+/**
+ * Which install a path from `findExecutable` runs: its file and when that was
+ * last written. Updating a CLI rewrites it or points its link at another version.
+ */
+export async function installStamp(found: string) {
+  const path = await realpath(found);
+  const { mtimeMs, size } = await stat(path);
+  return `${path}\0${mtimeMs}\0${size}`;
+}
 
 /** Git's own lookup, apart from the agent CLIs `findExecutable` finds. */
 export const findGit = () => locate("git");

@@ -1,9 +1,9 @@
 import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { memoByKey } from "./memo";
+import { memoByKey, memoWhileStamp } from "./memo";
 import { terminate } from "./terminate";
-import { findExecutable, spawnExecutable } from "./executables";
+import { findExecutable, installStamp, spawnExecutable } from "./executables";
 import {
   withCodexTransport,
   type CodexTransport,
@@ -75,57 +75,56 @@ const modelPageSchema = z.object({
   data: z.array(z.unknown()).max(500),
   nextCursor: z.string().nullish(),
 });
-let modelList: Promise<CodexModel[]> | undefined;
-/** Asks the installed CLI which models this account can use, once per launch. */
-export function codexModels(): Promise<CodexModel[]> {
-  modelList ??= withAppServer(homedir(), "listing models", async (wire) => {
-    // Signed out, Codex still lists the few models built into it. Kept, that
-    // list would outlast signing in; failing lets the picker ask again.
-    const { account, requiresOpenaiAuth } = await wire.request(
-      "account/read",
-      {},
-    );
-    if (!account && requiresOpenaiAuth)
-      throw new Error("Sign in to Codex to list its models.");
-    const models: CodexModel[] = [];
-    let cursor: string | null | undefined;
-    for (let page = 0; page < 10; page++) {
-      const response = modelPageSchema.parse(
-        await wire.request("model/list", cursor ? { cursor } : {}),
+/**
+ * Asks the installed CLI which models this account can use, again once it's
+ * updated: a new version brings new models.
+ */
+export const codexModels = memoWhileStamp(
+  () => findExecutable("codex").then(installStamp),
+  (): Promise<CodexModel[]> =>
+    withAppServer(homedir(), "listing models", async (wire) => {
+      // Signed out, Codex still lists the few models built into it. Kept, that
+      // list would outlast signing in; failing lets the picker ask again.
+      const { account, requiresOpenaiAuth } = await wire.request(
+        "account/read",
+        {},
       );
-      for (const value of response.data) {
-        const entry = modelEntrySchema.safeParse(value).data;
-        const id = modelSchema.safeParse(entry?.model ?? entry?.id).data;
-        if (!entry || !id || entry.hidden) continue;
-        const defaultEffort = reasoningEffortSchema.safeParse(
-          entry.defaultReasoningEffort,
-        ).data;
-        models.push({
-          id,
-          name: entry.displayName || id,
-          description: entry.description ?? "",
-          efforts: (entry.supportedReasoningEfforts ?? []).flatMap(
-            ({ reasoningEffort }) => {
-              const effort = reasoningEffortSchema.safeParse(reasoningEffort);
-              return effort.success && effort.data ? [effort.data] : [];
-            },
-          ),
-          legacy: entry.upgrade != null,
-          ...(defaultEffort ? { defaultEffort } : {}),
-          ...(entry.isDefault ? { isDefault: true } : {}),
-        });
+      if (!account && requiresOpenaiAuth)
+        throw new Error("Sign in to Codex to list its models.");
+      const models: CodexModel[] = [];
+      let cursor: string | null | undefined;
+      for (let page = 0; page < 10; page++) {
+        const response = modelPageSchema.parse(
+          await wire.request("model/list", cursor ? { cursor } : {}),
+        );
+        for (const value of response.data) {
+          const entry = modelEntrySchema.safeParse(value).data;
+          const id = modelSchema.safeParse(entry?.model ?? entry?.id).data;
+          if (!entry || !id || entry.hidden) continue;
+          const defaultEffort = reasoningEffortSchema.safeParse(
+            entry.defaultReasoningEffort,
+          ).data;
+          models.push({
+            id,
+            name: entry.displayName || id,
+            description: entry.description ?? "",
+            efforts: (entry.supportedReasoningEfforts ?? []).flatMap(
+              ({ reasoningEffort }) => {
+                const effort = reasoningEffortSchema.safeParse(reasoningEffort);
+                return effort.success && effort.data ? [effort.data] : [];
+              },
+            ),
+            legacy: entry.upgrade != null,
+            ...(defaultEffort ? { defaultEffort } : {}),
+            ...(entry.isDefault ? { isDefault: true } : {}),
+          });
+        }
+        cursor = response.nextCursor;
+        if (!cursor) break;
       }
-      cursor = response.nextCursor;
-      if (!cursor) break;
-    }
-    return models;
-  }).catch((e) => {
-    // Let the next caller ask again, e.g. after signing in.
-    modelList = undefined;
-    throw e;
-  });
-  return modelList;
-}
+      return models;
+    }),
+);
 const configSchema = z.object({
   config: z.object({
     model: z.string().nullish(),

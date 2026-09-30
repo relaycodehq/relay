@@ -37,3 +37,25 @@ export function memoOnce<T>(load: () => Promise<T>, ttl = 60000) {
   };
   return get;
 }
+
+/**
+ * `load`'s answer, kept while `stamp` says the same, e.g. the installed CLI
+ * that answered. A failure isn't kept; a stamp that fails asks again.
+ */
+export function memoWhileStamp<T>(
+  stamp: () => Promise<string>,
+  load: () => Promise<T>,
+) {
+  let kept: { stamp: string; result: Promise<T> } | undefined;
+  return async () => {
+    const now = await stamp().catch(() => undefined);
+    if (now !== undefined && kept?.stamp === now) return kept.result;
+    const result = load();
+    const entry = now === undefined ? undefined : { stamp: now, result };
+    kept = entry;
+    result.catch(() => {
+      if (entry && kept === entry) kept = undefined;
+    });
+    return result;
+  };
+}
