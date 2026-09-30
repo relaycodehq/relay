@@ -40,6 +40,7 @@ const methods = [
   "linkProject",
   "triageProjectChat",
   "renameProjectChat",
+  "markProjectChatSeen",
   "forkProjectChat",
   "projectCommands",
   "projectBranchPulls",

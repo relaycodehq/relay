@@ -119,6 +119,8 @@ export interface ChatSummary {
   settledAt?: number;
   snoozedAt?: number;
   snoozedUntil?: number;
+  /** The `updated` this thread was last read up to, on the desktop or a phone. */
+  seenAt?: number;
   /** Archived threads are hidden from the sidebar. */
   archivedAt?: number;
   /** Branch checked out when the latest message was sent. */
@@ -517,6 +519,8 @@ export interface ProjectApi {
   revealProject(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
+  /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
+  markProjectChatSeen(id: string, seenAt: number): Promise<void>;
   /** A new thread holding the conversation up to this answer. */
   forkProjectChat(id: string, messageId: string): Promise<ChatSummary>;
   projectCommands(

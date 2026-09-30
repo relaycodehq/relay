@@ -332,6 +332,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.running ? { running: true, runningSince: c.runningSince } : {}),
     ...(c.waiting ? { waiting: true } : {}),
     ...(c.settledAt ? { settledAt: c.settledAt } : {}),
+    ...(c.seenAt ? { seenAt: c.seenAt } : {}),
     ...(c.snoozedUntil
       ? { snoozedUntil: c.snoozedUntil, snoozedAt: c.snoozedAt }
       : {}),

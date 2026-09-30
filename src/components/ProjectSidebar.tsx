@@ -138,10 +138,14 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
       writeJson("relay-thread-seen", next);
       return next;
     });
+    // Phones read it from the desktop, so their marks clear too.
+    void window.relay
+      ?.markProjectChatSeen?.(current.id, current.updated)
+      .catch(() => {});
   }, [focused, current?.id, current?.updated]);
   return (c: ChatSummary) =>
     (c.id !== chatId || (!focused && !c.running)) &&
-    c.updated > Math.max(since, seen[c.id] ?? 0);
+    c.updated > Math.max(since, seen[c.id] ?? 0, c.seenAt ?? 0);
 }
 
 /** The row that expands or collapses a long thread list. */

@@ -659,6 +659,13 @@ export class ProjectChats {
     await this.persist(chat);
     return this.summary(chat);
   }
+  /** Only moves forward, so a device that read less can't mark a thread unread again. */
+  async markSeen(id: string, seenAt: number) {
+    const chat = await this.load(id);
+    if ((chat.seenAt ?? 0) >= seenAt) return;
+    chat.seenAt = seenAt;
+    await this.persist(chat);
+  }
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");

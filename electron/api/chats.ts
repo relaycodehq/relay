@@ -85,6 +85,11 @@ export function chatHandlers(ctx: ApiContext) {
       projectChats.fork(idSchema.parse(args[0]), idSchema.parse(args[1])),
     renameProjectChat: (args) =>
       projectChats.rename(idSchema.parse(args[0]), z.string().parse(args[1])),
+    markProjectChatSeen: (args) =>
+      projectChats.markSeen(
+        idSchema.parse(args[0]),
+        z.number().int().min(0).parse(args[1]),
+      ),
     sendProjectChat: async (args) => {
       const send = projectChatSendSchema.parse(args[1]);
       const sent = await projectChats.send(idSchema.parse(args[0]), send);

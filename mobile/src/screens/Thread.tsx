@@ -67,7 +67,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   // Open on the phone counts as read, for the Activity list's unread marks.
   const updated = summary?.updated;
   useEffect(() => {
-    if (updated) markSeen(id, updated);
+    if (!updated) return;
+    markSeen(id, updated);
+    // The desktop keeps the shared mark; an older one just doesn't know the call.
+    void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
   }, [id, updated]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<

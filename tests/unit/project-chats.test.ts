@@ -242,6 +242,12 @@ it("retries a title with the answering agent's own model after another agent too
   // Codex can't run Claude's model; it retries with its own settings.
   expect(await models()).not.toContain("claude-model");
 }, 20000);
+it("keeps the furthest read mark, and lists it for the desktop and phones", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.markSeen(chat.id, 500);
+  await chats.markSeen(chat.id, 300);
+  expect(chats.list(projectId).find((c) => c.id === chat.id)?.seenAt).toBe(500);
+});
 it("keeps a user's thread name over the prompt excerpt and generated titles", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });

@@ -100,6 +100,8 @@ export interface RemoteChatSummary {
   settledAt?: number;
   snoozedAt?: number;
   snoozedUntil?: number;
+  /** Read up to this `updated`, on the desktop or any phone. */
+  seenAt?: number;
   branch?: string;
   worktree?: boolean;
   pending?: ChatPending[];
@@ -268,6 +270,7 @@ export const phoneDesktopMethods = [
   "stopProjectChatPending",
   "triageProjectChat",
   "renameProjectChat",
+  "markProjectChatSeen",
   "forkProjectChat",
   "rewindProjectTurn",
   "projectChatImage",
