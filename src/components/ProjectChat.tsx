@@ -51,7 +51,12 @@ import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
-import { readDraft, writeDraft } from "../lib/drafts";
+import {
+  loadDraftWorkspace,
+  readDraft,
+  saveDraftWorkspace,
+  writeDraft,
+} from "../lib/drafts";
 import {
   loadCodeRefs,
   loadSelection,
@@ -773,9 +778,13 @@ export function ProjectChat({
   }, [messages, parentIds, root]);
   const running = messages.some((m) => m.status === "streaming");
   // Where a new thread will work; a started one keeps its own.
-  const [workspace, setWorkspace] = useState<ChatWorkspace>("checkout");
+  const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
+    chat ? "checkout" : loadDraftWorkspace(id),
+  );
   useEffect(() => {
-    if (!chat) onDraftWorkspace?.(workspace);
+    if (chat) return;
+    saveDraftWorkspace(id, workspace);
+    onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
   const worktree = useQuery({
     queryKey: ["worktree", chat?.id],
@@ -1123,6 +1132,7 @@ export function ProjectChat({
       }
       follow.current = true;
       if (!chat) {
+        saveDraftWorkspace(id, "checkout");
         startThreadSettings(
           id,
           target.id,

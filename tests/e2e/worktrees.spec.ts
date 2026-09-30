@@ -80,6 +80,11 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     ).toBeVisible();
     await screenshot(page, { path: "test-results/worktree-new-thread.png" });
     await page.getByLabel("Message project").fill("fixture edit files");
+    // Coming back to the draft finds it where it was going to work.
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: /New worktree/ }),
+    ).toBeVisible();
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();

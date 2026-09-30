@@ -25,6 +25,7 @@ import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
   forgetNewThread,
   loadDraftScope,
+  loadDraftWorkspace,
   readDraft,
   writeDraft,
   type ActivityDraft,
@@ -121,7 +122,7 @@ export async function sendDraft(
     (await api.createProjectChat(
       project.id,
       scope,
-      scope.kind === "project" ? "checkout" : undefined,
+      scope.kind === "project" ? loadDraftWorkspace(id) : undefined,
     ));
   started.set(id, target);
   const workItem = loadWorkItem(id);

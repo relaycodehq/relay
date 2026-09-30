@@ -1,7 +1,9 @@
 import { useCallback, useSyncExternalStore } from "react";
 import {
   chatScopeSchema,
+  chatWorkspaceSchema,
   type ChatScope,
+  type ChatWorkspace,
   type ChatSummary,
   type Project,
 } from "../../shared/projects";
@@ -107,8 +109,21 @@ export function loadDraftScope(id: string): ChatScope {
 }
 export const saveDraftScope = (id: string, scope: ChatScope) =>
   localStorage.setItem(scopeKey(id), JSON.stringify(scope));
-export const clearDraftScope = (id: string) =>
+/** Drops the scope and the workspace picked for it. */
+export function clearDraftScope(id: string) {
   localStorage.removeItem(scopeKey(id));
+  localStorage.removeItem(workspaceKey(id));
+}
+
+/** Where an unsent thread will work; the project folder by default. */
+const workspaceKey = (id: string) => "relay-draft-workspace:" + id.slice(4);
+export const loadDraftWorkspace = (id: string): ChatWorkspace =>
+  chatWorkspaceSchema.safeParse(localStorage.getItem(workspaceKey(id))).data ??
+  "checkout";
+export function saveDraftWorkspace(id: string, workspace: ChatWorkspace) {
+  if (workspace === "checkout") localStorage.removeItem(workspaceKey(id));
+  else localStorage.setItem(workspaceKey(id), workspace);
+}
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */
 export function forgetNewThread(id: string) {
