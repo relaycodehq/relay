@@ -32,6 +32,15 @@ import type { Account } from "../../shared/types";
 import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
+import {
+  bindings,
+  comboLabel,
+  comboWords,
+  useShortcutOverrides,
+} from "../lib/shortcuts";
+import { useEffortKeysLabel } from "../lib/effort-shortcut";
+import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
+import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettings } from "../lib/useAISettings";
 import { useUpdates } from "../lib/updates";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
@@ -91,7 +100,6 @@ import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
   DictationMicrophoneSetting,
   DictationModelSetting,
-  DictationShortcutSetting,
   dictationModelLine,
 } from "./DictationSettings";
 import { useDictationModel } from "../lib/dictation/session";
@@ -180,34 +188,11 @@ const categories: {
   },
 ];
 
-const shortcuts: [string, string][] = [
-  ["Open settings", keys("⌘,", "Ctrl+,")],
-  ["New thread", keys("⌘N", "Ctrl+N")],
-  ["New Scratchpad chat", keys("⌘⇧N", "Ctrl+Shift+N")],
-  ["Show or hide the terminal", keys("⌘J or Ctrl+`", "Ctrl+`")],
-  ["Stop the answer and pause queued messages", "Esc Esc"],
-  ["View activity", keys("⌥⌘U", "Ctrl+Alt+U")],
-  [
-    "Open one of the first nine activity threads",
-    keys("⌘1–⌘9", "Ctrl+1–Ctrl+9"),
-  ],
-  ["Settle the open thread", keys("⌘E", "Ctrl+E")],
-  [
-    "Step reasoning effort, or your quick-switch presets",
-    keys("⌘⌥←/→", "Ctrl+Alt+←/→"),
-  ],
-  ["Pin or unpin the projects sidebar", keys("⌘B", "Ctrl+B")],
-  ["Toggle a review's file list", keys("⌥⌘B", "Ctrl+Alt+B")],
-  ["Mark a review file as read", "V"],
-  ["Next / previous review file", "J / K"],
-  ["Search pull requests", keys("⌘F", "Ctrl+F")],
-  ["Open a pull request by URL", keys("⌘K", "Ctrl+K")],
-  ["Show or hide pull requests", keys("⌘⇧B", "Ctrl+Shift+B")],
-];
-
 interface Entry {
   id: string;
   category: CategoryId;
+  /** A heading within the category, shared by the entries that follow. */
+  section?: string;
   title: string;
   description?: string;
   keywords?: string;
@@ -216,6 +201,17 @@ interface Entry {
   /** A small control beside the title, for block entries. */
   accessory?: () => ReactNode;
   render: () => ReactNode;
+}
+
+/** Runs of entries under the same heading, in order. */
+function sections(entries: Entry[]) {
+  const runs: { section?: string; list: Entry[] }[] = [];
+  for (const entry of entries) {
+    const last = runs.at(-1);
+    if (last && last.section === entry.section) last.list.push(entry);
+    else runs.push({ section: entry.section, list: [entry] });
+  }
+  return runs;
 }
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -553,6 +549,9 @@ export function Settings({
   const cacheHeat = useCacheHeat();
   const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
+  // Search finds shortcuts by their current keys.
+  useShortcutOverrides();
+  const effortKeys = useEffortKeysLabel();
   const iconSrc = useMemo(
     () => svgDataUrl(relayIconSvg(appearance.accent)),
     [appearance.accent],
@@ -579,6 +578,41 @@ export function Settings({
   const previewKind =
     editing && kinds.includes(editing) ? editing : appearance.palette.kind;
 
+  const sendKeyEntry: Entry = {
+    id: "send-key",
+    category: "shortcuts",
+    section: "Composer",
+    title: "Send messages with",
+    description:
+      {
+        enter: "Enter sends the message. Shift+Enter adds a new line.",
+        "shift-enter": "Shift+Enter sends the message. Enter adds a new line.",
+        "mod-enter": `${keys("⌘", "Ctrl+")}Enter sends the message. Enter adds a new line.`,
+      }[sendKey] +
+      ` While an agent is working, this queues the message and ${steerKeyLabel(sendKey)} steers the current answer instead.`,
+    keywords:
+      "enter return send submit message newline composer chat queue steer",
+    render: () => (
+      <div className="segmented settings-segmented">
+        {(
+          [
+            ["enter", "Enter"],
+            ["shift-enter", "Shift Enter"],
+            ["mod-enter", `${keys("⌘", "Ctrl ")}Enter`],
+          ] as [SendKey, string][]
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            className={sendKey === value ? "active" : ""}
+            aria-pressed={sendKey === value}
+            onClick={() => setSendKey(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    ),
+  };
   const entries: Entry[] = [
     {
       id: "theme",
@@ -920,7 +954,7 @@ export function Settings({
       id: "quick-switch",
       category: "models",
       title: "Quick switch",
-      description: `Presets of agent, model and effort that ${keys("⌘⌥←/→", "Ctrl+Alt+←/→")} steps through in the composer.`,
+      description: `Presets of agent, model and effort that ${effortKeys || "the effort keys"} step through in the composer.`,
       keywords:
         "quick switch presets favourite favorite model agent effort keyboard shortcut arrows drum style",
       block: true,
@@ -986,15 +1020,14 @@ export function Settings({
         "dictation voice speech microphone parakeet download model transcribe",
       render: () => <DictationModelSetting />,
     },
-    ...(["dictation", "shortcuts"] as const).map((category) => ({
-      id: `dictation-shortcut:${category}`,
-      category,
-      title: category === "dictation" ? "Shortcut" : "Dictate",
-      description:
-        "Tap to start and tap again to finish, or hold to talk and let go. Esc discards what you said.",
+    {
+      id: "dictation-shortcut",
+      category: "dictation",
+      title: "Shortcut",
+      description: command("dictate").description,
       keywords: "dictation voice speech keyboard shortcut hotkey push to talk",
-      render: () => <DictationShortcutSetting />,
-    })),
+      render: () => <ShortcutKeys id="dictate" />,
+    },
     {
       id: "dictation-microphone",
       category: "dictation",
@@ -1003,53 +1036,34 @@ export function Settings({
       render: () => <DictationMicrophoneSetting />,
     },
     {
-      id: "send-key",
+      id: "shortcuts-intro",
       category: "shortcuts",
-      title: "Send messages with",
+      title: "Change a shortcut",
       description:
-        {
-          enter: "Enter sends the message. Shift+Enter adds a new line.",
-          "shift-enter":
-            "Shift+Enter sends the message. Enter adds a new line.",
-          "mod-enter": `${keys("⌘", "Ctrl+")}Enter sends the message. Enter adds a new line.`,
-        }[sendKey] +
-        ` While an agent is working, this queues the message and ${steerKeyLabel(sendKey)} steers the current answer instead.`,
-      keywords:
-        "enter return send submit message newline composer chat queue steer",
-      render: () => (
-        <div className="segmented settings-segmented">
-          {(
-            [
-              ["enter", "Enter"],
-              ["shift-enter", "Shift Enter"],
-              ["mod-enter", `${keys("⌘", "Ctrl ")}Enter`],
-            ] as [SendKey, string][]
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              className={sendKey === value ? "active" : ""}
-              aria-pressed={sendKey === value}
-              onClick={() => setSendKey(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      ),
+        "Click one and press the keys you want; Esc cancels and ⌫ removes it. They're kept on this computer.",
+      keywords: "keyboard shortcut hotkey keybinding rebind customize reset",
+      render: () => <ShortcutsResetAll />,
     },
-    ...shortcuts.map(([name, keys]) => ({
-      id: "shortcut:" + name,
-      category: "shortcuts" as const,
-      title: name,
-      keywords: "keyboard shortcut hotkey " + keys,
-      render: () => (
-        <span className="settings-keys">
-          {keys.split(" / ").map((k) => (
-            <kbd key={k}>{k}</kbd>
-          ))}
-        </span>
-      ),
-    })),
+    ...shortcutGroups.flatMap((group): Entry[] => [
+      ...(group === "Composer" ? [sendKeyEntry] : []),
+      ...shortcutIds
+        .filter((id) => command(id).group === group)
+        .map((id) => ({
+          id: "shortcut:" + id,
+          category: "shortcuts" as const,
+          section: group,
+          title: command(id).title,
+          description: command(id).description,
+          keywords: [
+            "keyboard shortcut hotkey keybinding",
+            command(id).keywords,
+            ...bindings(id).map(
+              (c) => comboLabel(c, command(id).digits) + " " + comboWords(c),
+            ),
+          ].join(" "),
+          render: () => <ShortcutKeys id={id} />,
+        })),
+    ]),
     {
       id: "version",
       category: "about",
@@ -1215,9 +1229,14 @@ export function Settings({
               </div>
             )
           ) : (
-            <div className="settings-group">
-              {entries.filter((e) => e.category === category).map(row)}
-            </div>
+            sections(entries.filter((e) => e.category === category)).map(
+              ({ section, list }, i) => (
+                <div key={section ?? i} className="settings-group">
+                  {section && <h5>{section}</h5>}
+                  {list.map(row)}
+                </div>
+              ),
+            )
           )}
           {!!error && <ErrorBox error={error} />}
         </div>

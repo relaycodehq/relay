@@ -17,14 +17,9 @@ import {
   type PromptInputHandle,
 } from "../src/components/ComposerPromptInput";
 import { DictationButton } from "../src/components/DictationButton";
-import {
-  DictationShortcutSetting,
-  DictationModelSetting,
-} from "../src/components/DictationSettings";
-import {
-  shortcutLabel,
-  useDictationShortcut,
-} from "../src/lib/dictation/shortcut";
+import { DictationModelSetting } from "../src/components/DictationSettings";
+import { ShortcutKeys } from "../src/components/ShortcutSettings";
+import { useShortcutLabel } from "../src/lib/shortcuts";
 import { dictationSnapshot, stopDictation } from "../src/lib/dictation/session";
 import type {
   DictationModelState,
@@ -230,7 +225,7 @@ function Preview() {
   const appearance = useAppearance();
   const [current, setCurrent] = useState<Scenario>("ready");
   const [aloud, setAloud] = useState(false);
-  const shortcut = shortcutLabel(useDictationShortcut());
+  const shortcut = useShortcutLabel("dictate");
   const [composerKey, setComposerKey] = useState(0);
   useEffect(() => {
     scenario = current;
@@ -295,7 +290,7 @@ function Preview() {
         <span>Speech model</span>
         <DictationModelSetting />
         <span>Shortcut</span>
-        <DictationShortcutSetting />
+        <ShortcutKeys id="dictate" />
       </section>
     </main>
   );

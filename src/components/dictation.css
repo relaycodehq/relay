@@ -181,32 +181,3 @@
   border-radius: 7px;
   font-size: 12px;
 }
-
-.dictation-shortcut {
-  align-items: center;
-}
-.dictation-shortcut-record {
-  border: 0;
-  padding: 0;
-  background: none;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-}
-.dictation-shortcut-record[data-recording] {
-  min-width: 84px;
-  padding: 4px 8px;
-  border: 1px dashed var(--accent);
-  border-radius: 6px;
-  color: var(--accent);
-}
-.dictation-shortcut-reset {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font-size: 11px;
-  cursor: pointer;
-}
-.dictation-shortcut-reset:hover {
-  color: var(--text);
-}

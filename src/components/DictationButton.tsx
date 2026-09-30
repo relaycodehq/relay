@@ -26,12 +26,8 @@ import {
   useDictationMicrophone,
   useMicrophones,
 } from "../lib/dictation/microphones";
-import {
-  dictationShortcut,
-  matchesShortcut,
-  shortcutLabel,
-  useDictationShortcut,
-} from "../lib/dictation/shortcut";
+import { matchedCombo, useShortcutLabel } from "../lib/shortcuts";
+import type { KeyCombo } from "../../shared/shortcuts";
 import { DictationWave } from "./DictationWave";
 import "./dictation.css";
 
@@ -48,7 +44,7 @@ interface Composer {
 // Every mounted composer; the shortcut goes to the one holding focus, or the
 // one used last.
 const composers = new Set<Composer>();
-let press: { at: number } | undefined;
+let press: { at: number; combo: KeyCombo } | undefined;
 
 function pick() {
   const active = document.activeElement;
@@ -70,16 +66,14 @@ function onKeyDown(e: KeyboardEvent) {
     cancelDictation();
     return;
   }
-  if (!matchesShortcut(e, dictationShortcut()) || e.isComposing) return;
-  // Settings is recording a new shortcut.
-  if (e.target instanceof Element && e.target.closest("[data-recording]"))
-    return;
+  const combo = matchedCombo("dictate", e);
+  if (!combo || e.isComposing) return;
   e.preventDefault();
   if (e.repeat) return;
   if (phase === "idle") {
     const composer = pick();
     if (!composer) return;
-    press = { at: performance.now() };
+    press = { at: performance.now(), combo };
     composer.start();
   } else if (phase === "starting" || phase === "listening") {
     press = undefined;
@@ -89,7 +83,7 @@ function onKeyDown(e: KeyboardEvent) {
 
 function onKeyUp(e: KeyboardEvent) {
   if (!press) return;
-  const shortcut = dictationShortcut();
+  const shortcut = press.combo;
   // macOS drops a key's keyup while ⌘ is down, so letting go of a modifier counts too.
   const released =
     e.code === shortcut.code ||
@@ -150,7 +144,7 @@ export function DictationButton({
 }) {
   const session = useDictation();
   const model = useDictationModel();
-  const shortcut = shortcutLabel(useDictationShortcut());
+  const shortcut = useShortcutLabel("dictate");
   const [prompt, setPrompt] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const mine = session.owner === owner && session.phase !== "idle";
@@ -208,7 +202,7 @@ export function DictationButton({
   const label = mine
     ? "Finish dictation"
     : model.status === "ready"
-      ? `Dictate · ${shortcut}`
+      ? `Dictate${shortcut && ` · ${shortcut}`}`
       : downloading
         ? "Downloading the speech model"
         : "Set up dictation";
@@ -233,8 +227,8 @@ export function DictationButton({
           aria-pressed={mine}
           title={
             mine
-              ? `Finish · ${shortcut} · Esc to discard`
-              : model.status === "ready"
+              ? `Finish${shortcut && ` · ${shortcut}`} · Esc to discard`
+              : model.status === "ready" && shortcut
                 ? `Dictate · tap ${shortcut} to start and stop, or hold it to talk`
                 : label
           }
@@ -359,9 +353,15 @@ function ModelPrompt({ shortcut }: { shortcut: string }) {
       <>
         <p className="dictation-prompt-title">Ready to dictate</p>
         <p className="dictation-prompt-note">
-          Click the mic or tap <kbd>{shortcut}</kbd> to start and stop. Hold{" "}
-          <kbd>{shortcut}</kbd> to talk and let go to finish. <kbd>Esc</kbd>{" "}
-          discards.
+          {shortcut ? (
+            <>
+              Click the mic or tap <kbd>{shortcut}</kbd> to start and stop. Hold{" "}
+              <kbd>{shortcut}</kbd> to talk and let go to finish.
+            </>
+          ) : (
+            "Click the mic to start and stop."
+          )}{" "}
+          <kbd>Esc</kbd> discards.
         </p>
       </>
     );

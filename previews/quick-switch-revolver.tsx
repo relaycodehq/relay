@@ -51,7 +51,7 @@ function Heading() {
   return (
     <div className="composer-menu-label">
       Quick switch
-      <kbd>{effortKeysLabel}</kbd>
+      <kbd>{effortKeysLabel()}</kbd>
     </div>
   );
 }

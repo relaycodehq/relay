@@ -5,7 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
 import { api } from "./api";
-import { mac } from "./mod-key";
+import { matches } from "./shortcuts";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
 
@@ -51,7 +51,9 @@ export class ThreadTerminal {
       new WebLinksAddon((_event, uri) => void api.openExternal(uri)),
     );
     // The drawer's own shortcut toggles it rather than reaching the shell.
-    this.term.attachCustomKeyEventHandler((e) => !isToggleShortcut(e));
+    this.term.attachCustomKeyEventHandler(
+      (e) => !(e.type === "keydown" && matches("terminal", e)),
+    );
     this.term.onData((data) => {
       if (this.status === "running")
         void api.writeTerminal(this.key, data).catch(() => {});
@@ -294,16 +296,6 @@ export function setTerminalTheme(theme: ITheme) {
   currentTheme = theme;
   for (const terminal of terminals.values())
     terminal.term.options.theme = theme;
-}
-
-/** ⌘J on macOS, Ctrl+` everywhere, as in VS Code. */
-export function isToggleShortcut(e: KeyboardEvent) {
-  if (e.type !== "keydown" || e.altKey || e.shiftKey || e.isComposing)
-    return false;
-  return (
-    (mac && e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "j") ||
-    (e.ctrlKey && !e.metaKey && e.code === "Backquote")
-  );
 }
 
 function monoFont() {

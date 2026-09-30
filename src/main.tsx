@@ -12,10 +12,12 @@ import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
 import { initFocusRing } from "./lib/focus-ring";
 import { initTypography } from "./lib/typography";
+import { initShortcuts } from "./lib/shortcuts";
 initAppearance();
 initTypography();
 initWindowFocus();
 initFocusRing();
+initShortcuts();
 const client = new QueryClient({
   defaultOptions: {
     queries: {

@@ -1,5 +1,4 @@
 import { Download, Pause, Trash2 } from "lucide-react";
-import { useState } from "react";
 import { useDialogContainer } from "../lib/useDialogContainer";
 import { dictationModel, dictationModelSize } from "../../shared/dictation";
 import { api } from "../lib/api";
@@ -9,13 +8,6 @@ import {
   useMicrophones,
 } from "../lib/dictation/microphones";
 import { useDictationModel } from "../lib/dictation/session";
-import {
-  defaultDictationShortcut,
-  setDictationShortcut,
-  shortcutFrom,
-  shortcutLabel,
-  useDictationShortcut,
-} from "../lib/dictation/shortcut";
 import { ComposerSelect } from "./ComposerSelect";
 import "./dictation.css";
 
@@ -67,49 +59,6 @@ export function DictationModelSetting() {
       <Download size={14} />
       {partial ? "Resume download" : "Download"}
     </button>
-  );
-}
-
-/** Click, then press the new combination; Escape keeps the old one. */
-export function DictationShortcutSetting() {
-  const shortcut = useDictationShortcut();
-  const [recording, setRecording] = useState(false);
-  const isDefault =
-    shortcutLabel(shortcut) === shortcutLabel(defaultDictationShortcut);
-  return (
-    <span className="settings-keys dictation-shortcut">
-      <button
-        className="dictation-shortcut-record"
-        data-recording={recording || undefined}
-        aria-label={
-          recording
-            ? "Press the new shortcut"
-            : `Dictation shortcut ${shortcutLabel(shortcut)}; click to change`
-        }
-        onClick={() => setRecording(true)}
-        onBlur={() => setRecording(false)}
-        onKeyDown={(e) => {
-          if (!recording) return;
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.key === "Escape") return setRecording(false);
-          const next = shortcutFrom(e);
-          if (!next) return;
-          setDictationShortcut(next);
-          setRecording(false);
-        }}
-      >
-        {recording ? "Press keys…" : <kbd>{shortcutLabel(shortcut)}</kbd>}
-      </button>
-      {!isDefault && !recording && (
-        <button
-          className="dictation-shortcut-reset"
-          onClick={() => setDictationShortcut(defaultDictationShortcut)}
-        >
-          Reset
-        </button>
-      )}
-    </span>
   );
 }
 

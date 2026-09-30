@@ -67,6 +67,12 @@ import { useCodexModels } from "../lib/useCodexModels";
 import { useClaudeModels } from "../lib/useClaudeModels";
 import { useAgentDefaults } from "../lib/useAgentDefaults";
 import { useDoubleEscape } from "../lib/useDoubleEscape";
+import {
+  pressedTwice,
+  useShortcut,
+  useShortcutLabel,
+  useShortcutValue,
+} from "../lib/shortcuts";
 import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
 import { DictationButton } from "./DictationButton";
@@ -74,8 +80,8 @@ import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
 import { useUsageRing } from "../lib/usage-ring";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import {
-  effortKeysLabel,
   effortStep,
+  useEffortKeysLabel,
   stepEffort,
 } from "../lib/effort-shortcut";
 import {
@@ -203,7 +209,15 @@ export function ProjectComposer({
 }) {
   const draft = useDraft(draftKey);
   const settings = useAISettings();
-  const stopArmed = useDoubleEscape(running, ".project-composer", onStop);
+  const effortKeys = useEffortKeysLabel();
+  const stopKeys = useShortcutLabel("stop");
+  const stopTwice = useShortcutValue(() => pressedTwice("stop"));
+  const stopArmed = useDoubleEscape(
+    running && stopTwice,
+    ".project-composer",
+    onStop,
+  );
+  useShortcut("stop", running, onStop);
   const [dictationOwner] = useState(() => ({}));
   const composerForm = useRef<HTMLFormElement>(null);
   const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
@@ -638,7 +652,7 @@ export function ProjectComposer({
       hideQuickSoon();
     } else pickPreset(at, step);
   }
-  const effortHint = quickPresets.length ? undefined : effortKeysLabel;
+  const effortHint = quickPresets.length ? undefined : effortKeys || undefined;
   const claudeTraits = useMemo(
     () => [
       ...(claudeModelEfforts.length > 0
@@ -1531,7 +1545,7 @@ export function ProjectComposer({
               aria-label={
                 stopArmed ? "Press Escape again to stop" : "Stop answer"
               }
-              title="Stop answer and pause queued messages · Esc Esc"
+              title={`Stop answer and pause queued messages${stopKeys && ` · ${stopKeys}`}`}
               onClick={onStop}
             >
               {stopArmed ? (

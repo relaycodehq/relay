@@ -21,7 +21,7 @@ import {
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useRef, useState } from "react";
-import { keys, modOnly } from "../lib/mod-key";
+import { matches, useShortcutLabel } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -69,7 +69,6 @@ import { RunningTasks } from "./RunningTasks";
 import { TerminalDrawer } from "./TerminalDrawer";
 import {
   adoptDraftTerminal,
-  isToggleShortcut,
   setTerminalOpen,
   terminalFor,
   terminalKey,
@@ -287,6 +286,8 @@ export default function ProjectShell() {
     setTerminalOpen(shellKey, !terminalOpen);
   }
   const toggleTerminalRef = useRef(toggleTerminal);
+  const sidebarKeys = useShortcutLabel("sidebar");
+  const terminalKeys = useShortcutLabel("terminal");
   toggleTerminalRef.current = toggleTerminal;
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
   // Git and file panes follow the thread: its worktree once it has one.
@@ -387,32 +388,26 @@ export default function ProjectShell() {
   }, [boot.data?.pendingUrl]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isToggleShortcut(e)) {
+      if (!e.isComposing && matches("terminal", e)) {
         e.preventDefault();
         toggleTerminalRef.current();
       }
       if (
-        modOnly(e) &&
-        !e.altKey &&
-        !e.shiftKey &&
+        matches("sidebar", e) &&
         !e.repeat &&
-        e.code === "KeyB" &&
         !legacy &&
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
         toggleProjectsRef.current();
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+      if (matches("settings", e)) {
         e.preventDefault();
         setSettings(true);
       }
       if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey &&
+        matches("new-thread", e) &&
         !e.isComposing &&
-        e.key.toLowerCase() === "n" &&
         project &&
         !legacy &&
         !dirty &&
@@ -424,11 +419,8 @@ export default function ProjectShell() {
         pickNewThread();
       }
       if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        e.shiftKey &&
+        matches("new-scratch", e) &&
         !e.isComposing &&
-        e.key.toLowerCase() === "n" &&
         !dirty &&
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
@@ -738,7 +730,7 @@ export default function ProjectShell() {
           <button
             type="button"
             className="icon-button relay-sidebar-toggle"
-            title={`${projectsHidden ? "Show" : "Hide"} sidebar · ${keys("⌘B", "Ctrl+B")}`}
+            title={`${projectsHidden ? "Show" : "Hide"} sidebar${sidebarKeys && ` · ${sidebarKeys}`}`}
             aria-label={
               (projectsHidden ? "Show sidebar" : "Hide sidebar") +
               (dot ? ` · ${dot}` : "")
@@ -864,9 +856,7 @@ export default function ProjectShell() {
               className="pane-toggles"
               title={
                 terminalBlocked ??
-                `${terminalOpen ? "Hide" : "Show"} terminal (${
-                  boot.data.platform === "darwin" ? "⌘J" : "Ctrl+`"
-                })`
+                `${terminalOpen ? "Hide" : "Show"} terminal${terminalKeys && ` (${terminalKeys})`}`
               }
             >
               <button

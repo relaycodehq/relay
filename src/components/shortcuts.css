@@ -1,0 +1,153 @@
+/* Settings → Keyboard shortcuts: a keycap per binding, recorded in place. */
+
+/* Shortcut rows are denser than other settings, and their status line wraps
+   under the whole row: the control's wrappers step aside so its parts become
+   the row's own flex items. */
+.setting:has(> .setting-control > .shortcut-row) {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding: 9px 0;
+}
+.setting-control:has(> .shortcut-row),
+.shortcut-row {
+  display: contents;
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-screen .shortcut-key {
+  min-width: 28px;
+  height: 25px;
+  padding: 0 8px;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--toolbar);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s,
+    color 0.12s;
+}
+.settings-screen .shortcut-key:not([data-state]):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--toolbar);
+}
+.settings-screen .shortcut-key:disabled {
+  opacity: 0.5;
+}
+/* Keys you picked yourself read in the accent, so a changed row stands out. */
+.shortcut-key[data-custom] {
+  color: var(--accent);
+}
+.shortcut-key[data-saved] {
+  animation: shortcut-saved 0.5s ease-out;
+}
+@keyframes shortcut-saved {
+  from {
+    transform: scale(0.92);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+.settings-screen .shortcut-key[data-state="record"],
+.settings-screen .shortcut-key[data-state="problem"] {
+  min-width: 92px;
+  border-style: dashed;
+  border-bottom-width: 1px;
+  /* The 2px keycap bottom, kept without the solid edge. */
+  padding-top: 1px;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+.settings-screen .shortcut-key[data-state="problem"] {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.shortcut-key[data-state="conflict"] {
+  display: inline-flex;
+  align-items: center;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-screen .shortcut-key[data-state="empty"] {
+  border-style: dashed;
+  border-bottom-width: 1px;
+  padding-top: 1px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Keycaps stay flush right; add and reset sit before them, while tabbing
+   still reaches them after the keys. */
+.shortcut-actions {
+  order: -1;
+  display: flex;
+  gap: 2px;
+}
+.settings-screen .shortcut-action {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.settings-screen .shortcut-action:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.settings-screen .shortcut-action {
+  display: none;
+}
+.settings-screen .shortcut-action[data-shown],
+.setting:hover .shortcut-add,
+.setting:focus-within .shortcut-add {
+  display: inline-flex;
+}
+
+.shortcut-status {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+  color: var(--muted);
+}
+.shortcut-status[hidden] {
+  display: none;
+}
+.shortcut-status[data-tone="problem"] {
+  color: var(--danger);
+}
+.shortcut-status[data-tone="warn"] {
+  color: var(--text);
+}
+.shortcut-status-actions {
+  display: flex;
+  gap: 6px;
+}
+.settings-screen .shortcut-status-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+}

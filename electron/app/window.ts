@@ -147,8 +147,10 @@ export class AppWindow {
     win.on("unmaximize", sendMaximized);
     // A reloaded window starts without terminals; shells keep their output until it asks.
     win.webContents.on("did-start-navigation", (details) => {
-      if (details.isMainFrame && !details.isSameDocument)
-        threadTerminals.detach();
+      if (!details.isMainFrame || details.isSameDocument) return;
+      threadTerminals.detach();
+      // Settings may have been recording a shortcut when the page went.
+      win.webContents.setIgnoreMenuShortcuts(false);
     });
     // Reloading Relay itself counts as a navigation too: Vite's full reload
     // after re-bundling dependencies and the error screen's button need it.

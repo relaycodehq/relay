@@ -9,6 +9,8 @@ import {
 import { z } from "zod";
 import { fetchThemes, searchThemes } from "../../shared/open-vsx";
 import { textSchema } from "../../shared/validation";
+import { menuAcceleratorsSchema } from "../../shared/shortcuts";
+import { setApplicationMenu } from "../app/menu";
 import type { ApiContext, Handlers } from "./context";
 
 /** The window and the OS around it: chrome, zoom, badge, clipboard, links. */
@@ -58,6 +60,14 @@ export function desktopHandlers(ctx: ApiContext) {
       const own = contents.getZoomFactor() / window.interfaceScale;
       window.interfaceScale = scale;
       contents.setZoomFactor(own * scale);
+    },
+    setMenuShortcuts: (args) => {
+      setApplicationMenu(window, menuAcceleratorsSchema.parse(args[0]));
+    },
+    ignoreMenuShortcuts: (args) => {
+      window.win?.webContents.setIgnoreMenuShortcuts(
+        z.boolean().parse(args[0]),
+      );
     },
     searchThemes: (args) =>
       searchThemes(

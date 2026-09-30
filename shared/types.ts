@@ -429,6 +429,10 @@ export interface Api
   tintTitleBar(colors: { color: string; symbolColor: string }): Promise<void>;
   /** Zooms the window to the interface size, on top of the user's own zoom. */
   setInterfaceScale(scale: number): Promise<void>;
+  /** Keys for the View menu's items that Settings changed, as accelerators. */
+  setMenuShortcuts(menu: Record<string, string[]>): Promise<void>;
+  /** Lets menu keys through to the page while Settings records a shortcut. */
+  ignoreMenuShortcuts(ignore: boolean): Promise<void>;
   /**
    * A page of colour-theme extensions on Open VSX from `offset`; an empty
    * query lists popular ones.

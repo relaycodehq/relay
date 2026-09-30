@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-re
 import { agentProviders } from "../../shared/agents";
 import { effortLabels, type ReasoningEffort } from "../../shared/settings";
 import { useCatalogs } from "../lib/useCatalogs";
-import { effortKeysLabel } from "../lib/effort-shortcut";
+import { useEffortKeysLabel } from "../lib/effort-shortcut";
 import {
   maxPresets,
   newPresetId,
@@ -34,6 +34,7 @@ const styleNames: Record<QuickSwitchStyle, string> = {
 
 /** The quick switch's settings: on or off, its style, and the presets in order. */
 export function QuickSwitchSettings() {
+  const effortKeys = useEffortKeysLabel();
   const quick = useQuickSwitch();
   const catalogs = useCatalogs();
   // Popups must render inside the modal <dialog> to sit in its top layer.
@@ -54,7 +55,7 @@ export function QuickSwitchSettings() {
       <SettingsCard>
         <SettingsRow
           label="Step through presets"
-          hint={`${effortKeysLabel} in the composer moves between these. Off, or with none set up, the keys step effort like before.`}
+          hint={`${effortKeys || "The effort keys"} in the composer move between these. Off, or with none set up, the keys step effort like before.`}
         >
           <Switch
             label="Step through presets"

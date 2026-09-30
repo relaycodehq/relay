@@ -64,6 +64,7 @@ import {
 } from "../lib/conversation-timeline";
 import { useTypography } from "../lib/typography";
 import { persistedStore } from "../lib/persisted-store";
+import { matches } from "../lib/shortcuts";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
 
@@ -231,9 +232,6 @@ export function ReviewWorkspace({
       if (
         tab !== "files" ||
         e.defaultPrevented ||
-        e.ctrlKey ||
-        e.metaKey ||
-        e.altKey ||
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement ||
@@ -241,15 +239,15 @@ export function ReviewWorkspace({
         document.querySelector("dialog[open]")
       )
         return;
-      if (e.key === "v") {
+      if (matches("review-read", e)) {
         e.preventDefault();
         if (!e.repeat) toggleRead();
       }
-      if (e.key === "j") {
+      if (matches("review-next", e)) {
         e.preventDefault();
         move(1);
       }
-      if (e.key === "k") {
+      if (matches("review-prev", e)) {
         e.preventDefault();
         move(-1);
       }

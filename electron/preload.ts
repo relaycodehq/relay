@@ -216,6 +216,8 @@ const methods = [
   "applyAppearance",
   "tintTitleBar",
   "setInterfaceScale",
+  "setMenuShortcuts",
+  "ignoreMenuShortcuts",
   "searchThemes",
   "fetchThemes",
   "setBadge",

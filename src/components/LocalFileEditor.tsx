@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import type { LocalFile, Pull } from "../../shared/types";
 import { api } from "../lib/api";
-import { keys } from "../lib/mod-key";
+import { matches, useShortcutLabel } from "../lib/shortcuts";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
@@ -359,9 +359,10 @@ export default function LocalFileEditor({
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, []);
+  const saveKeys = useShortcutLabel("save");
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+      if (matches("save", event)) {
         event.preventDefault();
         event.stopPropagation();
         void save();
@@ -420,7 +421,7 @@ export default function LocalFileEditor({
           <button
             className="primary"
             aria-label="Save locally"
-            title={`Save to the local folder (${keys("⌘S", "Ctrl+S")})`}
+            title={`Save to the local folder${saveKeys && ` (${saveKeys})`}`}
             disabled={!dirty || saving || loading}
             onClick={() => void save()}
           >
@@ -557,19 +558,18 @@ export default function LocalFileEditor({
             inert={loading}
             aria-busy={loading}
             onKeyDownCapture={(event) => {
-              if (event.key === "F12" || (event.altKey && event.key === "F7")) {
+              const lookup = matches("references", event)
+                ? "references"
+                : matches("definition", event)
+                  ? "definition"
+                  : undefined;
+              if (lookup) {
                 const caret = viewer.current?.getEditor(path)?.getViewState()
                   .selections?.[0]?.start;
                 if (caret) {
                   event.preventDefault();
                   event.stopPropagation();
-                  symbols.at(
-                    caret.line + 1,
-                    caret.character + 1,
-                    event.shiftKey || event.key === "F7"
-                      ? "references"
-                      : "definition",
-                  );
+                  symbols.at(caret.line + 1, caret.character + 1, lookup);
                 }
                 return;
               }
@@ -681,7 +681,8 @@ export default function LocalFileEditor({
                       : "Editing local checkout"}
               </span>
               <span className="editor-shortcuts">
-                {keys("⌘S", "Ctrl+S")} · Save{large ? " · Large file, plain text" : ""}
+                {saveKeys && `${saveKeys} · `}Save
+                {large ? " · Large file, plain text" : ""}
               </span>
               {history(16)}
               <IconButton

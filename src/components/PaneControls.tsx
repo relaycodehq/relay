@@ -1,5 +1,5 @@
 import { Files, MessageSquare, PanelLeft } from "lucide-react";
-import { keys } from "../lib/mod-key";
+import { useShortcutLabel } from "../lib/shortcuts";
 
 export function PaneControls({
   requestsHidden,
@@ -16,6 +16,8 @@ export function PaneControls({
   roomOpen: boolean;
   onToggleRoom?: () => void;
 }) {
+  const requestsKeys = useShortcutLabel("pr-list");
+  const filesKeys = useShortcutLabel("review-files");
   return (
     <div className="pane-controls" role="group" aria-label="Sidebar visibility">
       <button
@@ -23,7 +25,7 @@ export function PaneControls({
         aria-label="Toggle pull requests"
         aria-controls="requests-sidebar"
         aria-pressed={!requestsHidden}
-        title={`${requestsHidden ? "Show" : "Hide"} pull requests · ${keys("⌘⇧B", "Ctrl+Shift+B")}`}
+        title={`${requestsHidden ? "Show" : "Hide"} pull requests${requestsKeys && ` · ${requestsKeys}`}`}
         onClick={onToggleRequests}
       >
         <PanelLeft size={17} />
@@ -33,7 +35,7 @@ export function PaneControls({
         aria-label="Toggle changed files"
         aria-controls="files-sidebar"
         aria-pressed={!filesHidden}
-        title={`${filesHidden ? "Show" : "Hide"} changed files · ${keys("⌥⌘B", "Ctrl+Alt+B")}`}
+        title={`${filesHidden ? "Show" : "Hide"} changed files${filesKeys && ` · ${filesKeys}`}`}
         onClick={onToggleFiles}
       >
         <Files size={17} />

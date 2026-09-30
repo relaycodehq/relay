@@ -42,7 +42,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
-import { keys } from "./lib/mod-key";
+import { matches, useShortcutLabel } from "./lib/shortcuts";
 import { linksTo, type ProjectFileLink } from "../shared/project-file-links";
 import type {
   Account,
@@ -624,30 +624,32 @@ export function Connected({
     const url = incomingLink?.url ?? pendingUrl;
     if (url) void openUrl(url);
   }, [pendingUrl, incomingLink]);
+  const openKeys = useShortcutLabel("pr-open");
+  const searchKeys = useShortcutLabel("pr-search");
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
-      if (!e.metaKey && !e.ctrlKey) return;
-      const key = e.key.toLowerCase();
       // A thread's review stays on its own PR.
-      if (!embedded && key === "k") {
+      if (!embedded && matches("pr-open", e)) {
         e.preventDefault();
         setUrlOpen((v) => !v);
       }
-      if (!embedded && key === "f") {
+      if (!embedded && matches("pr-search", e)) {
         e.preventDefault();
         setRequestsHidden(false);
         requestAnimationFrame(() => searchRef.current?.focus());
       }
-      // In a thread, plain ⌘B belongs to the projects sidebar.
-      if (e.code === "KeyB" && !e.repeat) {
-        if (e.shiftKey) {
-          e.preventDefault();
-          setRequestsHidden((v) => !v);
-        } else if (e.altKey || !embedded) {
-          e.preventDefault();
-          setFilesHidden((v) => !v);
-        }
+      if (e.repeat) return;
+      if (matches("pr-list", e)) {
+        e.preventDefault();
+        setRequestsHidden((v) => !v);
+      } else if (
+        matches("review-files", e) ||
+        // In a thread, the sidebar's keys belong to the projects sidebar.
+        (!embedded && matches("sidebar", e))
+      ) {
+        e.preventDefault();
+        setFilesHidden((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
@@ -751,7 +753,7 @@ export function Connected({
         <button className="nav-row open-link" onClick={() => setUrlOpen(true)}>
           <Link2 size={17} />
           <span>Open PR by URL</span>
-          <kbd>{keys("⌘K", "Ctrl+K")}</kbd>
+          {openKeys && <kbd>{openKeys}</kbd>}
         </button>
         <div className="sidebar-divider" />
         <section className="sidebar-pulls" aria-label="Pull requests">
@@ -775,7 +777,7 @@ export function Connected({
                 maxLength={500}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <kbd>{keys("⌘F", "Ctrl+F")}</kbd>
+              {searchKeys && <kbd>{searchKeys}</kbd>}
             </div>
             <div className="segmented">
               {(["open", "closed", "all"] as const).map((v) => (
@@ -1061,7 +1063,8 @@ export function Connected({
                 We’ll keep your place while you review.
               </p>
               <button onClick={() => setUrlOpen(true)}>
-                <Link2 size={15} /> Open a pull request <kbd>{keys("⌘K", "Ctrl+K")}</kbd>
+                <Link2 size={15} /> Open a pull request{" "}
+                {openKeys && <kbd>{openKeys}</kbd>}
               </button>
             </div>
           </>

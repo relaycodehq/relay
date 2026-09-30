@@ -3,7 +3,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { TextQuote } from "lucide-react";
 import { selectionQuote } from "../lib/composer-quotes";
-import { mac } from "../lib/mod-key";
+import { ariaShortcut, matches, useShortcutLabel } from "../lib/shortcuts";
 
 interface Offer {
   text: string;
@@ -15,7 +15,6 @@ interface Offer {
 
 /** Room the button needs so it stays inside the window. */
 const WIDTH = 170;
-const mod = mac ? "⌘" : "Ctrl";
 
 export function SelectionQuote({
   container,
@@ -26,6 +25,7 @@ export function SelectionQuote({
   onQuote: (text: string) => void;
 }) {
   const [offer, setOffer] = useState<Offer | null>(null);
+  const keys = useShortcutLabel("quote");
   useEffect(() => {
     let dragging = false;
     const clear = () => setOffer((current) => (current ? null : current));
@@ -100,12 +100,7 @@ export function SelectionQuote({
   useEffect(() => {
     if (!offer) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === "l"
-      ) {
+      if (matches("quote", event)) {
         event.preventDefault();
         quote(offer.text);
       }
@@ -122,7 +117,7 @@ export function SelectionQuote({
       type="button"
       className="chat-quote-popup"
       title="Quote the selection in your message"
-      aria-keyshortcuts="Meta+L Control+L"
+      aria-keyshortcuts={ariaShortcut("quote") || undefined}
       style={{
         left: offer.x,
         top: above ? offer.top : offer.bottom,
@@ -136,10 +131,11 @@ export function SelectionQuote({
     >
       <TextQuote size={14} aria-hidden="true" />
       Add to chat
-      <span className="chat-quote-keys" aria-hidden="true">
-        <kbd>{mod}</kbd>
-        <kbd>L</kbd>
-      </span>
+      {keys && (
+        <span className="chat-quote-keys" aria-hidden="true">
+          <kbd>{keys}</kbd>
+        </span>
+      )}
     </button>,
     document.body,
   );

@@ -51,7 +51,16 @@ import {
 import { agentsSince } from "../../shared/waiting";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { api } from "../lib/api";
-import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
+import { mac } from "../lib/mod-key";
+import {
+  digitOf,
+  holdsModifiersOf,
+  matches as pressed,
+  modifiersLabel,
+  useBindings,
+  useShortcutLabel,
+} from "../lib/shortcuts";
+import { modifierCode } from "../../shared/shortcuts";
 import { useWindowFocused } from "../lib/window-focus";
 import { ErrorBox, IconButton, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
@@ -731,7 +740,7 @@ export function ProjectSidebar({
   );
   useEffect(() => {
     const toggle = (e: KeyboardEvent) => {
-      if (modOnly(e) && e.altKey && e.code === "KeyU") {
+      if (pressed("activity", e)) {
         e.preventDefault();
         setView((v) => (v === "activity" ? "threads" : "activity"));
       }
@@ -741,10 +750,15 @@ export function ProjectSidebar({
   }, []);
   /**
    * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
-   * first nine cards. ⌘ used as part of another shortcut or a ⌘-click never
-   * shows them.
+   * first nine cards (or whichever modifiers open them). ⌘ used as part of
+   * another shortcut or a ⌘-click never shows them.
    */
   const [cmdHeld, setCmdHeld] = useState(false);
+  const jumpBinding = useBindings("jump-thread")[0];
+  const settleKeys = useShortcutLabel("settle");
+  const newThreadKeys = useShortcutLabel("new-thread");
+  const newScratchKeys = useShortcutLabel("new-scratch");
+  const activityKeys = useShortcutLabel("activity");
   const jumpTo = useRef<(index: number) => boolean>(() => false);
   const settleOpen = useRef<() => boolean>(() => false);
   useEffect(() => {
@@ -758,17 +772,21 @@ export function ProjectSidebar({
       setCmdHeld(false);
     };
     const down = (e: KeyboardEvent) => {
-      if (!modOnly(e) || e.altKey || e.shiftKey) return release();
       // Ctrl keys typed in a terminal belong to its shell.
-      if (!mac && (e.target as Element | null)?.closest?.(".xterm"))
+      if (
+        !mac &&
+        e.ctrlKey &&
+        (e.target as Element | null)?.closest?.(".xterm")
+      )
         return release();
-      if (e.key !== modKey) cancel();
+      if (!holdsModifiersOf("jump-thread", e)) release();
+      else if (!modifierCode.test(e.code)) cancel();
       else if (reveal === undefined)
         reveal = window.setTimeout(() => setCmdHeld(true), CMD_HINT_DELAY_MS);
-      const digit = /^Digit([1-9])$/.exec(e.code);
-      if (digit && jumpTo.current(Number(digit[1]) - 1)) e.preventDefault();
+      const digit = digitOf("jump-thread", e);
+      if (digit && jumpTo.current(digit - 1)) e.preventDefault();
       if (
-        e.code === "KeyE" &&
+        pressed("settle", e) &&
         !e.repeat &&
         !e.isComposing &&
         !document.querySelector('dialog[open], [role="dialog"]') &&
@@ -777,10 +795,10 @@ export function ProjectSidebar({
         e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
-      if (!modHeld(e)) release();
+      if (!holdsModifiersOf("jump-thread", e)) release();
     };
     const click = (e: PointerEvent) => {
-      if (modHeld(e)) cancel();
+      if (holdsModifiersOf("jump-thread", e)) cancel();
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -1343,7 +1361,8 @@ export function ProjectSidebar({
 
   const card = (c: ChatSummary, index: number) => {
     const p = byId.get(c.projectId);
-    const shortcut = shortcuts && cmdHeld && index < 9 ? index + 1 : undefined;
+    const shortcut =
+      shortcuts && cmdHeld && jumpBinding && index < 9 ? index + 1 : undefined;
     const isUnread = unread(c);
     const selected = chatId === c.id;
     return (
@@ -1372,7 +1391,7 @@ export function ProjectSidebar({
             {shortcut && (
               <kbd className="sb-card-shortcut" aria-hidden>
                 <span className={mac ? "glyph" : undefined}>
-                  {keys("⌘", "Ctrl")}
+                  {modifiersLabel(jumpBinding)}
                 </span>
                 {shortcut}
               </kbd>
@@ -1389,7 +1408,7 @@ export function ProjectSidebar({
             {!c.running && !c.waiting && (
               <button
                 className="sb-card-action"
-                title={`Settle${c.id === chatId ? ` (${keys("⌘E", "Ctrl+E")})` : ""} — hide until something new happens`}
+                title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
                 onClick={(e) => {
                   e.stopPropagation();
                   settle(c);
@@ -1557,7 +1576,7 @@ export function ProjectSidebar({
       <div className="sb-section-heading">
         <h2>Scratchpad</h2>
         <IconButton
-          label={`New chat  ${keys("⌘⇧N", "Ctrl+Shift+N")}`}
+          label={`New chat  ${newScratchKeys}`.trim()}
           disabled={dirty}
           onClick={onNewScratch}
         >
@@ -1687,7 +1706,7 @@ export function ProjectSidebar({
         <button
           className="sb-top-button"
           aria-label="New thread"
-          title={`New thread  ${keys("⌘N", "Ctrl+N")}`}
+          title={`New thread  ${newThreadKeys}`.trim()}
           disabled={dirty}
           onClick={onPickNew}
         >
@@ -1697,7 +1716,7 @@ export function ProjectSidebar({
           className={`sb-top-button sb-bell ${view === "activity" ? "active" : ""}`}
           aria-pressed={view === "activity"}
           aria-label="View activity"
-          title={`View activity  ${keys("⌥⌘U", "Ctrl+Alt+U")}`}
+          title={`View activity  ${activityKeys}`.trim()}
           onClick={() => {
             setSearch("");
             setView((v) => (v === "activity" ? "threads" : "activity"));

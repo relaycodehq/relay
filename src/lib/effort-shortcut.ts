@@ -1,15 +1,20 @@
 import type { KeyboardEvent } from "react";
 import type { ReasoningEffort } from "../../shared/settings";
-import { mac } from "./mod-key";
+import {
+  bindings,
+  comboLabel,
+  matches,
+  modifiersLabel,
+  useShortcutValue,
+} from "./shortcuts";
 
 /**
- * ⌘⌥←/→ (Ctrl+Alt elsewhere) steps effort. Plain, ⌥, ⌘ and ⇧ arrows all
- * move the caret or selection in the draft, so those stay untouched.
+ * ⌘⌥←/→ (Ctrl+Alt elsewhere) by default steps effort. Plain, ⌥, ⌘ and ⇧
+ * arrows all move the caret or selection in the draft, so those stay untouched.
  */
 export function effortStep(e: KeyboardEvent): -1 | 1 | 0 {
-  if (e.nativeEvent.isComposing || e.shiftKey || !e.altKey) return 0;
-  if (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey) return 0;
-  return e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+  if (e.nativeEvent.isComposing) return 0;
+  return matches("effort-down", e) ? -1 : matches("effort-up", e) ? 1 : 0;
 }
 
 /**
@@ -29,4 +34,20 @@ export function stepEffort(
   return efforts[Math.min(efforts.length - 1, Math.max(0, at + step))];
 }
 
-export const effortKeysLabel = mac ? "⌘⌥ ←→" : "Ctrl Alt ←→";
+/** "⌥⌘ ←→" while both keys share modifiers and arrows, else both in full. */
+export function effortKeysLabel() {
+  const [down] = bindings("effort-down");
+  const [up] = bindings("effort-up");
+  if (
+    down?.code === "ArrowLeft" &&
+    up?.code === "ArrowRight" &&
+    modifiersLabel(down) === modifiersLabel(up)
+  )
+    return `${modifiersLabel(down)} ←→`;
+  return [down, up]
+    .filter((c) => !!c)
+    .map((c) => comboLabel(c))
+    .join(" / ");
+}
+
+export const useEffortKeysLabel = () => useShortcutValue(effortKeysLabel);
