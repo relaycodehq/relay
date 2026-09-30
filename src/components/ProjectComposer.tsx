@@ -85,6 +85,7 @@ import { useComposerToolbar } from "../lib/composer-toolbar";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import {
   effortStep,
+  quickStep,
   useEffortKeysLabel,
   stepEffort,
 } from "../lib/effort-shortcut";
@@ -568,7 +569,7 @@ export function ProjectComposer({
       ...all,
       [to]: { model: all[to]?.model ?? "", reasoningEffort },
     }));
-  // Quick switch: with presets set up, ⌘⌥←/→ steps through them instead of effort.
+  // Quick switch: with presets set up, ⌃⌘←/→ steps through them.
   const quickSwitch = useQuickSwitch();
   const quickPresets = quickSwitch.enabled ? quickSwitch.presets : [];
   const [quick, setQuick] = useState({ open: false, at: -1, dir: 1 });
@@ -631,7 +632,7 @@ export function ProjectComposer({
       hideQuickSoon();
     } else pickPreset(at, step);
   }
-  const effortHint = quickPresets.length ? undefined : effortKeys || undefined;
+  const effortHint = effortKeys || undefined;
   const claudeTraits = useMemo(
     () => [
       ...(claudeModelEfforts.length > 0
@@ -1393,8 +1394,13 @@ export function ProjectComposer({
             const step = effortStep(e);
             if (step) {
               e.preventDefault();
-              if (quickPresets.length) stepQuick(step);
-              else stepRecipientEffort(step);
+              stepRecipientEffort(step);
+              return;
+            }
+            const quickDir = quickPresets.length ? quickStep(e) : 0;
+            if (quickDir) {
+              e.preventDefault();
+              stepQuick(quickDir);
               return;
             }
             const action = sendAction(e, sendKey);

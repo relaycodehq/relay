@@ -12,8 +12,8 @@ import {
 } from "../../shared/settings";
 
 /**
- * Quick switch: agent, model and effort presets that ⌘⌥←/→ steps through in
- * the composer instead of effort levels. A per-device preference like the send
+ * Quick switch: agent, model and effort presets that ⌃⌘←/→ steps through in
+ * the composer; effort keeps ⌘⌥←/→. A per-device preference like the send
  * key, so it lives in localStorage rather than settings.
  */
 export const quickSwitchStyles = [

@@ -38,7 +38,7 @@ import {
   comboWords,
   useShortcutOverrides,
 } from "../lib/shortcuts";
-import { useEffortKeysLabel } from "../lib/effort-shortcut";
+import { useQuickKeysLabel } from "../lib/effort-shortcut";
 import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettings } from "../lib/useAISettings";
@@ -564,7 +564,7 @@ export function Settings({
   const sendKey = useSendKey();
   // Search finds shortcuts by their current keys.
   useShortcutOverrides();
-  const effortKeys = useEffortKeysLabel();
+  const quickKeys = useQuickKeysLabel();
   const iconSrc = useMemo(
     () => svgDataUrl(relayIconSvg(appearance.accent)),
     [appearance.accent],
@@ -979,7 +979,7 @@ export function Settings({
       id: "quick-switch",
       category: "models",
       title: "Quick switch",
-      description: `Presets of agent, model and effort that ${effortKeys || "the effort keys"} step through in the composer.`,
+      description: `Presets of agent, model and effort that ${quickKeys || "the quick-switch keys"} step through in the composer.`,
       keywords:
         "quick switch presets favourite favorite model agent effort keyboard shortcut arrows drum style",
       block: true,

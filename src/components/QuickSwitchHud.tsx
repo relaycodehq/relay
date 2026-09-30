@@ -11,7 +11,7 @@ import {
 } from "react";
 import { Zap } from "lucide-react";
 import { agentName, type AgentProvider } from "../../shared/agents";
-import { useEffortKeysLabel } from "../lib/effort-shortcut";
+import { useQuickKeysLabel } from "../lib/effort-shortcut";
 import {
   stepPreset,
   useQuickSwitch,
@@ -56,7 +56,7 @@ function Label({ item, dir }: { item: QuickItem; dir: number }) {
 }
 
 function Heading() {
-  const keys = useEffortKeysLabel();
+  const keys = useQuickKeysLabel();
   return (
     <div className="composer-menu-label">
       Quick switch

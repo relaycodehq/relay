@@ -132,17 +132,35 @@ export const shortcutCommands = {
     defaults: one("Escape", true),
   },
   "effort-down": {
-    title: "Less reasoning effort, or the previous quick-switch preset",
+    title: "Less reasoning effort",
     group: "Composer",
-    description: "Steps through quick-switch presets once you have some.",
-    keywords: "effort quick switch preset left",
+    keywords: "effort thinking left",
     defaults: one("mod+alt+ArrowLeft"),
   },
   "effort-up": {
-    title: "More reasoning effort, or the next quick-switch preset",
+    title: "More reasoning effort",
     group: "Composer",
-    keywords: "effort quick switch preset right",
+    keywords: "effort thinking right",
     defaults: one("mod+alt+ArrowRight"),
+  },
+  "quick-prev": {
+    title: "Previous quick-switch preset",
+    group: "Composer",
+    description:
+      "Switches agent, model and effort together. Set presets up in AI models → Quick switch.",
+    keywords: "quick switch preset model agent left",
+    // Win+Ctrl+arrows switch desktops on Windows, so no ⊞ there.
+    defaults: (mac) => [
+      combo(mac, mac ? "ctrl+meta+ArrowLeft" : "ctrl+alt+shift+ArrowLeft"),
+    ],
+  },
+  "quick-next": {
+    title: "Next quick-switch preset",
+    group: "Composer",
+    keywords: "quick switch preset model agent right",
+    defaults: (mac) => [
+      combo(mac, mac ? "ctrl+meta+ArrowRight" : "ctrl+alt+shift+ArrowRight"),
+    ],
   },
   dictate: {
     title: "Dictate",
