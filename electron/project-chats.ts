@@ -2366,7 +2366,12 @@ export class ProjectChats {
           if (files.length) message.changes = files;
         }
       }
-      if (compact) message.body = "";
+      if (compact) {
+        // The summary goes beside the answer: a compaction still says nothing.
+        const summary = message.body.trim();
+        if (summary) message.compactSummary = summary.slice(0, 100000);
+        message.body = "";
+      }
       message.status = abort.signal.aborted ? "cancelled" : "complete";
       const { thread } = agentSession(chat, provider, input.parentId);
       if (message.status === "complete" && point && thread)

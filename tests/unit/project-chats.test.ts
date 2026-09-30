@@ -426,6 +426,30 @@ it("still tells a compacted session the notes left since its last answer", async
     .find((text) => text.startsWith("My request: Go on"))!;
   expect(prompt).toContain("Keep the old API.");
 }, 20000);
+it("keeps what Claude compacted to beside the compaction, not as its answer", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const settled = (count: number) =>
+    vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 6000 },
+    );
+  await chats.send(chat.id, {
+    ...input("@claude Explain the cache guard"),
+    provider: "claude",
+  });
+  await settled(2);
+  await chats.compact(chat.id);
+  await settled(3);
+  const compaction = (await chats.get(chat.id)).messages.at(-1)!;
+  expect(compaction.compaction).toBe(true);
+  expect(compaction.body).toBe("");
+  expect(compaction.compactSummary).toBe("Summary:\n1. Keep the old API.");
+}, 20000);
 it("brings the sidebar summary up to date when a compaction finishes", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const finished = () =>

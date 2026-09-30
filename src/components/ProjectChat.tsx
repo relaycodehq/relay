@@ -110,6 +110,7 @@ import {
   WorktreeMenu,
 } from "./WorktreeControls";
 import type { TurnDiffTarget } from "./TurnChanges";
+import { CompactionRow } from "./CompactionRow";
 import {
   matchLink,
   type ProjectFileLink,
@@ -362,22 +363,11 @@ const Message = memo(function Message({
     );
   if (m.compaction)
     return (
-      <div
-        className="context-compaction"
-        data-message-id={m.id}
-        data-status={m.status}
-        role="status"
-      >
-        <span>
-          {m.status === "streaming"
-            ? "Compacting context…"
-            : m.status === "complete"
-              ? "Context compacted"
-              : m.status === "cancelled"
-                ? "Compaction stopped"
-                : (m.error ?? "Compaction failed")}
-        </span>
-      </div>
+      <CompactionRow
+        message={m}
+        projectRoot={projectRoot}
+        onOpenFile={onOpenFile}
+      />
     );
   return (
     <article

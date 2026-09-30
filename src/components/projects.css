@@ -2370,6 +2370,37 @@ details.agent-step > .agent-step-heading:hover {
 .context-compaction[data-status="failed"] {
   color: var(--danger);
 }
+/* Pulled in toward the text; the rules on either side keep their gap. */
+.compact-summary-trigger {
+  display: inline-flex;
+  margin-left: -8px;
+  padding: 2px;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: default;
+}
+.compact-summary-trigger:hover,
+.compact-summary-trigger[aria-expanded="true"] {
+  color: var(--text);
+}
+.compact-summary {
+  position: fixed;
+  z-index: 150;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px;
+  background: var(--toolbar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #00000029;
+  animation: model-callout-in 120ms ease-out;
+}
+.compact-summary > .project-message {
+  padding: 16px 0;
+  content-visibility: visible;
+}
 .agent-handoff .context-compaction .text-button {
   padding: 0;
   font-size: 11px;

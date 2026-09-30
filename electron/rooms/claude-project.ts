@@ -1240,6 +1240,8 @@ export async function runClaudeProject(
     // The CLI can end a turn it couldn't authenticate as a plain error result.
     let signedOut = false;
     let cache: PromptCache | undefined;
+    // After a compact boundary, the next synthetic user message is the summary.
+    let compacted: string | undefined;
     // The cache is read when a request starts, not when its reply arrives.
     let request: { id: string; at: number } | undefined;
     const report = (usedTokens: number) => {
@@ -1328,6 +1330,19 @@ export async function runClaudeProject(
         // The summary replaces the conversation the cache held.
         cache = undefined;
         report(message.compact_metadata.post_tokens ?? 0);
+        compacted = "";
+      }
+      if (
+        compacted === "" &&
+        message.type === "user" &&
+        message.isSynthetic &&
+        !message.parent_tool_use_id
+      ) {
+        const content = message.message.content;
+        compacted =
+          typeof content === "string"
+            ? content
+            : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
       }
       if (message.type === "assistant") {
         if (message.error === "authentication_failed") signedOut = true;
@@ -1455,7 +1470,7 @@ export async function runClaudeProject(
         }
         if (options.compact) {
           succeeded = true;
-          return "";
+          return compacted ?? "";
         }
         const final = session.plan || message.result || answer;
         const written = session.plan ? undefined : answeredFindings(final);

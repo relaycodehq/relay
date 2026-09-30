@@ -204,6 +204,8 @@ interface AgentHandoff {
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
+  /** Local: what a compaction left the agent with, when the provider hands it back readable. */
+  compactSummary?: string;
   handoff?: AgentHandoff;
   /** Local marker: the lead's brief for an Ultraplan council, shown inside it. */
   brief?: boolean;

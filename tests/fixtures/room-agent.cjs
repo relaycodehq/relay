@@ -158,6 +158,56 @@ if (args.includes("--permission-prompt-tool")) {
       }, 100);
       return;
     }
+    if (m.type === "user" && typeof m.message.content === "string") {
+      record({ provider: "claude", prompt: JSON.stringify(m) });
+      // Like Claude Code's /compact: the boundary, then the summary as a synthetic user message.
+      emit({
+        type: "system",
+        subtype: "compact_boundary",
+        uuid: "fixture-boundary",
+        session_id: "fixture-claude",
+        compact_metadata: {
+          trigger: "manual",
+          pre_tokens: 9000,
+          post_tokens: 900,
+        },
+      });
+      emit({
+        type: "user",
+        uuid: "fixture-summary",
+        session_id: "fixture-claude",
+        parent_tool_use_id: null,
+        isSynthetic: true,
+        message: { role: "user", content: "Summary:\n1. Keep the old API." },
+      });
+      emit({
+        type: "user",
+        uuid: "fixture-compacted",
+        session_id: "fixture-claude",
+        parent_tool_use_id: null,
+        isReplay: true,
+        message: {
+          role: "user",
+          content: "<local-command-stdout>Compacted </local-command-stdout>",
+        },
+      });
+      emit({
+        type: "result",
+        subtype: "success",
+        uuid: "fixture-result",
+        session_id: "fixture-claude",
+        is_error: false,
+        result: "",
+        duration_ms: 1,
+        duration_api_ms: 1,
+        num_turns: 0,
+        total_cost_usd: 0,
+        usage: { input_tokens: 0, output_tokens: 0 },
+        modelUsage: {},
+        permission_denials: [],
+      });
+      return;
+    }
     if (m.type === "user") {
       record({ provider: "claude", prompt: JSON.stringify(m) });
       const text = m.message.content
