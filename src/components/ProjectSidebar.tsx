@@ -63,7 +63,7 @@ import {
 import { modifierCode } from "../../shared/shortcuts";
 import { useWindowFocused } from "../lib/window-focus";
 import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
-import { UpdateButton } from "./UpdateButton";
+import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
 import { ProviderIcon } from "./ComposerModelPicker";
@@ -1680,13 +1680,19 @@ export function ProjectSidebar({
       {query ? searching : view === "activity" ? activity : threads}
       {viewError && <ErrorBox error={viewError} />}
       <div className="sb-footer">
-        <button className="sb-account" onClick={onAccount}>
+        <button
+          className={`sb-account ${account ? "signed-in" : ""}`}
+          title={account}
+          aria-label={account}
+          onClick={onAccount}
+        >
           <span className="sb-avatar" aria-hidden>
             {(account ?? "?").slice(0, 2).toUpperCase()}
           </span>
-          <span>{account ?? "Connect Gitea"}</span>
+          {!account && <span>Connect Gitea</span>}
         </button>
         <UpdateButton />
+        <CheckUpdatesButton />
         <AgentUpdateButton onDetails={() => onSettings("models")} />
         <IconButton label="Open settings" onClick={() => onSettings()}>
           <Settings2 size={15} />

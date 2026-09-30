@@ -1,8 +1,61 @@
-import { AlertCircle, ArrowDownToLine, Clock, RotateCw } from "lucide-react";
+import { useState } from "react";
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  Check,
+  Clock,
+  RefreshCw,
+  RotateCw,
+} from "lucide-react";
 import { api } from "../lib/api";
-import { useUpdates } from "../lib/updates";
+import { checkForUpdates, useUpdates } from "../lib/updates";
+import { useRecent } from "../lib/useRecent";
 import { releasesPage } from "../../shared/updates";
-import { Spinner } from "./ui";
+import { IconButton, Spinner } from "./ui";
+
+/**
+ * Sidebar footer icon that looks for a newer release. It steps aside once
+ * there is one: the update button beside it takes over from there.
+ */
+export function CheckUpdatesButton() {
+  const { state, checking, failure } = useUpdates();
+  const [askedAt, setAskedAt] = useState<number>();
+  const answered = useRecent(
+    !checking && state?.status === "idle" ? askedAt : undefined,
+    // The check itself takes at least 1.4s of the window.
+    3400,
+  );
+  if (!state || (state.status !== "idle" && state.status !== "checking"))
+    return null;
+  const busy = checking || state.status === "checking";
+  const label = busy
+    ? "Checking for updates…"
+    : failure
+      ? `${failure} Click to try again.`
+      : answered
+        ? `Relay ${state.current} is up to date`
+        : "Check for updates";
+  return (
+    <IconButton
+      label={label}
+      disabled={busy}
+      onClick={() => {
+        setAskedAt(Date.now());
+        void checkForUpdates();
+      }}
+    >
+      {busy ? (
+        <Spinner size={14} />
+      ) : failure ? (
+        <AlertCircle size={15} />
+      ) : answered ? (
+        <Check size={15} />
+      ) : (
+        <RefreshCw size={15} />
+      )}
+    </IconButton>
+  );
+}
 
 /** Sidebar footer control; stays hidden until there's a newer release. */
 export function UpdateButton() {

@@ -1136,6 +1136,13 @@
 .sb .sb-account:hover {
   background: var(--hover);
 }
+.sb .sb-account.signed-in {
+  flex: none;
+  margin-right: auto;
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
 .sb-account > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
