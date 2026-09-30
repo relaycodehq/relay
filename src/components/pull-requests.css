@@ -1,0 +1,580 @@
+/* The Pull requests page. Flat; status is muted text or a glyph, never a pill. */
+.pulls-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 26px 36px 48px;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.pulls-page > * {
+  max-width: 1040px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.pulls-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+}
+.pulls-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pulls-head h1 .sb-project-badge,
+.pulls-head h1 .pulls-remote-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.pulls-head p {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.pulls-head p strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.pulls-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Beats the global label, which stacks its children. */
+.pulls-search {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  width: 250px;
+  height: 30px;
+  margin: 0;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  font-weight: 400;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  cursor: text;
+}
+.pulls-search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.pulls-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.pulls-search input:focus-visible {
+  outline: none;
+}
+.pulls-search kbd {
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.pulls-search .pulls-search-clear {
+  border: 0;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.pulls-states {
+  display: flex;
+  gap: 2px;
+}
+.pulls-states button {
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pulls-states button[aria-checked="true"] {
+  color: var(--text);
+  background: var(--hover);
+}
+.pulls-quiet-button {
+  background: transparent;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.pulls-quiet-button > svg {
+  color: var(--muted);
+}
+.pulls-icon-button {
+  border: 0;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+}
+.pulls-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pulls-crumbs button {
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  font-size: inherit;
+  color: var(--accent);
+}
+.pulls-crumbs button:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.pulls-title button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pulls-title button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+
+/* Shared pieces. */
+.pulls-glyph {
+  flex: none;
+  color: var(--ci-pass);
+}
+.pulls-glyph.draft {
+  color: var(--muted);
+}
+.pulls-glyph.merged {
+  color: var(--accent);
+}
+.pulls-glyph.closed {
+  color: var(--ci-fail);
+}
+.pulls-person {
+  --size: 18px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  font-size: calc(var(--size) * 0.42);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: hsl(var(--hue) 40% 94%);
+  background: hsl(var(--hue) 22% 42%);
+}
+.pulls-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pulls-repo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pulls-repo:not(.quiet) .pulls-repo-name {
+  color: color-mix(in srgb, var(--text) 75%, var(--muted));
+}
+.pulls-remote-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.pulls-num,
+.pulls-time {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pulls-branch {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pulls-alarm {
+  color: var(--ci-fail);
+}
+.pulls-accent {
+  color: var(--accent);
+}
+
+.pulls-section {
+  margin-top: 26px;
+}
+.pulls-section > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pulls-section > h2 small {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Rows on a project's page and in search results. */
+.pulls-list {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sidebar) 35%, var(--surface));
+}
+.pulls-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  justify-content: stretch;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+}
+.pulls-row + .pulls-row {
+  border-top: 1px solid var(--border);
+}
+.pulls-row:hover {
+  background: color-mix(in srgb, var(--hover) 70%, transparent);
+}
+.pulls-row > .pulls-glyph {
+  margin-top: 20px;
+}
+.pulls-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.pulls-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pulls-row-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.pulls-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pulls-row-side {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  padding-top: 1px;
+}
+.pulls-row-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+}
+.pulls-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pulls-files {
+  color: var(--muted);
+}
+.pulls-row-stats .diff-stat {
+  display: inline-flex;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Needs you. */
+.pulls-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 10px;
+}
+.pulls-tile {
+  display: grid;
+  align-content: start;
+  justify-content: stretch;
+  gap: 8px;
+  padding: 12px 13px 11px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sidebar) 35%, var(--surface));
+  text-align: left;
+  white-space: normal;
+}
+.pulls-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--sidebar) 35%, var(--surface));
+}
+.pulls-tile-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pulls-tile-reason {
+  font-size: 11.5px;
+  color: var(--accent);
+}
+.pulls-tile-reason.alarm {
+  color: var(--ci-fail);
+}
+.pulls-tile-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pulls-tile-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A card per project. */
+.pulls-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+}
+.pulls-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar) 35%, var(--surface));
+  overflow: hidden;
+}
+.pulls-card.remote {
+  border-style: dashed;
+  background: transparent;
+}
+.pulls-card-head {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.pulls-card-head .sb-project-badge,
+.pulls-card-head .pulls-remote-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.pulls-card-name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.pulls-card-name strong {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pulls-card-name small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pulls-card-count {
+  margin-left: auto;
+  display: grid;
+  justify-items: end;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pulls-card-count em {
+  font-style: normal;
+  color: var(--accent);
+}
+.pulls-card-rows {
+  display: grid;
+  padding: 0 6px 6px;
+}
+.pulls-card-row {
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  justify-content: stretch;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  text-align: left;
+  color: color-mix(in srgb, var(--text) 85%, var(--muted));
+}
+.pulls-card-row.needs {
+  color: var(--text);
+  font-weight: 500;
+}
+.pulls-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pulls-card-more {
+  align-self: flex-start;
+  margin: -4px 0 8px 14px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--accent);
+  gap: 3px;
+}
+.pulls-card-more:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+.pulls-card-error {
+  margin: 0 14px 12px;
+  font-size: 12px;
+  color: var(--ci-fail);
+}
+
+.pulls-quiet {
+  margin: 14px 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pulls-quiet button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  color: color-mix(in srgb, var(--text) 80%, var(--muted));
+}
+.pulls-quiet button:hover {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+}
+.pulls-note,
+.pulls-none {
+  margin: 22px 2px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.pulls-more {
+  display: flex;
+  margin: 14px auto 0;
+}
+.pulls-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 70px 0;
+  text-align: center;
+}
+.pulls-empty > svg {
+  color: var(--accent);
+}
+.pulls-empty h2 {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.pulls-empty p {
+  max-width: 420px;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* A PR with no project here reviews under the app's titlebar, like a PR thread's Review. */
+.project-legacy .titlebar {
+  height: 44px;
+  min-height: 44px;
+}
+.review-local-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.review-local-note span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-local-note button {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+  color: var(--accent);
+}
+.review-local-note button:hover {
+  background: transparent;
+  text-decoration: underline;
+}

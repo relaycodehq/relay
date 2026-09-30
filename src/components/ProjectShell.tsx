@@ -37,7 +37,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
-import type { Account, PullRef } from "../../shared/types";
+import type { Account, PullRef, Repo } from "../../shared/types";
 import {
   type ChatWorkspace,
   type Project,
@@ -60,6 +60,13 @@ import {
   saveComposerSettings,
 } from "../lib/composer-settings";
 import { Connected, SignIn } from "../ReviewSurface";
+import {
+  PullsTitle,
+  type PullsLocation,
+  type PullsNav,
+  type PullsTarget,
+} from "./PullRequestsPage";
+import { projectFor, repoKey } from "../lib/pull-board";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
@@ -93,6 +100,8 @@ const WORKTREE_PENDING =
 /** How close to the window's left edge the pointer peeks a hidden sidebar. */
 const EDGE_PEEK_WIDTH = 12;
 const SIDEBAR_BESIDE_PANE_KEY = "relay-projects-hidden-beside-pane";
+const NOWHERE: PullsLocation = { repo: null, pull: null };
+const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {
   const qc = useQueryClient();
@@ -133,12 +142,19 @@ export default function ProjectShell() {
     ),
     [incoming, setIncoming] = useState<{ url: string }>(),
     [queuedUrl, setQueuedUrl] = useState<string>();
+  // The Pull requests page reports where it is for the title; the title and
+  // the sidebar send it back to the board.
+  const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE),
+    [pullsNav, setPullsNav] = useState<PullsNav | null>(null);
+  const goToPulls = (target: PullsTarget) =>
+    setPullsNav((n) => ({ ...target, request: (n?.request ?? 0) + 1 }));
   const panes = useWorkspacePanes();
   // The sidebar remembers two states: beside the chat alone, and beside a side
   // pane (a PR's Review, say). Until toggled there, the latter follows the
   // "make room" setting.
   const autoHide = useSidebarAutoHide();
-  const besidePane = panes.visible.some((id) => id !== "chat");
+  // The Pull requests page stands in for the chat alone.
+  const besidePane = !legacy && panes.visible.some((id) => id !== "chat");
   const [hiddenAlone, setHiddenAlone] = useState(
     () => localStorage.getItem("relay-projects-hidden") === "true",
   );
@@ -192,7 +208,7 @@ export default function ProjectShell() {
   // from opening it.
   const layoutRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
-  const edgePeekOn = projectsHidden && !legacy && !peek;
+  const edgePeekOn = projectsHidden && !peek;
   useEffect(() => {
     if (!edgePeekOn) return;
     let timer: number | undefined;
@@ -345,7 +361,17 @@ export default function ProjectShell() {
   }, [draftScope, draftId, restoredProject]);
   useEffect(() => {
     localStorage.setItem("relay-surface", legacy ? "inbox" : "project");
+    // The page took its link when it opened; coming back mustn't open it again.
+    if (!legacy) setIncoming(undefined);
   }, [legacy]);
+  // Switching projects closes side panes, so a PR opened from the Pull
+  // requests page shows its Review once the switch is done.
+  const reviewAfterSwitch = useRef<string>(undefined);
+  useEffect(() => {
+    if (!project || reviewAfterSwitch.current !== project.id) return;
+    reviewAfterSwitch.current = undefined;
+    panes.show("changes");
+  }, [project?.id]);
   useEffect(() => {
     if (project && project.id === restoredProject)
       localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
@@ -394,7 +420,6 @@ export default function ProjectShell() {
       if (
         matches("sidebar", e) &&
         !e.repeat &&
-        !legacy &&
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
@@ -438,6 +463,57 @@ export default function ProjectShell() {
         setSelected(p.id);
         setLegacy(false);
       }
+    } catch (e) {
+      setError(e);
+    }
+  }
+  /**
+   * A PR from the Pull requests page opens on its project's thread with the
+   * Review beside it; opening it the first time makes that thread.
+   */
+  async function openPullInProject(p: Project, ref: PullRef) {
+    if (dirty || !p.repository) return;
+    // The project's spelling of its repository, which its threads use.
+    const pr = {
+      owner: p.repository.owner,
+      name: p.repository.name,
+      number: ref.number,
+    };
+    const chatsOf = () =>
+      qc.fetchQuery({
+        queryKey: ["project-chats", p.id],
+        queryFn: () => api.projectChats(p.id),
+        staleTime: 0,
+      });
+    try {
+      let thread = (await chatsOf()).find(
+        (c) => c.scope.kind === "pr" && c.scope.ref.number === pr.number,
+      );
+      if (!thread) {
+        thread = await api.createProjectChat(p.id, { kind: "pr", ref: pr });
+        await chatsOf();
+      }
+      // Navigating closes side panes, and so does the project switch after it.
+      navigate(p, thread);
+      panes.show("changes");
+      if (p.id !== project?.id) reviewAfterSwitch.current = p.id;
+    } catch (e) {
+      setError(e);
+    }
+  }
+  /** Adds a project from the Pull requests page; the PR open there moves to its thread. */
+  async function addPullProject(repo?: Repo) {
+    try {
+      const p = await api.addProject();
+      if (!p) return;
+      await projects.refetch();
+      if (!repo) return;
+      if (!p.repository || repoKey(p.repository) !== repoKey(repo))
+        throw new Error(
+          `${p.name} is added, but it isn’t a clone of ${repo.owner}/${repo.name}.`,
+        );
+      if (pullsWhere.pull && pullsWhere.repo?.key === repoKey(repo))
+        await openPullInProject(p, { ...repo, number: pullsWhere.pull.number });
     } catch (e) {
       setError(e);
     }
@@ -759,14 +835,7 @@ export default function ProjectShell() {
           <RelayMark size={38} />
         </div>
         {legacy ? (
-          <button
-            className="text-button"
-            disabled={dirty}
-            onClick={() => setLegacy(false)}
-          >
-            <FolderGit2 size={15} />
-            Back to projects
-          </button>
+          <PullsTitle where={pullsWhere} disabled={dirty} onNav={goToPulls} />
         ) : (
           <div className="project-window-title">
             {project?.plain ? (
@@ -878,7 +947,7 @@ export default function ProjectShell() {
             </div>
           </div>
         )}
-        {projectsHidden && !legacy && (
+        {projectsHidden && (
           <IconButton label="Open settings" onClick={() => setSettings(true)}>
             <Settings2 size={16} />
           </IconButton>
@@ -891,7 +960,6 @@ export default function ProjectShell() {
           aria-label="Projects"
           aria-hidden={projectsHidden && !peek ? true : undefined}
           inert={projectsHidden && !peek ? true : undefined}
-          hidden={legacy}
           onMouseEnter={projectsHidden ? peekOpen : undefined}
           onMouseLeave={projectsHidden ? peekClose : undefined}
         >
@@ -899,8 +967,9 @@ export default function ProjectShell() {
           <ProjectSidebar
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
-            projectId={project?.id}
-            chatId={chat?.id}
+            projectId={legacy ? undefined : project?.id}
+            chatId={legacy ? undefined : chat?.id}
+            inbox={legacy}
             dirty={dirty}
             account={account?.user.login}
             onChat={(c) => {
@@ -910,7 +979,7 @@ export default function ProjectShell() {
             onNew={(p) => navigate(p, undefined, true)}
             onPickNew={pickNewThread}
             onNewScratch={() => void newScratch()}
-            draftId={chat ? undefined : draftId}
+            draftId={legacy || chat ? undefined : draftId}
             onDraft={(p, id) => navigate(p, undefined, id)}
             onAdd={() => void add()}
             onShared={(p) => {
@@ -924,8 +993,11 @@ export default function ProjectShell() {
             }}
             onAccount={() => setSignin(true)}
             onInbox={() => {
-              if (account) setLegacy(true);
-              else setSignin(true);
+              // From the page itself it goes back to the board; from anywhere
+              // else it returns to where the page was left.
+              if (!account) setSignin(true);
+              else if (legacy) goToPulls({ to: "board" });
+              else setLegacy(true);
             }}
           />
           {projects.error && <ErrorBox error={projects.error} />}
@@ -937,6 +1009,20 @@ export default function ProjectShell() {
               account={account}
               initialWorkspace={boot.data.workspace}
               incomingLink={incoming}
+              pulls={{
+                projects: projects.data ?? NO_PROJECTS,
+                projectOf: (repo) =>
+                  projectFor(
+                    projects.data ?? NO_PROJECTS,
+                    account.server,
+                    repo,
+                  ),
+                onOpenInProject: (p, ref) => void openPullInProject(p, ref),
+                onOpenProject: (p) => navigate(p),
+                onAddProject: (repo) => void addPullProject(repo),
+                onLocation: setPullsWhere,
+                nav: pullsNav,
+              }}
               onSettings={(category) => {
                 setSettingsCategory(
                   category === "rooms" ? category : undefined,

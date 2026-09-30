@@ -49,7 +49,6 @@ import "./rooms.css";
 
 type Props = {
   pull: Pull;
-  firstPane: boolean;
   accountId: string;
   path?: string;
   target: QuestionTarget | null;
@@ -68,7 +67,6 @@ type Draft = {
 };
 export function RoomPanel({
   pull,
-  firstPane,
   accountId,
   path,
   target,
@@ -288,11 +286,7 @@ export function RoomPanel({
   };
   const selected = draft.context;
   return (
-    <aside
-      id="pr-room"
-      className={`room-panel ${firstPane ? "is-first-pane" : ""}`}
-      aria-label="PR room"
-    >
+    <aside id="pr-room" className="room-panel" aria-label="PR room">
       <PaneResizer
         pane="room"
         label="Resize conversation"

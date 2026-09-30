@@ -1,5 +1,5 @@
 import { screenshot } from "../fixtures/screenshot";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -31,9 +31,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
     await openInbox(page);
-    await page
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page, /Make pull request reviews/);
     await expect(page.locator("diffs-container")).toBeVisible();
     const { account, files } = await page.evaluate(async () => {
       const ref = { owner: "Web", name: "web-store", number: 7 };

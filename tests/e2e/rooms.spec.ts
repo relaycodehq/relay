@@ -1,6 +1,6 @@
 import { screenshot } from "../fixtures/screenshot";
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
-import { openInbox } from "../fixtures/navigation";
+import { openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -145,9 +145,7 @@ test.beforeAll(async () => {
     }, repo);
     await page.reload();
     await openInbox(page);
-    await page
-      .getByRole("button", { name: /Make pull request reviews faster/ })
-      .click();
+    await openPull(page, /Make pull request reviews faster/);
     await expect(
       page.getByRole("heading", {
         name: "Make pull request reviews faster and more reliable",
@@ -293,9 +291,7 @@ test("only the sender's agent starts, shares its completed answer, and receives 
   expect(turn.input[0].text).toContain("cancellation path");
   expect(turn.input[0].text).toContain("excerpt");
   expect(calls[0].cwd).toBe(await realpath(repo));
-  await alice
-    .getByRole("button", { name: "Hide pull requests", exact: true })
-    .click();
+  await alice.getByRole("button", { name: /^Hide sidebar/ }).click();
   await alice.locator(".room-code-context > summary").click();
   await expect(alice.locator(".room-code-context pre")).toBeVisible();
   await expect(alice.locator(".room-code-context pre")).toContainText(

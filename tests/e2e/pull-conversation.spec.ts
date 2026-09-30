@@ -1,4 +1,4 @@
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,9 +30,7 @@ test("Gitea single line comments read in the conversation, in order", async () =
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
     await openInbox(page);
-    await page
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page, /Make pull request reviews/);
     await page.getByRole("button", { name: "Conversation" }).click();
 
     const cards = page.locator(".conversation .discussion-card");

@@ -1,6 +1,5 @@
 import type { PaneSlots } from "./components/WorkspacePanes";
 import { RoomPanel } from "./components/RoomPanel";
-import { RelayMark } from "./components/RelayMark";
 import { TeaHint, TeaLogins } from "./components/TeaSignIn";
 import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
 import { parseRoomInvitation, roomProtocol } from "../shared/rooms";
@@ -23,56 +22,44 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowUpRight,
   Check,
   FileCode2,
-  FolderGit2,
   GitPullRequest,
   Inbox,
-  Link2,
   PanelLeft,
   PanelLeftClose,
-  RefreshCw,
   Search,
-  Settings2,
-  UserRound,
-  MessageSquare,
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
-import { matches, useShortcutLabel } from "./lib/shortcuts";
+import { matches } from "./lib/shortcuts";
 import { linksTo, type ProjectFileLink } from "../shared/project-file-links";
 import type {
   Account,
   Bootstrap,
   ChangedFile,
-  Issue,
   Progress,
   PullRef,
   Pull,
+  Repo,
   WorkspaceState,
 } from "../shared/types";
 import { revisionOf } from "../shared/types";
-import {
-  Avatar,
-  ErrorBox,
-  IconButton,
-  Loading,
-  Modal,
-  relativeDate,
-} from "./components/ui";
+import { ErrorBox, IconButton, Loading, Modal } from "./components/ui";
 import { PaneResizer } from "./components/PaneResizer";
 import { PaneControls } from "./components/PaneControls";
 import { ReviewWorkspace } from "./components/ReviewWorkspace";
+import {
+  PullRequestsPage,
+  type PullsLocation,
+  type PullsNav,
+} from "./components/PullRequestsPage";
+import { PULL_BOARD } from "./lib/usePullBoard";
+import { repoKey } from "./lib/pull-board";
+import type { Project } from "../shared/projects";
 const LocalFileEditor = lazy(() => import("./components/LocalFileEditor"));
-const labels: Record<string, string> = {
-  review_requested: "Needs my review",
-  assigned: "Assigned to me",
-  created: "Created by me",
-  all: "All pull requests",
-};
 export function SignIn({
   onConnected,
   loginRestore,
@@ -270,6 +257,7 @@ export function SignIn({
 export function Connected({
   onDirtyChange,
   embedded,
+  pulls,
   account,
   onSettings,
   pendingUrl,
@@ -295,6 +283,21 @@ export function Connected({
     reveal?: (ProjectFileLink & { request: number }) | null;
     onRevealConsumed?: () => void;
   };
+  /**
+   * On the Pull requests page: its board shows while no PR is open, and a PR
+   * whose repository is a project opens on that project's thread instead.
+   */
+  pulls?: {
+    projects: Project[];
+    projectOf: (repo: Repo) => Project | undefined;
+    onOpenInProject: (project: Project, ref: PullRef) => void;
+    onOpenProject: (project: Project) => void;
+    onAddProject: (repo?: Repo) => void;
+    /** Where the page is, for the window title. */
+    onLocation: (where: PullsLocation) => void;
+    /** Leave the open PR for the board or a project's page. */
+    nav: PullsNav | null;
+  };
   account: Account;
   onSettings: (category?: SettingsCategory) => void;
   pendingUrl?: string;
@@ -311,10 +314,11 @@ export function Connected({
   const [restoring, setRestoring] = useState(
     !embedded && !!initialWorkspace.pull && !pendingUrl,
   );
-  const [filter, setFilter] = useState(initialWorkspace.filter),
-    [query, setQuery] = useState(initialWorkspace.query),
-    [search, setSearch] = useState(initialWorkspace.query),
+  const [query, setQuery] = useState(initialWorkspace.query),
     [state, setState] = useState(initialWorkspace.state),
+    [repo, setRepo] = useState(
+      () => localStorage.getItem(`relay-pulls-repo:${account.id}`) || null,
+    ),
     [selected, setSelected] = useState<PullRef | null>(
       embedded?.ref ?? initialWorkspace.pull,
     ),
@@ -322,9 +326,6 @@ export function Connected({
       path: initialWorkspace.file,
       reveal: true,
     }),
-    [requestsHidden, setRequestsHidden] = useStoredFlag(
-      "relay-requests-hidden",
-    ),
     [filesHidden, setFilesHidden] = useStoredFlag("relay-files-hidden"),
     [urlOpen, setUrlOpen] = useState(false),
     [error, setError] = useState<unknown>(),
@@ -337,18 +338,29 @@ export function Connected({
     path: string;
     line?: number;
   } | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    // A project's review pane keeps its own place; only the inbox's is saved.
+    // A project's review pane keeps its own place; only the page's is saved.
     if (embedded) return;
-    const workspace = { pull: selected, file, filter, query, state };
+    const workspace = {
+      pull: selected,
+      file,
+      filter: initialWorkspace.filter,
+      query,
+      state,
+    };
     // The inbox remounts from the bootstrap snapshot, so keep that current too.
     qc.setQueryData<Bootstrap>(
       ["bootstrap"],
       (boot) => boot && { ...boot, workspace },
     );
     void api.saveWorkspace(workspace).catch(setError);
-  }, [selected, file, filter, query, state]);
+  }, [selected, file, query, state]);
+  useEffect(() => {
+    if (embedded) return;
+    const key = `relay-pulls-repo:${account.id}`;
+    if (repo) localStorage.setItem(key, repo);
+    else localStorage.removeItem(key);
+  }, [repo]);
   const navigation = useRef(0);
   const selectFile = (path: string) => {
     navigation.current++;
@@ -360,18 +372,6 @@ export function Connected({
     },
     [],
   );
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(query), 250);
-    return () => clearTimeout(t);
-  }, [query]);
-  const inbox = useInfiniteQuery({
-    queryKey: ["inbox", filter, search, state],
-    queryFn: ({ pageParam }) => api.search(filter, search, state, pageParam),
-    enabled: !embedded,
-    initialPageParam: 1,
-    getNextPageParam: (p) => p.nextPage ?? undefined,
-  });
-  const pulls = inbox.data?.pages.flatMap((p) => p.items) ?? [];
   const pull = useQuery({
     queryKey: ["pull", selected],
     queryFn: () => api.pull(selected!),
@@ -598,6 +598,48 @@ export function Connected({
     setSelected(r);
     setFile(null);
   };
+  const deselect = () => {
+    setRestoring(false);
+    navigation.current++;
+    setSelected(null);
+    setFile(null);
+  };
+  /** A PR in one of your projects opens on its thread; any other one here. */
+  const open = (r: PullRef) => {
+    const project = pulls?.projectOf(r);
+    if (project) pulls!.onOpenInProject(project, r);
+    else select(r);
+  };
+  const nav = pulls?.nav;
+  // A request from before this mount is spent; answering it would drop the restored PR.
+  const handledNav = useRef(nav?.request);
+  useEffect(() => {
+    if (!nav || nav.request === handledNav.current) return;
+    handledNav.current = nav.request;
+    setRepo(nav.to === "repo" ? nav.repo : null);
+    deselect();
+  }, [nav?.request]);
+  const repoLabel = (key: string) => {
+    const [owner, name] = key.split("/");
+    return pulls?.projectOf({ owner, name })?.name ?? key;
+  };
+  useEffect(() => {
+    pulls?.onLocation({
+      repo: selected
+        ? {
+            key: repoKey(selected),
+            label:
+              pulls.projectOf(selected)?.name ??
+              `${selected.owner}/${selected.name}`,
+          }
+        : repo
+          ? { key: repo, label: repoLabel(repo) }
+          : null,
+      pull: selected
+        ? { number: selected.number, title: pull.data?.title }
+        : null,
+    });
+  }, [selected, repo, pull.data?.title]);
   const openUrl = async (url: string) => {
     try {
       const parsed = new URL(url);
@@ -614,7 +656,7 @@ export function Connected({
         setUrlOpen(false);
         return;
       }
-      select(await api.parseUrl(url));
+      open(await api.parseUrl(url));
       setUrlOpen(false);
     } catch (e) {
       setError(e);
@@ -624,8 +666,6 @@ export function Connected({
     const url = incomingLink?.url ?? pendingUrl;
     if (url) void openUrl(url);
   }, [pendingUrl, incomingLink]);
-  const openKeys = useShortcutLabel("pr-open");
-  const searchKeys = useShortcutLabel("pr-search");
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
@@ -634,20 +674,8 @@ export function Connected({
         e.preventDefault();
         setUrlOpen((v) => !v);
       }
-      if (!embedded && matches("pr-search", e)) {
-        e.preventDefault();
-        setRequestsHidden(false);
-        requestAnimationFrame(() => searchRef.current?.focus());
-      }
       if (e.repeat) return;
-      if (matches("pr-list", e)) {
-        e.preventDefault();
-        setRequestsHidden((v) => !v);
-      } else if (
-        matches("review-files", e) ||
-        // In a thread, the sidebar's keys belong to the projects sidebar.
-        (!embedded && matches("sidebar", e))
-      ) {
+      if (matches("review-files", e)) {
         e.preventDefault();
         setFilesHidden((v) => !v);
       }
@@ -658,7 +686,7 @@ export function Connected({
   const refresh = async () => {
     navigation.current++;
     await Promise.all([
-      qc.invalidateQueries({ queryKey: ["inbox"] }),
+      qc.invalidateQueries({ queryKey: [PULL_BOARD] }),
       qc.invalidateQueries({ queryKey: ["pull"] }),
       qc.invalidateQueries({ queryKey: ["files"] }),
       qc.invalidateQueries({ queryKey: ["reviews"] }),
@@ -671,6 +699,7 @@ export function Connected({
     [selected?.owner, selected?.name, selected?.number],
   );
   const current = allFiles.find((f) => f.filename === file);
+  const localProject = selected ? pulls?.projectOf(selected) : undefined;
   const readCount = allFiles.filter(
     (f) => progress.read[f.filename] === revision,
   ).length;
@@ -690,434 +719,302 @@ export function Connected({
     </IconButton>
   ) : (
     <PaneControls
-      requestsHidden={requestsHidden}
       filesHidden={filesHidden}
-      onToggleRequests={() => setRequestsHidden((v) => !v)}
       onToggleFiles={() => setFilesHidden((v) => !v)}
+      onRefresh={() => void refresh()}
       roomOpen={roomOpen}
       onToggleRoom={
-        pull.data && !restoring
-          ? () =>
-              setRoomOpen((v) => !v)
-          : undefined
+        pull.data && !restoring ? () => setRoomOpen((v) => !v) : undefined
       }
     />
   );
   return (
     <>
-      <aside
-        id="requests-sidebar"
-        className="sidebar"
-        aria-label="Workspace"
-        hidden={!!embedded || requestsHidden}
-      >
-        <PaneResizer pane="requests" initial={280} min={230} max={380} />
-        <header className="titlebar sidebar-titlebar">
-          <span className="traffic-space" />
-          <IconButton
-            label="Hide pull requests"
-            onClick={() => setRequestsHidden(true)}
-          >
-            <PanelLeft size={18} />
-          </IconButton>
-        </header>
-        <div className="workspace-label">
-          <RelayMark size={28} />
-          <strong>Relay</strong>
-        </div>
-        <div className="section-label">WORKSPACE</div>
-        <nav>
-          {Object.entries(labels).map(([value, label]) => {
-            const Icon =
-              value === "review_requested"
-                ? Inbox
-                : value === "assigned"
-                  ? UserRound
-                  : value === "created"
-                    ? GitPullRequest
-                    : FolderGit2;
-            return (
-              <button
-                key={value}
-                className={`nav-row ${filter === value ? "selected" : ""}`}
-                onClick={() => {
-                  setFilter(value as WorkspaceState["filter"]);
-                }}
-              >
-                <Icon size={17} />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <button className="nav-row open-link" onClick={() => setUrlOpen(true)}>
-          <Link2 size={17} />
-          <span>Open PR by URL</span>
-          {openKeys && <kbd>{openKeys}</kbd>}
-        </button>
-        <div className="sidebar-divider" />
-        <section className="sidebar-pulls" aria-label="Pull requests">
-          <div className="section-label pull-section-title">
-            <span>PULL REQUESTS</span>
-            <IconButton
-              label="Refresh pull requests"
-              onClick={() => void refresh()}
-            >
-              <RefreshCw size={14} className={inbox.isFetching ? "spin" : ""} />
-            </IconButton>
-          </div>
-          <div className="pr-controls">
-            <div className="search-field">
-              <Search size={15} />
-              <input
-                ref={searchRef}
-                aria-label="Search pull requests"
-                placeholder="Search pull requests"
-                value={query}
-                maxLength={500}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              {searchKeys && <kbd>{searchKeys}</kbd>}
-            </div>
-            <div className="segmented">
-              {(["open", "closed", "all"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setState(v)}
-                  className={state === v ? "active" : ""}
-                >
-                  {v[0].toUpperCase() + v.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="pr-list-meta">
-            <span>{labels[filter]}</span>
-            <span>
-              {inbox.data?.pages[0].total ?? pulls.length}
-              {inbox.hasNextPage ? "+" : ""}
-            </span>
-          </div>
-          <div className="pr-list">
-            {inbox.isPending && <Loading text="Finding your pull requests…" />}
-            {inbox.error && (
-              <ErrorBox
-                error={inbox.error}
-                retry={() => void inbox.refetch()}
-              />
-            )}
-            <InboxList items={pulls} selected={selected} onSelect={select} />
-            {!inbox.isPending && !inbox.error && !pulls.length && (
-              <div className="empty inbox-empty">
-                <Inbox size={27} />
-                <strong>
-                  {search ? "No matches" : "You’re all caught up"}
-                </strong>
-                <span>
-                  {search
-                    ? "Try a different search."
-                    : "Try Assigned to me or All pull requests."}
-                </span>
-              </div>
-            )}
-            {inbox.hasNextPage && (
-              <button
-                className="load-more"
-                disabled={inbox.isFetchingNextPage}
-                onClick={() => void inbox.fetchNextPage()}
-              >
-                {inbox.isFetchingNextPage
-                  ? "Loading…"
-                  : "Load more pull requests"}
-              </button>
-            )}
-          </div>
-        </section>
-        <footer className="account-footer">
-          <Avatar name={account.user.login} />
-          <div>
-            <strong>{account.user.full_name || account.user.login}</strong>
-            <small>
-              <span className="dot green" />
-              {new URL(account.server).host}
-            </small>
-          </div>
-          <IconButton label="Settings" onClick={() => onSettings()}>
-            <Settings2 size={17} />
-          </IconButton>
-        </footer>
-      </aside>
-      <section
-        id="files-sidebar"
-        className={`files-pane ${!embedded && requestsHidden ? "is-first-pane" : ""}`}
-        aria-label="Changed files"
-        hidden={filesHidden}
-      >
-        <PaneResizer
-          pane="inbox"
-          label="Resize file list"
-          initial={282}
-          min={230}
-          max={410}
+      {pulls && !selected ? (
+        <PullRequestsPage
+          account={account}
+          projects={pulls.projects}
+          repo={repo}
+          onRepo={setRepo}
+          query={query}
+          onQuery={setQuery}
+          state={state}
+          onState={setState}
+          onOpen={(p) => open(p.ref)}
+          onOpenUrl={() => setUrlOpen(true)}
+          onOpenProject={pulls.onOpenProject}
+          onAddProject={pulls.onAddProject}
         />
-        <header className="titlebar files-titlebar" hidden={!!embedded}>
-          <strong>Changed files</strong>
-          {selected && (
-            <span className="file-total">
-              {pull.data?.changed_files ?? allFiles.length}
-            </span>
-          )}
-          <IconButton
-            label="Hide changed files"
-            onClick={() => setFilesHidden(true)}
+      ) : (
+        <>
+          <section
+            id="files-sidebar"
+            className="files-pane"
+            aria-label="Changed files"
+            hidden={filesHidden}
           >
-            <PanelLeftClose size={17} />
-          </IconButton>
-        </header>
-        {selected ? (
-          <>
-            <div className="files-controls">
-              <div className="search-field">
-                <Search size={15} />
-                <input
-                  aria-label="Filter files"
-                  placeholder="Filter files…"
-                  value={fileFilter}
-                  onChange={(e) => setFileFilter(e.target.value)}
-                />
-              </div>
-            </div>
-            {pull.data && !restoring && (
-              <TriageControls
-                state={triage.data}
-                busy={analysisBusy}
-                error={analysisError || triage.error}
-                onStart={() => void startAnalysis()}
-                onCancel={() => void cancelAnalysis()}
-                plain={plainFiles}
-                onToggle={() => setPlainFiles((v) => !v)}
-                individualReason={
-                  file ? triage.data?.result?.ordinary[file] : undefined
-                }
-                incomplete={Boolean(
-                  file && triage.data?.result?.incompleteFiles?.includes(file),
-                )}
-              />
-            )}
-            <div className="files-context" hidden={!!embedded}>
-              <span title={`${selected.owner}/${selected.name}`}>
-                {selected.owner}/{selected.name}
-              </span>
-              <span>
-                {readCount}/{pull.data?.changed_files ?? allFiles.length} viewed
-              </span>
-            </div>
-            <div className="file-tree">
-              <GroupedFileList
-                checks={checks.state}
-                files={allFiles}
-                selection={fileSelection}
-                onSelect={selectFile}
-                progress={progress}
-                revision={revision}
-                changedSinceViewed={changedSinceViewed}
-                result={analysisResult}
-                groups={reviewGroups}
-                filter={fileFilter}
-                plain={plainFiles}
-                onReviewGroup={async (group, viewed) => {
-                  if (
-                    !selected ||
-                    !pull.data ||
-                    !progressController.initial.isSuccess
-                  )
-                    throw new Error("Review data is still loading.");
-                  const nav = navigation.current;
-                  const paths = await api.groupPaths(
-                    selected,
-                    pull.data.head.sha,
-                    pull.data.merge_base,
-                    group.id,
-                  );
-                  if (nav !== navigation.current)
-                    throw new Error(
-                      "The selected review changed. Open the group again.",
-                    );
-                  const next = progressController.update((p) => {
-                    const protectedPaths = new Set([
-                      ...notedPaths(p, revision),
-                      ...commentPaths,
-                    ]);
-                    const read = { ...p.read };
-                    for (const path of paths)
-                      if (
-                        group.paths.includes(path) &&
-                        !protectedPaths.has(path)
-                      ) {
-                        if (viewed) read[path] = revision;
-                        else if (read[path] === revision) delete read[path];
-                      }
-                    return { ...p, read };
-                  });
-                  if (viewed && file && paths.includes(file))
-                    await advanceUnread(file, next, false);
-                }}
-              />
-              {files.error && (
-                <ErrorBox
-                  error={files.error}
-                  retry={() => void files.refetch()}
-                />
-              )}
-              <div className="file-more">
-                {!analysisResult && files.hasNextPage && (
-                  <button
-                    onClick={() => void files.fetchNextPage()}
-                    disabled={files.isFetchingNextPage}
-                  >
-                    {files.isFetchingNextPage ? "Loading…" : "Load more files"}
-                  </button>
-                )}
-                {files.isPending && <Loading />}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="empty files-empty">
-            <FileCode2 size={28} />
-            <strong>Choose a pull request</strong>
-            <span>Its changed files will appear here.</span>
-          </div>
-        )}
-        <footer className="files-footer" hidden={!!embedded}>
-          <span className="dot green" />
-          Connected to Gitea
-          <IconButton
-            label="Open Gitea"
-            onClick={() => void api.openExternal(account.server)}
-          >
-            <ArrowUpRight size={13} />
-          </IconButton>
-        </footer>
-      </section>
-      {!embedded && roomOpen && pull.data && !restoring && (
-        <RoomPanel
-          key={JSON.stringify([
-            account.id,
-            pull.data.owner,
-            pull.data.name,
-            pull.data.number,
-          ])}
-          firstPane={requestsHidden && filesHidden}
-          pull={pull.data}
-          accountId={account.id}
-          onAppSettings={onSettings}
-          path={current?.filename}
-          target={
-            roomTarget?.key ===
-            `${pull.data.owner}/${pull.data.name}#${pull.data.number}`
-              ? roomTarget.value
-              : null
-          }
-          viewed={readCount}
-          onClearTarget={() => setRoomTarget(null)}
-          onClose={() => {
-            setRoomOpen(false);
-          }}
-          onSelect={selectFile}
-          onLink={() => {
-            void api
-              .linkFolder(pull.data!)
-              .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
-              .catch(setError);
-          }}
-        />
-      )}
-      <main
-        className={`review-main ${!embedded && requestsHidden && filesHidden && !(roomOpen && pull.data && !restoring) ? "is-first-pane" : ""}`}
-      >
-        {(!selected || pull.error || !pull.data || restoring) && (
-          <header className="titlebar empty-titlebar">
-            <span>Your review workspace</span>
-            <div className="toolbar-actions">
-              {paneControls}
-              <IconButton label="Open settings" onClick={() => onSettings()}>
-                <Settings2 size={16} />
-              </IconButton>
-            </div>
-          </header>
-        )}
-        {!selected ? (
-          <>
-            <div className="empty welcome-empty">
-              <div className="empty-illustration">
-                <GitPullRequest size={35} />
-                <span>
-                  <Check size={15} />
-                </span>
-              </div>
-              <h2>A fresh pair of eyes.</h2>
-              <p>
-                Choose a pull request to see what changed.
-                <br />
-                We’ll keep your place while you review.
-              </p>
-              <button onClick={() => setUrlOpen(true)}>
-                <Link2 size={15} /> Open a pull request{" "}
-                {openKeys && <kbd>{openKeys}</kbd>}
-              </button>
-            </div>
-          </>
-        ) : pull.error ? (
-          <ErrorBox error={pull.error} retry={() => void pull.refetch()} />
-        ) : !pull.data ? (
-          <Loading text="Opening pull request…" />
-        ) : restoring ? (
-          resume.error ? (
-            <ErrorBox
-              error={resume.error}
-              retry={() => void resume.refetch()}
+            <PaneResizer
+              pane="inbox"
+              label="Resize file list"
+              initial={282}
+              min={230}
+              max={410}
             />
-          ) : (
-            <Loading text="Checking your last review…" />
-          )
-        ) : (
-          <ReviewWorkspace
-            onSettings={embedded ? undefined : () => onSettings()}
-            onDiscuss={(target) => {
-              if (embedded?.onDiscuss) {
-                embedded.onDiscuss(target, pull.data!);
-                return;
+            <header className="titlebar files-titlebar" hidden={!!embedded}>
+              <strong>Changed files</strong>
+              {selected && (
+                <span className="file-total">
+                  {pull.data?.changed_files ?? allFiles.length}
+                </span>
+              )}
+              <IconButton
+                label="Hide changed files"
+                onClick={() => setFilesHidden(true)}
+              >
+                <PanelLeftClose size={17} />
+              </IconButton>
+            </header>
+            {selected ? (
+              <>
+                <div className="files-controls">
+                  <div className="search-field">
+                    <Search size={15} />
+                    <input
+                      aria-label="Filter files"
+                      placeholder="Filter files…"
+                      value={fileFilter}
+                      onChange={(e) => setFileFilter(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {pull.data && !restoring && (
+                  <TriageControls
+                    state={triage.data}
+                    busy={analysisBusy}
+                    error={analysisError || triage.error}
+                    onStart={() => void startAnalysis()}
+                    onCancel={() => void cancelAnalysis()}
+                    plain={plainFiles}
+                    onToggle={() => setPlainFiles((v) => !v)}
+                    individualReason={
+                      file ? triage.data?.result?.ordinary[file] : undefined
+                    }
+                    incomplete={Boolean(
+                      file &&
+                      triage.data?.result?.incompleteFiles?.includes(file),
+                    )}
+                  />
+                )}
+                <div className="files-context" hidden={!!embedded}>
+                  <span title={`${selected.owner}/${selected.name}`}>
+                    {selected.owner}/{selected.name}
+                  </span>
+                  <span>
+                    {readCount}/{pull.data?.changed_files ?? allFiles.length}{" "}
+                    viewed
+                  </span>
+                </div>
+                <div className="file-tree">
+                  <GroupedFileList
+                    checks={checks.state}
+                    files={allFiles}
+                    selection={fileSelection}
+                    onSelect={selectFile}
+                    progress={progress}
+                    revision={revision}
+                    changedSinceViewed={changedSinceViewed}
+                    result={analysisResult}
+                    groups={reviewGroups}
+                    filter={fileFilter}
+                    plain={plainFiles}
+                    onReviewGroup={async (group, viewed) => {
+                      if (
+                        !selected ||
+                        !pull.data ||
+                        !progressController.initial.isSuccess
+                      )
+                        throw new Error("Review data is still loading.");
+                      const nav = navigation.current;
+                      const paths = await api.groupPaths(
+                        selected,
+                        pull.data.head.sha,
+                        pull.data.merge_base,
+                        group.id,
+                      );
+                      if (nav !== navigation.current)
+                        throw new Error(
+                          "The selected review changed. Open the group again.",
+                        );
+                      const next = progressController.update((p) => {
+                        const protectedPaths = new Set([
+                          ...notedPaths(p, revision),
+                          ...commentPaths,
+                        ]);
+                        const read = { ...p.read };
+                        for (const path of paths)
+                          if (
+                            group.paths.includes(path) &&
+                            !protectedPaths.has(path)
+                          ) {
+                            if (viewed) read[path] = revision;
+                            else if (read[path] === revision) delete read[path];
+                          }
+                        return { ...p, read };
+                      });
+                      if (viewed && file && paths.includes(file))
+                        await advanceUnread(file, next, false);
+                    }}
+                  />
+                  {files.error && (
+                    <ErrorBox
+                      error={files.error}
+                      retry={() => void files.refetch()}
+                    />
+                  )}
+                  <div className="file-more">
+                    {!analysisResult && files.hasNextPage && (
+                      <button
+                        onClick={() => void files.fetchNextPage()}
+                        disabled={files.isFetchingNextPage}
+                      >
+                        {files.isFetchingNextPage
+                          ? "Loading…"
+                          : "Load more files"}
+                      </button>
+                    )}
+                    {files.isPending && <Loading />}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="empty files-empty">
+                <FileCode2 size={28} />
+                <strong>Choose a pull request</strong>
+                <span>Its changed files will appear here.</span>
+              </div>
+            )}
+            <footer className="files-footer" hidden={!!embedded}>
+              {selected && pulls && (
+                <span className="review-local-note">
+                  {localProject ? (
+                    <>
+                      <span>In {localProject.name}</span>
+                      <button
+                        onClick={() =>
+                          pulls.onOpenInProject(localProject, selected)
+                        }
+                      >
+                        Open its thread
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span>Not on this Mac</span>
+                      <button onClick={() => pulls.onAddProject(selected)}>
+                        Add its folder…
+                      </button>
+                    </>
+                  )}
+                </span>
+              )}
+              <IconButton
+                label="Open Gitea"
+                onClick={() => void api.openExternal(account.server)}
+              >
+                <ArrowUpRight size={13} />
+              </IconButton>
+            </footer>
+          </section>
+          {!embedded && roomOpen && pull.data && !restoring && (
+            <RoomPanel
+              key={JSON.stringify([
+                account.id,
+                pull.data.owner,
+                pull.data.name,
+                pull.data.number,
+              ])}
+              pull={pull.data}
+              accountId={account.id}
+              onAppSettings={onSettings}
+              path={current?.filename}
+              target={
+                roomTarget?.key ===
+                `${pull.data.owner}/${pull.data.name}#${pull.data.number}`
+                  ? roomTarget.value
+                  : null
               }
-              setRoomTarget({
-                key: `${pull.data!.owner}/${pull.data!.name}#${pull.data!.number}`,
-                value: target,
-              });
-              setRoomOpen(true);
-            }}
-            checks={checks}
-            key={JSON.stringify(selected)}
-            pull={pull.data}
-            file={current}
-            files={reviewFiles}
-            progressController={progressController}
-            changedSinceViewed={changedSinceViewed}
-            onCommentPaths={setCommentPaths}
-            onError={setError}
-            onRefresh={refresh}
-            onSelectFile={selectFile}
-            onFileViewed={advanceUnread}
-            paneControls={paneControls}
-            slots={embedded?.slots}
-            workspace={embedded?.workspace}
-            onEditFile={(path, line) =>
-              embedded?.onEditFile
-                ? embedded.onEditFile(path, line)
-                : setEditing({ pull: pull.data!, path, line })
-            }
-          />
-        )}
-      </main>
+              viewed={readCount}
+              onClearTarget={() => setRoomTarget(null)}
+              onClose={() => {
+                setRoomOpen(false);
+              }}
+              onSelect={selectFile}
+              onLink={() => {
+                void api
+                  .linkFolder(pull.data!)
+                  .then(() => qc.invalidateQueries({ queryKey: ["folder"] }))
+                  .catch(setError);
+              }}
+            />
+          )}
+          <main className="review-main">
+            {(pull.error || !pull.data || restoring) && (
+              <header className="titlebar empty-titlebar">
+                <span>Your review workspace</span>
+                <div className="toolbar-actions">{paneControls}</div>
+              </header>
+            )}
+            {pull.error ? (
+              <ErrorBox error={pull.error} retry={() => void pull.refetch()} />
+            ) : !pull.data ? (
+              <Loading text="Opening pull request…" />
+            ) : restoring ? (
+              resume.error ? (
+                <ErrorBox
+                  error={resume.error}
+                  retry={() => void resume.refetch()}
+                />
+              ) : (
+                <Loading text="Checking your last review…" />
+              )
+            ) : (
+              <ReviewWorkspace
+                onDiscuss={(target) => {
+                  if (embedded?.onDiscuss) {
+                    embedded.onDiscuss(target, pull.data!);
+                    return;
+                  }
+                  setRoomTarget({
+                    key: `${pull.data!.owner}/${pull.data!.name}#${pull.data!.number}`,
+                    value: target,
+                  });
+                  setRoomOpen(true);
+                }}
+                checks={checks}
+                key={JSON.stringify(selected)}
+                pull={pull.data}
+                file={current}
+                files={reviewFiles}
+                progressController={progressController}
+                changedSinceViewed={changedSinceViewed}
+                onCommentPaths={setCommentPaths}
+                onError={setError}
+                onRefresh={refresh}
+                onSelectFile={selectFile}
+                onFileViewed={advanceUnread}
+                paneControls={paneControls}
+                slots={embedded?.slots}
+                workspace={embedded?.workspace}
+                onEditFile={(path, line) =>
+                  embedded?.onEditFile
+                    ? embedded.onEditFile(path, line)
+                    : setEditing({ pull: pull.data!, path, line })
+                }
+              />
+            )}
+          </main>
+        </>
+      )}
       {!!error && (
         <div className="toast error" role="alert">
           <ErrorBox error={error} />
@@ -1164,75 +1061,6 @@ export function Connected({
         </Suspense>
       )}
     </>
-  );
-}
-function InboxList({
-  items,
-  selected,
-  onSelect,
-}: {
-  items: Issue[];
-  selected: PullRef | null;
-  onSelect: (r: PullRef) => void;
-}) {
-  const parent = useRef<HTMLDivElement>(null);
-  const virtual = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parent.current,
-    estimateSize: () => 110,
-    overscan: 5,
-  });
-  return (
-    <div ref={parent} className="inbox-virtual">
-      <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
-        {virtual.getVirtualItems().map((v) => {
-          const pr = items[v.index],
-            repo = pr.repository;
-          return (
-            <button
-              key={pr.id}
-              ref={virtual.measureElement}
-              data-index={v.index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${v.start}px)`,
-              }}
-              className={`pr-item ${selected?.number === pr.number && selected.owner === repo.owner && selected.name === repo.name ? "active" : ""}`}
-              onClick={() =>
-                onSelect({
-                  owner: repo.owner,
-                  name: repo.name,
-                  number: pr.number,
-                })
-              }
-            >
-              <div className="pr-item-top">
-                <span>{repo.full_name}</span>
-                <time>{relativeDate(pr.updated_at)}</time>
-              </div>
-              <div className="pr-item-title">
-                <GitPullRequest size={15} />
-                <strong>{pr.title}</strong>
-              </div>
-              <div className="pr-item-bottom">
-                <span>
-                  #{pr.number} · {pr.user.login}
-                </span>
-                {pr.comments > 0 && (
-                  <span>
-                    <MessageSquare size={12} />
-                    {pr.comments}
-                  </span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 function OpenUrl({

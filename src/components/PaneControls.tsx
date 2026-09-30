@@ -1,34 +1,30 @@
-import { Files, MessageSquare, PanelLeft } from "lucide-react";
+import { Files, MessageSquare, RefreshCw } from "lucide-react";
 import { useShortcutLabel } from "../lib/shortcuts";
 
 export function PaneControls({
-  requestsHidden,
   filesHidden,
-  onToggleRequests,
   onToggleFiles,
+  onRefresh,
   roomOpen,
   onToggleRoom,
 }: {
-  requestsHidden: boolean;
   filesHidden: boolean;
-  onToggleRequests: () => void;
   onToggleFiles: () => void;
+  /** Loads the PR afresh, for new commits and comments. */
+  onRefresh: () => void;
   roomOpen: boolean;
   onToggleRoom?: () => void;
 }) {
-  const requestsKeys = useShortcutLabel("pr-list");
   const filesKeys = useShortcutLabel("review-files");
   return (
-    <div className="pane-controls" role="group" aria-label="Sidebar visibility">
+    <div className="pane-controls" role="group" aria-label="Review panes">
       <button
-        className={`icon-button ${requestsHidden ? "" : "active"}`}
-        aria-label="Toggle pull requests"
-        aria-controls="requests-sidebar"
-        aria-pressed={!requestsHidden}
-        title={`${requestsHidden ? "Show" : "Hide"} pull requests${requestsKeys && ` · ${requestsKeys}`}`}
-        onClick={onToggleRequests}
+        className="icon-button"
+        aria-label="Refresh pull request"
+        title="Refresh pull request"
+        onClick={onRefresh}
       >
-        <PanelLeft size={17} />
+        <RefreshCw size={16} />
       </button>
       <button
         className={`icon-button ${filesHidden ? "" : "active"}`}

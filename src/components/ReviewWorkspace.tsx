@@ -28,7 +28,6 @@ import {
   GitBranch,
   GitPullRequest,
   MessageSquare,
-  Settings2,
   Terminal,
   WrapText,
   UnfoldVertical,
@@ -76,8 +75,6 @@ const fullContextStore = persistedStore(
 );
 
 interface Props {
-  /** Left out where the app's own settings button is already in view. */
-  onSettings?: () => void;
   onDiscuss: (target: QuestionTarget) => void;
   checks: ChecksController;
   pull: Pull;
@@ -99,7 +96,6 @@ interface Props {
   slots?: PaneSlots;
 }
 export function ReviewWorkspace({
-  onSettings,
   onDiscuss,
   checks,
   workspace,
@@ -355,11 +351,6 @@ export function ReviewWorkspace({
                 Finish review{draftCount > 0 && <span>{draftCount}</span>}
                 <ChevronDown size={13} />
               </button>
-              {onSettings && (
-                <IconButton label="Open settings" onClick={onSettings}>
-                  <Settings2 size={16} />
-                </IconButton>
-              )}
             </div>
           </header>
 

@@ -1,5 +1,5 @@
 import { screenshot } from "../fixtures/screenshot";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -82,7 +82,7 @@ test.beforeAll(async () => {
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
   await openInbox(page);
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  await openPull(page, /Make pull request reviews/);
 });
 test.afterAll(async () => {
   await app?.close();

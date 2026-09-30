@@ -1,4 +1,9 @@
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import {
+  openSignIn,
+  openInbox,
+  openPull,
+  pullsNav,
+} from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -28,10 +33,9 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     });
     page = await app.firstWindow();
   };
-  const open = () =>
-    page.getByRole("button", { name: /Make pull request reviews/ }).click();
-  const empty = () =>
-    page.getByRole("heading", { name: "A fresh pair of eyes." });
+  const open = () => openPull(page, /Make pull request reviews/);
+  const board = () =>
+    page.getByRole("heading", { name: "Pull requests", level: 1 });
   try {
     await launch();
     await openSignIn(page!);
@@ -63,7 +67,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     await app!.close();
     const start = fixture.requests.length;
     await launch();
-    await expect(empty()).toBeVisible();
+    await expect(board()).toBeVisible();
     expect(
       fixture.requests
         .slice(start)
@@ -88,7 +92,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
     await expect(page!.locator("diffs-container")).toBeVisible();
     fixture.setPullState("closed");
     await page!.reload();
-    await expect(empty()).toBeVisible();
+    await expect(board()).toBeVisible();
     fixture.setPullState("open", true);
     await open();
     await expect(
@@ -102,14 +106,14 @@ test("finished PRs stay closed on restart, while new commits after an approval r
       )
       .toBe(7);
     await page!.reload();
-    await expect(empty()).toBeVisible();
+    await expect(board()).toBeVisible();
   } finally {
     await app?.close();
     await fixture.close();
   }
 });
 
-test("restores the PR, late-page file and filters across reload/restart; explicit URLs take priority", async () => {
+test("restores the PR, late-page file and the page's search across reload/restart; explicit URLs take priority", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-workspace-"));
   const env = Object.fromEntries(
@@ -144,15 +148,14 @@ test("restores the PR, late-page file and filters across reload/restart; explici
       .click();
     await openInbox(page!);
     await page!
-      .getByRole("button", { name: "Created by me", exact: true })
-      .click();
-    await page!
       .getByRole("textbox", { name: "Search pull requests" })
       .fill("reviews");
-    await page!.getByRole("button", { name: "Closed", exact: true }).click();
-    await page!
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await page!.getByRole("radio", { name: "Closed", exact: true }).click();
+    // The search is saved once it runs, so open the PR from its results.
+    await expect(
+      page!.getByRole("heading", { name: /^Results/ }),
+    ).toBeVisible();
+    await openPull(page!, /Make pull request reviews/);
     await expect(current()).toHaveValue("src/hooks/useReview.ts");
     await page!
       .getByRole("button", { name: "Load more files", exact: true })
@@ -162,7 +165,7 @@ test("restores the PR, late-page file and filters across reload/restart; explici
     await expect.poll(workspace).toEqual({
       pull: { owner: "Web", name: "web-store", number: 7 },
       file: path,
-      filter: "created",
+      filter: "review_requested",
       query: "reviews",
       state: "closed",
     });
@@ -170,15 +173,6 @@ test("restores the PR, late-page file and filters across reload/restart; explici
     await page!.reload();
     await expect(current()).toHaveValue(path);
     await expect(page!.locator("diffs-container")).toBeVisible();
-    await expect(
-      page!.getByRole("textbox", { name: "Search pull requests" }),
-    ).toHaveValue("reviews");
-    await expect(
-      page!.getByRole("button", { name: "Created by me", exact: true }),
-    ).toHaveClass(/selected/);
-    await expect(
-      page!.getByRole("button", { name: "Closed", exact: true }),
-    ).toHaveClass(/active/);
     let raw = fixture.requests
       .slice(start)
       .filter((r) => r.path.includes("/raw/"));
@@ -217,10 +211,16 @@ test("restores the PR, late-page file and filters across reload/restart; explici
         encodeURIComponent(fixture.serverUrl + "/Web/web-store/pulls/20"),
     );
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#20");
+    // Back on the page, its search and state are as they were left.
+    await pullsNav(page!).click();
+    await expect(
+      page!.getByRole("textbox", { name: "Search pull requests" }),
+    ).toHaveValue("reviews");
+    await expect(
+      page!.getByRole("radio", { name: "Closed", exact: true }),
+    ).toHaveAttribute("aria-checked", "true");
     await page!.getByRole("textbox", { name: "Search pull requests" }).fill("");
-    await page!
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page!, /Make pull request reviews/);
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#7");
     await expect.poll(async () => (await workspace()).pull?.number).toBe(7);
     await page!.reload();
@@ -234,9 +234,8 @@ test("restores the PR, late-page file and filters across reload/restart; explici
         encodeURIComponent(fixture.serverUrl + "/Web/web-store/pulls/20"),
     );
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#20");
-    await page!
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await pullsNav(page!).click();
+    await openPull(page!, /Make pull request reviews/);
     await expect.poll(async () => (await workspace()).pull?.number).toBe(7);
     await page!.reload();
     await expect(page!.locator(".breadcrumb .pr-number")).toHaveText("#7");
@@ -298,7 +297,10 @@ test("keeps remembered reviews separate for each account and restores them after
     await openInbox(page);
   };
   const disconnect = async () => {
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("complementary", { name: "Projects" })
+      .getByRole("button", { name: "Open settings", exact: true })
+      .click();
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page
       .getByRole("button", { name: "Disconnect account", exact: true })
@@ -306,9 +308,7 @@ test("keeps remembered reviews separate for each account and restores them after
   };
   try {
     await connect(first.serverUrl);
-    await page
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page, /Make pull request reviews/);
     await page
       .getByRole("combobox", { name: "Current file" })
       .selectOption("src/lib/cache.ts");
@@ -322,9 +322,9 @@ test("keeps remembered reviews separate for each account and restores them after
     await disconnect();
     await connect(second.serverUrl);
     await expect(
-      page.getByRole("heading", { name: "A fresh pair of eyes." }),
+      page.getByRole("heading", { name: "Pull requests", level: 1 }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /Improve session expiry/ }).click();
+    await openPull(page, /Improve session expiry/);
     await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#20");
     await disconnect();
     await connect(first.serverUrl);
@@ -339,7 +339,7 @@ test("keeps remembered reviews separate for each account and restores them after
   }
 });
 
-test("the pull request inbox keeps its place after a visit to projects", async () => {
+test("the Pull requests page keeps its open PR after a visit to a chat", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-inbox-return-"));
   const env = Object.fromEntries(
@@ -364,13 +364,12 @@ test("the pull request inbox keeps its place after a visit to projects", async (
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
     await openInbox(page);
-    await page
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page, /Make pull request reviews/);
     await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#7");
     await page
-      .getByRole("button", { name: "Back to projects", exact: true })
+      .getByRole("button", { name: "Ask anything", exact: true })
       .click();
+    await expect(pullsNav(page)).not.toHaveAttribute("aria-current", "page");
     await openInbox(page);
     await expect(page.locator(".breadcrumb .pr-number")).toHaveText("#7");
     expect(

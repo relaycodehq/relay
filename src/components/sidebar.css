@@ -164,6 +164,12 @@
 .sb .sb-nav-item:hover:not(:disabled) {
   background: var(--hover);
 }
+.sb .sb-nav-item.selected {
+  background: var(--selected);
+}
+.sb .sb-nav-item.selected > svg {
+  color: var(--accent);
+}
 
 .sb-section-heading,
 .sb-view-heading {

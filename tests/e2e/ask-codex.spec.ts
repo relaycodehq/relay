@@ -1,5 +1,5 @@
 import { screenshot } from "../fixtures/screenshot";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -83,7 +83,7 @@ test.beforeAll(async () => {
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
   await openInbox(page);
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  await openPull(page, /Make pull request reviews/);
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
 });
 test.afterAll(async () => {
@@ -155,9 +155,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
     });
   }
   await page.getByRole("button", { name: "Close dialog" }).click();
-  await page
-    .getByRole("button", { name: "Toggle pull requests", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Hide sidebar/ }).click();
   await page
     .getByRole("button", { name: "Toggle changed files", exact: true })
     .click();

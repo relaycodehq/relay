@@ -1,5 +1,5 @@
 import { screenshot } from "../fixtures/screenshot";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -65,7 +65,7 @@ process.stdin.on('end',()=>{
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
   await openInbox(page);
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  await openPull(page, /Make pull request reviews/);
 });
 test.afterAll(async () => {
   await app?.close();
@@ -152,8 +152,8 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     })
     .toBe(2);
   expect(fixture.requests.some((r) => r.method !== "GET")).toBe(false);
+  // The reload reopens the PR being reviewed.
   await page.reload();
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   await expect(
     page.getByRole("button", {
       name: "About Constructor DI → inject()",
@@ -191,7 +191,9 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
   await expect(
     page.getByText("0 of 4 reviewed", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open settings", exact: true })
+    .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
@@ -221,7 +223,7 @@ test("stale groups, cancellation and invalid model output never mark files", asy
   ).toBeVisible();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
-    .getByRole("button", { name: "Refresh pull requests", exact: true })
+    .getByRole("button", { name: "Refresh pull request", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Group changes", exact: true }),

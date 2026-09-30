@@ -1,4 +1,4 @@
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -42,9 +42,7 @@ test("a line comment closed without text leaves no draft behind", async () => {
       .getByRole("button", { name: "Connect to Gitea", exact: true })
       .click();
     await openInbox(page);
-    await page
-      .getByRole("button", { name: /Make pull request reviews/ })
-      .click();
+    await openPull(page, /Make pull request reviews/);
     await expect(current).toHaveValue("src/hooks/useReview.ts");
     for (const typed of ["", "Not this one"]) {
       await page.locator('[data-column-number="20"]').last().click();

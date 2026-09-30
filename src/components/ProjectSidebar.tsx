@@ -442,6 +442,7 @@ export function ProjectSidebar({
   onSettings,
   onAccount,
   onInbox,
+  inbox,
   onAttention,
 }: {
   initialView?: SidebarView;
@@ -465,6 +466,8 @@ export function ProjectSidebar({
   onSettings: (category?: SettingsCategory) => void;
   onAccount: () => void;
   onInbox: () => void;
+  /** The Pull requests page is showing. */
+  inbox?: boolean;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
@@ -1566,7 +1569,12 @@ export function ProjectSidebar({
   const threads = (
     <div className="sb-scroll">
       <nav className="sb-nav">
-        <button className="sb-nav-item" disabled={dirty} onClick={onInbox}>
+        <button
+          className={`sb-nav-item ${inbox ? "selected" : ""}`}
+          aria-current={inbox ? "page" : undefined}
+          disabled={dirty}
+          onClick={onInbox}
+        >
           <GitPullRequest size={15} />
           Pull requests
         </button>

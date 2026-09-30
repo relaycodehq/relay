@@ -1,5 +1,10 @@
 import { screenshot } from "../fixtures/screenshot";
-import { openSignIn, openInbox } from "../fixtures/navigation";
+import {
+  openSignIn,
+  openInbox,
+  openPull,
+  pullsNav,
+} from "../fixtures/navigation";
 import {
   test,
   expect,
@@ -57,29 +62,27 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .fill("test-token");
   await page.getByRole("button", { name: "Connect to Gitea" }).click();
   await openInbox(page);
+  // Waiting on you, it shows as a tile and on its repository's card.
   await expect(
     page.getByRole("button", { name: /Make pull request reviews/ }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: /Web\/web-store\s*Not on this Mac/ }),
   ).toBeVisible();
   expect(fixture.requests.some((r) => r.path.includes("/raw/"))).toBe(false);
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  await openPull(page, /Make pull request reviews/);
   await expect(page.locator("diffs-container")).toBeVisible();
-  const requestsPane = page.getByRole("region", {
-    name: "Pull requests",
-    exact: true,
-  });
+  const sidebarPane = page.getByRole("complementary", { name: "Projects" });
   const filesPane = page.getByRole("region", {
     name: "Changed files",
     exact: true,
   });
   await expect(
-    requestsPane.getByRole("textbox", { name: "Search pull requests" }),
-  ).toBeVisible();
-  await expect(
     filesPane.getByRole("textbox", { name: "Filter files" }),
   ).toBeVisible();
-  const requestsBox = (await requestsPane.boundingBox())!;
+  const sidebarBox = (await sidebarPane.boundingBox())!;
   const filesBox = (await filesPane.boundingBox())!;
-  expect(requestsBox.x + requestsBox.width).toBeLessThanOrEqual(filesBox.x);
+  expect(sidebarBox.x + sidebarBox.width).toBeLessThanOrEqual(filesBox.x);
   expect(filesBox.x + filesBox.width).toBeLessThanOrEqual(
     (await page.getByRole("main").boundingBox())!.x,
   );
@@ -87,7 +90,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .getByRole("button", { name: "Hide changed files", exact: true })
     .click();
   await expect(filesPane).toHaveCount(0);
-  await expect(requestsPane).toBeVisible();
+  await expect(sidebarPane).toBeVisible();
   await page
     .getByRole("button", { name: "Toggle changed files", exact: true })
     .click();
@@ -119,15 +122,17 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect(
     page.getByRole("button", { name: "Saved locally" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Improve session expiry/ }).click();
+  await pullsNav(page).click();
+  await openPull(page, /Improve session expiry/);
   await expect(page.locator("diffs-container")).toBeVisible();
   await expect(page.getByText("0 of 72 reviewed")).toBeVisible();
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  await pullsNav(page).click();
+  await openPull(page, /Make pull request reviews/);
   await expect(
     page.getByRole("heading", { name: "One file closer." }),
   ).toBeVisible();
+  // The reload reopens the PR being reviewed.
   await page.reload();
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   await expect(
     page.getByRole("heading", { name: "One file closer." }),
   ).toBeVisible();
@@ -190,7 +195,9 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect(
     page.getByRole("heading", { name: "Binary or Git LFS file" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await sidebarPane
+    .getByRole("button", { name: "Open settings", exact: true })
+    .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
@@ -207,15 +214,15 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
 });
 
 test("navigation, file pagination, stale reviews and line bookmarks", async () => {
-  await page
-    .getByRole("button", { name: "Assigned to me", exact: true })
-    .click();
+  // The board asks for what's assigned to you along with review requests.
+  await pullsNav(page).click();
   await expect
     .poll(() => fixture.requests.some((r) => r.query.assigned === "true"))
     .toBe(true);
   await page
     .getByRole("textbox", { name: "Search pull requests" })
     .fill("session");
+  await expect(page.getByRole("heading", { name: /^Results/ })).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Improve session expiry/ }),
   ).toBeVisible();
@@ -223,7 +230,7 @@ test("navigation, file pagination, stale reviews and line bookmarks", async () =
     page.getByRole("button", { name: /Make pull request reviews/ }),
   ).toHaveCount(0);
   await page.getByRole("textbox", { name: "Search pull requests" }).fill("");
-  await page.getByRole("button", { name: "Open PR by URL ⌘K" }).click();
+  await page.getByRole("button", { name: "Open by URL", exact: true }).click();
   await page
     .getByLabel("Gitea pull request URL")
     .fill(fixture.serverUrl + "/Web/web-store/pulls/7/files");
@@ -273,7 +280,7 @@ test("navigation, file pagination, stale reviews and line bookmarks", async () =
     ).length,
   ).toBe(before);
   await page.getByRole("button", { name: "Keep reviewing" }).click();
-  await page.getByRole("button", { name: "Refresh pull requests" }).click();
+  await page.getByRole("button", { name: "Refresh pull request" }).click();
   await expect(page.getByText("0 of 72 reviewed")).toBeVisible();
   await page.getByRole("button", { name: "Unified diff" }).click();
   await expect(page.locator("diffs-container")).toBeVisible();
@@ -304,8 +311,8 @@ test("viewed advances across file pages, skips read files and stops at completio
     await window.relay.saveProgress(ref, progress);
     return files.map((f) => f.filename);
   }, ref);
+  // The reload reopens the PR being reviewed.
   await page.reload();
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   // Set in the previous test; both outlive the reload.
   const fullContext = page.getByRole("button", {
     name: "Show unchanged lines",
@@ -347,7 +354,7 @@ test("viewed advances across file pages, skips read files and stops at completio
 test("a push unmarks only the viewed files it changed", async () => {
   fixture.setPushed(["src/lib/cache.ts"]);
   fixture.setHead("d".repeat(40));
-  await page.getByRole("button", { name: "Refresh pull requests" }).click();
+  await page.getByRole("button", { name: "Refresh pull request" }).click();
   await expect(page.getByText("71 of 72 reviewed")).toBeVisible();
   await page.getByRole("textbox", { name: "Filter files" }).fill("cache.ts");
   await expect(
@@ -465,14 +472,10 @@ test("Codex handoff validates the checkout and safely carries the comment", asyn
   ).rejects.toThrow("different commit");
 });
 
-test("sidebars hide independently, preserve the review and remain recoverable after reload", async () => {
-  const workspace = page.getByRole("complementary", { name: "Workspace" });
+test("the app's sidebar and the file list hide independently, keep the review and come back after reload", async () => {
+  const sidebar = page.locator(".projects-sidebar");
   const files = page.getByRole("region", {
     name: "Changed files",
-    exact: true,
-  });
-  const requestsToggle = page.getByRole("button", {
-    name: "Toggle pull requests",
     exact: true,
   });
   const filesToggle = page.getByRole("button", {
@@ -488,11 +491,8 @@ test("sidebars hide independently, preserve the review and remain recoverable af
     },
     { owner: "Web", name: "web-store", number: 7 },
   );
+  // The reload reopens the PR being reviewed.
   await page.reload();
-  await page
-    .getByRole("button", { name: "Needs my review", exact: true })
-    .click();
-  await page.getByRole("button", { name: /Make pull request reviews/ }).click();
   const currentFile = page.getByRole("combobox", { name: "Current file" });
   await currentFile.selectOption("src/hooks/useReview.ts");
   await expect(currentFile).toHaveValue("src/hooks/useReview.ts");
@@ -504,12 +504,9 @@ test("sidebars hide independently, preserve the review and remain recoverable af
     r.path.includes("/raw/"),
   ).length;
 
-  await page
-    .getByRole("button", { name: "Hide pull requests", exact: true })
-    .click();
-  await expect(workspace).toHaveCount(0);
+  await page.getByRole("button", { name: /^Hide sidebar/ }).click();
+  await expect(sidebar).toHaveClass(/overlay/);
   await expect(files).toBeVisible();
-  await expect(requestsToggle).toHaveAttribute("aria-pressed", "false");
   expect((await files.boundingBox())!.x).toBe(0);
   expect((await files.boundingBox())!.width).toBe(filesWidth);
   await screenshot(page, { path: join(screenshots, "06-files-only.png") });
@@ -518,7 +515,6 @@ test("sidebars hide independently, preserve the review and remain recoverable af
     .getByRole("button", { name: "Hide changed files", exact: true })
     .click();
   await expect(files).toHaveCount(0);
-  await expect(workspace).toHaveCount(0);
   await expect(filesToggle).toHaveAttribute("aria-pressed", "false");
   await expect(currentFile).toHaveValue(path);
   expect((await page.getByRole("main").boundingBox())!.width).toBeGreaterThan(
@@ -531,27 +527,12 @@ test("sidebars hide independently, preserve the review and remain recoverable af
 
   await page.reload();
   await expect(currentFile).toHaveValue(path);
-  await expect(workspace).toHaveCount(0);
   await expect(files).toHaveCount(0);
-  await expect(requestsToggle).toBeVisible();
-  await expect(filesToggle).toBeVisible();
-  await page.keyboard.press(`${modifier}+f`);
-  await expect(workspace).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Search pull requests" }),
-  ).toBeFocused();
-  await expect(files).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "All pull requests", exact: true })
-    .click();
-  await expect(files).toHaveCount(0);
-  await page.keyboard.press(`${modifier}+Shift+b`);
-  await expect(workspace).toHaveCount(0);
+  await expect(sidebar).toHaveClass(/overlay/);
   await page.keyboard.press(`${modifier}+b`);
+  await expect(sidebar).not.toHaveClass(/overlay/);
+  await expect(files).toHaveCount(0);
+  await page.keyboard.press(`${modifier}+Alt+b`);
   await expect(files).toBeVisible();
-  await expect(workspace).toHaveCount(0);
-  await requestsToggle.click();
-  await expect(workspace).toBeVisible();
   await expect(filesToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(requestsToggle).toHaveAttribute("aria-pressed", "true");
 });

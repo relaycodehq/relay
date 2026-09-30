@@ -194,11 +194,6 @@ export const shortcutCommands = {
     keywords: "link",
     defaults: one("mod+KeyK"),
   },
-  "pr-list": {
-    title: "Show or hide pull requests",
-    group: "Reviews",
-    defaults: one("mod+shift+KeyB"),
-  },
   save: {
     title: "Save the open file",
     group: "Editor",
