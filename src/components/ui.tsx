@@ -21,8 +21,10 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
+import { looksLikeColor } from "../lib/color-value";
 import { useCopy } from "../lib/useCopy";
 import { CodeBlock } from "./CodeBlock";
+import { ColorCode } from "./ColorCode";
 import {
   projectFileLink,
   type ProjectFileLink,
@@ -471,6 +473,8 @@ export const RichText = memo(function RichText({
         const value = String(children).trim();
         const shown = className ? undefined : inlineCode?.(value);
         if (shown) return shown;
+        if (!className && looksLikeColor(value) && CSS.supports("color", value))
+          return <ColorCode value={value} />;
         const target =
           !className && projectRoot && linksFiles && !value.includes("\n")
             ? projectFileLink(value, projectRoot, true)

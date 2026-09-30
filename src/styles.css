@@ -893,6 +893,47 @@ small {
   padding: 2px 4px;
   border-radius: 4px;
 }
+.color-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* Colours sit over a checkerboard so alpha reads, and an inset ring keeps
+   one close to the background from vanishing. */
+.color-code-swatch,
+.color-code-big {
+  background:
+    linear-gradient(var(--swatch), var(--swatch)),
+    repeating-conic-gradient(#8884 0% 25%, transparent 0% 50%) 0 0 / 6px 6px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+.color-code-swatch {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  border-radius: 3px;
+}
+.color-code-big {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  background-size:
+    auto,
+    12px 12px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent),
+    0 12px 30px -12px #0009;
+  outline: none;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+.color-code-big[data-starting-style],
+.color-code-big[data-ending-style] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.6);
+}
 .markdown pre {
   overflow: auto;
   padding: 12px;
