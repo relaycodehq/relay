@@ -21,6 +21,7 @@ import {
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useRef, useState } from "react";
+import { keys, modOnly } from "../lib/mod-key";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -75,6 +76,9 @@ import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
+/** How close to the window's left edge the pointer peeks a hidden sidebar. */
+const EDGE_PEEK_WIDTH = 12;
+
 export default function ProjectShell() {
   const qc = useQueryClient();
   const boot = useQuery({
@@ -129,7 +133,61 @@ export default function ProjectShell() {
     window.clearTimeout(peekTimer.current);
     peekTimer.current = window.setTimeout(() => setPeek(false), 250);
   };
+  const toggleProjects = () => {
+    window.clearTimeout(peekTimer.current);
+    setPeek(false);
+    autoHidden.current = false;
+    setProjectsHidden((v) => !v);
+  };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Resting the pointer along the window's left edge peeks it too. It's
+  // watched rather than covered, so the edge still takes clicks and
+  // selections; the short dwell keeps a pointer flung past it, or a drag,
+  // from opening it.
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const edgePeekOn = projectsHidden && !legacy && !peek;
+  useEffect(() => {
+    if (!edgePeekOn) return;
+    let timer: number | undefined;
+    const cancel = () => {
+      window.clearTimeout(timer);
+      timer = undefined;
+    };
+    const onMove = (e: MouseEvent) => {
+      const top = layoutRef.current?.getBoundingClientRect().top ?? 0;
+      if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
+        return cancel();
+      timer ??= window.setTimeout(() => {
+        if (document.querySelector('dialog[open], [role="dialog"]')) return;
+        peekFromEdge.current = true;
+        setPeek(true);
+      }, 150);
+    };
+    window.addEventListener("mousemove", onMove);
+    document.documentElement.addEventListener("mouseleave", cancel);
+    return () => {
+      cancel();
+      window.removeEventListener("mousemove", onMove);
+      document.documentElement.removeEventListener("mouseleave", cancel);
+    };
+  }, [edgePeekOn]);
+  // The sidebar slides in under a pointer that hasn't entered it, so its own
+  // mouseleave can't close it; until the pointer gets in, leaving the edge does.
+  const peekFromEdge = useRef(false);
+  useEffect(() => {
+    if (!peek || !peekFromEdge.current) return;
+    peekFromEdge.current = false;
+    const onMove = (e: MouseEvent) => {
+      const inside =
+        e.target instanceof Node && asideRef.current?.contains(e.target);
+      if (!inside && e.clientX <= EDGE_PEEK_WIDTH) return;
+      if (!inside) peekClose();
+      window.removeEventListener("mousemove", onMove);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [peek]);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const panes = useWorkspacePanes();
@@ -316,6 +374,18 @@ export default function ProjectShell() {
       if (isToggleShortcut(e)) {
         e.preventDefault();
         toggleTerminalRef.current();
+      }
+      if (
+        modOnly(e) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.repeat &&
+        e.code === "KeyB" &&
+        !legacy &&
+        !document.querySelector('dialog[open], [role="dialog"]')
+      ) {
+        e.preventDefault();
+        toggleProjects();
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
@@ -608,15 +678,10 @@ export default function ProjectShell() {
           <button
             type="button"
             className="relay-brand-toggle"
-            title="Toggle projects"
+            title={`Toggle projects · ${keys("⌘B", "Ctrl+B")}`}
             aria-label="Toggle projects"
             aria-pressed={!projectsHidden}
-            onClick={() => {
-              window.clearTimeout(peekTimer.current);
-              setPeek(false);
-              autoHidden.current = false;
-              setProjectsHidden((v) => !v);
-            }}
+            onClick={toggleProjects}
             onMouseEnter={peekOpen}
             onMouseLeave={peekClose}
           >
@@ -766,8 +831,9 @@ export default function ProjectShell() {
           </IconButton>
         )}
       </header>
-      <div className="project-layout">
+      <div className="project-layout" ref={layoutRef}>
         <aside
+          ref={asideRef}
           className={`projects-sidebar ${projectsHidden ? "overlay" : ""} ${peek ? "peek" : ""}`}
           aria-label="Projects"
           aria-hidden={projectsHidden && !peek ? true : undefined}

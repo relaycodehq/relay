@@ -33,7 +33,7 @@ export function PaneControls({
         aria-label="Toggle changed files"
         aria-controls="files-sidebar"
         aria-pressed={!filesHidden}
-        title={`${filesHidden ? "Show" : "Hide"} changed files · ${keys("⌘B", "Ctrl+B")}`}
+        title={`${filesHidden ? "Show" : "Hide"} changed files · ${keys("⌥⌘B", "Ctrl+Alt+B")}`}
         onClick={onToggleFiles}
       >
         <Files size={17} />

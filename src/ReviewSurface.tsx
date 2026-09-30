@@ -639,10 +639,15 @@ export function Connected({
         setRequestsHidden(false);
         requestAnimationFrame(() => searchRef.current?.focus());
       }
-      if (key === "b" && !e.repeat) {
-        e.preventDefault();
-        if (e.shiftKey) setRequestsHidden((v) => !v);
-        else setFilesHidden((v) => !v);
+      // In a thread, plain ⌘B belongs to the projects sidebar.
+      if (e.code === "KeyB" && !e.repeat) {
+        if (e.shiftKey) {
+          e.preventDefault();
+          setRequestsHidden((v) => !v);
+        } else if (e.altKey || !embedded) {
+          e.preventDefault();
+          setFilesHidden((v) => !v);
+        }
       }
     };
     window.addEventListener("keydown", handler);
