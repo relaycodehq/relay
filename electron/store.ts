@@ -16,6 +16,7 @@ interface State {
   projectTitlesTidied?: true;
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */
   projectGroupsOrdered?: true;
+  sidebarView?: import("../shared/types").SidebarView;
   chats?: import("../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;

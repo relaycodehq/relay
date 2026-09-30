@@ -174,6 +174,7 @@ const methods = [
   "askAboutLines",
   "aiSettings",
   "saveAISettings",
+  "saveSidebarView",
   "newThreadAgent",
   "saveNewThreadAgent",
   "newThreadModels",

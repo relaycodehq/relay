@@ -77,6 +77,12 @@ export function settingsHandlers(ctx: ApiContext) {
     setLinkedAgents(store.get().agentPaths ?? {});
   }
   return {
+    saveSidebarView: async (args) => {
+      const view = z.enum(["threads", "activity"]).parse(args[0]);
+      await store.update((s) => {
+        s.sidebarView = view;
+      });
+    },
     aiSettings: () => store.aiSettings(),
     saveAISettings: async (args) => {
       const settings = aiSettingsSchema.parse(args[0]);

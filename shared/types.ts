@@ -180,11 +180,14 @@ export interface LocalFolder {
   dirty: boolean;
   remoteMatches: boolean;
 }
+export type SidebarView = "threads" | "activity";
 export interface Bootstrap {
   account: Account | null;
   platform: string;
   loginRestore: "idle" | "unlocking" | "failed";
   savedServer?: string;
+  /** Last sidebar view, kept in app data so it survives updates. */
+  sidebarView?: SidebarView;
   pendingUrl?: string;
   workspace: WorkspaceState;
 }
@@ -258,6 +261,7 @@ export interface Api
   ): Promise<string[]>;
   aiSettings(): Promise<AISettings>;
   saveAISettings(settings: AISettings): Promise<AISettings>;
+  saveSidebarView(view: SidebarView): Promise<void>;
   /** The agent last picked for a new thread, here or on the phone; null before either has. */
   newThreadAgent(): Promise<AgentProvider | null>;
   saveNewThreadAgent(provider: AgentProvider): Promise<void>;

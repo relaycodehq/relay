@@ -46,6 +46,7 @@ export function accountHandlers(ctx: ApiContext) {
         platform: process.platform,
         loginRestore: login.restore,
         savedServer: store.get().account?.server,
+        sidebarView: store.get().sidebarView,
         pendingUrl: links.take(),
         workspace: workspaceSchema.parse(
           (client && store.get().workspaces?.[client.account.id]) ??

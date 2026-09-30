@@ -848,6 +848,7 @@ export default function ProjectShell() {
         >
           <PaneResizer pane="sidebar" initial={250} min={210} max={360} />
           <ProjectSidebar
+            initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
             projectId={project?.id}
             chatId={chat?.id}

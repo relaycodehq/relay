@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "../lib/useNow";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { Bootstrap, SidebarView } from "../../shared/types";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
@@ -47,7 +53,7 @@ import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { api } from "../lib/api";
 import { keys, mac, modHeld, modKey, modOnly } from "../lib/mod-key";
 import { useWindowFocused } from "../lib/window-focus";
-import { IconButton, Spinner } from "./ui";
+import { ErrorBox, IconButton, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
@@ -431,6 +437,7 @@ function GroupNameInput({
 }
 
 export function ProjectSidebar({
+  initialView,
   projects,
   projectId,
   chatId,
@@ -448,6 +455,7 @@ export function ProjectSidebar({
   onInbox,
   onAttention,
 }: {
+  initialView?: SidebarView;
   projects: Project[];
   projectId?: string;
   chatId?: string;
@@ -479,12 +487,31 @@ export function ProjectSidebar({
   const [search, setSearch] = useState("");
   /** The query whose results are listed past the first SEARCH_RESULTS. */
   const [allResultsFor, setAllResultsFor] = useState<string>();
-  const [view, setView] = useState<"threads" | "activity">(() =>
-    localStorage.getItem("relay-sidebar-view") === "activity"
-      ? "activity"
-      : "threads",
-  );
-  useEffect(() => localStorage.setItem("relay-sidebar-view", view), [view]);
+  const [view, setView] = useState<SidebarView>(() => {
+    if (initialView) return initialView;
+    // Preserve the selection from versions that only used browser storage.
+    try {
+      if (localStorage.getItem("relay-sidebar-view") === "activity")
+        return "activity";
+    } catch {
+      // App data remains usable when browser storage isn't.
+    }
+    return "threads";
+  });
+  const { mutate: saveView, error: viewError } = useMutation({
+    mutationFn: (next: SidebarView) => api.saveSidebarView(next),
+    onSuccess: (_, sidebarView) => {
+      qc.setQueryData<Bootstrap>(["bootstrap"], (boot) =>
+        boot ? { ...boot, sidebarView } : boot,
+      );
+      try {
+        localStorage.removeItem("relay-sidebar-view");
+      } catch {
+        // The choice has already been saved in app data.
+      }
+    },
+  });
+  useEffect(() => saveView(view), [view, saveView]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       Object.entries(
@@ -1667,6 +1694,7 @@ export function ProjectSidebar({
         </button>
       </div>
       {query ? searching : view === "activity" ? activity : threads}
+      {viewError && <ErrorBox error={viewError} />}
       <div className="sb-footer">
         <button className="sb-account" onClick={onAccount}>
           <span className="sb-avatar" aria-hidden>
