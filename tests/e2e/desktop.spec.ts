@@ -306,6 +306,16 @@ test("viewed advances across file pages, skips read files and stops at completio
   }, ref);
   await page.reload();
   await page.getByRole("button", { name: /Make pull request reviews/ }).click();
+  // Set in the previous test; both outlive the reload.
+  const fullContext = page.getByRole("button", {
+    name: "Show unchanged lines",
+  });
+  await expect(fullContext).toHaveAttribute("aria-pressed", "true");
+  await fullContext.click();
+  await expect(page.getByRole("button", { name: "Unified diff" })).toHaveClass(
+    /active/,
+  );
+  await page.getByRole("button", { name: "Side by side diff" }).click();
   const currentFile = page.getByRole("combobox", { name: "Current file" });
   await currentFile.selectOption(paths[49]);
   await expect(

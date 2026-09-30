@@ -55,10 +55,20 @@ import {
   relativeDate,
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
+import { useSplitDiff } from "./WorkingDiff";
 import { useElementWidth } from "../lib/useElementWidth";
 import { useTypography } from "../lib/typography";
+import { persistedStore } from "../lib/persisted-store";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
+
+// Shared by every review and kept across restarts.
+const fullContextStore = persistedStore(
+  "relay-review-full-context",
+  (saved) => saved === "true",
+  (on) => String(on),
+);
+
 interface Props {
   /** Left out where the app's own settings button is already in view. */
   onSettings?: () => void;
@@ -108,10 +118,10 @@ export function ReviewWorkspace({
   } | null>(null);
   // The typography setting picks how diffs open; the toolbar flips it.
   const { wrap: wrapByDefault } = useTypography();
+  const fullContext = fullContextStore.use();
+  const [split, setSplit] = useSplitDiff();
   const [tab, setTab] = useState<"files" | "conversation" | "local">("files"),
-    [chosenLayout, setLayout] = useState<"split" | "unified">("split"),
     [wrap, setWrap] = useState(wrapByDefault),
-    [fullContext, setFullContext] = useState(false),
     [reviewOpen, setReviewOpen] = useState(false),
     [draftsOpen, setDraftsOpen] = useState(false),
     [folderOpen, setFolderOpen] = useState(false),
@@ -132,7 +142,7 @@ export function ReviewWorkspace({
   const tabsRef = useRef<HTMLDivElement>(null),
     width = useElementWidth(tabsRef),
     narrow = !!width && width < 480,
-    layout = narrow ? "unified" : chosenLayout;
+    layout = narrow || !split ? "unified" : "split";
   useEffect(() => setExpandedRead(null), [file?.filename]);
   const reviews = useInfiniteQuery({
     queryKey: ["reviews", pull.owner, pull.name, pull.number, pull.head.sha],
@@ -462,14 +472,14 @@ export function ReviewWorkspace({
                       ? "Widen this pane for a side-by-side diff"
                       : undefined
                   }
-                  onClick={() => setLayout("split")}
+                  onClick={() => setSplit(true)}
                 >
                   Split
                 </button>
                 <button
                   aria-label="Unified diff"
                   className={layout === "unified" ? "active" : ""}
-                  onClick={() => setLayout("unified")}
+                  onClick={() => setSplit(false)}
                 >
                   Unified
                 </button>
@@ -477,7 +487,7 @@ export function ReviewWorkspace({
               <IconButton
                 label="Show unchanged lines"
                 active={fullContext}
-                onClick={() => setFullContext((v) => !v)}
+                onClick={() => fullContextStore.set(!fullContext)}
               >
                 <UnfoldVertical size={16} />
               </IconButton>

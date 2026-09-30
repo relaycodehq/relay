@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useStoredFlag } from "../lib/useStoredFlag";
+import { persistedStore } from "../lib/persisted-store";
 import { useElementWidth } from "../lib/useElementWidth";
 import type {
   CodeViewDiffItem,
@@ -26,8 +26,13 @@ export interface WorkingLineTarget {
   code: string;
 }
 type Viewer = CodeViewHandle<undefined, undefined>;
-/** Side-by-side or inline diffs, remembered across diff panes. */
-export const useSplitDiff = () => useStoredFlag("relay-diff-split", true);
+const splitDiff = persistedStore(
+  "relay-diff-split",
+  (saved) => saved !== "false",
+  (split) => String(split),
+);
+/** Side-by-side or inline diffs, shared by every diff and kept across restarts. */
+export const useSplitDiff = () => [splitDiff.use(), splitDiff.set] as const;
 export function SplitDiffToggle({
   split,
   onChange,
