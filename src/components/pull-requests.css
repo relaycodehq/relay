@@ -498,7 +498,8 @@
 }
 
 .pulls-quiet {
-  margin: 14px 2px 0;
+  margin-top: 14px;
+  padding: 0 2px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -516,7 +517,8 @@
 }
 .pulls-note,
 .pulls-none {
-  margin: 22px 2px 0;
+  margin-top: 22px;
+  padding: 0 2px;
   font-size: 12.5px;
   color: var(--muted);
 }
