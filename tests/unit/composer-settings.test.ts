@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   composerProvider,
   loadComposerSettings,
-  resetComposerModels,
+  rememberSentModel,
   saveComposerSettings,
   saveSentSettings,
   startThreadSettings,
@@ -113,31 +113,45 @@ it("falls back to defaults for anything unreadable", () => {
   });
 });
 
-it("starts the next new thread on Default, keeping the agent and modes", () => {
-  saveComposerSettings("new:project", {
-    provider: "claude",
+it("starts every new thread on the model last picked or sent with", () => {
+  const settings = {
+    provider: "claude" as const,
+    choice: sol,
+    claude: {
+      model: "claude-fable-5-1[1m]",
+      reasoningEffort: "xhigh" as const,
+    },
+    picks: {},
+    runtimeMode: "auto" as const,
+    interactionMode: "plan" as const,
+    ultraplan: false,
+    council: "angles" as const,
+  };
+  saveComposerSettings("new:a", settings);
+  // Another project's new thread picks up the models, not the modes.
+  expect(loadComposerSettings("new:b")).toMatchObject({
+    provider: undefined,
     choice: sol,
     claude: { model: "claude-fable-5-1[1m]", reasoningEffort: "xhigh" },
-    picks: {},
-    runtimeMode: "auto",
-    interactionMode: "plan",
-    ultraplan: true,
-    council: "same",
+    interactionMode: "default",
   });
-  resetComposerModels("new:project");
-  expect(loadComposerSettings("new:project")).toEqual({
-    provider: "claude",
-    choice: undefined,
+  // A thread's own settings stay its own.
+  saveComposerSettings("thread", {
+    ...settings,
     claude: { model: "", reasoningEffort: "" },
-    picks: {},
-    runtimeMode: "auto",
-    interactionMode: "plan",
-    ultraplan: true,
-    council: "same",
   });
-  // Nothing saved yet stays that way.
-  resetComposerModels("new:other");
-  expect(store.has("composer-settings:new:other")).toBe(false);
+  expect(loadComposerSettings("new:b").claude.model).toBe(
+    "claude-fable-5-1[1m]",
+  );
+  // Sending anywhere moves that agent's model; the others keep theirs.
+  rememberSentModel({
+    provider: "claude",
+    choice: { model: "opus", fast: false, reasoningEffort: "max" },
+  });
+  expect(loadComposerSettings("new:a")).toMatchObject({
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max" },
+  });
 });
 
 it("keeps Ultraplan and its council, and reads anything else as off", () => {
@@ -207,12 +221,11 @@ it("starts a thread on the agent its first message went to", () => {
     picks: {},
     interactionMode: "plan",
   });
-  // The new-thread composer keeps following the default.
+  // The new-thread composer keeps following the default agent, on its models.
   expect(loadComposerSettings("new:project")).toMatchObject({
     provider: undefined,
-    choice: undefined,
-    claude: { model: "" },
-    picks: {},
+    choice: sol,
+    claude: { model: "opus" },
   });
 });
 

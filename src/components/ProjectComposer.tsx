@@ -45,6 +45,7 @@ import {
   isPickAgent,
   loadComposerSettings,
   pickAgents,
+  rememberSentModel,
   saveComposerSettings,
 } from "../lib/composer-settings";
 import { useAgentPicks } from "../lib/useAgentPicks";
@@ -1129,7 +1130,12 @@ export function ProjectComposer({
       if (!sent) {
         outgoing.restore();
         if (councilOn) setUltraplan(true);
-      }
+      } else if (recipient !== "message")
+        rememberSentModel({
+          provider: recipient,
+          choice: choiceFor(recipient)!,
+          ...contextFor(recipient),
+        });
       if (sent && images.length) {
         try {
           await saveDraftImages(draftKey, []);
