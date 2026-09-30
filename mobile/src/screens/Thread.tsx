@@ -561,6 +561,14 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
             ) : null
           }
           contentContainerStyle={styles.list}
+          // New messages and a growing answer land at offset 0, the visual
+          // bottom of the inverted list. Without this, everything you were
+          // reading shifts away; with it the anchor holds still, and within
+          // 80px of the bottom the list follows, as the desktop does.
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+            autoscrollToTopThreshold: 80,
+          }}
           // Reading back or tapping an answer puts the keyboard away. Android
           // has no "interactive" mode, which left it open there.
           keyboardDismissMode="on-drag"
