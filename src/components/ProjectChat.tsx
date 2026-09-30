@@ -626,6 +626,9 @@ export function ProjectChat({
       return applyChatPatch(patch, previous);
     },
     enabled: !!chat,
+    // Events for a thread that isn't open are ignored, so a cached copy can
+    // still say "streaming" after the answer ended; the patch is cheap.
+    refetchOnMount: "always",
     refetchInterval: (query) =>
       chat?.shared
         ? 2000
