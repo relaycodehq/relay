@@ -20,8 +20,6 @@ export function desktopHandlers(ctx: ApiContext) {
         .object({
           mode: z.enum(["system", "light", "dark"]),
           background: z.string().regex(/^#[0-9a-f]{6}$/i),
-          titlebar: z.string().regex(/^#[0-9a-f]{6}$/i),
-          titlebarText: z.string().regex(/^#[0-9a-f]{6}$/i),
           icon: z
             .string()
             .max(2_000_000)
@@ -35,17 +33,22 @@ export function desktopHandlers(ctx: ApiContext) {
       // prefers-color-scheme, so it could never see the OS go dark again.
       nativeTheme.themeSource = appearance.mode;
       win?.setBackgroundColor(appearance.background);
-      // The window controls sit on the titlebar, so they wear its colours.
-      if (process.platform === "linux")
-        win?.setTitleBarOverlay({
-          color: appearance.titlebar,
-          symbolColor: appearance.titlebarText,
-        });
       const icon = nativeImage.createFromDataURL(appearance.icon);
       if (!icon.isEmpty()) {
         if (process.platform === "darwin") app.dock?.setIcon(icon);
         else win?.setIcon(icon);
       }
+    },
+    tintTitleBar: (args) => {
+      const colors = z
+        .object({
+          color: z.string().regex(/^#[0-9a-f]{6}$/i),
+          symbolColor: z.string().regex(/^#[0-9a-f]{6}$/i),
+        })
+        .strict()
+        .parse(args[0]);
+      // Only Linux uses the native overlay for its window controls.
+      if (process.platform === "linux") window.win?.setTitleBarOverlay(colors);
     },
     setInterfaceScale: (args) => {
       const scale = z.number().min(0.5).max(2).parse(args[0]);

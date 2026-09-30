@@ -15,6 +15,7 @@ import {
   type ThemeKind,
 } from "./themes";
 import { relayIconPng } from "./relay-icon";
+import { setTitleBarBase } from "./titlebar-tint";
 import type { PhonePalette } from "../../shared/remote";
 
 let value: Appearance = loadAppearance();
@@ -44,12 +45,11 @@ async function syncNative(current: ResolvedAppearance) {
       dark: phonePalette(resolveChoice("dark", value.dark)),
     })
     .catch(() => {});
+  setTitleBarBase(current.palette.surface, current.palette.text);
   try {
     await window.relay.applyAppearance({
       mode: value.mode,
       background: current.palette.sidebar,
-      titlebar: current.palette.surface,
-      titlebarText: current.palette.text,
       icon: await relayIconPng(current.accent),
     });
   } catch {
