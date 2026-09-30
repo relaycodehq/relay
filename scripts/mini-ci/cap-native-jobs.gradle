@@ -1,0 +1,14 @@
+// Caps every native module's CMake build at two jobs. Ninja otherwise runs one
+// compiler per core in each module Gradle builds at once, and the release
+// build's C++ took the mini to a load of 18 with its memory gone.
+allprojects {
+  ['com.android.library', 'com.android.application'].each { id ->
+    plugins.withId(id) {
+      android.defaultConfig.externalNativeBuild.cmake.arguments(
+        '-DCMAKE_JOB_POOLS=relay=2',
+        '-DCMAKE_JOB_POOL_COMPILE=relay',
+        '-DCMAKE_JOB_POOL_LINK=relay',
+      )
+    }
+  }
+}

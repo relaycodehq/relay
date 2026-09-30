@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists/PLIST-1.0.dtd">
+<!-- Niced with low-priority disk access: the mini's services always come
+     first. Not the Background process type: pinned to the efficiency cores,
+     timing-sensitive tests fail. release.sh caps each step's parallelism. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.relay.ci</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>HOME_DIR/relay-ci.noindex/bin/poll.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>LowPriorityIO</key>
+  <true/>
+  <key>Nice</key>
+  <integer>15</integer>
+  <key>StandardOutPath</key>
+  <string>HOME_DIR/relay-ci.noindex/logs/poll.log</string>
+  <key>StandardErrorPath</key>
+  <string>HOME_DIR/relay-ci.noindex/logs/poll.log</string>
+</dict>
+</plist>

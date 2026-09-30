@@ -30,7 +30,11 @@ Source layout: `electron/` owns credentials, API calls, disk and process access;
 
 ## Releases and automatic updates
 
-Every push to `main` runs `.github/workflows/release.yml`. It tests, builds macOS (arm64 `.dmg` and `.zip`), Windows (x64 NSIS installer) and Linux (x86-64 AppImage and the Omarchy bundle), and publishes them as `v<major>.<minor>.<run number>` to the public [relay-releases](https://github.com/lubomirmolin/relay-releases) repository, together with `latest.json`. The source repository stays private. Publishing needs a `RELEASES_TOKEN` secret: a fine-grained token with *Contents: read and write* on `relay-releases` only. To bump the major or minor version, change `version` in `package.json`.
+Every push to `main` is released from a Mac mini (`scripts/mini-ci/`), not GitHub Actions. A launchd job polls `main` every minute and runs `release.sh` niced, with each step's parallelism capped: it tests, builds macOS (arm64 `.dmg` and `.zip`), Windows (x64 NSIS installer, made on macOS) and Linux (x86-64 AppImage and the Omarchy bundle, in an x64 Docker container), rebuilds the APK only when the phone app's native side changed, and publishes them as `v<major>.<minor>.<patch>` to the public [relay-releases](https://github.com/lubomirmolin/relay-releases) repository, together with `latest.json`. The patch is one past the newest release. The source repository stays private. Publishing reads a fine-grained token with *Contents: read and write* on `relay-releases` only from `~/.config/relay-ci/releases-token` on the mini. To bump the major or minor version, change `version` in `package.json`.
+
+Each build reports on its commit as the `Release` commit status, which GitHub and Relay's CI indicator show: pending while it builds, then a link to the release, or on failure to its log in the `ci-logs` draft release (drafts are visible to collaborators only). The token also needs *Commit statuses: read and write* on this repository for that.
+
+`scripts/mini-ci/install.sh` copies the scripts over and reloads the job. Build logs are in `~/relay-ci.noindex/logs`; a failed commit isn't retried until `~/relay-ci.noindex/state/failed` is deleted or a newer commit lands. `release.sh <commit> --dry-run` builds without publishing.
 
 Installed apps fetch `latest.json` every four hours (`electron/updater.ts`). When a newer version is out, an **Update** button appears in the sidebar footer. It downloads the file for the current install, checks its SHA-512, and switches over on **Restart**:
 

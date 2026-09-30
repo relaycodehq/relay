@@ -1,5 +1,5 @@
 name: Checks
-# Pull requests and feature branches. Pushes to main run the same checks in release.yml.
+# Pull requests and feature branches. Pushes to main are tested by the Mac mini release (scripts/mini-ci).
 on:
   pull_request:
   push:
