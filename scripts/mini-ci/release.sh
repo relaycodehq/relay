@@ -170,8 +170,9 @@ else
     export RELAY_VERSION="$version" RELAY_VERSION_CODE="$patch" RELAY_RUNTIME="$runtime"
     CI=1 npx expo prebuild --platform android --no-install --clean
     cd android
-    # Efficiency cores only, and at most two native compiles per worker.
-    /usr/sbin/taskpolicy -b ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --console=plain \
+    # At most two native compiles per worker. Not taskpolicy -b: macOS starves
+    # background work while anything else runs, and the build took 40 minutes, not 4.
+    ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --console=plain \
       --no-daemon --max-workers=2 --init-script "$ROOT/bin/cap-native-jobs.gradle" -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g" \
       -Pkotlin.daemon.jvmargs=-Xmx1g
   )
