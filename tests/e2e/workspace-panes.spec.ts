@@ -1,9 +1,17 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, mkdir, rm, writeFile, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+  realpath,
+} from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { openInFileTree } from "../fixtures/navigation";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("chat, changes and files are inline panes that can be reordered", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-panes-"))),
@@ -105,20 +113,136 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await order()).toEqual(["chat", "changes", "files"]);
 
-    // Drag a header toggle to reorder the panes; the order survives a reload.
+    // Drag a header toggle to reorder the panes; the order and the open
+    // panes survive a reload.
     await toggle("Files").dragTo(toggle("Chat"), {
       targetPosition: { x: 2, y: 5 },
     });
     expect(await order()).toEqual(["files", "chat", "changes"]);
     await page.reload();
-    await toggle("Changes").click();
-    await toggle("Files").click();
-    expect(await order()).toEqual(["files", "chat", "changes"]);
+    await expect(toggles).toBeVisible();
+    await expect.poll(order).toEqual(["files", "chat", "changes"]);
 
     // The last visible pane cannot be hidden.
     await toggle("Files").click();
     await toggle("Changes").click();
     await expect(toggle("Chat")).toBeDisabled();
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("each thread keeps the panes it had open", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-panes-"))),
+    repo = join(root, "project"),
+    bin = join(root, "bin");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+  await mkdir(repo);
+  await mkdir(bin);
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.invalid");
+  await writeFile(join(repo, "README.md"), "# Cache\n");
+  git("add", ".");
+  git("commit", "-qm", "Base");
+  await fakeCli(
+    join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: {
+      ...env,
+      ...pathWith(env, bin),
+      RELAY_TEST_DATA: join(root, "data"),
+      RELAY_TEST_HEADED: "0",
+      RELAY_TEST_NATIVE_STORAGE: "0",
+    },
+  });
+  const mod = process.platform === "darwin" ? "Meta" : "Control";
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [dir],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page.reload();
+    const toggles = page.getByRole("group", { name: "Workspace panes" });
+    const toggle = (name: string) =>
+      toggles.getByRole("button", { name: new RegExp(`^${name}\\b`) });
+    const order = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".workspace-pane")]
+          .filter((p) => !p.hidden)
+          .sort((a, b) => Number(a.style.order) - Number(b.style.order))
+          .map((p) => p.dataset.pane),
+      );
+    const send = async (text: string) => {
+      await page.getByLabel("Message project").fill(text);
+      await page
+        .getByRole("button", { name: "Send message", exact: true })
+        .click();
+      await expect(
+        page.getByText("The cache guard prevents duplicate requests.").first(),
+      ).toBeVisible();
+    };
+    const sidebar = page.locator(".projects-sidebar");
+    // Both threads get the fixture's title, so each is renamed once it has.
+    const rename = async (title: string) => {
+      const current = () =>
+        page.evaluate(async () => {
+          const project = localStorage.getItem("relay-project-id")!;
+          const id = localStorage.getItem("relay-project-chat:" + project);
+          const chats = await window.relay.projectChats(project);
+          return chats.find((c) => c.id === id);
+        });
+      await expect
+        .poll(async () => (await current())?.title)
+        .toBe("Cache guard behavior");
+      const id = (await current())!.id;
+      await page.evaluate(
+        ([id, title]) => window.relay.renameProjectChat(id, title),
+        [id, title] as const,
+      );
+    };
+    const thread = (title: string) =>
+      sidebar.getByRole("button", { name: new RegExp(title) });
+
+    // The first thread is left with History alone.
+    await send("hello");
+    await rename("First thread");
+    await toggle("History").click();
+    await toggle("Chat").click();
+    await expect.poll(order).toEqual(["history"]);
+
+    // A new thread starts with the chat alone, then opens Files beside it.
+    await page.keyboard.press(`${mod}+N`);
+    await expect.poll(order).toEqual(["chat"]);
+    await send("hello again");
+    await rename("Second thread");
+    await toggle("Files").click();
+    await expect.poll(order).toEqual(["chat", "files"]);
+
+    // After a reload, each comes back as it was left.
+    await page.reload();
+    await expect(toggles).toBeVisible();
+    await expect.poll(order).toEqual(["chat", "files"]);
+    await thread("First thread").click();
+    await expect.poll(order).toEqual(["history"]);
+    await thread("Second thread").click();
+    await expect.poll(order).toEqual(["chat", "files"]);
+    await thread("First thread").click();
+    await expect.poll(order).toEqual(["history"]);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

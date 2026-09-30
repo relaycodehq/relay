@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 export type PaneId = "chat" | "changes" | "files" | "history";
 const PANE_IDS: PaneId[] = ["chat", "changes", "files", "history"];
@@ -9,11 +9,70 @@ const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   history: 1.2,
 };
 const STORAGE_KEY = "relay-workspace-panes";
+const THREADS_KEY = "relay-thread-panes";
+const REMEMBERED_THREADS = 200;
+
+type OpenPanes = Record<PaneId, boolean>;
 
 interface PaneLayout {
   order: PaneId[];
-  open: Record<PaneId, boolean>;
+  /** The thread (or unsent draft) `open` belongs to. */
+  thread: string;
+  open: OpenPanes;
   weights: Record<PaneId, number>;
+}
+
+const CHAT_ONLY: OpenPanes = {
+  chat: true,
+  changes: false,
+  files: false,
+  history: false,
+};
+
+/** Panes each thread had open when last on screen, least recently used first. */
+const openByThread = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(THREADS_KEY) || "[]");
+    return new Map<string, PaneId[]>(
+      Array.isArray(saved)
+        ? saved.filter(
+            (entry): entry is [string, PaneId[]] =>
+              Array.isArray(entry) &&
+              typeof entry[0] === "string" &&
+              Array.isArray(entry[1]) &&
+              entry[1].every((id: unknown) => PANE_IDS.includes(id as PaneId)),
+          )
+        : [],
+    );
+  } catch {
+    return new Map<string, PaneId[]>();
+  }
+})();
+
+function recall(thread: string): OpenPanes | undefined {
+  const ids = openByThread.get(thread);
+  if (!ids?.length) return;
+  return Object.fromEntries(
+    PANE_IDS.map((id) => [id, ids.includes(id)]),
+  ) as OpenPanes;
+}
+
+function remember(thread: string, open: OpenPanes) {
+  if (!thread) return;
+  openByThread.delete(thread);
+  openByThread.set(
+    thread,
+    PANE_IDS.filter((id) => open[id]),
+  );
+  for (const oldest of openByThread.keys()) {
+    if (openByThread.size <= REMEMBERED_THREADS) break;
+    openByThread.delete(oldest);
+  }
+  try {
+    localStorage.setItem(THREADS_KEY, JSON.stringify([...openByThread]));
+  } catch {
+    // Still remembered for this session.
+  }
 }
 
 function restore(): Pick<PaneLayout, "order" | "weights"> {
@@ -41,11 +100,15 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
   }
 }
 
-/** Chat, changes and files are peers: each can be shown, hidden and reordered. */
-export function useWorkspacePanes() {
+/**
+ * Chat, changes and files are peers: each can be shown, hidden and reordered.
+ * Which are open is the thread's own; order and widths are the same everywhere.
+ */
+export function useWorkspacePanes(thread: string) {
   const [layout, setLayout] = useState<PaneLayout>(() => ({
     ...restore(),
-    open: { chat: true, changes: false, files: false, history: false },
+    thread,
+    open: recall(thread) ?? CHAT_ONLY,
   }));
   useEffect(() => {
     localStorage.setItem(
@@ -53,6 +116,36 @@ export function useWorkspacePanes() {
       JSON.stringify({ order: layout.order, weights: layout.weights }),
     );
   }, [layout.order, layout.weights]);
+  useEffect(
+    () => remember(layout.thread, layout.open),
+    [layout.thread, layout.open],
+  );
+  // A thread reached without switchTo shows its own panes too. One never
+  // seen took over from the last, like a draft once sent, and keeps its panes.
+  useLayoutEffect(
+    () =>
+      setLayout((l) =>
+        l.thread === thread
+          ? l
+          : { ...l, thread, open: recall(thread) ?? l.open },
+      ),
+    [thread],
+  );
+  /**
+   * Shows the panes `next` had open when it was last on screen, or the chat.
+   * A `fresh` thread starts with the chat alone even when it reuses an id.
+   */
+  const switchTo = useCallback(
+    (next: string, fresh = false) =>
+      setLayout((l) =>
+        fresh
+          ? { ...l, thread: next, open: CHAT_ONLY }
+          : l.thread === next
+            ? l
+            : { ...l, thread: next, open: recall(next) ?? CHAT_ONLY },
+      ),
+    [],
+  );
   const setOpen = useCallback(
     (id: PaneId, open: boolean) =>
       setLayout((l) => {
@@ -64,14 +157,6 @@ export function useWorkspacePanes() {
     [],
   );
   const show = useCallback((id: PaneId) => setOpen(id, true), [setOpen]);
-  const closeCode = useCallback(
-    () =>
-      setLayout((l) => ({
-        ...l,
-        open: { chat: true, changes: false, files: false, history: false },
-      })),
-    [],
-  );
   const move = useCallback(
     (id: PaneId, target: PaneId, after: boolean) =>
       setLayout((l) => {
@@ -88,5 +173,5 @@ export function useWorkspacePanes() {
     [],
   );
   const visible = layout.order.filter((id) => layout.open[id]);
-  return { layout, visible, setOpen, show, closeCode, move, resize };
+  return { layout, visible, setOpen, show, switchTo, move, resize };
 }

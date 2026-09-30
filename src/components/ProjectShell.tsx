@@ -148,7 +148,13 @@ export default function ProjectShell() {
     [pullsNav, setPullsNav] = useState<PullsNav | null>(null);
   const goToPulls = (target: PullsTarget) =>
     setPullsNav((n) => ({ ...target, request: (n?.request ?? 0) + 1 }));
-  const panes = useWorkspacePanes();
+  const project =
+    projects.data?.find((p) => p.id === selected) ??
+    projects.data?.find((p) => !p.scratch) ??
+    projects.data?.[0];
+  // Which of the project's unsent threads shows while no thread is open.
+  const draftId = project ? currentNewThread(project.id) : "";
+  const panes = useWorkspacePanes(chatId ?? draftId);
   // The sidebar remembers two states: beside the chat alone, and beside a side
   // pane (a PR's Review, say). Until toggled there, the latter follows the
   // "make room" setting.
@@ -275,10 +281,6 @@ export default function ProjectShell() {
     [invitation, setInvitation] = useState<string>(),
     [browseShared, setBrowseShared] = useState(false);
   const [restoredProject, setRestoredProject] = useState<string>();
-  const project =
-    projects.data?.find((p) => p.id === selected) ??
-    projects.data?.find((p) => !p.scratch) ??
-    projects.data?.[0];
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
   const chats = useQuery({
@@ -287,8 +289,6 @@ export default function ProjectShell() {
     enabled: !!project,
   });
   const chat = chats.data?.find((c) => c.id === chatId);
-  // Which of the project's unsent threads shows while no thread is open.
-  const draftId = project ? currentNewThread(project.id) : "";
   // A PR thread reviews its PR; any other thread shows the working tree.
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
@@ -349,7 +349,7 @@ export default function ProjectShell() {
       const saved = localStorage.getItem("relay-project-chat:" + project.id);
       setChatId(saved || null);
       setDraftScope(loadDraftScope(currentNewThread(project.id)));
-      panes.closeCode();
+      panes.switchTo(saved || currentNewThread(project.id));
       setTurnDiff(null);
       setRestoredProject(project.id);
       setDirty(false);
@@ -364,14 +364,6 @@ export default function ProjectShell() {
     // The page took its link when it opened; coming back mustn't open it again.
     if (!legacy) setIncoming(undefined);
   }, [legacy]);
-  // Switching projects closes side panes, so a PR opened from the Pull
-  // requests page shows its Review once the switch is done.
-  const reviewAfterSwitch = useRef<string>(undefined);
-  useEffect(() => {
-    if (!project || reviewAfterSwitch.current !== project.id) return;
-    reviewAfterSwitch.current = undefined;
-    panes.show("changes");
-  }, [project?.id]);
   useEffect(() => {
     if (project && project.id === restoredProject)
       localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
@@ -493,10 +485,8 @@ export default function ProjectShell() {
         thread = await api.createProjectChat(p.id, { kind: "pr", ref: pr });
         await chatsOf();
       }
-      // Navigating closes side panes, and so does the project switch after it.
       navigate(p, thread);
       panes.show("changes");
-      if (p.id !== project?.id) reviewAfterSwitch.current = p.id;
     } catch (e) {
       setError(e);
     }
@@ -523,7 +513,7 @@ export default function ProjectShell() {
     try {
       const next = await api.createProjectChat(project.id, scope);
       await chats.refetch();
-      setChatId(next.id);
+      openChat(next.id);
       panes.show("chat");
       return next;
     } catch (e) {
@@ -534,9 +524,14 @@ export default function ProjectShell() {
     const existing = chats.data?.find(
       (c) => c.scope.kind === "pr" && c.scope.ref.number === ref.number,
     );
-    if (existing) setChatId(existing.id);
+    if (existing) openChat(existing.id);
     else await newChat({ kind: "pr", ref });
     panes.show("chat");
+  }
+  /** Opens a thread with the panes it had open when it was last on screen. */
+  function openChat(id: string) {
+    setChatId(id);
+    panes.switchTo(id);
   }
   /**
    * Reviewing a PR from the new thread makes it that PR's thread, taking the
@@ -678,11 +673,12 @@ export default function ProjectShell() {
       if (fresh === true) clearDraftScope(id);
       setCurrentNewThread(p.id, id);
       setDraftScope(loadDraftScope(id));
+      if (!next) panes.switchTo(id, fresh === true);
     }
     setSelected(p.id);
     if (next || fresh) setChatId(next?.id ?? null);
+    if (next) panes.switchTo(next.id);
     setLegacy(false);
-    panes.closeCode();
     setTurnDiff(null);
     setContextText(undefined);
     setViewing(NO_VIEWING);
@@ -1349,7 +1345,7 @@ export default function ProjectShell() {
             if (c) localStorage.setItem("relay-project-chat:" + p, c.id);
             setSelected(p);
             await chats.refetch();
-            if (c) setChatId(c.id);
+            if (c) openChat(c.id);
             setLegacy(false);
             panes.show("chat");
             setInvitation(undefined);
@@ -1362,7 +1358,7 @@ export default function ProjectShell() {
           onClose={() => setBrowseShared(false)}
           onOpen={async (c) => {
             await chats.refetch();
-            setChatId(c.id);
+            openChat(c.id);
             panes.show("chat");
             setBrowseShared(false);
           }}

@@ -137,7 +137,11 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     );
     await expect(page.getByLabel("Message project")).not.toHaveText(/@codex/);
     await page.reload();
-    await expect(page.locator(".pane-header")).toHaveCount(0);
+    // The thread comes back with its Review still beside the chat.
+    await expect(page.locator(".pane-header")).toHaveCount(1);
+    await expect(
+      page.locator('[data-pane="changes"] .pane-header'),
+    ).toBeVisible();
     await expect(
       page
         .locator(".thread-context-controls")
