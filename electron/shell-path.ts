@@ -19,6 +19,21 @@ const run: Run = async (file, args) =>
     })
   ).stdout;
 
+/**
+ * Started with the launch PATH, the shell hands it back reordered: macOS's
+ * path_helper puts the system folders first and the inherited ones after, so
+ * `mergePath` could no longer tell which folders the launch put in front. A
+ * bare PATH leaves only what the profile adds.
+ */
+const runShell: Run = async (file, args) =>
+  (
+    await promisify(execFile)(file, args, {
+      encoding: "utf8",
+      timeout: SHELL_TIMEOUT,
+      env: { ...process.env, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
+    })
+  ).stdout;
+
 /** The shells worth asking, the user's own first. */
 export function loginShells(
   env: NodeJS.ProcessEnv,
@@ -70,7 +85,7 @@ export function mergePath(
   return entries.length ? entries.join(separator) : undefined;
 }
 
-async function readLoginShellPath(shell: string, exec: Run = run) {
+async function readLoginShellPath(shell: string, exec: Run = runShell) {
   const script = `printf '%s\\n' '${START}'; printenv PATH || true; printf '%s\\n' '${END}'`;
   return extractPath(await exec(shell, ["-ilc", script]));
 }
