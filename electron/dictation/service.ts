@@ -125,13 +125,20 @@ export class Dictation {
     return systemPreferences.askForMediaAccess("microphone");
   }
 
-  /** Hands the page a port straight to the speech engine, loading it if needed. */
-  connect(contents: WebContents) {
-    if (this.state.status !== "ready") return false;
+  /** A port straight to the speech engine, loading it if needed. */
+  open() {
+    if (this.state.status !== "ready") return;
     const worker = this.startWorker();
     const { port1, port2 } = new MessageChannelMain();
     worker.postMessage({ type: "port" }, [port1]);
-    contents.postMessage("relay:dictation-port", null, [port2]);
+    return port2;
+  }
+
+  /** Hands the page a port straight to the speech engine. */
+  connect(contents: WebContents) {
+    const port = this.open();
+    if (!port) return false;
+    contents.postMessage("relay:dictation-port", null, [port]);
     return true;
   }
 

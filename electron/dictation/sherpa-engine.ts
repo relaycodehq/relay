@@ -2,6 +2,15 @@ import { join } from "node:path";
 import { dictationSampleRate as rate } from "../../shared/dictation";
 import type { SpeechEngine } from "./transcriber";
 
+/**
+ * The model, shared by every session, and a voice detector for each: the
+ * desktop and a phone may dictate at once, and a detector keeps state.
+ */
+export interface SpeechModel {
+  decode: SpeechEngine["decode"];
+  detector(): Pick<SpeechEngine, "detect" | "resetDetector">;
+}
+
 // sherpa-onnx-node, loaded from the copy beside the bundle (see build-electron.mjs).
 interface Sherpa {
   OfflineRecognizer: {
@@ -33,7 +42,7 @@ export async function loadSherpaEngine(
   sherpa: Sherpa,
   dir: string,
   threads: number,
-): Promise<SpeechEngine> {
+): Promise<SpeechModel> {
   const recognizer = await sherpa.OfflineRecognizer.createAsync({
     featConfig: { sampleRate: rate, featureDim: 80 },
     modelConfig: {
@@ -48,45 +57,47 @@ export async function loadSherpaEngine(
       provider: "cpu",
     },
   });
-  const vad = new sherpa.Vad(
-    {
-      sileroVad: {
-        model: join(dir, "silero_vad.onnx"),
-        threshold: 0.4,
-        // Short: the transcriber decides which pauses end a phrase.
-        minSilenceDuration: 0.3,
-        minSpeechDuration: 0.2,
-        windowSize: vadWindow,
-      },
-      sampleRate: rate,
-      numThreads: 1,
-      provider: "cpu",
+  const vadConfig = {
+    sileroVad: {
+      model: join(dir, "silero_vad.onnx"),
+      threshold: 0.4,
+      // Short: the transcriber decides which pauses end a phrase.
+      minSilenceDuration: 0.3,
+      minSpeechDuration: 0.2,
+      windowSize: vadWindow,
     },
-    30,
-  );
-  // Silero takes exactly one window at a time.
-  let pending = new Float32Array(0);
+    sampleRate: rate,
+    numThreads: 1,
+    provider: "cpu",
+  };
   return {
     async decode(samples) {
       const stream = recognizer.createStream();
       stream.acceptWaveform({ samples, sampleRate: rate });
       return (await recognizer.decodeAsync(stream)).text;
     },
-    detect(samples) {
-      const all = new Float32Array(pending.length + samples.length);
-      all.set(pending);
-      all.set(samples, pending.length);
-      let at = 0;
-      for (; at + vadWindow <= all.length; at += vadWindow)
-        vad.acceptWaveform(all.slice(at, at + vadWindow));
-      pending = all.slice(at);
-      // Only the live flag matters; drop the segments it collects.
-      while (!vad.isEmpty()) vad.pop();
-      return vad.isDetected();
-    },
-    resetDetector() {
-      vad.reset();
-      pending = new Float32Array(0);
+    detector() {
+      const vad = new sherpa.Vad(vadConfig, 30);
+      // Silero takes exactly one window at a time.
+      let pending = new Float32Array(0);
+      return {
+        detect(samples) {
+          const all = new Float32Array(pending.length + samples.length);
+          all.set(pending);
+          all.set(samples, pending.length);
+          let at = 0;
+          for (; at + vadWindow <= all.length; at += vadWindow)
+            vad.acceptWaveform(all.slice(at, at + vadWindow));
+          pending = all.slice(at);
+          // Only the live flag matters; drop the segments it collects.
+          while (!vad.isEmpty()) vad.pop();
+          return vad.isDetected();
+        },
+        resetDetector() {
+          vad.reset();
+          pending = new Float32Array(0);
+        },
+      };
     },
   };
 }
