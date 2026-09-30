@@ -1517,6 +1517,12 @@ export function ProjectComposer({
           {showUsage && reportsUsage(recipient) && (
             <UsageRing provider={recipient} />
           )}
+          <DictationButton
+            owner={dictationOwner}
+            target={() => promptInput.current?.dictation}
+            composer={composerForm}
+            resetKey={draftKey}
+          />
           {running && (
             <button
               type="button"
@@ -1543,12 +1549,6 @@ export function ProjectComposer({
               )}
             </button>
           )}
-          <DictationButton
-            owner={dictationOwner}
-            target={() => promptInput.current?.dictation}
-            composer={composerForm}
-            resetKey={draftKey}
-          />
           {(!running || !!draft.trim() || !!images.length) && (
             <SendLaterMenu
               disabled={sendDisabled}
