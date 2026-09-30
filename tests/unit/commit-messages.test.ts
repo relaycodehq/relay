@@ -56,6 +56,7 @@ it("asks for a commit message under commit-message instructions, not a thread ti
   const message = await write(defaultAISettings);
 
   expect(message).toBe("Raise the limit");
+  expect(runs[0].prompt).toMatch(/Recent subjects:\nInitial\n/);
   expect(runs[0].helper?.instructions).toMatch(/commit message/);
   expect(runs[0].helper?.instructions).not.toMatch(/title/);
 });
