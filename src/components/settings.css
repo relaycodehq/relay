@@ -19,8 +19,9 @@
   animation: settings-in 0.18s ease-out;
 }
 .settings-screen::backdrop {
-  background: color-mix(in srgb, #0b0b10 38%, transparent);
-  backdrop-filter: blur(4px);
+  /* No blur: colour edits repaint the app behind, and re-blurring the whole
+     window on every change halved the frame rate. */
+  background: color-mix(in srgb, #0b0b10 50%, transparent);
 }
 .settings-screen button {
   font-size: 12.5px;
