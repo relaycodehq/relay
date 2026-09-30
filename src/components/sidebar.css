@@ -1,8 +1,8 @@
 /* Project sidebar: Codex-style thread list plus a T3 Code-style activity
    inbox (settle / snooze) behind the bell. */
-/* The titlebar brand echoes the status dot while the sidebar is hidden. */
+/* The titlebar sidebar toggle echoes the status dot while the sidebar is hidden. */
 .sb,
-.relay-brand-mark {
+.relay-sidebar-toggle {
   --sb-waiting: #d99a2b;
 }
 .sb {

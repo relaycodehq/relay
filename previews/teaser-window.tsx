@@ -16,6 +16,7 @@ import {
   LockKeyhole,
   MessageSquare,
   PanelBottom,
+  PanelLeft,
   Plus,
   ScanSearch,
   Search,
@@ -116,12 +117,10 @@ export function AppWindow({
               <i />
               <i />
             </span>
-            <span className="relay-brand-toggle">
-              <span className="relay-brand-mark">
-                <RelayMark accent={accent} />
-              </span>
-              <strong>Relay</strong>
+            <span className="icon-button relay-sidebar-toggle">
+              <PanelLeft size={16} />
             </span>
+            <RelayMark size={38} accent={accent} />
           </div>
           <div className="project-window-title">
             <FolderGit2 size={14} />

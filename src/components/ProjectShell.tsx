@@ -33,6 +33,7 @@ import {
   GitCompareArrows,
   GitGraph,
   PanelBottom,
+  PanelLeft,
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
@@ -121,7 +122,7 @@ export default function ProjectShell() {
   const [projectsHidden, setProjectsHidden] = useState(
     () => localStorage.getItem("relay-projects-hidden") === "true",
   );
-  // While the sidebar is hidden, hovering the brand toggle peeks it as an overlay.
+  // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
   const [pickingProject, setPickingProject] = useState(false);
   const peekTimer = useRef<number | undefined>(undefined);
@@ -668,6 +669,12 @@ export default function ProjectShell() {
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
+  const dot =
+    projectsHidden && attention
+      ? attention === "waiting"
+        ? "Needs your input"
+        : "New activity"
+      : undefined;
   return (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
@@ -677,31 +684,28 @@ export default function ProjectShell() {
           <span className="traffic-space" />
           <button
             type="button"
-            className="relay-brand-toggle"
-            title={`Toggle projects · ${keys("⌘B", "Ctrl+B")}`}
-            aria-label="Toggle projects"
+            className="icon-button relay-sidebar-toggle"
+            title={`${projectsHidden ? "Show" : "Hide"} sidebar · ${keys("⌘B", "Ctrl+B")}`}
+            aria-label={
+              (projectsHidden ? "Show sidebar" : "Hide sidebar") +
+              (dot ? ` · ${dot}` : "")
+            }
             aria-pressed={!projectsHidden}
             onClick={toggleProjects}
             onMouseEnter={peekOpen}
             onMouseLeave={peekClose}
           >
-            <span className="relay-brand-mark">
-              <RelayMark />
-              {projectsHidden && attention && (
-                <span
-                  className={`sb-status ${attention} relay-brand-dot`}
-                  title={
-                    attention === "waiting"
-                      ? "Needs your input"
-                      : "New activity"
-                  }
-                >
-                  <i />
-                </span>
-              )}
-            </span>
-            <strong>Relay</strong>
+            <PanelLeft size={16} />
+            {dot && (
+              <span
+                className={`sb-status ${attention} relay-brand-dot`}
+                aria-hidden="true"
+              >
+                <i />
+              </span>
+            )}
           </button>
+          <RelayMark size={38} />
         </div>
         {legacy ? (
           <button

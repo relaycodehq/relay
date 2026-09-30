@@ -6,39 +6,20 @@
   filter: drop-shadow(0 1px 1px #0003);
 }
 
-.relay-brand-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 32px;
-  flex-shrink: 0;
-  padding: 0 8px 0 0;
-  color: inherit;
-  font: inherit;
-  cursor: default;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-}
-
-.relay-brand-toggle:hover {
-  background: transparent;
-}
-
-.relay-brand-toggle:hover .relay-mark,
-.relay-brand-toggle:hover strong {
-  opacity: 0.8;
-}
-
-.relay-brand-mark {
+.relay-sidebar-toggle {
   position: relative;
-  display: block;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  color: var(--muted);
 }
 
-.relay-brand-mark .relay-brand-dot {
+.relay-sidebar-toggle .relay-brand-dot {
   position: absolute;
-  top: 1px;
-  right: -3px;
+  top: 2px;
+  right: 1px;
   width: auto;
   height: auto;
   animation: sb-pop 0.25s ease-out;

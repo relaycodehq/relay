@@ -651,11 +651,6 @@
 .platform-win32 .project-titlebar-brand .traffic-space {
   display: none;
 }
-.project-titlebar-brand strong {
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 .project-window-title {
   flex: initial;
   display: flex;
