@@ -19,6 +19,8 @@ import { BlameService } from "./blame";
 import { Ci } from "./ci";
 import { ProjectChecks } from "./checks/service";
 import { DevOps } from "./devops";
+import { ClockifyPlugin } from "./plugins/clockify/service";
+import { PluginSecrets } from "./plugins/secrets";
 import { Dictation } from "./dictation/service";
 import { gitExecutable, setGitPath } from "./git";
 import { registerAppImage } from "./linux-desktop-entry";
@@ -234,6 +236,23 @@ app
       },
     );
     projectChats = chats;
+    const clockify = new ClockifyPlugin({
+      store: loaded,
+      secrets: new PluginSecrets(loaded, seal, unseal),
+      fetch: (url, init) => net.fetch(url, init),
+      chats: {
+        summaries: () => loaded.get().chats ?? [],
+        get: (id) => chats.get(id),
+      },
+      projectName: (id) => {
+        try {
+          return projects.get(id).name;
+        } catch {
+          return "Removed project";
+        }
+      },
+      aiSettings: () => loaded.aiSettings(),
+    });
     if (hostingSetup) {
       const input = await hostingSetup;
       if ("error" in input) throw input.error;
@@ -253,6 +272,7 @@ app
         projectChats: chats,
         rooms: roomService,
         devops,
+        clockify,
         triage: triageService,
         phoneRemote: () => phoneRemote,
         login,

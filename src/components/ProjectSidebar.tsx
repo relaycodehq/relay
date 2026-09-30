@@ -66,6 +66,7 @@ import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
 import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
+import { ClockifyTimer } from "./plugins/ClockifyTimer";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { agentName } from "../../shared/agents";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
@@ -1687,6 +1688,12 @@ export function ProjectSidebar({
       </div>
       {query ? searching : view === "activity" ? activity : threads}
       {viewError && <ErrorBox error={viewError} />}
+      <ClockifyTimer
+        projectId={projectId}
+        projectName={projects.find((p) => p.id === projectId)?.name}
+        chatId={chatId}
+        onSetUp={() => onSettings("plugins")}
+      />
       <div className="sb-footer">
         <button
           className={`sb-account ${account ? "signed-in" : ""}`}

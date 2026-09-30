@@ -1,0 +1,13 @@
+.plugin-select {
+  width: 280px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.settings-row-control input.plugin-number {
+  width: 80px;
+}

@@ -19,6 +19,7 @@ import {
   Monitor,
   Moon,
   Palette,
+  Puzzle,
   RotateCcw,
   Search,
   Sparkles,
@@ -112,6 +113,9 @@ import {
 } from "./DictationSettings";
 import { useDictationModel } from "../lib/dictation/session";
 import { QuickSwitchSettings } from "./QuickSwitchSettings";
+import { PluginPanel, PluginSwitch } from "./plugins/PluginSettings";
+import { pluginIds, plugins } from "../../shared/plugins";
+import { usePluginEnabled } from "../lib/plugins";
 import "./settings.css";
 import {
   agentName,
@@ -126,6 +130,7 @@ type CategoryId =
   | "account"
   | "models"
   | "integrations"
+  | "plugins"
   | "rooms"
   | "phone"
   | "dictation"
@@ -163,6 +168,13 @@ const categories: {
     description:
       "Git, and the hosts your pull requests, CI and work items come from.",
     icon: ListTodo,
+  },
+  {
+    id: "plugins",
+    label: "Plugins",
+    description:
+      "Extras that ship with Relay and stay out of sight until you turn them on.",
+    icon: Puzzle,
   },
   {
     id: "rooms",
@@ -545,7 +557,7 @@ export function Settings({
     [saved, setSaved] = useState(false);
   const values = draft ?? settings.data;
   const change = (
-    kind: "grouping" | "questions" | "split" | "commitMessage",
+    kind: "grouping" | "questions" | "split" | "commitMessage" | "timesheet",
     value: AISettings["questions"],
     provider: AgentProvider,
   ) => {
@@ -562,6 +574,8 @@ export function Settings({
   const cacheHeat = useCacheHeat();
   const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
+  // Plugins that are off leave no trace in the rest of Settings.
+  const timesheets = usePluginEnabled("clockify");
   // Search finds shortcuts by their current keys.
   useShortcutOverrides();
   const quickKeys = useQuickKeysLabel();
@@ -931,6 +945,23 @@ export function Settings({
                 }
               />
             </SettingsRow>
+            {timesheets && (
+              <SettingsRow
+                label="Timesheets"
+                hint="Describes your day's entries for the Clockify plugin."
+              >
+                <ModelField
+                  label="Timesheets"
+                  value={values.timesheet}
+                  provider={values.timesheetProvider}
+                  providers={agentProviders}
+                  allowDefault
+                  onChange={(value, provider) =>
+                    change("timesheet", value, provider)
+                  }
+                />
+              </SettingsRow>
+            )}
             <SettingsFooter
               note={
                 saved ? (
@@ -1018,6 +1049,16 @@ export function Settings({
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings onConnect={onConnect} />,
     },
+    ...pluginIds.map((id): Entry => ({
+      id: `plugin-${id}`,
+      category: "plugins",
+      title: plugins[id].title,
+      description: plugins[id].description,
+      keywords: `plugin extension ${plugins[id].keywords}`,
+      block: true,
+      accessory: () => <PluginSwitch id={id} />,
+      render: () => <PluginPanel id={id} />,
+    })),
     {
       id: "room-hosting",
       category: "rooms",

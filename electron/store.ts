@@ -33,6 +33,17 @@ interface State {
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;
   devopsOpenRouterKey?: string;
+  /** Built-in plugins turned on in Settings → Plugins. */
+  plugins?: Partial<Record<import("../shared/plugins").PluginId, boolean>>;
+  /** Each plugin's secrets, encrypted with the OS credential store. */
+  pluginSecrets?: Partial<
+    Record<import("../shared/plugins").PluginId, Record<string, string>>
+  >;
+  clockify?: {
+    settings?: import("../shared/clockify").ClockifySettings;
+    day?: import("../shared/clockify").ClockifyDay;
+    review?: import("../shared/clockify").ClockifyReview;
+  };
   phoneRemote?: import("./remote/devices").RemoteSettings;
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;

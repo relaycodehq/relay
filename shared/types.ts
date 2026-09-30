@@ -1,6 +1,8 @@
 import type { ExtensionRef, ThemeSearchPage, VsCodeTheme } from "./open-vsx";
 import type { ProjectApi } from "./projects";
 import type { DevOpsApi } from "./devops";
+import type { ClockifyApi } from "./clockify";
+import type { PluginsApi } from "./plugins";
 import type { LiveSyncApi } from "./live-sync";
 import type { TaskApi } from "./tasks";
 import type { TerminalApi } from "./terminals";
@@ -220,6 +222,8 @@ export interface Api
     LiveSyncApi,
     ProjectApi,
     DevOpsApi,
+    PluginsApi,
+    ClockifyApi,
     TaskApi,
     TerminalApi,
     PhoneRemoteApi {
