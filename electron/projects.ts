@@ -15,14 +15,19 @@ import { git, gitBytes } from "./git";
 import { isGitMissing } from "../shared/working-tree";
 import { folderFiles } from "./folder-files";
 import { digest } from "./hash";
-import { inspectRepository, remoteUrl, repoOf } from "./repository";
+import {
+  inspectRepository,
+  remoteOnHost,
+  remoteUrl,
+  repoOf,
+} from "./repository";
 import { readWorkingFile, decodeText, writeWorkingFile } from "./working-files";
 function repositoryFromRemote(
   raw: string,
   server: string,
 ): Project["repository"] {
   const remote = remoteUrl(raw);
-  if (!remote || remote.hostname !== new URL(server).hostname) return null;
+  if (!remote || !remoteOnHost(remote, new URL(server).hostname)) return null;
   const repo = repoOf(remote);
   return repo && { server, ...repo };
 }

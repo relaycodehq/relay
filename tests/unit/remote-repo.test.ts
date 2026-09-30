@@ -51,6 +51,39 @@ describe("isRemoteOf", () => {
     ).toBe(true);
   });
 
+  it("takes an SSH remote whose host isn't the web address, but not an HTTP one", () => {
+    for (const raw of [
+      "git@ssh.git.example.com:Web/Web-Store.git",
+      "git@work-gitea:Web/Web-Store.git",
+      "ssh://git@git.example.com:2222/Web/Web-Store.git",
+    ])
+      expect(isRemoteOf(raw, "git.example.com", repo)).toBe(true);
+    expect(
+      isRemoteOf(
+        "https://ssh.git.example.com/Web/Web-Store",
+        "git.example.com",
+        repo,
+      ),
+    ).toBe(false);
+  });
+
+  it("compares hosts without case", () => {
+    expect(
+      isRemoteOf(
+        "https://Git.Example.com/Web/Web-Store",
+        "git.example.com",
+        repo,
+      ),
+    ).toBe(true);
+    expect(
+      isRemoteOf(
+        "ssh://git@GIT.example.com/Web/Web-Store",
+        "git.example.com",
+        repo,
+      ),
+    ).toBe(true);
+  });
+
   it("rejects another host, another repository, and things that aren't URLs", () => {
     expect(
       isRemoteOf(

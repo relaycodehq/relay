@@ -18,6 +18,18 @@ export function remoteUrl(raw: string): URL | null {
   }
 }
 
+/**
+ * Whether a remote points at the forge on `host`. An SSH remote's host is the
+ * SSH endpoint, which is often an alias or another domain than the web address
+ * (`~/.ssh/config` hosts, `ssh.example.com`), so only HTTP remotes must match it.
+ */
+export function remoteOnHost(remote: URL, host: string) {
+  return (
+    remote.protocol === "ssh:" ||
+    remote.hostname.toLowerCase() === host.toLowerCase()
+  );
+}
+
 /** The owner and name a remote's last two path segments give; null with fewer. */
 export function repoOf(remote: URL) {
   const parts = remote.pathname
@@ -36,7 +48,8 @@ export function isRemoteOf(
 ) {
   const remote = remoteUrl(raw);
   return (
-    remote?.hostname === host &&
+    !!remote &&
+    remoteOnHost(remote, host) &&
     remote.pathname
       .replace(/\.git$/, "")
       .toLowerCase()
