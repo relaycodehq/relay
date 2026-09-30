@@ -11,11 +11,13 @@ import {
 } from "../../shared/settings";
 
 const runs: (AgentOptions & { provider: string })[] = [];
+const plainReply = '{"subject":"Raise the limit","body":""}';
+let reply = plainReply;
 vi.mock("../../electron/agents", () => ({
   agentRuntime: (provider: string) => ({
     run: async (options: AgentOptions) => {
       runs.push({ ...options, provider });
-      return '{"subject":"Raise the limit","body":""}';
+      return reply;
     },
   }),
 }));
@@ -25,6 +27,7 @@ const { generateCommitMessage } =
 let root: string;
 afterEach(async () => {
   runs.length = 0;
+  reply = plainReply;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -76,4 +79,15 @@ it("keeps settings saved before the choice existed on Codex at low effort", asyn
   await write(aiSettingsSchema.parse(saved));
   expect(runs[0].provider).toBe("codex");
   expect(runs[0].choice).toMatchObject({ model: "", reasoningEffort: "low" });
+});
+
+it("drops the attribution lines agents like to sign off with", async () => {
+  await changedRepo();
+  reply = JSON.stringify({
+    subject: "Raise the limit",
+    body: "Two was enough for the new importer.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+  });
+  expect(await write(defaultAISettings)).toBe(
+    "Raise the limit\n\nTwo was enough for the new importer.",
+  );
 });
