@@ -7,6 +7,8 @@
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
+// RELAY_DICTATION_MODEL=<folder with the files in shared/dictation.ts> lets
+// the phone dictate.
 import { _electron as electron } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
@@ -15,6 +17,7 @@ import {
   readFile,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -59,6 +62,19 @@ await writeFile(
     (await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8")),
   { mode: 0o700 },
 );
+
+const modelDir = process.env.RELAY_DICTATION_MODEL;
+if (modelDir) {
+  const { dictationModel } = await import("../../shared/dictation.ts");
+  const model = join(root, "data", "models", dictationModel.id);
+  await mkdir(model, { recursive: true });
+  for (const file of dictationModel.files)
+    await symlink(join(modelDir, file.name), join(model, file.name));
+  await writeFile(
+    join(model, "verified.json"),
+    JSON.stringify(dictationModel.files.map((file) => file.sha256)),
+  );
+}
 
 const env = Object.fromEntries(
   Object.entries(process.env).filter(

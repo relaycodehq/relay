@@ -301,6 +301,10 @@ app
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
         phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
+        dictation: {
+          status: () => dictation.current.status,
+          open: () => dictation.open(),
+        },
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );

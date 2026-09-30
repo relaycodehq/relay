@@ -1,3 +1,4 @@
+import type { DictationModelState } from "./dictation";
 import type { PhoneAppReport } from "./phone-app";
 /**
  * Relay's phone remote: a phone pairs with the desktop over the local network
@@ -128,7 +129,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for a restart of an older desktop. */
-export const remoteBridgeVersion = 7;
+export const remoteBridgeVersion = 8;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -179,6 +180,8 @@ export interface RemoteOverview {
   appearance?: PhoneAppearance;
   /** Missing before version 7, and in builds made without the phone app. */
   phoneApp?: PhoneAppRelease;
+  /** The desktop's speech model, which phones dictate with; missing before version 8. */
+  dictation?: DictationModelState["status"];
   projects: RemoteProject[];
   /** Unarchived threads with messages, newest first. */
   chats: RemoteChatSummary[];
@@ -303,6 +306,27 @@ export const phoneDesktopMethods = [
 ] as const satisfies readonly ApiMethod[];
 export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
 
+/**
+ * Dictation on a phone: the phone's microphone, the desktop's speech engine.
+ * One session per phone; a new start ends the last one.
+ */
+export type PhoneDictation =
+  | { type: "start"; id: number }
+  /** About 80 ms of 16 kHz mono 16-bit little-endian PCM, as base64. */
+  | { type: "audio"; id: number; pcm: string }
+  /** Settles the last words; the answer's `settled` is the whole text. */
+  | { type: "stop"; id: number }
+  | { type: "cancel"; id: number };
+/** Everything heard so far: `settled` won't change, `tentative` may. */
+export interface PhoneDictationHeard {
+  settled: string;
+  tentative: string;
+  /** The engine is still loading the model; the audio waits for it. */
+  loading: boolean;
+}
+/** The most base64 one audio call may carry: a second of speech. */
+export const maxDictationChunk = 44_000;
+
 /** Everything a paired phone may ask of the desktop. Nothing else is reachable. */
 export interface RemoteApi {
   overview(): Promise<RemoteOverview>;
@@ -322,6 +346,7 @@ export interface RemoteApi {
   phoneAppFile(path: string, offset: number): Promise<string>;
   /** What the phone's app runs, for the desktop's Settings. */
   reportApp(report: PhoneAppReport): Promise<void>;
+  dictate(request: PhoneDictation): Promise<PhoneDictationHeard>;
 }
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
@@ -332,6 +357,7 @@ export const remoteMethods = [
   "projectIcons",
   "phoneAppFile",
   "reportApp",
+  "dictate",
 ] as const satisfies readonly RemoteMethod[];
 
 /**

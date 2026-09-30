@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDraft } from "../remote/drafts";
 import * as Haptics from "expo-haptics";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
+import { placeDictation } from "../../../shared/dictation";
 import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { atHour, wakeLabel } from "../../../shared/chat-activity";
 import { composerCommands, relayCommand, type RelayCommand } from "../../../shared/commands";
@@ -21,9 +22,20 @@ import type { RemoteSettings } from "../../../shared/remote";
 import { reasoningEffortSchema, type ModelChoice } from "../../../shared/settings";
 import { switchAgent, withRememberedModel } from "../remote/compose";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
+import {
+  cancelDictation,
+  clearDictationError,
+  dictationSnapshot,
+  phoneHasMic,
+  stopDictation,
+  useDictation,
+  type DictationTarget,
+} from "../remote/dictation";
 import { maxImages, pickImages, type Attachment } from "../remote/images";
+import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
 import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from "./CommandMenu";
+import { DictationButton, dictationShrinkMs } from "./DictationButton";
 import { useKeyboardShown } from "./KeyboardAware";
 import { ModelSheet } from "./ModelSheet";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
@@ -39,6 +51,16 @@ export interface Outgoing {
   delivery?: "queue" | "steer";
   /** Send later: held until then. */
   sendAt?: number;
+}
+
+/** Dictated words going into `base` in place of `from`–`to`; they sit at `start`–`end`, the last `tentative` characters still unsure. */
+interface Live {
+  base: string;
+  from: number;
+  to: number;
+  start: number;
+  end: number;
+  tentative: number;
 }
 
 /** A workspace command's outcome: done, or why not. */
@@ -118,6 +140,79 @@ export const Composer = forwardRef<
   }, [settings]);
   useEffect(() => setError(undefined), [text]);
 
+  const { overview } = useRemote();
+  // Desktops from before phone dictation don't say, and can't.
+  const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
+  const [dictationOwner] = useState(() => ({}));
+  const dictation = useDictation();
+  const dictating = dictation.owner === dictationOwner && dictation.phase !== "idle";
+  const dictationError = dictation.owner === dictationOwner ? dictation.error : undefined;
+  // The toolbar makes room for the waveform until the capsule has shrunk back.
+  const [shrinking, setShrinking] = useState(false);
+  const [wasDictating, setWasDictating] = useState(dictating);
+  if (wasDictating !== dictating) {
+    setWasDictating(dictating);
+    setShrinking(!dictating);
+  }
+  useEffect(() => {
+    if (!shrinking) return;
+    const timer = setTimeout(() => setShrinking(false), dictationShrinkMs);
+    return () => clearTimeout(timer);
+  }, [shrinking]);
+  const selection = useRef({ start: 0, end: 0 });
+  const typed = useRef(text);
+  useEffect(() => {
+    typed.current = text;
+  }, [text]);
+  /** The draft the words go into, and where; `tentative` counts the words' last characters that may still change. */
+  const [live, setLiveState] = useState<Live>();
+  const liveRef = useRef<Live>(undefined);
+  const setLive = (next: Live | undefined) => {
+    liveRef.current = next;
+    setLiveState(next);
+  };
+  /** The draft as the last dictation left it, for a send that waited on it. */
+  const dictated = useRef("");
+  const dictationTarget = (): DictationTarget => ({
+    begin: () => {
+      const base = typed.current;
+      // At the cursor while typing; after the draft otherwise.
+      const at = input.current?.isFocused() ? selection.current : { start: base.length, end: base.length };
+      const from = Math.min(at.start, base.length),
+        to = Math.min(Math.max(from, at.end), base.length);
+      setLive({ base, from, to, start: from, end: from, tentative: 0 });
+    },
+    update: (settled, tentative) => {
+      const current = liveRef.current;
+      if (!current) return;
+      const placed = placeDictation(
+        current.base,
+        current.from,
+        current.to,
+        [settled, tentative].filter(Boolean).join(" "),
+      );
+      setText(placed.text);
+      setLive({ ...current, start: placed.start, end: placed.end, tentative: tentative.length });
+    },
+    end: (words) => {
+      const current = liveRef.current;
+      setLive(undefined);
+      if (!current) return;
+      const placed = placeDictation(current.base, current.from, current.to, words ?? "");
+      dictated.current = words ? placed.text : current.base;
+      setText(dictated.current);
+      selection.current = { start: placed.end, end: placed.end };
+    },
+  });
+  // Leaving the thread, or its draft, takes unfinished words back out.
+  useEffect(
+    () => () => {
+      const now = dictationSnapshot();
+      if (now.owner === dictationOwner && now.phase !== "idle") cancelDictation();
+    },
+    [dictationOwner, draftKey],
+  );
+
   const switchTo = (next: RemoteSettings, to: AgentProvider) => {
     if (to === next.provider) return onSettings(next);
     const kept = picks.current[to];
@@ -192,9 +287,16 @@ export const Composer = forwardRef<
   };
 
   const empty = !text.trim() && !images.length;
-  const send = async (delivery?: "queue" | "steer", sendAt?: number) => {
-    if (empty || busy) return;
-    const draft = text.trim();
+  /** `written` is the draft when it hasn't reached `text` yet. */
+  const send = async (delivery?: "queue" | "steer", sendAt?: number, written = text) => {
+    // Sending mid-dictation waits for the last words to land in the draft.
+    const now = dictationSnapshot();
+    if (now.owner === dictationOwner && now.phase !== "idle") {
+      if (await stopDictation()) await send(delivery, sendAt, dictated.current);
+      return;
+    }
+    if ((!written.trim() && !images.length) || busy) return;
+    const draft = written.trim();
     if (draft.startsWith("/")) {
       const command = relayCommand(draft);
       if (command && command.name !== "btw") return void run(command.name, command.args);
@@ -252,9 +354,9 @@ export const Composer = forwardRef<
           onPick={pick}
         />
       )}
-      {!!error && (
-        <Pressable onPress={() => setDismissed(text)}>
-          <Text style={[styles.note, { color: t.danger }]}>{error}</Text>
+      {!!(error ?? dictationError) && (
+        <Pressable onPress={() => (error ? setDismissed(text) : clearDictationError())}>
+          <Text style={[styles.note, { color: t.danger }]}>{error ?? dictationError}</Text>
         </Pressable>
       )}
       <View style={[styles.box, { borderColor: t.border, backgroundColor: t.raised }]}>
@@ -280,14 +382,24 @@ export const Composer = forwardRef<
           ref={input}
           accessibilityLabel="Message"
           multiline
-          // Typing goes on while it reconnects; only sending waits.
-          editable
-          value={text}
+          // Typing goes on while it reconnects; only sending waits. Dictated
+          // words hold it still until they settle.
+          editable={!live}
+          value={live ? undefined : text}
           onChangeText={setText}
+          onSelectionChange={(e) => (selection.current = e.nativeEvent.selection)}
           placeholder={placeholder ?? `Message ${agentNames[provider]}`}
           placeholderTextColor={t.faint}
           style={[styles.input, { color: t.text }]}
-        />
+        >
+          {live && (
+            <>
+              <Text>{text.slice(0, live.end - live.tentative)}</Text>
+              <Text style={{ color: t.muted }}>{text.slice(live.end - live.tentative, live.end)}</Text>
+              <Text>{text.slice(live.end)}</Text>
+            </>
+          )}
+        </TextInput>
         <View style={styles.toolbar}>
           <Tool label="Attach a photo" disabled={images.length >= maxImages} onPress={() => setSheet("attach")}>
             <ImagePlus size={17} color={t.muted} />
@@ -301,19 +413,29 @@ export const Composer = forwardRef<
             </Text>
             <ChevronDown size={12} color={t.faint} />
           </Tool>
-          <Tool label="Permissions" onPress={() => setSheet("mode")}>
-            <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
-              {modeLabel(settings.runtimeMode)}
-            </Text>
-          </Tool>
-          <Tool
-            label={plan ? "Plan mode on" : "Plan mode off"}
-            onPress={() => onSettings({ ...settings, interactionMode: plan ? "default" : "plan" })}
-          >
-            <Text style={[styles.toolText, { color: plan ? t.accent : t.muted }]}>Plan</Text>
-          </Tool>
+          {/* Room for the waveform on a narrow phone. */}
+          {!dictating && !shrinking && (
+            <>
+              <Tool label="Permissions" onPress={() => setSheet("mode")}>
+                <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
+                  {modeLabel(settings.runtimeMode)}
+                </Text>
+              </Tool>
+              <Tool
+                label={plan ? "Plan mode on" : "Plan mode off"}
+                onPress={() => onSettings({ ...settings, interactionMode: plan ? "default" : "plan" })}
+              >
+                <Text style={[styles.toolText, { color: plan ? t.accent : t.muted }]}>Plan</Text>
+              </Tool>
+            </>
+          )}
           <View style={styles.spacer} />
-          {!text && (
+          {dictating && dictation.phase === "listening" && (
+            <Tool label="Discard dictation" onPress={cancelDictation}>
+              <X size={16} color={t.muted} />
+            </Tool>
+          )}
+          {!text && !dictating && (
             <Tool
               label="Commands"
               onPress={() => {
@@ -339,6 +461,9 @@ export const Composer = forwardRef<
             >
               <Zap size={15} color={t.accent} />
             </Pressable>
+          )}
+          {canDictate && (
+            <DictationButton owner={dictationOwner} target={dictationTarget} disabled={disabled || busy} />
           )}
           <Pressable
             accessibilityRole="button"

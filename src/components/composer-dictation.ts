@@ -7,6 +7,7 @@ import {
   type EditorState,
 } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { fitCase } from "../../shared/dictation";
 
 /**
  * The words being dictated: `from`–`to` in the draft, tentative from
@@ -76,20 +77,6 @@ function caret() {
   element.className = "dictation-caret";
   element.setAttribute("aria-hidden", "true");
   return element;
-}
-
-/**
- * The speech model starts every phrase with a capital, as if a sentence
- * began there. Mid-sentence it doesn't: "Please fix", not "Please Fix".
- */
-export function fitCase(words: string, before: string) {
-  const first = words.match(/^\p{L}[\p{L}']*/u)?.[0];
-  if (!first) return words;
-  const sentenceStart = !before.trim() || /[.!?…]["')\]]?\s*$/.test(before);
-  if (sentenceStart) return words.charAt(0).toUpperCase() + words.slice(1);
-  if (/^I('|$)/.test(first) || !/^\p{Lu}\p{Ll}*('\p{Ll}+)?$/u.test(first))
-    return words;
-  return words.charAt(0).toLowerCase() + words.slice(1);
 }
 
 /** The draft's text on the dictation's line before `from`. */

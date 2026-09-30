@@ -4,6 +4,7 @@ import type { Store } from "../store";
 import { toBase64Url } from "../../shared/remote-crypto";
 import {
   defaultRemotePort,
+  maxDictationChunk,
   pairingUrl,
   type PhoneAppearance,
   type PhonePairing,
@@ -11,6 +12,7 @@ import {
 } from "../../shared/remote";
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
+import { PhoneDictations } from "./phone-dictation";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 
@@ -31,6 +33,23 @@ const appReportSchema = z
     failed: version.optional(),
   })
   .strict();
+
+const dictationId = z.number().int().nonnegative();
+const dictationSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("start"), id: dictationId }).strict(),
+  z
+    .object({
+      type: z.literal("audio"),
+      id: dictationId,
+      pcm: z
+        .string()
+        .max(maxDictationChunk)
+        .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+    })
+    .strict(),
+  z.object({ type: z.literal("stop"), id: dictationId }).strict(),
+  z.object({ type: z.literal("cancel"), id: dictationId }).strict(),
+]);
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const paletteSchema = z
@@ -69,6 +88,7 @@ export class PhoneRemote {
   readonly devices: RemoteDevices;
   private bridge: RemoteBridge;
   private server: RemoteServer;
+  private dictations?: PhoneDictations;
   private error?: string;
   private watch?: NodeJS.Timeout;
   private syncing = Promise.resolve();
@@ -86,14 +106,24 @@ export class PhoneRemote {
       { ...host, name, appearance: () => this.devices.settings.appearance },
       (event) => this.server.broadcast(event),
     );
+    if (host.dictation) this.dictations = new PhoneDictations(host.dictation);
     this.server = new RemoteServer({
       devices: this.devices,
       port,
       name,
-      handle: (method, args, deviceId) =>
-        method === "reportApp"
-          ? this.devices.setApp(deviceId, appReportSchema.parse(args[0]))
-          : this.bridge.handle(method, args),
+      handle: async (method, args, deviceId) => {
+        if (method === "reportApp")
+          return this.devices.setApp(deviceId, appReportSchema.parse(args[0]));
+        if (method === "dictate") {
+          if (!this.dictations)
+            throw new Error("Dictation isn't available on this computer.");
+          return this.dictations.handle(
+            deviceId,
+            dictationSchema.parse(args[0]),
+          );
+        }
+        return this.bridge.handle(method, args);
+      },
       onPresence: () => this.bridge.setWatching(this.server.online().size > 0),
     });
   }
@@ -176,6 +206,7 @@ export class PhoneRemote {
     clearInterval(this.watch);
     this.watch = undefined;
     this.bridge.dispose();
+    this.dictations?.dispose();
     await this.server.close();
   }
   /** Listens now, and keeps up as Tailscale goes off, comes back or moves. */

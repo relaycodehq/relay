@@ -28,6 +28,7 @@ import {
 } from "../../shared/remote";
 import { idSchema } from "../../shared/rooms";
 import type { ApiMethod, FilePair } from "../../shared/types";
+import type { SpeechService } from "./phone-dictation";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -44,6 +45,8 @@ export interface RemoteHost {
     release(): Promise<PhoneAppRelease | undefined>;
     chunk(path: string, offset: number): Promise<string>;
   };
+  /** The speech engine phones dictate with. */
+  dictation?: SpeechService;
 }
 
 const pathSchema = z.string().min(1).max(1000);
@@ -98,8 +101,8 @@ export class RemoteBridge {
     private host: RemoteHost,
     private broadcast: (event: RemoteEvent) => void,
   ) {}
-  /** A phone's report on its own app goes to its device record instead; see phone-remote. */
-  private api: Omit<RemoteApi, "reportApp"> = {
+  /** Calls about one phone go through phone-remote, which knows which phone asks. */
+  private api: Omit<RemoteApi, "reportApp" | "dictate"> = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
         this.host.projects(),
@@ -110,6 +113,9 @@ export class RemoteBridge {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
         ...(phoneApp ? { phoneApp } : {}),
+        ...(this.host.dictation
+          ? { dictation: this.host.dictation.status() }
+          : {}),
         ...(this.host.appearance?.()
           ? { appearance: this.host.appearance() }
           : {}),

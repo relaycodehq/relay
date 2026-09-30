@@ -85,3 +85,41 @@ export type DictationEvent =
   | { type: "text"; id: number; settled: string; tentative: string }
   | { type: "final"; id: number; text: string }
   | { type: "error"; id?: number; message: string };
+
+/**
+ * The speech model starts every phrase with a capital, as if a sentence
+ * began there. Mid-sentence it doesn't: "Please fix", not "Please Fix".
+ */
+export function fitCase(words: string, before: string) {
+  const first = words.match(/^\p{L}[\p{L}']*/u)?.[0];
+  if (!first) return words;
+  const sentenceStart = !before.trim() || /[.!?…]["')\]]?\s*$/.test(before);
+  if (sentenceStart) return words.charAt(0).toUpperCase() + words.slice(1);
+  if (/^I('|$)/.test(first) || !/^\p{Lu}\p{Ll}*('\p{Ll}+)?$/u.test(first))
+    return words;
+  return words.charAt(0).toLowerCase() + words.slice(1);
+}
+
+/**
+ * Dictated `words` in plain `text` in place of `from`–`to`, spaced from the
+ * text around them; `start`–`end` is where they landed.
+ */
+export function placeDictation(
+  text: string,
+  from: number,
+  to: number,
+  words: string,
+) {
+  const before = text.slice(0, from),
+    after = text.slice(to);
+  const fitted = fitCase(words, before.slice(before.lastIndexOf("\n") + 1));
+  if (!fitted) return { text: before + after, start: from, end: from };
+  const lead = before && !/\s$/.test(before) ? " " : "",
+    trail = after && !/^[\s.,!?;:)\]]/.test(after) ? " " : "";
+  const start = from + lead.length;
+  return {
+    text: before + lead + fitted + trail + after,
+    start,
+    end: start + fitted.length,
+  };
+}
