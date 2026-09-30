@@ -65,27 +65,9 @@ export function resolveTurnModel(
   };
 }
 
-/** "Opus 5.5 · High effort · 1M context", with Default spelled out where it applied. */
-export function turnModelLabel(
-  provider: AgentProvider,
-  model: TurnModel,
-): string {
-  const name = model.byDefault
-    ? model.name
-      ? `${model.name} (default)`
-      : "Default model"
-    : model.name;
-  const level = provider === "codex" ? "reasoning" : "effort";
-  const effort = model.effort
-    ? `${effortLabels[model.effort]} ${level}${model.effortByDefault ? " (default)" : ""}`
-    : `Default ${level}`;
-  return [
-    name,
-    effort,
-    model.fast && "Fast",
-    model.window && `${model.window} context`,
-    model.plan && "Plan mode",
-  ]
+/** "Opus 5.5 Medium"; "" when neither is known. */
+export function turnModelLabel(model: TurnModel): string {
+  return [model.name, model.effort && effortLabels[model.effort]]
     .filter(Boolean)
-    .join(" · ");
+    .join(" ");
 }

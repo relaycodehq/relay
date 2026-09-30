@@ -21,21 +21,29 @@ describe("turn model", () => {
       claudeModels,
       null,
     );
-    expect(turnModelLabel("claude", turn)).toBe(
-      "Opus 5.5 · High effort · 1M context · Plan mode",
-    );
+    expect(turn).toEqual({
+      name: "Opus 5.5",
+      effort: "high",
+      window: "1M",
+      plan: true,
+    });
+    expect(turnModelLabel(turn)).toBe("Opus 5.5 High");
   });
 
-  it("spells out what Default ran", () => {
+  it("resolves what Default ran", () => {
     const turn = resolveTurnModel(
       "claude",
       { choice: { model: "", fast: false, reasoningEffort: "" } },
       claudeModels,
       { model: "sonnet", effort: "medium", efforts: { opus: "xhigh" } },
     );
-    expect(turnModelLabel("claude", turn)).toBe(
-      "Sonnet 5.5 (default) · Medium effort (default)",
-    );
+    expect(turn).toEqual({
+      name: "Sonnet 5.5",
+      byDefault: true,
+      effort: "medium",
+      effortByDefault: true,
+    });
+    expect(turnModelLabel(turn)).toBe("Sonnet 5.5 Medium");
   });
 
   it("takes a picked model's own default effort", () => {
@@ -45,20 +53,17 @@ describe("turn model", () => {
       claudeModels,
       { model: "sonnet", effort: "medium", efforts: { opus: "xhigh" } },
     );
-    expect(turnModelLabel("claude", turn)).toBe(
-      "Opus 5.5 · Extra high effort (default)",
-    );
+    expect(turnModelLabel(turn)).toBe("Opus 5.5 Extra high");
   });
 
-  it("says Default when the agent can't tell", () => {
+  it("leaves the label empty when the agent can't tell", () => {
     const turn = resolveTurnModel(
       "codex",
       { choice: { model: "", fast: true, reasoningEffort: "" } },
       [],
       null,
     );
-    expect(turnModelLabel("codex", turn)).toBe(
-      "Default model · Default reasoning · Fast",
-    );
+    expect(turn).toMatchObject({ name: "", effort: "", fast: true });
+    expect(turnModelLabel(turn)).toBe("");
   });
 });

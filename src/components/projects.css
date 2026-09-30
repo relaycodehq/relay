@@ -156,6 +156,48 @@
   width: 14px;
   height: 14px;
 }
+/* Points at the answer's glyph from its left, or from the name's right. */
+.model-callout {
+  position: fixed;
+  z-index: 150;
+  transform: translateY(-50%);
+  padding: 3px 7px;
+  font-size: 10.5px;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--toolbar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px #0000001f;
+  pointer-events: none;
+  animation: model-callout-in 120ms ease-out;
+}
+.model-callout::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: inherit;
+  border: inherit;
+  border-radius: 1px;
+  transform: translateY(-50%) rotate(45deg);
+}
+.model-callout[data-side="left"]::after {
+  right: -4px;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+}
+.model-callout[data-side="right"]::after {
+  left: -4px;
+  border-right-color: transparent;
+  border-top-color: transparent;
+}
+@keyframes model-callout-in {
+  from {
+    opacity: 0;
+  }
+}
 .project-message .markdown pre {
   max-width: 100%;
   overflow: auto;
