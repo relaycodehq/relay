@@ -1,0 +1,113 @@
+/* Settings → Composer toolbar: the composer's bar, rearranged by dragging. */
+.toolbar-edit .project-composer {
+  margin: 0;
+}
+.toolbar-edit-prompt {
+  margin: 0;
+  padding: 14px 16px 10px;
+  font-size: 14px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+/* One line, even when Settings is narrower than the bar; it zooms to fit. */
+.toolbar-edit .composer-tools {
+  flex-wrap: nowrap;
+}
+.toolbar-edit .composer-tools > * {
+  flex-shrink: 0;
+}
+.toolbar-edit-item,
+.toolbar-edit-gap {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  outline-offset: 1px;
+  cursor: grab;
+}
+.toolbar-edit-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.toolbar-edit-item:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.toolbar-edit-item[data-dragging],
+.toolbar-edit-gap[data-dragging] {
+  opacity: 0.35;
+}
+.toolbar-edit-item:focus-visible,
+.toolbar-edit-gap:focus-visible,
+.toolbar-edit-hidden:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.toolbar-edit-gap {
+  flex: 1;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 16px;
+  min-height: 28px;
+  border: 1px dashed transparent;
+  color: var(--muted);
+}
+.toolbar-edit-gap > svg {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.toolbar-edit .composer-tools:hover .toolbar-edit-gap {
+  border-color: var(--border);
+}
+.toolbar-edit .composer-tools:hover .toolbar-edit-gap > svg,
+.toolbar-edit-gap:focus-visible > svg {
+  opacity: 0.8;
+}
+
+/* Hidden controls wait below the bar. */
+.toolbar-edit .toolbar-edit-tray {
+  flex-wrap: wrap;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px dashed transparent;
+  border-radius: 10px;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+.toolbar-edit-tray[data-armed] {
+  border-color: var(--border);
+}
+.toolbar-edit-tray[data-over] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.toolbar-edit-empty {
+  padding-left: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.toolbar-edit-hidden {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: grab;
+  opacity: 0.6;
+}
+.toolbar-edit-hidden:hover {
+  opacity: 0.9;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.toolbar-edit-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+.toolbar-edit-reset:disabled {
+  opacity: 0.4;
+}

@@ -54,8 +54,8 @@ const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
 };
 
 /**
- * A double ring beside the context meter with the signed-in provider's
- * session and weekly limits. Hovering shows each one in full.
+ * A double ring in the composer with the signed-in provider's session and
+ * weekly limits. Hovering shows each one in full.
  */
 export const UsageRing = memo(function UsageRing({
   provider,
@@ -115,40 +115,7 @@ export const UsageRing = memo(function UsageRing({
           state ? `${agent} usage: ${state.label}` : `${agent} usage, checking…`
         }
       >
-        <svg
-          className="usage-ring-dial"
-          width="20"
-          height="20"
-          viewBox="0 0 20 20"
-          aria-hidden
-        >
-          {(["weekly", "session"] as const).map((kind) => {
-            const { radius } = RINGS[kind];
-            const circumference = 2 * Math.PI * radius;
-            const meter = state?.meters.find((m) => m.kind === kind);
-            // Full while the limit is untouched, draining as it's used.
-            const left = meter?.leftPercent ?? 0;
-            return (
-              <g key={kind} className="usage-ring" data-kind={kind}>
-                <circle
-                  className="usage-ring-track"
-                  cx="10"
-                  cy="10"
-                  r={radius}
-                />
-                <circle
-                  className="usage-ring-fill"
-                  data-pace={meter?.pace ?? "ok"}
-                  cx="10"
-                  cy="10"
-                  r={radius}
-                  strokeDasharray={circumference}
-                  strokeDashoffset={circumference * (1 - left / 100)}
-                />
-              </g>
-            );
-          })}
-        </svg>
+        <UsageDial meters={state?.meters ?? []} />
         {hot && <Flame size={8} className="usage-ring-flame" aria-hidden />}
       </Popover.Trigger>
       <Popover.Portal>
@@ -189,6 +156,45 @@ export const UsageRing = memo(function UsageRing({
     </Popover.Root>
   );
 });
+
+/** The two rings on their own, as the trigger and Settings' sample draw them. */
+export function UsageDial({
+  meters,
+}: {
+  meters: Pick<UsageMeter, "kind" | "leftPercent" | "pace">[];
+}) {
+  return (
+    <svg
+      className="usage-ring-dial"
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      aria-hidden
+    >
+      {(["weekly", "session"] as const).map((kind) => {
+        const { radius } = RINGS[kind];
+        const circumference = 2 * Math.PI * radius;
+        const meter = meters.find((m) => m.kind === kind);
+        // Full while the limit is untouched, draining as it's used.
+        const left = meter?.leftPercent ?? 0;
+        return (
+          <g key={kind} className="usage-ring" data-kind={kind}>
+            <circle className="usage-ring-track" cx="10" cy="10" r={radius} />
+            <circle
+              className="usage-ring-fill"
+              data-pace={meter?.pace ?? "ok"}
+              cx="10"
+              cy="10"
+              r={radius}
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - left / 100)}
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 function UsageRow({ meter }: { meter: UsageMeter }) {
   const hot = meter.pace === "hot" || meter.pace === "spent";

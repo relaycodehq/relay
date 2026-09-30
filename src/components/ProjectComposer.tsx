@@ -1,5 +1,6 @@
 import { runtimeModes } from "../../shared/agent-modes";
-import { ComposerModeControls } from "./ComposerModeControls";
+import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
+import { ComposerToolbar } from "./ComposerToolbar";
 import {
   ComposerPromptInput,
   type PromptInputHandle,
@@ -80,7 +81,7 @@ import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
 import { DictationButton } from "./DictationButton";
 import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
-import { useUsageRing } from "../lib/usage-ring";
+import { useComposerToolbar } from "../lib/composer-toolbar";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import {
   effortStep,
@@ -406,7 +407,7 @@ export function ProjectComposer({
     setUltraplan(on);
     if (on) setSpark((n) => n + 1);
   }, []);
-  const showUsage = useUsageRing();
+  const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const pickOf = (to: AgentProvider) =>
     livePick(picks[to], agentPicks.catalogs[to]?.models);
@@ -1184,6 +1185,53 @@ export function ProjectComposer({
       sending.current = false;
     }
   }
+  const effortControl =
+    recipient === "codex" && selected ? (
+      <>
+        <ComposerSelect<ReasoningEffort>
+          label="Reasoning effort"
+          value={selected.reasoningEffort}
+          options={codexEffortOptions}
+          onChange={setCodexEffort}
+          heading={{ label: "Reasoning", hint: effortHint }}
+        />
+        <button
+          type="button"
+          className="composer-control composer-fast"
+          aria-label="Fast mode"
+          aria-pressed={selected.fast}
+          title={selected.fast ? "Fast mode enabled" : "Enable Fast mode"}
+          onClick={() => setChoice({ ...selected, fast: !selected.fast })}
+        >
+          <Zap size={14} />
+          Fast
+        </button>
+      </>
+    ) : recipient === "claude" &&
+      selected &&
+      (claudeModelEfforts.length > 0 || claudeRuns?.longContext) ? (
+      <ComposerTraitsMenu
+        label="Reasoning effort and context window"
+        sections={claudeTraits}
+      />
+    ) : isPickAgent(recipient) &&
+      selected &&
+      pickOf(recipient).efforts.length > 0 ? (
+      <ComposerSelect<ReasoningEffort>
+        label="Reasoning effort"
+        value={pickOf(recipient).reasoningEffort}
+        options={[
+          { value: "", label: "Default" },
+          ...pickOf(recipient).efforts.map((value) => ({
+            value,
+            label: effortLabels[value],
+          })),
+        ]}
+        onChange={(effort) => setPickEffort(recipient, effort)}
+        heading={{ label: "Reasoning", hint: effortHint }}
+      />
+    ) : null;
+
   return (
     <div className="thread-compose-wrap">
       {planProvider && (
@@ -1401,86 +1449,6 @@ export function ProjectComposer({
           />
         )}
         <div className="composer-tools">
-          <ComposerModelPicker
-            provider={recipient}
-            ready={!!selected}
-            catalogs={catalogs}
-            onOpen={openModelPicker}
-            openSignal={pickModel}
-            onSelect={selectModel}
-            defaultNames={defaultNames}
-          />
-          {recipient === "codex" && selected && (
-            <>
-              <span className="composer-divider" aria-hidden />
-              <ComposerSelect<ReasoningEffort>
-                label="Reasoning effort"
-                value={selected.reasoningEffort}
-                options={codexEffortOptions}
-                onChange={setCodexEffort}
-                heading={{ label: "Reasoning", hint: effortHint }}
-              />
-              <button
-                type="button"
-                className="composer-control composer-fast"
-                aria-label="Fast mode"
-                aria-pressed={selected.fast}
-                title={selected.fast ? "Fast mode enabled" : "Enable Fast mode"}
-                onClick={() => setChoice({ ...selected, fast: !selected.fast })}
-              >
-                <Zap size={14} />
-                Fast
-              </button>
-            </>
-          )}
-          {recipient === "claude" &&
-            selected &&
-            (claudeModelEfforts.length > 0 || claudeRuns?.longContext) && (
-              <>
-                <span className="composer-divider" aria-hidden />
-                <ComposerTraitsMenu
-                  label="Reasoning effort and context window"
-                  sections={claudeTraits}
-                />
-              </>
-            )}
-          {isPickAgent(recipient) &&
-            selected &&
-            pickOf(recipient).efforts.length > 0 && (
-              <>
-                <span className="composer-divider" aria-hidden />
-                <ComposerSelect<ReasoningEffort>
-                  label="Reasoning effort"
-                  value={pickOf(recipient).reasoningEffort}
-                  options={[
-                    { value: "", label: "Default" },
-                    ...pickOf(recipient).efforts.map((value) => ({
-                      value,
-                      label: effortLabels[value],
-                    })),
-                  ]}
-                  onChange={(effort) => setPickEffort(recipient, effort)}
-                  heading={{ label: "Reasoning", hint: effortHint }}
-                />
-              </>
-            )}
-          {contextMeter && (
-            <>
-              <span className="composer-divider" aria-hidden />
-              {contextMeter}
-            </>
-          )}
-          {recipient !== "message" && (
-            <ComposerModeControls
-              provider={recipient}
-              runtimeMode={runtimeMode}
-              interactionMode={interactionMode}
-              ultraplan={councilOn}
-              onRuntimeMode={setRuntimeMode}
-              onInteractionMode={setInteractionMode}
-              onUltraplan={ultraplanOffered ? pickUltraplan : undefined}
-            />
-          )}
           <input
             ref={filePick}
             type="file"
@@ -1491,29 +1459,65 @@ export function ProjectComposer({
               event.target.value = "";
             }}
           />
-          <button
-            type="button"
-            className="composer-control"
-            aria-label="Attach files"
-            title={
-              shared
-                ? "Files in shared conversations are not supported yet"
-                : "Attach screenshots or files"
-            }
-            disabled={shared}
-            onClick={() => filePick.current?.click()}
-          >
-            <Paperclip size={15} />
-          </button>
-          <span className="spacer" />
-          {showUsage && reportsUsage(recipient) && (
-            <UsageRing provider={recipient} />
-          )}
-          <DictationButton
-            owner={dictationOwner}
-            target={() => promptInput.current?.dictation}
-            composer={composerForm}
-            resetKey={draftKey}
+          <ComposerToolbar
+            layout={toolbar}
+            controls={{
+              model: (
+                <ComposerModelPicker
+                  provider={recipient}
+                  ready={!!selected}
+                  catalogs={catalogs}
+                  onOpen={openModelPicker}
+                  openSignal={pickModel}
+                  onSelect={selectModel}
+                  defaultNames={defaultNames}
+                />
+              ),
+              effort: effortControl,
+              context: contextMeter,
+              access: recipient !== "message" && (
+                <RuntimeModeSelect
+                  provider={recipient}
+                  runtimeMode={runtimeMode}
+                  onRuntimeMode={setRuntimeMode}
+                />
+              ),
+              mode: recipient !== "message" && (
+                <InteractionModeMenu
+                  interactionMode={interactionMode}
+                  ultraplan={councilOn}
+                  onInteractionMode={setInteractionMode}
+                  onUltraplan={ultraplanOffered ? pickUltraplan : undefined}
+                />
+              ),
+              attach: (
+                <button
+                  type="button"
+                  className="composer-control"
+                  aria-label="Attach files"
+                  title={
+                    shared
+                      ? "Files in shared conversations are not supported yet"
+                      : "Attach screenshots or files"
+                  }
+                  disabled={shared}
+                  onClick={() => filePick.current?.click()}
+                >
+                  <Paperclip size={15} />
+                </button>
+              ),
+              usage: reportsUsage(recipient) && (
+                <UsageRing provider={recipient} />
+              ),
+              mic: (
+                <DictationButton
+                  owner={dictationOwner}
+                  target={() => promptInput.current?.dictation}
+                  composer={composerForm}
+                  resetKey={draftKey}
+                />
+              ),
+            }}
           />
           {running && (
             <button

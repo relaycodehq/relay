@@ -45,7 +45,10 @@ import { useAISettings } from "../lib/useAISettings";
 import { useUpdates } from "../lib/updates";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
-import { setUsageRing, useUsageRing } from "../lib/usage-ring";
+import {
+  ComposerToolbarReset,
+  ComposerToolbarSettings,
+} from "./ComposerToolbarSettings";
 import {
   setSidebarAutoHide,
   useSidebarAutoHide,
@@ -545,7 +548,6 @@ export function Settings({
   const updates = useUpdates();
   const dictationModel = useDictationModel();
   const appearance = useAppearance();
-  const usageRing = useUsageRing();
   const cacheHeat = useCacheHeat();
   const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
@@ -693,19 +695,16 @@ export function Settings({
       render: () => <ThemeImportSettings />,
     },
     {
-      id: "usage-ring",
+      id: "composer-toolbar",
       category: "appearance",
-      title: "Usage limits",
+      title: "Composer toolbar",
       description:
-        "A ring in the composer, next to the context meter, with the session and weekly limits of the selected agent.",
-      keywords: "usage limit quota session weekly meter ring composer",
-      render: () => (
-        <Switch
-          label="Show usage limits in the composer"
-          checked={usageRing}
-          onChange={setUsageRing}
-        />
-      ),
+        "Drag a control along the bar to move it, and drag the gap to choose what sits on the right. Drop a control below the bar to hide it. From the keyboard, the arrows move the focused control and Delete hides it.",
+      keywords:
+        "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode attach dictation microphone",
+      block: true,
+      accessory: () => <ComposerToolbarReset />,
+      render: () => <ComposerToolbarSettings />,
     },
     {
       id: "cache-heat",

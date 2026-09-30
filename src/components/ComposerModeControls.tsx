@@ -65,87 +65,126 @@ export const ComposerModeControls = memo(function ComposerModeControls({
   /** Unset where a council can't run, so the menu doesn't offer it. */
   onUltraplan?: (on: boolean) => void;
 }) {
-  const Icon = icons[runtimeMode];
-  const mode: Mode = ultraplan ? "ultraplan" : interactionMode;
-  const current = modes.find((m) => m.value === mode)!;
   return (
     <>
       <span className="composer-divider" aria-hidden />
-      <ComposerSelect
-        label="Runtime mode"
-        className="composer-runtime"
-        value={runtimeMode}
-        icon={<Icon size={14} />}
-        onChange={onRuntimeMode}
-        options={runtimeModesFor(provider).map((option) => {
-          const OptionIcon = icons[option.value];
-          return { ...option, icon: <OptionIcon size={14} /> };
-        })}
+      <RuntimeModeSelect
+        provider={provider}
+        runtimeMode={runtimeMode}
+        onRuntimeMode={onRuntimeMode}
       />
       <span className="composer-divider" aria-hidden />
-      <Menu.Root>
-        <Menu.Trigger
-          className={`composer-control composer-interaction ${mode !== "default" ? "selected" : ""}`}
-          data-mode={mode}
-          aria-label={`Mode: ${current.label}`}
-          title="Build, plan, or plan with a council first"
-        >
-          {current.icon}
-          <span className={mode === "ultraplan" ? "ultraplan-text" : undefined}>
-            {current.label}
-          </span>
-          <ChevronDown size={12} />
-        </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner
-            className="composer-popup-positioner"
-            align="start"
-            sideOffset={6}
-          >
-            <Menu.Popup
-              className="composer-select-popup composer-mode-menu"
-              aria-label="Mode"
-            >
-              <Menu.RadioGroup
-                value={mode}
-                onValueChange={(value: Mode) => {
-                  onInteractionMode(value === "default" ? "default" : "plan");
-                  onUltraplan?.(value === "ultraplan");
-                }}
-              >
-                {modes
-                  .filter((m) => m.value !== "ultraplan" || onUltraplan)
-                  .map((m) => (
-                    <Menu.RadioItem
-                      key={m.value}
-                      className="composer-select-item"
-                      value={m.value}
-                      data-mode={m.value}
-                      closeOnClick
-                    >
-                      <span className="composer-mode-option">
-                        {m.icon}
-                        <span
-                          className={
-                            m.value === "ultraplan"
-                              ? "ultraplan-text"
-                              : undefined
-                          }
-                        >
-                          {m.label}
-                        </span>
-                        <small>{m.hint}</small>
-                      </span>
-                      <Menu.RadioItemIndicator>
-                        <Check size={13} />
-                      </Menu.RadioItemIndicator>
-                    </Menu.RadioItem>
-                  ))}
-              </Menu.RadioGroup>
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
+      <InteractionModeMenu
+        interactionMode={interactionMode}
+        ultraplan={ultraplan}
+        onInteractionMode={onInteractionMode}
+        onUltraplan={onUltraplan}
+      />
     </>
+  );
+});
+
+/** How much the agent may do without asking: approvals up to full access. */
+export const RuntimeModeSelect = memo(function RuntimeModeSelect({
+  provider,
+  runtimeMode,
+  onRuntimeMode,
+}: {
+  provider?: AgentProvider;
+  runtimeMode: RuntimeMode;
+  onRuntimeMode: (mode: RuntimeMode) => void;
+}) {
+  const Icon = icons[runtimeMode];
+  return (
+    <ComposerSelect
+      label="Runtime mode"
+      className="composer-runtime"
+      value={runtimeMode}
+      icon={<Icon size={14} />}
+      onChange={onRuntimeMode}
+      options={runtimeModesFor(provider).map((option) => {
+        const OptionIcon = icons[option.value];
+        return { ...option, icon: <OptionIcon size={14} /> };
+      })}
+    />
+  );
+});
+
+/** Build, Plan, or Ultraplan. */
+export const InteractionModeMenu = memo(function InteractionModeMenu({
+  interactionMode,
+  ultraplan = false,
+  onInteractionMode,
+  onUltraplan,
+}: {
+  interactionMode: InteractionMode;
+  ultraplan?: boolean;
+  onInteractionMode: (mode: InteractionMode) => void;
+  onUltraplan?: (on: boolean) => void;
+}) {
+  const mode: Mode = ultraplan ? "ultraplan" : interactionMode;
+  const current = modes.find((m) => m.value === mode)!;
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className={`composer-control composer-interaction ${mode !== "default" ? "selected" : ""}`}
+        data-mode={mode}
+        aria-label={`Mode: ${current.label}`}
+        title="Build, plan, or plan with a council first"
+      >
+        {current.icon}
+        <span className={mode === "ultraplan" ? "ultraplan-text" : undefined}>
+          {current.label}
+        </span>
+        <ChevronDown size={12} />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner
+          className="composer-popup-positioner"
+          align="start"
+          sideOffset={6}
+        >
+          <Menu.Popup
+            className="composer-select-popup composer-mode-menu"
+            aria-label="Mode"
+          >
+            <Menu.RadioGroup
+              value={mode}
+              onValueChange={(value: Mode) => {
+                onInteractionMode(value === "default" ? "default" : "plan");
+                onUltraplan?.(value === "ultraplan");
+              }}
+            >
+              {modes
+                .filter((m) => m.value !== "ultraplan" || onUltraplan)
+                .map((m) => (
+                  <Menu.RadioItem
+                    key={m.value}
+                    className="composer-select-item"
+                    value={m.value}
+                    data-mode={m.value}
+                    closeOnClick
+                  >
+                    <span className="composer-mode-option">
+                      {m.icon}
+                      <span
+                        className={
+                          m.value === "ultraplan" ? "ultraplan-text" : undefined
+                        }
+                      >
+                        {m.label}
+                      </span>
+                      <small>{m.hint}</small>
+                    </span>
+                    <Menu.RadioItemIndicator>
+                      <Check size={13} />
+                    </Menu.RadioItemIndicator>
+                  </Menu.RadioItem>
+                ))}
+            </Menu.RadioGroup>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 });
