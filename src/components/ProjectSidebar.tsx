@@ -62,13 +62,19 @@ import {
 } from "../lib/shortcuts";
 import { modifierCode } from "../../shared/shortcuts";
 import { useWindowFocused } from "../lib/window-focus";
-import { ErrorBox, IconButton, Spinner } from "./ui";
+import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
 import { UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { agentName } from "../../shared/agents";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
+import { DraftCard } from "./DraftCard";
+import {
+  activityDrafts,
+  useDraftKeys,
+  type ActivityDraft,
+} from "../lib/drafts";
 import {
   joinGroup,
   moveGroupInList,
@@ -360,59 +366,6 @@ function Elapsed({ since }: { since: number }) {
   return <span className="sb-elapsed">{text}</span>;
 }
 
-/**
- * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
- * or in a menu they open, bubble up here and are left to them.
- */
-const rowKeys = (open: () => void) => (e: React.KeyboardEvent) => {
-  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " "))
-    return;
-  e.preventDefault();
-  open();
-};
-
-interface ComposerDraft {
-  key: string;
-  text: string;
-  chatId?: string;
-  projectId?: string;
-}
-
-/**
- * Unsent composer text from ProjectChat's `chat-draft:<chat>[:<reply>]` and
- * `chat-draft:new:<project>` keys. The open thread's own draft is already on
- * screen, so it is left out.
- */
-function composerDrafts(
-  chatId: string | undefined,
-  projectId: string | undefined,
-  inChat: boolean,
-): ComposerDraft[] {
-  const drafts: ComposerDraft[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith("chat-draft:")) continue;
-      const text = localStorage.getItem(key)?.replace(/\s+/g, " ").trim();
-      if (!text) continue;
-      const rest = key.slice("chat-draft:".length);
-      if (rest.startsWith("new:")) {
-        const project = rest.slice(4);
-        if (!inChat && project === projectId) continue;
-        drafts.push({ key, text, projectId: project });
-      } else {
-        const chat = rest.split(":")[0];
-        // One card per thread, even with reply drafts alongside the main one.
-        if (chat === chatId || drafts.some((d) => d.chatId === chat)) continue;
-        drafts.push({ key, text, chatId: chat });
-      }
-    }
-  } catch {
-    // Storage is a convenience here.
-  }
-  return drafts.sort((a, b) => a.key.localeCompare(b.key));
-}
-
 /** Inline name field for naming a group, or renaming a project, in place. */
 function GroupNameInput({
   label,
@@ -476,6 +429,7 @@ export function ProjectSidebar({
   projects,
   projectId,
   chatId,
+  draftId,
   dirty,
   account,
   onChat,
@@ -494,6 +448,8 @@ export function ProjectSidebar({
   projects: Project[];
   projectId?: string;
   chatId?: string;
+  /** The unsent thread that's open, when no thread is. */
+  draftId?: string;
   dirty: boolean;
   account?: string;
   onChat: (c: ChatSummary) => void;
@@ -501,8 +457,8 @@ export function ProjectSidebar({
   /** New thread in a project still to be chosen. */
   onPickNew: () => void;
   onNewScratch: () => void;
-  /** Back to a project's unsent new thread. */
-  onDraft: (p: Project) => void;
+  /** Back to one of a project's unsent threads. */
+  onDraft: (p: Project, id: string) => void;
   onAdd: () => void;
   onShared: (p: Project) => void;
   /** Opens Settings, at `category` when given. */
@@ -514,6 +470,8 @@ export function ProjectSidebar({
 }) {
   const qc = useQueryClient();
   const now = useNow(30_000);
+  // Follows drafts as they gain or lose text; each card follows its own.
+  const draftKeys = useDraftKeys();
   // Scratchpad chats list under their own heading, never as projects.
   const realProjects = projects.filter((p) => !p.scratch);
   const scratchIds = new Set(
@@ -884,10 +842,15 @@ export function ProjectSidebar({
     void triage(c, { kind: "settle" });
   };
   const shortcuts = view === "activity" && !query;
-  // Re-read on every render: drafts live in localStorage and the sidebar
-  // re-renders on its clock and chat refetches anyway.
   const drafts =
-    view === "activity" ? composerDrafts(chatId, projectId, !!chatId) : [];
+    view === "activity"
+      ? activityDrafts(
+          draftKeys,
+          byId,
+          new Map(all.map((c) => [c.id, c])),
+          chatId,
+        )
+      : [];
   settleOpen.current = () => {
     const c = sections.active.find((a) => a.id === chatId);
     if (!c || c.running || c.waiting) return false;
@@ -1438,35 +1401,15 @@ export function ProjectSidebar({
     );
   };
 
-  const draftCard = (d: ComposerDraft) => {
-    const chat = d.chatId ? all.find((c) => c.id === d.chatId) : undefined;
-    const p = byId.get(chat?.projectId ?? d.projectId ?? "");
-    if (!p || (d.chatId && !chat)) return null;
-    const resume = () => {
-      if (dirty) return;
-      if (chat) onChat(chat);
-      else onDraft(p);
-    };
-    return (
-      <div
-        key={d.key}
-        role="button"
-        tabIndex={0}
-        aria-disabled={dirty}
-        className="sb-card draft"
-        title={chat ? `Draft in ${chat.title}` : `New thread in ${p.name}`}
-        onClick={resume}
-        onKeyDown={rowKeys(resume)}
-      >
-        <div className="sb-card-top">
-          <SquarePen size={14} className="sb-draft-icon" aria-label="Draft" />
-          <ProjectBadge id={p.id} name={p.name} />
-          <span className="sb-card-project">{p.name}</span>
-        </div>
-        <div className="sb-draft-text">{d.text}</div>
-      </div>
-    );
-  };
+  const draftCard = (d: ActivityDraft) => (
+    <DraftCard
+      key={d.key}
+      draft={d}
+      selected={d.id === draftId}
+      dirty={dirty}
+      onOpen={() => (d.chat ? onChat(d.chat) : onDraft(d.project, d.id))}
+    />
+  );
 
   const compactRow = (c: ChatSummary, kind: "snoozed" | "settled") => {
     const p = byId.get(c.projectId);

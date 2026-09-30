@@ -2,7 +2,7 @@ import { AgentRequestCard } from "./AgentRequestCard";
 import { clock } from "../../shared/waiting";
 import type { RelayCommand } from "../../shared/commands";
 import { agentMention } from "../../shared/rooms";
-import { lineQuestionSchema, type LineQuestion } from "../../shared/questions";
+import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
   memo,
@@ -53,6 +53,11 @@ import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import { readDraft, writeDraft } from "../lib/drafts";
 import {
+  loadCodeRefs,
+  loadSelection,
+  loadWorkItem,
+} from "../lib/draft-attachments";
+import {
   startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
@@ -80,10 +85,9 @@ import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
-import { workItemMessage, type WorkItem } from "../../shared/devops";
+import { workItemMessage } from "../../shared/devops";
 import {
   codeReferenceMessage,
-  isCodeReference,
   parseCodeReferences,
   sameCodeReference,
   type CodeReference,
@@ -540,6 +544,7 @@ export function ProjectChat({
   project,
   projects,
   chat,
+  draftId,
   draftScope,
   contextText,
   onContextUsed,
@@ -563,6 +568,8 @@ export function ProjectChat({
   project: Project;
   projects: Project[];
   chat?: ChatSummary;
+  /** The unsent thread shown while there's no `chat`; see lib/drafts. */
+  draftId: string;
   draftScope: ChatScope;
   contextText?: {
     id: string;
@@ -589,7 +596,7 @@ export function ProjectChat({
   viewing: { path: string | null; viewed: number; total: number };
 }) {
   const qc = useQueryClient(),
-    id = chat?.id ?? `new:${project.id}`,
+    id = chat?.id ?? draftId,
     scope = chat?.scope ?? draftScope;
   const history = useQuery({
     queryKey: ["project-chat", chat?.id],
@@ -634,37 +641,9 @@ export function ProjectChat({
     "relay-project-presence",
   );
   const [sharingOpen, setSharingOpen] = useState(false);
-  const [selection, setSelection] = useState<LineQuestion | undefined>(() => {
-    try {
-      return lineQuestionSchema.safeParse(
-        JSON.parse(localStorage.getItem("chat-selection:" + id) || "null"),
-      ).data;
-    } catch {
-      return undefined;
-    }
-  });
-  const [workItem, setWorkItem] = useState<WorkItem | undefined>(() => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem("chat-work-item:" + id) || "null",
-      );
-      return typeof saved?.id === "number" && typeof saved.title === "string"
-        ? saved
-        : undefined;
-    } catch {
-      return undefined;
-    }
-  });
-  const [codeRefs, setCodeRefs] = useState<CodeReference[]>(() => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem("chat-code-refs:" + id) || "[]",
-      );
-      return Array.isArray(saved) ? saved.filter(isCodeReference) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [selection, setSelection] = useState(() => loadSelection(id));
+  const [workItem, setWorkItem] = useState(() => loadWorkItem(id));
+  const [codeRefs, setCodeRefs] = useState(() => loadCodeRefs(id));
   const created = useRef<ChatSummary | undefined>(undefined);
   const [visible, setVisible] = useState(80);
   const scroll = useRef<HTMLDivElement>(null),
@@ -2049,6 +2028,7 @@ export function ProjectChat({
         {isEmpty && scope.kind === "review" && !chat ? (
           <DeepReviewSetup
             project={project}
+            settingsKey={id}
             context={contextButtons}
             branch={checkout.data?.branch}
             changes={checkout.data?.changes.length ?? 0}

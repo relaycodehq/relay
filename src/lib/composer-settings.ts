@@ -11,6 +11,7 @@ import {
 import {
   agentProviders,
   isAgentProvider,
+  type AgentModel,
   type AgentProvider,
 } from "../../shared/agents";
 import {
@@ -93,6 +94,58 @@ function pickedProvider(key: string, saved: any): Provider | undefined {
     ? undefined
     : saved.provider;
 }
+/** The model and efforts an agent in `picks` runs; "" is its Default. */
+export function livePick(
+  pick: AgentPick | undefined,
+  models: AgentModel[] | undefined,
+) {
+  const { model, reasoningEffort } = pick ?? {
+    model: "",
+    reasoningEffort: "" as const,
+  };
+  const efforts = models?.find((m) => m.id === model)?.efforts ?? [];
+  return {
+    model,
+    efforts,
+    // An effort the model no longer lists runs as its default.
+    reasoningEffort: efforts.includes(reasoningEffort)
+      ? reasoningEffort
+      : ("" as const),
+  };
+}
+/**
+ * What a message to `to` runs on, from Codex's `selected` choice. Every agent
+ * keeps its own model and effort; Codex-only settings never reach the others.
+ */
+export function messageChoice(
+  to: string,
+  selected: ModelChoice | undefined,
+  claude: ComposerSettings["claude"],
+  pick: AgentPick,
+): ModelChoice | undefined {
+  if (!selected) return undefined;
+  if (to === "claude")
+    return {
+      ...selected,
+      model: claude.model,
+      reasoningEffort: claude.reasoningEffort,
+      fast: false,
+    };
+  if (isPickAgent(to))
+    return {
+      model: pick.model,
+      reasoningEffort: pick.reasoningEffort,
+      fast: false,
+    };
+  return selected;
+}
+export const messageContext = (
+  to: string,
+  claude: ComposerSettings["claude"],
+) =>
+  to === "claude" && claude.contextWindow
+    ? { contextWindow: claude.contextWindow }
+    : {};
 /** The agent a composer runs: its pick, else the default for its kind. */
 export const composerProvider = (
   picked: Provider | undefined,

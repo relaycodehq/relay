@@ -7,19 +7,18 @@ interface AgentPickCatalog {
   /** Undefined while loading; empty when the agent couldn't list any. */
   models: AgentModel[] | undefined;
 }
+export const agentModelsQuery = (provider: AgentProvider) => ({
+  queryKey: ["agent-models", provider],
+  queryFn: () => api.agentModels(provider),
+  staleTime: 60_000,
+  retry: false,
+});
 /**
  * The models of each agent whose model the composer keeps in `picks`. Asked
  * once a minute at most; opening the picker asks again.
  */
 export function useAgentPicks() {
-  const models = useQueries({
-    queries: pickAgents.map((provider) => ({
-      queryKey: ["agent-models", provider],
-      queryFn: () => api.agentModels(provider),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
+  const models = useQueries({ queries: pickAgents.map(agentModelsQuery) });
   const catalogs = Object.fromEntries(
     pickAgents.map((provider, i) => [
       provider,

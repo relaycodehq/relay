@@ -137,6 +137,7 @@ function savedSetup(projectId: string): Setup | undefined {
 /** Replaces the composer in a new deep review thread. */
 export function DeepReviewSetup({
   project,
+  settingsKey,
   context,
   branch,
   changes,
@@ -146,6 +147,8 @@ export function DeepReviewSetup({
   onStart,
 }: {
   project: Project;
+  /** The unsent thread's composer settings. */
+  settingsKey: string;
   /** The thread's context buttons, as the composer shows them. */
   context: ReactNode;
   branch?: string;
@@ -243,7 +246,7 @@ export function DeepReviewSetup({
     let runtimeMode = savedRuntimeMode(undefined);
     try {
       const composer = JSON.parse(
-        localStorage.getItem(`composer-settings:new:${project.id}`) || "null",
+        localStorage.getItem(`composer-settings:${settingsKey}`) || "null",
       );
       runtimeMode = savedRuntimeMode(composer?.runtimeMode);
     } catch {

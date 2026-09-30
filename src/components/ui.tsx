@@ -5,6 +5,7 @@ import {
   useRef,
   useId,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   Component,
@@ -31,6 +32,16 @@ import {
   fileIcon,
   parentSuffixes,
 } from "../lib/file-icons";
+/**
+ * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
+ * or in a menu they open, bubble up here and are left to them.
+ */
+export const rowKeys = (open: () => void) => (e: ReactKeyboardEvent) => {
+  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " "))
+    return;
+  e.preventDefault();
+  open();
+};
 export function IconButton({
   label,
   children,

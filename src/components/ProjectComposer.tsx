@@ -43,7 +43,10 @@ import { useAISettings } from "../lib/useAISettings";
 import {
   composerProvider,
   isPickAgent,
+  livePick,
   loadComposerSettings,
+  messageChoice,
+  messageContext,
   newThreadModelsOf,
   pickAgents,
   saveComposerSettings,
@@ -405,41 +408,16 @@ export function ProjectComposer({
   }, []);
   const showUsage = useUsageRing();
   const sendKey = useSendKey();
-  /** The model and efforts an agent in `picks` runs; "" is its Default. */
-  const pickOf = (to: AgentProvider) => {
-    const pick = picks[to] ?? { model: "", reasoningEffort: "" as const };
-    const efforts =
-      agentPicks.catalogs[to]?.models?.find((m) => m.id === pick.model)
-        ?.efforts ?? [];
-    return {
-      ...pick,
-      efforts,
-      // An effort the model no longer lists runs as its default.
-      reasoningEffort: efforts.includes(pick.reasoningEffort)
-        ? pick.reasoningEffort
-        : ("" as const),
-    };
-  };
-  // Every agent keeps its own model and effort; Codex-only settings never reach the others.
+  const pickOf = (to: AgentProvider) =>
+    livePick(picks[to], agentPicks.catalogs[to]?.models);
   const choiceFor = (to: string): ModelChoice | undefined =>
-    selected && to === "claude"
-      ? {
-          ...selected,
-          model: claude.model,
-          reasoningEffort: claude.reasoningEffort,
-          fast: false,
-        }
-      : selected && isPickAgent(to)
-        ? {
-            model: pickOf(to).model,
-            reasoningEffort: pickOf(to).reasoningEffort,
-            fast: false,
-          }
-        : selected;
-  const contextFor = (to: string) =>
-    to === "claude" && claude.contextWindow
-      ? { contextWindow: claude.contextWindow }
-      : {};
+    messageChoice(
+      to,
+      selected,
+      claude,
+      isPickAgent(to) ? pickOf(to) : { model: "", reasoningEffort: "" },
+    );
+  const contextFor = (to: string) => messageContext(to, claude);
   const [pickModel, setPickModel] = useState(0);
   const catalogs = useMemo(
     () => ({

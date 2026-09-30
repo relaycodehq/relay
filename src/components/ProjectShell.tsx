@@ -39,13 +39,22 @@ import {
 import { parseRoomInvitation } from "../../shared/rooms";
 import type { Account, PullRef } from "../../shared/types";
 import {
-  chatScopeSchema,
   type ChatWorkspace,
   type Project,
   type ChatSummary,
 } from "../../shared/projects";
 import { api } from "../lib/api";
-import { readDraft, writeDraft } from "../lib/drafts";
+import {
+  clearDraftScope,
+  currentNewThread,
+  DRAFT_PREFIX,
+  freshNewThread,
+  loadDraftScope,
+  readDraft,
+  saveDraftScope,
+  setCurrentNewThread,
+  writeDraft,
+} from "../lib/drafts";
 import {
   loadComposerSettings,
   saveComposerSettings,
@@ -262,6 +271,8 @@ export default function ProjectShell() {
     enabled: !!project,
   });
   const chat = chats.data?.find((c) => c.id === chatId);
+  // Which of the project's unsent threads shows while no thread is open.
+  const draftId = project ? currentNewThread(project.id) : "";
   // A PR thread reviews its PR; any other thread shows the working tree.
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
@@ -321,16 +332,7 @@ export default function ProjectShell() {
       localStorage.setItem("relay-project-id", project.id);
       const saved = localStorage.getItem("relay-project-chat:" + project.id);
       setChatId(saved || null);
-      try {
-        const stored = chatScopeSchema.safeParse(
-          JSON.parse(
-            localStorage.getItem("relay-draft-scope:" + project.id) || "null",
-          ),
-        );
-        setDraftScope(stored.success ? stored.data : { kind: "project" });
-      } catch {
-        setDraftScope({ kind: "project" });
-      }
+      setDraftScope(loadDraftScope(currentNewThread(project.id)));
       panes.closeCode();
       setTurnDiff(null);
       setRestoredProject(project.id);
@@ -339,11 +341,8 @@ export default function ProjectShell() {
   }, [project?.id]);
   useEffect(() => {
     if (project && project.id === restoredProject)
-      localStorage.setItem(
-        "relay-draft-scope:" + project!.id,
-        JSON.stringify(draftScope),
-      );
-  }, [draftScope, project?.id, restoredProject]);
+      saveDraftScope(draftId, draftScope);
+  }, [draftScope, draftId, restoredProject]);
   useEffect(() => {
     localStorage.setItem("relay-surface", legacy ? "inbox" : "project");
   }, [legacy]);
@@ -476,17 +475,17 @@ export default function ProjectShell() {
     );
     if (existing) return setChatId(existing.id);
     startingReview.current = true;
-    const from = `new:${project.id}`;
+    const from = draftId;
     try {
       const next = await api.createProjectChat(project.id, {
         kind: "pr",
         ref,
       });
       saveComposerSettings(next.id, loadComposerSettings(from));
-      const draft = readDraft(`chat-draft:${from}`);
+      const draft = readDraft(DRAFT_PREFIX + from);
       if (draft) {
-        writeDraft(`chat-draft:${next.id}`, draft);
-        writeDraft(`chat-draft:${from}`, "");
+        writeDraft(DRAFT_PREFIX + next.id, draft);
+        writeDraft(DRAFT_PREFIX + from, "");
       }
       await chats.refetch();
       setChatId(next.id);
@@ -585,20 +584,25 @@ export default function ProjectShell() {
     }
   }
   /**
-   * Opens `next`, or with `fresh` the project's new thread: a fresh one on
-   * the repository, or with "draft" the unsent one in the scope it was
-   * written for.
+   * Opens `next`, or with `fresh` one of the project's unsent threads: a new
+   * one on the repository, or with a draft's id that draft, in the scope it
+   * was written for.
    */
   function navigate(
     p: Project,
     next?: ChatSummary,
-    fresh: boolean | "draft" = false,
+    fresh: boolean | string = false,
   ) {
     if (dirty) return;
     if (fresh || next)
       localStorage.setItem("relay-project-chat:" + p.id, next?.id ?? "");
-    // Switching projects restores the saved scope, so a fresh thread drops it.
-    if (fresh === true) localStorage.removeItem("relay-draft-scope:" + p.id);
+    if (fresh) {
+      const id = fresh === true ? freshNewThread(p.id) : fresh;
+      // Switching projects restores the saved scope, so a fresh thread drops it.
+      if (fresh === true) clearDraftScope(id);
+      setCurrentNewThread(p.id, id);
+      setDraftScope(loadDraftScope(id));
+    }
     setSelected(p.id);
     if (next || fresh) setChatId(next?.id ?? null);
     setLegacy(false);
@@ -606,7 +610,6 @@ export default function ProjectShell() {
     setTurnDiff(null);
     setContextText(undefined);
     setViewing(NO_VIEWING);
-    if (fresh === true) setDraftScope({ kind: "project" });
   }
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pickNewThread() {
@@ -641,6 +644,9 @@ export default function ProjectShell() {
   /** A thread keeps the scope it started with; another one takes a new thread. */
   function newThreadIn(scope: ChatSummary["scope"]) {
     if (dirty) return;
+    // From a thread it starts afresh, not in a draft written for something else.
+    if (chat && project)
+      setCurrentNewThread(project.id, freshNewThread(project.id));
     setChatId(null);
     setDraftScope(scope);
   }
@@ -904,7 +910,8 @@ export default function ProjectShell() {
             onNew={(p) => navigate(p, undefined, true)}
             onPickNew={pickNewThread}
             onNewScratch={() => void newScratch()}
-            onDraft={(p) => navigate(p, undefined, "draft")}
+            draftId={chat ? undefined : draftId}
+            onDraft={(p, id) => navigate(p, undefined, id)}
             onAdd={() => void add()}
             onShared={(p) => {
               navigate(p);
@@ -966,8 +973,9 @@ export default function ProjectShell() {
                 className="project-chat-pane"
               >
                 <ProjectChat
-                  key={chat?.id ?? `new:${project.id}`}
+                  key={chat?.id ?? draftId}
                   project={project}
+                  draftId={draftId}
                   onCommand={runCommand}
                   projects={realProjects}
                   chat={chat}

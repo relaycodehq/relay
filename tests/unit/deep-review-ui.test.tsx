@@ -27,6 +27,7 @@ const setup = () =>
     <QueryClientProvider client={new QueryClient()}>
       <DeepReviewSetup
         project={project}
+        settingsKey="new:p1"
         context={null}
         branch="main"
         changes={2}
