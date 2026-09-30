@@ -12,7 +12,9 @@ import type {
   SourceControlKind,
   SourceControlProvider,
 } from "../shared/source-control";
+import type { TeaSetup } from "../shared/source-control";
 import type { Api } from "../shared/types";
+import { TeaSignIn } from "../src/components/TeaSignIn";
 
 initAppearance();
 
@@ -29,10 +31,18 @@ const github: SourceControlProvider = {
 const gitea: SourceControlProvider = {
   kind: "gitea",
   name: "Gitea",
+  cli: "tea",
   enabled: true,
-  version: "1.22.0",
+  path: "/opt/homebrew/bin/tea",
+  version: "0.16.0",
   signIn: "signed-in",
-  account: "sample-user",
+  account: "sample-user on git.example.com",
+};
+const giteaOut: SourceControlProvider = {
+  ...gitea,
+  signIn: "signed-out",
+  account: undefined,
+  detail: "tea is logged in to git.example.com. Connect to use one.",
 };
 
 // Sample data, not this machine's tools.
@@ -47,7 +57,8 @@ const samples: Record<string, SourceControlProvider[]> = {
     },
     gitea,
   ],
-  "gh missing": [
+  "Gitea signed out": [github, giteaOut],
+  "Nothing installed": [
     {
       ...github,
       path: undefined,
@@ -58,11 +69,11 @@ const samples: Record<string, SourceControlProvider[]> = {
         "Install the GitHub CLI (`brew install gh`, or cli.github.com), or link it here if it lives somewhere else.",
     },
     {
-      ...gitea,
-      signIn: "signed-out",
-      account: undefined,
+      ...giteaOut,
+      path: undefined,
       version: undefined,
-      detail: "Connect your account under Account.",
+      detail:
+        "Connect with a token, or link tea to sign in with one of its logins.",
     },
   ],
   "gh linked": [
@@ -91,15 +102,49 @@ Object.assign(window.relay as Partial<Api>, {
     return state;
   },
   // The dialog is the desktop's; the sample links a mise install.
-  linkGithubCli: async () => {
-    state = samples["gh linked"];
+  linkSourceControlCli: async (kind: SourceControlKind) => {
+    state = state.map((p) =>
+      p.kind === kind
+        ? {
+            ...p,
+            linked: true,
+            path: `/home/sample/.local/share/mise/installs/${p.cli}/latest/bin/${p.cli}`,
+          }
+        : p,
+    );
     return state;
   },
-  unlinkGithubCli: async () => {
-    state = samples["Both ready"];
+  unlinkSourceControlCli: async (kind: SourceControlKind) => {
+    state = state.map((p) =>
+      p.kind === kind ? { ...p, linked: undefined } : p,
+    );
     return state;
+  },
+  teaSetup: async () => teaSample,
+  connectWithTea: async () => {
+    await wait();
+    throw new Error("Sample: this preview doesn't sign in.");
   },
 });
+
+const teaSample: TeaSetup = {
+  path: "/opt/homebrew/bin/tea",
+  version: "0.16.0",
+  logins: [
+    {
+      name: "work",
+      url: "https://git.example.com",
+      user: "ann",
+      default: true,
+    },
+    {
+      name: "home",
+      url: "http://192.168.1.20:3000",
+      user: "ann",
+      default: false,
+    },
+  ],
+};
 
 const client = new QueryClient();
 
@@ -123,7 +168,11 @@ function Preview() {
         ))}
       </div>
       <p className="setting-muted">Sample data.</p>
-      <SourceControlSettings />
+      <SourceControlSettings onConnect={() => {}} />
+      <div style={{ width: 395 }}>
+        <p className="setting-muted">The sign-in screen's tea section:</p>
+        <TeaSignIn onConnected={async () => {}} />
+      </div>
     </div>
   );
 }

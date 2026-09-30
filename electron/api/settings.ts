@@ -1,4 +1,4 @@
-import { dialog, net } from "electron";
+import { dialog } from "electron";
 import { homedir } from "node:os";
 import { z } from "zod";
 import {
@@ -16,9 +16,10 @@ import { runExecutable, setLinkedAgents } from "../executables";
 import { gitInfo, gitVersion, setGitPath } from "../git";
 import { readProviderUsage } from "../provider-usage";
 import {
-  relinkGh,
+  linkCli,
   setSourceControlEnabled,
   sourceControlStatus,
+  unlinkCli,
 } from "../source-control";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
@@ -27,8 +28,7 @@ import type { ApiContext, Handlers } from "./context";
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
-  const sourceControl = () =>
-    sourceControlStatus(store, ctx.login, (url, init) => net.fetch(url, init));
+  const sourceControl = () => sourceControlStatus(store, ctx.login);
   function requirePhoneRemote() {
     const phoneRemote = ctx.phoneRemote();
     if (!phoneRemote) throw new Error("Relay is still starting.");
@@ -156,28 +156,25 @@ export function settingsHandlers(ctx: ApiContext) {
       );
       return sourceControl();
     },
-    linkGithubCli: async () => {
+    linkSourceControlCli: async (args) => {
+      const kind = z.enum(sourceControlKinds).parse(args[0]);
+      const cli = kind === "github" ? "gh" : "tea";
       const result = await dialog.showOpenDialog(ctx.window.win!, {
-        title: "Choose the gh program",
+        title: `Choose the ${cli} program`,
+        // Version managers keep their installs in hidden folders.
         properties: ["openFile", "showHiddenFiles"],
         defaultPath: homedir(),
         filters:
           process.platform === "win32"
-            ? [{ name: "gh", extensions: ["exe", "cmd", "bat"] }]
+            ? [{ name: cli, extensions: ["exe", "cmd", "bat"] }]
             : undefined,
       });
       if (result.canceled) return null;
-      const path = result.filePaths[0];
-      const run = await runExecutable(path, ["--version"], 15_000);
-      if (run.code !== 0 || !/^gh version /.test(run.stdout))
-        throw new Error(
-          `That doesn't look like the GitHub CLI: it didn't say "gh version".${run.output.trim() ? `\n${run.output.trim().slice(-300)}` : ""}`,
-        );
-      await relinkGh(store, path);
+      await linkCli(store, kind, result.filePaths[0]);
       return sourceControl();
     },
-    unlinkGithubCli: async () => {
-      await relinkGh(store, undefined);
+    unlinkSourceControlCli: async (args) => {
+      await unlinkCli(store, z.enum(sourceControlKinds).parse(args[0]));
       return sourceControl();
     },
     signInCursor: async () => {

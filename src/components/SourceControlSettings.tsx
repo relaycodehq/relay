@@ -19,7 +19,12 @@ const signIns = {
 } as const;
 
 /** Settings → Integrations: the hosts Relay reads pull requests and CI from. */
-export function SourceControlSettings() {
+export function SourceControlSettings({
+  onConnect,
+}: {
+  /** Opens the Gitea sign-in, which also offers the logins tea holds. */
+  onConnect?: () => void;
+}) {
   const qc = useQueryClient();
   const providers = useQuery({
     queryKey: ["source-control"],
@@ -34,8 +39,11 @@ export function SourceControlSettings() {
       const next = await run();
       if (!next) return;
       qc.setQueryData(["source-control"], next);
-      // A host turned off or a different `gh` changes what CI shows.
-      await qc.invalidateQueries({ queryKey: ["ci-status"] });
+      // A host turned off or a different CLI changes what CI and sign-in show.
+      await qc.invalidateQueries({
+        predicate: (q) =>
+          ["ci-status", "tea-setup"].includes(String(q.queryKey[0])),
+      });
     } catch (e) {
       setError(e);
     } finally {
@@ -53,6 +61,7 @@ export function SourceControlSettings() {
             provider={provider}
             busy={busy}
             apply={apply}
+            onConnect={onConnect}
           />
         ))}
         <SettingsFooter note="A host you turn off stops showing CI status. Your accounts and tools stay as they are.">
@@ -80,16 +89,18 @@ function ProviderRow({
   provider,
   busy,
   apply,
+  onConnect,
 }: {
   provider: SourceControlProvider;
+  onConnect?: () => void;
   busy: boolean;
   apply: (run: () => Promise<SourceControlProvider[] | null>) => Promise<void>;
 }) {
   const { kind, cli, path, version } = provider;
   const status = [
     version && (cli ? `${cli} ${version}` : `Version ${version}`),
-    // A tool that isn't there has no sign-in worth reporting.
-    cli && !path
+    // A tool that isn't there, and nobody signed in through it, has nothing to report.
+    provider.signIn === "unknown" && !provider.account
       ? undefined
       : provider.account
         ? `${signIns[provider.signIn]} as ${provider.account}`
@@ -111,7 +122,11 @@ function ProviderRow({
           {provider.detail && (
             <span
               className="agent-version-note"
-              data-failed={provider.signIn === "signed-out" || undefined}
+              data-failed={
+                kind === "github" && provider.signIn === "signed-out"
+                  ? true
+                  : undefined
+              }
             >
               {provider.detail}
             </span>
@@ -119,11 +134,16 @@ function ProviderRow({
         </>
       }
     >
+      {kind === "gitea" && provider.signIn === "signed-out" && onConnect && (
+        <button className="primary" disabled={busy} onClick={onConnect}>
+          Connect…
+        </button>
+      )}
       {cli && provider.linked && (
         <button
           disabled={busy}
           title="Forget the linked program and search again"
-          onClick={() => void apply(() => api.unlinkGithubCli())}
+          onClick={() => void apply(() => api.unlinkSourceControlCli(kind))}
         >
           <RotateCcw size={14} />
           Find automatically
@@ -133,7 +153,7 @@ function ProviderRow({
         <button
           className={!path && !provider.linked ? "primary" : ""}
           disabled={busy}
-          onClick={() => void apply(() => api.linkGithubCli())}
+          onClick={() => void apply(() => api.linkSourceControlCli(kind))}
         >
           <FolderOpen size={14} />
           {path ? "Change…" : "Link…"}

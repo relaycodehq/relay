@@ -4,6 +4,7 @@ import { emptyWorkspace } from "../../shared/types";
 import { workspaceSchema } from "../../shared/validation";
 import { seal } from "../app/login";
 import { Gitea } from "../gitea";
+import { teaSetup, teaToken } from "../tea";
 import type { ApiContext, Handlers } from "./context";
 
 /** Signing in and out of Gitea, and what the window starts from. */
@@ -19,6 +20,24 @@ export function accountHandlers(ctx: ApiContext) {
     blame,
     requireClient,
   } = ctx;
+  async function signIn(server: string, token: string) {
+    login.cancelRestore();
+    const next = await Gitea.connect(server, token, (url, options) =>
+      net.fetch(url, options),
+    );
+    const encryptedToken = (await seal(token)) ?? undefined;
+    next.account.persistent = encryptedToken !== undefined;
+    await store.update((s) => {
+      s.account = next.account;
+      s.encryptedToken = encryptedToken;
+    });
+    triage.cancel();
+    projectChecks.stop();
+    blame.dispose();
+    login.client?.dispose();
+    login.client = next;
+    return next.account;
+  }
   return {
     bootstrap: () => {
       const client = login.client;
@@ -48,25 +67,17 @@ export function accountHandlers(ctx: ApiContext) {
         s.workspaces[accountId] = workspace;
       });
     },
-    connect: async (args) => {
-      const server = z.string().max(2048).parse(args[0]),
-        token = z.string().trim().min(1).max(4096).parse(args[1]);
-      login.cancelRestore();
-      const next = await Gitea.connect(server, token, (url, options) =>
-        net.fetch(url, options),
-      );
-      const encryptedToken = (await seal(token)) ?? undefined;
-      next.account.persistent = encryptedToken !== undefined;
-      await store.update((s) => {
-        s.account = next.account;
-        s.encryptedToken = encryptedToken;
-      });
-      triage.cancel();
-      projectChecks.stop();
-      blame.dispose();
-      login.client?.dispose();
-      login.client = next;
-      return next.account;
+    connect: (args) =>
+      signIn(
+        z.string().max(2048).parse(args[0]),
+        z.string().trim().min(1).max(4096).parse(args[1]),
+      ),
+    teaSetup: () => teaSetup(),
+    connectWithTea: async (args) => {
+      const name = z.string().max(200).parse(args[0]);
+      const login = (await teaSetup()).logins.find((l) => l.name === name);
+      if (!login) throw new Error(`tea has no login called ${name}.`);
+      return signIn(login.url, await teaToken(login));
     },
     disconnect: async () => {
       await liveSyncs.stopAll();

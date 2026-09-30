@@ -10,7 +10,7 @@ export const sourceControlNames: Record<SourceControlKind, string> = {
 /** What Settings keeps: hosts the user turned off, and the `gh` they linked. */
 export interface SourceControlSettings {
   off?: SourceControlKind[];
-  paths?: { github?: string };
+  paths?: { github?: string; gitea?: string };
 }
 
 export const isSourceControlOn = (
@@ -25,13 +25,13 @@ export interface SourceControlProvider {
   kind: SourceControlKind;
   name: string;
   enabled: boolean;
-  /** The command-line tool Relay runs; absent for a host Relay reaches with an account. */
+  /** The command-line tool Relay runs. */
   cli?: string;
   /** The program Relay runs; absent when none was found. */
   path?: string;
   /** Set when the user linked `path` instead of leaving it to Relay. */
   linked?: boolean;
-  /** As the tool or server prints it, e.g. `gh version 2.101.0`. */
+  /** The tool's version, e.g. `2.101.0`. */
   version?: string;
   signIn: SourceControlSignIn;
   /** Who Relay acts as. */
@@ -70,3 +70,50 @@ export function parseGhAuth(output: string, code: number | null): GhSignIn {
     detail: "`gh auth status` gave an answer Relay doesn't recognise.",
   };
 }
+
+/** A server `tea` is logged in to; its token stays in the main process. */
+export interface TeaLogin {
+  name: string;
+  url: string;
+  user: string;
+  default: boolean;
+}
+
+export interface TeaSetup {
+  /** The `tea` program; absent when none was found. */
+  path?: string;
+  linked?: boolean;
+  version?: string;
+  logins: TeaLogin[];
+  /** Why `tea` couldn't be used, e.g. that it won't say its version. */
+  error?: string;
+}
+
+/** The logins in `tea logins list --output json`, the default one first. */
+export function parseTeaLogins(output: string): TeaLogin[] {
+  let list: unknown;
+  try {
+    list = JSON.parse(output);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(list)) return [];
+  return list
+    .flatMap((entry: Record<string, unknown>) =>
+      typeof entry?.name === "string" && typeof entry.url === "string"
+        ? [
+            {
+              name: entry.name,
+              url: entry.url,
+              user: typeof entry.user === "string" ? entry.user : "",
+              default: entry.default === "true" || entry.default === true,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => Number(b.default) - Number(a.default));
+}
+
+/** The token line of what a git credential helper prints for a `get`. */
+export const credentialPassword = (output: string) =>
+  /^password=(.+)$/m.exec(output)?.[1].trim() || undefined;

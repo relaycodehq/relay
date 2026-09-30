@@ -1,6 +1,7 @@
 import type { PaneSlots } from "./components/WorkspacePanes";
 import { RoomPanel } from "./components/RoomPanel";
 import { RelayMark } from "./components/RelayMark";
+import { TeaSignIn } from "./components/TeaSignIn";
 import { RoomInvitationDialog } from "./components/RoomInvitationDialog";
 import { parseRoomInvitation, roomProtocol } from "../shared/rooms";
 import type { QuestionTarget } from "../shared/questions";
@@ -253,6 +254,7 @@ export function SignIn({
               >
                 Create a token in Gitea <ArrowUpRight size={14} />
               </button>
+              <TeaSignIn onConnected={onConnected} />
               <div className="connection-footnote">
                 <span className="dot green" /> Direct connection · Credentials
                 stay on this device

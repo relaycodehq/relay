@@ -14,7 +14,7 @@ import {
   runExecutable,
   setLinkedTools,
 } from "./executables";
-import type { FetchRequest } from "./gitea";
+import { teaSetup } from "./tea";
 import type { Store } from "./store";
 
 const probeTimeout = 8000;
@@ -64,69 +64,52 @@ async function github(enabled: boolean): Promise<SourceControlProvider> {
   return { ...base, path, version: number, ...result };
 }
 
-/** The version a Gitea or Forgejo server reports; it needs no login. */
-async function giteaVersion(server: string, fetchRequest: FetchRequest) {
-  try {
-    const response = await fetchRequest(`${server}/api/v1/version`, {
-      redirect: "error",
-      credentials: "omit",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) return undefined;
-    const { version } = (await response.json()) as { version?: unknown };
-    return typeof version === "string" ? parseVersion(version) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function gitea(
-  store: Store,
-  login: GiteaLogin,
-  fetchRequest: FetchRequest,
-  enabled: boolean,
-): Promise<SourceControlProvider> {
+async function gitea(store: Store, login: GiteaLogin, enabled: boolean) {
   const base = {
     kind: "gitea",
     name: sourceControlNames.gitea,
+    cli: "tea",
     enabled,
   } as const;
+  const tea = await teaSetup();
   const saved = store.get().account;
-  if (!saved)
-    return {
-      ...base,
-      signIn: "signed-out",
-      detail: "Connect your account under Account.",
-    };
-  const version = await giteaVersion(saved.server, fetchRequest);
-  const common = {
+  const provider: SourceControlProvider = {
     ...base,
-    ...(version ? { version } : {}),
-    account: saved.user.login,
+    ...(tea.path ? { path: tea.path } : {}),
+    ...(tea.linked ? { linked: true } : {}),
+    ...(tea.version ? { version: tea.version } : {}),
+    signIn: "signed-out",
   };
-  if (login.client) return { ...common, signIn: "signed-in" };
-  return {
-    ...common,
-    signIn: "unknown",
-    detail:
-      login.restore === "failed"
-        ? "The saved token couldn't be read from the system credential store."
-        : "Unlocking the saved token…",
-  };
+  if (saved) {
+    provider.account = `${saved.user.login} on ${new URL(saved.server).host}`;
+    if (login.client) provider.signIn = "signed-in";
+    else {
+      provider.signIn = "unknown";
+      provider.detail =
+        login.restore === "failed"
+          ? "The saved token couldn't be read from the system credential store."
+          : "Unlocking the saved token…";
+    }
+    return provider;
+  }
+  provider.detail = tea.error
+    ? tea.error
+    : tea.logins.length
+      ? `tea is logged in to ${tea.logins.map((l) => new URL(l.url).host).join(", ")}. Connect to use one.`
+      : tea.path
+        ? "Connect with a token, or run `tea login add` and connect with that login."
+        : "Connect with a token, or link tea to sign in with one of its logins.";
+  return provider;
 }
 
 /** Every host, as the tools and accounts on this computer report them. */
 export function sourceControlStatus(
   store: Store,
   login: GiteaLogin,
-  fetchRequest: FetchRequest,
 ): Promise<SourceControlProvider[]> {
   const settings = store.get().sourceControl;
   const on = (kind: SourceControlKind) => isSourceControlOn(settings, kind);
-  return Promise.all([
-    github(on("github")),
-    gitea(store, login, fetchRequest, on("gitea")),
-  ]);
+  return Promise.all([github(on("github")), gitea(store, login, on("gitea"))]);
 }
 
 export async function setSourceControlEnabled(
@@ -145,18 +128,53 @@ export async function setSourceControlEnabled(
   });
 }
 
-/** Links the `gh` at `path`, or forgets the linked one; Relay then searches again. */
-export async function relinkGh(store: Store, path?: string) {
+const clis = {
+  github: {
+    name: "the GitHub CLI",
+    says: (output: string) => /^gh version /.test(output),
+  },
+  gitea: {
+    name: "tea",
+    says: (output: string) =>
+      /^Version: /.test(output.replace(/\u001b\[[0-9;]*m/g, "")),
+  },
+} satisfies Record<
+  SourceControlKind,
+  { name: string; says: (output: string) => boolean }
+>;
+
+/** Links the program at `path` as a host's CLI if it says it is that CLI. */
+export async function linkCli(
+  store: Store,
+  kind: SourceControlKind,
+  path: string,
+) {
+  const run = await runExecutable(path, ["--version"], 15_000);
+  if (run.code !== 0 || !clis[kind].says(run.stdout))
+    throw new Error(
+      `That doesn't look like ${clis[kind].name}: it didn't say which version it is.${run.output.trim() ? `\n${run.output.trim().slice(-300)}` : ""}`,
+    );
+  await relink(store, kind, path);
+}
+
+/** Forgets a linked CLI; Relay then searches again. */
+export const unlinkCli = (store: Store, kind: SourceControlKind) =>
+  relink(store, kind, undefined);
+
+async function relink(store: Store, kind: SourceControlKind, path?: string) {
   await store.update((s) => {
     const paths = { ...s.sourceControl?.paths };
-    if (path) paths.github = path;
-    else delete paths.github;
+    if (path) paths[kind] = path;
+    else delete paths[kind];
     s.sourceControl = { ...s.sourceControl, paths };
   });
   applyLinkedTools(store);
 }
 
 export function applyLinkedTools(store: Store) {
-  const github = store.get().sourceControl?.paths?.github;
-  setLinkedTools(github ? { gh: github } : {});
+  const { github, gitea } = store.get().sourceControl?.paths ?? {};
+  setLinkedTools({
+    ...(github ? { gh: github } : {}),
+    ...(gitea ? { tea: gitea } : {}),
+  });
 }

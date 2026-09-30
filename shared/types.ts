@@ -15,6 +15,7 @@ import type { AgentVersions } from "./agent-updates";
 import type {
   SourceControlKind,
   SourceControlProvider,
+  TeaSetup,
 } from "./source-control";
 import type { LineQuestion } from "./questions";
 import type {
@@ -384,10 +385,18 @@ export interface Api
     kind: SourceControlKind,
     enabled: boolean,
   ): Promise<SourceControlProvider[]>;
-  /** Asks for the `gh` program and links it if it says so; null if cancelled. */
-  linkGithubCli(): Promise<SourceControlProvider[] | null>;
-  /** Forgets the linked `gh` and finds one again. */
-  unlinkGithubCli(): Promise<SourceControlProvider[]>;
+  /** Asks for a host's CLI (`gh`, `tea`) and links it if it says so; null if cancelled. */
+  linkSourceControlCli(
+    kind: SourceControlKind,
+  ): Promise<SourceControlProvider[] | null>;
+  /** Forgets the linked CLI and finds one again. */
+  unlinkSourceControlCli(
+    kind: SourceControlKind,
+  ): Promise<SourceControlProvider[]>;
+  /** The `tea` CLI and the servers it is logged in to. */
+  teaSetup(): Promise<TeaSetup>;
+  /** Signs in to Gitea with the token `tea` holds for one of its logins. */
+  connectWithTea(login: string): Promise<Account>;
   /** Signs in to Cursor in the browser, downloading its SDK first if needed. */
   signInCursor(): Promise<AgentVersions>;
   signOutCursor(): Promise<AgentVersions>;

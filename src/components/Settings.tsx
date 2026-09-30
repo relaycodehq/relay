@@ -909,11 +909,11 @@ export function Settings({
       category: "integrations",
       title: "Source control",
       description:
-        "GitHub and Gitea, where your repositories and their CI live. Relay finds the GitHub CLI by itself; link it here if it lives somewhere else.",
+        "GitHub and Gitea, where your repositories and their CI live. Relay finds the gh and tea command-line tools by itself; link them here if they live somewhere else.",
       keywords:
-        "github gitea forgejo gh cli ci actions pull request host sign in link path",
+        "github gitea forgejo gh tea cli ci actions pull request host sign in login link path",
       block: true,
-      render: () => <SourceControlSettings />,
+      render: () => <SourceControlSettings onConnect={onConnect} />,
     },
     {
       id: "devops",

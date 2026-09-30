@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isSourceControlOn, parseGhAuth } from "../../shared/source-control";
+import {
+  credentialPassword,
+  isSourceControlOn,
+  parseGhAuth,
+  parseTeaLogins,
+} from "../../shared/source-control";
 
 describe("reading gh auth status", () => {
   it("finds the account in newer and older output", () => {
@@ -37,4 +42,44 @@ it("treats every host as on until the user turns it off", () => {
   expect(isSourceControlOn(undefined, "github")).toBe(true);
   expect(isSourceControlOn({ off: ["gitea"] }, "github")).toBe(true);
   expect(isSourceControlOn({ off: ["gitea"] }, "gitea")).toBe(false);
+});
+
+describe("reading tea", () => {
+  // From `tea logins list --output json`, tea 0.16.0.
+  const list = JSON.stringify([
+    {
+      name: "work",
+      url: "https://git.example.com",
+      user: "ann",
+      default: "false",
+    },
+    {
+      name: "home",
+      url: "http://127.0.0.1:3000",
+      user: "ann",
+      default: "true",
+    },
+    { url: "https://no-name.example.com" },
+  ]);
+
+  it("lists logins with the default first and skips broken entries", () => {
+    expect(parseTeaLogins(list).map((l) => l.name)).toEqual(["home", "work"]);
+    expect(parseTeaLogins(list)[0]).toMatchObject({ default: true });
+  });
+
+  it("treats anything that isn't a list as no logins", () => {
+    expect(parseTeaLogins("No logins yet")).toEqual([]);
+    expect(parseTeaLogins("{}")).toEqual([]);
+  });
+
+  it("takes the token from a credential helper's answer", () => {
+    expect(
+      credentialPassword(
+        "protocol=https\nhost=git.example.com\nusername=ann\npassword=s3cret\n",
+      ),
+    ).toBe("s3cret");
+    expect(
+      credentialPassword("protocol=https\nhost=git.example.com\n"),
+    ).toBeUndefined();
+  });
 });
