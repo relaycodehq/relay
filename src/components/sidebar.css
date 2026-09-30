@@ -49,22 +49,27 @@
   min-width: 0;
   height: 30px;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 7px;
+  margin: 0;
   padding: 0 8px 0 10px;
   border-radius: 8px;
   color: var(--muted);
+  font-weight: 400;
   background: color-mix(in srgb, var(--text) 5%, transparent);
-  transition:
-    background-color 0.12s,
-    box-shadow 0.12s;
+  cursor: text;
+  transition: background-color 0.12s;
 }
 .sb-search:focus-within {
   background: var(--surface);
-  box-shadow: 0 0 0 1px var(--border);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
+/* Fills the box: a short field gets a short caret. */
 .sb-search input {
   flex: 1;
+  align-self: stretch;
   min-width: 0;
   border: 0;
   outline: 0;
@@ -75,6 +80,13 @@
 }
 .sb-search input::placeholder {
   color: var(--muted);
+}
+/* sidebar.css loads before styles.css, so a plain `outline: 0` loses the
+   tie with the global `input:focus-visible` ring. The box or border marks
+   focus instead. */
+.sb-search input:focus-visible,
+.sb-group-input input:focus-visible {
+  outline: none;
 }
 .sb .sb-search-clear {
   display: grid;

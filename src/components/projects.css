@@ -716,6 +716,9 @@
   font: inherit;
   font-weight: 500;
 }
+.thread-title-input:focus-visible {
+  outline: none;
+}
 .breadcrumb-slash {
   opacity: 0.5;
 }

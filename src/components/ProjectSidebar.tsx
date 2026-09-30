@@ -1618,7 +1618,7 @@ export function ProjectSidebar({
   return (
     <div className="sb">
       <div className="sb-top">
-        <div className="sb-search">
+        <label className="sb-search">
           <Search size={13} />
           <input
             aria-label="Search threads"
@@ -1638,7 +1638,7 @@ export function ProjectSidebar({
               <X size={12} />
             </button>
           )}
-        </div>
+        </label>
         <button
           className="sb-top-button"
           aria-label="New thread"
