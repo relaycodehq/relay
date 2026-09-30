@@ -152,6 +152,7 @@ const methods = [
   "pull",
   "files",
   "contents",
+  "changedBetween",
   "blame",
   "reviews",
   "reviewComments",

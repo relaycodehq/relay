@@ -298,6 +298,12 @@ export interface Api
     head: string,
     base: string,
   ): Promise<FilePair>;
+  /** Paths changed between two commits, or null when Gitea can't say. */
+  changedBetween(
+    ref: PullRef,
+    from: string,
+    to: string,
+  ): Promise<string[] | null>;
   reviews(ref: PullRef, page: number): Promise<Page<Review>>;
   reviewComments(ref: PullRef, id: number): Promise<ReviewComment[]>;
   discussion(ref: PullRef, page: number): Promise<Page<Discussion>>;

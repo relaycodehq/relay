@@ -35,6 +35,8 @@ interface Props {
   onSelect: (path: string) => void;
   progress: Progress;
   revision: string;
+  /** Viewed files a later push changed; they read as unviewed again. */
+  changedSinceViewed?: Set<string>;
   result?: TriageResult;
   groups: ChangeGroup[];
   filter: string;
@@ -48,6 +50,7 @@ export function GroupedFileList({
   onSelect,
   progress,
   revision,
+  changedSinceViewed,
   result,
   groups,
   filter,
@@ -263,6 +266,7 @@ export function GroupedFileList({
               parts = f.filename.split("/"),
               name = parts.pop(),
               read = progress.read[f.filename] === revision,
+              changed = !read && !!changedSinceViewed?.has(f.filename),
               checked =
                 checks?.status === "ready"
                   ? checks.files[f.filename]
@@ -282,7 +286,10 @@ export function GroupedFileList({
                 {read ? <Check size={15} /> : <FileCode2 size={15} />}
                 <div>
                   <strong>{name}</strong>
-                  <small>{parts.join("/") || "Repository root"}</small>
+                  <small>
+                    {changed && "Changed since viewed · "}
+                    {parts.join("/") || "Repository root"}
+                  </small>
                 </div>
                 {checked && diagnosticSeverity(checked) && (
                   <span

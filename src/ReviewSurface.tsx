@@ -7,6 +7,7 @@ import type { QuestionTarget } from "../shared/questions";
 import type { SettingsCategory } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
+import { useViewedCarryOver } from "./lib/useViewedCarryOver";
 import { shouldResumeReview } from "./lib/resumeReview";
 import {
   GroupedFileList,
@@ -393,6 +394,11 @@ export function Connected({
   }, [restoring, resume.data]);
   const progressController = useReviewProgress(selected, setError);
   const { progress } = progressController;
+  const changedSinceViewed = useViewedCarryOver(
+    selected,
+    pull.data,
+    progressController,
+  );
   const revision = pull.data ? revisionOf(pull.data) : "";
   const triageKey = ["triage", selected, revision];
   const triage = useQuery({
@@ -904,6 +910,7 @@ export function Connected({
                 onSelect={selectFile}
                 progress={progress}
                 revision={revision}
+                changedSinceViewed={changedSinceViewed}
                 result={analysisResult}
                 groups={reviewGroups}
                 filter={fileFilter}
@@ -1083,6 +1090,7 @@ export function Connected({
             file={current}
             files={reviewFiles}
             progressController={progressController}
+            changedSinceViewed={changedSinceViewed}
             onCommentPaths={setCommentPaths}
             onError={setError}
             onRefresh={refresh}

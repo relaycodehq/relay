@@ -70,6 +70,8 @@ interface Props {
   file?: ChangedFile;
   files: ChangedFile[];
   progressController: ReviewProgressController;
+  /** Viewed files a later push changed. */
+  changedSinceViewed: Set<string>;
   onCommentPaths: (paths: string[]) => void;
   onError: (e: unknown) => void;
   onRefresh: () => Promise<void>;
@@ -89,6 +91,7 @@ export function ReviewWorkspace({
   file,
   files,
   progressController,
+  changedSinceViewed,
   onCommentPaths,
   onError,
   onRefresh,
@@ -485,6 +488,9 @@ export function ReviewWorkspace({
               >
                 <WrapText size={16} />
               </IconButton>
+              {file && !read && changedSinceViewed.has(file.filename) && (
+                <span className="read-changed">Changed since viewed</span>
+              )}
               <button
                 className={`read-button ${read ? "is-read" : ""}`}
                 onClick={toggleRead}

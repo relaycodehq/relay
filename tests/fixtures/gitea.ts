@@ -96,6 +96,8 @@ export async function fixtureServer(
     baseSha = BASE;
   let pullState = "open",
     merged = false;
+  // Paths a push changed; null answers like a Gitea without raw compare diffs.
+  let pushed: string[] | null = null;
   let comments = [
     {
       id: 101,
@@ -279,6 +281,16 @@ export async function fixtureServer(
         ...(createdPull ?? pull),
         number: Number(path.split("/").at(-1)),
       });
+    if (path.startsWith("/repos/Web/web-store/compare/")) {
+      if (!pushed || url.searchParams.get("output") !== "diff")
+        return json({ total_commits: 1, commits: [] });
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end(
+        pushed
+          .map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n`)
+          .join(""),
+      );
+    }
     if (path.endsWith("/files")) {
       const page = Number(url.searchParams.get("page") ?? 1);
       res.setHeader("x-total-count", files.length);
@@ -371,6 +383,7 @@ export async function fixtureServer(
     requests,
     setHead: (v: string) => (head = v),
     setBase: (v: string) => (baseSha = v),
+    setPushed: (paths: string[] | null) => (pushed = paths),
     setPullState: (state: "open" | "closed", isMerged = false) => {
       pullState = state;
       merged = isMerged;

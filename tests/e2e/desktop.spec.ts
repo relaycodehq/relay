@@ -334,6 +334,31 @@ test("viewed advances across file pages, skips read files and stops at completio
   await expect(page.getByText("72 of 72 reviewed")).toBeVisible();
 });
 
+test("a push unmarks only the viewed files it changed", async () => {
+  fixture.setPushed(["src/lib/cache.ts"]);
+  fixture.setHead("d".repeat(40));
+  await page.getByRole("button", { name: "Refresh pull requests" }).click();
+  await expect(page.getByText("71 of 72 reviewed")).toBeVisible();
+  await page.getByRole("textbox", { name: "Filter files" }).fill("cache.ts");
+  await expect(
+    page.locator(".file-row", { hasText: "cache.ts" }),
+  ).toContainText("Changed since viewed · src/lib");
+  await page
+    .getByRole("combobox", { name: "Current file" })
+    .selectOption("src/lib/cache.ts");
+  await expect(
+    page.getByText("Changed since viewed", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Viewed V" }).click();
+  await expect(page.getByText("72 of 72 reviewed")).toBeVisible();
+  await expect(
+    page.locator(".file-row", { hasText: "cache.ts" }),
+  ).not.toContainText("Changed since viewed");
+  await page.getByRole("textbox", { name: "Filter files" }).fill("");
+  fixture.setPushed(null);
+  fixture.setHead(HEAD);
+});
+
 test("Codex handoff validates the checkout and safely carries the comment", async () => {
   test.skip(
     process.platform === "win32",

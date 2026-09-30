@@ -12,6 +12,7 @@ import type {
 } from "../shared/types";
 import { networkError } from "./network-errors";
 import { readBounded } from "../shared/http";
+import { diffPaths } from "./diff-paths";
 import { normalizeServer, parsePullUrl } from "../shared/validation";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
@@ -148,6 +149,29 @@ export class Gitea {
   }
   files(r: PullRef, page: number, signal?: AbortSignal) {
     return this.page<ChangedFile>(`${this.pr(r)}/files`, page, signal);
+  }
+  /**
+   * Paths whose content differs between two commits, like Gitea's own
+   * "changed since last view". Null when the server can't say: before 1.27 the
+   * compare API has no raw diff, and a force-push may have dropped `from`.
+   */
+  async changedBetween(
+    r: PullRef,
+    from: string,
+    to: string,
+  ): Promise<string[] | null> {
+    if (from === to) return [];
+    try {
+      const { data, headers } = await this.request<string>(
+        `${this.repo(r)}/compare/${from}..${to}?output=diff`,
+        { raw: true, limit: 64 * 1024 * 1024 },
+      );
+      return headers.get("content-type")?.startsWith("text/plain")
+        ? diffPaths(data)
+        : null;
+    } catch {
+      return null;
+    }
   }
   reviews(r: PullRef, page: number, signal?: AbortSignal) {
     return this.page<Review>(`${this.pr(r)}/reviews`, page, signal);

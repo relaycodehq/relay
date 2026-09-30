@@ -86,6 +86,12 @@ export function reviewHandlers(ctx: ApiContext) {
         shaSchema.parse(args[3]),
       );
     },
+    changedBetween: (args) =>
+      requireClient().changedBetween(
+        refSchema.parse(args[0]),
+        shaSchema.parse(args[1]),
+        shaSchema.parse(args[2]),
+      ),
     reviews: (args) => {
       const r = refSchema.parse(args[0]);
       return requireClient().reviews(r, pageSchema.parse(args[1]));
