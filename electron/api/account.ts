@@ -4,7 +4,7 @@ import { emptyWorkspace } from "../../shared/types";
 import { workspaceSchema } from "../../shared/validation";
 import { seal } from "../app/login";
 import { Gitea } from "../gitea";
-import { teaSetup, teaToken } from "../tea";
+import { teaSetup, teaToken } from "../source-control/tea";
 import type { ApiContext, Handlers } from "./context";
 
 /** Signing in and out of Gitea, and what the window starts from. */

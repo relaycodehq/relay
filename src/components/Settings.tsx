@@ -94,11 +94,6 @@ import {
   dictationModelLine,
 } from "./DictationSettings";
 import { useDictationModel } from "../lib/dictation/session";
-import {
-  DevOpsConnectionSettings,
-  DevOpsFilterSettings,
-  DevOpsProjectSettings,
-} from "./DevOpsSettings";
 import { QuickSwitchSettings } from "./QuickSwitchSettings";
 import "./settings.css";
 import {
@@ -149,7 +144,7 @@ const categories: {
     id: "integrations",
     label: "Integrations",
     description:
-      "The Git Relay runs, and your Azure DevOps work items in new threads.",
+      "Git, and the hosts your pull requests, CI and work items come from.",
     icon: ListTodo,
   },
   {
@@ -903,7 +898,7 @@ export function Settings({
       category: "integrations",
       title: "Git",
       description:
-        "Branches, changes and history need Git. Relay finds it by itself; choose it here if it lives somewhere else.",
+        "Relay finds it by itself, the one your terminal runs first. Link another here.",
       keywords: "git executable path program install branch folder exe",
       block: true,
       render: () => <GitSettings />,
@@ -913,42 +908,12 @@ export function Settings({
       category: "integrations",
       title: "Source control",
       description:
-        "Relay reads CI and pull requests through the GitHub CLI and your Gitea account. Turn a host off to stop showing its CI.",
+        "CI and pull requests from GitHub and Gitea, work items from Azure DevOps. Relay uses the CLIs and accounts on this computer.",
       keywords:
-        "github gitea forgejo gh tea cli ci actions pull request host sign in login link path",
+        "github gitea forgejo azure devops az boards work items tasks bugs tickets token pat jev openrouter filter projects hints hide gh tea cli ci actions pull request host sign in login link path",
       block: true,
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings onConnect={onConnect} />,
-    },
-    {
-      id: "devops",
-      category: "integrations",
-      title: "Azure DevOps",
-      description:
-        "Open work items assigned to you appear as cards below the composer of a new thread.",
-      keywords: "azure devops boards work items tasks bugs tickets token pat",
-      block: true,
-      render: () => <DevOpsConnectionSettings />,
-    },
-    {
-      id: "devops-projects",
-      category: "integrations",
-      title: "Projects",
-      description:
-        "Turn work items off for projects that are not tracked in Azure DevOps.",
-      keywords: "azure devops work items cards hide projects hints keywords",
-      block: true,
-      render: () => <DevOpsProjectSettings />,
-    },
-    {
-      id: "devops-filter",
-      category: "integrations",
-      title: "Project filter",
-      description:
-        "Jev, a decision model on OpenRouter, decides which work items belong to the project you are in.",
-      keywords: "jev openrouter typesafe filter classify ai",
-      block: true,
-      render: () => <DevOpsFilterSettings />,
     },
     {
       id: "room-hosting",

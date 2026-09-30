@@ -80,8 +80,11 @@ export interface WorkingTreeApi {
   workingDiff(repo: Repo, path: string, area: ChangeArea): Promise<FilePair>;
   gitAction(repo: Repo, action: GitAction): Promise<WorkingTree>;
   gitInfo(): Promise<GitInfo>;
-  /** Asks for the Git executable and uses it if it runs; null if cancelled. */
-  chooseGit(): Promise<GitInfo | null>;
+  /**
+   * Uses the Git at `path`, or one chosen in a file dialog when it's left
+   * out, if it runs as Git; null if cancelled.
+   */
+  chooseGit(path?: string): Promise<GitInfo | null>;
   /** Forgets the chosen Git and finds one again. */
   resetGit(): Promise<GitInfo>;
 }

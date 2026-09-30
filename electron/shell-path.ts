@@ -47,24 +47,26 @@ export function extractPath(output: string): string | undefined {
 }
 
 /**
- * `inherited` entries stay in front: a PATH the app was started with (tests,
- * `PATH=… relay`) beats the profile. The shell's follow, without repeats.
+ * The order the user's own terminal finds programs in, so Relay runs the
+ * `gh`, `git` or agent CLI that `which` names first. Folders put in front of
+ * the launch PATH keep their place: a test's fake CLIs, or
+ * `PATH=/x:$PATH relay`. Then the shell's order, then what only the launch
+ * had. A launcher's bare `/usr/bin` would otherwise beat the mise or Homebrew
+ * install the shell puts first.
  */
 export function mergePath(
   inherited: string | undefined,
   shell: string | undefined,
   separator = delimiter,
 ): string | undefined {
-  const entries: string[] = [];
-  const seen = new Set<string>();
-  for (const value of [inherited, shell]) {
-    for (const raw of value?.split(separator) ?? []) {
-      const entry = raw.trim();
-      if (!entry || seen.has(entry)) continue;
-      seen.add(entry);
-      entries.push(entry);
-    }
-  }
+  const split = (value: string | undefined) =>
+    (value?.split(separator) ?? []).map((raw) => raw.trim()).filter(Boolean);
+  const launch = split(inherited),
+    fromShell = split(shell);
+  const known = new Set(fromShell);
+  const shared = launch.findIndex((entry) => known.has(entry));
+  const front = shared === -1 ? launch : launch.slice(0, shared);
+  const entries = [...new Set([...front, ...fromShell, ...launch])];
   return entries.length ? entries.join(separator) : undefined;
 }
 
@@ -79,8 +81,8 @@ async function readLaunchctlPath(exec: Run = run) {
 
 /**
  * Apps started from the Dock or a launcher inherit a bare PATH without the
- * user's tools; a login shell reads the profile that sets the real one. Adds
- * that PATH to `env`, after whatever the app was started with.
+ * user's tools; a login shell reads the profile that sets the real one.
+ * Merges that PATH into `env` as `mergePath` orders them.
  */
 export async function hydratePath(
   env: NodeJS.ProcessEnv,

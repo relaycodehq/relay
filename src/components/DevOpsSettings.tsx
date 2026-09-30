@@ -1,380 +1,413 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   devopsSettingsSchema,
   type DevOpsSecrets,
   type DevOpsSettings as Settings,
+  type DevOpsStatus,
 } from "../../shared/devops";
 import { api } from "../lib/api";
+import { Switch } from "./SettingsCard";
 import { ErrorBox } from "./ui";
-import {
-  SettingsCard,
-  SettingsFooter,
-  SettingsRow,
-  Switch,
-} from "./SettingsCard";
 import "./work-items.css";
 
 export const useDevOpsStatus = () =>
   useQuery({ queryKey: ["devops-status"], queryFn: () => api.devopsStatus() });
 
-/** Each section drafts only its own part, so saving one keeps the other. */
-function useDevOpsDraft<T>(
-  pick: (s: Settings) => T,
-  merge: (s: Settings, part: T) => Settings,
-) {
-  const status = useDevOpsStatus(),
-    qc = useQueryClient();
-  const [draft, setDraft] = useState<T>();
+type Change = (next: Partial<Settings>) => void;
+
+/**
+ * Azure DevOps' details under Settings → Integrations → Source control, one
+ * form with one save: the connection, which projects show work items, and
+ * the filter that sorts them by project. The row's switch turns work items on
+ * and off; setting it up the first time turns them on.
+ */
+export function AzureDevOpsDetails({
+  cliField,
+  onSaved,
+}: {
+  /** Where `az` is, shown while it signs in with the Azure CLI. */
+  cliField: ReactNode;
+  /** After a save, so the row says who it's signed in as now. */
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const status = useDevOpsStatus();
+  // Only what was edited, laid over the saved settings when it's saved: the
+  // row's switch or a card's "hide" may change the rest meanwhile.
+  const [draft, setDraft] = useState<Partial<Settings>>({});
+  const [pat, setPat] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [note, setNote] = useState<string>();
-  const saved = status.data?.settings;
-  const values = draft ?? (saved && pick(saved));
-  const full = saved && values !== undefined ? merge(saved, values) : undefined;
-  const save = async (
-    secrets: DevOpsSecrets,
-    after?: (s: Settings) => Promise<string>,
-  ) => {
-    if (!full) return false;
+  const saved = status.data;
+  if (!saved)
+    return status.error ? (
+      <ErrorBox error={status.error} retry={() => void status.refetch()} />
+    ) : (
+      <p className="setting-muted">Loading…</p>
+    );
+  const firstTime = !saved.settings.organization;
+  const values = { ...saved.settings, ...draft };
+  const change: Change = (next) => {
+    setDraft({ ...draft, ...next });
+    setNote(undefined);
+  };
+  const on = firstTime || saved.settings.enabled;
+  const dirty = Object.keys(draft).length > 0;
+  /** Saves the edits and new secrets, or, given `forgotten`, only drops a secret. */
+  async function save(secrets: DevOpsSecrets, forgotten?: string) {
     setBusy(true);
     setError(undefined);
     setNote(undefined);
     try {
-      const next = await api.saveDevOpsSettings(full, secrets);
+      const latest = qc.getQueryData<DevOpsStatus>(["devops-status"])!;
+      const next = await api.saveDevOpsSettings(
+        forgotten
+          ? latest.settings
+          : {
+              ...latest.settings,
+              ...draft,
+              enabled: firstTime || latest.settings.enabled,
+            },
+        secrets,
+      );
       qc.setQueryData(["devops-status"], next);
-      setDraft(undefined);
       await qc.invalidateQueries({ queryKey: ["devops-items"] });
-      setNote(after ? await after(next.settings) : "Saved");
-      return true;
+      onSaved();
+      if (forgotten) {
+        setNote(`${forgotten} forgotten`);
+        return;
+      }
+      setDraft({});
+      if (secrets.pat) setPat("");
+      if (secrets.openRouterKey) setOpenRouterKey("");
+      if (!next.settings.enabled) setNote("Saved");
+      else {
+        const { items } = await api.devopsWorkItems(null, true);
+        setNote(
+          `Connected · ${items.length} open ${items.length === 1 ? "item" : "items"} assigned to you`,
+        );
+      }
     } catch (e) {
       setError(e);
-      return false;
     } finally {
       setBusy(false);
     }
+  }
+  const secrets: DevOpsSecrets = {
+    ...(pat.trim() ? { pat: pat.trim() } : {}),
+    ...(openRouterKey.trim() ? { openRouterKey: openRouterKey.trim() } : {}),
   };
-  return {
-    status,
-    values,
-    change: (next: T) => {
-      setDraft(next);
-      setNote(undefined);
-    },
-    dirty: draft !== undefined,
-    valid: !!full && devopsSettingsSchema.safeParse(full).success,
-    busy,
-    error,
-    note,
-    save,
-  };
-}
-
-export function DevOpsConnectionSettings() {
-  const d = useDevOpsDraft(
-    ({ filter: _, hiddenProjects: __, ...connection }) => connection,
-    (s, connection) => ({
-      ...connection,
-      filter: s.filter,
-      hiddenProjects: s.hiddenProjects,
-    }),
+  const forget = (secret: keyof DevOpsSecrets, what: string) => (
+    <button
+      className="text-button"
+      disabled={busy}
+      onClick={() => void save({ [secret]: null }, what)}
+    >
+      Forget
+    </button>
   );
-  const [pat, setPat] = useState("");
-  const v = d.values;
-  if (!v)
-    return d.status.error ? (
-      <ErrorBox error={d.status.error} retry={() => void d.status.refetch()} />
-    ) : (
-      <p className="setting-muted">Loading…</p>
-    );
-  const hasPat = d.status.data?.hasPat;
   return (
     <>
-      <SettingsCard>
-        <SettingsRow label="Show my work items under new threads">
-          <Switch
-            label="Show my work items under new threads"
-            checked={v.enabled}
-            onChange={(enabled) => d.change({ ...v, enabled })}
+      <Connection
+        values={values}
+        change={change}
+        status={saved}
+        pat={pat}
+        setPat={setPat}
+        forgetPat={forget("pat", "Token")}
+        cliField={cliField}
+      />
+      {!firstTime && (
+        <>
+          <Filter
+            values={values}
+            change={change}
+            hasKey={saved.hasOpenRouterKey}
+            openRouterKey={openRouterKey}
+            setOpenRouterKey={setOpenRouterKey}
+            forgetKey={forget("openRouterKey", "Key")}
           />
-        </SettingsRow>
-        <SettingsRow label="Organization" hint="Name or dev.azure.com URL.">
-          <input
-            aria-label="Organization"
-            placeholder="my-org"
-            value={v.organization}
-            onChange={(e) => d.change({ ...v, organization: e.target.value })}
-          />
-        </SettingsRow>
-        <SettingsRow label="Project" hint="Leave empty for every project.">
-          <input
-            aria-label="Project"
-            placeholder="All projects"
-            value={v.project}
-            onChange={(e) => d.change({ ...v, project: e.target.value })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Sign in with"
-          hint={
-            v.auth === "pat" ? (
-              "A personal access token, saved with your system’s credential protection."
-            ) : (
-              <>
-                The account you signed into with <code>az login</code>. Relay
-                stores no token.
-              </>
-            )
+          <Projects values={values} change={change} />
+        </>
+      )}
+      <hr />
+      <div className="tool-row-actions">
+        <p>{note && <span role="status">{note}</span>}</p>
+        <button
+          className="primary"
+          disabled={
+            busy ||
+            !devopsSettingsSchema.safeParse(values).success ||
+            !values.organization.trim() ||
+            (!dirty && !Object.keys(secrets).length && !on)
           }
+          onClick={() => void save(secrets)}
         >
+          {busy ? "Saving…" : on ? "Save and test" : "Save"}
+        </button>
+      </div>
+      {!!error && <ErrorBox error={error} />}
+    </>
+  );
+}
+
+function Connection({
+  values: v,
+  change,
+  status,
+  pat,
+  setPat,
+  forgetPat,
+  cliField,
+}: {
+  values: Settings;
+  change: Change;
+  status: DevOpsStatus;
+  pat: string;
+  setPat: (pat: string) => void;
+  forgetPat: ReactNode;
+  cliField: ReactNode;
+}) {
+  return (
+    <>
+      <div className="tool-row-fields">
+        <div className="tool-row-field">
+          <label>
+            Organization
+            <input
+              placeholder="my-org"
+              value={v.organization}
+              onChange={(e) => change({ organization: e.target.value })}
+            />
+          </label>
+          <small>Name or dev.azure.com URL.</small>
+        </div>
+        <div className="tool-row-field">
+          <label>
+            Project
+            <input
+              placeholder="All projects"
+              value={v.project}
+              onChange={(e) => change({ project: e.target.value })}
+            />
+          </label>
+          <small>Leave empty for every project.</small>
+        </div>
+        <div
+          className="tool-row-wide tool-row-choice"
+          role="group"
+          aria-label="Sign in with"
+        >
+          <span>Sign in with</span>
           <div className="segmented settings-segmented">
             <button
               className={v.auth === "pat" ? "active" : ""}
-              onClick={() => d.change({ ...v, auth: "pat" })}
+              aria-pressed={v.auth === "pat"}
+              onClick={() => change({ auth: "pat" })}
             >
               Access token
             </button>
             <button
               className={v.auth === "azure-cli" ? "active" : ""}
-              onClick={() => d.change({ ...v, auth: "azure-cli" })}
+              aria-pressed={v.auth === "azure-cli"}
+              onClick={() => change({ auth: "azure-cli" })}
             >
               Azure CLI
             </button>
           </div>
-        </SettingsRow>
+        </div>
         {v.auth === "pat" && (
-          <SettingsRow
-            label="Personal access token"
-            hint={
-              <>
-                Needs the <strong>Work Items (Read)</strong> scope.
-              </>
-            }
-          >
-            <input
-              aria-label="Personal access token"
-              type="password"
-              autoComplete="off"
-              placeholder={hasPat ? "Saved · enter a new one to replace" : ""}
-              value={pat}
-              onChange={(e) => setPat(e.target.value)}
-            />
-          </SettingsRow>
+          <div className="tool-row-field tool-row-wide">
+            <label>
+              Personal access token
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder={
+                  status.hasPat ? "Saved · enter a new one to replace" : ""
+                }
+                value={pat}
+                onChange={(e) => setPat(e.target.value)}
+              />
+            </label>
+            <small>
+              Needs the Work Items (Read) scope. Saved with your system’s
+              credential protection. {status.hasPat && forgetPat}
+            </small>
+          </div>
         )}
-        <SettingsFooter note={d.note && <span role="status">{d.note}</span>}>
-          {hasPat && v.auth === "pat" && (
-            <button
-              disabled={d.busy}
-              onClick={() => void d.save({ pat: null })}
-            >
-              Forget token
-            </button>
-          )}
-          <button
-            className="primary"
-            disabled={
-              d.busy ||
-              !d.valid ||
-              (!d.dirty && !pat.trim() && !v.enabled) ||
-              (v.enabled && !v.organization.trim())
-            }
-            onClick={() =>
-              void d.save(pat.trim() ? { pat: pat.trim() } : {}, async (s) => {
-                setPat("");
-                if (!s.enabled) return "Saved";
-                const { items } = await api.devopsWorkItems(null, true);
-                return `Connected · ${items.length} open ${items.length === 1 ? "item" : "items"} assigned to you`;
-              })
-            }
-          >
-            {d.busy ? "Connecting…" : v.enabled ? "Save and test" : "Save"}
-          </button>
-        </SettingsFooter>
-      </SettingsCard>
-      {!!d.error && <ErrorBox error={d.error} />}
+      </div>
+      {v.auth === "azure-cli" && (
+        <>
+          {cliField}
+          <p className="tool-row-off">
+            Uses the account you signed into with <code>az login</code>. Relay
+            stores no token.
+          </p>
+        </>
+      )}
     </>
   );
 }
 
-export function DevOpsFilterSettings() {
-  const d = useDevOpsDraft(
-    ({ filter: { keywords: _, ...filter } }) => filter,
-    (s, filter) => ({
-      ...s,
-      filter: { ...filter, keywords: s.filter.keywords },
-    }),
-  );
-  const [key, setKey] = useState("");
-  const f = d.values;
-  if (!f) return <p className="setting-muted">Loading…</p>;
-  const hasKey = d.status.data?.hasOpenRouterKey;
-  const setFilter = (next: Partial<typeof f>) => d.change({ ...f, ...next });
+/** Jev on OpenRouter, deciding which work items belong to the open project. */
+function Filter({
+  values: v,
+  change,
+  hasKey,
+  openRouterKey,
+  setOpenRouterKey,
+  forgetKey,
+}: {
+  values: Settings;
+  change: Change;
+  hasKey: boolean;
+  openRouterKey: string;
+  setOpenRouterKey: (key: string) => void;
+  forgetKey: ReactNode;
+}) {
+  const f = v.filter;
+  const setFilter = (next: Partial<Settings["filter"]>) =>
+    change({ filter: { ...f, ...next } });
   return (
-    <>
-      <SettingsCard>
-        <SettingsRow
+    <section className="tool-row-group" aria-label="Work item filter">
+      <div className="tool-row-group-head">
+        <div>
+          <h6>Only the open project's items</h6>
+          <small>
+            Jev, a decision model on OpenRouter, decides which work items belong
+            to the project you are in.
+          </small>
+        </div>
+        <Switch
           label="Show only the items that belong to the open project"
-          hint="Jev sorts your items by project on OpenRouter."
-        >
-          <Switch
-            label="Show only the items that belong to the open project"
-            checked={f.enabled}
-            onChange={(enabled) => setFilter({ enabled })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="OpenRouter API key"
-          hint="Saved with your system’s credential protection."
-        >
-          <input
-            aria-label="OpenRouter API key"
-            type="password"
-            autoComplete="off"
-            placeholder={
-              hasKey ? "Saved · enter a new one to replace" : "sk-or-…"
-            }
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-          />
-        </SettingsRow>
-        <SettingsRow label="Model" hint="OpenRouter model ID.">
-          <input
-            aria-label="Model"
-            value={f.model}
-            onChange={(e) => setFilter({ model: e.target.value })}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Confidence"
-          hint="How sure Jev must be before an item counts as a match."
-        >
-          <input
-            aria-label="Match confidence"
-            type="range"
-            min={5}
-            max={95}
-            step={5}
-            value={Math.round(f.threshold * 100)}
-            onChange={(e) =>
-              setFilter({ threshold: Number(e.target.value) / 100 })
-            }
-          />
-          <span className="settings-row-value">
-            {Math.round(f.threshold * 100)}%
-          </span>
-        </SettingsRow>
-        <SettingsFooter
-          note={
-            d.note ? (
-              <span role="status">{d.note}</span>
-            ) : (
-              "Sends work item titles, types, area paths, tags and the start of descriptions to OpenRouter. Answers are reused until an item changes."
-            )
-          }
-        >
-          {hasKey && (
-            <button
-              disabled={d.busy}
-              onClick={() => void d.save({ openRouterKey: null })}
-            >
-              Forget key
-            </button>
-          )}
-          <button
-            className="primary"
-            disabled={d.busy || !d.valid || (!d.dirty && !key.trim())}
-            onClick={() =>
-              void d
-                .save(key.trim() ? { openRouterKey: key.trim() } : {})
-                .then((ok) => ok && setKey(""))
-            }
-          >
-            {d.busy ? "Saving…" : "Save filter"}
-          </button>
-        </SettingsFooter>
-      </SettingsCard>
-      {!!d.error && <ErrorBox error={d.error} />}
-    </>
+          checked={f.enabled}
+          onChange={(enabled) => setFilter({ enabled })}
+        />
+      </div>
+      {f.enabled && (
+        <div className="tool-row-fields">
+          <div className="tool-row-field tool-row-wide">
+            <label>
+              OpenRouter API key
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder={
+                  hasKey ? "Saved · enter a new one to replace" : "sk-or-…"
+                }
+                value={openRouterKey}
+                onChange={(e) => setOpenRouterKey(e.target.value)}
+              />
+            </label>
+            <small>
+              Saved with your system’s credential protection.{" "}
+              {hasKey && forgetKey}
+            </small>
+          </div>
+          <div className="tool-row-field">
+            <label>
+              Model
+              <input
+                value={f.model}
+                onChange={(e) => setFilter({ model: e.target.value })}
+              />
+            </label>
+            <small>OpenRouter model ID.</small>
+          </div>
+          <div className="tool-row-field">
+            <label>
+              Confidence · {Math.round(f.threshold * 100)}%
+              <input
+                aria-label="Match confidence"
+                type="range"
+                min={5}
+                max={95}
+                step={5}
+                value={Math.round(f.threshold * 100)}
+                onChange={(e) =>
+                  setFilter({ threshold: Number(e.target.value) / 100 })
+                }
+              />
+            </label>
+            <small>How sure Jev must be before an item counts.</small>
+          </div>
+          <small className="tool-row-wide">
+            Sends work item titles, types, area paths, tags and the start of
+            descriptions to OpenRouter. Answers are reused until an item
+            changes.
+          </small>
+        </div>
+      )}
+    </section>
   );
 }
 
 /** Which projects show work item cards, and the filter's hints for each. */
-export function DevOpsProjectSettings() {
-  const d = useDevOpsDraft(
-    (s) => ({ hidden: s.hiddenProjects, keywords: s.filter.keywords }),
-    (s, { hidden, keywords }) => ({
-      ...s,
-      hiddenProjects: hidden,
-      filter: { ...s.filter, keywords },
-    }),
-  );
+function Projects({ values: v, change }: { values: Settings; change: Change }) {
   const projects = useQuery({
     queryKey: ["devops-projects"],
     queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
   });
-  const v = d.values;
-  if (!v || !projects.data) return <p className="setting-muted">Loading…</p>;
-  if (!projects.data.length)
-    return <p className="setting-muted">Add a project to choose here.</p>;
-  const filtering = !!d.status.data?.settings.filter.enabled;
+  const filtering = v.filter.enabled;
   return (
-    <>
-      <SettingsCard>
-        {projects.data.map((p) => {
-          const shown = !v.hidden.includes(p.id);
-          return (
-            <SettingsRow
-              key={p.id}
-              label={p.name}
-              hint={shown ? undefined : "Work items are hidden here."}
-            >
-              {filtering && shown && (
-                <input
-                  aria-label={`${p.name} hints`}
-                  placeholder="Hints, e.g. Licensing, BM"
-                  title="Product names, area paths, tags or abbreviations. Jev also sees project and repository names."
-                  value={v.keywords[p.id] ?? ""}
-                  onChange={(e) => {
-                    const keywords = { ...v.keywords, [p.id]: e.target.value };
-                    if (!e.target.value) delete keywords[p.id];
-                    d.change({ ...v, keywords });
-                  }}
+    <section className="tool-row-group" aria-label="Work items per project">
+      <div className="tool-row-group-head">
+        <div>
+          <h6>Projects</h6>
+          <small>
+            {filtering
+              ? "Turn work items off where a project isn't tracked in Azure DevOps. Hints help Jev match items to the rest."
+              : "Turn work items off where a project isn't tracked in Azure DevOps."}
+          </small>
+        </div>
+      </div>
+      {!projects.data ? (
+        <p className="setting-muted">Loading…</p>
+      ) : !projects.data.length ? (
+        <p className="setting-muted">Add a project to choose here.</p>
+      ) : (
+        <div className="tool-row-list">
+          {projects.data.map((p) => {
+            const shown = !v.hiddenProjects.includes(p.id);
+            return (
+              <div key={p.id} className="tool-row-item">
+                <span data-hidden={!shown || undefined}>{p.name}</span>
+                {filtering && shown && (
+                  <input
+                    aria-label={`${p.name} hints`}
+                    placeholder="Hints, e.g. Licensing, BM"
+                    title="Product names, area paths, tags or abbreviations. Jev also sees project and repository names."
+                    value={v.filter.keywords[p.id] ?? ""}
+                    onChange={(e) => {
+                      const keywords = {
+                        ...v.filter.keywords,
+                        [p.id]: e.target.value,
+                      };
+                      if (!e.target.value) delete keywords[p.id];
+                      change({ filter: { ...v.filter, keywords } });
+                    }}
+                  />
+                )}
+                <Switch
+                  label={`Show work items in ${p.name}`}
+                  checked={shown}
+                  onChange={(on) =>
+                    change({
+                      hiddenProjects: on
+                        ? v.hiddenProjects.filter((id) => id !== p.id)
+                        : [...v.hiddenProjects, p.id],
+                    })
+                  }
                 />
-              )}
-              <Switch
-                label={`Show work items in ${p.name}`}
-                checked={shown}
-                onChange={(on) =>
-                  d.change({
-                    ...v,
-                    hidden: on
-                      ? v.hidden.filter((id) => id !== p.id)
-                      : [...v.hidden, p.id],
-                  })
-                }
-              />
-            </SettingsRow>
-          );
-        })}
-        <SettingsFooter
-          note={
-            d.note ? (
-              <span role="status">{d.note}</span>
-            ) : filtering ? (
-              "Hints help Jev match work items to each project."
-            ) : undefined
-          }
-        >
-          <button
-            className="primary"
-            disabled={d.busy || !d.valid || !d.dirty}
-            onClick={() => void d.save({})}
-          >
-            {d.busy ? "Saving…" : "Save projects"}
-          </button>
-        </SettingsFooter>
-      </SettingsCard>
-      {!!d.error && <ErrorBox error={d.error} />}
-    </>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

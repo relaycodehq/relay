@@ -391,9 +391,13 @@ export interface Api
     kind: SourceControlKind,
     enabled: boolean,
   ): Promise<SourceControlProvider[]>;
-  /** Asks for a host's CLI (`gh`, `tea`) and links it if it says so; null if cancelled. */
+  /**
+   * Links a host's CLI (`gh`, `tea`, `az`) if it says it is one: the program at
+   * `path`, or one chosen in a file dialog when it's left out. Null if cancelled.
+   */
   linkSourceControlCli(
     kind: SourceControlKind,
+    path?: string,
   ): Promise<SourceControlProvider[] | null>;
   /** Forgets the linked CLI and finds one again. */
   unlinkSourceControlCli(

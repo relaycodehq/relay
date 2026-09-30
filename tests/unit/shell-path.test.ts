@@ -27,14 +27,27 @@ describe("extractPath", () => {
 });
 
 describe("mergePath", () => {
-  it("keeps the inherited entries in front and drops repeats", () => {
+  it("follows the shell's order, as `which -a` does", () => {
+    // An app started from omarchy's launcher, with mise activated in the shell.
+    const mise =
+      "/home/me/.local/share/mise/installs/gh/latest/gh_2.101.0_linux_amd64/bin";
     expect(
       mergePath(
-        "/fake/bin:/usr/bin",
+        "/usr/local/bin:/usr/bin:/bin",
+        `${mise}:/home/me/.local/share/mise/shims:/home/me/.local/bin:/usr/local/bin:/usr/bin:/bin`,
+        ":",
+      )?.split(":")[0],
+    ).toBe(mise);
+  });
+
+  it("keeps folders put in front of the launch PATH there, and drops repeats", () => {
+    expect(
+      mergePath(
+        "/fake/bin:/usr/bin:/usr/sbin",
         "/Users/me/.local/bin:/usr/bin:/bin",
         ":",
       ),
-    ).toBe("/fake/bin:/usr/bin:/Users/me/.local/bin:/bin");
+    ).toBe("/fake/bin:/Users/me/.local/bin:/usr/bin:/bin:/usr/sbin");
   });
 
   it("works with either side missing", () => {
@@ -56,7 +69,7 @@ describe("loginShells", () => {
 describe("hydratePath", () => {
   const bare = "/usr/bin:/bin:/usr/sbin:/sbin";
 
-  it("appends the login shell's PATH to a Dock launch's bare one", async () => {
+  it("puts the login shell's PATH ahead of a Dock launch's bare one", async () => {
     const env = { PATH: bare, SHELL: "/bin/zsh" };
     const exec: Run = async (file, args) => {
       expect(file).toBe("/bin/zsh");
@@ -64,7 +77,7 @@ describe("hydratePath", () => {
       return marked("/Users/me/.local/bin:/usr/bin:/bin");
     };
     await hydratePath(env, { platform: "darwin", exec });
-    expect(env.PATH).toBe(`${bare}:/Users/me/.local/bin`);
+    expect(env.PATH).toBe("/Users/me/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
   });
 
   it("moves on from a shell that fails to the next one, then launchctl", async () => {

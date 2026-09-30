@@ -144,30 +144,32 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await page.keyboard.press("ControlOrMeta+Comma");
     const settings = page.getByRole("dialog");
     await settings.getByRole("button", { name: "Integrations" }).click();
-    const devops = settings.getByRole("region", { name: "Azure DevOps" });
-    await devops.getByLabel("Show my work items under new threads").check();
-    await devops.getByLabel("Organization").fill("contoso");
-    await devops.getByLabel("Project").fill("Software");
-    await devops.getByLabel("Personal access token").fill("pat-123");
-    await devops.getByRole("button", { name: "Save and test" }).click();
-    await expect(devops.getByRole("status")).toHaveText(
+    // Azure DevOps sits with the other hosts; its switch waits for a setup.
+    const hosts = settings.getByRole("region", { name: "Source control" });
+    const use = hosts.getByRole("switch", { name: "Use Azure DevOps" });
+    await expect(use).toBeDisabled();
+    await hosts.getByRole("button", { name: "Set up…" }).click();
+    await hosts.getByLabel("Organization").fill("contoso");
+    await hosts.getByLabel("Project", { exact: true }).fill("Software");
+    await hosts.getByLabel("Personal access token").fill("pat-123");
+    await hosts.getByRole("button", { name: "Save and test" }).click();
+    await expect(hosts.getByRole("status")).toHaveText(
       "Connected · 3 open items assigned to you",
     );
+    // Setting it up turns the work items on.
+    await expect(use).toBeChecked();
     await screenshot(page, { path: join(root, "settings.png") });
 
-    const filter = settings.getByRole("region", { name: "Project filter" });
-    await filter
+    // The filter and the projects sit in the same details, saved together.
+    await hosts
       .getByLabel("Show only the items that belong to the open project")
       .check();
-    await filter.getByLabel("OpenRouter API key").fill("sk-or-test");
-    await filter.getByRole("button", { name: "Save filter" }).click();
-    await expect(filter.getByRole("status")).toHaveText("Saved");
-    const projects = settings.getByRole("region", { name: "Projects" });
-    await projects
-      .getByLabel("licensing hints")
-      .fill("Licensing, license keys");
-    await projects.getByRole("button", { name: "Save projects" }).click();
-    await expect(projects.getByRole("status")).toHaveText("Saved");
+    await hosts.getByLabel("OpenRouter API key").fill("sk-or-test");
+    await hosts.getByLabel("licensing hints").fill("Licensing, license keys");
+    await hosts.getByRole("button", { name: "Save and test" }).click();
+    await expect(hosts.getByRole("status")).toHaveText(
+      "Connected · 3 open items assigned to you",
+    );
     await settings.getByRole("button", { name: "Close dialog" }).click();
 
     const cards = page.getByRole("region", { name: "Your work items" });
@@ -248,8 +250,8 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(sent).toContainText("I am going to work on this card");
     await expect(page.locator(".work-item-chip")).toHaveCount(0);
     await screenshot(page, { path: join(root, "sent.png") });
-    // Once before the hints were saved, once with them.
-    expect(await jevCalls()).toBe(2);
+    // Once: the hints were saved with the filter, so Jev never saw it without them.
+    expect(await jevCalls()).toBe(1);
     console.log("screenshots in", root);
   } finally {
     await app.close();

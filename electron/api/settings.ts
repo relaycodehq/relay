@@ -19,10 +19,12 @@ import { gitInfo, gitVersion, setGitPath } from "../git";
 import { readProviderUsage } from "../provider-usage";
 import {
   linkCli,
+  resolveCliPath,
   setSourceControlEnabled,
   sourceControlStatus,
   unlinkCli,
 } from "../source-control";
+import { clis } from "../source-control/clis";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
 import type { ApiContext, Handlers } from "./context";
@@ -30,7 +32,26 @@ import type { ApiContext, Handlers } from "./context";
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
-  const sourceControl = () => sourceControlStatus(store, ctx.login);
+  const sourceControl = () => sourceControlStatus(store, ctx.login, devops);
+  const typedPath = (value: unknown) =>
+    z.string().trim().min(1).max(4096).optional().parse(value);
+  /** A program picked in a file dialog; null when cancelled. */
+  async function chooseProgram(
+    program: string,
+    extensions = ["exe", "cmd", "bat"],
+  ) {
+    const result = await dialog.showOpenDialog(ctx.window.win!, {
+      title: `Choose the ${program} program`,
+      // Version managers keep their installs in hidden folders.
+      properties: ["openFile", "showHiddenFiles"],
+      defaultPath: homedir(),
+      filters:
+        process.platform === "win32"
+          ? [{ name: program, extensions }]
+          : undefined,
+    });
+    return result.canceled ? null : result.filePaths[0];
+  }
   function requirePhoneRemote() {
     const phoneRemote = ctx.phoneRemote();
     if (!phoneRemote) throw new Error("Relay is still starting.");
@@ -96,17 +117,12 @@ export function settingsHandlers(ctx: ApiContext) {
       );
     },
     gitInfo: () => gitInfo(),
-    chooseGit: async () => {
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
-        title: "Choose the Git program",
-        properties: ["openFile"],
-        filters:
-          process.platform === "win32"
-            ? [{ name: "Git", extensions: ["exe"] }]
-            : undefined,
-      });
-      if (result.canceled) return null;
-      const path = result.filePaths[0];
+    chooseGit: async (args) => {
+      const typed = typedPath(args[0]);
+      const path = typed
+        ? await resolveCliPath("git", typed)
+        : await chooseProgram("git", ["exe"]);
+      if (!path) return null;
       await gitVersion(path);
       await store.update((s) => {
         s.gitPath = path;
@@ -132,18 +148,8 @@ export function settingsHandlers(ctx: ApiContext) {
     linkAgent: async (args) => {
       const provider = cliProvider(args[0]);
       const { cli } = agents[provider];
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
-        title: `Choose the ${cli} program`,
-        // Version managers keep their installs in hidden folders.
-        properties: ["openFile", "showHiddenFiles"],
-        defaultPath: homedir(),
-        filters:
-          process.platform === "win32"
-            ? [{ name: cli, extensions: ["exe", "cmd", "bat"] }]
-            : undefined,
-      });
-      if (result.canceled) return null;
-      const path = result.filePaths[0];
+      const path = await chooseProgram(cli);
+      if (!path) return null;
       const run = await runExecutable(path, ["--version"], 15_000);
       if (run.code !== 0 || !parseVersion(run.stdout))
         throw new Error(
@@ -160,6 +166,7 @@ export function settingsHandlers(ctx: ApiContext) {
     setSourceControlEnabled: async (args) => {
       await setSourceControlEnabled(
         store,
+        devops,
         z.enum(sourceControlKinds).parse(args[0]),
         z.boolean().parse(args[1]),
       );
@@ -167,19 +174,10 @@ export function settingsHandlers(ctx: ApiContext) {
     },
     linkSourceControlCli: async (args) => {
       const kind = z.enum(sourceControlKinds).parse(args[0]);
-      const cli = kind === "github" ? "gh" : "tea";
-      const result = await dialog.showOpenDialog(ctx.window.win!, {
-        title: `Choose the ${cli} program`,
-        // Version managers keep their installs in hidden folders.
-        properties: ["openFile", "showHiddenFiles"],
-        defaultPath: homedir(),
-        filters:
-          process.platform === "win32"
-            ? [{ name: cli, extensions: ["exe", "cmd", "bat"] }]
-            : undefined,
-      });
-      if (result.canceled) return null;
-      await linkCli(store, kind, result.filePaths[0]);
+      const path =
+        typedPath(args[1]) ?? (await chooseProgram(clis[kind].program));
+      if (!path) return null;
+      await linkCli(store, kind, path);
       return sourceControl();
     },
     unlinkSourceControlCli: async (args) => {

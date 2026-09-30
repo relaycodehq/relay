@@ -1,16 +1,17 @@
-/** The hosts Relay talks to for a repository's pull requests and CI. */
-export const sourceControlKinds = ["github", "gitea"] as const;
+/** The hosts Relay talks to for a repository's pull requests, CI and work items. */
+export const sourceControlKinds = ["github", "gitea", "azure-devops"] as const;
 export type SourceControlKind = (typeof sourceControlKinds)[number];
 
 export const sourceControlNames: Record<SourceControlKind, string> = {
   github: "GitHub",
   gitea: "Gitea",
+  "azure-devops": "Azure DevOps",
 };
 
 /** What Settings keeps: hosts the user turned off, and the CLIs they linked. */
 export interface SourceControlSettings {
   off?: SourceControlKind[];
-  paths?: { github?: string; gitea?: string };
+  paths?: Partial<Record<SourceControlKind, string>>;
 }
 
 export const isSourceControlOn = (
@@ -40,7 +41,15 @@ export interface SourceControlProvider {
   server?: string;
   /** One more sentence: what to do about it, or why Relay couldn't tell. */
   detail?: string;
+  /** The one thing to do in Relay: link the CLI, sign in, or set the host up. */
+  fix?: SourceControlFix;
 }
+
+/**
+ * `connect` opens the Gitea sign-in; the rest open the host's details.
+ * `set-up` means Relay has nothing to go on yet, so the host can't be on.
+ */
+export type SourceControlFix = "link" | "connect" | "sign-in" | "set-up";
 
 export interface GhSignIn {
   signIn: SourceControlSignIn;

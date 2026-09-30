@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { z } from "zod";
 import type { PhoneTailnet } from "../../shared/remote";
+import { findExecutable } from "../executables";
 
 /**
  * Finds this computer on Tailscale. Phone access listens only on the tailnet
@@ -70,8 +71,8 @@ export function readTailscaleStatus(json: string): PhoneTailnet {
   };
 }
 
-// Where Tailscale's installers put the CLI; an app started from the Dock or
-// Finder has no shell PATH to find it by.
+// Where Tailscale's installers put the CLI when no PATH has it, like the
+// macOS app's, which lives inside its bundle.
 const cliPaths: Partial<Record<NodeJS.Platform, string[]>> = {
   darwin: [
     "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
@@ -98,8 +99,14 @@ function cliStatus(cli: string) {
   );
 }
 
+/** The `tailscale` the user's shell runs first, else where its installers put it. */
+const findCli = () =>
+  findExecutable("tailscale").catch(() =>
+    (cliPaths[process.platform] ?? []).find((p) => existsSync(p)),
+  );
+
 async function probe(): Promise<PhoneTailnet> {
-  const cli = (cliPaths[process.platform] ?? []).find((p) => existsSync(p));
+  const cli = await findCli();
   if (cli)
     try {
       const status = readTailscaleStatus(await cliStatus(cli));

@@ -1,56 +1,63 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import type {
+  SourceControlFix,
   SourceControlKind,
   SourceControlProvider,
 } from "../../shared/source-control";
-import { GiteaMark, GitHubMark } from "./BrandIcons";
-import { Switch } from "./SettingsCard";
-import { ErrorBox, IconButton, Spinner } from "./ui";
-import "./source-control.css";
+import { AzureDevOpsMark, GiteaMark, GitHubMark } from "./BrandIcons";
+import { AzureDevOpsDetails } from "./DevOpsSettings";
+import {
+  CliPathField,
+  RescanButton,
+  ToolRow,
+  ToolRows,
+  withCode,
+} from "./ToolRow";
+import { ErrorBox } from "./ui";
 
 const queryKey = ["source-control"];
-const marks: Record<SourceControlKind, typeof GitHubMark> = {
-  github: GitHubMark,
-  gitea: GiteaMark,
+const marks: Record<SourceControlKind, ReactNode> = {
+  github: <GitHubMark />,
+  gitea: <GiteaMark />,
+  "azure-devops": <AzureDevOpsMark />,
 };
+/** What the switch stops, said once it's off. */
+const offNotes: Record<SourceControlKind, string> = {
+  github: "Turned off: Relay doesn't show GitHub CI status.",
+  gitea: "Turned off: Relay doesn't show Gitea CI status.",
+  "azure-devops": "Turned off: your work items don't show under new threads.",
+};
+const fixLabels: Record<SourceControlFix, string> = {
+  link: "Link it…",
+  connect: "Connect…",
+  "sign-in": "Sign in…",
+  "set-up": "Set up…",
+};
+/** What else follows a host: CI, the tea logins, the work item cards. */
+const followers = ["ci-status", "tea-setup", "devops-status", "devops-items"];
 
 type Apply = (
   run: () => Promise<SourceControlProvider[] | null>,
 ) => Promise<void>;
 
-function useProviders() {
-  return useQuery({ queryKey, queryFn: () => api.sourceControl() });
-}
-
-/** Text with `code` spans, as the details from `gh` and `tea` come. */
-function withCode(text: string) {
-  return text
-    .split("`")
-    .map((part, i) =>
-      i % 2 ? <code key={i}>{part}</code> : <Fragment key={i}>{part}</Fragment>,
-    );
-}
+const useProviders = () =>
+  useQuery({ queryKey, queryFn: () => api.sourceControl() });
 
 /** The section header's rescan button. */
 export function SourceControlRescan() {
   const qc = useQueryClient();
   const { isFetching } = useProviders();
   return (
-    <IconButton
-      label="Check again"
-      disabled={isFetching}
-      className="source-control-rescan"
+    <RescanButton
+      busy={isFetching}
       onClick={() => void qc.refetchQueries({ queryKey })}
-    >
-      {isFetching ? <Spinner size={13} /> : <RefreshCw size={14} />}
-    </IconButton>
+    />
   );
 }
 
-/** Settings → Integrations: the hosts Relay reads pull requests and CI from. */
+/** Settings → Integrations: where pull requests, CI and work items come from. */
 export function SourceControlSettings({
   onConnect,
 }: {
@@ -68,10 +75,8 @@ export function SourceControlSettings({
       const next = await run();
       if (!next) return;
       qc.setQueryData(queryKey, next);
-      // A host turned off or a different CLI changes what CI and sign-in show.
       await qc.invalidateQueries({
-        predicate: (q) =>
-          ["ci-status", "tea-setup"].includes(String(q.queryKey[0])),
+        predicate: (q) => followers.includes(String(q.queryKey[0])),
       });
     } catch (e) {
       setError(e);
@@ -86,11 +91,13 @@ export function SourceControlSettings({
         retry={() => void providers.refetch()}
       />
     ) : (
-      <p className="setting-muted">Looking for GitHub and Gitea…</p>
+      <p className="setting-muted">
+        Looking for GitHub, Gitea and Azure DevOps…
+      </p>
     );
   return (
     <>
-      <div className="settings-card source-control">
+      <ToolRows>
         {providers.data.map((provider) => (
           <ProviderRow
             key={provider.kind}
@@ -100,7 +107,7 @@ export function SourceControlSettings({
             onConnect={onConnect}
           />
         ))}
-      </div>
+      </ToolRows>
       {!!error && <ErrorBox error={error} />}
     </>
   );
@@ -117,151 +124,111 @@ function ProviderRow({
   apply: Apply;
   onConnect?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const { kind, name, cli, path, version, enabled } = provider;
-  const Mark = marks[kind];
-  const state = !enabled
-    ? "off"
-    : provider.signIn === "signed-in"
-      ? "ready"
-      : "attention";
-  const link = () => void apply(() => api.linkSourceControlCli(kind));
+  const { kind, name, cli, version, enabled, fix } = provider;
+  const cliField = cli && (
+    <CliPathField
+      program={cli}
+      path={provider.path}
+      linked={provider.linked}
+      busy={busy}
+      autoFocus={fix === "link"}
+      onUse={(typed) => void apply(() => api.linkSourceControlCli(kind, typed))}
+      onUnlink={() => void apply(() => api.unlinkSourceControlCli(kind))}
+    />
+  );
   return (
-    <div className="source-control-row" data-state={state}>
-      <div className="source-control-main">
-        <span className="source-control-mark">
-          <Mark size={18} />
-          <span className="source-control-dot" aria-hidden />
-        </span>
-        <div className="source-control-text">
-          <div className="source-control-title">
-            <span>{name}</span>
-            {version && (
-              <code>
-                {cli} {version}
-              </code>
-            )}
-          </div>
-          <p>
-            <Summary
-              provider={provider}
-              busy={busy}
-              onConnect={onConnect}
-              onLink={link}
-            />
-          </p>
-        </div>
-        {cli && (
-          <IconButton
-            label={`${open ? "Hide" : "Show"} ${name} details`}
-            className="source-control-toggle"
-            active={open}
-            onClick={() => setOpen(!open)}
-          >
-            <ChevronDown size={15} data-open={open || undefined} />
-          </IconButton>
-        )}
-        <Switch
-          label={`Use ${name}`}
-          checked={enabled}
-          disabled={busy}
-          onChange={(on) =>
-            void apply(() => api.setSourceControlEnabled(kind, on))
-          }
+    <ToolRow
+      mark={marks[kind]}
+      name={name}
+      version={version && `${cli} ${version}`}
+      state={
+        !enabled
+          ? "off"
+          : provider.signIn === "signed-in"
+            ? "ready"
+            : "attention"
+      }
+      summary={(openDetails) => (
+        <Summary
+          provider={provider}
+          busy={busy}
+          onFix={fix === "connect" ? onConnect : openDetails}
         />
-      </div>
-      {open && cli && (
-        <div className="source-control-details">
-          <div className="source-control-program">
-            <span>{cli}</span>
-            {path ? (
-              <code title={path}>{path}</code>
-            ) : (
-              <em>Not found on this computer</em>
-            )}
-            {path && <small>{provider.linked ? "Linked" : "Found"}</small>}
-            <span className="source-control-actions">
-              {provider.linked && (
-                <button
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() =>
-                    void apply(() => api.unlinkSourceControlCli(kind))
-                  }
-                >
-                  Find automatically
-                </button>
-              )}
-              <button className="text-button" disabled={busy} onClick={link}>
-                {path ? "Change…" : `Link ${cli}…`}
-              </button>
-            </span>
-          </div>
-          {!enabled && (
-            <p className="source-control-off">
-              Turned off: Relay doesn't show {name} CI status. Your sign-in and{" "}
-              {cli} stay as they are.
-            </p>
-          )}
-        </div>
       )}
-    </div>
+      toggle={{
+        checked: enabled,
+        // Nothing to turn on before it's set up.
+        disabled: busy || fix === "set-up",
+        onChange: (on) =>
+          void apply(() => api.setSourceControlEnabled(kind, on)),
+      }}
+      details={
+        <>
+          {kind === "azure-devops" ? (
+            <AzureDevOpsDetails
+              cliField={cliField}
+              onSaved={() => void apply(() => api.sourceControl())}
+            />
+          ) : (
+            cliField
+          )}
+          {!enabled && fix !== "set-up" && (
+            <p className="tool-row-off">{offNotes[kind]}</p>
+          )}
+        </>
+      }
+    />
   );
 }
 
-/** One line: who Relay is signed in as, or the one thing to do about it. */
+/** One line: who Relay is signed in as, or what's wrong and the one fix. */
 function Summary({
   provider,
   busy,
-  onConnect,
-  onLink,
+  onFix,
 }: {
   provider: SourceControlProvider;
   busy: boolean;
-  onConnect?: () => void;
-  onLink: () => void;
-}): ReactNode {
-  const { kind, cli, path, account, server, detail } = provider;
-  const who = account && (
+  onFix?: () => void;
+}) {
+  const { cli, account, server, detail, fix, signIn } = provider;
+  if (signIn === "signed-in")
+    return account ? (
+      <>
+        Signed in as <b>{account}</b>
+        {server && <> on {server}</>}
+      </>
+    ) : (
+      <>Signed in{server && <> to {server}</>}</>
+    );
+  const headline =
+    fix === "link" ? (
+      `Can't find ${cli}.`
+    ) : fix === "connect" ? (
+      "Not connected."
+    ) : fix === "set-up" ? (
+      "Not set up."
+    ) : signIn === "signed-out" ? (
+      `Not signed in${server ? ` to ${server}` : ""}.`
+    ) : account ? (
+      <>
+        <b>{account}</b>
+        {server && <> on {server}</>}.
+      </>
+    ) : null;
+  if (!headline && !detail) return <>Couldn't tell whether you're signed in.</>;
+  return (
     <>
-      <b>{account}</b>
-      {server && <> on {server}</>}
+      {headline}
+      {detail && <> {withCode(detail)}</>}
+      {fix && onFix && (
+        <>
+          {" "}
+          <button className="text-button" disabled={busy} onClick={onFix}>
+            {fixLabels[fix]}
+          </button>
+        </>
+      )}
     </>
   );
-  const action = (label: string, run: () => void) => (
-    <button className="text-button" disabled={busy} onClick={run}>
-      {label}
-    </button>
-  );
-  const more = detail && <> {withCode(detail)}</>;
-  switch (provider.signIn) {
-    case "signed-in":
-      return <>Signed in as {who}</>;
-    case "signed-out":
-      return kind === "gitea" ? (
-        <>
-          Not connected.{more} {onConnect && action("Connect…", onConnect)}
-        </>
-      ) : (
-        <>Not signed in.{more}</>
-      );
-    default:
-      if (cli && !path && !account)
-        return (
-          <>
-            Can't find {cli}.{more} {action("Link it…", onLink)}
-          </>
-        );
-      return account ? (
-        <>
-          {who}.{more}
-        </>
-      ) : (
-        <>
-          {detail
-            ? withCode(detail)
-            : "Couldn't tell whether you're signed in."}
-        </>
-      );
-  }
 }

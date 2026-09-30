@@ -51,6 +51,9 @@ interface RelevanceCache {
   [key: string]: { at: number; answers: Record<string, number> };
 }
 
+/** The network failed, as opposed to Azure DevOps turning the sign-in down. */
+export class DevOpsUnreachable extends Error {}
+
 export class DevOps {
   /** Secrets that could not be encrypted live for this session only. */
   private session: { pat?: string; openRouterKey?: string } = {};
@@ -114,6 +117,33 @@ export class DevOps {
     this.items = undefined;
     this.cliToken = undefined;
     return this.status();
+  }
+
+  /** Turns work items on or off, keeping the rest of the settings. */
+  async setEnabled(enabled: boolean) {
+    const settings = this.settings();
+    if (enabled && !settings.organization)
+      throw new Error("Set up Azure DevOps first: add your organization.");
+    return this.save({ ...settings, enabled }, {});
+  }
+
+  /**
+   * Who Azure DevOps takes the saved sign-in for, so Settings shows what it
+   * really accepts. Throws `DevOpsUnreachable` when it can't be asked.
+   */
+  async whoAmI(): Promise<string | undefined> {
+    const settings = this.settings();
+    const base = organizationUrl(settings.organization);
+    const { authenticatedUser: user } = await this.request<{
+      authenticatedUser?: {
+        providerDisplayName?: string;
+        properties?: { Account?: { $value?: string } };
+      };
+    }>(
+      `${base}/_apis/connectionData`,
+      await this.authorization(settings, base),
+    );
+    return user?.providerDisplayName || user?.properties?.Account?.$value;
   }
 
   async workItems(
@@ -269,21 +299,22 @@ export class DevOps {
     return sealed ? await this.decrypt(sealed) : undefined;
   }
 
-  private async request<T>(url: string, auth: string, body: unknown) {
+  /** POSTs `body` as JSON, or GETs when there is none. */
+  private async request<T>(url: string, auth: string, body?: unknown) {
     let res: Response;
     try {
       res = await this.fetch(url, {
-        method: "POST",
+        method: body === undefined ? "GET" : "POST",
         headers: {
           Authorization: auth,
-          "Content-Type": "application/json",
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
           Accept: "application/json",
         },
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(30_000),
       });
     } catch {
-      throw new Error("Azure DevOps could not be reached.");
+      throw new DevOpsUnreachable("Azure DevOps could not be reached.");
     }
     // An invalid PAT gets a 203 sign-in page instead of a 401.
     const json = res.headers.get("content-type")?.includes("json");

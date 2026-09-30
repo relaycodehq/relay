@@ -115,6 +115,14 @@ export function organizationUrl(value: string) {
   return url.origin + url.pathname.replace(/\/+$/, "");
 }
 
+/** How the organization reads in a sentence: `my-org`, or a server's host and path. */
+export function organizationLabel(value: string) {
+  const url = organizationUrl(value);
+  return url.startsWith("https://dev.azure.com/")
+    ? url.slice("https://dev.azure.com/".length)
+    : url.replace(/^https:\/\//, "");
+}
+
 /**
  * The message an attached work item sends: the item, a `~` separator, then
  * whatever the user wrote. A leading agent mention stays in front.

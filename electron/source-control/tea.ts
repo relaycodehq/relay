@@ -1,49 +1,25 @@
-import { parseVersion } from "../shared/agent-updates";
 import {
   credentialPassword,
   parseTeaLogins,
   type TeaLogin,
   type TeaSetup,
-} from "../shared/source-control";
-import {
-  findExecutable,
-  linkedTool,
-  runExecutable,
-  spawnExecutable,
-} from "./executables";
-
-const timeout = 8000;
-// tea colours its version line even when piped.
-const plain = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, "");
+} from "../../shared/source-control";
+import { findExecutable, runExecutable, spawnExecutable } from "../executables";
+import { cliFields, plain, probeCli, probeTimeout as timeout } from "./clis";
 
 /** The `tea` CLI and the servers it is logged in to. */
 export async function teaSetup(): Promise<TeaSetup> {
-  const linked = linkedTool("tea") ? { linked: true } : {};
-  let path: string;
-  try {
-    path = await findExecutable("tea");
-  } catch (error) {
-    return {
-      logins: [],
-      ...(linked.linked ? { error: (error as Error).message } : {}),
-    };
-  }
-  const [version, list] = await Promise.all([
-    runExecutable(path, ["--version"], timeout),
-    runExecutable(path, ["logins", "list", "--output", "json"], timeout),
-  ]);
-  const number = parseVersion(plain(version.stdout));
-  if (version.code !== 0 || !number)
-    return {
-      path,
-      ...linked,
-      logins: [],
-      error: "That program doesn't say which version of tea it is.",
-    };
+  const cli = await probeCli("gitea");
+  const found = { ...cliFields(cli), logins: [] };
+  if (!cli.path || !cli.version)
+    return cli.error ? { ...found, error: cli.error } : found;
+  const list = await runExecutable(
+    cli.path,
+    ["logins", "list", "--output", "json"],
+    timeout,
+  );
   return {
-    path,
-    ...linked,
-    version: number,
+    ...found,
     logins: parseTeaLogins(list.stdout),
     ...(list.code !== 0
       ? {

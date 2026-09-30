@@ -2,7 +2,7 @@ import { it, expect, vi } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DevOps, plainText } from "../../electron/devops";
+import { DevOps, DevOpsUnreachable, plainText } from "../../electron/devops";
 import { Store } from "../../electron/store";
 import {
   defaultDevOpsSettings,
@@ -287,4 +287,42 @@ it("sends an attached work item ahead of the user's message", async () => {
   // Without a message there is no separator.
   expect(workItemMessage(item, "@codex")).not.toContain("~");
   expect(workItemMessage(item, "")).toMatch(/^User has selected/);
+});
+
+it("says who Azure DevOps takes the sign-in for, and tells a refusal from no network", async () => {
+  const asked: string[] = [];
+  const { devops } = await setup(async (url, init) => {
+    asked.push(`${init?.method} ${url}`);
+    return json({
+      authenticatedUser: {
+        providerDisplayName: "Ann Example",
+        properties: { Account: { $value: "ann@example.com" } },
+      },
+    });
+  });
+  expect(await devops.whoAmI()).toBe("Ann Example");
+  expect(asked).toEqual([
+    "GET https://dev.azure.com/contoso/_apis/connectionData",
+  ]);
+
+  const refused = await setup(
+    async () => new Response("<html>Sign in</html>", { status: 203 }),
+  );
+  await expect(refused.devops.whoAmI()).rejects.toThrow(/rejected/);
+  const offline = await setup(async () => {
+    throw new TypeError("fetch failed");
+  });
+  await expect(offline.devops.whoAmI()).rejects.toBeInstanceOf(
+    DevOpsUnreachable,
+  );
+});
+
+it("turns work items on only once there is an organization", async () => {
+  const { devops } = await setup(async () => json({}));
+  await devops.setEnabled(false);
+  expect(devops.settings().enabled).toBe(false);
+  // The rest of the settings stay as they were.
+  expect(devops.settings().project).toBe("Software");
+  await devops.save({ ...devops.settings(), organization: "" }, {});
+  await expect(devops.setEnabled(true)).rejects.toThrow(/organization/);
 });
