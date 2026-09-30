@@ -33,8 +33,8 @@ import {
 } from "../remote/chat-state";
 import {
   composeSend,
+  desktopNewThreadSettings,
   implementPlan,
-  newThreadSettings,
   withoutMention,
 } from "../remote/compose";
 import { diffHref, workspaceId } from "../remote/links";
@@ -75,11 +75,21 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   >();
   const [acting, setActing] = useState<ChatMessage>();
   const composer = useRef<ComposerHandle>(null);
-  // Starts from what the thread last sent, as the desktop's composer does.
+  // Starts from what the thread last sent, as the desktop's composer does;
+  // before its first message, as a new thread would.
+  const loaded = !!thread;
+  const lastSent = thread?.settings;
   useEffect(() => {
-    if (thread && !settings)
-      setSettings(thread.settings ?? newThreadSettings(undefined));
-  }, [thread, settings]);
+    if (!loaded || settings) return;
+    if (lastSent) return setSettings(lastSent);
+    let live = true;
+    void desktopNewThreadSettings(remote.desktop).then(
+      (s) => live && setSettings((current) => current ?? s),
+    );
+    return () => {
+      live = false;
+    };
+  }, [loaded, lastSent, settings, remote.desktop]);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   const listed = useMemo(
     () => (rootId ? sideConversation(all, rootId) : mainMessages(all)),

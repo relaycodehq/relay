@@ -14,7 +14,7 @@ import { Redo2, Undo2 } from "lucide-react-native";
 import type { TurnFileChange, WorktreeStatus } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
-import { composeSend, newThreadSettings } from "../remote/compose";
+import { composeSend, desktopNewThreadSettings } from "../remote/compose";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { MergeSheet } from "../ui/MergeSheet";
@@ -295,7 +295,8 @@ export default function TurnScreen() {
               "sendProjectChat",
               chat,
               composeSend(
-                thread.settings ?? newThreadSettings(undefined),
+                thread.settings ??
+                  (await desktopNewThreadSettings(desktop)),
                 text,
                 {
                   id: randomUUID(),

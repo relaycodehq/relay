@@ -53,6 +53,13 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return settings;
     },
+    newThreadAgent: () => store.get().newThreadAgent ?? null,
+    saveNewThreadAgent: async (args) => {
+      const provider = agentProviderSchema.parse(args[0]);
+      await store.update((s) => {
+        s.newThreadAgent = provider;
+      });
+    },
     providerUsage: (args) =>
       readProviderUsage(
         usageProviderSchema.parse(args[0]),

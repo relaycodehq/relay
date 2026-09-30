@@ -173,6 +173,8 @@ const methods = [
   "askAboutLines",
   "aiSettings",
   "saveAISettings",
+  "newThreadAgent",
+  "saveNewThreadAgent",
   "devopsStatus",
   "saveDevOpsSettings",
   "devopsWorkItems",

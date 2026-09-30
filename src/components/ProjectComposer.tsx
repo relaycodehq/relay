@@ -88,6 +88,7 @@ import { QuickSwitchHud } from "./QuickSwitchHud";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import { api } from "../lib/api";
+import { useNewThreadAgent } from "../lib/useNewThreadAgent";
 import {
   isScreenshot,
   loadDraftImages,
@@ -207,6 +208,31 @@ export function ProjectComposer({
     shared,
     settings.data?.threadProvider,
   );
+  // A new thread starts on the agent last picked for one, here or on the
+  // phone; picking one here makes it that agent for both.
+  const followsLastAgent = settingsKey.startsWith("new:") && !shared;
+  const [lastAgent, saveLastAgent] = useNewThreadAgent(followsLastAgent);
+  const adopted = useRef<AgentProvider | null>(undefined);
+  const known = useRef<typeof picked>(undefined);
+  useEffect(() => {
+    if (!followsLastAgent || lastAgent === undefined) return;
+    if (lastAgent && lastAgent !== adopted.current) {
+      adopted.current = known.current = lastAgent;
+      setProvider(lastAgent);
+      return;
+    }
+    if (adopted.current === undefined) {
+      adopted.current = lastAgent;
+      known.current = picked;
+      return;
+    }
+    if (picked === known.current) return;
+    known.current = picked;
+    if (picked && picked !== "message") {
+      adopted.current = picked;
+      saveLastAgent(picked);
+    }
+  }, [followsLastAgent, lastAgent, picked, saveLastAgent]);
   const [choice, setChoice] = useState(saved.choice);
   const [claude, setClaude] = useState(saved.claude);
   const [picks, setPicks] = useState(saved.picks);

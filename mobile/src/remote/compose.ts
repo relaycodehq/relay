@@ -1,6 +1,7 @@
 import type { AgentProvider } from "../../../shared/agents";
 import type { ProjectChatSend } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
+import type { RemoteClient } from "../../../shared/remote-client";
 import type { AISettings } from "../../../shared/settings";
 
 /** Only a leading mention makes an agent answer (shared/agents' agentMentionPattern). */
@@ -28,6 +29,20 @@ export function newThreadSettings(
     runtimeMode: "full-access",
     interactionMode: "default",
   };
+}
+
+/**
+ * A new thread's composer on the agent last picked for one, on the phone or
+ * the desktop, else the default agent. Older desktops only know the default.
+ */
+export async function desktopNewThreadSettings(
+  desktop: RemoteClient["desktop"],
+): Promise<RemoteSettings> {
+  const [last, ai] = await Promise.all([
+    desktop("newThreadAgent").catch(() => null),
+    desktop("aiSettings").catch(() => undefined),
+  ]);
+  return newThreadSettings(ai, last ?? ai?.threadProvider);
 }
 
 /** The same composer on another agent: its model goes back to Default, as on the desktop. */

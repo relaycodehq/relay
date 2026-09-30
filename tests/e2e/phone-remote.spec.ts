@@ -16,6 +16,7 @@ import { RemoteClient } from "../../shared/remote-client";
 import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
 import {
   composeSend,
+  desktopNewThreadSettings,
   newThreadSettings,
 } from "../../mobile/src/remote/compose";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
@@ -37,6 +38,10 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
   await writeFile(join(folder, "README.md"), "# Project\n");
   await fakeCli(
     join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
+  await fakeCli(
+    join(bin, "claude"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   const env = Object.fromEntries(
@@ -135,6 +140,30 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
 
     const overview = await phone.call("overview");
     const project = overview.projects[0]!;
+    // The agent last picked for a new thread, on either side, is where the
+    // next one starts on both.
+    const picker = page.getByRole("button", {
+      name: "Choose model and provider",
+      exact: true,
+    });
+    await picker.click();
+    await page.getByRole("button", { name: "Claude", exact: true }).click();
+    await page
+      .getByRole("option", { name: "Claude default", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await desktopNewThreadSettings(phone!.desktop.bind(phone)))
+            .provider,
+      )
+      .toBe("claude");
+    await phone.desktop("saveNewThreadAgent", "codex");
+    await page.reload();
+    await expect(picker).not.toContainText("Claude");
+    await phone.desktop("saveNewThreadAgent", "claude");
+    await page.reload();
+    await expect(picker).toContainText("Claude");
     // A supervised thread started the way the phone's New thread does.
     const supervised = {
       ...newThreadSettings(await phone.desktop("aiSettings")),

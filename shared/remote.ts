@@ -251,8 +251,9 @@ export type RemoteDiffSource =
  * Desktop calls a paired phone makes as they are, validated by the desktop's
  * own dispatch: threads, models, Git (stage, commit, push, pull, fetch,
  * branches), read-only files, history and background tasks; only what the
- * phone app uses. Terminals, file saves, settings, sharing and anything that
- * opens a desktop dialog are not on the list and stay out of reach.
+ * phone app uses. Terminals, file saves, settings (bar the agent new threads
+ * start on), sharing and anything that opens a desktop dialog are not on the
+ * list and stay out of reach.
  */
 export const phoneDesktopMethods = [
   "createProjectChat",
@@ -274,6 +275,8 @@ export const phoneDesktopMethods = [
   "agentModels",
   "agentDefaults",
   "aiSettings",
+  "newThreadAgent",
+  "saveNewThreadAgent",
   "projectWorktree",
   "projectCommands",
   "providerUsage",

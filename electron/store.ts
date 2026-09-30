@@ -22,6 +22,8 @@ interface State {
   roomJoins?: Record<string, string>;
   roomDeliveries?: Record<string, import("./rooms/service").RoomDelivery>;
   aiSettings?: StoredAISettings;
+  /** The agent last picked for a new thread, on the desktop or the phone. */
+  newThreadAgent?: import("../shared/agents").AgentProvider;
   devops?: import("../shared/devops").DevOpsSettings;
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   composeSend,
+  desktopNewThreadSettings,
   newThreadSettings,
   switchAgent,
 } from "../../mobile/src/remote/compose";
@@ -51,4 +52,26 @@ it("keeps Fast for Codex and the 200k window for Claude, never the other way rou
   expect(back.choice).toEqual({ model: "", fast: false, reasoningEffort: "" });
   expect(back).not.toHaveProperty("contextWindow");
   expect(projectChatSendSchema.parse(sent)).toEqual(sent);
+});
+
+it("starts new threads on the agent last picked for one, else the default agent", async () => {
+  const ai = { ...defaultAISettings, threadProvider: "cursor" as const };
+  const desktop = (last: string | null | Error) =>
+    (async (method: string) => {
+      if (method === "aiSettings") return ai;
+      if (last instanceof Error) throw last;
+      return last;
+    }) as Parameters<typeof desktopNewThreadSettings>[0];
+
+  const claude = await desktopNewThreadSettings(desktop("claude"));
+  expect(claude.provider).toBe("claude");
+  expect(claude.choice.model).toBe("");
+  expect((await desktopNewThreadSettings(desktop(null))).provider).toBe(
+    "cursor",
+  );
+  // A desktop from before the method turns it down.
+  expect(
+    (await desktopNewThreadSettings(desktop(new Error("Invalid enum"))))
+      .provider,
+  ).toBe("cursor");
 });
