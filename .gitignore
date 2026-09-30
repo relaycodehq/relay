@@ -3,7 +3,6 @@ dist/
 dist-electron/
 dist-phone/
 release/
-!.claude/skills/release/
 test-results/
 playwright-report/
 .DS_Store
@@ -16,3 +15,5 @@ server/.secrets/
 /t3code/
 /openusage/
 __pycache__/
+.claude/skills/
+.idea/
