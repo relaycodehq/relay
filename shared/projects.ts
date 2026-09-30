@@ -218,6 +218,8 @@ export interface ChatMessage {
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
+  /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
+  unread?: boolean;
   /**
    * Local marker: a `/btw` question, asked beside the main conversation. It
    * roots a side thread its agent answers without changing anything, and the

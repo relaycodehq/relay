@@ -240,6 +240,14 @@ export class ProjectChats {
   ) {
     active.requests.close();
     this.active.delete(chat.id);
+    // A steer the agent never confirmed reading still went to it; stop waiting.
+    const unread = chat.messages.filter((m) => m.unread);
+    for (const m of unread) {
+      delete m.unread;
+      m.version++;
+      this.emit({ chatId: chat.id, message: structuredClone(m) });
+    }
+    if (unread.length) void this.save(chat).catch(() => {});
     if (turn) this.reviewStep(chat.id, turn);
     void this.updateSummary(chat).catch(() => {});
     void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
@@ -1200,6 +1208,7 @@ export class ProjectChats {
     const message: ChatMessage = {
       id: next.input.id,
       steered: true,
+      unread: true,
       role: "user",
       body: next.input.body,
       provider: mention.provider,
@@ -2159,6 +2168,11 @@ export class ProjectChats {
     const continueBelow = (id: string) => {
       const steer = chat.messages.find((m) => m.id === id);
       if (!steer) return;
+      if (steer.unread) {
+        delete steer.unread;
+        steer.version++;
+        this.emit({ chatId: chat.id, message: structuredClone(steer) });
+      }
       if (flush) clearTimeout(flush);
       if (
         message.body.trim() ||

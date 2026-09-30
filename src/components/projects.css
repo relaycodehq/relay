@@ -144,6 +144,10 @@
   font-size: 10px;
   color: var(--muted);
 }
+.steer-unread {
+  display: inline-flex;
+  margin-left: -4px;
+}
 .project-message.assistant > header strong {
   color: var(--accent);
 }

@@ -570,6 +570,11 @@ it.each([
       ["assistant", "Noted: Use the blue one", "complete", false],
     ]);
     expect(messages[3]!.created).toBeGreaterThan(messages[2]!.created);
+    // Shown as waiting until Claude picks it up.
+    const steerEvents = events.filter((e) => e.message.id === messages[2]!.id);
+    expect(steerEvents[0]?.message.unread).toBe(true);
+    expect(steerEvents.at(-1)?.message.unread).toBeUndefined();
+    expect(messages[2]!.unread).toBeUndefined();
     expect((await chats.get(chat.id)).sessions?.claude?.through).toBe(
       messages[3]!.id,
     );

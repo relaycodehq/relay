@@ -57,7 +57,7 @@ import {
   saveSentSettings,
 } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
-import { ErrorBox, IconButton, Loading, RichText } from "./ui";
+import { ErrorBox, IconButton, Loading, RichText, Spinner } from "./ui";
 import {
   ImageThumbnail,
   useWorkingImages,
@@ -382,6 +382,16 @@ const Message = memo(function Message({
           <MessageAgentName provider={m.provider} model={m.model} />
         )}
         {m.role === "user" && <time>{clock(m.created)}</time>}
+        {m.unread && (
+          <span
+            className="steer-unread muted"
+            role="status"
+            aria-label="Not read yet"
+            title={`Steering ${agentName(m.provider)}: waiting for it to read this`}
+          >
+            <Spinner size={11} steady />
+          </span>
+        )}
         {m.author && m.role === "assistant" && (
           <span className="muted">via {m.author}</span>
         )}
