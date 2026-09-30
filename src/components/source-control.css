@@ -1,0 +1,156 @@
+/* Settings → Source control: one row per host, details behind the chevron. */
+.source-control {
+  --sc-ready: light-dark(#1a7f37, #3fb950);
+  --sc-attention: #c39236;
+}
+.source-control-row + .source-control-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.source-control-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 16px;
+}
+.source-control-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.source-control-dot {
+  position: absolute;
+  top: -1px;
+  left: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface);
+  background: var(--muted);
+}
+[data-state="ready"] .source-control-dot {
+  background: var(--sc-ready);
+}
+[data-state="attention"] .source-control-dot {
+  background: var(--sc-attention);
+}
+.source-control-text {
+  flex: 1;
+  min-width: 0;
+}
+[data-state="off"] :is(.source-control-mark, .source-control-text) {
+  opacity: 0.55;
+}
+.source-control-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.source-control-title > span {
+  font-size: 13px;
+  font-weight: 500;
+}
+.source-control-title code,
+.source-control-program code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.source-control-text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.source-control-text p b {
+  font-weight: 500;
+  color: var(--text);
+}
+.source-control-text p code {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--hover);
+}
+.source-control .text-button {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+  font-weight: 500;
+}
+.source-control .icon-button.source-control-toggle {
+  width: 26px;
+  height: 26px;
+  background: none;
+  color: var(--muted);
+}
+.source-control .icon-button.source-control-toggle:hover,
+.source-control .icon-button.source-control-toggle.active {
+  background: var(--hover);
+  color: var(--text);
+}
+.source-control-toggle svg {
+  transition: transform 0.15s;
+}
+.source-control-toggle svg[data-open] {
+  transform: rotate(180deg);
+}
+.source-control-details {
+  display: grid;
+  gap: 6px;
+  margin: 0 16px 14px 50px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hover) 55%, transparent);
+  font-size: 12px;
+}
+.source-control-program {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.source-control-program > span {
+  flex: none;
+  font-weight: 500;
+}
+.source-control-program code {
+  min-width: 0;
+  color: var(--text);
+}
+.source-control-program em,
+.source-control-program small {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+.source-control-program .source-control-actions {
+  display: flex;
+  gap: 14px;
+  flex: none;
+  margin-left: auto;
+  font-weight: 400;
+}
+.source-control-off {
+  margin: 2px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.icon-button.source-control-rescan {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: none;
+  color: var(--muted);
+}
+.icon-button.source-control-rescan:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}

@@ -1,20 +1,21 @@
-// Settings → Integrations → Source control, on sample data.
+// Settings → Integrations → Source control, and the Gitea sign-in's tea logins.
 // Open http://127.0.0.1:5177/previews/source-control.html
 import "./desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../src/styles.css";
-import "../src/components/settings.css";
+import "../src/components/projects.css";
 import { initAppearance } from "../src/lib/appearance";
-import { SourceControlSettings } from "../src/components/SourceControlSettings";
+import { Settings } from "../src/components/Settings";
+import { SignIn } from "../src/ReviewSurface";
+import { Modal } from "../src/components/ui";
 import type {
   SourceControlKind,
   SourceControlProvider,
+  TeaSetup,
 } from "../shared/source-control";
-import type { TeaSetup } from "../shared/source-control";
 import type { Api } from "../shared/types";
-import { TeaSignIn } from "../src/components/TeaSignIn";
 
 initAppearance();
 
@@ -36,143 +37,212 @@ const gitea: SourceControlProvider = {
   path: "/opt/homebrew/bin/tea",
   version: "0.16.0",
   signIn: "signed-in",
-  account: "sample-user on git.example.com",
+  account: "sample-user",
+  server: "git.example.com",
 };
 const giteaOut: SourceControlProvider = {
   ...gitea,
   signIn: "signed-out",
   account: undefined,
-  detail: "tea is logged in to git.example.com. Connect to use one.",
+  server: undefined,
+};
+const ghMissing: SourceControlProvider = {
+  ...github,
+  path: undefined,
+  version: undefined,
+  signIn: "unknown",
+  account: undefined,
 };
 
 // Sample data, not this machine's tools.
-const samples: Record<string, SourceControlProvider[]> = {
-  "Both ready": [github, gitea],
-  "gh signed out": [
-    {
-      ...github,
-      signIn: "signed-out",
-      account: undefined,
-      detail: "Run `gh auth login` in a terminal to sign in.",
+const scenarios: Record<
+  string,
+  { providers: SourceControlProvider[]; tea: TeaSetup }
+> = {
+  "All set": {
+    providers: [github, gitea],
+    tea: { path: gitea.path, version: "0.16.0", logins: [] },
+  },
+  "tea has logins": {
+    providers: [
+      github,
+      { ...giteaOut, detail: "tea has a login for git.example.com." },
+    ],
+    tea: {
+      path: gitea.path,
+      version: "0.16.0",
+      logins: [
+        {
+          name: "work",
+          url: "https://git.example.com",
+          user: "ann",
+          default: true,
+        },
+        {
+          name: "home",
+          url: "http://192.168.1.20:3000",
+          user: "ann",
+          default: false,
+        },
+      ],
     },
-    gitea,
-  ],
-  "Gitea signed out": [github, giteaOut],
-  "Nothing installed": [
-    {
-      ...github,
-      path: undefined,
-      version: undefined,
-      signIn: "unknown",
-      account: undefined,
-      detail:
-        "Install the GitHub CLI (`brew install gh`, or cli.github.com), or link it here if it lives somewhere else.",
-    },
-    {
-      ...giteaOut,
-      path: undefined,
-      version: undefined,
-      detail:
-        "Connect with a token, or link tea to sign in with one of its logins.",
-    },
-  ],
-  "gh linked": [
-    {
-      ...github,
-      linked: true,
-      path: "/home/sample/.local/share/mise/installs/gh/latest/bin/gh",
-    },
-    { ...gitea, enabled: false },
-  ],
+  },
+  "gh signed out": {
+    providers: [{ ...github, signIn: "signed-out", account: undefined }, gitea],
+    tea: { path: gitea.path, version: "0.16.0", logins: [] },
+  },
+  "Nothing installed": {
+    providers: [
+      { ...ghMissing, detail: "Install it with `brew install gh`." },
+      { ...giteaOut, path: undefined, version: undefined },
+    ],
+    tea: { logins: [] },
+  },
+  "Gitea off": {
+    providers: [github, { ...gitea, enabled: false }],
+    tea: { path: gitea.path, version: "0.16.0", logins: [] },
+  },
 };
 
-let state = samples["Both ready"];
-const wait = () => new Promise((r) => setTimeout(r, 500));
+// Also settable from the URL (?s=All%20set&v=signin), since the dialogs are modal.
+const params = new URLSearchParams(location.search);
+let current = scenarios[params.get("s") ?? ""] ?? scenarios["All set"];
+const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 
 Object.assign(window.relay as Partial<Api>, {
+  updateState: async () => ({ status: "off", current: "preview" }),
   sourceControl: async () => {
     await wait();
-    return state;
+    return current.providers;
   },
   setSourceControlEnabled: async (
     kind: SourceControlKind,
     enabled: boolean,
   ) => {
-    state = state.map((p) => (p.kind === kind ? { ...p, enabled } : p));
-    return state;
+    current = {
+      ...current,
+      providers: current.providers.map((p) =>
+        p.kind === kind ? { ...p, enabled } : p,
+      ),
+    };
+    return current.providers;
   },
-  // The dialog is the desktop's; the sample links a mise install.
+  // The file dialog is the desktop's; the sample links a mise install.
   linkSourceControlCli: async (kind: SourceControlKind) => {
-    state = state.map((p) =>
-      p.kind === kind
-        ? {
-            ...p,
-            linked: true,
-            path: `/home/sample/.local/share/mise/installs/${p.cli}/latest/bin/${p.cli}`,
-          }
-        : p,
-    );
-    return state;
+    await wait();
+    current = {
+      ...current,
+      providers: current.providers.map((p) =>
+        p.kind === kind
+          ? {
+              ...p,
+              linked: true,
+              path: `/home/sample/.local/share/mise/installs/${p.cli}/latest/bin/${p.cli}`,
+              version: p.version ?? (kind === "github" ? "2.101.0" : "0.16.0"),
+            }
+          : p,
+      ),
+    };
+    return current.providers;
   },
   unlinkSourceControlCli: async (kind: SourceControlKind) => {
-    state = state.map((p) =>
-      p.kind === kind ? { ...p, linked: undefined } : p,
-    );
-    return state;
-  },
-  teaSetup: async () => teaSample,
-  connectWithTea: async () => {
     await wait();
+    current = {
+      ...current,
+      providers: current.providers.map((p) =>
+        p.kind === kind ? { ...p, linked: undefined } : p,
+      ),
+    };
+    return current.providers;
+  },
+  teaSetup: async () => {
+    await wait(200);
+    return current.tea;
+  },
+  connectWithTea: async () => {
+    await wait(700);
     throw new Error("Sample: this preview doesn't sign in.");
   },
 });
 
-const teaSample: TeaSetup = {
-  path: "/opt/homebrew/bin/tea",
-  version: "0.16.0",
-  logins: [
-    {
-      name: "work",
-      url: "https://git.example.com",
-      user: "ann",
-      default: true,
-    },
-    {
-      name: "home",
-      url: "http://192.168.1.20:3000",
-      user: "ann",
-      default: false,
-    },
-  ],
-};
-
 const client = new QueryClient();
 
 function Preview() {
-  const [sample, setSample] = useState("Both ready");
+  const [name, setName] = useState(
+    params.get("s") && scenarios[params.get("s")!]
+      ? params.get("s")!
+      : "All set",
+  );
+  const [view, setView] = useState<"settings" | "signin">(
+    params.get("v") === "signin" ? "signin" : "settings",
+  );
+  const pick = (next: string) => {
+    setName(next);
+    current = scenarios[next];
+    client.removeQueries();
+  };
   return (
-    <div style={{ padding: 24, display: "grid", gap: 24, maxWidth: 760 }}>
-      <div className="segmented settings-segmented">
-        {Object.keys(samples).map((name) => (
+    <div style={{ padding: 16, display: "grid", gap: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          zIndex: 10000,
+          position: "relative",
+        }}
+      >
+        <div className="segmented settings-segmented">
+          {Object.keys(scenarios).map((key) => (
+            <button
+              key={key}
+              className={name === key ? "active" : ""}
+              onClick={() => pick(key)}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+        <div className="segmented settings-segmented">
           <button
-            key={name}
-            className={sample === name ? "active" : ""}
-            onClick={() => {
-              setSample(name);
-              state = samples[name];
-              client.invalidateQueries({ queryKey: ["source-control"] });
-            }}
+            className={view === "settings" ? "active" : ""}
+            onClick={() => setView("settings")}
           >
-            {name}
+            Settings
           </button>
-        ))}
+          <button
+            className={view === "signin" ? "active" : ""}
+            onClick={() => setView("signin")}
+          >
+            Sign-in
+          </button>
+        </div>
+        <span className="setting-muted">Sample data</span>
       </div>
-      <p className="setting-muted">Sample data.</p>
-      <SourceControlSettings onConnect={() => {}} />
-      <div style={{ width: 395 }}>
-        <p className="setting-muted">The sign-in screen's tea section:</p>
-        <TeaSignIn onConnected={async () => {}} />
-      </div>
+      {view === "settings" ? (
+        <Settings
+          key={name}
+          account={null}
+          initialCategory="integrations"
+          onClose={() => {}}
+          onConnect={() => setView("signin")}
+          onDisconnect={async () => {}}
+        />
+      ) : (
+        <Modal
+          key={name}
+          title="Gitea account"
+          className="project-signin"
+          onClose={() => setView("settings")}
+        >
+          <SignIn
+            onConnected={async () => {}}
+            loginRestore="idle"
+            platform="darwin"
+            onRestoreAction={async () => {}}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

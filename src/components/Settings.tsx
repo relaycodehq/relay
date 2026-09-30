@@ -82,7 +82,10 @@ import { UpdateCheck, updateLine } from "./UpdateCheck";
 import { AgentVersionSettings } from "./AgentUpdates";
 import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
-import { SourceControlSettings } from "./SourceControlSettings";
+import {
+  SourceControlRescan,
+  SourceControlSettings,
+} from "./SourceControlSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
   DictationMicrophoneSetting,
@@ -909,10 +912,11 @@ export function Settings({
       category: "integrations",
       title: "Source control",
       description:
-        "GitHub and Gitea, where your repositories and their CI live. Relay finds the gh and tea command-line tools by itself; link them here if they live somewhere else.",
+        "Relay reads CI and pull requests through the GitHub CLI and your Gitea account. Turn a host off to stop showing its CI.",
       keywords:
         "github gitea forgejo gh tea cli ci actions pull request host sign in login link path",
       block: true,
+      accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings onConnect={onConnect} />,
     },
     {

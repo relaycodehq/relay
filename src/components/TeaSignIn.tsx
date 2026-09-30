@@ -1,99 +1,109 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { api } from "../lib/api";
 import type { Account } from "../../shared/types";
 import { ErrorBox, Spinner } from "./ui";
 import "./tea-signin.css";
 
+const useTea = () =>
+  useQuery({ queryKey: ["tea-setup"], queryFn: () => api.teaSetup() });
+
 /**
- * Signing in with a login the `tea` CLI holds, instead of typing the server
- * and a token. Relay asks tea for the token; it never reaches this window.
+ * The servers the `tea` CLI is logged in to, as one-click sign-ins above the
+ * token form. Relay asks tea for the token; it never reaches this window.
  */
-export function TeaSignIn({
+export function TeaLogins({
   onConnected,
 }: {
   onConnected: (account: Account) => Promise<void>;
 }) {
-  const qc = useQueryClient();
-  const setup = useQuery({
-    queryKey: ["tea-setup"],
-    queryFn: () => api.teaSetup(),
-  });
-  const [busy, setBusy] = useState<string | boolean>(false);
+  const logins = useTea().data?.logins ?? [];
+  const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
-  async function run(id: string | true, work: () => Promise<void>) {
-    setBusy(id);
-    setError(undefined);
-    try {
-      await work();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  const data = setup.data;
-  if (!data) return null;
-  const refresh = () =>
-    run(true, async () => {
-      await qc.invalidateQueries({ queryKey: ["tea-setup"] });
-    });
+  if (!logins.length) return null;
   return (
-    <div className="tea-signin">
-      <span className="tea-signin-title">Or use the tea CLI</span>
-      {data.logins.map((login) => (
-        <button
-          key={login.name}
-          className="tea-login"
-          disabled={!!busy}
-          onClick={() =>
-            void run(login.name, async () => {
-              await onConnected(await api.connectWithTea(login.name));
-            })
-          }
-        >
-          <span>
-            {login.user || login.name}
-            <small>{new URL(login.url).host}</small>
-          </span>
-          {busy === login.name ? <Spinner size={12} /> : <span>Use</span>}
-        </button>
-      ))}
-      {!data.logins.length && (
-        <p className="tea-signin-note">
-          {data.error ??
-            (data.path
-              ? "tea has no logins yet. Run `tea login add` in a terminal, then check again."
-              : "Already signed in with tea? Link it and pick a login, no token needed.")}
-        </p>
-      )}
-      <div className="tea-signin-actions">
-        {!data.path && (
+    <div className="tea-logins">
+      <span className="tea-logins-label">Signed in with tea</span>
+      <div className="tea-logins-list">
+        {logins.map((login) => (
           <button
-            className="text-button"
+            key={login.name}
+            type="button"
             disabled={!!busy}
-            onClick={() =>
-              void run(true, async () => {
-                if (await api.linkSourceControlCli("gitea"))
-                  await qc.invalidateQueries({ queryKey: ["tea-setup"] });
-              })
-            }
+            onClick={async () => {
+              setBusy(login.name);
+              setError(undefined);
+              try {
+                await onConnected(await api.connectWithTea(login.name));
+              } catch (e) {
+                setError(e);
+              } finally {
+                setBusy(undefined);
+              }
+            }}
           >
-            <FolderOpen size={12} /> Link tea…
+            <span className="tea-login-avatar" aria-hidden>
+              {(login.user || login.name).slice(0, 1).toUpperCase()}
+            </span>
+            <span className="tea-login-text">
+              <b>{login.user || login.name}</b>
+              <small>{new URL(login.url).host}</small>
+            </span>
+            {busy === login.name ? (
+              <Spinner size={13} />
+            ) : (
+              <ArrowRight size={15} className="tea-login-go" />
+            )}
           </button>
-        )}
-        {!!data.path && !data.logins.length && (
-          <button
-            className="text-button"
-            disabled={!!busy}
-            onClick={() => void refresh()}
-          >
-            <RefreshCw size={12} /> Check again
-          </button>
+        ))}
+      </div>
+      {!!error && <ErrorBox error={error} />}
+      <span className="tea-logins-or">or use a token</span>
+    </div>
+  );
+}
+
+/** Under the form: how to bring tea in, when it has nothing to offer yet. */
+export function TeaHint() {
+  const qc = useQueryClient();
+  const tea = useTea().data;
+  const [error, setError] = useState<unknown>();
+  if (!tea || tea.logins.length) return null;
+  const again = () => void qc.invalidateQueries({ queryKey: ["tea-setup"] });
+  return (
+    <>
+      <div className="tea-hint">
+        {tea.path ? (
+          <>
+            Use the tea CLI? It has no logins yet. Run{" "}
+            <code>tea login add</code>, then{" "}
+            <button type="button" className="text-button" onClick={again}>
+              check again
+            </button>
+            .
+          </>
+        ) : (
+          <>
+            Signed in with the tea CLI?{" "}
+            <button
+              type="button"
+              className="text-button"
+              onClick={async () => {
+                setError(undefined);
+                try {
+                  if (await api.linkSourceControlCli("gitea")) again();
+                } catch (e) {
+                  setError(e);
+                }
+              }}
+            >
+              Link tea…
+            </button>
+          </>
         )}
       </div>
       {!!error && <ErrorBox error={error} />}
-    </div>
+    </>
   );
 }

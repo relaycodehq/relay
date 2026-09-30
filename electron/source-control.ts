@@ -18,8 +18,7 @@ import { teaSetup } from "./tea";
 import type { Store } from "./store";
 
 const probeTimeout = 8000;
-const ghInstallHint =
-  "Install the GitHub CLI (`brew install gh`, or cli.github.com), or link it here if it lives somewhere else.";
+const ghInstallHint = "Install it with `brew install gh`.";
 
 const firstLine = (text: string) => text.split(/\r?\n/, 1)[0].trim();
 
@@ -81,7 +80,8 @@ async function gitea(store: Store, login: GiteaLogin, enabled: boolean) {
     signIn: "signed-out",
   };
   if (saved) {
-    provider.account = `${saved.user.login} on ${new URL(saved.server).host}`;
+    provider.account = saved.user.login;
+    provider.server = new URL(saved.server).host;
     if (login.client) provider.signIn = "signed-in";
     else {
       provider.signIn = "unknown";
@@ -92,13 +92,10 @@ async function gitea(store: Store, login: GiteaLogin, enabled: boolean) {
     }
     return provider;
   }
-  provider.detail = tea.error
-    ? tea.error
-    : tea.logins.length
-      ? `tea is logged in to ${tea.logins.map((l) => new URL(l.url).host).join(", ")}. Connect to use one.`
-      : tea.path
-        ? "Connect with a token, or run `tea login add` and connect with that login."
-        : "Connect with a token, or link tea to sign in with one of its logins.";
+  const hosts = tea.logins.map((l) => new URL(l.url).host);
+  if (tea.error) provider.detail = tea.error;
+  else if (hosts.length)
+    provider.detail = `tea has a login for ${hosts.join(", ")}.`;
   return provider;
 }
 

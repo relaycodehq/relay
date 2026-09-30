@@ -7,7 +7,7 @@ export const sourceControlNames: Record<SourceControlKind, string> = {
   gitea: "Gitea",
 };
 
-/** What Settings keeps: hosts the user turned off, and the `gh` they linked. */
+/** What Settings keeps: hosts the user turned off, and the CLIs they linked. */
 export interface SourceControlSettings {
   off?: SourceControlKind[];
   paths?: { github?: string; gitea?: string };
@@ -36,7 +36,9 @@ export interface SourceControlProvider {
   signIn: SourceControlSignIn;
   /** Who Relay acts as. */
   account?: string;
-  /** What the user can do about it, or why Relay couldn't tell. */
+  /** The server `account` is on, for a host that isn't one site, e.g. `git.example.com`. */
+  server?: string;
+  /** One more sentence: what to do about it, or why Relay couldn't tell. */
   detail?: string;
 }
 
