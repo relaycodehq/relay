@@ -91,10 +91,12 @@
   font-weight: 600;
 }
 /* Nothing will come of it without you: muted instead of accent. */
-.waiting-strip.stopped {
+.waiting-strip.stopped,
+.waiting-strip.settled {
   border-color: var(--border);
   background: color-mix(in srgb, var(--muted) 8%, var(--toolbar));
 }
-.waiting-strip.stopped .waiting-strip-head > svg {
+.waiting-strip.stopped .waiting-strip-head > svg,
+.waiting-strip.settled .waiting-strip-head > svg {
   color: var(--muted);
 }

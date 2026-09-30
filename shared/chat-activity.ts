@@ -12,7 +12,7 @@ type Triaged = Pick<
   "running" | "waiting" | "settledAt" | "snoozedAt" | "snoozedUntil" | "updated"
 >;
 
-function chatSettled(chat: Triaged): boolean {
+export function chatSettled(chat: Triaged): boolean {
   return (
     !chat.running &&
     !chat.waiting &&

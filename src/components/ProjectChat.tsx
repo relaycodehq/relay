@@ -32,7 +32,7 @@ import {
   RotateCcw,
   ScanSearch,
 } from "lucide-react";
-import { wakeLabel } from "../../shared/chat-activity";
+import { chatSettled, wakeLabel } from "../../shared/chat-activity";
 import {
   applyChatPatch,
   replyRoot,
@@ -107,7 +107,7 @@ import {
 } from "../../shared/pasted-texts";
 import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
-import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
+import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
 import { outsideBatch, runningBatch } from "../../shared/subagents";
@@ -834,6 +834,19 @@ export function ProjectChat({
   const agentBatch = runningBatch(agents.data ?? []);
   // The indicator shows those agents, and stops them; the strip keeps the rest.
   const leftBehind = pending && outsideBatch(pending, agentBatch);
+  const unsettle = async () => {
+    if (!chat) return;
+    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
+      list?.map((c) => (c.id === chat.id ? { ...c, settledAt: undefined } : c)),
+    );
+    try {
+      await api.triageProjectChat(chat.id, { kind: "unsettle" });
+    } catch (e) {
+      setError(e);
+    } finally {
+      void qc.invalidateQueries({ queryKey: ["project-chats"] });
+    }
+  };
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
   const sendKey = useSendKey();
@@ -2147,25 +2160,26 @@ export function ProjectChat({
                     }
                   }}
                 />
+              ) : leftBehind?.length ? (
+                <WaitingStrip
+                  pending={leftBehind}
+                  onStop={async (item) => {
+                    if (!chat) return;
+                    try {
+                      await api.stopProjectChatPending(chat.id, item.id);
+                    } catch (e) {
+                      setError(e);
+                      throw e;
+                    } finally {
+                      void qc.invalidateQueries({
+                        queryKey: ["project-chats"],
+                      });
+                    }
+                  }}
+                />
               ) : (
-                !!leftBehind?.length && (
-                  <WaitingStrip
-                    pending={leftBehind}
-                    onStop={async (item) => {
-                      if (!chat) return;
-                      try {
-                        await api.stopProjectChatPending(chat.id, item.id);
-                      } catch (e) {
-                        setError(e);
-                        throw e;
-                      } finally {
-                        void qc.invalidateQueries({
-                          queryKey: ["project-chats"],
-                        });
-                      }
-                    }}
-                  />
-                )
+                chat &&
+                chatSettled(chat) && <SettledStrip onUnsettle={unsettle} />
               )
             }
             placeholder={

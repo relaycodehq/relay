@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNow } from "../lib/useNow";
 import {
   AlarmClock,
+  CheckCheck,
   ChevronDown,
   CircleStop,
   SquareTerminal,
@@ -163,6 +164,28 @@ export function StoppedStrip({
           onClick={() => act("resume")}
         >
           Pick it back up
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** A settled thread, opened: the next message moves it back to Activity. */
+export function SettledStrip({ onUnsettle }: { onUnsettle: () => void }) {
+  return (
+    <div className="waiting-strip settled" role="status">
+      <div className="waiting-strip-head">
+        <CheckCheck size={15} />
+        <span className="waiting-strip-text">
+          <b>Settled</b>
+          <span> · replying moves it back to Activity</span>
+        </span>
+        <button
+          type="button"
+          title="Move back to activity"
+          onClick={onUnsettle}
+        >
+          Unsettle
         </button>
       </div>
     </div>

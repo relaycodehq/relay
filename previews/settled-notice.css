@@ -1,0 +1,191 @@
+.sn-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+}
+.sn-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.sn-bar .sn-sample {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sn-tabs {
+  display: flex;
+  gap: 2px;
+}
+.sn-tabs button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sn-tabs button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.sn-about {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sn-chat {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.sn-chat .thread-message-column {
+  margin: 0 auto;
+}
+.sn-chat .composer-dock {
+  max-width: var(--thread-width);
+  margin: 0 auto;
+}
+.sn-prompt {
+  display: block;
+  resize: none;
+  color: var(--text);
+}
+.sn-prompt::placeholder {
+  color: var(--muted);
+}
+.sn-tool {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* A · one muted line under the composer. */
+.settled-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  margin: 6px 0 -10px;
+  padding: 0 20px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.settled-line svg {
+  flex: none;
+  opacity: 0.8;
+}
+.settled-line button {
+  margin-left: 2px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.composer-dock:hover .settled-line button,
+.settled-line button:focus-visible {
+  opacity: 1;
+}
+.settled-line button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* B · the waiting strip's tab, without the accent: nothing needs you here. */
+.settled-tab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  margin: 0 18px -1px;
+  padding: 3px 8px 3px 14px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--text) 3%, var(--toolbar));
+  font-size: 12.5px;
+}
+.settled-tab > svg {
+  flex: none;
+  color: var(--muted);
+}
+.settled-tab-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settled-tab-text b {
+  font-weight: 550;
+}
+.settled-tab-text span {
+  color: var(--muted);
+}
+.settled-tab button {
+  flex: none;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settled-tab button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* C · nothing extra until you type; then a hint next to send. */
+.settled-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(6px);
+  transition:
+    opacity 160ms,
+    transform 160ms cubic-bezier(0.2, 0, 0, 1);
+  pointer-events: none;
+}
+.settled-hint[data-shown] {
+  opacity: 1;
+  transform: none;
+}
+
+.sn-moved {
+  padding: 0 20px;
+  margin: 6px 0 -10px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.sn-moved button {
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
