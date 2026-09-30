@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
-import type { GitAction, WorkingTree } from "../../shared/working-tree";
+import {
+  checkoutChanged,
+  type GitAction,
+  type WorkingTree,
+} from "../../shared/working-tree";
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
 import { workingTreeKey } from "../lib/working-tree-key";
@@ -36,6 +40,18 @@ export function CommitSheet({
   const selected = files
     .filter((c) => !excluded.has(c.path))
     .map((c) => c.path);
+  // Files this sheet has listed; ones that leave while HEAD moves were
+  // committed by someone else (an agent, a terminal) while it was open.
+  const openedAt = useRef(tree.head);
+  const listed = useRef(new Set<string>());
+  for (const c of files) listed.current.add(c.path);
+  const live = new Set(files.map((c) => c.path));
+  const committed =
+    tree.head === openedAt.current
+      ? []
+      : [...listed.current].filter((p) => !live.has(p));
+  const allCommitted = !files.length && committed.length > 0;
+  const headSubject = tree.outgoing.find((c) => c.sha === tree.head)?.subject;
   const generation = useRef(0);
   async function write(paths: string[]) {
     if (!paths.length) return;
@@ -54,6 +70,11 @@ export function CommitSheet({
   useEffect(() => {
     void write(selected);
   }, []);
+  // The drafted message still describes the files that left.
+  useEffect(() => {
+    if (committed.length && selected.length && !typed.current)
+      void write(selected);
+  }, [committed.length]);
   async function submit() {
     if (
       busy ||
@@ -65,12 +86,30 @@ export function CommitSheet({
     setBusy(true);
     setError(undefined);
     try {
+      // The poll can be up to 3s old; don't commit files that already left.
+      const fresh = await qc.fetchQuery({
+        queryKey: key,
+        queryFn: () => api.projectWorkingTree(where),
+        staleTime: 0,
+      });
+      const changed = new Set(fresh.changes.map((c) => c.path));
+      if (!selected.every((p) => changed.has(p))) {
+        if (fresh.head === openedAt.current)
+          setError(
+            new Error(
+              `${checkoutChanged} Review the refreshed changes and try again.`,
+            ),
+          );
+        return;
+      }
       let next = await api.projectGitAction(where, {
         kind: "commit",
-        revision: tree.revision,
+        revision: fresh.revision,
         message,
         paths: selected,
       } satisfies GitAction);
+      // Our own commit; a failed push below shouldn't read as someone else's.
+      openedAt.current = next.head;
       qc.setQueryData(key, next);
       if (push) {
         next = await api.projectGitAction(where, {
@@ -87,6 +126,28 @@ export function CommitSheet({
       setBusy(false);
     }
   }
+  async function pushOnly() {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      qc.setQueryData(
+        key,
+        await api.projectGitAction(where, {
+          kind: "push",
+          revision: tree.revision,
+        }),
+      );
+      onClose();
+    } catch (e) {
+      setError(e);
+      void qc.invalidateQueries({ queryKey: key });
+    } finally {
+      setBusy(false);
+    }
+  }
+  const canPush =
+    push && !!tree.pushTarget && (tree.ahead > 0 || !tree.upstream);
   const toggle = (paths: string[]) =>
     setExcluded((s) => {
       const next = new Set(s);
@@ -113,82 +174,110 @@ export function CommitSheet({
         }}
       >
         <CommitRoute tree={tree} push={push} />
-        <fieldset className="commit-files-fieldset" disabled={busy}>
-          <CommitFileList
-            files={files}
-            excluded={excluded}
-            onToggle={toggle}
-            lines={tree.lines}
-          />
-        </fieldset>
-        <div className="commit-message">
-          <span className="commit-message-label">
-            <span>Message</span>
-            {subject > 0 && (
-              <span
-                className={`commit-subject-length ${subject > SUBJECT_LIMIT ? "long" : ""}`}
-                title="Subject line length"
-              >
-                {subject}/{SUBJECT_LIMIT}
-              </span>
+        {committed.length > 0 && (
+          <p className="commit-sheet-note" role="status">
+            {allCommitted
+              ? "Already committed while this was open"
+              : `${committed.length === 1 ? "1 file was" : `${committed.length} files were`} committed while this was open`}
+            {headSubject && (
+              <>
+                : <q>{headSubject}</q>
+              </>
             )}
-            <IconButton
-              label="Write the message again"
-              onClick={() => {
-                typed.current = false;
-                void write(selected);
-              }}
-              disabled={writing || busy || !selected.length}
+          </p>
+        )}
+        {allCommitted ? (
+          <>
+            {!!error && <ErrorBox error={error} />}
+            <button
+              type="button"
+              className="primary commit-submit"
+              disabled={busy}
+              onClick={() => (canPush ? void pushOnly() : onClose())}
             >
-              {writing ? <Spinner size={13} /> : <RefreshCw size={13} />}
-            </IconButton>
-          </span>
-          <textarea
-            aria-label="Commit message"
-            value={message}
-            onChange={(e) => {
-              typed.current = true;
-              setMessage(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void submit();
+              {busy ? "Pushing…" : canPush ? "Push" : "Close"}
+            </button>
+          </>
+        ) : (
+          <>
+            <fieldset className="commit-files-fieldset" disabled={busy}>
+              <CommitFileList
+                files={files}
+                excluded={excluded}
+                onToggle={toggle}
+                lines={tree.lines}
+              />
+            </fieldset>
+            <div className="commit-message">
+              <span className="commit-message-label">
+                <span>Message</span>
+                {subject > 0 && (
+                  <span
+                    className={`commit-subject-length ${subject > SUBJECT_LIMIT ? "long" : ""}`}
+                    title="Subject line length"
+                  >
+                    {subject}/{SUBJECT_LIMIT}
+                  </span>
+                )}
+                <IconButton
+                  label="Write the message again"
+                  onClick={() => {
+                    typed.current = false;
+                    void write(selected);
+                  }}
+                  disabled={writing || busy || !selected.length}
+                >
+                  {writing ? <Spinner size={13} /> : <RefreshCw size={13} />}
+                </IconButton>
+              </span>
+              <textarea
+                aria-label="Commit message"
+                value={message}
+                onChange={(e) => {
+                  typed.current = true;
+                  setMessage(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    void submit();
+                  }
+                }}
+                placeholder={writing ? "Writing a message…" : "Commit message"}
+                rows={5}
+                maxLength={16000}
+                disabled={busy}
+              />
+            </div>
+            {!!error && <ErrorBox error={error} />}
+            <button
+              className="primary commit-submit"
+              disabled={
+                busy ||
+                (writing && !typed.current) ||
+                !message.trim() ||
+                !selected.length
               }
-            }}
-            placeholder={writing ? "Writing a message…" : "Commit message"}
-            rows={5}
-            maxLength={16000}
-            disabled={busy}
-          />
-        </div>
-        {!!error && <ErrorBox error={error} />}
-        <button
-          className="primary commit-submit"
-          disabled={
-            busy ||
-            (writing && !typed.current) ||
-            !message.trim() ||
-            !selected.length
-          }
-        >
-          {busy ? (
-            push ? (
-              "Committing and pushing…"
-            ) : (
-              "Committing…"
-            )
-          ) : (
-            <>
-              Commit{" "}
-              {selected.length === files.length
-                ? ""
-                : `${selected.length} of ${files.length} files `}
-              {push && "& push"}
-              <kbd>{keys("⌘↵", "Ctrl+↵")}</kbd>
-            </>
-          )}
-        </button>
+            >
+              {busy ? (
+                push ? (
+                  "Committing and pushing…"
+                ) : (
+                  "Committing…"
+                )
+              ) : (
+                <>
+                  Commit{" "}
+                  {selected.length === files.length
+                    ? ""
+                    : `${selected.length} of ${files.length} files `}
+                  {push && "& push"}
+                  <kbd>{keys("⌘↵", "Ctrl+↵")}</kbd>
+                </>
+              )}
+            </button>
+          </>
+        )}
       </form>
     </Modal>
   );

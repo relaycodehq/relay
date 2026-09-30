@@ -166,3 +166,12 @@
   opacity: 0.7;
   font-size: 12px;
 }
+
+.commit-sheet-note {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.commit-sheet-note q {
+  color: var(--text);
+}
