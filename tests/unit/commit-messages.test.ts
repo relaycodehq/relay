@@ -74,12 +74,12 @@ it("drafts with the commit-message model, not the line questions'", async () => 
   expect(runs[0].choice).toMatchObject({ model: "composer-2" });
 });
 
-it("keeps settings saved before the choice existed on Codex at low effort", async () => {
+it("keeps settings saved before the choice existed on Codex Luna at low effort", async () => {
   await changedRepo();
   const { commitMessage, commitMessageProvider, ...saved } = defaultAISettings;
   await write(aiSettingsSchema.parse(saved));
   expect(runs[0].provider).toBe("codex");
-  expect(runs[0].choice).toMatchObject({ model: "", reasoningEffort: "low" });
+  expect(runs[0].choice).toMatchObject({ model: "gpt-6-luna", reasoningEffort: "low" });
 });
 
 it("drops the attribution lines agents like to sign off with", async () => {

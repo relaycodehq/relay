@@ -184,7 +184,7 @@ export const aiSettingsSchema = z
     }),
     /** Drafts the Commit sheet's message; added later, so it has a default. */
     commitMessage: questionChoiceSchema.default({
-      model: "",
+      model: "gpt-6-luna",
       fast: false,
       reasoningEffort: "low",
     }),
@@ -222,7 +222,7 @@ export const defaultAISettings: AISettings = {
   grouping: { model: "gpt-5.6-luna", fast: false, reasoningEffort: "medium" },
   questions: { model: "", fast: false, reasoningEffort: "" },
   split: { model: "", fast: false, reasoningEffort: "medium" },
-  commitMessage: { model: "", fast: false, reasoningEffort: "low" },
+  commitMessage: { model: "gpt-6-luna", fast: false, reasoningEffort: "low" },
   groupingProvider: "codex",
   questionsProvider: "codex",
   splitProvider: "codex",
@@ -235,6 +235,7 @@ export const codexQuestionChoice = (settings: AISettings): ModelChoice =>
     ? settings.questions
     : defaultAISettings.questions;
 const modelChoices = [
+  ["gpt-6-luna", "GPT-6 Luna"],
   ["gpt-5.6-luna", "Luna"],
   ["gpt-5.6-sol", "Sol"],
   ["gpt-5.6-terra", "Terra"],
