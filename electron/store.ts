@@ -24,6 +24,8 @@ interface State {
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../shared/agents").AgentProvider;
+  /** Each agent's model a new thread starts on; see shared/new-thread-models. */
+  newThreadModels?: import("../shared/new-thread-models").NewThreadModels;
   devops?: import("../shared/devops").DevOpsSettings;
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;

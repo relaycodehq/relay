@@ -3,6 +3,7 @@ import {
   composeSend,
   desktopNewThreadSettings,
   newThreadSettings,
+  withRememberedModel,
   switchAgent,
 } from "../../mobile/src/remote/compose";
 import { projectChatSendSchema } from "../../shared/projects";
@@ -56,16 +57,42 @@ it("keeps Fast for Codex and the 200k window for Claude, never the other way rou
 
 it("starts new threads on the agent last picked for one, else the default agent", async () => {
   const ai = { ...defaultAISettings, threadProvider: "cursor" as const };
-  const desktop = (last: string | null | Error) =>
+  const opus = { model: "opus", fast: false, reasoningEffort: "max" as const };
+  const desktop = (last: string | null | Error, models = {}) =>
     (async (method: string) => {
       if (method === "aiSettings") return ai;
       if (last instanceof Error) throw last;
+      if (method === "newThreadModels") return models;
       return last;
     }) as Parameters<typeof desktopNewThreadSettings>[0];
 
   const claude = await desktopNewThreadSettings(desktop("claude"));
   expect(claude.provider).toBe("claude");
   expect(claude.choice.model).toBe("");
+  // On the model it last ran with, from the desktop or the phone.
+  expect(
+    await desktopNewThreadSettings(
+      desktop("claude", {
+        claude: { choice: opus, contextWindow: "200k" },
+        codex: { choice: { model: "", fast: false, reasoningEffort: "" } },
+      }),
+    ),
+  ).toMatchObject({ provider: "claude", choice: opus, contextWindow: "200k" });
+  // A blank Codex pick keeps the line-question model the desktop defaults to.
+  const questions = {
+    model: "gpt-6-sol",
+    fast: false,
+    reasoningEffort: "high" as const,
+  };
+  expect(
+    withRememberedModel(
+      newThreadSettings(
+        { ...ai, questionsProvider: "codex", questions },
+        "codex",
+      ),
+      { codex: { choice: { model: "", fast: false, reasoningEffort: "" } } },
+    ).choice,
+  ).toEqual(questions);
   expect((await desktopNewThreadSettings(desktop(null))).provider).toBe(
     "cursor",
   );

@@ -14,6 +14,7 @@ import {
 } from "../../shared/projects";
 import { idSchema, presenceSchema } from "../../shared/rooms";
 import { workingPathSchema } from "../../shared/working-tree";
+import { rememberSentModel } from "../new-thread-models";
 import type { ApiContext, Handlers } from "./context";
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
@@ -65,11 +66,12 @@ export function chatHandlers(ctx: ApiContext) {
       projectChats.fork(idSchema.parse(args[0]), idSchema.parse(args[1])),
     renameProjectChat: (args) =>
       projectChats.rename(idSchema.parse(args[0]), z.string().parse(args[1])),
-    sendProjectChat: (args) =>
-      projectChats.send(
-        idSchema.parse(args[0]),
-        projectChatSendSchema.parse(args[1]),
-      ),
+    sendProjectChat: async (args) => {
+      const send = projectChatSendSchema.parse(args[1]);
+      const sent = await projectChats.send(idSchema.parse(args[0]), send);
+      await rememberSentModel(store, send);
+      return sent;
+    },
     resumeProjectChat: (args) =>
       projectChats.resume(
         idSchema.parse(args[0]),

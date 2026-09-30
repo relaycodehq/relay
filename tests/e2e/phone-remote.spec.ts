@@ -164,6 +164,27 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await phone.desktop("saveNewThreadAgent", "claude");
     await page.reload();
     await expect(picker).toContainText("Claude");
+    // So is the model an agent last ran with: picked on the phone, the
+    // desktop's new-thread composer takes it up.
+    const opus = {
+      model: "claude-opus-5-5",
+      fast: false,
+      reasoningEffort: "" as const,
+    };
+    await phone.desktop("saveNewThreadModel", "claude", { choice: opus });
+    await page.reload();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Object.keys(localStorage)
+            .filter((key) => key.startsWith("composer-settings:new:"))
+            .map((key) => JSON.parse(localStorage.getItem(key)!).claude?.model),
+        ),
+      )
+      .toContain("claude-opus-5-5");
+    expect(
+      (await desktopNewThreadSettings(phone.desktop.bind(phone))).choice,
+    ).toEqual(opus);
     // A supervised thread started the way the phone's New thread does.
     const supervised = {
       ...newThreadSettings(await phone.desktop("aiSettings")),
@@ -179,6 +200,11 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
         id: randomUUID(),
       }),
     );
+
+    // Sending from the phone makes its model the next new thread's.
+    expect(
+      (await phone.desktop("newThreadModels"))[supervised.provider]?.choice,
+    ).toEqual(supervised.choice);
 
     // The desktop's thread list learns the agent is waiting; so does the phone.
     await expect

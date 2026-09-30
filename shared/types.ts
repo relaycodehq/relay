@@ -261,6 +261,12 @@ export interface Api
   /** The agent last picked for a new thread, here or on the phone; null before either has. */
   newThreadAgent(): Promise<AgentProvider | null>;
   saveNewThreadAgent(provider: AgentProvider): Promise<void>;
+  /** Each agent's model a new thread starts on, here or on the phone. */
+  newThreadModels(): Promise<import("./new-thread-models").NewThreadModels>;
+  saveNewThreadModel(
+    provider: AgentProvider,
+    model: import("./new-thread-models").NewThreadModel,
+  ): Promise<void>;
   /** `force` skips the cached reading, for an explicit refresh. */
   providerUsage(
     provider: UsageProvider,

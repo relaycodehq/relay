@@ -277,6 +277,8 @@ export const phoneDesktopMethods = [
   "aiSettings",
   "newThreadAgent",
   "saveNewThreadAgent",
+  "newThreadModels",
+  "saveNewThreadModel",
   "projectWorktree",
   "projectCommands",
   "providerUsage",

@@ -10,6 +10,8 @@ import {
 } from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
+import { newThreadModelSchema } from "../../shared/new-thread-models";
+import { saveNewThreadModel } from "../new-thread-models";
 import { parseVersion } from "../../shared/agent-updates";
 import { signInCursor, signOutCursor } from "../agents/cursor/account";
 import { runExecutable, setLinkedAgents } from "../executables";
@@ -68,6 +70,13 @@ export function settingsHandlers(ctx: ApiContext) {
         s.newThreadAgent = provider;
       });
     },
+    newThreadModels: () => store.get().newThreadModels ?? {},
+    saveNewThreadModel: (args) =>
+      saveNewThreadModel(
+        store,
+        agentProviderSchema.parse(args[0]),
+        newThreadModelSchema.parse(args[1]),
+      ),
     providerUsage: (args) =>
       readProviderUsage(
         usageProviderSchema.parse(args[0]),

@@ -19,7 +19,8 @@ import { composerCommands, relayCommand, type RelayCommand } from "../../../shar
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { reasoningEffortSchema, type ModelChoice } from "../../../shared/settings";
-import { switchAgent } from "../remote/compose";
+import { switchAgent, withRememberedModel } from "../remote/compose";
+import type { NewThreadModels } from "../../../shared/new-thread-models";
 import { maxImages, pickImages, type Attachment } from "../remote/images";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
 import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from "./CommandMenu";
@@ -80,9 +81,11 @@ export const Composer = forwardRef<
     onCommand?: (name: RelayCommand, args: string) => CommandResult | Promise<CommandResult>;
     /** Where unsent text is kept between visits: the thread, or the reply's root. */
     draftKey?: string;
+    /** A new thread's models, per agent, for switching to one not picked here yet. */
+    remembered?: NewThreadModels;
   }
 >(function Composer(
-  { projectId, settings, onSettings, placeholder, running, disabled, context, onSend, onStop, onCommand, draftKey },
+  { projectId, settings, onSettings, placeholder, running, disabled, context, onSend, onStop, onCommand, draftKey, remembered },
   ref,
 ) {
   const t = useTheme();
@@ -126,7 +129,7 @@ export const Composer = forwardRef<
             choice: { model: kept.model, fast: kept.fast, reasoningEffort: kept.reasoningEffort },
             ...(kept.contextWindow ? { contextWindow: kept.contextWindow } : {}),
           }
-        : switched,
+        : withRememberedModel(switched, remembered ?? {}),
     );
   };
   /** The desktop's runCommand for a composer setting; with no value, its picker opens. */

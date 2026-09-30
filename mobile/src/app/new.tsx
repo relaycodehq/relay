@@ -12,7 +12,11 @@ import { randomUUID } from "expo-crypto";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
-import { composeSend, desktopNewThreadSettings } from "../remote/compose";
+import { composeSend, desktopNewThread } from "../remote/compose";
+import {
+  sameModel,
+  type NewThreadModels,
+} from "../../../shared/new-thread-models";
 import { NotebookPen } from "lucide-react-native";
 import { Composer, type Outgoing } from "../ui/Composer";
 import { ProjectIcon } from "../ui/ProjectIcon";
@@ -53,11 +57,16 @@ export default function NewThread() {
   const projectId = picked === "scratch" ? scratchId : picked;
   const [workspace, setWorkspace] = useState<ChatWorkspace>("checkout");
   const [settings, setSettings] = useState<RemoteSettings>();
+  const [models, setModels] = useState<NewThreadModels>({});
   const { desktop } = remote;
   useEffect(() => {
     if (settings) return;
     let live = true;
-    void desktopNewThreadSettings(desktop).then((s) => live && setSettings(s));
+    void desktopNewThread(desktop).then((s) => {
+      if (!live) return;
+      setSettings(s.settings);
+      setModels(s.models);
+    });
     return () => {
       live = false;
     };
@@ -172,6 +181,11 @@ export default function NewThread() {
             // The next new thread, here or on the desktop, starts on it too.
             if (s.provider !== settings.provider)
               void desktop("saveNewThreadAgent", s.provider).catch(() => {});
+            else if (!sameModel(s, settings))
+              void desktop("saveNewThreadModel", s.provider, {
+                choice: s.choice,
+                ...(s.contextWindow ? { contextWindow: s.contextWindow } : {}),
+              }).catch(() => {});
             setSettings(s);
           }}
           running={false}
@@ -181,6 +195,7 @@ export default function NewThread() {
           }
           onSend={start}
           draftKey="new-thread"
+          remembered={models}
         />
       )}
     </KeyboardAware>

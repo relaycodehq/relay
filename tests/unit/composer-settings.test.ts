@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   composerProvider,
+  cacheNewThreadModels,
   loadComposerSettings,
-  rememberSentModel,
+  newThreadModelsOf,
   saveComposerSettings,
   saveSentSettings,
   startThreadSettings,
+  withNewThreadModels,
 } from "../../src/lib/composer-settings";
+import { sentModel } from "../../shared/new-thread-models";
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -113,45 +116,67 @@ it("falls back to defaults for anything unreadable", () => {
   });
 });
 
-it("starts every new thread on the model last picked or sent with", () => {
-  const settings = {
-    provider: "claude" as const,
-    choice: sol,
-    claude: {
-      model: "claude-fable-5-1[1m]",
-      reasoningEffort: "xhigh" as const,
-    },
-    picks: {},
-    runtimeMode: "auto" as const,
-    interactionMode: "plan" as const,
+it("starts every new thread on the models the desktop and phone share", () => {
+  saveComposerSettings("new:a", {
+    provider: "claude",
+    choice: undefined,
+    claude: { model: "sonnet", reasoningEffort: "high" },
+    picks: { cursor: { model: "auto", reasoningEffort: "" } },
+    runtimeMode: "auto",
+    interactionMode: "plan",
     ultraplan: false,
-    council: "angles" as const,
-  };
-  saveComposerSettings("new:a", settings);
-  // Another project's new thread picks up the models, not the modes.
-  expect(loadComposerSettings("new:b")).toMatchObject({
-    provider: undefined,
+    council: "angles",
+  });
+  // Only the agents the phone or desktop remembered move; modes stay.
+  cacheNewThreadModels({
+    codex: { choice: sol },
+    claude: {
+      choice: { model: "opus", fast: false, reasoningEffort: "max" },
+      contextWindow: "200k",
+    },
+  });
+  const loaded = loadComposerSettings("new:a");
+  expect(loaded).toMatchObject({
+    provider: "claude",
     choice: sol,
-    claude: { model: "claude-fable-5-1[1m]", reasoningEffort: "xhigh" },
-    interactionMode: "default",
+    claude: { model: "opus", reasoningEffort: "max", contextWindow: "200k" },
+    picks: { cursor: { model: "auto" } },
+    interactionMode: "plan",
   });
   // A thread's own settings stay its own.
-  saveComposerSettings("thread", {
-    ...settings,
-    claude: { model: "", reasoningEffort: "" },
+  saveComposerSettings("thread", { ...loaded, choice: undefined });
+  expect(loadComposerSettings("thread").choice).toBeUndefined();
+  // Shared and read back, every agent keeps its model; Codex's Default
+  // follows the line-question setting again.
+  const models = {
+    choice: undefined,
+    claude: loaded.claude,
+    picks: loaded.picks,
+  };
+  expect(withNewThreadModels(models, newThreadModelsOf(models))).toEqual({
+    choice: undefined,
+    claude: loaded.claude,
+    picks: { ...loaded.picks, opencode: { model: "", reasoningEffort: "" } },
   });
-  expect(loadComposerSettings("new:b").claude.model).toBe(
-    "claude-fable-5-1[1m]",
-  );
-  // Sending anywhere moves that agent's model; the others keep theirs.
-  rememberSentModel({
-    provider: "claude",
-    choice: { model: "opus", fast: false, reasoningEffort: "max" },
-  });
-  expect(loadComposerSettings("new:a")).toMatchObject({
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max" },
-  });
+});
+
+it("remembers the model a message went to an agent with, not one to people", () => {
+  const choice = {
+    model: "opus",
+    fast: false,
+    reasoningEffort: "max" as const,
+  };
+  expect(
+    sentModel({
+      body: "@claude hi",
+      provider: "claude",
+      choice,
+      contextWindow: "200k",
+    }),
+  ).toEqual(["claude", { choice, contextWindow: "200k" }]);
+  expect(
+    sentModel({ body: "hi all", provider: "codex", choice }),
+  ).toBeUndefined();
 });
 
 it("keeps Ultraplan and its council, and reads anything else as off", () => {

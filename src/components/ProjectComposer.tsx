@@ -44,9 +44,10 @@ import {
   composerProvider,
   isPickAgent,
   loadComposerSettings,
+  newThreadModelsOf,
   pickAgents,
-  rememberSentModel,
   saveComposerSettings,
+  withNewThreadModels,
 } from "../lib/composer-settings";
 import { useAgentPicks } from "../lib/useAgentPicks";
 import {
@@ -90,6 +91,11 @@ import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import { api } from "../lib/api";
 import { useNewThreadAgent } from "../lib/useNewThreadAgent";
+import { useNewThreadModels } from "../lib/useNewThreadModels";
+import {
+  sameModel,
+  type NewThreadModels,
+} from "../../shared/new-thread-models";
 import {
   isScreenshot,
   loadDraftImages,
@@ -237,6 +243,42 @@ export function ProjectComposer({
   const [choice, setChoice] = useState(saved.choice);
   const [claude, setClaude] = useState(saved.claude);
   const [picks, setPicks] = useState(saved.picks);
+  // Its models follow the ones last picked for a new thread or sent with,
+  // here or on the phone; picking one here makes it the model for both.
+  const [lastModels, saveLastModel] = useNewThreadModels(followsLastAgent);
+  const models = useMemo(
+    () => newThreadModelsOf({ choice, claude, picks }),
+    [choice, claude, picks],
+  );
+  const current = useRef({ choice, claude, picks });
+  current.current = { choice, claude, picks };
+  useEffect(() => {
+    if (!followsLastAgent || !lastModels) return;
+    const changed = Object.fromEntries(
+      agentProviders.flatMap((p) =>
+        lastModels[p] && !sameModel(lastModels[p], models[p])
+          ? [[p, lastModels[p]]]
+          : [],
+      ),
+    );
+    if (!Object.keys(changed).length) return;
+    const next = withNewThreadModels(current.current, changed);
+    setChoice(next.choice);
+    setClaude(next.claude);
+    setPicks(next.picks);
+  }, [followsLastAgent, lastModels]);
+  const shownModels = useRef<NewThreadModels>(undefined);
+  useEffect(() => {
+    const before = shownModels.current;
+    shownModels.current = models;
+    if (!followsLastAgent || !before) return;
+    for (const p of agentProviders)
+      if (
+        !sameModel(models[p], before[p]) &&
+        !sameModel(models[p], lastModels?.[p])
+      )
+        saveLastModel(p, models[p]!);
+  }, [models]);
   const agentPicks = useAgentPicks();
   const claudeCatalog = useClaudeModels();
   const claudeModels = claudeCatalog.models;
@@ -1131,8 +1173,7 @@ export function ProjectComposer({
         outgoing.restore();
         if (councilOn) setUltraplan(true);
       } else if (recipient !== "message")
-        rememberSentModel({
-          provider: recipient,
+        saveLastModel(recipient, {
           choice: choiceFor(recipient)!,
           ...contextFor(recipient),
         });

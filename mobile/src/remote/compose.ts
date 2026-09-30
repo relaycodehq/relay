@@ -3,6 +3,7 @@ import type { ProjectChatSend } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { RemoteClient } from "../../../shared/remote-client";
 import type { AISettings } from "../../../shared/settings";
+import type { NewThreadModels } from "../../../shared/new-thread-models";
 
 /** Only a leading mention makes an agent answer (shared/agents' agentMentionPattern). */
 const mention = /^@(codex|claude|opencode|cursor)(?=\s|$)/i;
@@ -12,38 +13,73 @@ export const withoutMention = (body: string) =>
 
 /**
  * A new thread's composer, as the desktop starts one: the default agent,
- * Full access and Build, with models on Default. Codex's Default is the
- * line-question model when Codex answers those (shared/settings' codexQuestionChoice).
+ * Full access and Build, on the agent's remembered model or its Default.
+ * Codex's Default is the line-question model when Codex answers those
+ * (shared/settings' codexQuestionChoice).
  */
 export function newThreadSettings(
   settings: AISettings | undefined,
   provider: AgentProvider = settings?.threadProvider ?? "codex",
+  models: NewThreadModels = {},
 ): RemoteSettings {
   const codex =
     provider === "codex" && settings?.questionsProvider === "codex"
       ? settings.questions
       : undefined;
+  return withRememberedModel(
+    {
+      provider,
+      choice: codex ?? { model: "", fast: false, reasoningEffort: "" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+    },
+    models,
+  );
+}
+
+/** `settings` on the model its agent last ran with in a new thread or any send, when there is one. */
+export function withRememberedModel(
+  settings: RemoteSettings,
+  models: NewThreadModels,
+): RemoteSettings {
+  const remembered = models[settings.provider];
+  const { choice } = remembered ?? {};
+  // A blank Codex pick is the desktop's Default, which `settings` already has.
+  if (
+    !remembered ||
+    !(choice!.model || choice!.reasoningEffort || choice!.fast)
+  )
+    return settings;
+  const { contextWindow: _, ...rest } = settings;
   return {
-    provider,
-    choice: codex ?? { model: "", fast: false, reasoningEffort: "" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
+    ...rest,
+    choice: remembered.choice,
+    ...(remembered.contextWindow
+      ? { contextWindow: remembered.contextWindow }
+      : {}),
   };
 }
 
 /**
  * A new thread's composer on the agent last picked for one, on the phone or
- * the desktop, else the default agent. Older desktops only know the default.
+ * the desktop, else the default agent, with each agent's remembered model.
+ * Older desktops only know the default.
  */
-export async function desktopNewThreadSettings(
-  desktop: RemoteClient["desktop"],
-): Promise<RemoteSettings> {
-  const [last, ai] = await Promise.all([
+export async function desktopNewThread(desktop: RemoteClient["desktop"]) {
+  const [last, ai, models] = await Promise.all([
     desktop("newThreadAgent").catch(() => null),
     desktop("aiSettings").catch(() => undefined),
+    desktop("newThreadModels").catch(() => ({}) as NewThreadModels),
   ]);
-  return newThreadSettings(ai, last ?? ai?.threadProvider);
+  return {
+    settings: newThreadSettings(ai, last ?? ai?.threadProvider, models),
+    models,
+  };
 }
+
+export const desktopNewThreadSettings = async (
+  desktop: RemoteClient["desktop"],
+) => (await desktopNewThread(desktop)).settings;
 
 /** The same composer on another agent: its model goes back to Default, as on the desktop. */
 export function switchAgent(

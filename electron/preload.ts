@@ -176,6 +176,8 @@ const methods = [
   "saveAISettings",
   "newThreadAgent",
   "saveNewThreadAgent",
+  "newThreadModels",
+  "saveNewThreadModel",
   "devopsStatus",
   "saveDevOpsSettings",
   "devopsWorkItems",

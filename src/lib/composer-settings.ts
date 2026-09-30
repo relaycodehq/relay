@@ -5,6 +5,10 @@ import {
 } from "../../shared/agent-modes";
 import type { ProjectChatSend } from "../../shared/projects";
 import {
+  newThreadModelsSchema,
+  type NewThreadModels,
+} from "../../shared/new-thread-models";
+import {
   agentProviders,
   isAgentProvider,
   type AgentProvider,
@@ -111,24 +115,90 @@ function readModels(saved: any): ComposerModels {
     picks: readPicks(saved?.picks),
   };
 }
+const blankChoice: ModelChoice = {
+  model: "",
+  fast: false,
+  reasoningEffort: "",
+};
+/** Each agent's model in `models`, the way desktop and phone share them. */
+export function newThreadModelsOf({
+  choice,
+  claude,
+  picks,
+}: ComposerModels): NewThreadModels {
+  return {
+    ...Object.fromEntries(
+      pickAgents.map((p) => [p, { choice: { ...blankChoice, ...picks[p] } }]),
+    ),
+    codex: { choice: choice ?? blankChoice },
+    claude: {
+      choice: {
+        model: claude.model,
+        fast: false,
+        reasoningEffort: claude.reasoningEffort,
+      },
+      ...(claude.contextWindow ? { contextWindow: claude.contextWindow } : {}),
+    },
+  };
+}
+/** `models` with each agent in `models` on its model there; the others keep theirs. */
+export function withNewThreadModels(
+  models: ComposerModels,
+  remembered: NewThreadModels,
+): ComposerModels {
+  let next = models;
+  for (const provider of agentProviders) {
+    const entry = remembered[provider];
+    if (!entry) continue;
+    const { choice, contextWindow } = entry;
+    next = isPickAgent(provider)
+      ? {
+          ...next,
+          picks: {
+            ...next.picks,
+            [provider]: {
+              model: choice.model,
+              reasoningEffort: choice.reasoningEffort,
+            },
+          },
+        }
+      : provider === "claude"
+        ? {
+            ...next,
+            claude: {
+              model: choice.model,
+              reasoningEffort: choice.reasoningEffort,
+              ...(contextWindow ? { contextWindow } : {}),
+            },
+          }
+        : {
+            ...next,
+            // Default follows the line-question setting.
+            choice:
+              choice.model || choice.reasoningEffort || choice.fast
+                ? choice
+                : undefined,
+          };
+  }
+  return next;
+}
 /**
- * Every project's new-thread composer shares one set of models: the ones last
- * picked there or last sent with in any thread.
+ * Every project's new-thread composer starts on the same models, kept on the
+ * desktop and shared with the phone. This copy opens a composer on them at once.
  */
 const newThreadModelsKey = "composer-models:new-thread";
 const isNewThread = (key: string) => key.startsWith("new:");
-function readNewThreadModels() {
+export function cachedNewThreadModels(): NewThreadModels | undefined {
   try {
-    return JSON.parse(localStorage.getItem(newThreadModelsKey) || "null");
+    return newThreadModelsSchema.safeParse(
+      JSON.parse(localStorage.getItem(newThreadModelsKey) || "null"),
+    ).data;
   } catch {
-    return null;
+    return undefined;
   }
 }
-const saveNewThreadModels = ({ choice, claude, picks }: ComposerModels) =>
-  localStorage.setItem(
-    newThreadModelsKey,
-    JSON.stringify({ choice, claude, picks }),
-  );
+export const cacheNewThreadModels = (models: NewThreadModels) =>
+  localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
@@ -142,7 +212,9 @@ export function loadComposerSettings(
   }
   return {
     provider,
-    ...readModels((isNewThread(key) && readNewThreadModels()) || saved),
+    ...(isNewThread(key)
+      ? withNewThreadModels(readModels(saved), cachedNewThreadModels() ?? {})
+      : readModels(saved)),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
     ultraplan: saved?.ultraplan === true,
@@ -157,7 +229,6 @@ export function saveComposerSettings(
     storageKey(key),
     JSON.stringify({ ...settings, agent: provider }),
   );
-  if (isNewThread(key)) saveNewThreadModels(settings);
 }
 /**
  * Hands a new thread's composer settings to the thread it started, on the
@@ -169,39 +240,6 @@ export function startThreadSettings(
   provider: Provider,
 ) {
   saveComposerSettings(to, { ...loadComposerSettings(from), provider });
-}
-type SentModel = Pick<ProjectChatSend, "provider" | "choice" | "contextWindow">;
-/** `models` with the model a message was sent with, in its agent's slot. */
-function withSentModel(
-  models: ComposerModels,
-  sent: SentModel,
-): ComposerModels {
-  if (isPickAgent(sent.provider))
-    return {
-      ...models,
-      picks: {
-        ...models.picks,
-        [sent.provider]: {
-          model: sent.choice.model,
-          reasoningEffort: sent.choice.reasoningEffort,
-        },
-      },
-    };
-  if (sent.provider === "claude")
-    return {
-      ...models,
-      claude: {
-        model: sent.choice.model,
-        reasoningEffort: sent.choice.reasoningEffort,
-        ...(sent.contextWindow ? { contextWindow: sent.contextWindow } : {}),
-      },
-    };
-  return { ...models, choice: sent.choice };
-}
-/** The next new thread starts on the model a message just went out with. */
-export function rememberSentModel(sent: SentModel) {
-  const saved = readNewThreadModels();
-  saveNewThreadModels(withSentModel(readModels(saved), sent));
 }
 /**
  * Opens a composer on what a message was sent with. The choice is the model
@@ -219,7 +257,12 @@ export function saveSentSettings(
   const saved = loadComposerSettings(key);
   saveComposerSettings(key, {
     ...saved,
-    ...withSentModel(saved, sent),
+    ...withNewThreadModels(saved, {
+      [sent.provider]: {
+        choice: sent.choice,
+        ...(sent.contextWindow ? { contextWindow: sent.contextWindow } : {}),
+      },
+    }),
     provider,
     runtimeMode: sent.runtimeMode,
     interactionMode: sent.interactionMode,
