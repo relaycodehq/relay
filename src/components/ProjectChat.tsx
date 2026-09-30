@@ -102,7 +102,7 @@ import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
-import { runningBatch } from "../../shared/subagents";
+import { outsideBatch, runningBatch } from "../../shared/subagents";
 import {
   CheckoutControl,
   RemoveWorktreeDialog,
@@ -835,6 +835,8 @@ export function ProjectChat({
     if (chat) void agents.refetch();
   }, [running, chat?.pending?.length]);
   const agentBatch = runningBatch(agents.data ?? []);
+  // The indicator shows those agents, and stops them; the strip keeps the rest.
+  const leftBehind = pending && outsideBatch(pending, agentBatch);
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
   const sendKey = useSendKey();
@@ -2089,6 +2091,19 @@ export function ProjectChat({
                     batch={agentBatch}
                     projectRoot={folder}
                     onOpen={setAgentView}
+                    onStop={async (id) => {
+                      if (!chat) return;
+                      try {
+                        await api.stopProjectChatAgent(chat.id, id);
+                      } catch (e) {
+                        setError(e);
+                        throw e;
+                      } finally {
+                        void qc.invalidateQueries({
+                          queryKey: ["project-chat-agents", chat.id],
+                        });
+                      }
+                    }}
                   />
                 )}
                 {workspaceControl}
@@ -2119,9 +2134,9 @@ export function ProjectChat({
                   }}
                 />
               ) : (
-                pending && (
+                !!leftBehind?.length && (
                   <WaitingStrip
-                    pending={pending}
+                    pending={leftBehind}
                     onStop={async (item) => {
                       if (!chat) return;
                       try {

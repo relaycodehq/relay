@@ -128,6 +128,7 @@ export class SubagentTracker {
       run.status === "running" ? undefined : (run.answer?.text ?? run.returned);
     return {
       id: run.id,
+      taskId: run.taskId,
       description: run.description,
       type: run.type,
       model: run.model,

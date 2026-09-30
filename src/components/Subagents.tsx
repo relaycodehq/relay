@@ -85,11 +85,13 @@ export function SubagentsIndicator({
   batch,
   projectRoot,
   onOpen,
+  onStop,
 }: {
   /** Every agent since the first of the fan-out that's still going. */
   batch: SubagentRun[];
   projectRoot: string;
   onOpen: (id: string) => void;
+  onStop: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const working = batch.filter((r) => r.status === "running").length;
@@ -121,6 +123,7 @@ export function SubagentsIndicator({
                 setOpen(false);
                 onOpen(id);
               }}
+              onStop={onStop}
             />
           </Popover.Popup>
         </Popover.Positioner>
@@ -134,13 +137,17 @@ function Peek({
   batch,
   projectRoot,
   onOpen,
+  onStop,
 }: {
   batch: SubagentRun[];
   projectRoot: string;
   onOpen: (id: string) => void;
+  onStop: (id: string) => Promise<void>;
 }) {
   const now = useNow(1000);
   const [focus, setFocus] = useState<string>();
+  // Stays pressed until the agent's status says it stopped.
+  const [stopping, setStopping] = useState<string>();
   const working = batch.filter((r) => r.status === "running");
   const run = batch.find((r) => r.id === focus) ?? working[0] ?? batch[0]!;
   const root = projectRoot.replace(/\/+$/, "") + "/";
@@ -204,14 +211,29 @@ function Peek({
             );
           })}
         </div>
-        <button
-          type="button"
-          className="text-button subagents-open"
-          onClick={() => onOpen(run.id)}
-        >
-          Open its run
-          <ChevronRight size={13} />
-        </button>
+        <div className="subagents-actions">
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => onOpen(run.id)}
+          >
+            Open its run
+            <ChevronRight size={13} />
+          </button>
+          {run.status === "running" && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={stopping === run.id}
+              onClick={() => {
+                setStopping(run.id);
+                onStop(run.id).catch(() => setStopping(undefined));
+              }}
+            >
+              {stopping === run.id ? "Stopping…" : "Stop agent"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

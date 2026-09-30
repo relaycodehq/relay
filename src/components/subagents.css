@@ -199,10 +199,14 @@
 .subagents-call.live {
   color: var(--text);
 }
-.subagents-open {
-  align-self: flex-start;
+.subagents-actions {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 2px;
+}
+.subagents-actions .text-button {
   gap: 2px;
-  padding: 2px 0 0;
+  padding: 0;
 }
 
 /* The run covers the conversation, which stays laid out underneath: it

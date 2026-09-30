@@ -1,13 +1,15 @@
 // Subagents Claude started in a thread, as the composer's indicator, its card
 // and an agent's side thread show them. The main process follows them from
 // the SDK's task events while the session lives; none of this is saved.
-import type { AgentActivity, AgentTrace } from "./projects";
+import type { AgentActivity, AgentTrace, ChatPending } from "./projects";
 
 export type SubagentStatus = "running" | "completed" | "failed" | "stopped";
 
 export interface SubagentRun {
   /** The Agent tool call that started it. */
   id: string;
+  /** Its SDK background task, which the thread's pending work lists too. */
+  taskId?: string;
   description: string;
   /** Its agent type, e.g. "Explore" or "general-purpose". */
   type?: string;
@@ -57,6 +59,15 @@ function subagentBatches(runs: SubagentRun[], now = Date.now()) {
 export function runningBatch(runs: SubagentRun[], now = Date.now()) {
   const last = subagentBatches(runs, now).at(-1) ?? [];
   return last.some((r) => r.status === "running") ? last : [];
+}
+
+/**
+ * The thread's background work minus the agents the indicator already shows,
+ * for the strip under the composer: they'd be listed twice otherwise.
+ */
+export function outsideBatch(pending: ChatPending[], batch: SubagentRun[]) {
+  const shown = new Set(batch.map((r) => r.taskId));
+  return pending.filter((p) => !shown.has(p.id));
 }
 
 /** The fan-out an agent belongs to, for its side thread's tabs. */

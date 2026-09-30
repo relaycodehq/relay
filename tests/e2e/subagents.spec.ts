@@ -82,6 +82,12 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     const chip = page.locator(".subagents-chip");
     await expect(chip).toHaveAccessibleName("3 subagents: 0 done, 3 working");
     await expect(chip).toHaveText("0/3");
+    // The strip under the composer keeps only what the indicator doesn't show.
+    const strip = page.locator(".waiting-strip");
+    await expect(strip).toContainText(
+      "Start the dev server · running in the background",
+    );
+    await expect(strip).not.toContainText("Find where turns render");
     // The first to report back moves the count, between turns.
     await expect(chip).toHaveText("1/3");
     await screenshot(page, { path: "test-results/subagents-indicator.png" });
@@ -100,7 +106,14 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(card).toContainText("Running vitest");
     await screenshot(card, { path: "test-results/subagents-card.png" });
 
-    // Its run covers the conversation, read-only, and can be stopped.
+    // The card stops it, now the strip doesn't list agents.
+    await card.getByRole("button", { name: "Stop agent" }).click();
+    await expect(card.getByRole("button", { name: "Stop agent" })).toHaveCount(
+      0,
+    );
+    await expect(card).toContainText("2 of 3 done");
+
+    // Its run covers the conversation, read-only.
     await card.getByRole("button", { name: "Open its run" }).click();
     const run = page.getByRole("dialog", {
       name: "Agent: Check the phone's turn view",
@@ -112,14 +125,13 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(run).toContainText(
       "Read-only. Agents take instructions from Claude, not from you.",
     );
-    await screenshot(page, { path: "test-results/subagents-run.png" });
-    await run.getByRole("button", { name: "Stop agent" }).click();
     await expect(run).toContainText(
       "Stopped. Claude hears it was and carries on without it.",
     );
     await expect(run.getByRole("button", { name: "Stop agent" })).toHaveCount(
       0,
     );
+    await screenshot(page, { path: "test-results/subagents-run.png" });
 
     // The others started with it are a tab away; a finished one shows its report.
     await run.getByRole("button", { name: "Find where turns render" }).click();

@@ -69,13 +69,21 @@ const live = () =>
   emit({
     type: "system",
     subtype: "background_tasks_changed",
-    tasks: agents
-      .filter((a) => running.has(a.task))
-      .map((a) => ({
-        task_id: a.task,
-        task_type: "local_agent",
-        description: a.description,
-      })),
+    tasks: [
+      ...agents
+        .filter((a) => running.has(a.task))
+        .map((a) => ({
+          task_id: a.task,
+          task_type: "local_agent",
+          description: a.description,
+        })),
+      // A dev server Claude left up, which never reports back.
+      {
+        task_id: "fixture-dev-server",
+        task_type: "local_bash",
+        description: "Start the dev server",
+      },
+    ],
   });
 const said = (parent, id, content) =>
   emit({
