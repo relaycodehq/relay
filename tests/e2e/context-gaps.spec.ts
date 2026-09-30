@@ -106,6 +106,12 @@ test("visible gap controls expand chunks and whole gaps with mouse and keyboard"
   await page.locator(".diff-code-view").evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
+  // The viewer ignores the pointer while it scrolls, and listens again 120ms
+  // after. A click before then misses, and Playwright scrolls to retry it,
+  // which moves the gap out of the rendered window.
+  await expect(
+    page.locator('.diff-code-view [style*="pointer-events: none"]'),
+  ).toHaveCount(0);
   await expect(
     page.locator(
       '[data-gutter] [data-expand-index="2"] [data-unmodified-lines]:visible',

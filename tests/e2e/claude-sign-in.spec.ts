@@ -83,11 +83,16 @@ test("an expired Claude login offers its sign-in command in the thread's termina
     await expect(screen).toContainText("prompt-42");
 
     // A command holding the shell would read the line, so it isn't typed.
+    // The first one may still be on screen: typed while the shell was
+    // starting, it lands as output that Ctrl+U can't clear.
+    const typed = async () =>
+      ((await screen.textContent()) ?? "").split("auth login").length - 1;
     await page.keyboard.type("sleep 30");
     await page.keyboard.press("Enter");
+    const before = await typed();
     await signIn.click();
     await expect(page.getByText("The terminal is busy.")).toBeVisible();
-    await expect(screen).not.toContainText("auth login");
+    expect(await typed()).toBe(before);
   } finally {
     await app.close();
   }
