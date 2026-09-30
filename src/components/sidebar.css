@@ -675,6 +675,8 @@
 .sb-card {
   position: relative;
   display: grid;
+  /* Without this the column grows to the nowrap project name and the card spills out. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 3px;
   padding: 8px 10px 8px;
   border-radius: 10px;
