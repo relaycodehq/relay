@@ -4,11 +4,7 @@ import { workingTree } from "./working-tree";
 import { agentRuntime } from "./agents";
 import { emptyCwd, unfence } from "./helper-output";
 import { helperFallbacks } from "../shared/agents";
-import {
-  defaultAISettings,
-  type HelperProvider,
-  type AISettings,
-} from "../shared/settings";
+import { defaultAISettings, type AISettings } from "../shared/settings";
 
 const PATCH_LIMIT = 40_000;
 const NEW_FILE_LIMIT = 3_000;
@@ -97,16 +93,17 @@ export async function generateCommitMessage(
     "Patch:",
     context.patch,
   ].join("\n");
-  // Line questions' provider picks the model; the other CLI is the fallback.
-  const first: HelperProvider = settings.questionsProvider;
+  const first = settings.commitMessageProvider;
   let lastError: unknown;
   for (const provider of helperFallbacks(first)) {
     const choice =
-      provider === first ? settings.questions : defaultAISettings.questions;
+      provider === first
+        ? settings.commitMessage
+        : defaultAISettings.commitMessage;
     const options = {
       cwd: await emptyCwd(),
       prompt,
-      choice: { ...choice, reasoningEffort: "low" as const, fast: false },
+      choice,
       signal,
       onText: () => {},
       helper: {
@@ -115,7 +112,6 @@ export async function generateCommitMessage(
       },
     };
     try {
-      // Commit messages take the model but not the effort of line questions.
       const output = await agentRuntime(provider).run(options);
       const message = parseCommitMessage(output);
       if (message) return message;

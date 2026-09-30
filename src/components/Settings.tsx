@@ -154,7 +154,7 @@ const categories: {
     id: "models",
     label: "AI models",
     description:
-      "The agent new threads start on, and the models for grouping and line questions.",
+      "The agent new threads start on, and the models for grouping, line questions and commits.",
     icon: Sparkles,
   },
   {
@@ -545,7 +545,7 @@ export function Settings({
     [saved, setSaved] = useState(false);
   const values = draft ?? settings.data;
   const change = (
-    kind: "grouping" | "questions" | "split",
+    kind: "grouping" | "questions" | "split" | "commitMessage",
     value: AISettings["questions"],
     provider: AgentProvider,
   ) => {
@@ -859,7 +859,7 @@ export function Settings({
       title: "Agents",
       description: `Uses your signed-in ${agentProviders.map((p) => agents[p].cli).join(", ")}. Model availability depends on your account.`,
       keywords:
-        "default agent new thread grouping line questions commit split reasoning effort fast mode model codex claude opencode cursor ai",
+        "default agent new thread grouping line questions commit split message reasoning effort fast mode model codex claude opencode cursor ai",
       block: true,
       render: () =>
         values ? (
@@ -914,6 +914,21 @@ export function Settings({
                 providers={agentProviders}
                 allowDefault
                 onChange={(value, provider) => change("split", value, provider)}
+              />
+            </SettingsRow>
+            <SettingsRow
+              label="Commit messages"
+              hint="Drafts the message in the Commit and Commit & push sheets."
+            >
+              <ModelField
+                label="Commit messages"
+                value={values.commitMessage}
+                provider={values.commitMessageProvider}
+                providers={agentProviders}
+                allowDefault
+                onChange={(value, provider) =>
+                  change("commitMessage", value, provider)
+                }
               />
             </SettingsRow>
             <SettingsFooter
