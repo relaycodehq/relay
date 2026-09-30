@@ -1,0 +1,513 @@
+/* Settings → Computers: a small map of this computer and the ones it hands
+   threads to, the picked one's threads, and taking threads over. Flat; the
+   only motion is the map settling in once. */
+.cm-map,
+.cm-card {
+  --cm-on: light-dark(#1a7f37, #3fb950);
+  --cm-wait: light-dark(#9a6700, #d29922);
+}
+.cm-icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.cm-icon-button:hover {
+  color: var(--text);
+}
+
+/* The map: this computer on the left, wires out to each of the others. */
+.cm-map {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 4px;
+  padding: 6px 0;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--toolbar) 55%, transparent);
+}
+.cm-canvas {
+  position: relative;
+  flex: none;
+}
+.cm-wires {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.cm-wire {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition:
+    stroke 0.15s,
+    stroke-width 0.15s;
+}
+/* Connected wires draw themselves in once; the others fade in dashed. */
+.cm-wire.on {
+  stroke: color-mix(in srgb, var(--cm-on) 75%, var(--border));
+  stroke-dasharray: 1;
+  animation: cm-draw 0.7s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 80ms);
+}
+.cm-wire.off,
+.cm-wire.add {
+  stroke-dasharray: 0.012 0.014;
+  animation: cm-fade 0.5s ease-out both;
+  animation-delay: calc(var(--i) * 80ms + 150ms);
+}
+.cm-wire.off {
+  stroke: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.cm-wire.add {
+  stroke: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+.cm-wire.lit {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.cm-thread-dot {
+  stroke: var(--surface);
+  stroke-width: 2.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cm-pop 0.3s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+  animation-delay: calc(var(--i) * 80ms + 550ms);
+}
+.cm-thread-dot.working {
+  fill: var(--accent);
+}
+.cm-thread-dot.waiting {
+  fill: var(--cm-wait);
+}
+.cm-thread-dot.finished {
+  fill: var(--cm-on);
+}
+/* A computer: its glyph on a tile, then its name and how it is. */
+.cm-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 11px;
+  box-sizing: border-box;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  white-space: normal;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+button.cm-node {
+  animation: cm-in 0.35s ease-out both;
+  animation-delay: calc(var(--i) * 70ms + 120ms);
+}
+.cm-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--muted) 11%, var(--surface));
+  color: var(--text);
+}
+.cm-node-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cm-node-text b {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-node-text small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-node-text .cm-dot {
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+}
+/* This computer is where the wires start: its tile wears the accent. */
+.cm-node.self .cm-tile {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+/* An offline computer steps back; its name stays readable. */
+.cm-node.off .cm-tile {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 6%, var(--surface));
+}
+.cm-node.off {
+  border-style: dashed;
+  background: transparent;
+}
+button.cm-node:hover {
+  background: color-mix(in srgb, var(--hover) 55%, var(--surface));
+}
+.cm-node.picked,
+button.cm-node.picked:hover {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.cm-node.picked .cm-tile {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+.cm-node.add {
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-node.add:hover,
+.cm-node.add.picked {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  color: var(--accent);
+}
+
+@keyframes cm-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes cm-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes cm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+@keyframes cm-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+/* Cards below the map. */
+.cm-card {
+  background: var(--surface);
+}
+.cm-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.cm-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--muted) 6%, var(--surface));
+  color: var(--muted);
+}
+.cm-card-icon.on {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+.cm-card-icon.small {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.cm-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cm-card-title b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cm-card-title small,
+.cm-row-text small,
+.cm-thread-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.cm-sep {
+  margin: 0 6px;
+  opacity: 0.6;
+}
+.cm-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  vertical-align: 1px;
+}
+.cm-dot.on,
+.cm-dot.finished {
+  background: var(--cm-on);
+}
+.cm-dot.working {
+  background: var(--accent);
+}
+.cm-dot.waiting {
+  background: var(--cm-wait);
+}
+em.working,
+em.waiting,
+em.finished {
+  font-style: normal;
+}
+em.waiting {
+  color: var(--cm-wait);
+}
+.cm-threads {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.cm-threads li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 8px 20px;
+}
+.cm-threads li:hover {
+  background: color-mix(in srgb, var(--hover) 45%, transparent);
+}
+.cm-threads .cm-dot {
+  margin-right: 10px;
+}
+.cm-thread-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cm-thread-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-text-button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-text-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.cm-text-button.accent {
+  color: var(--accent);
+  font-weight: 600;
+}
+.cm-text-button.danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+.cm-text-button.quiet {
+  padding: 4px 6px;
+}
+.cm-nothing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.cm-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--toolbar) 50%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-card-foot > span {
+  flex: 1;
+  padding-left: 6px;
+}
+
+/* Adding one: the steps, then the paste box. */
+.cm-steps {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+.cm-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 16px;
+}
+.cm-steps li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cm-steps b {
+  font-weight: 500;
+}
+.cm-steps small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cm-steps em {
+  font-style: normal;
+  color: var(--text);
+}
+.cm-step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--border) 60%, var(--muted));
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cm-steps li.done .cm-step-mark {
+  border-color: var(--cm-on);
+  background: var(--cm-on);
+  color: #fff;
+}
+.cm-grow {
+  flex: 1;
+  min-width: 0;
+}
+.cm-paste {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cm-paste input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.cm-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* Taking threads over. */
+.cm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+}
+.cm-row + .cm-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.cm-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cm-row-text b {
+  font-weight: 500;
+}
+.cm-link-row {
+  flex-wrap: wrap;
+}
+.cm-link {
+  flex: 1 1 100%;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.cm-link input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.cm-link-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* The picked computer's card sits right under the map, which already names it. */
+.cm-detail {
+  margin-top: 12px;
+}
+
+/* Threads between steps, or whose state can't be told right now. */
+.cm-thread-dot.sending,
+.cm-thread-dot.returning,
+.cm-thread-dot.unknown {
+  fill: var(--muted);
+}
+.cm-thread-dot.failed {
+  fill: var(--danger);
+}
+.cm-dot.failed {
+  background: var(--danger);
+}
+em.failed {
+  font-style: normal;
+  color: var(--danger);
+}
+em.sending,
+em.returning,
+em.unknown {
+  font-style: normal;
+}
+.cm-card > .error-box {
+  margin: 0 12px 12px;
+}

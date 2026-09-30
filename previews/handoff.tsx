@@ -17,10 +17,6 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../src/components/HandoffStrip";
-import {
-  AcceptComputersSettings,
-  HandoffComputersSettings,
-} from "../src/components/ComputersSettings";
 import type {
   HandoffTarget,
   HandoffView,
@@ -172,7 +168,6 @@ const scenes: Record<string, Scene> = {
     },
   },
   returned: { label: "Strip · on the mini, handed back" },
-  settings: { label: "Settings · Computers", settings: true },
 };
 
 const accept: PhoneRemoteState = {
@@ -277,14 +272,7 @@ function Preview() {
           </button>
         ))}
       </p>
-      {s.settings ? (
-        <div className="settings-content">
-          <h3>Hand threads off</h3>
-          <HandoffComputersSettings />
-          <h3>Take threads over</h3>
-          <AcceptComputersSettings />
-        </div>
-      ) : (
+      {s.settings ? null : (
         <>
           <header
             className="project-header"

@@ -11,6 +11,7 @@ export function computerHandlers(ctx: ApiContext) {
   };
   return {
     pairedComputers: () => handoffs().computers.list(),
+    computersOverview: () => handoffs().sender.overview(),
     pairComputer: (args) =>
       handoffs().computers.pair(z.string().max(2000).parse(args[0])),
     forgetComputer: (args) =>

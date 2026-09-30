@@ -1313,6 +1313,20 @@ export default function ProjectShell() {
             setSettings(false);
             setSignin(true);
           }}
+          onOpenChat={(projectId, chatId) => {
+            const p = projects.data?.find((p) => p.id === projectId);
+            if (!p) return;
+            void qc
+              .fetchQuery({
+                queryKey: ["project-chats", projectId],
+                queryFn: () => api.projectChats(projectId),
+              })
+              .then((list) => {
+                const next = list.find((c) => c.id === chatId);
+                if (next) navigate(p, next);
+              })
+              .catch(setError);
+          }}
           onDisconnect={async () => {
             await api.disconnect();
             qc.removeQueries({

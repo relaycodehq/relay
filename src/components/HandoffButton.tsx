@@ -5,6 +5,7 @@ import { MonitorUp, Settings2 } from "lucide-react";
 import type { ChatSummary } from "../../shared/projects";
 import type { HandoffTarget, PairedComputer } from "../../shared/handoff";
 import { api } from "../lib/api";
+import { DeviceIcon } from "./DeviceIcon";
 import "./handoff.css";
 
 /** Why this thread can't move to another computer, if it can't. */
@@ -96,7 +97,7 @@ export function HandoffButton({
                   disabled={!!blocked || !target.project}
                   onClick={() => void handOff(target)}
                 >
-                  <MonitorUp size={14} />
+                  <DeviceIcon name={target.name} size={16} />
                   <span className="handoff-target-text">
                     <span>{target.name}</span>
                     <small>

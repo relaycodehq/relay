@@ -1,0 +1,53 @@
+/* Preview frame: a Settings pane as wide as the real one. The panel's own
+   styles are src/components/computers.css. */
+.cm-page {
+  --cm-on: light-dark(#1a7f37, #3fb950);
+  --cm-wait: light-dark(#9a6700, #d29922);
+  min-height: 100vh;
+  padding: 18px 24px 40px;
+  background: var(--sidebar);
+  color: var(--text);
+  font-size: 13px;
+}
+.cm-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 750px;
+  margin: 0 auto 14px;
+}
+.cm-sample {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-dialog {
+  display: flex;
+  max-width: 750px;
+  min-height: 700px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cm-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--toolbar);
+}
+.cm-seg button {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-seg button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}

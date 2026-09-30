@@ -107,10 +107,7 @@ import {
   SourceControlSettings,
 } from "./SourceControlSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
-import {
-  AcceptComputersSettings,
-  HandoffComputersSettings,
-} from "./ComputersSettings";
+import { ComputersMap, TakeThreadsOver } from "./ComputersSettings";
 import {
   DictationMicrophoneSetting,
   DictationModelSetting,
@@ -527,6 +524,7 @@ export function Settings({
   onClose,
   onDisconnect,
   onConnect,
+  onOpenChat,
   initialCategory = "appearance",
 }: {
   initialCategory?: SettingsCategory;
@@ -534,6 +532,8 @@ export function Settings({
   onClose: () => void;
   onDisconnect: () => Promise<void>;
   onConnect?: () => void;
+  /** Opens a thread, e.g. one listed under Computers. */
+  onOpenChat?: (projectId: string, chatId: string) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -1091,28 +1091,37 @@ export function Settings({
       render: () => <PhoneRemoteSettings />,
     },
     {
-      id: "computers-paired",
+      id: "computers-map",
       category: "computers",
-      section: "Hand threads off",
-      title: "Computers you hand threads to",
+      title: "Your computers",
       description:
-        "The thread's agent stops and writes a handoff note, its worktree is committed, and the thread carries on there. Bring it back from the thread when you're back.",
+        "Pick one to see the threads on it. Hand a thread over from its header; its agent writes a note, the worktree is committed and it carries on there.",
       keywords:
-        "computer handoff hand off mac mini server vps remote pair tailscale continue away",
+        "computer handoff hand off mac mini server vps remote pair tailscale continue away bring back",
       block: true,
-      render: () => <HandoffComputersSettings />,
+      render: () => (
+        <ComputersMap
+          onOpenChat={
+            onOpenChat &&
+            ((projectId, chatId) => {
+              onClose();
+              onOpenChat(projectId, chatId);
+            })
+          }
+        />
+      ),
     },
     {
       id: "computers-accept",
       category: "computers",
       section: "Take threads over",
-      title: "Let other computers hand threads here",
+      title: "On the computer that stays on",
       description:
-        "Turn this on on the computer that stays on, then pair the other one with its link.",
+        "Turn this on on the Mac mini or server, then pair the other computer with the link it shows.",
       keywords:
         "computer handoff accept receive mac mini server pairing link tailscale",
       block: true,
-      render: () => <AcceptComputersSettings />,
+      render: () => <TakeThreadsOver />,
     },
     {
       id: "dictation-model",

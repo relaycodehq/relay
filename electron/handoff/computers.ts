@@ -62,6 +62,7 @@ export class Computers {
         name: c.name,
         status: entry?.client.status ?? "offline",
         ...(entry?.detail ? { detail: entry.detail } : {}),
+        ...(c.hosts[0] ? { address: c.hosts[0] } : {}),
       };
     });
   }

@@ -245,6 +245,7 @@ const methods = [
   "phoneAppearance",
   "revokePhone",
   "pairedComputers",
+  "computersOverview",
   "pairComputer",
   "forgetComputer",
   "handoffTargets",

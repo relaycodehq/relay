@@ -121,6 +121,33 @@ export interface PairedComputer {
   name: string;
   status: "connecting" | "online" | "offline" | "denied";
   detail?: string;
+  /** Where it's reached on the tailnet. */
+  address?: string;
+}
+
+/** Where a thread that left this computer stands, as Settings lists it. */
+export type AwayState =
+  | "sending"
+  | "working"
+  | "waiting"
+  | "finished"
+  | "returning"
+  | "failed"
+  | "unknown";
+export interface AwayThread {
+  chatId: string;
+  projectId: string;
+  project: string;
+  title: string;
+  state: AwayState;
+  /** When it left, or when it finished. */
+  since: number;
+  error?: string;
+}
+/** Settings → Computers: this computer, and each paired one with its threads there. */
+export interface ComputersOverview {
+  name: string;
+  computers: (PairedComputer & { threads: AwayThread[] })[];
 }
 
 /** One computer in the thread's hand-off menu. */
@@ -143,6 +170,7 @@ export interface HandoffView {
 
 export interface ComputersApi {
   pairedComputers(): Promise<PairedComputer[]>;
+  computersOverview(): Promise<ComputersOverview>;
   /** Pairs with the link another computer shows under Settings → Computers. */
   pairComputer(link: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;

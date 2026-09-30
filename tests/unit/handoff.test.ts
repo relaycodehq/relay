@@ -195,6 +195,22 @@ it("hands a worktree thread to the other computer and brings it back", async () 
     { timeout: 15000 },
   );
 
+  // Settings lists it under the computer it went to.
+  const overview = await sender.overview();
+  expect(overview.computers).toEqual([
+    expect.objectContaining({
+      id: computerId,
+      status: "online",
+      threads: [
+        expect.objectContaining({
+          chatId: thread.id,
+          project: "App",
+          state: expect.stringMatching(/^(working|finished)$/),
+        }),
+      ],
+    }),
+  ]);
+
   // The note was written here, in the outgoing agent's session, and the work committed.
   const left = await laptop.chats.get(thread.id);
   expect(left.messages.at(-1)).toMatchObject({

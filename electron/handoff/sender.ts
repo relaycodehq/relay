@@ -4,6 +4,8 @@ import { join } from "node:path";
 import {
   handoffChunk,
   needsFullBundle,
+  type AwayThread,
+  type ComputersOverview,
   type HandoffRemoteStatus,
   type HandoffTarget,
   type HandoffThread,
@@ -90,6 +92,74 @@ export class Handoffs {
         }
       }),
     );
+  }
+  /** Each paired computer with the threads this one handed it, statuses fresh within seconds. */
+  async overview(): Promise<ComputersOverview> {
+    const away = (this.store.get().chats ?? []).filter((c) => c.sentTo);
+    const computers = this.computers.list();
+    await Promise.all(
+      computers
+        .filter((c) => c.status === "online")
+        .map(async (c) => {
+          const ids = away
+            .map((a) => a.sentTo!)
+            .filter((s) => s.computerId === c.id && s.state !== "sending")
+            .map((s) => s.id);
+          const stale = ids.some(
+            (id) => Date.now() - (this.statuses.get(id)?.at ?? 0) > 4000,
+          );
+          if (!stale) return;
+          try {
+            const client = await this.computers.connected(c.id);
+            const found = await client.call("handoffStatus", ids);
+            for (const id of ids)
+              this.statuses.set(id, {
+                at: Date.now(),
+                status: found[id] ?? null,
+              });
+          } catch {
+            // Offline after all; the last known states stand.
+          }
+        }),
+    );
+    const projectName = (id: string) => {
+      try {
+        return this.projects.get(id).name;
+      } catch {
+        return "Removed project";
+      }
+    };
+    const thread = (chat: ChatSummary): AwayThread => {
+      const sentTo = chat.sentTo!;
+      const remote = this.statuses.get(sentTo.id)?.status;
+      const state = sentTo.error
+        ? "failed"
+        : sentTo.state !== "away"
+          ? sentTo.state
+          : !remote
+            ? "unknown"
+            : remote.waiting
+              ? "waiting"
+              : remote.running
+                ? "working"
+                : "finished";
+      return {
+        chatId: chat.id,
+        projectId: chat.projectId,
+        project: projectName(chat.projectId),
+        title: remote?.title ?? chat.title,
+        state,
+        since: state === "finished" && remote ? remote.updated : sentTo.at,
+        ...(sentTo.error ? { error: sentTo.error } : {}),
+      };
+    };
+    return {
+      name: computerName(),
+      computers: computers.map((c) => ({
+        ...c,
+        threads: away.filter((a) => a.sentTo!.computerId === c.id).map(thread),
+      })),
+    };
   }
   async handOff(chatId: string, computerId: string) {
     if (this.jobs.has(chatId))

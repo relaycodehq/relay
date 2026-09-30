@@ -71,12 +71,15 @@ test("a worktree thread goes to another computer from its header and comes back 
     });
     apps.push(app);
     const page = await app.firstWindow();
-    await app.evaluate(({ dialog }, folder) => {
-      dialog.showOpenDialog = async () => ({
-        canceled: false,
-        filePaths: [folder],
-      });
-    }, join(root, name));
+    await app.evaluate(
+      ({ dialog }, folder) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [folder],
+        });
+      },
+      join(root, name),
+    );
     await page.evaluate(() => window.relay.addProject());
     await page.reload();
     return { app, page };
@@ -88,12 +91,19 @@ test("a worktree thread goes to another computer from its header and comes back 
     // The mini accepts connections and shows its link in Settings → Computers.
     const openComputers = async (page: typeof mini.page) => {
       await page.getByRole("button", { name: "Open settings" }).first().click();
-      const settings = page.getByRole("dialog", { name: "Settings", exact: true });
-      await settings.getByRole("button", { name: "Computers", exact: true }).click();
+      const settings = page.getByRole("dialog", {
+        name: "Settings",
+        exact: true,
+      });
+      await settings
+        .getByRole("button", { name: "Computers", exact: true })
+        .click();
       return settings;
     };
     const accept = await openComputers(mini.page);
-    await accept.getByRole("switch", { name: "Accept connections" }).check();
+    await accept
+      .getByRole("switch", { name: "Accept threads from other computers" })
+      .check();
     await accept
       .getByRole("button", { name: "Show pairing link", exact: true })
       .click();
@@ -121,9 +131,12 @@ test("a worktree thread goes to another computer from its header and comes back 
     });
     await pair.getByLabel("Pairing link").fill(link);
     await pair.getByRole("button", { name: "Pair", exact: true }).click();
-    await expect(pair.getByText("Connected", { exact: true })).toBeVisible({
-      timeout: 20_000,
-    });
+    // The map draws the paired computer, and its card opens below.
+    await expect(
+      pair.getByRole("group", { name: "Your computers" }).getByRole("button", {
+        name: /Connected/,
+      }),
+    ).toBeVisible({ timeout: 20_000 });
     await screenshot(pair, { path: "test-results/handoff-paired.png" });
     await laptop.page.keyboard.press("Escape");
     await expect(pair).toBeHidden();
@@ -143,6 +156,24 @@ test("a worktree thread goes to another computer from its header and comes back 
     await expect(strip).toContainText(/finished|Working on/, {
       timeout: 60_000,
     });
+    // Settings lists it under the computer it went to.
+    await laptop.page
+      .getByRole("button", { name: "Open settings" })
+      .first()
+      .click();
+    const listed = laptop.page.getByRole("dialog", {
+      name: "Settings",
+      exact: true,
+    });
+    await listed
+      .getByRole("button", { name: "Computers", exact: true })
+      .click();
+    await expect(
+      listed.getByRole("list", { name: /^Threads on / }),
+    ).toContainText("Cache guard behavior", { timeout: 15_000 });
+    await screenshot(listed, { path: "test-results/handoff-settings.png" });
+    await laptop.page.keyboard.press("Escape");
+    await expect(listed).toBeHidden();
     await expect(laptop.page.getByLabel("Message project")).toHaveAttribute(
       "data-placeholder",
       /This thread is on /,
@@ -174,7 +205,9 @@ test("a worktree thread goes to another computer from its header and comes back 
       "data-placeholder",
       /This thread is on /,
     );
-    await expect(laptop.page.getByText(/Handoff note for /).first()).toBeVisible();
+    await expect(
+      laptop.page.getByText(/Handoff note for /).first(),
+    ).toBeVisible();
     await screenshot(laptop.page, { path: "test-results/handoff-back.png" });
   } finally {
     for (const app of apps) await app.close().catch(() => {});
