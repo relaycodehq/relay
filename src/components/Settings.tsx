@@ -43,7 +43,12 @@ import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettings } from "../lib/useAISettings";
 import { useUpdates } from "../lib/updates";
-import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
+import {
+  setLiveScope,
+  setMode,
+  setThemeChoice,
+  useAppearance,
+} from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import {
   ComposerToolbarReset,
@@ -397,6 +402,9 @@ function ThemeChoiceCard({
   const { theme, palette, accent } = look;
   const base = resolvePalette(kind, { theme: theme.id });
   const change = (patch: Partial<ThemeChoice>) => setThemeChoice(kind, patch);
+  // Wells and the slider fire on every pointer move.
+  const drag = (patch: Partial<ThemeChoice>) =>
+    setThemeChoice(kind, patch, true);
   const label = kindLabels[kind];
   const contrast = choice.contrast ?? DEFAULT_CONTRAST;
   return (
@@ -434,7 +442,7 @@ function ThemeChoiceCard({
               type="color"
               aria-label={`${label} custom accent`}
               value={accent}
-              onChange={(e) => change({ accent: e.target.value })}
+              onChange={(e) => drag({ accent: e.target.value })}
             />
           </label>
         </div>
@@ -444,7 +452,7 @@ function ThemeChoiceCard({
           label={`${label} background`}
           value={palette.surface}
           onChange={(color) =>
-            change({ background: color === base.surface ? undefined : color })
+            drag({ background: color === base.surface ? undefined : color })
           }
         />
       </SettingsRow>
@@ -453,7 +461,7 @@ function ThemeChoiceCard({
           label={`${label} foreground`}
           value={palette.text}
           onChange={(color) =>
-            change({ foreground: color === base.text ? undefined : color })
+            drag({ foreground: color === base.text ? undefined : color })
           }
         />
       </SettingsRow>
@@ -469,7 +477,7 @@ function ThemeChoiceCard({
           value={contrast}
           onChange={(e) => {
             const value = Number(e.target.value);
-            change({
+            drag({
               contrast: value === DEFAULT_CONTRAST ? undefined : value,
             });
           }}
@@ -508,6 +516,9 @@ export function Settings({
   useEffect(() => {
     dialog.current?.showModal();
     searchInput.current?.focus();
+    // Dragged colours restyle this dialog first; the page follows later.
+    setLiveScope(dialog.current);
+    return () => setLiveScope(null);
   }, []);
   const [category, setCategory] = useState<CategoryId>(initialCategory);
   const [query, setQuery] = useState("");
