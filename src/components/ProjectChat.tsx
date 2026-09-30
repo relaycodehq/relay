@@ -72,7 +72,7 @@ import {
 } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { AgentTurn } from "./AgentTurn";
-import { MessageActions } from "./MessageActions";
+import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
 import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
@@ -402,6 +402,13 @@ const Message = memo(function Message({
           >
             started on its own
           </span>
+        )}
+        {m.role === "user" && !!text?.trim() && (
+          <CopyMessageButton
+            className="message-copy"
+            text={text.trim()}
+            label="Copy message"
+          />
         )}
       </header>
       {m.role === "assistant" && (

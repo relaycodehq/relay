@@ -535,7 +535,8 @@
 .message-actions[inert] {
   visibility: hidden;
 }
-.message-actions button {
+.message-actions button,
+.project-message > header .message-copy {
   display: grid;
   place-items: center;
   border: 0;
@@ -544,13 +545,24 @@
   color: var(--muted);
   padding: 5px;
 }
-.message-actions button:hover {
+.message-actions button:hover,
+.project-message > header .message-copy:hover {
   background: var(--toolbar);
   color: var(--text);
 }
 .message-actions time {
   margin-left: 6px;
   font-size: 12px;
+}
+/* A user message's copy sits at the end of its header, so the bubble gains no row. */
+.project-message > header .message-copy {
+  margin: -6px -5px -6px auto;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.project-message:hover > header .message-copy,
+.project-message > header .message-copy:focus-visible {
+  opacity: 1;
 }
 .composer-reply {
   display: flex;

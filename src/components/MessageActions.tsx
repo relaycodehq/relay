@@ -17,19 +17,9 @@ export function MessageActions({
   onReply: () => void;
   onFork?: () => void;
 }) {
-  const [copied, copy] = useCopy();
   return (
     <footer className="message-actions" inert={pending}>
-      {!!text?.trim() && (
-        <button
-          type="button"
-          title={copied ? "Copied" : "Copy answer"}
-          aria-label={copied ? "Copied" : "Copy answer"}
-          onClick={() => copy(text)}
-        >
-          {copied ? <Check size={15} /> : <Copy size={15} />}
-        </button>
-      )}
+      {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
       {onFork && (
         <button
           type="button"
@@ -55,5 +45,28 @@ export function MessageActions({
         {sentLabel(sent, new Date())}
       </time>
     </footer>
+  );
+}
+
+export function CopyMessageButton({
+  text,
+  label,
+  className,
+}: {
+  text: string;
+  label: string;
+  className?: string;
+}) {
+  const [copied, copy] = useCopy();
+  return (
+    <button
+      type="button"
+      className={className}
+      title={copied ? "Copied" : label}
+      aria-label={copied ? "Copied" : label}
+      onClick={() => copy(text)}
+    >
+      {copied ? <Check size={15} /> : <Copy size={15} />}
+    </button>
   );
 }
