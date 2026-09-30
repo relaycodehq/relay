@@ -639,6 +639,7 @@ export default function LocalFileEditor({
                 <StyledDiffCodeView
                   viewerRef={viewer}
                   className="diff-code-view local-edit-code"
+                  scrollPastEnd
                   items={items}
                   editorOptions={editorOptions}
                   onItemEditChange={(event) => {

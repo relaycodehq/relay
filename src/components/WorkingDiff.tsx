@@ -143,6 +143,7 @@ export function WorkingDiff({
     return (
       <StyledDiffCodeView
         className="working-diff"
+        scrollPastEnd
         viewerRef={setViewer}
         items={items}
         selectedLines={onAsk ? selection : undefined}

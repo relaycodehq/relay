@@ -715,8 +715,11 @@ small {
 .diff-code-view,
 .working-diff {
   --diffs-font-size: var(--code-font-size, 12px);
+  /* StyledDiffCodeView's virtual row height repeats this sum. */
   --diffs-line-height: calc(var(--code-font-size, 12px) + 10px);
   font-family: var(--font-mono);
+  /* The blank space past the last line continues the code surface. */
+  background: var(--code-background);
 }
 .diff-code-view {
   height: 100%;

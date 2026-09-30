@@ -430,6 +430,7 @@ export function DiffViewer({
       <StyledDiffCodeView<Annotation>
         viewerRef={viewer}
         className="diff-code-view"
+        scrollPastEnd
         unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-diff], [data-file] {transition:none !important; opacity:1 !important;}`}
         items={items}
         selectedLines={selection}

@@ -8,10 +8,11 @@ import {
   type UncontrolledCodeViewProps,
 } from "@pierre/diffs/react";
 /* oxlint-enable eslint/no-restricted-imports */
-import type { Ref } from "react";
+import { useCallback, useRef, useState, type Ref } from "react";
 
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "./diffRendering";
 import { DiffWorkerPoolProvider } from "../../components/DiffWorkerPoolProvider";
+import { useTypography } from "../../lib/typography";
 
 const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
 /* Keep alignment gaps blank and continuous with the code surface, including the gutter. */
@@ -256,7 +257,31 @@ type StyledDiffCodeViewProps<LAnnotation> = (
    * to restyle chrome the viewer owns — such as replacing its per-file line counts.
    */
   readonly unsafeCSSExtra?: string;
+  /** Let the last line scroll up off the pane's bottom edge instead of stopping flush with it. */
+  readonly scrollPastEnd?: boolean;
 };
+
+/** A third of the pane: the end of the file settles in the lower middle of the view. */
+const END_SPACE_SHARE = 1 / 3;
+
+/** Blank space under the last item, tracking the scroll container's height. */
+function useEndSpace(enabled: boolean) {
+  const [space, setSpace] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const containerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      observer.current?.disconnect();
+      observer.current = null;
+      if (!element || !enabled) return setSpace(0);
+      observer.current = new ResizeObserver(([entry]) =>
+        setSpace(Math.round(entry.contentRect.height * END_SPACE_SHARE)),
+      );
+      observer.current.observe(element);
+    },
+    [enabled],
+  );
+  return [space, containerRef] as const;
+}
 
 /** The shared web CodeView surface: app styling and virtualized geometry stay paired here. */
 export function StyledDiffCodeView<LAnnotation = undefined>({
@@ -264,13 +289,17 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
   viewerRef,
   className,
   unsafeCSSExtra,
+  scrollPastEnd = false,
   ...props
 }: StyledDiffCodeViewProps<LAnnotation>) {
+  const { codeSize } = useTypography();
+  const [endSpace, containerRef] = useEndSpace(scrollPastEnd);
   return (
     <DiffWorkerPoolProvider>
       <CodeView<LAnnotation>
         {...props}
         {...(viewerRef ? { ref: viewerRef } : {})}
+        containerRef={containerRef}
         // The custom element itself is focusable for keyboard scrolling. Its native outline sits
         // outside the panel clipping boundary; actual controls inside retain their own indicators.
         className={
@@ -284,8 +313,10 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
             ? `${DIFF_VIEW_UNSAFE_CSS}\n${unsafeCSSExtra}`
             : DIFF_VIEW_UNSAFE_CSS,
           itemMetrics: {
-            // Keep virtual scroll geometry aligned with the app's 22px code rows.
-            lineHeight: 22,
+            // Must match `--diffs-line-height` in styles.css. A fixed 22 only held at the
+            // default 12px code font; at any other size every unmounted row was estimated
+            // wrong, so the scroll range ended short of the file's last lines (or past them).
+            lineHeight: codeSize + 10,
             diffHeaderHeight: 32,
             hunkSeparatorHeight: 32,
             // Pierre uses its general file spacing as a fallback in expanded-file layout paths.
@@ -300,7 +331,7 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
             // one clipped file row per expanded file above it.
             paddingBottom: 8,
           },
-          layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
+          layout: { paddingTop: 0, paddingBottom: endSpace, gap: 0 },
         }}
       />
     </DiffWorkerPoolProvider>
