@@ -276,6 +276,11 @@ const QUEUED_DRAG = "application/x-relay-queued-message";
  * pixel offset would land somewhere else. Threads left at the bottom have no
  * entry and open pinned there. */
 const readingPlaces = new Map<string, { id: string; offset: number }>();
+/** A thread opens with the latest few messages mounted and fills up to the
+ * window on idle, so the first paint isn't waiting on 80 markdown renders. */
+const FIRST_MESSAGES = 20,
+  MESSAGE_WINDOW = 80,
+  MESSAGE_STEP = 20;
 /** The message at the top of the thread's view, and how far below it starts. */
 function placeInView(view: HTMLElement) {
   const top = view.getBoundingClientRect().top;
@@ -650,7 +655,7 @@ export function ProjectChat({
   const [workItem, setWorkItem] = useState(() => loadWorkItem(id));
   const [codeRefs, setCodeRefs] = useState(() => loadCodeRefs(id));
   const created = useRef<ChatSummary | undefined>(undefined);
-  const [visible, setVisible] = useState(80);
+  const [visible, setVisible] = useState(FIRST_MESSAGES);
   const scroll = useRef<HTMLDivElement>(null),
     column = useRef<HTMLDivElement>(null),
     follow = useRef(true),
@@ -991,7 +996,7 @@ export function ProjectChat({
     returning.current = readingPlaces.get(place);
     follow.current = !returning.current;
     oldest.current = undefined;
-    setVisible(80);
+    setVisible(FIRST_MESSAGES);
   }, [place]);
   useEffect(() => {
     if (contextText) {
@@ -1047,6 +1052,21 @@ export function ProjectChat({
     }
     oldest.current = shown[Math.max(0, shown.length - visible)]?.id;
   }, [shown, visible]);
+  const filling = visible < MESSAGE_WINDOW && shown.length > visible;
+  useEffect(() => {
+    if (!filling) return;
+    const idle = requestIdleCallback(
+      () => {
+        // Going in above a reader who has scrolled up: hold their message.
+        const view = scroll.current;
+        if (view && !follow.current && !returning.current)
+          returning.current = placeInView(view);
+        setVisible((v) => Math.min(v + MESSAGE_STEP, MESSAGE_WINDOW));
+      },
+      { timeout: 250 },
+    );
+    return () => cancelIdleCallback(idle);
+  }, [filling, visible]);
   /** Taking over from another agent loses its session: say so first. */
   async function confirmSwitch(to: AgentProvider | undefined) {
     return (
@@ -1684,13 +1704,13 @@ export function ProjectChat({
                 {root.side ? "Side question" : "Side conversation"}
               </h2>
             )}
-            {shown.length > visible && (
+            {shown.length > visible && !filling && (
               <button
                 className="load-more"
                 onClick={() => {
                   // They go in above the message being read, which stays put.
                   returning.current = placeInView(scroll.current!);
-                  setVisible((v) => v + 80);
+                  setVisible((v) => v + MESSAGE_WINDOW);
                 }}
               >
                 Earlier messages
