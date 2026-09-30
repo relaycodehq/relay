@@ -337,13 +337,11 @@ export class ProjectChats {
       (c) => c.projectId === projectId,
     );
     // A review runs while any of its reviewers does, a thread while its thinkers do.
-    const reviewing = new Map<string, ActiveChat>();
+    const helpers = new Map<string, ActiveChat[]>();
     for (const c of chats) {
       const parent = (c.reviewer ?? c.thinker)?.parent;
       const active = parent && this.active.get(c.id);
-      const earlier = parent && reviewing.get(parent);
-      if (active && (!earlier || earlier.started > active.started))
-        reviewing.set(parent, active);
+      if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
     }
     // Once for the list: the sidebar asks every few seconds.
     const live = this.pending();
@@ -351,7 +349,20 @@ export class ProjectChats {
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
       .map((c) => {
-        const active = this.active.get(c.id) ?? reviewing.get(c.id);
+        const crew = [
+          this.active.get(c.id),
+          ...(helpers.get(c.id) ?? []).sort((a, b) => a.started - b.started),
+        ].filter((a): a is ActiveChat => !!a);
+        const active = crew[0];
+        const running = [
+          ...new Set(
+            crew.flatMap(({ input }) =>
+              input
+                ? [agentMention(input.body)?.provider ?? input.provider]
+                : [],
+            ),
+          ),
+        ];
         const pending = [
           ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
           ...(c.heldWakeups ?? []).map((w): ChatPending => ({
@@ -369,6 +380,7 @@ export class ProjectChats {
                 ? {
                     running: true,
                     runningSince: active.started,
+                    runningAgents: running,
                     waiting: active.requests.list().length > 0,
                   }
                 : {}),

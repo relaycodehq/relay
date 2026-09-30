@@ -878,8 +878,9 @@
   background: var(--sb-waiting);
 }
 .sb-card-provider {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
   margin-left: auto;
   opacity: 0.75;
@@ -887,6 +888,9 @@
 .sb-card-provider svg {
   width: 13px;
   height: 13px;
+}
+.sb-card-provider-more {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Unsent composer text, T3 Code-style: amber-tinted card with the text. */

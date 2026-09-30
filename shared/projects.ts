@@ -140,6 +140,8 @@ export interface ChatSummary {
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
+  /** The thread's own agent first, then its reviewers or thinkers, one per provider. */
+  runningAgents?: AgentProvider[];
   waiting?: boolean;
   /** Work Claude left running that will start its next turn by itself. */
   pending?: ChatPending[];

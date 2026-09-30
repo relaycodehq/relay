@@ -58,6 +58,7 @@ import { UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
 import { ProviderIcon } from "./ComposerModelPicker";
+import { agentName } from "../../shared/agents";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import {
   joinGroup,
@@ -157,6 +158,27 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
   const icon = useProjectIcon(id);
   if (icon) return <img className="sb-project-icon" src={icon} alt="" />;
   return open ? <FolderOpen size={15} /> : <Folder size={15} />;
+}
+
+/** Past this many agents, the last slot counts the rest. */
+const CARD_AGENT_ICONS = 3;
+/** Who's answering while it runs, otherwise who answered last. */
+function CardAgents({ chat }: { chat: ChatSummary }) {
+  const agents = chat.runningAgents?.length
+    ? chat.runningAgents
+    : chat.provider
+      ? [chat.provider]
+      : [];
+  if (!agents.length) return null;
+  const more = agents.length - CARD_AGENT_ICONS;
+  return (
+    <span className="sb-card-provider" title={agents.map(agentName).join(", ")}>
+      {agents.slice(0, more > 0 ? CARD_AGENT_ICONS - 1 : undefined).map((p) => (
+        <ProviderIcon key={p} provider={p} />
+      ))}
+      {more > 0 && <span className="sb-card-provider-more">+{more + 1}</span>}
+    </span>
+  );
 }
 
 function StatusMark({
@@ -1387,11 +1409,7 @@ export function ProjectSidebar({
             </span>
           )}
           <span className="sb-card-branch">{c.branch}</span>
-          {c.provider && (
-            <span className="sb-card-provider">
-              <ProviderIcon provider={c.provider} />
-            </span>
-          )}
+          <CardAgents chat={c} />
         </div>
       </div>
     );
