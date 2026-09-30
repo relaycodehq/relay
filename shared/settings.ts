@@ -188,12 +188,19 @@ export const aiSettingsSchema = z
       fast: false,
       reasoningEffort: "low",
     }),
+    /** Describes the day's entries for the Clockify plugin; added later, so it has a default. */
+    timesheet: questionChoiceSchema.default({
+      model: "gpt-6-luna",
+      fast: false,
+      reasoningEffort: "low",
+    }),
     /** Which signed-in CLI runs grouping, line questions or commit splits. */
     groupingProvider: helperProviderSchema.default("codex"),
     questionsProvider: helperProviderSchema.default("codex"),
     /** Commit splits only need text back, so any agent can plan them. */
     splitProvider: agentProviderSchema.default("codex"),
     commitMessageProvider: agentProviderSchema.default("codex"),
+    timesheetProvider: agentProviderSchema.default("codex"),
     /** The agent a composer starts on until it remembers one. */
     threadProvider: agentProviderSchema.default("codex"),
   })
@@ -213,6 +220,10 @@ export const aiSettingsSchema = z
   .refine((s) => claudeEffortCheck(s.commitMessageProvider, s.commitMessage), {
     ...effortCheck,
     path: ["commitMessage", "reasoningEffort"],
+  })
+  .refine((s) => claudeEffortCheck(s.timesheetProvider, s.timesheet), {
+    ...effortCheck,
+    path: ["timesheet", "reasoningEffort"],
   });
 export type ModelChoice = z.infer<typeof modelChoiceSchema>;
 export type AISettings = z.infer<typeof aiSettingsSchema>;
@@ -223,10 +234,12 @@ export const defaultAISettings: AISettings = {
   questions: { model: "", fast: false, reasoningEffort: "" },
   split: { model: "", fast: false, reasoningEffort: "medium" },
   commitMessage: { model: "gpt-6-luna", fast: false, reasoningEffort: "low" },
+  timesheet: { model: "gpt-6-luna", fast: false, reasoningEffort: "low" },
   groupingProvider: "codex",
   questionsProvider: "codex",
   splitProvider: "codex",
   commitMessageProvider: "codex",
+  timesheetProvider: "codex",
   threadProvider: "codex",
 };
 /** Codex's line-question choice, or its defaults when questions go to Claude. */

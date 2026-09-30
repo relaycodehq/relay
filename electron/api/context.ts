@@ -10,6 +10,7 @@ import type { BlameService } from "../blame";
 import type { Ci } from "../ci";
 import type { ProjectChecks } from "../checks/service";
 import type { DevOps } from "../devops";
+import type { ClockifyPlugin } from "../plugins/clockify/service";
 import type { Dictation } from "../dictation/service";
 import type { LiveSyncs } from "../live-sync";
 import type { ProjectChats } from "../project-chats";
@@ -27,6 +28,7 @@ export interface Services {
   projectChats: ProjectChats;
   rooms: RoomService;
   devops: DevOps;
+  clockify: ClockifyPlugin;
   triage: TriageService;
   phoneRemote(): PhoneRemote | undefined;
   login: GiteaLogin;

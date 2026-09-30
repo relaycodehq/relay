@@ -12,6 +12,7 @@ import { projectHandlers } from "./projects";
 import { reviewCheckoutHandlers } from "./review-checkout";
 import { reviewHandlers } from "./reviews";
 import { roomHandlers } from "./rooms";
+import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { terminalHandlers } from "./terminals";
 
@@ -30,6 +31,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     ...terminalHandlers(ctx),
     ...roomHandlers(ctx),
     ...settingsHandlers(ctx),
+    ...pluginHandlers(ctx),
     ...desktopHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   } satisfies Required<Handlers>;

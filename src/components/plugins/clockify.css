@@ -1,0 +1,576 @@
+/* ---- The day's timer, above the sidebar footer ---- */
+
+.clockify-timer {
+  padding: 6px 6px 2px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.clockify-timer + .sb-footer {
+  border-top: 0;
+}
+.clockify-now {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 6px 2px 6px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--c) 9%, transparent);
+}
+.clockify-now .icon-button {
+  width: 24px;
+  height: 24px;
+}
+/* A still dot, not a pulse: it sits on screen all day. */
+.clockify-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.clockify-now[data-untracked] .clockify-dot,
+.clockify-now[data-paused] .clockify-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.clockify-now[data-untracked],
+.clockify-now[data-paused] {
+  background: color-mix(in srgb, var(--hover) 60%, transparent);
+}
+.clockify-now-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
+}
+.clockify-now-text b,
+.clockify-now-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clockify-now-text b {
+  font-size: 12px;
+  font-weight: 600;
+}
+.clockify-now-text small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.clockify-clock {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  margin-right: 2px;
+}
+.clockify-now[data-paused] .clockify-clock {
+  color: var(--muted);
+}
+.sb .clockify-action,
+.sb .clockify-pending {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sb .clockify-action span {
+  flex: 1;
+  text-align: left;
+}
+.sb .clockify-action small {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.sb .clockify-action:hover,
+.sb .clockify-pending:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sb .clockify-action[data-ready] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.sb .clockify-action[data-ready] span {
+  font-weight: 600;
+}
+.sb .clockify-pending {
+  height: 26px;
+  font-size: 11px;
+}
+.clockify-error {
+  margin: 4px 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--danger);
+}
+
+/* ---- The review sheet ---- */
+
+.modal.clockify-review {
+  width: 900px;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.clockify-review .modal-heading {
+  margin-bottom: 4px;
+}
+.clockify-review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding-bottom: 16px;
+}
+.clockify-review-summary p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clockify-review-summary ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.clockify-review-summary li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.clockify-review-summary li i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--c);
+}
+.clockify-review-summary li[data-empty] {
+  color: var(--muted);
+}
+.clockify-review-summary li[data-empty] i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.clockify-review-summary li span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.clockify-review-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  min-height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  margin: 0 -25px;
+}
+.clockify-review-day {
+  max-height: min(560px, calc(100vh - 290px));
+  overflow: auto;
+  padding: 18px 16px 22px 25px;
+  overscroll-behavior: contain;
+}
+
+/* The calendar column */
+.clockify-day {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 1fr;
+}
+.clockify-day-hours {
+  position: relative;
+}
+.clockify-day-hours span {
+  position: absolute;
+  right: 10px;
+  transform: translateY(-50%);
+}
+.clockify-day-hours span[data-edge="start"] {
+  transform: none;
+  color: var(--text);
+}
+.clockify-day-hours span[data-edge="end"] {
+  transform: translateY(-100%);
+  color: var(--text);
+}
+.clockify-day-hours span {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.clockify-day-track {
+  position: relative;
+}
+.clockify-day-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+}
+.clockify-day-pause {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--muted) 9%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  font-size: 11px;
+  color: var(--muted);
+}
+.clockify-day-pause span {
+  padding: 1px 8px;
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.clockify-event {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+  overflow: hidden;
+  padding: 5px 10px 5px 12px;
+  border: 0;
+  border-radius: 7px;
+  /* Space between neighbours without moving their edges. */
+  box-shadow: inset 0 0 0 1.5px var(--surface);
+  background: color-mix(in srgb, var(--c) 17%, var(--surface));
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  transition: background-color 0.12s;
+}
+.clockify-event::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--c);
+}
+.clockify-event:hover {
+  background: color-mix(in srgb, var(--c) 25%, var(--surface));
+}
+.clockify-event[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--c) 30%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1.5px var(--surface),
+    inset 0 0 0 2.5px color-mix(in srgb, var(--c) 75%, var(--text));
+}
+.clockify-event[data-empty] {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--muted) 12%, var(--surface)) 0 6px,
+    var(--surface) 6px 12px
+  );
+  color: var(--muted);
+}
+.clockify-event[data-empty]::before {
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--muted) 70%, transparent);
+  width: 0;
+}
+.clockify-event[data-empty][aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 1.5px var(--surface),
+    inset 0 0 0 2.5px var(--muted);
+}
+.clockify-event[data-sent] {
+  background: color-mix(in srgb, var(--c) 8%, var(--surface));
+}
+.clockify-event[data-sent] .clockify-event-text {
+  opacity: 0.7;
+}
+.clockify-event-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.clockify-event-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.clockify-event-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clockify-event-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+}
+.clockify-event[data-size="s"] {
+  flex-direction: row;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.clockify-event[data-size="s"] .clockify-event-head {
+  flex: 1;
+}
+.clockify-event[data-size="s"] .clockify-event-text,
+.clockify-event[data-size="xs"] > * {
+  display: none;
+}
+
+/* The edge between two entries: a grip that shows on hover and while dragged. */
+.clockify-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  margin-top: -4px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.clockify-edge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: var(--text);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.clockify-edge:hover::after,
+.clockify-edge:focus-visible::after,
+.clockify-edge[data-dragging]::after {
+  opacity: 0.55;
+}
+.clockify-edge:focus-visible {
+  outline: none;
+}
+.clockify-edge-time {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  pointer-events: none;
+}
+.clockify-edge[data-dragging] .clockify-edge-time,
+.clockify-edge:focus-visible .clockify-edge-time {
+  opacity: 1;
+}
+
+/* The selected entry */
+.clockify-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 25px 22px 20px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--toolbar) 45%, transparent);
+  overflow: auto;
+  max-height: min(560px, calc(100vh - 290px));
+}
+.clockify-entry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.clockify-entry-time {
+  display: grid;
+  gap: 2px;
+}
+.clockify-entry-time b {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.clockify-entry-time span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.clockify-entry-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clockify-entry-step .icon-button {
+  width: 24px;
+  height: 24px;
+}
+.clockify-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-weight: 400;
+}
+.clockify-field > span:first-child,
+.clockify-sources > span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.clockify-field textarea {
+  resize: vertical;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.clockify-project {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.clockify-project i {
+  position: absolute;
+  left: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--c);
+  pointer-events: none;
+}
+.clockify-project[data-empty] i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.clockify-project select {
+  width: 100%;
+  appearance: none;
+  padding: 8px 30px 8px 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.clockify-project svg {
+  position: absolute;
+  right: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.clockify-sources {
+  display: grid;
+  gap: 6px;
+}
+.clockify-sources p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text) 80%, transparent);
+}
+.clockify-sources ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.clockify-sources li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.clockify-sources li svg {
+  flex: none;
+  position: relative;
+  top: 1px;
+  color: var(--muted);
+}
+.clockify-entry-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.clockify-review-error {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.clockify-review-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -25px;
+  padding: 14px 25px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.clockify-review-foot p {
+  flex: 1;
+  margin: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clockify-review-foot button.primary,
+.clockify-review-foot button.danger {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+.clockify-review-foot p.clockify-review-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  color: var(--text);
+}
