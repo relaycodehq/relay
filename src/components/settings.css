@@ -378,31 +378,19 @@
 }
 .theme-code-line.added {
   --bar: light-dark(#1a7f37, #3fb950);
-  background: light-dark(
-    color-mix(in srgb, var(--code-background) 50%, var(--diff-addition)),
-    color-mix(in srgb, var(--code-background) 70%, var(--diff-addition))
-  );
+  background: var(--diff-addition);
 }
 .theme-code-line.removed {
   --bar: light-dark(#cf222e, #f85149);
-  background: light-dark(
-    color-mix(in srgb, var(--code-background) 50%, var(--diff-deletion)),
-    color-mix(in srgb, var(--code-background) 70%, var(--diff-deletion))
-  );
+  background: var(--diff-deletion);
 }
 .theme-code-line.added .theme-code-number {
   color: var(--bar);
-  background: light-dark(
-    color-mix(in srgb, var(--code-background) 35%, var(--diff-addition)),
-    color-mix(in srgb, var(--code-background) 60%, var(--diff-addition))
-  );
+  background: color-mix(in srgb, var(--diff-addition) 78%, var(--bar));
 }
 .theme-code-line.removed .theme-code-number {
   color: var(--bar);
-  background: light-dark(
-    color-mix(in srgb, var(--code-background) 35%, var(--diff-deletion)),
-    color-mix(in srgb, var(--code-background) 60%, var(--diff-deletion))
-  );
+  background: color-mix(in srgb, var(--diff-deletion) 78%, var(--bar));
 }
 
 /* Theme dropdown. */

@@ -306,41 +306,31 @@ export const DIFF_SURFACE_THEME_UNSAFE_CSS = `
   );
   --diffs-bg-buffer-override: color-mix(in srgb, var(--code-background) 90%, var(--code-foreground));
 
-  --diffs-bg-addition-override: light-dark(
-    color-mix(in srgb, var(--code-background) 50%, var(--diff-addition)),
-    color-mix(in srgb, var(--code-background) 70%, var(--diff-addition))
-  );
-  --diffs-bg-addition-number-override: light-dark(
-    color-mix(in srgb, var(--code-background) 35%, var(--diff-addition)),
-    color-mix(in srgb, var(--code-background) 60%, var(--diff-addition))
-  );
-  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--code-background) 85%, var(--diff-addition));
-  --diffs-bg-addition-emphasis-override: color-mix(
+  /* The theme's diff colours are finished row tints. Pierre treats these
+     overrides as targets it mixes only 12-20% into the background, so changed
+     rows below paint them at full strength instead. */
+  --diffs-bg-addition-override: var(--diff-addition);
+  --diffs-bg-addition-number-override: color-mix(
     in srgb,
-    var(--code-background) 80%,
-    var(--diff-addition)
+    var(--diff-addition) 78%,
+    var(--diffs-addition-base)
   );
-
-  --diffs-bg-deletion-override: light-dark(
-    color-mix(in srgb, var(--code-background) 50%, var(--diff-deletion)),
-    color-mix(in srgb, var(--code-background) 70%, var(--diff-deletion))
-  );
-  --diffs-bg-deletion-number-override: light-dark(
-    color-mix(in srgb, var(--code-background) 35%, var(--diff-deletion)),
-    color-mix(in srgb, var(--code-background) 60%, var(--diff-deletion))
-  );
-  --diffs-bg-deletion-hover-override: color-mix(
+  --diffs-bg-deletion-override: var(--diff-deletion);
+  --diffs-bg-deletion-number-override: color-mix(
     in srgb,
-    var(--code-background) 85%,
-    var(--diff-deletion)
-  );
-  --diffs-bg-deletion-emphasis-override: color-mix(
-    in srgb,
-    var(--code-background) 80%,
-    var(--diff-deletion)
+    var(--diff-deletion) 78%,
+    var(--diffs-deletion-base)
   );
 
   background-color: var(--diffs-bg) !important;
   color: var(--code-foreground) !important;
+}
+
+:is([data-line], [data-no-newline], [data-gutter-buffer], [data-column-number]):is(
+    [data-line-type="change-addition"],
+    [data-line-type="change-deletion"]
+  ) {
+  --mix-light: 0% !important;
+  --mix-dark: 0% !important;
 }
 `;
