@@ -69,6 +69,42 @@ export type UpdateState =
   | { status: "installing"; current: string; version: string }
   | { status: "error"; current: string; version?: string; message: string };
 
+/** Every release's notes, newest first, for the changelog in About. */
+export const releasesApi = `https://api.github.com/repos/${releasesRepo}/releases?per_page=100`;
+
+export interface ReleaseNote {
+  version: string;
+  published: string;
+  notes: string;
+}
+
+const githubRelease = z.object({
+  tag_name: z.string(),
+  draft: z.boolean(),
+  published_at: z.string().nullable(),
+  body: z.string().nullable(),
+});
+
+/** Published vX.Y.Z releases from GitHub's list, newest version first; CI logs and drafts drop out. */
+export function releaseNotesFrom(data: unknown): ReleaseNote[] {
+  return z
+    .array(githubRelease)
+    .parse(data)
+    .flatMap((release) => {
+      const version = /^v(\d+\.\d+\.\d+)$/.exec(release.tag_name)?.[1];
+      if (!version || release.draft || !release.published_at) return [];
+      const notes = (release.body ?? "").trim();
+      return [{ version, published: release.published_at, notes }];
+    })
+    .sort((a, b) =>
+      newerVersion(a.version, b.version)
+        ? -1
+        : newerVersion(b.version, a.version)
+          ? 1
+          : 0,
+    );
+}
+
 /** Numeric x.y.z comparison; release versions never carry prerelease tags. */
 export function newerVersion(candidate: string, current: string) {
   const a = candidate.split(".").map(Number),

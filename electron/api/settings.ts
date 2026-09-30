@@ -27,6 +27,7 @@ import {
 import { clis } from "../source-control/clis";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
+import { fetchReleaseNotes } from "../release-notes";
 import type { ApiContext, Handlers } from "./context";
 
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
@@ -141,6 +142,7 @@ export function settingsHandlers(ctx: ApiContext) {
     checkForUpdates: () => updater.check(),
     downloadUpdate: () => updater.download(),
     installUpdate: () => updater.installAndRestart(),
+    releaseNotes: () => fetchReleaseNotes(),
     agentVersions: () => agentUpdates.current,
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: (args) =>

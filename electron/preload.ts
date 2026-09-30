@@ -189,6 +189,7 @@ const methods = [
   "checkForUpdates",
   "downloadUpdate",
   "installUpdate",
+  "releaseNotes",
   "dictationState",
   "downloadDictationModel",
   "cancelDictationDownload",

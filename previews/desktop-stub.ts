@@ -4,6 +4,7 @@
 import type { Api } from "../shared/types";
 import { fallbackCodexModels, type ClaudeModel } from "../shared/settings";
 import { fetchThemes, searchThemes } from "../shared/open-vsx";
+import { releaseNotesFrom, releasesApi } from "../shared/updates";
 
 const claudeModels: ClaudeModel[] = [
   {
@@ -56,6 +57,9 @@ const stub: Partial<Api> = {
   // Open VSX allows any origin, so previews talk to the real thing.
   searchThemes: (query, offset) => searchThemes(query, offset),
   fetchThemes: (extension) => fetchThemes(extension),
+  // So does GitHub's API: the changelog shows the real releases.
+  releaseNotes: async () =>
+    releaseNotesFrom(await (await fetch(releasesApi)).json()),
   // No repository icons in a preview; the letter badge stands in.
   projectIcon: async () => null,
   providerUsage: async (provider) => ({

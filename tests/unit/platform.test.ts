@@ -4,7 +4,11 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { manifestSchema, newerVersion } from "../../shared/updates";
+import {
+  manifestSchema,
+  newerVersion,
+  releaseNotesFrom,
+} from "../../shared/updates";
 import { powershellScript } from "../../electron/local";
 import { findExecutable, spawnExecutable } from "../../electron/executables";
 
@@ -79,6 +83,24 @@ describe("update feed", () => {
         files: { "mac-arm64": { ...file, name: "../evil.zip" } },
       }),
     ).toThrow();
+  });
+
+  it("lists published releases for the changelog, newest version first", () => {
+    const release = (tag_name: string, draft = false) => ({
+      tag_name,
+      draft,
+      published_at: draft ? null : "2026-09-30T09:51:36Z",
+      body: `${tag_name} notes\n`,
+    });
+    const notes = releaseNotesFrom([
+      release("v0.1.9"),
+      release("ci-logs", true),
+      release("v0.1.10"),
+      release("v0.1.11", true),
+      release("v0.2.0"),
+    ]);
+    expect(notes.map((n) => n.version)).toEqual(["0.2.0", "0.1.10", "0.1.9"]);
+    expect(notes[0]!.notes).toBe("v0.2.0 notes");
   });
 });
 

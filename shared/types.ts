@@ -9,7 +9,7 @@ import type { RoomApi as importRoomApi } from "./rooms";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
-import type { UpdateState } from "./updates";
+import type { ReleaseNote, UpdateState } from "./updates";
 import type { DictationModelState } from "./dictation";
 import type { AgentVersions } from "./agent-updates";
 import type {
@@ -360,6 +360,8 @@ export interface Api
   downloadUpdate(): Promise<UpdateState>;
   /** Quits and hands over to the new version, which starts by itself. */
   installUpdate(): Promise<UpdateState>;
+  /** Every published release's notes, newest first. */
+  releaseNotes(): Promise<ReleaseNote[]>;
   onUpdate(callback: (state: UpdateState) => void): () => void;
   dictationState(): Promise<DictationModelState>;
   downloadDictationModel(): Promise<DictationModelState>;

@@ -79,6 +79,7 @@ import {
   Switch,
 } from "./SettingsCard";
 import { UpdateCheck, updateLine } from "./UpdateCheck";
+import { Changelog } from "./Changelog";
 import { AgentVersionSettings } from "./AgentUpdates";
 import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
@@ -174,7 +175,7 @@ const categories: {
   {
     id: "about",
     label: "About",
-    description: "Version and credits.",
+    description: "Version, changelog and credits.",
     icon: Info,
   },
 ];
@@ -1013,6 +1014,15 @@ export function Settings({
       description: updateLine(updates),
       keywords: "version about check for updates upgrade",
       render: () => <UpdateCheck />,
+    },
+    {
+      id: "changelog",
+      category: "about",
+      title: "Changelog",
+      description: "What changed in each version.",
+      keywords: "changelog release notes what's new version history",
+      block: true,
+      render: () => <Changelog />,
     },
     {
       id: "credits",
