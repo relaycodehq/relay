@@ -6,6 +6,7 @@ import { readBounded } from "../../shared/http";
 import type { FetchRequest } from "../gitea";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
+import { statusRuns, type CommitStatus } from "./statuses";
 
 const exec = promisify(execFile);
 const API = "https://api.github.com";
@@ -162,10 +163,32 @@ export class GitHub {
   }
 
   async read(repo: CiRepo, branch: string): Promise<CiReading | null> {
-    const { workflow_runs } = await this.get<{ workflow_runs: GithubRun[] }>(
-      `${this.repoPath(repo)}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=30&exclude_pull_requests=true`,
-    );
+    const ref = `heads/${branch.split("/").map(encodeURIComponent).join("/")}`;
+    const [{ workflow_runs }, tip] = await Promise.all([
+      this.get<{ workflow_runs: GithubRun[] }>(
+        `${this.repoPath(repo)}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=30&exclude_pull_requests=true`,
+      ),
+      // CI outside Actions, like a build machine of your own, posts commit statuses.
+      this.get<{ sha: string; statuses: CommitStatus[] }>(
+        `${this.repoPath(repo)}/commits/${ref}/status`,
+      ).catch(() => null),
+    ]);
     const latest = latestGithubRuns(workflow_runs);
+    const statuses = tip ? statusRuns(tip.statuses) : [];
+    // Statuses are all the branch tip has so far; any Actions runs are older.
+    if (tip && statuses.length && tip.sha !== latest?.head.head_sha) {
+      const found = await this.get<{
+        commit: { message?: string; author?: { name?: string } };
+      }>(`${this.repoPath(repo)}/commits/${tip.sha}`).catch(() => null);
+      return {
+        commit: {
+          sha: tip.sha,
+          message: found?.commit.message?.split("\n")[0],
+          author: found?.commit.author?.name,
+        },
+        runs: statuses,
+      };
+    }
     if (!latest) return null;
     const runs = await Promise.all(
       latest.runs.map(async (r): Promise<CiRun> => {
@@ -191,7 +214,7 @@ export class GitHub {
         message: commit?.message?.split("\n")[0],
         author: commit?.author?.name,
       },
-      runs,
+      runs: [...runs, ...statuses],
     };
   }
 }

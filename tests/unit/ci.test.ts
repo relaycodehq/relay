@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ciSummary, type CiRun } from "../../shared/ci";
 import {
+  GitHub,
   latestGithubRuns,
   githubRunState,
   type GithubRun,
 } from "../../electron/ci/github";
-import { giteaRuns } from "../../electron/ci/gitea";
+import { statusRuns } from "../../electron/ci/statuses";
 import { remoteRepo } from "../../electron/ci";
 
 const run = (workflow: string, state: CiRun["state"], at: number): CiRun => ({
@@ -62,9 +63,59 @@ it("reads the newest commit's latest run per workflow from GitHub", () => {
   expect(latestGithubRuns([])).toBeNull();
 });
 
+it("shows commit statuses from CI outside Actions next to Actions runs", async () => {
+  const at = "2026-09-24T10:10:00Z";
+  const release = {
+    context: "Release",
+    state: "pending",
+    target_url: "https://mini.example/log",
+    updated_at: at,
+  };
+  const answer = (routes: Record<string, unknown>) =>
+    new GitHub(async (url) => {
+      const path = new URL(url).pathname;
+      const body = routes[path];
+      return body === undefined
+        ? new Response("{}", { status: 404 })
+        : Response.json(body);
+    });
+  const actions = "/repos/o/r/actions/runs";
+  const tip = "/repos/o/r/commits/heads/feature/x/status";
+
+  // A push the build machine picked up before any Actions run: its tip wins.
+  const onlyStatuses = await answer({
+    [actions]: { workflow_runs: [gh({ head_sha: "old" })] },
+    [tip]: { sha: "tip", statuses: [release] },
+    "/repos/o/r/commits/tip": {
+      commit: { message: "Ship it\n\nBody", author: { name: "Ada" } },
+    },
+  }).read({ owner: "o", name: "r" }, "feature/x");
+  expect(onlyStatuses).toMatchObject({
+    commit: { sha: "tip", message: "Ship it", author: "Ada" },
+    runs: [{ workflow: "Release", state: "running" }],
+  });
+
+  // Both on the same commit.
+  const both = await answer({
+    [actions]: { workflow_runs: [gh({ head_sha: "tip" })] },
+    [tip]: { sha: "tip", statuses: [{ ...release, state: "failure" }] },
+  }).read({ owner: "o", name: "r" }, "feature/x");
+  expect(both?.runs.map((r) => [r.workflow, r.state])).toEqual([
+    ["Checks", "success"],
+    ["Release", "failure"],
+  ]);
+
+  // No statuses, or none readable: Actions alone, as before.
+  const actionsOnly = await answer({
+    [actions]: { workflow_runs: [gh({ head_sha: "old" })] },
+  }).read({ owner: "o", name: "r" }, "feature/x");
+  expect(actionsOnly?.commit.sha).toBe("old");
+  expect(actionsOnly?.runs.map((r) => r.workflow)).toEqual(["Checks"]);
+});
+
 it("groups Gitea Actions job statuses under their workflow", () => {
   const at = "2026-09-24T10:00:00Z";
-  const runs = giteaRuns([
+  const runs = statusRuns([
     {
       context: "Checks / lint (push)",
       state: "success",
