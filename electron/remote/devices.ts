@@ -9,10 +9,13 @@ import {
   type KeyPair,
 } from "../../shared/remote-crypto";
 import type { PhoneAppReport } from "../../shared/phone-app";
+import type { DeviceKind } from "../../shared/remote";
 
 interface RemoteDevice {
   id: string;
   name: string;
+  /** Unset for a phone. */
+  kind?: DeviceKind;
   created: number;
   lastSeen?: number;
   /** SHA-256 of the device's token; the token itself only lives on the phone. */
@@ -35,7 +38,11 @@ const maxFailures = 5;
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("base64url");
 
-/** Paired phones, the bridge's key, and the one pairing code that may be open at a time. */
+/**
+ * Paired phones and computers, the bridge's key, and the one pairing code
+ * that may be open at a time. Whoever holds the code says which it is; a
+ * computer gets the handoff calls instead of the phone's.
+ */
 export class RemoteDevices {
   private pairing?: { code: string; expiresAt: number; failures: number };
   private keyPair?: KeyPair;
@@ -89,7 +96,7 @@ export class RemoteDevices {
     };
     return { code: this.pairing.code, expiresAt: this.pairing.expiresAt };
   }
-  async pair(code: string, name: string) {
+  async pair(code: string, name: string, kind?: DeviceKind) {
     const open = this.pairing;
     if (!open || open.expiresAt < this.now())
       throw new Error("This pairing code expired. Show a new one in Relay.");
@@ -99,7 +106,7 @@ export class RemoteDevices {
     }
     this.pairing = undefined;
     if (this.list().length >= maxDevices)
-      throw new Error("Remove a paired phone in Relay first.");
+      throw new Error("Remove a paired phone or computer in Relay first.");
     const token = randomToken(32);
     const device: RemoteDevice = {
       id: randomUUID(),
@@ -107,7 +114,8 @@ export class RemoteDevices {
         name
           .replace(/[\x00-\x1f]/g, "")
           .trim()
-          .slice(0, 60) || "Phone",
+          .slice(0, 60) || (kind === "computer" ? "Computer" : "Phone"),
+      ...(kind ? { kind } : {}),
       created: this.now(),
       lastSeen: this.now(),
       tokenHash: hash(token),

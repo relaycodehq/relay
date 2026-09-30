@@ -45,6 +45,8 @@ interface State {
     review?: import("../shared/clockify").ClockifyReview;
   };
   phoneRemote?: import("./remote/devices").RemoteSettings;
+  /** Computers this one hands threads to; see handoff/computers. */
+  computers?: import("./handoff/computers").SavedComputer[];
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;
   /** Agent CLIs linked in Settings; a missing one is found by searching. */

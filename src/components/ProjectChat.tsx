@@ -108,6 +108,7 @@ import {
 import { PastedTextPill } from "./PastedTextCard";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
+import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
 import { outsideBatch, runningBatch } from "../../shared/subagents";
@@ -181,8 +182,10 @@ function HandoffRow({
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { from, to } = m.handoff!;
-  const switched = `Switched from ${agentName(from)} to ${agentName(to)}`;
+  const { from, to, computer } = m.handoff!;
+  const switched = computer
+    ? `Handoff note for ${computer}`
+    : `Switched from ${agentName(from)} to ${agentName(to)}`;
   const note = m.status === "complete" && m.body.trim();
   return (
     <div
@@ -194,7 +197,7 @@ function HandoffRow({
       <div className="context-compaction">
         <span>
           {m.status === "streaming"
-            ? `${agentName(from)} is writing a handoff note for ${agentName(to)}…`
+            ? `${agentName(from)} is writing a handoff note for ${computer ?? agentName(to)}…`
             : note
               ? switched
               : `${switched} · no handoff note`}
@@ -2106,7 +2109,7 @@ export function ProjectChat({
             shared={!!chat?.shared}
             // A side thread doesn't wait for the main answer, nor queue behind it.
             running={root?.side ? false : running || reviewing || planning}
-            busy={busy}
+            busy={busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt}
             branch={checkout.data?.branch}
             plain={project.plain}
             projectId={project.id}
@@ -2143,7 +2146,11 @@ export function ProjectChat({
             }
             onSend={send}
             notice={
-              stopped?.length ? (
+              chat?.sentTo ? (
+                <HandoffStrip chat={chat} onError={setError} />
+              ) : chat?.cameFrom?.returnedAt ? (
+                <ReturnedStrip computer={chat.cameFrom.computer} />
+              ) : stopped?.length ? (
                 <StoppedStrip
                   items={stopped}
                   onResolve={async (action) => {
@@ -2183,7 +2190,8 @@ export function ProjectChat({
               )
             }
             placeholder={
-              root?.side
+              (chat && awayPlaceholder(chat)) ??
+              (root?.side
                 ? `Ask ${agentName(root.provider)} a follow-up on the side…`
                 : reviewing
                   ? "Reviewers are at work. Messages wait for the lead…"
@@ -2195,7 +2203,7 @@ export function ProjectChat({
                         ? "Message Claude now, or wait for it to check back…"
                         : project.scratch
                           ? "Ask anything…"
-                          : undefined
+                          : undefined)
             }
             ultraplanOffered={!root && !chat?.shared && scope.kind !== "review"}
             planProvider={

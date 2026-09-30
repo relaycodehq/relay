@@ -102,6 +102,56 @@ export async function createWorktree(
   };
 }
 
+/**
+ * A worktree for work that arrived from another computer: a new `relay/…`
+ * branch at `commit`, counting its changes from `start` on `from`, as they
+ * did there, when this repository has both.
+ */
+export async function adoptWorktree(
+  root: string,
+  dir: string,
+  name: string,
+  commit: string,
+  { from, start }: { from?: string; start?: string } = {},
+): Promise<MadeWorktree> {
+  const has = (ref: string) =>
+    git(root, ["rev-parse", "-q", "--verify", ref]).then(
+      (s) => s.trim(),
+      () => undefined,
+    );
+  const local = from && (await has(`refs/heads/${from}^{commit}`));
+  const current = (await git(root, ["branch", "--show-current"])).trim();
+  const source = local ? from : current || undefined;
+  const base =
+    (start && (await has(`${start}^{commit}`))) ||
+    (source &&
+      (await git(root, ["merge-base", `refs/heads/${source}`, commit]).then(
+        (s) => s.trim(),
+        () => undefined,
+      ))) ||
+    commit;
+  const folder = join(dir, slug(basename(root)));
+  await mkdir(folder, { recursive: true });
+  const leaf = await freeName(root, folder, slug(name));
+  const path = join(folder, leaf);
+  const branch = `relay/${leaf}`;
+  await git(root, ["worktree", "prune"]).catch(() => {});
+  await git(
+    root,
+    ["worktree", "add", "-q", "-b", branch, path, commit],
+    120000,
+  );
+  await linkModules(root, path);
+  return {
+    path,
+    branch,
+    head: base,
+    start: base,
+    base,
+    ...(source ? { from: source } : {}),
+  };
+}
+
 async function linkModules(root: string, path: string) {
   const source = join(root, "node_modules");
   const info = await lstat(source).catch(() => null);

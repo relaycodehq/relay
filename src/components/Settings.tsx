@@ -27,6 +27,7 @@ import {
   UserRound,
   Users,
   Smartphone,
+  MonitorUp,
   X,
 } from "lucide-react";
 import type { Account } from "../../shared/types";
@@ -107,6 +108,10 @@ import {
 } from "./SourceControlSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
+  AcceptComputersSettings,
+  HandoffComputersSettings,
+} from "./ComputersSettings";
+import {
   DictationMicrophoneSetting,
   DictationModelSetting,
   dictationModelLine,
@@ -133,6 +138,7 @@ type CategoryId =
   | "plugins"
   | "rooms"
   | "phone"
+  | "computers"
   | "dictation"
   | "shortcuts"
   | "about";
@@ -187,6 +193,13 @@ const categories: {
     label: "Phone",
     description: "Follow and answer your threads from the Relay phone app.",
     icon: Smartphone,
+  },
+  {
+    id: "computers",
+    label: "Computers",
+    description:
+      "Hand a thread to another computer running Relay, like a Mac mini at home, and bring it back later.",
+    icon: MonitorUp,
   },
   {
     id: "dictation",
@@ -1076,6 +1089,30 @@ export function Settings({
       keywords: "phone mobile android remote qr pair tailscale",
       block: true,
       render: () => <PhoneRemoteSettings />,
+    },
+    {
+      id: "computers-paired",
+      category: "computers",
+      section: "Hand threads off",
+      title: "Computers you hand threads to",
+      description:
+        "The thread's agent stops and writes a handoff note, its worktree is committed, and the thread carries on there. Bring it back from the thread when you're back.",
+      keywords:
+        "computer handoff hand off mac mini server vps remote pair tailscale continue away",
+      block: true,
+      render: () => <HandoffComputersSettings />,
+    },
+    {
+      id: "computers-accept",
+      category: "computers",
+      section: "Take threads over",
+      title: "Let other computers hand threads here",
+      description:
+        "Turn this on on the computer that stays on, then pair the other one with its link.",
+      keywords:
+        "computer handoff accept receive mac mini server pairing link tailscale",
+      block: true,
+      render: () => <AcceptComputersSettings />,
     },
     {
       id: "dictation-model",

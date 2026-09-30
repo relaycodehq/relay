@@ -46,7 +46,9 @@ export function PhoneRemoteSettings() {
   const now = useNow(!!pairing);
   const data = state.data;
   const tailnet = data?.tailnet;
-  const paired = data?.devices.length ?? 0;
+  // Computers that paired to hand threads over have their own list, under Computers.
+  const phones = data?.devices.filter((d) => d.kind !== "computer") ?? [];
+  const paired = phones.length;
   const showing =
     pairing && pairing.expiresAt > now && paired <= pairing.before;
   useEffect(() => setAnother(false), [paired]);
@@ -178,7 +180,7 @@ export function PhoneRemoteSettings() {
           </ol>
         )}
         {data?.listening &&
-          data.devices.map((d) => (
+          phones.map((d) => (
             <SettingsRow
               key={d.id}
               label={d.name}
@@ -230,7 +232,7 @@ export function PhoneRemoteSettings() {
   );
 }
 
-function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
+export function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
   const connected = tailnet?.status === "connected";
   return (
     <SettingsRow

@@ -28,6 +28,7 @@ import type {
 } from "./checks";
 import type { TriageState } from "./triage";
 import type { PhoneRemoteApi } from "./remote";
+import type { ComputersApi } from "./handoff";
 interface User {
   id: number;
   login: string;
@@ -226,7 +227,8 @@ export interface Api
     ClockifyApi,
     TaskApi,
     TerminalApi,
-    PhoneRemoteApi {
+    PhoneRemoteApi,
+    ComputersApi {
   inspectSymbol(
     ref: PullRef,
     head: string,

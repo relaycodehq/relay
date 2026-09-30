@@ -244,6 +244,15 @@ const methods = [
   "phonePairing",
   "phoneAppearance",
   "revokePhone",
+  "pairedComputers",
+  "pairComputer",
+  "forgetComputer",
+  "handoffTargets",
+  "handOffThread",
+  "retryHandoff",
+  "handoffView",
+  "bringBackThread",
+  "keepThreadHere",
 ] as const satisfies readonly ApiMethod[];
 // Fails to compile, naming the method, when the Api gains one this list lacks.
 const complete: Exclude<ApiMethod, (typeof methods)[number]> extends never

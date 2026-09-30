@@ -1,4 +1,5 @@
 import type { DictationModelState } from "./dictation";
+import type { HandBack, HandoffRemoteStatus } from "./handoff";
 import type { PhoneAppReport } from "./phone-app";
 /**
  * Relay's phone remote: a phone pairs with the desktop over the local network
@@ -129,7 +130,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for a restart of an older desktop. */
-export const remoteBridgeVersion = 8;
+export const remoteBridgeVersion = 9;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -347,6 +348,37 @@ export interface RemoteApi {
   /** What the phone's app runs, for the desktop's Settings. */
   reportApp(report: PhoneAppReport): Promise<void>;
   dictate(request: PhoneDictation): Promise<PhoneDictationHeard>;
+  /** Computers only from here, handing threads over; see shared/handoff. */
+  computerProjects(): Promise<ComputerProject[]>;
+  /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
+  handoffUpload(
+    id: string,
+    part: HandoffPart,
+    offset: number,
+    data: string,
+  ): Promise<void>;
+  /** Takes the uploaded thread over; the same id again answers the same. */
+  receiveHandoff(id: string): Promise<{ chatId: string; project: string }>;
+  /** Handed-over threads by handoff id; null for one this computer doesn't have. */
+  handoffStatus(
+    ids: string[],
+  ): Promise<Record<string, HandoffRemoteStatus | null>>;
+  /** Stops the thread here and readies it to go back; `handoffDownload` fetches it. */
+  handBack(id: string): Promise<HandBack>;
+  handoffDownload(
+    id: string,
+    part: HandoffPart,
+    offset: number,
+  ): Promise<string>;
+  /** The thread arrived back; the copy here stays still. */
+  handedBack(id: string): Promise<void>;
+}
+export type HandoffPart = "thread" | "bundle";
+/** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
+export interface ComputerProject {
+  id: string;
+  name: string;
+  repositories: string[];
 }
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
@@ -358,7 +390,35 @@ export const remoteMethods = [
   "phoneAppFile",
   "reportApp",
   "dictate",
+  "computerProjects",
+  "handoffUpload",
+  "receiveHandoff",
+  "handoffStatus",
+  "handBack",
+  "handoffDownload",
+  "handedBack",
 ] as const satisfies readonly RemoteMethod[];
+/** What a paired computer may call, and nothing a phone may. */
+export const computerMethods = [
+  "computerProjects",
+  "handoffUpload",
+  "receiveHandoff",
+  "handoffStatus",
+  "handBack",
+  "handoffDownload",
+  "handedBack",
+] as const satisfies readonly RemoteMethod[];
+export type ComputerMethod = (typeof computerMethods)[number];
+/**
+ * Calls that stop an agent, wait for its note or move a repository's worth
+ * of Git; a dead link still fails them within a minute, as its ticks stop.
+ */
+export const slowRemoteMethods: readonly RemoteMethod[] = [
+  "receiveHandoff",
+  "handBack",
+  "handoffUpload",
+  "handoffDownload",
+];
 
 /**
  * Calls that wait on the network, git or a model: pushes, pulls and merges,
@@ -386,9 +446,11 @@ export type RemoteEvent =
   | { kind: "chats"; chats: RemoteChatSummary[] }
   | { kind: "appearance"; appearance: PhoneAppearance };
 
+/** Phones leave the kind out; a computer pairs to hand threads over. */
+export type DeviceKind = "computer";
 /** Frames inside the encrypted channel. */
 export type ClientFrame =
-  | { t: "pair"; code: string; device: string }
+  | { t: "pair"; code: string; device: string; kind?: DeviceKind }
   | { t: "auth"; deviceId: string; token: string }
   | { t: "call"; id: number; method: RemoteMethod; args: unknown[] };
 export type ServerFrame =
@@ -436,6 +498,7 @@ export interface PhoneRemoteState {
   devices: {
     id: string;
     name: string;
+    kind?: DeviceKind;
     created: number;
     lastSeen?: number;
     online: boolean;

@@ -15,6 +15,7 @@ import {
   remoteBridgeVersion,
   maxRemoteHistory,
   remoteHistory,
+  type ComputerMethod,
   type PhoneAppearance,
   type PhoneAppRelease,
   type PhoneDesktopMethod,
@@ -47,6 +48,14 @@ export interface RemoteHost {
   };
   /** The speech engine phones dictate with. */
   dictation?: SpeechService;
+  /** Takes threads other computers hand over; see ../handoff/receiver. */
+  handoffs?: {
+    handle(
+      method: ComputerMethod,
+      args: unknown[],
+      device: { id: string; name: string },
+    ): Promise<unknown>;
+  };
 }
 
 const pathSchema = z.string().min(1).max(1000);
@@ -101,8 +110,8 @@ export class RemoteBridge {
     private host: RemoteHost,
     private broadcast: (event: RemoteEvent) => void,
   ) {}
-  /** Calls about one phone go through phone-remote, which knows which phone asks. */
-  private api: Omit<RemoteApi, "reportApp" | "dictate"> = {
+  /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
+  private api: Omit<RemoteApi, "reportApp" | "dictate" | ComputerMethod> = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
         this.host.projects(),

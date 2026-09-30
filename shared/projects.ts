@@ -134,6 +134,10 @@ export interface ChatSummary {
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */
   stopped?: { at: number; items: StoppedWork[] };
+  /** Handed off to another computer; it continues there. See shared/handoff. */
+  sentTo?: import("./handoff").ChatSentTo;
+  /** Taken over from another computer. */
+  cameFrom?: import("./handoff").ChatCameFrom;
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
@@ -207,6 +211,8 @@ export type { AgentProvider };
 interface AgentHandoff {
   from: AgentProvider;
   to: AgentProvider;
+  /** The note is for another computer, where `to` carries on. */
+  computer?: string;
 }
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
@@ -364,6 +370,8 @@ export interface ProjectChat extends ChatSummary {
   ultraplans?: Record<string, UltraplanState>;
   /** Each agent's session on a side conversation, by its root message. */
   replySessions?: Record<string, AgentSessions>;
+  /** Local: what the next turn hears about a handoff between computers. */
+  handover?: import("./handoff").ChatHandover;
 }
 /** An agent's session on a conversation, and the last message it heard there. */
 export interface AgentSession {

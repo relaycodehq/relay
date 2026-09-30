@@ -1,0 +1,62 @@
+/* The thread header's hand-off menu: each computer with the project it
+   continues in, or why it can't, in muted text. */
+.handoff-menu {
+  width: 290px;
+}
+.handoff-menu .composer-select-item.handoff-target {
+  justify-content: flex-start;
+  gap: 9px;
+}
+.handoff-menu .composer-select-item[data-disabled] {
+  cursor: default;
+}
+.handoff-menu .composer-select-item[data-disabled] > svg,
+.handoff-menu .composer-select-item[data-disabled] .handoff-target-text > span {
+  opacity: 0.5;
+}
+.handoff-target > svg {
+  flex: none;
+  color: var(--muted);
+}
+.handoff-target-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.handoff-target-text small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.handoff-target-text small:empty {
+  display: none;
+}
+.handoff-menu-note {
+  margin: 4px 10px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.handoff-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* Failed steps are the user's to pick up: muted, like a stopped strip. */
+.waiting-strip.handoff-strip.failed {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 8%, var(--toolbar));
+}
+.waiting-strip.handoff-strip.failed .waiting-strip-head > svg {
+  color: var(--muted);
+}
+
+/* Settings → Computers: the one-time link, to copy onto the other computer. */
+.handoff-pairing-link {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

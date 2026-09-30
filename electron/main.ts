@@ -33,6 +33,9 @@ import { PullRequestCreation } from "./pull-request-create";
 import { questionContext } from "./questions";
 import { PhoneAppFiles } from "./remote/phone-app";
 import { PhoneRemote } from "./remote/phone-remote";
+import { Computers } from "./handoff/computers";
+import { HandoffReceiver } from "./handoff/receiver";
+import { Handoffs } from "./handoff/sender";
 import { readHostingSetup } from "./rooms/provision";
 import { RoomService } from "./rooms/service";
 import { pathReady } from "./shell-path";
@@ -66,6 +69,8 @@ let rooms: RoomService | undefined;
 let projectChats: ProjectChats | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
+/** Handing threads to other computers running Relay. */
+let handoffs: { computers: Computers; sender: Handoffs } | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
 const login = new GiteaLogin();
@@ -89,6 +94,7 @@ const quit = new Quit({
     liveSyncs
       .stopAll()
       .then(() => phoneRemote?.close())
+      .then(() => handoffs?.computers.close())
       .then(() => {
         if (quit.detaching) agentHosts?.detach();
         return projectChats?.dispose({ detach: quit.detaching });
@@ -275,6 +281,7 @@ app
         clockify,
         triage: triageService,
         phoneRemote: () => phoneRemote,
+        handoffs: () => handoffs,
         login,
         window,
         menubar,
@@ -289,6 +296,18 @@ app
         agentUpdates,
       }),
     );
+    const handoffDir = join(app.getPath("userData"), "handoffs");
+    const computers = new Computers(loaded, seal, unseal);
+    handoffs = {
+      computers,
+      sender: new Handoffs(
+        loaded,
+        computers,
+        chats,
+        projects,
+        join(handoffDir, "out"),
+      ),
+    };
     phoneRemote = new PhoneRemote(
       loaded,
       seal,
@@ -305,10 +324,18 @@ app
           status: () => dictation.current.status,
           open: () => dictation.open(),
         },
+        handoffs: new HandoffReceiver({
+          projects: () => projects.list(login.client),
+          root: (id) => projects.root(id),
+          chats,
+          worktrees: join(app.getPath("userData"), "worktrees"),
+          dir: join(handoffDir, "in"),
+        }),
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
     );
     void phoneRemote.start();
+    void computers.start();
     threadTerminals.connect((event) => window.send("relay:terminal", event));
     serveApi(window, dispatch);
     // Agent sessions that kept running through a restart come back before the window does.

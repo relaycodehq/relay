@@ -11,6 +11,7 @@ import {
 import type {
   ClientFrame,
   DesktopCall,
+  DeviceKind,
   HelloFrame,
   PairingLink,
   RemoteApi,
@@ -20,11 +21,12 @@ import type {
   PhoneDesktopMethod,
   ServerFrame,
 } from "./remote";
-import { slowPhoneMethods } from "./remote";
+import { slowPhoneMethods, slowRemoteMethods } from "./remote";
 
 export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
 
-type Start = { link: PairingLink; device: string } | RemoteCredentials;
+type Start =
+  { link: PairingLink; device: string; kind?: DeviceKind } | RemoteCredentials;
 
 export interface RemoteClientOptions {
   start: Start;
@@ -35,7 +37,7 @@ export interface RemoteClientOptions {
   onPaired?: (credentials: RemoteCredentials) => void;
   /** Per host while connecting, and per call. */
   timeoutMs?: number;
-  /** Per call for `slowPhoneMethods`. */
+  /** Per call for `slowPhoneMethods` and `slowRemoteMethods`. */
   slowTimeoutMs?: number;
   /** Silence after which a link counts as dead; the desktop ticks every 15s. */
   staleMs?: number;
@@ -90,7 +92,13 @@ export class RemoteClient {
     method: M,
     ...args: Parameters<RemoteApi[M]>
   ): Promise<Result<M>> {
-    return this.request(method, args, this.options.timeoutMs ?? 15000);
+    return this.request(
+      method,
+      args,
+      slowRemoteMethods.includes(method)
+        ? (this.options.slowTimeoutMs ?? 120_000)
+        : (this.options.timeoutMs ?? 15000),
+    );
   }
   private request<M extends RemoteMethod>(
     method: M,
@@ -213,6 +221,7 @@ export class RemoteClient {
                     t: "pair",
                     code: this.target.link.code,
                     device: this.target.device,
+                    ...(this.target.kind ? { kind: this.target.kind } : {}),
                   }
                 : {
                     t: "auth",

@@ -109,18 +109,17 @@ export class RemoteServer {
     if (server)
       await new Promise<void>((resolve) => server.close(() => resolve()));
   }
-  broadcast(event: RemoteEvent) {
+  /** To every device online, or those `to` picks. */
+  broadcast(event: RemoteEvent, to?: (deviceId: string) => boolean) {
     for (const c of this.connections)
-      if (c.deviceId) this.send(c, { t: "event", event });
+      if (c.deviceId && (!to || to(c.deviceId)))
+        this.send(c, { t: "event", event });
   }
-  /** Ends a revoked phone's sessions right away. */
-  disconnect(deviceId: string) {
+  /** Ends a revoked device's sessions right away. */
+  disconnect(deviceId: string, reason = "This phone was removed in Relay.") {
     for (const c of this.connections)
       if (c.deviceId === deviceId) {
-        this.send(c, {
-          t: "denied",
-          reason: "This phone was removed in Relay.",
-        });
+        this.send(c, { t: "denied", reason });
         c.socket.close();
       }
   }
@@ -172,6 +171,7 @@ export class RemoteServer {
           const { device, token } = await devices.pair(
             String(frame.code),
             String(frame.device ?? ""),
+            frame.kind === "computer" ? "computer" : undefined,
           );
           c.deviceId = device.id;
           this.send(c, {

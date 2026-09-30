@@ -1,4 +1,5 @@
 import { GitActions } from "./GitActions";
+import { HandoffButton } from "./HandoffButton";
 import { workspaceId } from "../../shared/workspaces";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
@@ -894,6 +895,16 @@ export default function ProjectShell() {
                 onReview={(ref) => void reviewBranchPr(ref)}
                 onChanges={() => openCode("changes")}
                 onError={setError}
+              />
+            )}
+            {chat && !project.plain && !project.scratch && (
+              <HandoffButton
+                chat={chat}
+                onError={setError}
+                onSettings={() => {
+                  setSettingsCategory("computers");
+                  setSettings(true);
+                }}
               />
             )}
             <PaneToggles

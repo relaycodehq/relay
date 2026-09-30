@@ -17,6 +17,8 @@ import type { ProjectChats } from "../project-chats";
 import type { Place, Projects } from "../projects";
 import type { PullRequestCreation } from "../pull-request-create";
 import type { PhoneRemote } from "../remote/phone-remote";
+import type { Computers } from "../handoff/computers";
+import type { Handoffs } from "../handoff/sender";
 import type { RoomService } from "../rooms/service";
 import type { Store } from "../store";
 import type { TriageService } from "../triage/service";
@@ -31,6 +33,8 @@ export interface Services {
   clockify: ClockifyPlugin;
   triage: TriageService;
   phoneRemote(): PhoneRemote | undefined;
+  /** Computers this one hands threads to; unset until Relay has started. */
+  handoffs(): { computers: Computers; sender: Handoffs } | undefined;
   login: GiteaLogin;
   window: AppWindow;
   menubar: Menubar;

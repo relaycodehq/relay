@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Store } from "../store";
 import { toBase64Url } from "../../shared/remote-crypto";
 import {
+  computerMethods,
   defaultRemotePort,
   maxDictationChunk,
   pairingUrl,
@@ -104,7 +105,7 @@ export class PhoneRemote {
     const name = () => hostname().replace(/\.local$/, "") || "Relay";
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
-      (event) => this.server.broadcast(event),
+      (event) => this.server.broadcast(event, (id) => !this.isComputer(id)),
     );
     if (host.dictation) this.dictations = new PhoneDictations(host.dictation);
     this.server = new RemoteServer({
@@ -112,6 +113,18 @@ export class PhoneRemote {
       port,
       name,
       handle: async (method, args, deviceId) => {
+        const device = this.devices.list().find((d) => d.id === deviceId);
+        const computer = device?.kind === "computer";
+        if ((computerMethods as readonly string[]).includes(method)) {
+          if (!computer || !device || !host.handoffs)
+            throw new Error("Only a paired computer can do that.");
+          return host.handoffs.handle(
+            method as (typeof computerMethods)[number],
+            args,
+            device,
+          );
+        }
+        if (computer) throw new Error("Computers can't do that.");
         if (method === "reportApp")
           return this.devices.setApp(deviceId, appReportSchema.parse(args[0]));
         if (method === "dictate") {
@@ -124,8 +137,17 @@ export class PhoneRemote {
         }
         return this.bridge.handle(method, args);
       },
-      onPresence: () => this.bridge.setWatching(this.server.online().size > 0),
+      // Thread states are watched for phones; computers ask for theirs.
+      onPresence: () =>
+        this.bridge.setWatching(
+          [...this.server.online()].some((id) => !this.isComputer(id)),
+        ),
     });
+  }
+  private isComputer(deviceId: string) {
+    return (
+      this.devices.list().find((d) => d.id === deviceId)?.kind === "computer"
+    );
   }
   /** Resumes listening if phone access was on when Relay last quit. */
   async start() {
@@ -140,7 +162,10 @@ export class PhoneRemote {
       return;
     await this.devices.setAppearance(appearance);
     if (this.server.listening)
-      this.server.broadcast({ kind: "appearance", appearance });
+      this.server.broadcast(
+        { kind: "appearance", appearance },
+        (id) => !this.isComputer(id),
+      );
   }
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
     if (this.server.listening) this.bridge.chatEvent(event);
@@ -161,6 +186,7 @@ export class PhoneRemote {
       devices: this.devices.list().map((d) => ({
         id: d.id,
         name: d.name,
+        ...(d.kind ? { kind: d.kind } : {}),
         created: d.created,
         lastSeen: d.lastSeen,
         online: online.has(d.id),
@@ -198,8 +224,14 @@ export class PhoneRemote {
     };
   }
   async revoke(deviceId: string) {
+    const computer = this.isComputer(deviceId);
     await this.devices.revoke(deviceId);
-    this.server.disconnect(deviceId);
+    this.server.disconnect(
+      deviceId,
+      computer
+        ? `${hostname().replace(/\.local$/, "") || "Relay"} removed this computer.`
+        : undefined,
+    );
     return this.state();
   }
   async close() {
