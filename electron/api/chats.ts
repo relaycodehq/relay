@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
+import { chatIsEmpty } from "../../shared/chat-activity";
 import { deepReviewStartSchema } from "../../shared/deep-review";
 import {
   chatScopeSchema,
@@ -11,6 +12,7 @@ import {
   knownMessagesSchema,
   projectChatSendSchema,
   resumeSettingsSchema,
+  type ChatSummary,
 } from "../../shared/projects";
 import { idSchema, presenceSchema } from "../../shared/rooms";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -19,7 +21,19 @@ import type { ApiContext, Handlers } from "./context";
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
-  const { store, projects, projectChats, login, requireClient } = ctx;
+  const { store, projects, projectChats, login, requireClient, prKey } = ctx;
+  /** An unused PR thread is still a review in the making once files are viewed or drafted. */
+  function reviewStarted(chat: ChatSummary) {
+    if (chat.scope.kind !== "pr" || !login.client) return false;
+    const p = store.get().progress[prKey(chat.scope.ref)];
+    return (
+      !!p &&
+      (Object.keys(p.read).length > 0 ||
+        p.drafts.length > 0 ||
+        p.marks.length > 0 ||
+        !!p.reviewBody?.trim())
+    );
+  }
   /** Whether a worktree thread's PR was merged on Gitea; asked at most once a minute. */
   const pullChecks = new Map<string, { at: number; merged: boolean }>();
   async function pullMerged(chatId: string, number: number) {
@@ -41,7 +55,12 @@ export function chatHandlers(ctx: ApiContext) {
     return merged;
   }
   return {
-    projectChats: (args) => projectChats.list(idSchema.parse(args[0])),
+    projectChats: (args) =>
+      projectChats
+        .list(idSchema.parse(args[0]))
+        .map((c) =>
+          chatIsEmpty(c) && reviewStarted(c) ? { ...c, empty: false } : c,
+        ),
     createProjectChat: (args) =>
       projectChats.create(
         idSchema.parse(args[0]),

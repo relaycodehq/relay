@@ -45,6 +45,11 @@ import {
   type ChatSummary,
 } from "../../shared/projects";
 import { api } from "../lib/api";
+import { readDraft, writeDraft } from "../lib/drafts";
+import {
+  loadComposerSettings,
+  saveComposerSettings,
+} from "../lib/composer-settings";
 import { Connected, SignIn } from "../ReviewSurface";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
@@ -79,6 +84,7 @@ const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
 /** How close to the window's left edge the pointer peeks a hidden sidebar. */
 const EDGE_PEEK_WIDTH = 12;
+const SIDEBAR_BESIDE_PANE_KEY = "relay-projects-hidden-beside-pane";
 
 export default function ProjectShell() {
   const qc = useQueryClient();
@@ -119,9 +125,22 @@ export default function ProjectShell() {
     ),
     [incoming, setIncoming] = useState<{ url: string }>(),
     [queuedUrl, setQueuedUrl] = useState<string>();
-  const [projectsHidden, setProjectsHidden] = useState(
+  const panes = useWorkspacePanes();
+  // The sidebar remembers two states: beside the chat alone, and beside a side
+  // pane (a PR's Review, say). Until toggled there, the latter follows the
+  // "make room" setting.
+  const autoHide = useSidebarAutoHide();
+  const besidePane = panes.visible.some((id) => id !== "chat");
+  const [hiddenAlone, setHiddenAlone] = useState(
     () => localStorage.getItem("relay-projects-hidden") === "true",
   );
+  const [hiddenBesidePane, setHiddenBesidePane] = useState(() => {
+    const saved = localStorage.getItem(SIDEBAR_BESIDE_PANE_KEY);
+    return saved ? saved === "true" : null;
+  });
+  const projectsHidden = besidePane
+    ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
+    : hiddenAlone;
   // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
   const [pickingProject, setPickingProject] = useState(false);
@@ -137,9 +156,27 @@ export default function ProjectShell() {
   const toggleProjects = () => {
     window.clearTimeout(peekTimer.current);
     setPeek(false);
-    autoHidden.current = false;
-    setProjectsHidden((v) => !v);
+    (besidePane ? setHiddenBesidePane : setHiddenAlone)(!projectsHidden);
   };
+  // ⌘B's listener outlives renders; this keeps it toggling the current state.
+  const toggleProjectsRef = useRef(toggleProjects);
+  toggleProjectsRef.current = toggleProjects;
+  useEffect(() => {
+    localStorage.setItem("relay-projects-hidden", String(hiddenAlone));
+  }, [hiddenAlone]);
+  useEffect(() => {
+    if (hiddenBesidePane === null)
+      localStorage.removeItem(SIDEBAR_BESIDE_PANE_KEY);
+    else
+      localStorage.setItem(SIDEBAR_BESIDE_PANE_KEY, String(hiddenBesidePane));
+  }, [hiddenBesidePane]);
+  // Flipping the setting is a fresh answer for side panes.
+  const autoHideWas = useRef(autoHide);
+  useEffect(() => {
+    if (autoHideWas.current === autoHide) return;
+    autoHideWas.current = autoHide;
+    setHiddenBesidePane(null);
+  }, [autoHide]);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
   // Resting the pointer along the window's left edge peeks it too. It's
   // watched rather than covered, so the edge still takes clicks and
@@ -191,7 +228,6 @@ export default function ProjectShell() {
   }, [peek]);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
-  const panes = useWorkspacePanes();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const [dirty, setDirty] = useState(false),
@@ -314,27 +350,6 @@ export default function ProjectShell() {
     if (project && project.id === restoredProject)
       localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
   }, [project?.id, chatId, restoredProject]);
-  // Opening a side pane hides the sidebar for room; closing them all brings it
-  // back, unless the user toggled it themselves in between.
-  const autoHide = useSidebarAutoHide();
-  const autoHidden = useRef(false);
-  const sidePaneOpen = panes.visible.some((id) => id !== "chat");
-  useEffect(() => {
-    if (sidePaneOpen && autoHide && !projectsHidden) {
-      autoHidden.current = true;
-      setProjectsHidden(true);
-    } else if (!sidePaneOpen && autoHidden.current) {
-      autoHidden.current = false;
-      setProjectsHidden(false);
-    }
-  }, [sidePaneOpen]);
-  useEffect(() => {
-    // A sidebar hidden only for a pane shouldn't stay hidden after a restart.
-    localStorage.setItem(
-      "relay-projects-hidden",
-      String(projectsHidden && !autoHidden.current),
-    );
-  }, [projectsHidden]);
   function openUrl(url: string) {
     if (dirty) {
       setQueuedUrl(url);
@@ -386,7 +401,7 @@ export default function ProjectShell() {
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
-        toggleProjects();
+        toggleProjectsRef.current();
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
@@ -456,6 +471,44 @@ export default function ProjectShell() {
     else await newChat({ kind: "pr", ref });
     panes.show("chat");
   }
+  /**
+   * Reviewing a PR from the new thread makes it that PR's thread, taking the
+   * unsent message and composer settings along, so a review started without
+   * messages has a thread to come back to.
+   */
+  const startingReview = useRef(false);
+  async function startReviewThread(ref: PullRef) {
+    if (!project || startingReview.current) return;
+    const existing = chats.data?.find(
+      (c) => c.scope.kind === "pr" && c.scope.ref.number === ref.number,
+    );
+    if (existing) return setChatId(existing.id);
+    startingReview.current = true;
+    const from = `new:${project.id}`;
+    try {
+      const next = await api.createProjectChat(project.id, {
+        kind: "pr",
+        ref,
+      });
+      saveComposerSettings(next.id, loadComposerSettings(from));
+      const draft = readDraft(`chat-draft:${from}`);
+      if (draft) {
+        writeDraft(`chat-draft:${next.id}`, draft);
+        writeDraft(`chat-draft:${from}`, "");
+      }
+      await chats.refetch();
+      setChatId(next.id);
+    } catch (e) {
+      setError(e);
+    } finally {
+      startingReview.current = false;
+    }
+  }
+  const reviewOpen = panes.layout.open.changes;
+  useEffect(() => {
+    if (reviewOpen && pull && !chat && chats.data && !dirty)
+      void startReviewThread(pull);
+  }, [reviewOpen, pull?.number, chat?.id, !!chats.data]);
   function openCode(next: "changes" | "files") {
     panes.show(next === "files" || project?.plain ? "files" : "changes");
   }
