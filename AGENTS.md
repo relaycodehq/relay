@@ -33,3 +33,9 @@
   transition under `prefers-reduced-motion`. Add a local block only to fix the
   end state a stopped animation leaves wrong (a half-drawn stroke, a sheen still
   showing) or to beat another stylesheet's `!important`.
+
+## Releases
+
+- **Pushing to main ships nothing; a `v*` tag does.** The Mac mini builds
+  annotated tags on main, and the tag's message is the changelog friends see
+  in Settings → About. The `release` skill drafts the notes and tags.

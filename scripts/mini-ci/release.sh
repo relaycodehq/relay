@@ -1,9 +1,10 @@
 #!/bin/bash
-# Builds one commit into a Relay release and publishes it to the releases
+# Builds one release tag into a Relay release and publishes it to the releases
 # repo: Mac, Windows, Linux, the phone bundle and the APK, all on the Mac mini.
-# poll.sh runs it for every new commit on main.
+# poll.sh runs it for every new v* tag. The tag names the version and its
+# message is the release notes; scripts/tag-release.sh makes one.
 #
-#   release.sh <commit> [<previous released commit>] [--dry-run]
+#   release.sh <vX.Y.Z> [--dry-run]
 #
 # --dry-run builds everything and stops before touching the releases repo.
 set -euo pipefail
@@ -22,8 +23,10 @@ for arg in "$@"; do
     *) args+=("$arg") ;;
   esac
 done
-commit="${args[0]:?Usage: release.sh <commit> [<previous commit>] [--dry-run]}"
-previous="${args[1]:-}"
+tag="${args[0]:?Usage: release.sh <vX.Y.Z> [--dry-run]}"
+[[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "$tag isn't a vX.Y.Z tag." >&2; exit 1; }
+version="${tag#v}"
+major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
 
 export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export JAVA_HOME="$ROOT/jdk/Contents/Home"
@@ -44,11 +47,12 @@ step() { printf '\n==> %s  %s\n' "$(date '+%H:%M:%S')" "$*"; }
 src="$ROOT/src"
 out="$ROOT/out"
 
-step "Checking out $commit"
+step "Checking out $tag"
 [[ -d "$src/.git" ]] || git clone --quiet "$REPO_URL" "$src"
 cd "$src"
-git fetch --quiet origin
-git checkout --quiet --force --detach "$commit"
+# --force: a tag moved to another commit on GitHub moves here too.
+git fetch --quiet --force --tags origin
+git checkout --quiet --force --detach "$tag"
 # node_modules survive between builds; installs below redo them when the lockfile changes.
 git clean -ffdxq -e node_modules -e mobile/node_modules -e packaging/checks-typescript/node_modules
 rm -rf "$out" && mkdir -p "$out"
@@ -61,14 +65,22 @@ tidy() {
 }
 tidy
 
-# major.minor from package.json, the patch one past the newest release.
-line="$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')"
-last_patch="$(gh api "repos/$RELEASES_REPO/releases?per_page=100" --jq '.[].tag_name' |
-  sed -nE "s/^v${line//./\\.}\.([0-9]+)$/\1/p" | sort -n | tail -1)"
-patch=$((${last_patch:-0} + 1))
-version="$line.$patch"
+step "Checking $tag"
+fail() { echo "$tag $*" >&2; exit 1; }
+# A lightweight tag has no message, so no release notes.
+[[ "$(git cat-file -t "refs/tags/$tag")" == tag ]] ||
+  fail "is a lightweight tag. Tag with git tag -a, the message is the release notes."
+git merge-base --is-ancestor "$tag^{commit}" origin/main ||
+  fail "points at a commit that isn't on main."
+latest="$(gh api "repos/$RELEASES_REPO/releases/latest" --jq .tag_name 2>/dev/null || true)"
+if [[ -n "$latest" ]] &&
+  [[ "$(printf '%s\n' "${latest#v}" "$version" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" != "$version" || "$latest" == "$tag" ]]; then
+  fail "isn't newer than the published $latest."
+fi
+git tag -l --format='%(contents)' "$tag" | sed '/^-----BEGIN PGP SIGNATURE-----$/,$d' >"$ROOT/notes.md"
+grep -q '[^[:space:]]' "$ROOT/notes.md" || fail "has an empty message; it's the release notes."
 echo "$version" >"$ROOT/state/version"
-step "Version $version"
+cat "$ROOT/notes.md"
 
 install() { # <dir>: npm ci, skipped while the lockfile is unchanged
   local stamp="$1/node_modules/.relay-ci-lock" hash
@@ -167,7 +179,8 @@ else
   set -a && . "$SIGNING" && set +a
   (
     cd mobile
-    export RELAY_VERSION="$version" RELAY_VERSION_CODE="$patch" RELAY_RUNTIME="$runtime"
+    # Grows with every version, minor and major bumps included: 0.1.37 → 1037.
+    export RELAY_VERSION="$version" RELAY_VERSION_CODE="$((major * 1000000 + minor * 1000 + patch))" RELAY_RUNTIME="$runtime"
     CI=1 npx expo prebuild --platform android --no-install --clean
     cd android
     # At most two native compiles per worker. Not taskpolicy -b: macOS starves
@@ -180,13 +193,6 @@ else
 fi
 rm -rf "$previous_apk"
 
-# The commit's message without trailers like Co-Authored-By; subjects when several commits land at once.
-without_trailers() { sed -E '/^[A-Za-z-]+: .*<[^>]*@[^>]*>$/d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'; }
-if [[ -n "$previous" ]] && [[ "$(git rev-list --count "$previous..$commit" 2>/dev/null || echo 1)" -gt 1 ]]; then
-  git log --reverse --format='- %s' "$previous..$commit" >"$ROOT/notes.md"
-else
-  git log -1 --format=%B "$commit" | without_trailers >"$ROOT/notes.md"
-fi
 node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$(cat "$ROOT/notes.md")"
 ls -l "$out"
 
@@ -197,7 +203,6 @@ if ((dry_run)); then
 fi
 
 step "Publishing $version"
-tag="v$version"
 gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1 ||
   gh release create "$tag" --repo "$RELEASES_REPO" --draft --title "Relay $version" --notes ""
 # Nobody sees the draft until the edit below publishes it.
