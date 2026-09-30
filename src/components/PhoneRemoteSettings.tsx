@@ -10,6 +10,7 @@ import {
   type PhoneTailnet,
 } from "../../shared/remote";
 import { androidAppDownload } from "../../shared/updates";
+import { phoneAppStatus } from "../../shared/phone-app";
 import { useCopy } from "../lib/useCopy";
 import { api } from "../lib/api";
 import { ErrorBox, relativeDate } from "./ui";
@@ -182,11 +183,17 @@ export function PhoneRemoteSettings() {
               key={d.id}
               label={d.name}
               hint={
-                d.online
-                  ? "Connected now"
-                  : d.lastSeen
-                    ? `Last seen ${relativeDate(new Date(d.lastSeen).toISOString())}`
-                    : "Paired"
+                <>
+                  {d.online
+                    ? "Connected now"
+                    : d.lastSeen
+                      ? `Last seen ${relativeDate(new Date(d.lastSeen).toISOString())}`
+                      : "Paired"}
+                  <br />
+                  {d.app
+                    ? `Relay ${d.app.version} · ${phoneAppStatus(d.app, data.phoneApp)}`
+                    : "App version unknown until the phone runs a newer Relay"}
+                </>
               }
             >
               <button

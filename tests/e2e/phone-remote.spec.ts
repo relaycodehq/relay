@@ -109,8 +109,22 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await expect(
       settings.getByText("Test phone", { exact: true }),
     ).toBeVisible();
+    await expect(settings.getByText(/^Connected now/)).toBeVisible();
+    // Until the phone says, its version is unknown; then Settings shows it.
     await expect(
-      settings.getByText("Connected now", { exact: true }),
+      settings.getByText(/App version unknown/),
+    ).toBeVisible();
+    await phone.call("reportApp", {
+      version: "0.1.0",
+      updated: false,
+      apk: "0.1.0",
+      updates: true,
+      update: { kind: "ready", version: "0.1.1" },
+    });
+    await expect(
+      settings.getByText(
+        /Relay 0\.1\.0 · 0\.1\.1 downloaded, runs once the app restarts/,
+      ),
     ).toBeVisible();
     await screenshot(page, {
       path: test.info().outputPath("settings-phone.png"),

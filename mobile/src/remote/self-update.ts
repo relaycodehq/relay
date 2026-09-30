@@ -7,6 +7,7 @@ import Constants from "expo-constants";
 import { reloadAppAsync, requireOptionalNativeModule } from "expo";
 import { phoneAppChunk, type PhoneAppRelease } from "../../../shared/remote";
 import { releasesRepo } from "../../../shared/updates";
+import { newerVersion, type PhoneAppReport } from "../../../shared/phone-app";
 
 /** modules/relay-bundle; missing in Expo Go and development builds. */
 interface RelayBundle {
@@ -45,12 +46,6 @@ export function confirmLaunch() {
   native?.confirm();
 }
 
-const newer = (a: string, b: string) => {
-  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
-  return false;
-};
-
 let started: string | undefined;
 
 /** Fetches the desktop's newer code, if it has some this app can run. */
@@ -58,7 +53,7 @@ export async function checkForUpdate(
   offer: PhoneAppRelease | undefined,
   fetchChunk: (path: string, offset: number) => Promise<string>,
 ) {
-  if (!native || !runtime || !offer || !newer(offer.version, runningVersion)) return;
+  if (!native || !runtime || !offer || !newerVersion(offer.version, runningVersion)) return;
   if (offer.runtime !== runtime) {
     set({
       kind: "apk",
@@ -105,6 +100,21 @@ export function useSelfUpdate() {
     },
     () => state,
   );
+}
+
+/** What this app runs and where its update stands, for the desktop and Settings. */
+export function appReport(update: SelfUpdate): PhoneAppReport {
+  const apk = Constants.expoConfig?.version ?? "0.0.0";
+  return {
+    version: runningVersion,
+    updated: runningUpdate,
+    apk,
+    updates: !!native && !!runtime,
+    ...(update.kind !== "none"
+      ? { update: { kind: update.kind, version: update.version } }
+      : {}),
+    ...(native?.failed ? { failed: native.failed } : {}),
+  };
 }
 
 export const restartIntoUpdate = () => reloadAppAsync("Relay updated from the desktop");

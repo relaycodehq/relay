@@ -1,3 +1,4 @@
+import type { PhoneAppReport } from "./phone-app";
 /**
  * Relay's phone remote: a phone pairs with the desktop over the local network
  * (or a VPN such as Tailscale) and drives its threads. The desktop hosts the
@@ -311,6 +312,8 @@ export interface RemoteApi {
   ): Promise<Record<string, RemoteProjectIcon>>;
   /** Up to `phoneAppChunk` bytes of a file in `phoneApp`, from `offset`, as base64. */
   phoneAppFile(path: string, offset: number): Promise<string>;
+  /** What the phone's app runs, for the desktop's Settings. */
+  reportApp(report: PhoneAppReport): Promise<void>;
 }
 export type RemoteMethod = keyof RemoteApi;
 export const remoteMethods = [
@@ -320,6 +323,7 @@ export const remoteMethods = [
   "desktop",
   "projectIcons",
   "phoneAppFile",
+  "reportApp",
 ] as const satisfies readonly RemoteMethod[];
 
 /**
@@ -401,7 +405,11 @@ export interface PhoneRemoteState {
     created: number;
     lastSeen?: number;
     online: boolean;
+    /** As the phone last reported it; phones from before the report leave it out. */
+    app?: PhoneAppReport;
   }[];
+  /** The phone app version this Relay hands out, if it carries one. */
+  phoneApp?: string;
 }
 export interface PhonePairing {
   url: string;

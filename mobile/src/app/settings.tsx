@@ -2,7 +2,14 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Check, Monitor } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
-import { runningUpdate, runningVersion, restartOnBuiltIn } from "../remote/self-update";
+import {
+  appReport,
+  runningUpdate,
+  runningVersion,
+  restartOnBuiltIn,
+  useSelfUpdate,
+} from "../remote/self-update";
+import { phoneAppStatus } from "../../../shared/phone-app";
 import { ConnectionLine } from "../ui/ConnectionLine";
 import { MenuRow } from "../ui/Sheet";
 import { SectionTitle } from "../ui/Rows";
@@ -14,6 +21,8 @@ export default function Settings() {
   const t = useTheme();
   const { preference, setPreference } = useThemePreference();
   const known = !!remote.overview?.appearance;
+  const app = appReport(useSelfUpdate());
+  const offered = remote.overview?.phoneApp?.version;
   const choices: { value: ThemePreference; label: string; hint: string }[] = [
     {
       value: "computer",
@@ -51,9 +60,10 @@ export default function Settings() {
         <View style={styles.text}>
           <Text style={[styles.name, { color: t.text }]}>Relay {runningVersion}</Text>
           <Text style={[styles.hint, { color: t.muted }]}>
+            {phoneAppStatus(app, offered)}.{" "}
             {runningUpdate
-              ? `Updated from ${remote.name}. New versions arrive from there.`
-              : `New versions arrive from ${remote.name} when Relay there is newer.`}
+              ? `Came from ${remote.name}; the app was installed as ${app.apk}.`
+              : `As installed; new versions come from ${remote.name}.`}
           </Text>
         </View>
       </View>

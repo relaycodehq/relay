@@ -98,7 +98,8 @@ export class RemoteBridge {
     private host: RemoteHost,
     private broadcast: (event: RemoteEvent) => void,
   ) {}
-  private api: RemoteApi = {
+  /** A phone's report on its own app goes to its device record instead; see phone-remote. */
+  private api: Omit<RemoteApi, "reportApp"> = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
         this.host.projects(),

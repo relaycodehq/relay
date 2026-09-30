@@ -21,7 +21,11 @@ export interface RemoteServerOptions {
   devices: RemoteDevices;
   port: number;
   name: () => string;
-  handle: (method: RemoteMethod, args: unknown[]) => Promise<unknown>;
+  handle: (
+    method: RemoteMethod,
+    args: unknown[],
+    deviceId: string,
+  ) => Promise<unknown>;
   /** A phone came online or went away. */
   onPresence?: () => void;
   tickMs?: number;
@@ -203,7 +207,7 @@ export class RemoteServer {
         throw new Error("Phones can't do that.");
       if (!Array.isArray(args) || args.length > 4)
         throw new Error("Invalid request.");
-      const value = await this.options.handle(method, args);
+      const value = await this.options.handle(method, args, c.deviceId);
       this.send(c, { t: "result", id, ok: true, value: value ?? null });
     } catch (e) {
       this.send(c, {

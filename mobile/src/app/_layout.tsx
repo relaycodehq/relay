@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
-import { checkForUpdate, confirmLaunch } from "../remote/self-update";
+import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
 import {
   FullWidthContext,
   HeaderHeightContext,
@@ -53,6 +53,13 @@ function Screens() {
   useEffect(() => {
     void checkForUpdate(offer, (path, offset) => call("phoneAppFile", path, offset));
   }, [offer, call]);
+  // So the desktop's Settings can tell what this phone runs. The report
+  // leaves out download progress, so it goes out at start and finish only.
+  const reported = JSON.stringify(appReport(useSelfUpdate()));
+  useEffect(() => {
+    // Older desktops don't take the report.
+    if (status === "online") void call("reportApp", JSON.parse(reported)).catch(() => {});
+  }, [status, reported, call]);
   // Beside the list: an unfolded foldable or a tablet, once paired.
   const panes =
     width >= paneBreakpoint &&

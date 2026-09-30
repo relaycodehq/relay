@@ -14,6 +14,24 @@ import { RemoteDevices } from "./devices";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 
+const version = z.string().regex(/^\d+\.\d+\.\d+$/);
+const appReportSchema = z
+  .object({
+    version,
+    updated: z.boolean(),
+    apk: version,
+    updates: z.boolean(),
+    update: z
+      .object({
+        kind: z.enum(["downloading", "ready", "apk"]),
+        version,
+      })
+      .strict()
+      .optional(),
+    failed: version.optional(),
+  })
+  .strict();
+
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const paletteSchema = z
   .object({
@@ -58,7 +76,7 @@ export class PhoneRemote {
     store: Store,
     seal: (value: string) => Promise<string | null>,
     unseal: (value: string) => Promise<string>,
-    host: Omit<RemoteHost, "name">,
+    private host: Omit<RemoteHost, "name">,
     port = defaultRemotePort,
     private tailnet: TailnetProbe = tailnetProbe(),
   ) {
@@ -72,7 +90,10 @@ export class PhoneRemote {
       devices: this.devices,
       port,
       name,
-      handle: (method, args) => this.bridge.handle(method, args),
+      handle: (method, args, deviceId) =>
+        method === "reportApp"
+          ? this.devices.setApp(deviceId, appReportSchema.parse(args[0]))
+          : this.bridge.handle(method, args),
       onPresence: () => this.bridge.setWatching(this.server.online().size > 0),
     });
   }
@@ -95,7 +116,10 @@ export class PhoneRemote {
     if (this.server.listening) this.bridge.chatEvent(event);
   }
   async state(): Promise<PhoneRemoteState> {
-    const tailnet = await this.tailnet(true);
+    const [tailnet, phoneApp] = await Promise.all([
+      this.tailnet(true),
+      this.host.phoneApp?.release(),
+    ]);
     const online = this.server.online();
     return {
       enabled: !!this.devices.settings.enabled,
@@ -110,7 +134,9 @@ export class PhoneRemote {
         created: d.created,
         lastSeen: d.lastSeen,
         online: online.has(d.id),
+        ...(d.app ? { app: d.app } : {}),
       })),
+      ...(phoneApp ? { phoneApp: phoneApp.version } : {}),
     };
   }
   async setEnabled(enabled: boolean) {

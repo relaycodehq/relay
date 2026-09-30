@@ -8,6 +8,7 @@ import {
   toBase64Url,
   type KeyPair,
 } from "../../shared/remote-crypto";
+import type { PhoneAppReport } from "../../shared/phone-app";
 
 interface RemoteDevice {
   id: string;
@@ -16,6 +17,7 @@ interface RemoteDevice {
   lastSeen?: number;
   /** SHA-256 of the device's token; the token itself only lives on the phone. */
   tokenHash: string;
+  app?: PhoneAppReport;
 }
 export interface RemoteSettings {
   enabled?: boolean;
@@ -127,6 +129,14 @@ export class RemoteDevices {
       if (saved) saved.lastSeen = this.now();
     });
     return device;
+  }
+  async setApp(deviceId: string, app: PhoneAppReport) {
+    const saved = this.list().find((d) => d.id === deviceId);
+    if (!saved || JSON.stringify(saved.app) === JSON.stringify(app)) return;
+    await this.store.update((s) => {
+      const device = s.phoneRemote?.devices?.find((d) => d.id === deviceId);
+      if (device) device.app = app;
+    });
   }
   async revoke(deviceId: string) {
     await this.store.update((s) => {
