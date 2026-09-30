@@ -24,6 +24,13 @@ const mini: Computer = {
   name: "Mac mini",
   status: "online",
   address: "100.64.12.34",
+  version: "0.14.2",
+  update: {
+    status: "available",
+    current: "0.14.2",
+    version: "0.14.3",
+    install: "auto",
+  },
   threads: [
     {
       chatId: "t1",
@@ -56,6 +63,9 @@ const pi: Computer = {
   name: "raspberrypi",
   status: "online",
   address: "100.77.3.18",
+  version: "0.13.0",
+  outdated: true,
+  update: { status: "idle", current: "0.13.0" },
   threads: [
     {
       chatId: "t4",
@@ -137,6 +147,42 @@ Object.assign(window.relay as Partial<Api>, {
   forgetComputer: async (id: string) => {
     computers = computers.filter((c) => c.id !== id);
     return paired();
+  },
+  // Asked to update: it downloads for a few seconds, restarts, and comes back newer.
+  updateComputer: async (id: string) => {
+    const at = (update: Computer["update"], extra: Partial<Computer> = {}) =>
+      (computers = computers.map((c) =>
+        c.id === id ? { ...c, update, ...extra } : c,
+      ));
+    const c = computers.find((c) => c.id === id)!;
+    const version =
+      c.update?.status === "available" ? c.update.version : "0.14.3";
+    const current = c.version!;
+    if (current === version) return { status: "idle" as const, current };
+    for (let i = 1; i <= 4; i++)
+      setTimeout(
+        () => at({ status: "downloading", current, version, progress: i / 4 }),
+        i * 900,
+      );
+    setTimeout(() => at({ status: "installing", current, version }), 4500);
+    setTimeout(
+      () =>
+        at(
+          { status: "idle", current: version },
+          { version, outdated: undefined, status: "online" },
+        ),
+      7500,
+    );
+    setTimeout(
+      () =>
+        at(
+          { status: "installing", current, version },
+          { status: "offline", detail: undefined },
+        ),
+      5500,
+    );
+    return at({ status: "checking", current }, {}).find((c) => c.id === id)!
+      .update!;
   },
   bringBackThread: async (chatId: string) => {
     computers = computers.map((c) => ({

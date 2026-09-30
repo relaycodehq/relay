@@ -29,5 +29,7 @@ export function computerHandlers(ctx: ApiContext) {
       handoffs().sender.bringBack(idSchema.parse(args[0])),
     keepThreadHere: (args) =>
       handoffs().sender.keepHere(idSchema.parse(args[0])),
+    updateComputer: (args) =>
+      handoffs().sender.update(idSchema.parse(args[0])),
   } satisfies Handlers;
 }

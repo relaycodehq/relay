@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   handoffChunk,
   needsFullBundle,
+  type ComputerInfo,
   type AwayThread,
   type ComputersOverview,
   type HandoffRemoteStatus,
@@ -12,7 +13,7 @@ import {
   type HandoffView,
 } from "../../shared/handoff";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
-import type { HandoffPart } from "../../shared/remote";
+import { remoteBridgeVersion, type HandoffPart } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { agentMention } from "../../shared/rooms";
 import { git } from "../git";
@@ -29,6 +30,8 @@ import {
 } from "./git";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** What a Relay from before bridge 10 answers a call it doesn't know. */
+const unknownCall = "Phones can't do that.";
 
 /**
  * Handing this computer's threads to the paired ones and bringing them back.
@@ -41,6 +44,8 @@ export class Handoffs {
     string,
     { at: number; status: HandoffRemoteStatus | null }
   >();
+  /** Each computer's version and update, as it last said; `null` for one too old to say. */
+  private infos = new Map<string, { at: number; info: ComputerInfo | null }>();
   constructor(
     private store: Store,
     private computers: Computers,
@@ -76,6 +81,8 @@ export class Handoffs {
           return { ...base, online: true, problem: "No Git remote to match" };
         try {
           const client = await this.computers.connected(c.id);
+          if (outdated(await this.info(c.id, client)))
+            return { ...base, online: true, problem: "Needs a Relay update" };
           const projects = await client.call("computerProjects");
           const match = projects.find((p) =>
             p.repositories.some((r) => repositories.includes(r)),
@@ -108,9 +115,10 @@ export class Handoffs {
           const stale = ids.some(
             (id) => Date.now() - (this.statuses.get(id)?.at ?? 0) > 4000,
           );
-          if (!stale) return;
           try {
             const client = await this.computers.connected(c.id);
+            await this.info(c.id, client);
+            if (!stale) return;
             const found = await client.call("handoffStatus", ids);
             for (const id of ids)
               this.statuses.set(id, {
@@ -155,11 +163,46 @@ export class Handoffs {
     };
     return {
       name: computerName(),
-      computers: computers.map((c) => ({
-        ...c,
-        threads: away.filter((a) => a.sentTo!.computerId === c.id).map(thread),
-      })),
+      computers: computers.map((c) => {
+        const known = c.status === "online" ? this.infos.get(c.id) : undefined;
+        const info = known?.info;
+        return {
+          ...c,
+          ...(info ? { version: info.version, update: info.update } : {}),
+          ...(known && outdated(info) ? { outdated: true } : {}),
+          threads: away
+            .filter((a) => a.sentTo!.computerId === c.id)
+            .map(thread),
+        };
+      }),
     };
+  }
+  /** Has the computer update Relay; it restarts, and its link comes back by itself. */
+  async update(computerId: string) {
+    const client = await this.computers.connected(computerId);
+    if ((await this.info(computerId, client, true)) === null)
+      throw new Error(
+        `${this.computers.get(computerId).name} runs a Relay too old to update from here. Update it there once.`,
+      );
+    const update = await client.call("updateNow");
+    const known = this.infos.get(computerId)?.info;
+    if (known)
+      this.infos.set(computerId, {
+        at: Date.now(),
+        info: { ...known, update },
+      });
+    return update;
+  }
+  /** The computer's version and update, asked at most every few seconds. */
+  private async info(computerId: string, client: RemoteClient, fresh = false) {
+    const cached = this.infos.get(computerId);
+    if (!fresh && cached && Date.now() - cached.at < 3000) return cached.info;
+    const info = await client.call("computerInfo").catch((e) => {
+      if (message(e) === unknownCall) return null;
+      throw e;
+    });
+    this.infos.set(computerId, { at: Date.now(), info });
+    return info;
   }
   async handOff(chatId: string, computerId: string) {
     if (this.jobs.has(chatId))
@@ -261,6 +304,10 @@ export class Handoffs {
           `This project has no Git remote, so ${name} can't find its copy.`,
         );
       const client = await this.computers.connected(computerId);
+      if (outdated(await this.info(computerId, client, true)))
+        throw new Error(
+          `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
+        );
       const thread: HandoffThread = {
         from: computerName(),
         repositories,
@@ -379,6 +426,10 @@ export class Handoffs {
     await this.computers.setUnacknowledged(computerId, left);
   }
 }
+
+/** Too old to take threads from this computer: before bridge 10, or behind this one's. */
+export const outdated = (info: ComputerInfo | null | undefined) =>
+  info === null || (!!info && info.bridge < remoteBridgeVersion);
 
 async function upload(
   client: RemoteClient,

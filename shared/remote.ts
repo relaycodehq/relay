@@ -1,5 +1,6 @@
 import type { DictationModelState } from "./dictation";
-import type { HandBack, HandoffRemoteStatus } from "./handoff";
+import type { ComputerInfo, HandBack, HandoffRemoteStatus } from "./handoff";
+import type { UpdateState } from "./updates";
 import type { PhoneAppReport } from "./phone-app";
 /**
  * Relay's phone remote: a phone pairs with the desktop over the local network
@@ -130,7 +131,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for a restart of an older desktop. */
-export const remoteBridgeVersion = 9;
+export const remoteBridgeVersion = 10;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -372,6 +373,10 @@ export interface RemoteApi {
   ): Promise<string>;
   /** The thread arrived back; the copy here stays still. */
   handedBack(id: string): Promise<void>;
+  /** This Relay's version, its bridge's and its update; missing before bridge 10. */
+  computerInfo(): Promise<ComputerInfo>;
+  /** Checks for Relay's latest release, downloads it and restarts into it. */
+  updateNow(): Promise<UpdateState>;
 }
 export type HandoffPart = "thread" | "bundle";
 /** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
@@ -397,6 +402,8 @@ export const remoteMethods = [
   "handBack",
   "handoffDownload",
   "handedBack",
+  "computerInfo",
+  "updateNow",
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call, and nothing a phone may. */
 export const computerMethods = [
@@ -407,6 +414,8 @@ export const computerMethods = [
   "handBack",
   "handoffDownload",
   "handedBack",
+  "computerInfo",
+  "updateNow",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
 /**

@@ -511,3 +511,21 @@ em.unknown {
 .cm-card > .error-box {
   margin: 0 12px 12px;
 }
+
+/* The other computer's Relay and its Update, at the end of the card's head. */
+.cm-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+.cm-version small {
+  font-size: 11.5px;
+}
+.cm-version small.busy {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}

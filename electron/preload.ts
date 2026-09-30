@@ -254,6 +254,7 @@ const methods = [
   "handoffView",
   "bringBackThread",
   "keepThreadHere",
+  "updateComputer",
 ] as const satisfies readonly ApiMethod[];
 // Fails to compile, naming the method, when the Api gains one this list lacks.
 const complete: Exclude<ApiMethod, (typeof methods)[number]> extends never

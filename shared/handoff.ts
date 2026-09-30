@@ -7,6 +7,7 @@
  * outgoing agent's handoff note. Bringing it back is the same the other way.
  */
 import type { AgentProvider } from "./agents";
+import type { UpdateState } from "./updates";
 import type { ChatMessage, ChatScope, ProjectChatSend } from "./projects";
 
 /** On the computer that handed the thread off: where it is now. */
@@ -123,6 +124,18 @@ export interface PairedComputer {
   detail?: string;
   /** Where it's reached on the tailnet. */
   address?: string;
+  /** Its Relay, as it last said; unknown while it's offline. */
+  version?: string;
+  /** Its bridge is older than this computer's: threads can't go there until it updates. */
+  outdated?: boolean;
+  update?: UpdateState;
+}
+
+/** What a computer taking threads says about itself. */
+export interface ComputerInfo {
+  version: string;
+  bridge: number;
+  update: UpdateState;
 }
 
 /** Where a thread that left this computer stands, as Settings lists it. */
@@ -183,4 +196,6 @@ export interface ComputersApi {
   bringBackThread(chatId: string): Promise<void>;
   /** Keeps a thread whose handoff failed here; refused once the other side has it. */
   keepThreadHere(chatId: string): Promise<void>;
+  /** Has a paired computer update Relay and restart; it reconnects by itself. */
+  updateComputer(id: string): Promise<UpdateState>;
 }

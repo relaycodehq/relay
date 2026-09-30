@@ -17,7 +17,9 @@ import { ProjectChats } from "../../electron/project-chats";
 import { PhoneRemote } from "../../electron/remote/phone-remote";
 import { Computers } from "../../electron/handoff/computers";
 import { HandoffReceiver } from "../../electron/handoff/receiver";
-import { Handoffs } from "../../electron/handoff/sender";
+import { Handoffs, outdated } from "../../electron/handoff/sender";
+import { remoteBridgeVersion } from "../../shared/remote";
+import type { UpdateState } from "../../shared/updates";
 import { findExecutable } from "../../electron/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { RemoteClient } from "../../shared/remote-client";
@@ -78,9 +80,41 @@ async function computer(name: string) {
   return { dir, clone, store, projects, projectId, chats };
 }
 
+/** The mini's updater: one newer release on the feed, installed when asked. */
+function fakeUpdater() {
+  const calls: string[] = [];
+  let state: UpdateState = { status: "idle", current: "0.9.0" };
+  return {
+    calls,
+    state: () => state,
+    check: async () => {
+      calls.push("check");
+      return (state = {
+        status: "available",
+        current: "0.9.0",
+        version: "0.9.1",
+        install: "auto",
+      });
+    },
+    download: async () => {
+      calls.push("download");
+      return (state = { status: "ready", current: "0.9.0", version: "0.9.1" });
+    },
+    install: async () => {
+      calls.push("install");
+      return (state = {
+        status: "installing",
+        current: "0.9.0",
+        version: "0.9.1",
+      });
+    },
+  };
+}
+
 async function pairedComputers() {
   const laptop = await computer("laptop");
   const mini = await computer("mini");
+  const updater = fakeUpdater();
   const seal = async (v: string) => "sealed:" + v,
     unseal = async (v: string) => v.slice(7);
   const remote = new PhoneRemote(
@@ -99,6 +133,8 @@ async function pairedComputers() {
         chats: mini.chats,
         worktrees: join(mini.dir, "worktrees"),
         dir: join(mini.dir, "handoffs"),
+        version: () => "0.9.0",
+        updates: updater,
       }),
     },
     0,
@@ -119,7 +155,15 @@ async function pairedComputers() {
     laptop.projects,
     join(laptop.dir, "handoffs"),
   );
-  return { laptop, mini, remote, computers, sender, computerId: paired!.id };
+  return {
+    laptop,
+    mini,
+    remote,
+    computers,
+    sender,
+    updater,
+    computerId: paired!.id,
+  };
 }
 
 const input = (body: string) => ({
@@ -350,3 +394,33 @@ it("carries commits the shared remote never saw, and answers a repeated handoff 
     mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
   ).toHaveLength(1);
 }, 40000);
+
+it("updates the other computer's Relay from here, and tells an older one apart", async () => {
+  const { sender, updater, computerId } = await pairedComputers();
+  expect((await sender.overview()).computers[0]).toMatchObject({
+    version: "0.9.0",
+    update: { status: "idle" },
+  });
+  expect((await sender.overview()).computers[0]!.outdated).toBeUndefined();
+  await sender.update(computerId);
+  // It checks, then downloads and restarts into the new release on its own.
+  await vi.waitFor(() =>
+    expect(updater.calls).toEqual(["check", "download", "install"]),
+  );
+  // A Relay from before bridge 10 can't say, and one behind this one's can't take threads.
+  expect(outdated(null)).toBe(true);
+  expect(
+    outdated({
+      version: "0.8.0",
+      bridge: remoteBridgeVersion - 1,
+      update: { status: "idle", current: "0.8.0" },
+    }),
+  ).toBe(true);
+  expect(
+    outdated({
+      version: "0.9.0",
+      bridge: remoteBridgeVersion,
+      update: { status: "idle", current: "0.9.0" },
+    }),
+  ).toBe(false);
+}, 30000);

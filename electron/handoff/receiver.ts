@@ -12,7 +12,12 @@ import {
   type HandoffThread,
 } from "../../shared/handoff";
 import { chatScopeSchema, projectChatSendSchema } from "../../shared/projects";
-import type { ComputerMethod, ComputerProject } from "../../shared/remote";
+import {
+  remoteBridgeVersion,
+  type ComputerMethod,
+  type ComputerProject,
+} from "../../shared/remote";
+import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/rooms";
 import { git } from "../git";
 import type { ProjectChats } from "../project-chats";
@@ -84,6 +89,15 @@ export interface ReceiverHost {
   worktrees: string;
   /** Scratch space for uploads and downloads, a folder per handoff. */
   dir: string;
+  /** This Relay's version. */
+  version(): string;
+  /** Its updater, which a paired computer may set going. */
+  updates?: {
+    state(): UpdateState;
+    check(): Promise<UpdateState>;
+    download(): Promise<UpdateState>;
+    install(): Promise<UpdateState>;
+  };
 }
 
 /**
@@ -93,6 +107,8 @@ export interface ReceiverHost {
  * sender that lost an answer can simply ask again.
  */
 export class HandoffReceiver {
+  /** Hand-backs being readied; an update waits for them as for arrivals. */
+  private handingBack = new Set<string>();
   private receiving = new Map<
     string,
     Promise<{ chatId: string; project: string }>
@@ -126,8 +142,26 @@ export class HandoffReceiver {
       }
       case "handoffStatus":
         return this.status(z.array(idSchema).max(200).parse(args[0]));
-      case "handBack":
-        return this.handBack(idSchema.parse(args[0]), device.id);
+      case "handBack": {
+        const id = idSchema.parse(args[0]);
+        this.handingBack.add(id);
+        try {
+          return await this.handBack(id, device.id);
+        } finally {
+          this.handingBack.delete(id);
+        }
+      }
+      case "computerInfo":
+        return {
+          version: this.host.version(),
+          bridge: remoteBridgeVersion,
+          update: this.host.updates?.state() ?? {
+            status: "off",
+            current: this.host.version(),
+          },
+        };
+      case "updateNow":
+        return this.update();
       case "handoffDownload":
         this.mine(idSchema.parse(args[0]), device.id);
         return this.download(
@@ -143,6 +177,42 @@ export class HandoffReceiver {
         return;
       }
     }
+  }
+  /**
+   * Checks for Relay's latest release and, when there is one, downloads it
+   * and restarts into it, in the background; the answer is the state as it
+   * starts. The agent host keeps this computer's agents going through the
+   * restart, and the bridge comes back with it.
+   */
+  private async update(): Promise<UpdateState> {
+    const updates = this.host.updates;
+    if (!updates) throw new Error("This Relay can't update itself.");
+    if (this.receiving.size || this.handingBack.size)
+      throw new Error("A thread is on its way. Try again when it's arrived.");
+    let state = updates.state();
+    if (state.status === "off")
+      throw new Error(
+        "This Relay is a development build; it doesn't update itself.",
+      );
+    if (state.status === "idle" || state.status === "error")
+      state = await updates.check();
+    if (state.status === "available") {
+      if (state.install === "manual")
+        throw new Error(
+          state.reason ??
+            "This copy can't replace itself. Install the new version on it by hand.",
+        );
+      void updates
+        .download()
+        .then((next) => (next.status === "ready" ? updates.install() : next))
+        .catch((e) => console.warn("Update from a paired computer failed:", e));
+      return updates.state();
+    }
+    if (state.status === "ready") {
+      void updates.install().catch((e) => console.warn("Update failed:", e));
+      return updates.state();
+    }
+    return state;
   }
   private async projects(): Promise<ComputerProject[]> {
     const projects = (await this.host.projects()).filter(

@@ -330,6 +330,13 @@ app
           chats,
           worktrees: join(app.getPath("userData"), "worktrees"),
           dir: join(handoffDir, "in"),
+          version: () => app.getVersion(),
+          updates: {
+            state: () => updater.current,
+            check: () => updater.check(),
+            download: () => updater.download(),
+            install: () => updater.installAndRestart(),
+          },
         }),
       },
       Number(process.env.RELAY_REMOTE_PORT) || undefined,
