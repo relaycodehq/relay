@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { recognizeShape, snapLine, type Point } from "../../src/lib/sketch";
+import {
+  blurShape,
+  recognizeShape,
+  snapLine,
+  type Point,
+} from "../../src/lib/sketch";
 
 const circle = (cx: number, cy: number, r: number): Point[] =>
   Array.from({ length: 80 }, (_, i) => {
@@ -61,5 +66,36 @@ describe("sketch shape snapping", () => {
         { x: 3, y: 2 },
       ]),
     ).toBeUndefined();
+  });
+});
+
+describe("blur shapes", () => {
+  it("turns a rotated ellipse into the upright box around it", () => {
+    const shape = blurShape({
+      kind: "ellipse",
+      center: { x: 100, y: 50 },
+      rx: 40,
+      ry: 10,
+      angle: Math.PI / 2,
+    });
+    expect(shape.kind === "polyline" && shape.closed).toBe(true);
+    const [topLeft, , bottomRight] =
+      shape.kind === "polyline" ? shape.points : [];
+    expect(topLeft.x).toBeCloseTo(90);
+    expect(topLeft.y).toBeCloseTo(10);
+    expect(bottomRight.x).toBeCloseTo(110);
+    expect(bottomRight.y).toBeCloseTo(90);
+  });
+
+  it("leaves lines alone", () => {
+    const line = {
+      kind: "polyline" as const,
+      points: [
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+      ],
+      closed: false,
+    };
+    expect(blurShape(line)).toBe(line);
   });
 });

@@ -1246,7 +1246,9 @@ export function ProjectComposer({
                   onClick={() => setSketching(image.id)}
                 >
                   <img src={image.dataUrl} alt={image.name} />
-                  {image.sketch && <SketchOverlay sketch={image.sketch} />}
+                  {image.sketch && (
+                    <SketchOverlay sketch={image.sketch} src={image.dataUrl} />
+                  )}
                 </button>
                 <button
                   type="button"

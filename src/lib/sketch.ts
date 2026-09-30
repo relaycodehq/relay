@@ -19,6 +19,8 @@ export interface Stroke {
   /** Set once the stroke snapped to a clean shape; drawn with an even width instead of the ink. */
   shape?: Shape;
   shapeWidth?: number;
+  /** Blurs the screenshot under the stroke instead of inking it; a closed shape blurs its whole inside. */
+  blur?: boolean;
 }
 export interface Sketch {
   width: number;
@@ -38,6 +40,8 @@ export const sketchColors = [
 ];
 /** Pen widths in on-screen pixels. */
 export const sketchSizes = [3, 5, 9];
+/** Blur brush widths in on-screen pixels. */
+export const blurSizes = [16, 30, 52];
 
 export const distance = (a: Point, b: Point) =>
   Math.hypot(a.x - b.x, a.y - b.y);
@@ -178,6 +182,73 @@ export function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
   ctx.restore();
 }
 
+/**
+ * A strongly blurred copy of the screenshot at image size. The radius scales
+ * with the image so text stays unreadable on retina captures too.
+ */
+export function blurredCopy(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  // The unblurred pass keeps the edges opaque where the blur fades out.
+  ctx.drawImage(source, 0, 0, width, height);
+  ctx.filter = `blur(${Math.max(8, Math.round(Math.max(width, height) / 110))}px)`;
+  ctx.drawImage(source, 0, 0, width, height);
+  return canvas;
+}
+
+let mask: HTMLCanvasElement | undefined;
+
+/**
+ * Draws the whole drawing in image coordinates (the context is already scaled
+ * to them). Blur strokes go first through one shared mask, so ink always sits
+ * on top of them whatever the order it was drawn in. Without `blurred` they are
+ * skipped.
+ */
+export function drawSketch(
+  ctx: CanvasRenderingContext2D,
+  strokes: Stroke[],
+  blurred: CanvasImageSource | undefined,
+  size: Pick<Sketch, "width" | "height">,
+) {
+  const blurs = strokes.filter((s) => s.blur);
+  if (blurred && blurs.length) {
+    mask ??= document.createElement("canvas");
+    mask.width = ctx.canvas.width;
+    mask.height = ctx.canvas.height;
+    const m = mask.getContext("2d");
+    if (m) {
+      m.setTransform(ctx.getTransform());
+      for (const stroke of blurs) {
+        // An even band: the pen's speed swell and tapered tail would leave text peeking out.
+        const width = Math.max(...stroke.widths);
+        drawStroke(m, {
+          ...stroke,
+          color: "#000",
+          widths: stroke.widths.map(() => width),
+        });
+        if (stroke.shape?.kind === "ellipse" || stroke.shape?.closed) {
+          m.fillStyle = "#000";
+          m.fill(shapePath(stroke.shape));
+        }
+      }
+      m.globalCompositeOperation = "source-in";
+      m.drawImage(blurred, 0, 0, size.width, size.height);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(mask, 0, 0);
+      ctx.restore();
+    }
+  }
+  strokes.forEach((stroke) => stroke.blur || drawStroke(ctx, stroke));
+}
+
 /** Burns the drawing into the screenshot; images without ink pass through. */
 export async function flattenSketch(image: DraftImage): Promise<DraftImage> {
   const { sketch, ...plain } = image;
@@ -192,7 +263,10 @@ export async function flattenSketch(image: DraftImage): Promise<DraftImage> {
   if (!ctx) throw new Error("Could not draw on screenshot.");
   ctx.drawImage(img, 0, 0);
   ctx.scale(canvas.width / sketch.width, canvas.height / sketch.height);
-  sketch.strokes.forEach((stroke) => drawStroke(ctx, stroke));
+  const blurred = sketch.strokes.some((s) => s.blur)
+    ? blurredCopy(img, sketch.width, sketch.height)
+    : undefined;
+  drawSketch(ctx, sketch.strokes, blurred, sketch);
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/png"),
   );
@@ -253,6 +327,33 @@ export function snapLine(a: Point, b: Point): Point[] {
       y: a.y + Math.sin(snappedAngle) * len,
     },
   ];
+}
+
+/** Blur covers text, so any closed shape becomes the upright box around it. */
+export function blurShape(shape: Shape): Shape {
+  if (shape.kind === "polyline" && !shape.closed) return shape;
+  let box;
+  if (shape.kind === "ellipse") {
+    const { center: c, rx, ry, angle } = shape;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const hw = Math.hypot(rx * cos, ry * sin);
+    const hh = Math.hypot(rx * sin, ry * cos);
+    box = { x: c.x - hw, y: c.y - hh, width: hw * 2, height: hh * 2 };
+  } else {
+    box = bounds(shape.points);
+  }
+  const { x, y, width, height } = box;
+  return {
+    kind: "polyline",
+    points: [
+      { x, y },
+      { x: x + width, y },
+      { x: x + width, y: y + height },
+      { x, y: y + height },
+    ],
+    closed: true,
+  };
 }
 
 export function isLine(shape: Shape) {

@@ -5,11 +5,14 @@ import {
   useState,
   type PointerEvent,
 } from "react";
-import { Check, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Check, Droplet, PenLine, Redo2, Trash2, Undo2 } from "lucide-react";
 import type { DraftImage } from "../lib/draft-images";
 import {
+  blurredCopy,
+  blurShape,
+  blurSizes,
   distance,
-  drawStroke,
+  drawSketch,
   isLine,
   recognizeShape,
   scaleShape,
@@ -35,16 +38,26 @@ export interface SketchHistory {
 }
 
 const PEN_KEY = "relay-sketch-pen";
-function savedPen() {
+interface Pen {
+  tool: "pen" | "blur";
+  color: string;
+  size: number;
+  blurSize: number;
+}
+function savedPen(): Pen {
+  let saved: Partial<Pen> = {};
   try {
-    const { color, size } = JSON.parse(localStorage.getItem(PEN_KEY) ?? "{}");
-    return {
-      color: sketchColors.includes(color) ? (color as string) : sketchColors[0],
-      size: sketchSizes.includes(size) ? (size as number) : sketchSizes[1],
-    };
+    saved = JSON.parse(localStorage.getItem(PEN_KEY) ?? "{}");
   } catch {
-    return { color: sketchColors[0], size: sketchSizes[1] };
+    // Falls back to the defaults below.
   }
+  const { tool, color, size, blurSize } = saved;
+  return {
+    tool: tool === "blur" ? "blur" : "pen",
+    color: sketchColors.includes(color!) ? color! : sketchColors[0],
+    size: sketchSizes.includes(size!) ? size! : sketchSizes[1],
+    blurSize: blurSizes.includes(blurSize!) ? blurSize! : blurSizes[1],
+  };
 }
 
 type Pointer =
@@ -59,9 +72,9 @@ const mod = mac ? "⌘" : "Ctrl+";
 const shift = mac ? "⇧" : "Shift+";
 
 /**
- * A minimal drawing layer over a pasted screenshot. Strokes smooth into ink;
- * pausing at the end of a stroke (or right-dragging) snaps it into a clean
- * line, circle or box.
+ * A minimal drawing layer over a pasted screenshot. Strokes smooth into ink
+ * (or blur, with the blur brush); pausing at the end of a stroke (or
+ * right-dragging) snaps it into a clean line, circle or box.
  */
 export function SketchEditor({
   image,
@@ -81,6 +94,9 @@ export function SketchEditor({
   const [history, setHistory] = useState(initial);
   const [pen, setPen] = useState(savedPen);
   const [size, setSize] = useState(image.sketch);
+  const blurring = pen.tool === "blur";
+  const brush = blurring ? pen.blurSize : pen.size;
+  const blurred = useRef<HTMLCanvasElement>(undefined);
   const pointer = useRef<Pointer>(undefined);
   const builder = useRef<StrokeBuilder>(undefined);
   const active = useRef<Stroke>(undefined);
@@ -120,8 +136,10 @@ export function SketchEditor({
         0,
         0,
       );
-      strokes.current.forEach((stroke) => drawStroke(ctx, stroke));
-      if (active.current) drawStroke(ctx, active.current);
+      const all = active.current
+        ? [...strokes.current, active.current]
+        : strokes.current;
+      drawSketch(ctx, all, blurred.current, size);
     });
   }
   useEffect(paint, [history, size]);
@@ -184,13 +202,18 @@ export function SketchEditor({
     };
   }
 
+  function recognize(stroke: Stroke) {
+    const shape = recognizeShape(stroke.points);
+    return shape && stroke.blur ? blurShape(shape) : shape;
+  }
+
   function checkHold() {
     const current = pointer.current;
     const stroke = builder.current?.stroke;
     if (current?.kind !== "drawing" || !stroke) return;
     if (performance.now() - hold.current.since < HOLD_MS) return;
     hold.current.since = Infinity; // one attempt per pause
-    const shape = recognizeShape(stroke.points);
+    const shape = recognize(stroke);
     if (!shape) return;
     clearInterval(hold.current.timer);
     pointer.current = {
@@ -216,9 +239,10 @@ export function SketchEditor({
       point,
       event.timeStamp,
       pen.color,
-      pen.size * unit,
+      brush * unit,
       unit,
     );
+    if (blurring) builder.current.stroke.blur = true;
     active.current = builder.current.stroke;
     hold.current = {
       point,
@@ -268,7 +292,7 @@ export function SketchEditor({
     let stroke = current.kind === "drawing" ? b.finish() : active.current!;
     if (current.kind === "drawing" && current.button === RIGHT_BUTTON) {
       // Right-drag always snaps to a clean shape on release.
-      const shape = recognizeShape(stroke.points);
+      const shape = recognize(stroke);
       if (shape) stroke = snapped(stroke, shape, b.baseWidth);
     }
     pointer.current = builder.current = active.current = undefined;
@@ -305,6 +329,8 @@ export function SketchEditor({
             const { naturalWidth: width, naturalHeight: height } =
               event.currentTarget;
             setSize((current) => current ?? { width, height, strokes: [] });
+            blurred.current = blurredCopy(event.currentTarget, width, height);
+            paint();
           }}
         />
         {size && (
@@ -322,36 +348,62 @@ export function SketchEditor({
         <div
           ref={dot}
           className="sketch-cursor"
+          data-blur={blurring || undefined}
           hidden
           style={{
-            background: pen.color,
-            width: Math.max(pen.size, 4),
-            height: Math.max(pen.size, 4),
+            background: blurring ? undefined : pen.color,
+            width: Math.max(brush, 4),
+            height: Math.max(brush, 4),
           }}
         />
       </div>
       <div className="sketch-palette">
         <div className="sketch-tools">
+          <button
+            type="button"
+            aria-label="Pen"
+            title="Pen"
+            aria-pressed={!blurring}
+            className="sketch-tool"
+            onClick={() => setPen((p) => ({ ...p, tool: "pen" }))}
+          >
+            <PenLine size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label="Blur"
+            title="Blur · pause on a box to blur all of it"
+            aria-pressed={blurring}
+            className="sketch-tool"
+            onClick={() => setPen((p) => ({ ...p, tool: "blur" }))}
+          >
+            <Droplet size={16} />
+          </button>
+          <span className="sketch-separator" />
           {sketchColors.map((color) => (
             <button
               key={color}
               type="button"
               className="sketch-color"
               aria-label={`Color ${color}`}
-              aria-pressed={pen.color === color}
+              aria-pressed={!blurring && pen.color === color}
               style={{ color }}
-              onClick={() => setPen((p) => ({ ...p, color }))}
+              onClick={() => setPen((p) => ({ ...p, tool: "pen", color }))}
             />
           ))}
           <span className="sketch-separator" />
-          {sketchSizes.map((width, i) => (
+          {(blurring ? blurSizes : sketchSizes).map((width, i) => (
             <button
-              key={width}
+              key={i}
               type="button"
               className="sketch-size"
               aria-label={["Thin", "Medium", "Thick"][i]}
-              aria-pressed={pen.size === width}
-              onClick={() => setPen((p) => ({ ...p, size: width }))}
+              aria-pressed={brush === width}
+              onClick={() =>
+                setPen((p) =>
+                  blurring ? { ...p, blurSize: width } : { ...p, size: width },
+                )
+              }
             >
               <span style={{ width: [5, 8, 13][i], height: [5, 8, 13][i] }} />
             </button>
@@ -389,8 +441,8 @@ export function SketchEditor({
           </button>
         </div>
         <p>
-          Pause to snap a shape · Right-drag for shapes · {mod}Z undo · Esc done
-          · Burned in when sent
+          Pause to snap a shape · Blur a box to hide all of it · {mod}Z undo ·
+          Esc done · Burned in when sent
         </p>
       </div>
     </dialog>
@@ -398,17 +450,40 @@ export function SketchEditor({
 }
 
 /** The drawing over a composer thumbnail, cropped like the image under it. */
-export function SketchOverlay({ sketch }: { sketch: Sketch }) {
+export function SketchOverlay({
+  sketch,
+  src,
+}: {
+  sketch: Sketch;
+  src: string;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx) return;
+    let cancelled = false;
     const scale = Math.min(1, 320 / Math.max(sketch.width, sketch.height));
-    el.width = Math.max(1, Math.round(sketch.width * scale));
-    el.height = Math.max(1, Math.round(sketch.height * scale));
-    ctx.scale(scale, scale);
-    sketch.strokes.forEach((stroke) => drawStroke(ctx, stroke));
-  }, [sketch]);
+    const draw = (blurred?: HTMLCanvasElement) => {
+      el.width = Math.max(1, Math.round(sketch.width * scale));
+      el.height = Math.max(1, Math.round(sketch.height * scale));
+      ctx.scale(scale, scale);
+      drawSketch(ctx, sketch.strokes, blurred, sketch);
+    };
+    draw();
+    if (sketch.strokes.some((s) => s.blur)) {
+      const img = new Image();
+      img.src = src;
+      img
+        .decode()
+        .then(() => {
+          if (!cancelled) draw(blurredCopy(img, sketch.width, sketch.height));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [sketch, src]);
   return <canvas ref={canvas} className="sketch-overlay" aria-hidden />;
 }

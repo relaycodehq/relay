@@ -50,6 +50,10 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+.sketch-cursor[data-blur] {
+  backdrop-filter: blur(3px);
+  background: #ffffff1f;
+}
 .sketch-cursor[hidden] {
   display: none;
 }
@@ -115,10 +119,15 @@
   background: #fffffff2;
   box-shadow: 0 0 0 8px transparent;
 }
-.sketch-size[aria-pressed="true"] {
+.sketch-size[aria-pressed="true"],
+.sketch-tool[aria-pressed="true"] {
   position: relative;
 }
-.sketch-size[aria-pressed="true"]::before {
+.sketch-tool svg {
+  position: relative;
+}
+.sketch-size[aria-pressed="true"]::before,
+.sketch-tool[aria-pressed="true"]::before {
   content: "";
   position: absolute;
   width: 28px;
