@@ -350,3 +350,26 @@
 .image-diff-canvas img {
   max-width: 100%;
 }
+.change-list-view {
+  display: flex;
+  gap: 1px;
+}
+.working-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 6px 1px;
+  padding-left: 23px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.working-folder span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.local-changes .working-file.nested {
+  padding-left: 43px;
+}

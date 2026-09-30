@@ -5,13 +5,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
   ChevronRight,
+  FolderTree,
   GitBranch,
+  List,
   RefreshCw,
   Split,
   SquarePen,
 } from "lucide-react";
 import type { Pull } from "../../shared/types";
-import type { ChangeArea, GitAction } from "../../shared/working-tree";
+import type {
+  ChangeArea,
+  GitAction,
+  WorkingChange,
+} from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
@@ -77,7 +83,8 @@ export function LocalChanges({
     [notice, setNotice] = useState(""),
     [push, setPush] = useState(false),
     [splitting, setSplitting] = useState(false),
-    [collapsed, setCollapsed] = useState<ChangeArea[]>([]);
+    [collapsed, setCollapsed] = useState<ChangeArea[]>([]),
+    [grouped, setGrouped] = useState(saved?.grouped === true);
   // A requested file selects its row once the tree lists it; until then the
   // review says it has no local changes.
   const [wanted, setWanted] = useState<ProjectFileLink | null>(null),
@@ -91,8 +98,11 @@ export function LocalChanges({
   }, [reveal?.request]);
   useEffect(() => {
     if (storageKey)
-      localStorage.setItem(storageKey, JSON.stringify({ selected, message }));
-  }, [storageKey, selected, message]);
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ selected, message, grouped }),
+      );
+  }, [storageKey, selected, message, grouped]);
   useEffect(() => {
     onSelection?.(selected?.path ?? null);
   }, [selected?.path]);
@@ -202,6 +212,22 @@ export function LocalChanges({
     : [];
   const actions = (
     <>
+      <span className="change-list-view">
+        <IconButton
+          label="Group by folder"
+          active={grouped}
+          onClick={() => setGrouped(true)}
+        >
+          <FolderTree size={14} />
+        </IconButton>
+        <IconButton
+          label="Flat list"
+          active={!grouped}
+          onClick={() => setGrouped(false)}
+        >
+          <List size={14} />
+        </IconButton>
+      </span>
       <IconButton
         label="Refresh local changes"
         disabled={busy}
@@ -301,6 +327,91 @@ export function LocalChanges({
                 {sections.map((s) => {
                   const open = !collapsed.includes(s.area),
                     staged = s.area === "staged";
+                  const fileRow = (c: WorkingChange, nested: boolean) => {
+                    const code = staged ? c.index : c.worktree,
+                      kind = changeKind(code, c.conflict),
+                      slash = c.path.lastIndexOf("/");
+                    const row = (
+                      <div
+                        className={`working-file ${nested ? "nested" : ""} ${selected?.path === c.path && selected.area === s.area ? "selected" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`${staged ? "Unstage" : "Stage"} ${c.path}`}
+                          checked={staged}
+                          disabled={busy}
+                          onChange={() =>
+                            void act({
+                              kind: s.kind,
+                              revision: tree.revision,
+                              paths: [c.path],
+                            })
+                          }
+                        />
+                        <button
+                          className="change-select"
+                          aria-label={`${changeLabels[kind]} ${c.path}`}
+                          title={`${changeLabels[kind]}: ${c.previousPath ? `${c.previousPath} → ` : ""}${c.path}`}
+                          onClick={() => {
+                            setSelected({ path: c.path, area: s.area });
+                            setWanted(null);
+                            setLine(undefined);
+                          }}
+                        >
+                          <FileEntryIcon path={c.path} directory={false} />
+                          <span className={`change-name ${kind}`}>
+                            {c.path.slice(slash + 1)}
+                          </span>
+                          {!nested && slash > 0 && (
+                            <span className="change-dir">
+                              {c.path.slice(0, slash)}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                    return (
+                      <LocalChangeMenu
+                        key={c.path}
+                        change={c}
+                        area={s.area}
+                        projectId={projectId}
+                        busy={busy}
+                        trigger={row}
+                        onStage={() =>
+                          void act({
+                            kind: s.kind,
+                            revision: tree.revision,
+                            paths: [c.path],
+                          })
+                        }
+                        onIgnore={(file) =>
+                          void act({
+                            kind: "ignore",
+                            revision: tree.revision,
+                            paths: [c.path],
+                            file,
+                          })
+                        }
+                        onDiscard={() =>
+                          void act({
+                            kind: "discard",
+                            revision: tree.revision,
+                            paths: [c.path],
+                            area: s.area,
+                          })
+                        }
+                        onShowArea={(area) => {
+                          setSelected({ path: c.path, area });
+                          setWanted(null);
+                          setLine(undefined);
+                        }}
+                        onOpenFile={onOpenFile}
+                        onTrashed={() => void state.refetch()}
+                        onError={setError}
+                      />
+                    );
+                  };
                   return (
                     <section key={s.area}>
                       <header>
@@ -337,94 +448,35 @@ export function LocalChanges({
                         </span>
                       </header>
                       {open &&
-                        s.files.map((c) => {
-                          const code = staged ? c.index : c.worktree,
-                            kind = changeKind(code, c.conflict),
-                            slash = c.path.lastIndexOf("/");
-                          const row = (
-                            <div
-                              className={`working-file ${selected?.path === c.path && selected.area === s.area ? "selected" : ""}`}
-                            >
-                              <input
-                                type="checkbox"
-                                aria-label={`${staged ? "Unstage" : "Stage"} ${c.path}`}
-                                checked={staged}
-                                disabled={busy}
-                                onChange={() =>
-                                  void act({
-                                    kind: s.kind,
-                                    revision: tree.revision,
-                                    paths: [c.path],
-                                  })
-                                }
-                              />
-                              <button
-                                className="change-select"
-                                aria-label={`${changeLabels[kind]} ${c.path}`}
-                                title={`${changeLabels[kind]}: ${c.previousPath ? `${c.previousPath} → ` : ""}${c.path}`}
-                                onClick={() => {
-                                  setSelected({ path: c.path, area: s.area });
-                                  setWanted(null);
-                                  setLine(undefined);
-                                }}
+                        (grouped
+                          ? [...byFolder(s.files)].map(([folder, files]) => (
+                              <div
+                                key={folder}
+                                role="group"
+                                aria-label={folder || "Repository root"}
                               >
-                                <FileEntryIcon
-                                  path={c.path}
-                                  directory={false}
-                                />
-                                <span className={`change-name ${kind}`}>
-                                  {c.path.slice(slash + 1)}
-                                </span>
-                                {slash > 0 && (
-                                  <span className="change-dir">
-                                    {c.path.slice(0, slash)}
+                                <div className="working-folder">
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`${staged ? "Unstage" : "Stage"} ${folder || "repository root"}`}
+                                    checked={staged}
+                                    disabled={busy}
+                                    onChange={() =>
+                                      void act({
+                                        kind: s.kind,
+                                        revision: tree.revision,
+                                        paths: files.map((c) => c.path),
+                                      })
+                                    }
+                                  />
+                                  <span title={folder || "Repository root"}>
+                                    {folder || "/"}
                                   </span>
-                                )}
-                              </button>
-                            </div>
-                          );
-                          return (
-                            <LocalChangeMenu
-                              key={c.path}
-                              change={c}
-                              area={s.area}
-                              projectId={projectId}
-                              busy={busy}
-                              trigger={row}
-                              onStage={() =>
-                                void act({
-                                  kind: s.kind,
-                                  revision: tree.revision,
-                                  paths: [c.path],
-                                })
-                              }
-                              onIgnore={(file) =>
-                                void act({
-                                  kind: "ignore",
-                                  revision: tree.revision,
-                                  paths: [c.path],
-                                  file,
-                                })
-                              }
-                              onDiscard={() =>
-                                void act({
-                                  kind: "discard",
-                                  revision: tree.revision,
-                                  paths: [c.path],
-                                  area: s.area,
-                                })
-                              }
-                              onShowArea={(area) => {
-                                setSelected({ path: c.path, area });
-                                setWanted(null);
-                                setLine(undefined);
-                              }}
-                              onOpenFile={onOpenFile}
-                              onTrashed={() => void state.refetch()}
-                              onError={setError}
-                            />
-                          );
-                        })}
+                                </div>
+                                {files.map((c) => fileRow(c, true))}
+                              </div>
+                            ))
+                          : s.files.map((c) => fileRow(c, false)))}
                     </section>
                   );
                 })}
@@ -633,6 +685,16 @@ function changeKind(code: string, conflict: boolean): ChangeKind {
   if (code === "A" || code === "?") return "added";
   if (code === "D") return "deleted";
   return "modified";
+}
+
+/** Files under their folder, in the order the folders first appear. */
+function byFolder(files: WorkingChange[]) {
+  const folders = new Map<string, WorkingChange[]>();
+  for (const c of files) {
+    const folder = c.path.slice(0, Math.max(0, c.path.lastIndexOf("/")));
+    folders.set(folder, [...(folders.get(folder) ?? []), c]);
+  }
+  return folders;
 }
 
 function sideLabels(area: ChangeArea) {
