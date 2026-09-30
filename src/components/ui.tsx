@@ -531,6 +531,11 @@ export function relativeDate(value: string) {
             day: "numeric",
           });
 }
+/** "5m ago" while recent, a bare date once relativeDate gives one. */
+export function timeAgo(value: string) {
+  const rel = relativeDate(value);
+  return /^\d+[mhd]$/.test(rel) ? `${rel} ago` : rel;
+}
 export class ErrorBoundary extends Component<
   { children: ReactNode },
   { error?: Error }

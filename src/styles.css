@@ -1689,7 +1689,24 @@ body.resizing-table-column {
 .review-state {
   font-size: 10px;
   color: var(--muted);
-  text-transform: capitalize;
+}
+.review-line-comment {
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 12px;
+  margin-top: 12px;
+}
+.discussion-card > div:first-child + .review-line-comment {
+  margin-top: 0;
+}
+.review-line-comment header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.review-line-comment header strong {
+  margin-left: auto;
 }
 .discussion-composer {
   padding: 16px 19px;

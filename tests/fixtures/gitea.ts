@@ -83,6 +83,8 @@ export async function fixtureServer(
     contextGaps?: boolean;
     code?: { before: string; after: string };
     users?: Record<string, { id: number; login: string; full_name: string }>;
+    /** Line comments added one at a time, as Gitea files them: each one a body-less COMMENT review. */
+    singleComments?: boolean;
   } = {},
 ) {
   let createdPull: any = null;
@@ -122,6 +124,47 @@ export async function fixtureServer(
       comments_count: 1,
     },
   ];
+  const discussion: {
+    id: number;
+    body: string;
+    user: { id: number; login: string };
+    created_at: string;
+    html_url: string;
+  }[] = [];
+  if (options.singleComments) {
+    const at = (h: number) => new Date(Date.UTC(2026, 8, 1, h)).toISOString();
+    const jan = { id: 5, login: "jan-novak" };
+    for (const [id, line, text] of [
+      [12, 14, "Why not reuse the controller from the parent hook?"],
+      [13, 26, "This drops the error on the floor."],
+    ] as const) {
+      reviewList.push({
+        id,
+        body: "",
+        state: "COMMENT",
+        user: jan,
+        commit_id: HEAD,
+        comments_count: 1,
+        submitted_at: at(id - 10),
+      } as (typeof reviewList)[number]);
+      comments.push({
+        ...comments[0],
+        id: id * 10,
+        body: text,
+        position: line,
+        user: jan,
+        created_at: at(id - 10),
+        pull_request_review_id: id,
+      });
+    }
+    discussion.push({
+      id: 500,
+      body: "Pushed a fix for both.",
+      user: { id: 3, login: "sam" },
+      created_at: at(4),
+      html_url: "https://example.test/issue-comment",
+    });
+  }
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, "http://localhost");
     let raw = "";
@@ -373,7 +416,7 @@ export async function fixtureServer(
       return json(comments[1], 201);
     }
     if (path.includes("/issues/") && path.endsWith("/comments"))
-      return json([]);
+      return json(discussion);
     return json({ message: "unimplemented fixture " + path }, 404);
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));

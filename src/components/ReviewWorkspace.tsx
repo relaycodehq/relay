@@ -40,6 +40,7 @@ import type {
   Draft,
   Progress,
   Pull,
+  Review,
   ReviewComment,
   Side,
 } from "../../shared/types";
@@ -52,11 +53,15 @@ import {
   Loading,
   Modal,
   RichText,
-  relativeDate,
+  timeAgo,
 } from "./ui";
 import { DiffViewer } from "./DiffViewer";
 import { useSplitDiff } from "./WorkingDiff";
 import { useElementWidth } from "../lib/useElementWidth";
+import {
+  conversationTimeline,
+  reviewStateLabel,
+} from "../lib/conversation-timeline";
 import { useTypography } from "../lib/typography";
 import { persistedStore } from "../lib/persisted-store";
 import { createPortal } from "react-dom";
@@ -386,7 +391,7 @@ export function ReviewWorkspace({
               <span className="additions">+{pull.additions ?? 0}</span>
               <span className="deletions">−{pull.deletions ?? 0}</span>
               <span className="push-date">
-                Updated {relativeDate(pull.updated_at)} ago
+                Updated {timeAgo(pull.updated_at)}
               </span>
             </div>
           </section>
@@ -908,12 +913,7 @@ function Conversation({
   onSelectFile,
 }: {
   pull: Pull;
-  reviews: {
-    id: number;
-    body: string;
-    state: string;
-    user: { login: string };
-  }[];
+  reviews: Review[];
   comments: ReviewComment[];
   onError: (e: unknown) => void;
   onSelectFile: (s: string) => void;
@@ -927,6 +927,16 @@ function Conversation({
     initialPageParam: 1,
     getNextPageParam: (p) => p.nextPage ?? undefined,
   });
+  // Pages come oldest first; load them all so reviews interleave in order.
+  useEffect(() => {
+    if (discussion.hasNextPage && !discussion.isFetchingNextPage)
+      void discussion.fetchNextPage();
+  }, [discussion.hasNextPage, discussion.isFetchingNextPage, discussion.data]);
+  const timeline = conversationTimeline(
+    reviews,
+    comments,
+    discussion.data?.pages.flatMap((p) => p.items) ?? [],
+  );
   return (
     <div className="conversation">
       <article className="discussion-card description">
@@ -937,56 +947,63 @@ function Conversation({
         </div>
         <RichText text={pull.body || "No description provided."} />
       </article>
-      {reviews.map((r) => (
-        <article className="discussion-card" key={`r${r.id}`}>
-          <div>
-            <Avatar name={r.user?.login ?? "Team"} />
-            <strong>{r.user?.login ?? "Review team"}</strong>
-            <span className="review-state">
-              {r.state.toLowerCase().replaceAll("_", " ")}
-            </span>
-          </div>
-          {r.body && <RichText text={r.body} />}
-        </article>
-      ))}
-      {comments
-        .filter((c) => c.commit_id !== pull.head.sha)
-        .map((c) => (
-          <article className="discussion-card" key={`c${c.id}`}>
-            <span className="warning-note">Comment on an earlier revision</span>
-            <button
-              className="text-button"
-              onClick={() => onSelectFile(c.path)}
-            >
-              {c.path}:{c.position || c.original_position}
-            </button>
-            <RichText text={c.body} />
-            <small>{c.user.login}</small>
+      {timeline.map((entry) =>
+        entry.kind === "review" ? (
+          <article
+            className="discussion-card"
+            key={`r${entry.review.id}`}
+            data-review-state={entry.review.state}
+          >
+            <div>
+              <Avatar name={entry.review.user?.login ?? "Team"} />
+              <strong>{entry.review.user?.login ?? "Review team"}</strong>
+              <span className="review-state">
+                {reviewStateLabel(entry.review.state)}
+                {entry.review.dismissed && ", dismissed"}
+              </span>
+              {entry.review.submitted_at && (
+                <time>{timeAgo(entry.review.submitted_at)}</time>
+              )}
+            </div>
+            {entry.review.body?.trim() && <RichText text={entry.review.body} />}
+            {entry.comments.map((c) => (
+              <section className="review-line-comment" key={`c${c.id}`}>
+                <header>
+                  <button
+                    className="text-button"
+                    onClick={() => onSelectFile(c.path)}
+                  >
+                    {c.path}:{c.position || c.original_position}
+                  </button>
+                  {c.commit_id !== pull.head.sha && (
+                    <span className="muted">earlier revision</span>
+                  )}
+                  {c.resolver && <span className="muted">resolved</span>}
+                  {c.user.login !== entry.review.user?.login && (
+                    <strong>{c.user.login}</strong>
+                  )}
+                </header>
+                <RichText text={c.body} />
+              </section>
+            ))}
           </article>
-        ))}
+        ) : (
+          <article className="discussion-card" key={`d${entry.comment.id}`}>
+            <div>
+              <Avatar name={entry.comment.user.login} />
+              <strong>{entry.comment.user.login}</strong>
+              <time>{timeAgo(entry.comment.created_at)}</time>
+            </div>
+            <RichText text={entry.comment.body} />
+          </article>
+        ),
+      )}
       {discussion.isPending && <Loading />}
       {discussion.error && (
         <ErrorBox
           error={discussion.error}
           retry={() => void discussion.refetch()}
         />
-      )}{" "}
-      {discussion.data?.pages
-        .flatMap((p) => p.items)
-        .map((c) => (
-          <article className="discussion-card" key={`d${c.id}`}>
-            <div>
-              <Avatar name={c.user.login} />
-              <strong>{c.user.login}</strong>
-              <time>{relativeDate(c.created_at)} ago</time>
-            </div>
-            <RichText text={c.body} />
-          </article>
-        ))}
-      {discussion.hasNextPage && (
-        <button onClick={() => void discussion.fetchNextPage()}>
-          Load older conversation
-        </button>
       )}
       <form
         className="discussion-composer"
