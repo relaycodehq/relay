@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { liveCwd } from "../../electron/tasks";
 import {
   commandKey,
   describeTask,
@@ -150,4 +151,13 @@ it("leaves one-off commands out of the note", () => {
   expect(lastingTask({ ...base, id: "3", kind: "watch", ports: [] })).toBe(
     true,
   );
+});
+
+describe("liveCwd", () => {
+  it("drops the suffix Linux adds to a deleted working folder", () => {
+    expect(liveCwd("/home/jan/work/search (deleted)")).toBe(
+      "/home/jan/work/search",
+    );
+    expect(liveCwd("/home/jan/work/search")).toBe("/home/jan/work/search");
+  });
 });

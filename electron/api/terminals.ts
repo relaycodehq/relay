@@ -24,7 +24,7 @@ export function terminalHandlers(ctx: ApiContext) {
   ) {
     const id = idSchema.parse(args[0]);
     return projectTasks[method === "stopProjectTask" ? "stop" : "restart"](
-      await projects.root(id),
+      await projects.taskFolder(id),
       z.string().max(64).parse(args[1]),
       projectChats.worktreeFolders(id),
     );
@@ -33,7 +33,7 @@ export function terminalHandlers(ctx: ApiContext) {
     projectTasks: async (args) => {
       const id = idSchema.parse(args[0]);
       return projectTasks.list(
-        await projects.root(id),
+        await projects.taskFolder(id),
         projectChats.worktreeFolders(id),
       );
     },

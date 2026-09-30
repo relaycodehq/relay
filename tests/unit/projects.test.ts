@@ -223,3 +223,20 @@ it("reuses the Scratchpad folder no thread has used before making another", asyn
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("still names the folder of a project deleted outside Relay, so its processes can be stopped", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const root = join(dir, "licensing--search");
+    await mkdir(root);
+    const project = await projects.add(root, null);
+    await rm(root, { recursive: true });
+    await expect(projects.root(project.id)).rejects.toThrow("ENOENT");
+    expect(await projects.taskFolder(project.id)).toBe(root);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -213,6 +213,11 @@ export class Projects {
   async root(id: string) {
     return (await this.inspect(id)).root;
   }
+  /** Where the project's processes run. A folder deleted outside Relay still names them, so they can be stopped. */
+  async taskFolder(id: string) {
+    const { path } = this.get(id);
+    return realpath(path).catch(() => path);
+  }
   async add(path: string, client: Gitea | null) {
     const root = await realpath(path),
       repository = await repositoryRoot(root);

@@ -58,6 +58,8 @@ function run(file: string, args: string[]) {
     );
   });
 }
+/** Linux marks the working folder of a process whose folder was deleted with a suffix. */
+export const liveCwd = (link: string) => link.replace(/ \(deleted\)$/, "");
 const within = (path: string, root: string) =>
   path === root || path.startsWith(root + sep);
 const agentName = (line: string) => {
@@ -202,6 +204,8 @@ class ProjectTasks {
         stdio: "ignore",
       },
     );
+    // A folder deleted meanwhile fails the spawn asynchronously.
+    child.on("error", () => {});
     child.unref();
     if (!child.pid) throw new Error("The process couldn't be started again.");
     this.adopting.set(child.pid, {
@@ -496,7 +500,7 @@ class ProjectTasks {
         pending.map(async (pid) =>
           this.cwds.set(
             `${pid}:${this.seen.get(pid)}`,
-            await readlink(`/proc/${pid}/cwd`).catch(() => null),
+            await readlink(`/proc/${pid}/cwd`).then(liveCwd, () => null),
           ),
         ),
       );
