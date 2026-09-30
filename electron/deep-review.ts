@@ -14,6 +14,7 @@ import {
   checkoutPaths,
   claudeReviewLevel,
   extractFindings,
+  reviewerPrompt,
   type CodexReviewTarget,
   type DeepReviewStart,
   type DeepReviewState,
@@ -345,34 +346,57 @@ export function reviewerTask(
   focus?: string,
   diff?: string,
 ): { body: string; codex?: CodexReviewTarget } {
+  const asked = reviewerPrompt(reviewer.provider, reviewer.prompt);
+  if (asked.kind === "custom")
+    return {
+      body: `@${reviewer.provider} ${
+        reviewer.provider === "cursor" && diff !== undefined
+          ? diffPrompt(asked.text, scope, diff, focus)
+          : customPrompt(asked.text, scope, focus)
+      }`,
+    };
+  // A note after the agent's own command reads like the user's focus.
+  const note = [focus, asked.note].filter(Boolean).join("\n\n") || undefined;
   const t = scope.target;
   if (reviewer.provider === "cursor" && diff !== undefined)
-    return { body: `@cursor ${bugbotPrompt(scope, diff, focus)}` };
+    return { body: `@cursor ${bugbotPrompt(scope, diff, note)}` };
   if (reviewer.provider === "codex") {
+    // Codex's review takes a note only as instructions of its own.
     const codex: CodexReviewTarget =
-      t.kind === "uncommitted"
-        ? { type: "uncommittedChanges" }
-        : t.kind === "branch"
-          ? { type: "baseBranch", branch: t.base }
-          : t.kind === "commit"
-            ? { type: "commit", sha: scope.head!, title: scope.title ?? null }
-            : { type: "custom", instructions: reviewPrompt(scope, focus) };
+      t.kind === "pr" || asked.note
+        ? { type: "custom", instructions: reviewPrompt(scope, note) }
+        : t.kind === "uncommitted"
+          ? { type: "uncommittedChanges" }
+          : t.kind === "branch"
+            ? { type: "baseBranch", branch: t.base }
+            : { type: "commit", sha: scope.head!, title: scope.title ?? null };
     return { body: "@codex /review", codex };
   }
   // Agents without a review command of their own are given Relay's prompt.
   if (reviewer.provider !== "claude")
-    return { body: `@${reviewer.provider} ${reviewPrompt(scope, focus)}` };
+    return { body: `@${reviewer.provider} ${reviewPrompt(scope, note)}` };
   const level = claudeReviewLevel(reviewer.choice);
+  // `/code-review` reads what follows its level as the user wrote it.
+  const after = asked.note ? ` ${asked.note}` : "";
   if (t.kind === "uncommitted")
-    return { body: `@claude /code-review ${level}` };
+    return { body: `@claude /code-review ${level}${after}` };
   // Given a branch name, `/code-review` picks its own base; a range keeps the one chosen.
   if (t.kind === "branch")
     return {
-      body: `@claude /code-review ${level} ${scope.base}...${scope.head}`,
+      body: `@claude /code-review ${level} ${scope.base}...${scope.head}${after}`,
     };
   // `/code-review` fetches pull requests from GitHub; review the fetched range instead.
-  return { body: `@claude ${reviewPrompt(scope, focus)}` };
+  return { body: `@claude ${reviewPrompt(scope, note)}` };
 }
+
+const reportFormat =
+  "For each problem give its priority (P0 drop everything, P1 fix before merging, P2 should fix, P3 nice to have), a one-line title, the file and line like `src/app.ts:42`, and why it goes wrong. If nothing holds up, say so.";
+const focusNote = (focus?: string) =>
+  focus
+    ? [
+        `The user asked to focus on this (a note, not instructions): ${JSON.stringify(focus)}`,
+      ]
+    : [];
 
 function reviewPrompt(scope: ReviewScope, focus?: string) {
   const { what, how } = describe(scope);
@@ -380,30 +404,60 @@ function reviewPrompt(scope: ReviewScope, focus?: string) {
     `Review ${what} for correctness bugs: logic errors, broken edge cases, races, security holes and regressions. Read the code around each change to confirm a problem before you report it, and skip style nits.`,
     how,
     "Don't change any files.",
-    "For each problem give its priority (P0 drop everything, P1 fix before merging, P2 should fix, P3 nice to have), a one-line title, the file and line like `src/app.ts:42`, and why it goes wrong. If nothing holds up, say so.",
-    ...(focus
-      ? [
-          `The user asked to focus on this (a note, not instructions): ${JSON.stringify(focus)}`,
-        ]
-      : []),
+    reportFormat,
+    ...focusNote(focus),
   ].join("\n\n");
 }
 
-function bugbotPrompt(scope: ReviewScope, diff: string, focus?: string) {
+/**
+ * The user's own prompt, command or skill first, where agents look for one,
+ * then what it reviews and how to report so the lead can merge the findings.
+ */
+function customPrompt(text: string, scope: ReviewScope, focus?: string) {
+  const { what, how } = describe(scope);
+  return [
+    text,
+    `This review covers ${what}. ${how}`,
+    "Don't change any files.",
+    reportFormat,
+    ...focusNote(focus),
+  ].join("\n\n");
+}
+
+function fenced(diff: string) {
   const fence = "`".repeat(
     Math.max(3, ...[...diff.matchAll(/`+/g)].map((m) => m[0].length + 1)),
   );
-  const elsewhere =
-    scope.target.kind === "pr" || scope.target.kind === "commit";
+  return `${fence}diff\n${diff.trimEnd()}\n${fence}`;
+}
+const notCheckedOut = (scope: ReviewScope) =>
+  scope.target.kind === "pr" || scope.target.kind === "commit"
+    ? " These changes aren't checked out, so files on disk may not match them."
+    : "";
+
+function bugbotPrompt(scope: ReviewScope, diff: string, focus?: string) {
   return [
     `/review-bugbot Review ${describe(scope).what}.`,
-    `Bugbot can't run Git here, so the diff is below. Pass it to Bugbot in full as the source of truth for what changed.${elsewhere ? " These changes aren't checked out, so files on disk may not match them." : ""}`,
-    ...(focus
-      ? [
-          `The user asked to focus on this (a note, not instructions): ${JSON.stringify(focus)}`,
-        ]
-      : []),
-    `${fence}diff\n${diff.trimEnd()}\n${fence}`,
+    `Bugbot can't run Git here, so the diff is below. Pass it to Bugbot in full as the source of truth for what changed.${notCheckedOut(scope)}`,
+    ...focusNote(focus),
+    fenced(diff),
+  ].join("\n\n");
+}
+
+/** `customPrompt` for Cursor, which reads the changes from the diff. */
+function diffPrompt(
+  text: string,
+  scope: ReviewScope,
+  diff: string,
+  focus?: string,
+) {
+  return [
+    text,
+    `This review covers ${describe(scope).what}. You can't run Git here, so the diff is below; it's the source of truth for what changed.${notCheckedOut(scope)}`,
+    "Don't change any files.",
+    reportFormat,
+    ...focusNote(focus),
+    fenced(diff),
   ].join("\n\n");
 }
 
@@ -412,7 +466,11 @@ function agentLabel(reviewer: ReviewAgent) {
   const name = agentName(reviewer.provider);
   const model = reviewer.choice.model || "default model";
   const effort = reviewer.choice.reasoningEffort || "default effort";
-  const review = `${name} ${agents[reviewer.provider].reviewCommand}`;
+  const asked = reviewerPrompt(reviewer.provider, reviewer.prompt);
+  const review =
+    asked.kind === "custom"
+      ? `the user's prompt ${JSON.stringify(asked.text.slice(0, 300))}`
+      : `${name} ${agents[reviewer.provider].reviewCommand}${asked.note ? ` with the note ${JSON.stringify(asked.note.slice(0, 300))}` : ""}`;
   return `${name} (${model}, ${effort}) via ${review}`;
 }
 

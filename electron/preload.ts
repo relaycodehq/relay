@@ -80,6 +80,7 @@ const methods = [
   "rewindProjectTurn",
   "projectGitAction",
   "projectCommitMessage",
+  "nameReviewSetup",
   "projectPlanCommitSplit",
   "projectApplyCommitSplit",
   "projectMergePlan",

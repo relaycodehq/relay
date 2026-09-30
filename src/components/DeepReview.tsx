@@ -36,6 +36,7 @@ import {
 import {
   deepReviewStartSchema,
   MAX_REVIEWERS,
+  ownReviewCommand,
   priorityMeaning,
   type DeepReviewStart,
   type DeepReviewState,
@@ -68,6 +69,14 @@ import {
 import { useCodexModels } from "../lib/useCodexModels";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
+import { ReviewPromptLine } from "./ReviewPromptLine";
+import { ReviewSetups } from "./ReviewSetups";
+import {
+  lastPrompt,
+  latestReviewSetup,
+  recordReviewSetup,
+  type ReviewSetupChoice,
+} from "../lib/review-setups";
 import "./deep-review.css";
 
 /** Names an agent by its model, as the pickers do. */
@@ -161,18 +170,28 @@ export function DeepReviewSetup({
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const claudeModels = useClaudeModels().models;
+  const name = useAgentName();
   const sendKey = useSendKey();
-  const [setup, setSetup] = useState<Setup>(
-    () =>
+  // This project's last setup, else the last review's anywhere, else a pair.
+  const [setup, setSetup] = useState<Setup>(() => {
+    const latest = latestReviewSetup();
+    return (
       savedSetup(project.id) ?? {
         kind: "uncommitted",
         base: "",
-        reviewers: lineup.slice(0, 2),
-        lead: claudeAgent("high"),
-        runChecks: true,
-      },
+        ...(latest ?? {
+          reviewers: lineup
+            .slice(0, 2)
+            .map((r) => ({ ...r, prompt: lastPrompt(r.provider) })),
+          lead: claudeAgent("high"),
+          runChecks: true,
+        }),
+      }
+    );
+  });
+  const [touched, setTouched] = useState(
+    () => !!savedSetup(project.id) || !!latestReviewSetup(),
   );
-  const [touched, setTouched] = useState(() => !!savedSetup(project.id));
   const [pull, setPull] = useState<PullRef | null>(null);
   const [commit, setCommit] = useState("");
   const [focus, setFocus] = useState(
@@ -260,8 +279,10 @@ export function DeepReviewSetup({
       focus: focus.trim(),
       runtimeMode,
     });
+    if (!started) return;
+    recordReviewSetup(choice, focus.trim());
     // Like a sent message, the note goes with this review only.
-    if (started) localStorage.removeItem(focusKey(project.id));
+    localStorage.removeItem(focusKey(project.id));
   }
   const targets: {
     kind: ReviewTarget["kind"];
@@ -282,6 +303,11 @@ export function DeepReviewSetup({
     },
   ];
   const count = setup.reviewers.length;
+  const choice: ReviewSetupChoice = {
+    reviewers: setup.reviewers,
+    lead: setup.lead,
+    runChecks: setup.runChecks,
+  };
   return (
     <div className="thread-compose-wrap">
       <div className="thread-context-controls">
@@ -405,23 +431,36 @@ export function DeepReviewSetup({
                       onChange={(choice, provider) =>
                         update({
                           reviewers: setup.reviewers.map((r, j) =>
-                            j === i ? { provider, choice } : r,
+                            j !== i
+                              ? r
+                              : {
+                                  provider,
+                                  choice,
+                                  // Prompts belong to an agent; another starts where you left it.
+                                  prompt:
+                                    provider === r.provider
+                                      ? r.prompt
+                                      : lastPrompt(provider),
+                                },
                           ),
                         })
                       }
                     />
-                    <span
-                      className="deep-review-native"
-                      title={
-                        agents[reviewer.provider].reviewCommand.startsWith("/")
-                          ? "Runs the agent's own review"
-                          : "Reviews with Relay's review prompt"
+                    <ReviewPromptLine
+                      projectId={project.id}
+                      provider={reviewer.provider}
+                      label={`Prompt for reviewer ${i + 1}`}
+                      value={
+                        reviewer.prompt ?? ownReviewCommand(reviewer.provider)
                       }
-                    >
-                      <ScanSearch size={12} />
-                      {agents[reviewer.provider].reviewCommand}
-                    </span>
-                    <span className="spacer" />
+                      onChange={(prompt) =>
+                        update({
+                          reviewers: setup.reviewers.map((r, j) =>
+                            j === i ? { ...r, prompt } : r,
+                          ),
+                        })
+                      }
+                    />
                     {count > 1 && (
                       <button
                         type="button"
@@ -447,7 +486,13 @@ export function DeepReviewSetup({
                   className="text-button deep-review-add"
                   onClick={() =>
                     update({
-                      reviewers: [...setup.reviewers, lineup[count]!],
+                      reviewers: [
+                        ...setup.reviewers,
+                        {
+                          ...lineup[count]!,
+                          prompt: lastPrompt(lineup[count]!.provider),
+                        },
+                      ],
                     })
                   }
                 >
@@ -497,11 +542,16 @@ export function DeepReviewSetup({
           }}
         />
         <div className="composer-tools">
+          <ReviewSetups
+            setup={choice}
+            name={name}
+            onLoad={(saved) => update(saved)}
+          />
+          <span className="spacer" />
           <span className="deep-review-hint">
             {count} {count === 1 ? "reviewer" : "reviewers"} and a lead · runs
             on your plan usage
           </span>
-          <span className="spacer" />
           <button
             type="submit"
             className="primary deep-review-start"

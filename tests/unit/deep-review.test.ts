@@ -222,6 +222,71 @@ describe("reviewer tasks", () => {
     // A fence longer than any in the diff, so the diff can't close it early.
     expect(body).toContain("````diff\n+const md = ```js```;\n````");
   });
+  it("sends the prompt you picked, with what to review and how to report", () => {
+    const uncommitted = { ...scope, target: { kind: "uncommitted" as const } };
+    // Another command goes first, where Claude runs it, then the review's scope.
+    const command = reviewerTask(
+      { provider: "claude", choice, prompt: "/security-review" },
+      uncommitted,
+      "the queue",
+    );
+    expect(command.body).toMatch(
+      /^@claude \/security-review\n\nThis review covers the uncommitted changes/,
+    );
+    expect(command.body).toContain("git diff HEAD");
+    expect(command.body).toContain("P0 drop everything");
+    expect(command.body).toContain('"the queue"');
+    // A Codex skill runs in a plain turn, where `$name` finds it; not Codex's review.
+    const skill = reviewerTask(
+      { provider: "codex", choice, prompt: "$test-gaps" },
+      uncommitted,
+    );
+    expect(skill.codex).toBeUndefined();
+    expect(skill.body).toMatch(/^@codex \$test-gaps\n\n/);
+    // Your own words, for Cursor, still come with the diff it can't get itself.
+    const cursor = reviewerTask(
+      { provider: "cursor", choice, prompt: "Only the SQL" },
+      uncommitted,
+      undefined,
+      "+select 1;\n",
+    );
+    expect(cursor.body).toMatch(/^@cursor Only the SQL\n\n/);
+    expect(cursor.body).not.toContain("/review-bugbot");
+    expect(cursor.body).toContain("```diff\n+select 1;\n```");
+    // A command that only starts like the agent's own is someone else's.
+    expect(
+      reviewerTask(
+        { provider: "claude", choice, prompt: "/code-reviewer" },
+        uncommitted,
+      ).body,
+    ).toMatch(/^@claude \/code-reviewer\n\n/);
+  });
+  it("passes a note after the agent's own command to its review", () => {
+    const uncommitted = { ...scope, target: { kind: "uncommitted" as const } };
+    // The agent's own command alone is the same as no prompt.
+    expect(
+      reviewerTask(
+        { provider: "claude", choice, prompt: "/code-review" },
+        uncommitted,
+      ),
+    ).toEqual({ body: "@claude /code-review high" });
+    expect(
+      reviewerTask(
+        { provider: "claude", choice, prompt: "/code-review focus on auth" },
+        uncommitted,
+      ).body,
+    ).toBe("@claude /code-review high focus on auth");
+    // Codex's review takes it as instructions, and still reviews on its own.
+    const codex = reviewerTask(
+      { provider: "codex", choice, prompt: "/review the retries" },
+      uncommitted,
+    );
+    expect(codex.body).toBe("@codex /review");
+    expect(codex.codex).toMatchObject({ type: "custom" });
+    expect(
+      codex.codex?.type === "custom" && codex.codex.instructions,
+    ).toContain('"the retries"');
+  });
   it("hands the lead every report as data", () => {
     const prompt = leadPrompt(
       {

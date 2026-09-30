@@ -19,6 +19,7 @@ import type {
   DeepReviewState,
   FindingStatus,
   ReviewerTask,
+  ReviewSetup,
 } from "./deep-review";
 import {
   ultraplanKindSchema,
@@ -747,6 +748,8 @@ export interface ProjectApi {
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
   cancelProjectChat(id: string): Promise<void>;
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** A short name for a deep review setup, written by a helper agent; null when none could. */
+  nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
   /** Runs the council's thinkers that didn't finish, then the lead. */
   resumeUltraplan(id: string, request: string): Promise<void>;
   /** Runs the reviewers that didn't finish, then the lead. */

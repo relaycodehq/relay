@@ -342,3 +342,58 @@ test("the focus note keeps the send key set for messages", async () => {
     await close();
   }
 });
+
+test("a reviewer runs the prompt you typed, and the setup waits by Start next time", async () => {
+  const { page, close } = await openProject();
+  try {
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    const second = page.getByLabel("Prompt for reviewer 2");
+    // Each line starts on the agent's own review.
+    await expect(page.getByLabel("Prompt for reviewer 1")).toHaveValue(
+      "/code-review",
+    );
+    await expect(second).toHaveValue("/review");
+    await second.click();
+    await expect(
+      page.getByRole("listbox", { name: "Codex prompts" }),
+    ).toBeVisible();
+    await screenshot(page, {
+      path: "test-results/deep-review-prompt-menu.png",
+    });
+    await second.fill("Only look for dropped messages in the queue");
+    await screenshot(page, { path: "test-results/deep-review-prompt.png" });
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+
+    const panes = page.locator(".deep-review-pane");
+    await expect(panes).toHaveCount(2);
+    await expect(panes.first()).toContainText("/code-review high");
+    await expect(panes.nth(1)).toContainText(
+      "Only look for dropped messages in the queue",
+    );
+    await expect(panes.nth(1)).toContainText("This review covers");
+
+    // The next review starts from this setup, shown by Start and kept under More.
+    await page
+      .getByRole("button", { name: "New thread", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await expect(page.getByLabel("Prompt for reviewer 2")).toHaveValue(
+      "Only look for dropped messages in the queue",
+    );
+    const shown = page.locator(".deep-review-setups button[aria-pressed]");
+    await expect(shown).toHaveAttribute("aria-pressed", "true");
+    await expect(shown).not.toHaveText("Naming…", { timeout: 20000 });
+    await page.getByRole("button", { name: "All review setups" }).click();
+    await expect(page.locator(".deep-review-setups-row")).toHaveCount(1);
+    await screenshot(page, { path: "test-results/deep-review-setups.png" });
+  } finally {
+    await close();
+  }
+});

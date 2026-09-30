@@ -2,7 +2,7 @@
 // lead agent checks what they found and fixes it with the user.
 import { z } from "zod";
 import { runtimeModeSchema, type RuntimeMode } from "./agent-modes";
-import { agentProviderSchema, reviewerProviderSchema } from "./agents";
+import { agentProviderSchema, agents, reviewerProviderSchema } from "./agents";
 import { aiSettingsSchema, type ModelChoice } from "./settings";
 import { filePathSchema, refSchema } from "./validation";
 
@@ -32,14 +32,42 @@ const reviewAgentSchema = z
   .object({
     provider: reviewerProviderSchema,
     choice: aiSettingsSchema.shape.questions,
+    /** What it's asked, see `reviewerPrompt`; none runs its own review. */
+    prompt: z.string().trim().max(2000).optional(),
   })
   .strict();
 export type ReviewAgent = z.infer<typeof reviewAgentSchema>;
 /** The lead works in a thread like any other, so any agent can lead. */
-const leadAgentSchema = reviewAgentSchema
-  .extend({ provider: agentProviderSchema })
+const leadAgentSchema = z
+  .object({
+    provider: agentProviderSchema,
+    choice: aiSettingsSchema.shape.questions,
+  })
   .strict();
 export type LeadAgent = z.infer<typeof leadAgentSchema>;
+
+/** The agent's own review command, like `/code-review`; none for OpenCode. */
+export const ownReviewCommand = (provider: ReviewAgent["provider"]) => {
+  const command: string = agents[provider].reviewCommand;
+  return command.startsWith("/") ? command : "";
+};
+/**
+ * A reviewer's prompt as written in the setup: empty or the agent's own
+ * review command runs that review, with anything after the command as a note
+ * for it. Anything else (another command, a skill, your own words) goes to
+ * the agent as written, with what to review and how to report.
+ */
+export function reviewerPrompt(
+  provider: ReviewAgent["provider"],
+  prompt = "",
+): { kind: "own"; note: string } | { kind: "custom"; text: string } {
+  const text = prompt.trim();
+  const own = ownReviewCommand(provider);
+  if (!text) return { kind: "own", note: "" };
+  if (own && (text === own || text.startsWith(own + " ")))
+    return { kind: "own", note: text.slice(own.length).trim() };
+  return { kind: "custom", text };
+}
 
 export const MAX_REVIEWERS = 4;
 export const deepReviewStartSchema = z
@@ -55,6 +83,14 @@ export const deepReviewStartSchema = z
   })
   .strict();
 export type DeepReviewStart = z.infer<typeof deepReviewStartSchema>;
+
+/** What a helper agent names a setup from, to find it again later. */
+export const reviewSetupSchema = deepReviewStartSchema.pick({
+  reviewers: true,
+  lead: true,
+  focus: true,
+});
+export type ReviewSetup = z.infer<typeof reviewSetupSchema>;
 
 /** What the review covers, as resolved in the checkout when it started. */
 export interface ReviewScope {

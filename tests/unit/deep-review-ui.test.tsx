@@ -61,3 +61,32 @@ it("opens on the setup last used in the project", () => {
   );
   expect(html).not.toContain('type="checkbox" checked=""');
 });
+
+it("starts from the last review's setup when the project has none", () => {
+  const codex = {
+    provider: "codex",
+    choice: { model: "gpt-5.5", reasoningEffort: "high", fast: false },
+  };
+  store.set(
+    "deep-review-setups",
+    JSON.stringify([
+      {
+        id: "s1",
+        at: Date.now(),
+        name: "Retry hunt",
+        setup: {
+          reviewers: [{ ...codex, prompt: "$race-hunter" }, codex, codex],
+          lead: codex,
+          runChecks: true,
+        },
+      },
+    ]),
+  );
+  const html = setup();
+  expect(html).toContain("3 reviewers and a lead");
+  expect(html).toContain("$race-hunter");
+  // Named by Start, as the setup you're on.
+  expect(html).toMatch(
+    /aria-pressed="true"[^>]*>(?:<svg[^]*?<\/svg>)?Retry hunt</,
+  );
+});

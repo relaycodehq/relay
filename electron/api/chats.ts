@@ -4,7 +4,10 @@ import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
 import { chatIsEmpty } from "../../shared/chat-activity";
-import { deepReviewStartSchema } from "../../shared/deep-review";
+import {
+  deepReviewStartSchema,
+  reviewSetupSchema,
+} from "../../shared/deep-review";
 import {
   chatScopeSchema,
   chatTriageSchema,
@@ -17,6 +20,7 @@ import {
 import { idSchema, presenceSchema } from "../../shared/rooms";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../new-thread-models";
+import { nameReviewSetup } from "../review-setup-names";
 import type { ApiContext, Handlers } from "./context";
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
@@ -246,6 +250,12 @@ export function chatHandlers(ctx: ApiContext) {
         pull && { number: pull.number, title: pull.title, base: pull.base.ref },
       );
     },
+    nameReviewSetup: (args) =>
+      nameReviewSetup(
+        reviewSetupSchema.parse(args[0]),
+        store.aiSettings(),
+        AbortSignal.timeout(60_000),
+      ),
     resumeDeepReview: (args) =>
       projectChats.resumeDeepReview(idSchema.parse(args[0])),
     resumeUltraplan: (args) =>
