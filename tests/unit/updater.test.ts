@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 vi.mock("electron", () => ({
-  app: { isPackaged: false, getVersion: () => "0.1.0" },
+  app: { isPackaged: false, getVersion: () => "0.1.0", on: vi.fn() },
   net: { fetch: vi.fn() },
 }));
-import { net } from "electron";
+import { app, net } from "electron";
 import { Updater } from "../../electron/updater";
 import type { UpdateFile, UpdateState } from "../../shared/updates";
 
@@ -79,6 +79,44 @@ it("says why a check failed and goes back to idle", async () => {
   expect(seen).toEqual(["checking", "idle"]);
   vi.mocked(net.fetch).mockResolvedValueOnce(new Response("<!doctype html>"));
   await expect(updater.check()).rejects.toThrow("can't read");
+});
+
+it("keeps an offer in place while looking for a newer one", async () => {
+  const seen: string[] = [];
+  const updater = checker((s) => seen.push(s.status));
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  const offer = await updater.check();
+  seen.length = 0;
+  vi.mocked(net.fetch).mockRejectedValueOnce(new Error("offline"));
+  await expect(updater.check()).rejects.toThrow();
+  expect(updater.current).toEqual(offer);
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.3.0"));
+  expect(await updater.check()).toMatchObject({ version: "0.3.0" });
+  expect(seen).not.toContain("checking");
+});
+
+it("checks again on coming back to Relay once the last check is old", async () => {
+  vi.useFakeTimers();
+  vi.mocked(app.on).mockClear();
+  const updater = checker();
+  vi.mocked(net.fetch).mockImplementation(async () => feed("0.1.0"));
+  updater.start();
+  const calls = vi.mocked(app.on).mock.calls as unknown as [
+    string,
+    () => void,
+  ][];
+  const focus = calls.find(([event]) => event === "browser-window-focus")![1];
+  focus();
+  expect(net.fetch).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(net.fetch).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(29 * 60_000);
+  focus();
+  expect(net.fetch).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(60_000);
+  focus();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(net.fetch).toHaveBeenCalledTimes(2);
 });
 
 it("writes a verified download and reports progress", async () => {

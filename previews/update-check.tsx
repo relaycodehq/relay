@@ -18,6 +18,7 @@ import {
   ListTodo,
   Palette,
   Search,
+  Settings2,
   Smartphone,
   Sparkles,
   UserRound,
@@ -27,6 +28,7 @@ import {
 import "../src/styles.css";
 import "../src/components/settings.css";
 import "../src/components/relay-mark.css";
+import "../src/components/sidebar.css";
 import "./chrome.css";
 import "./update-check.css";
 import { initAppearance, setMode, useAppearance } from "../src/lib/appearance";
@@ -35,6 +37,7 @@ import { useUpdates } from "../src/lib/updates";
 import { RelayMark } from "../src/components/RelayMark";
 import { IconButton, Spinner } from "../src/components/ui";
 import { Settings } from "../src/components/Settings";
+import { UpdateButton } from "../src/components/UpdateButton";
 import { defaultAISettings } from "../shared/settings";
 import {
   UpdateActionButton,
@@ -98,9 +101,10 @@ Object.assign(window.relay as Partial<Api>, {
   },
   downloadUpdate: async () => {
     const { current, next: version } = sim;
+    // Long enough to close Settings mid-download and find it in the sidebar.
     for (let i = 0; i <= 40; i++) {
       set({ status: "downloading", current, version, progress: i / 40 });
-      await wait(70);
+      await wait(sim.latency > 1000 ? 250 : 70);
     }
     set({ status: "ready", current, version });
     return state;
@@ -290,6 +294,22 @@ function App() {
         <button
           type="button"
           className="uc-reset"
+          title="What the timed check does when GitHub has a newer release: the sidebar offers it"
+          onClick={() =>
+            set({
+              status: "available",
+              current: sim.current,
+              version: sim.next,
+              notes: "Sample release notes.",
+              install: "auto",
+            })
+          }
+        >
+          Timed check finds one
+        </button>
+        <button
+          type="button"
+          className="uc-reset"
           title="The app's own Settings dialog, with Orbit"
           onClick={() => setRealDialog(true)}
         >
@@ -375,6 +395,23 @@ function App() {
           <Check size={13} />
           {looks.find((l) => l.value === look)!.note}
         </p>
+        <div className="sb uc-sidebar" aria-label="Sidebar footer">
+          <div className="sb-footer">
+            <button type="button" className="sb-account">
+              <span className="sb-avatar" aria-hidden>
+                LM
+              </span>
+              <span>lubomirmolin</span>
+            </button>
+            <UpdateButton />
+            <IconButton
+              label="Open settings"
+              onClick={() => setRealDialog(true)}
+            >
+              <Settings2 size={15} />
+            </IconButton>
+          </div>
+        </div>
       </div>
       {realDialog && (
         <Settings

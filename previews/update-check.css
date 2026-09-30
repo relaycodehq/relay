@@ -29,6 +29,14 @@
   line-height: 1.5;
   color: var(--muted);
 }
+/* The real sidebar footer, to follow an update once Settings closes. */
+.uc-sidebar {
+  flex: none;
+  width: 280px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--sidebar);
+}
 .uc-note svg {
   flex: none;
   margin-top: 3px;

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../lib/api";
 import { checkForUpdates, useUpdates, type Updates } from "../lib/updates";
+import { useRecent } from "../lib/useRecent";
 import { releasesPage, type UpdateState } from "../../shared/updates";
 import { RelayMark } from "./RelayMark";
 import "./update-check.css";
@@ -239,6 +240,8 @@ export function UpdateConfetti() {
 export function UpdateCheck() {
   const { updates, action, phase, live } = useUpdateCheck();
   const comet = useLinger(phase === "busy", 300);
+  // Keyed to the find, not the phase: the download starts right after it.
+  const burst = useRecent(updates.foundAt, 1400);
   const progress =
     updates.state?.status === "downloading"
       ? updates.state.progress
@@ -276,7 +279,7 @@ export function UpdateCheck() {
           </svg>
         )}
         {live && phase === "latest" && <i className="update-ripple" />}
-        {live && phase === "found" && <UpdateConfetti />}
+        {burst && <UpdateConfetti />}
         <UpdateBadge phase={phase} />
       </span>
     </div>

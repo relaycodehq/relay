@@ -9,6 +9,8 @@ export interface Updates {
   checking: boolean;
   /** Why that check got no answer; the next update event clears it. */
   failure?: string;
+  /** When that check last found a newer release. */
+  foundAt?: number;
 }
 
 // A feed that answers at once would flash the check past; this long, it reads.
@@ -37,7 +39,11 @@ function subscribe(listener: () => void) {
 
 export const useUpdates = () => useSyncExternalStore(subscribe, () => updates);
 
-/** Looks for a newer release now, taking at least long enough to watch. */
+/**
+ * Looks for a newer release now, taking at least long enough to watch, and
+ * downloads one it finds: asking was the go-ahead. The download belongs to the
+ * main process, so closing Settings leaves it running in the sidebar.
+ */
 export async function checkForUpdates() {
   if (updates.checking) return;
   change({ checking: true, failure: undefined });
@@ -45,8 +51,10 @@ export async function checkForUpdates() {
     api.checkForUpdates(),
     new Promise((resolve) => setTimeout(resolve, shortestCheck)),
   ]);
+  const found = check.status === "fulfilled" ? check.value : undefined;
   change({
     checking: false,
+    ...(found?.status === "available" && { foundAt: Date.now() }),
     failure:
       check.status === "fulfilled"
         ? undefined
@@ -54,4 +62,6 @@ export async function checkForUpdates() {
           ? check.reason.message
           : "Couldn't check for updates.",
   });
+  if (found?.status === "available" && found.install === "auto")
+    void api.downloadUpdate();
 }

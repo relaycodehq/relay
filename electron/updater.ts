@@ -29,6 +29,8 @@ import {
 
 const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;
+// Coming back to Relay checks again once the last check is this old.
+const staleAfter = 30 * 60 * 1000;
 const checkTimeout = 20_000;
 const stallTimeout = 60_000;
 
@@ -85,6 +87,7 @@ export class Updater {
   private staged?: { version: string; path: string };
   private busy = false;
   private checking?: Promise<UpdateState>;
+  private checkedAt = 0;
   private readonly feed: string;
 
   private waiting?: NodeJS.Timeout;
@@ -120,6 +123,11 @@ export class Updater {
       );
     setTimeout(quietly, 15_000).unref();
     setInterval(quietly, checkEvery).unref();
+    // The launch check covers the first focus.
+    this.checkedAt = Date.now();
+    app.on("browser-window-focus", () => {
+      if (Date.now() - this.checkedAt >= staleAfter) quietly();
+    });
   }
 
   private set(state: UpdateState) {
@@ -152,7 +160,12 @@ export class Updater {
       this.set({ status: "off", current });
       return this.state;
     }
-    this.set({ status: "checking", current });
+    this.checkedAt = Date.now();
+    // An offer already in the sidebar stays put while Relay looks for a newer one.
+    const offered = ["available", "error"].includes(this.state.status)
+      ? this.state
+      : undefined;
+    if (!offered) this.set({ status: "checking", current });
     try {
       const response = await net
         .fetch(this.feed, {
@@ -189,7 +202,7 @@ export class Updater {
         });
       }
     } catch (error) {
-      this.set({ status: "idle", current });
+      this.set(offered ?? { status: "idle", current });
       throw error;
     }
     return this.state;

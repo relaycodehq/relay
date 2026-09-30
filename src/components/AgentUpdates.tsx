@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   AlertCircle,
   ArrowDownToLine,
@@ -9,6 +9,7 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
+import { useRecent } from "../lib/useRecent";
 import {
   checkAgentVersions,
   linkAgent,
@@ -40,21 +41,6 @@ const installers: Record<AgentInstaller, string> = {
 
 const names = (list: AgentVersion[]) =>
   list.length === 1 ? agents[list[0].provider].name : "agents";
-
-/** True for `ms` after `at`, then re-renders to say it's over. */
-function useRecent(at: number | undefined, ms: number) {
-  const [, expire] = useState(0);
-  const recent = at !== undefined && Date.now() - at < ms;
-  useEffect(() => {
-    if (!recent) return;
-    const timer = setTimeout(
-      () => expire((n) => n + 1),
-      ms - (Date.now() - at),
-    );
-    return () => clearTimeout(timer);
-  }, [recent, at, ms]);
-  return recent;
-}
 
 /**
  * Sidebar footer control, hidden until an agent CLI has a newer release. It
