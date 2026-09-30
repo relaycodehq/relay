@@ -265,8 +265,11 @@ test("group actions keep the sidebar position while explicit file navigation rev
     await expectSelectionInView();
     await current.selectOption(path(63));
     await expectSelectionInView();
-    await list.evaluate((el) => {
-      el.scrollTop = 60;
+    // Leaving the list let both complete groups settle into the Viewed fold.
+    await page.getByRole("button", { name: "Viewed 14", exact: true }).click();
+    const bottom = await list.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+      return el.scrollTop;
     });
     await group(b)
       .getByRole("button", { name: "Mark as unviewed", exact: true })
@@ -274,7 +277,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
     await expect(
       group(b).getByRole("button", { name: "Mark as viewed", exact: true }),
     ).toBeEnabled();
-    await expectOffset(60);
+    await expectOffset(bottom);
     await expect(
       page.getByText("12 of 72 reviewed", { exact: true }),
     ).toBeVisible();
@@ -291,7 +294,7 @@ test("group actions keep the sidebar position while explicit file navigation rev
     ).toBeVisible();
     await page.getByRole("button", { name: "Dismiss", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    await expectOffset(60);
+    await expectOffset(bottom);
     expect(fixture.requests.some((r) => r.method !== "GET")).toBe(false);
   } finally {
     await app.close();

@@ -1,0 +1,138 @@
+/* Unviewed/viewed split in the review file list. Flat, no pills. */
+.rv-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.rv-list {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  margin: 0 7px;
+  padding-bottom: 12px;
+}
+.rv-list .file-row {
+  width: 100%;
+  height: 49px;
+}
+
+/* A · the viewed section folds away behind one row. */
+.rv-fold {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 11px 7px 9px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.rv-fold:hover {
+  color: var(--text);
+}
+.rv-fold > span {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* B · viewed files stay listed, one quiet line each. */
+.rv-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 9px 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.rv-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.rv-list .file-row.rv-compact {
+  height: 28px;
+  padding: 4px 9px;
+}
+.file-row.rv-compact > div {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+.file-row.rv-compact strong {
+  flex-shrink: 0;
+  max-width: 70%;
+  color: var(--muted);
+  font-weight: 450;
+}
+.file-row.rv-compact small {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+.file-row.rv-compact:is(:hover, .active) strong {
+  color: var(--text);
+}
+.rv-option-sink .change-group.is-viewed .group-heading strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.rv-done {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 9px;
+  color: #558c6a;
+  font-size: 11px;
+}
+
+/* Stand-in diff pane: just enough to drive the Viewed button. */
+.rv-diff {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.rv-diff-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.rv-diff-head code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11px var(--font-mono);
+}
+.rv-diff-body {
+  overflow: auto;
+  padding: 10px 0;
+}
+.rv-diff-note {
+  margin: 6px 16px 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.rv-line {
+  padding: 0 16px;
+  font: 11px/1.8 var(--font-mono);
+  white-space: pre;
+}
+.rv-line.add {
+  background: color-mix(in srgb, #3b9c63 13%, transparent);
+}
+.rv-line.del {
+  background: color-mix(in srgb, #bd6c77 13%, transparent);
+}

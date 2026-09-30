@@ -2113,6 +2113,33 @@ html {
 .file-row.group-member {
   padding-left: 24px;
 }
+.viewed-fold-row {
+  padding-top: 6px;
+}
+.viewed-fold {
+  width: 100%;
+  height: 100%;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 0 7px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.viewed-fold:hover:not(:disabled) {
+  color: var(--text);
+}
+.viewed-fold:disabled {
+  opacity: 1;
+}
+.viewed-fold > span {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
 .group-description {
   font-size: 13px;
   line-height: 1.6;

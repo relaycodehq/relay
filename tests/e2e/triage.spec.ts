@@ -152,8 +152,9 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     })
     .toBe(2);
   expect(fixture.requests.some((r) => r.method !== "GET")).toBe(false);
-  // The reload reopens the PR being reviewed.
+  // The reload reopens the PR being reviewed, with the viewed group folded away.
   await page.reload();
+  await page.getByRole("button", { name: "Viewed 2", exact: true }).click();
   await expect(
     page.getByRole("button", {
       name: "About Constructor DI → inject()",

@@ -22,7 +22,8 @@ import { agentName } from "../../shared/agents";
 type Row =
   | { type: "file"; file: ChangedFile; grouped: boolean }
   | { type: "group"; group: ChangeGroup }
-  | { type: "label"; text: string };
+  | { type: "label"; text: string }
+  | { type: "fold"; count: number };
 export interface FileSelection {
   path: string | null;
   /** Explicit navigation reveals the file; bulk review keeps the list in place. */
@@ -61,58 +62,108 @@ export function GroupedFileList({
   const [open, setOpen] = useState<Set<string>>(new Set()),
     [inspect, setInspect] = useState<ChangeGroup | null>(null),
     [busy, setBusy] = useState<string | null>(null),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [viewedOpen, setViewedOpen] = useState(false),
+    // Group actions taken with the pointer on the list keep their rows in
+    // place until it leaves, so nothing moves out from under the cursor.
+    [held, setHeld] = useState<Map<string, boolean>>(new Map());
+  const pointerInside = useRef(false);
   useEffect(() => {
     setOpen(new Set());
     setInspect(null);
     setError("");
+    setHeld(new Map());
   }, [revision]);
+  const grouping = !plain && groups.length > 0;
+  /** Paths that sit in the Viewed section: viewed files, and complete groups. */
+  const folded = useMemo(() => {
+    const settled = (p: string) => held.get(p) ?? progress.read[p] === revision;
+    const result = new Set<string>(),
+      grouped = new Set<string>();
+    if (grouping)
+      for (const group of groups) {
+        group.paths.forEach((p) => grouped.add(p));
+        if (group.paths.every(settled))
+          group.paths.forEach((p) => result.add(p));
+      }
+    for (const f of files)
+      if (!grouped.has(f.filename) && settled(f.filename))
+        result.add(f.filename);
+    return result;
+  }, [files, groups, grouping, progress.read, revision, held]);
   const rows = useMemo(() => {
     const matches = (f: ChangedFile) =>
       f.filename.toLowerCase().includes(filter.toLowerCase());
-    if (plain || !groups.length)
-      return files
-        .filter(matches)
-        .map((file) => ({ type: "file", file, grouped: false }) as Row);
-    const result: Row[] = [],
-      grouped = new Set(groups.flatMap((g) => g.paths)),
-      byPath = new Map(files.map((f) => [f.filename, f]));
-    for (const group of groups) {
-      const members = group.paths
-        .map((p) => byPath.get(p))
-        .filter((f): f is ChangedFile => !!f && matches(f));
-      if (!members.length) continue;
-      result.push({ type: "group", group });
-      if (open.has(group.id) || filter)
-        result.push(
-          ...members.map(
-            (file) => ({ type: "file", file, grouped: true }) as Row,
-          ),
-        );
-    }
-    const normal = files.filter((f) => !grouped.has(f.filename) && matches(f));
-    if (normal.length)
-      result.push(
-        { type: "label", text: `Individual changes · ${normal.length}` },
-        ...normal.map(
-          (file) => ({ type: "file", file, grouped: false }) as Row,
-        ),
+    const fileRow = (file: ChangedFile, grouped: boolean): Row => ({
+      type: "file",
+      file,
+      grouped,
+    });
+    const top: Row[] = [],
+      bottom: Row[] = [];
+    let count = 0;
+    if (!grouping)
+      for (const file of files.filter(matches)) {
+        const done = folded.has(file.filename);
+        (done ? bottom : top).push(fileRow(file, false));
+        if (done) count++;
+      }
+    else {
+      const grouped = new Set(groups.flatMap((g) => g.paths)),
+        byPath = new Map(files.map((f) => [f.filename, f]));
+      for (const group of groups) {
+        const members = group.paths
+          .map((p) => byPath.get(p))
+          .filter((f): f is ChangedFile => !!f && matches(f));
+        if (!members.length) continue;
+        const done = group.paths.every((p) => folded.has(p)),
+          section = done ? bottom : top;
+        if (done) count += members.length;
+        section.push({ type: "group", group });
+        if (open.has(group.id) || filter)
+          section.push(...members.map((file) => fileRow(file, true)));
+      }
+      const normal = files.filter(
+        (f) => !grouped.has(f.filename) && matches(f),
       );
-    return result;
-  }, [files, groups, filter, plain, open]);
+      const unviewed = normal.filter((f) => !folded.has(f.filename)),
+        viewed = normal.filter((f) => folded.has(f.filename));
+      if (unviewed.length)
+        top.push(
+          { type: "label", text: `Individual changes · ${unviewed.length}` },
+          ...unviewed.map((file) => fileRow(file, false)),
+        );
+      bottom.push(...viewed.map((file) => fileRow(file, false)));
+      count += viewed.length;
+    }
+    if (!bottom.length) return top;
+    return [
+      ...top,
+      { type: "fold", count } as Row,
+      ...(viewedOpen || filter ? bottom : []),
+    ];
+  }, [files, groups, grouping, folded, filter, open, viewedOpen]);
   const parent = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parent.current,
     estimateSize: (i) =>
-      rows[i].type === "group" ? 77 : rows[i].type === "label" ? 33 : 49,
+      rows[i].type === "group"
+        ? 77
+        : rows[i].type === "label"
+          ? 33
+          : rows[i].type === "fold"
+            ? 40
+            : 49,
     overscan: 8,
     getItemKey: (i) =>
       rows[i].type === "file"
         ? rows[i].file.filename
         : rows[i].type === "group"
           ? rows[i].group.id
-          : "individual-label",
+          : rows[i].type === "fold"
+            ? "viewed-fold"
+            : "individual-label",
   });
   const revealed = useRef<{
     selection: FileSelection;
@@ -128,6 +179,10 @@ export function GroupedFileList({
         revealed.current.revision === revision)
     )
       return;
+    if (folded.has(selected) && !viewedOpen && !filter) {
+      setViewedOpen(true);
+      return;
+    }
     const group = !plain && groups.find((g) => g.paths.includes(selected));
     if (group && !open.has(group.id) && !filter) {
       setOpen((prev) => new Set([...prev, group.id]));
@@ -138,7 +193,11 @@ export function GroupedFileList({
     );
     if (index >= 0) {
       revealed.current = { selection, revision };
-      virtual.scrollToIndex(index, { align: "auto" });
+      // A new selection can resize the controls above the list; wait a frame
+      // so the virtualizer has seen the list's new height before scrolling.
+      requestAnimationFrame(() =>
+        virtual.scrollToIndex(index, { align: "auto" }),
+      );
     }
   }, [
     selection,
@@ -149,12 +208,21 @@ export function GroupedFileList({
     open,
     plain,
     filter,
+    folded,
+    viewedOpen,
     virtual,
   ]);
   const reviewGroup = async (group: ChangeGroup) => {
     if (busy) return;
     setBusy(group.id);
     setError("");
+    if (pointerInside.current)
+      setHeld((previous) => {
+        const next = new Map(previous);
+        for (const p of group.paths)
+          if (!next.has(p)) next.set(p, folded.has(p));
+        return next;
+      });
     try {
       await onReviewGroup(
         group,
@@ -174,7 +242,15 @@ export function GroupedFileList({
   };
   return (
     <>
-      <div className="file-virtual" ref={parent}>
+      <div
+        className="file-virtual"
+        ref={parent}
+        onPointerEnter={() => (pointerInside.current = true)}
+        onPointerLeave={() => {
+          pointerInside.current = false;
+          if (held.size) setHeld(new Map());
+        }}
+      >
         <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
           {virtual.getVirtualItems().map((v) => {
             const row = rows[v.index],
@@ -192,6 +268,27 @@ export function GroupedFileList({
                   {row.text}
                 </div>
               );
+            if (row.type === "fold") {
+              const expanded = viewedOpen || !!filter;
+              return (
+                <div key={v.key} className="viewed-fold-row" style={style}>
+                  <button
+                    className="viewed-fold"
+                    aria-expanded={expanded}
+                    disabled={!!filter}
+                    onClick={() => setViewedOpen((o) => !o)}
+                  >
+                    {expanded ? (
+                      <ChevronDown size={13} />
+                    ) : (
+                      <ChevronRight size={13} />
+                    )}
+                    Viewed
+                    <span>{row.count}</span>
+                  </button>
+                </div>
+              );
+            }
             if (row.type === "group") {
               const { group } = row,
                 viewed = group.paths.filter(
