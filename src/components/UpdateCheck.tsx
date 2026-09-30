@@ -90,10 +90,11 @@ function actionOf({ state, checking, failure }: Updates): UpdateAction | null {
     case "installing":
       return { label: "Restarting…" };
     case "error":
+      // Checks first, so a release out since the failure replaces it.
       return {
         label: "Try again",
         icon: RefreshCw,
-        run: () => void api.downloadUpdate(),
+        run: () => void checkForUpdates(),
       };
     default:
       return {
@@ -102,6 +103,20 @@ function actionOf({ state, checking, failure }: Updates): UpdateAction | null {
         run: () => void checkForUpdates(),
       };
   }
+}
+
+/**
+ * Looking again while one is offered or downloaded, so a release that came out
+ * since replaces it instead of installing the obsolete one first.
+ */
+function recheckOf({ state, checking }: Updates): UpdateAction | undefined {
+  if (checking || (state?.status !== "available" && state?.status !== "ready"))
+    return undefined;
+  return {
+    label: "Check again",
+    title: "Look for a release newer than this one",
+    run: () => void checkForUpdates(),
+  };
 }
 
 /** What the mark beside the button shows. */
@@ -147,6 +162,7 @@ export function useUpdateCheck() {
   return {
     updates,
     action: actionOf(updates),
+    recheck: recheckOf(updates),
     phase: phaseOf(updates),
     live,
   };
@@ -238,7 +254,7 @@ export function UpdateConfetti() {
  * a newer release bursts into confetti. The ring then fills as it downloads.
  */
 export function UpdateCheck() {
-  const { updates, action, phase, live } = useUpdateCheck();
+  const { updates, action, recheck, phase, live } = useUpdateCheck();
   const comet = useLinger(phase === "busy", 300);
   // Keyed to the find, not the phase: the download starts right after it.
   const burst = useRecent(updates.foundAt, 1400);
@@ -254,6 +270,7 @@ export function UpdateCheck() {
       data-phase={phase}
       data-live={live || undefined}
     >
+      {recheck && <UpdateActionButton action={recheck} />}
       {action && <UpdateActionButton action={action} />}
       <span className="update-orb">
         <RelayMark size={30} />

@@ -69,6 +69,8 @@ const set = (next: UpdateState) => {
   for (const listener of listeners) listener(next);
 };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const bump = (version: string) =>
+  version.replace(/\d+$/, (n) => String(Number(n) + 1));
 
 Object.assign(window.relay as Partial<Api>, {
   updateState: async () => state,
@@ -78,12 +80,22 @@ Object.assign(window.relay as Partial<Api>, {
   },
   checkForUpdates: async () => {
     const { current, next } = sim;
-    set({ status: "checking", current });
+    // Like the updater, an offer stays put while it looks for a newer one.
+    const offered = ["available", "ready", "error"].includes(state.status)
+      ? state
+      : undefined;
+    if (!offered) set({ status: "checking", current });
     await wait(sim.latency);
     if (sim.answer === "offline") {
-      set({ status: "idle", current });
+      set(offered ?? { status: "idle", current });
       throw new Error("Couldn't reach github.com.");
     }
+    // A download already ready stays unless a newer release is out.
+    if (
+      state.status === "ready" &&
+      (sim.answer === "latest" || state.version === next)
+    )
+      return state;
     if (sim.answer === "latest")
       set({ status: "idle", current, checkedAt: Date.now() });
     else
@@ -100,7 +112,9 @@ Object.assign(window.relay as Partial<Api>, {
     return state;
   },
   downloadUpdate: async () => {
-    const { current, next: version } = sim;
+    // What the last check offered, not what's come out since.
+    const { current } = sim;
+    const version = ("version" in state && state.version) || sim.next;
     // Long enough to close Settings mid-download and find it in the sidebar.
     for (let i = 0; i <= 40; i++) {
       set({ status: "downloading", current, version, progress: i / 40 });
@@ -114,7 +128,7 @@ Object.assign(window.relay as Partial<Api>, {
     await wait(1800);
     // Back from the restart on the new version.
     sim.current = sim.next;
-    sim.next = sim.next.replace(/\d+$/, (n) => String(Number(n) + 1));
+    sim.next = bump(sim.next);
     set({ status: "idle", current: sim.current });
     return state;
   },
@@ -306,6 +320,14 @@ function App() {
           }
         >
           Timed check finds one
+        </button>
+        <button
+          type="button"
+          className="uc-reset"
+          title="Publishes the next version on the sample feed; only a check sees it"
+          onClick={() => void (sim.next = bump(sim.next))}
+        >
+          Newer release comes out
         </button>
         <button
           type="button"

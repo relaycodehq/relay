@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -93,6 +93,47 @@ it("keeps an offer in place while looking for a newer one", async () => {
   vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.3.0"));
   expect(await updater.check()).toMatchObject({ version: "0.3.0" });
   expect(seen).not.toContain("checking");
+});
+
+it("skips a downloaded release once a newer one is out", async () => {
+  const updater = checker();
+  const dir = await mkdtemp(join(tmpdir(), "relay-update-"));
+  Object.assign(updater as any, {
+    state: { status: "ready", current: "0.1.0", version: "0.2.0" },
+    staged: { version: "0.2.0", path: join(dir, "Relay.AppImage"), dir },
+  });
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  expect(await updater.check()).toMatchObject({
+    status: "ready",
+    version: "0.2.0",
+  });
+  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.3.0"));
+  expect(await updater.check()).toMatchObject({
+    status: "available",
+    version: "0.3.0",
+  });
+  expect((updater as any).staged).toBeUndefined();
+  await vi.waitFor(() => expect(stat(dir)).rejects.toThrow(/ENOENT/));
+});
+
+it("leaves the state to a restart pressed while a check is out", async () => {
+  const updater = checker();
+  const dir = join(tmpdir(), "relay-update-restart");
+  await mkdir(dir, { recursive: true });
+  const ready = { status: "ready", current: "0.1.0", version: "0.2.0" };
+  Object.assign(updater as any, {
+    state: ready,
+    staged: { version: "0.2.0", path: join(dir, "Relay.AppImage"), dir },
+  });
+  let answer!: (response: Response) => void;
+  vi.mocked(net.fetch).mockReturnValueOnce(
+    new Promise((resolve) => (answer = resolve)),
+  );
+  const check = updater.check();
+  (updater as any).set({ ...ready, status: "waiting", tasks: 1 });
+  answer(feed("0.3.0"));
+  expect(await check).toMatchObject({ status: "waiting", version: "0.2.0" });
+  expect((updater as any).staged).toMatchObject({ version: "0.2.0" });
 });
 
 it("checks again on coming back to Relay once the last check is old", async () => {

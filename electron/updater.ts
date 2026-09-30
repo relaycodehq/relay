@@ -84,7 +84,7 @@ export class Updater {
   private state: UpdateState;
   private install: Install | null = null;
   private manifest?: UpdateManifest;
-  private staged?: { version: string; path: string };
+  private staged?: { version: string; path: string; dir: string };
   private busy = false;
   private checking?: Promise<UpdateState>;
   private checkedAt = 0;
@@ -148,12 +148,8 @@ export class Updater {
   private async lookUp() {
     const current = app.getVersion();
     if (this.state.status === "off" || this.busy) return this.state;
-    // A download in progress or waiting for restart shouldn't be reset by a timer.
-    if (
-      ["downloading", "ready", "waiting", "installing"].includes(
-        this.state.status,
-      )
-    )
+    // A download under way or a restart asked for shouldn't be reset by a timer.
+    if (["downloading", "waiting", "installing"].includes(this.state.status))
       return this.state;
     this.install ??= await detectInstall();
     if (!this.install) {
@@ -162,10 +158,12 @@ export class Updater {
     }
     this.checkedAt = Date.now();
     // An offer already in the sidebar stays put while Relay looks for a newer one.
-    const offered = ["available", "error"].includes(this.state.status)
+    const offered = ["available", "ready", "error"].includes(this.state.status)
       ? this.state
       : undefined;
     if (!offered) this.set({ status: "checking", current });
+    // Pressing Update or Restart mid-check hands the state to that instead.
+    const asked = this.state;
     try {
       const response = await net
         .fetch(this.feed, {
@@ -187,8 +185,14 @@ export class Updater {
           cause: parsed.error,
         });
       const manifest = parsed.data;
+      if (this.state !== asked) return this.state;
       this.manifest = manifest;
       const file = manifest.files[this.install.target];
+      const staged = this.state.status === "ready" ? this.staged : undefined;
+      if (staged && !newerVersion(manifest.version, staged.version))
+        return this.state;
+      // A newer release makes the downloaded one obsolete; skip straight past it.
+      this.dropStaged();
       if (!newerVersion(manifest.version, current) || !file) {
         this.set({ status: "idle", current, checkedAt: Date.now() });
       } else {
@@ -202,10 +206,17 @@ export class Updater {
         });
       }
     } catch (error) {
-      this.set(offered ?? { status: "idle", current });
+      if (this.state === asked)
+        this.set(offered ?? { status: "idle", current });
       throw error;
     }
     return this.state;
+  }
+
+  private dropStaged() {
+    const dir = this.staged?.dir;
+    this.staged = undefined;
+    if (dir) void rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 
   async download() {
@@ -231,7 +242,8 @@ export class Updater {
       const path = await this.fetchFile(file, dir, (progress) =>
         this.set({ status: "downloading", current, version, progress }),
       );
-      this.staged = { version, path: await prepare(install.target, path, dir) };
+      const staged = await prepare(install.target, path, dir);
+      this.staged = { version, path: staged, dir };
       this.set({ status: "ready", current, version });
     } catch (error) {
       await rm(dir, { recursive: true, force: true }).catch(() => {});
