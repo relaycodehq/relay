@@ -19,6 +19,8 @@ import {
   stepSlot,
   toolbarNames,
   useComposerToolbar,
+  type ToolbarItem,
+  type ToolbarLayout,
   type ToolbarSlot,
 } from "../lib/composer-toolbar";
 import { ComposerToolbar } from "./ComposerToolbar";
@@ -31,9 +33,10 @@ import "./composer-toolbar.css";
  * hidden ones.
  */
 export function ComposerToolbarSettings() {
-  const layout = useComposerToolbar();
+  const saved = useComposerToolbar();
   const controls = useSampleControls();
-  const [dragging, setDragging] = useDragging();
+  const drag = useDraftDrag(saved);
+  const { layout, slot: dragging } = drag;
   const [over, setOver] = useState(false);
   const tools = useFitOneLine();
   const hideable =
@@ -43,13 +46,13 @@ export function ComposerToolbarSettings() {
   const start = (slot: ToolbarSlot) => (e: DragEvent) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", slot);
-    setDragging(slot);
+    drag.start(slot);
   };
   const slotKeys = (slot: ToolbarSlot) => (e: KeyboardEvent) => {
-    if (e.key === "ArrowLeft") save(stepSlot(layout, slot, -1));
-    else if (e.key === "ArrowRight") save(stepSlot(layout, slot, 1));
+    if (e.key === "ArrowLeft") save(stepSlot(saved, slot, -1));
+    else if (e.key === "ArrowRight") save(stepSlot(saved, slot, 1));
     else if (slot !== "gap" && (e.key === "Backspace" || e.key === "Delete"))
-      save(hideItem(layout, slot));
+      save(hideItem(saved, slot));
     else return;
     e.preventDefault();
   };
@@ -78,7 +81,7 @@ export function ComposerToolbarSettings() {
           e.preventDefault();
           const box = e.currentTarget.getBoundingClientRect();
           const after = e.clientX > box.left + box.width / 2;
-          save(placeSlot(layout, dragging, slot, after));
+          drag.move((layout, moving) => placeSlot(layout, moving, slot, after));
         }}
         onKeyDown={slotKeys(slot)}
       >
@@ -135,7 +138,10 @@ export function ComposerToolbarSettings() {
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          if (hideable) save(hideItem(layout, hideable));
+          if (hideable)
+            drag.move((layout, moving) =>
+              hideItem(layout, moving as ToolbarItem),
+            );
         }}
       >
         {layout.hidden.length === 0 ? (
@@ -153,9 +159,9 @@ export function ComposerToolbarSettings() {
               title="Drag back onto the bar, or press Enter"
               onDragStart={start(item)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") save(showItem(layout, item));
+                if (e.key === "Enter") save(showItem(saved, item));
               }}
-              onDoubleClick={() => save(showItem(layout, item))}
+              onDoubleClick={() => save(showItem(saved, item))}
             >
               <span className="toolbar-edit-control" inert>
                 {controls[item]}
@@ -184,22 +190,54 @@ export function ComposerToolbarReset() {
   );
 }
 
+interface Drag {
+  slot: ToolbarSlot;
+  from: ToolbarLayout;
+  layout: ToolbarLayout;
+}
+
 /**
- * The slot being dragged. Showing or hiding one unmounts the element the drag
- * began on, which then never gets its dragend, so the window ends it too.
+ * A drag in progress. Its order stays here while the pointer moves and
+ * reaches the store once on release: every composer in the app listens to
+ * the store, and dragover fires every few milliseconds.
+ *
+ * Showing or hiding a control unmounts the element the drag began on, which
+ * then never gets its dragend, so the window ends the drag too.
  */
-function useDragging() {
-  const [dragging, setDragging] = useState<ToolbarSlot>();
+function useDraftDrag(saved: ToolbarLayout) {
+  const [drag, setDrag] = useState<Drag>();
+  // Handlers in one event see each other's changes before React renders.
+  const current = useRef(drag);
+  const update = (next: Drag | undefined) => {
+    current.current = next;
+    setDrag(next);
+  };
+  const dragging = drag !== undefined;
   useEffect(() => {
     if (!dragging) return;
-    const stop = () => setDragging(undefined);
+    const end = () => {
+      const done = current.current;
+      update(undefined);
+      if (done && done.layout !== done.from) setComposerToolbar(done.layout);
+    };
     const events = ["dragend", "drop", "mousemove"] as const;
-    for (const event of events) window.addEventListener(event, stop);
+    for (const event of events) window.addEventListener(event, end);
     return () => {
-      for (const event of events) window.removeEventListener(event, stop);
+      for (const event of events) window.removeEventListener(event, end);
     };
   }, [dragging]);
-  return [dragging, setDragging] as const;
+  return {
+    slot: drag?.slot,
+    layout: drag?.layout ?? saved,
+    start: (slot: ToolbarSlot) => update({ slot, from: saved, layout: saved }),
+    /** Applies `change` to the drag's order; unchanged, nothing renders. */
+    move(change: (layout: ToolbarLayout, slot: ToolbarSlot) => ToolbarLayout) {
+      const now = current.current;
+      if (!now) return;
+      const layout = change(now.layout, now.slot);
+      if (layout !== now.layout) update({ ...now, layout });
+    },
+  };
 }
 
 /**

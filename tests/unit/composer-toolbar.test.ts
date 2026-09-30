@@ -68,6 +68,16 @@ it("placing a hidden control shows it", () => {
   expect(placed.slots.slice(0, 2)).toEqual(["model", "usage"]);
 });
 
+it("a move that changes nothing is the same layout", () => {
+  // Dragover fires every few milliseconds; Settings renders only on a change.
+  expect(placeSlot(defaultToolbar, "model", "effort", false)).toBe(
+    defaultToolbar,
+  );
+  expect(placeSlot(defaultToolbar, "effort", "model", true)).toBe(
+    defaultToolbar,
+  );
+});
+
 describe("the old usage ring switch", () => {
   afterEach(() => vi.unstubAllGlobals());
   const load = async (saved: Record<string, string>) => {

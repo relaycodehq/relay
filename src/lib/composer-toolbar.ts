@@ -87,7 +87,12 @@ export function placeSlot(
   if (slot === target) return layout;
   const slots = layout.slots.filter((s) => s !== slot);
   slots.splice(slots.indexOf(target) + (after ? 1 : 0), 0, slot);
-  return { slots, hidden: layout.hidden.filter((h) => h !== slot) };
+  const hidden = layout.hidden.filter((h) => h !== slot);
+  // Dragging keeps asking; a move that changes nothing is the same layout.
+  const same =
+    hidden.length === layout.hidden.length &&
+    slots.every((s, i) => s === layout.slots[i]);
+  return same ? layout : { slots, hidden };
 }
 
 /** Moves `slot` one place along the shown slots. */
@@ -114,10 +119,10 @@ export function hideItem(
 export const showItem = (
   layout: ToolbarLayout,
   item: ToolbarItem,
-): ToolbarLayout => ({
-  ...layout,
-  hidden: layout.hidden.filter((h) => h !== item),
-});
+): ToolbarLayout =>
+  layout.hidden.includes(item)
+    ? { ...layout, hidden: layout.hidden.filter((h) => h !== item) }
+    : layout;
 
 export const isDefaultToolbar = (layout: ToolbarLayout) =>
   layout.hidden.length === 0 &&
