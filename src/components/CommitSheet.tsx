@@ -252,6 +252,7 @@ export function CommitSheet({
             {!!error && <ErrorBox error={error} />}
             <button
               className="primary commit-submit"
+              aria-keyshortcuts={keys("Meta+Enter", "Control+Enter")}
               disabled={
                 busy ||
                 (writing && !typed.current) ||
@@ -272,7 +273,7 @@ export function CommitSheet({
                     ? ""
                     : `${selected.length} of ${files.length} files `}
                   {push && "& push"}
-                  <kbd>{keys("⌘↵", "Ctrl+↵")}</kbd>
+                  <kbd aria-hidden>{keys("⌘↵", "Ctrl+↵")}</kbd>
                 </>
               )}
             </button>
