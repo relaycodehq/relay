@@ -54,6 +54,24 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
       paths: z.array(workingPathSchema).min(1).max(1000).optional(),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("ignore"),
+      revision: z.string(),
+      paths: z.array(workingPathSchema).min(1).max(1000),
+      /** The shared .gitignore, or .git/info/exclude for this clone only. */
+      file: z.enum(["gitignore", "exclude"]),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("discard"),
+      revision: z.string(),
+      paths: z.array(workingPathSchema).min(1).max(1000),
+      /** Working changes go back to the index; staged ones, and the rest, back to HEAD. */
+      area: z.enum(["staged", "unstaged"]),
+    })
+    .strict(),
   z.object({ kind: z.literal("push"), revision: z.string() }).strict(),
   z.object({ kind: z.literal("pull"), revision: z.string() }).strict(),
   z.object({ kind: z.literal("fetch") }).strict(),

@@ -1,3 +1,4 @@
+import { shell } from "electron";
 import { z } from "zod";
 import { mergeBranchSchema } from "../../shared/branch-merge";
 import { branchActionSchema } from "../../shared/branches";
@@ -114,6 +115,7 @@ export function gitHandlers(ctx: ApiContext) {
       performGitAction(
         await placeRoot(args[0]),
         gitActionSchema.parse(args[1]),
+        (file) => shell.trashItem(file),
       ),
   } satisfies Handlers;
 }

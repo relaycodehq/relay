@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ContextMenu } from "@base-ui/react/context-menu";
@@ -29,6 +28,7 @@ import {
   type useExpanded,
 } from "../lib/useFileTree";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { ContextMenuItem } from "./ContextMenuItem";
 import { ErrorBox, FileEntryIcon, IconButton, Modal } from "./ui";
 import "./file-browser.css";
 import { mac } from "../lib/mod-key";
@@ -402,86 +402,58 @@ function Row({
           <ContextMenu.Popup className="sb-menu">
             {dir && (
               <>
-                <MenuItem
+                <ContextMenuItem
                   icon={<FilePlus size={13} />}
                   onClick={() => onCreate(row.path, "file")}
                 >
                   New file
-                </MenuItem>
-                <MenuItem
+                </ContextMenuItem>
+                <ContextMenuItem
                   icon={<FolderPlus size={13} />}
                   onClick={() => onCreate(row.path, "dir")}
                 >
                   New folder
-                </MenuItem>
+                </ContextMenuItem>
                 <ContextMenu.Separator className="sb-menu-separator" />
               </>
             )}
-            <MenuItem icon={<FolderOpen size={13} />} onClick={onReveal}>
+            <ContextMenuItem icon={<FolderOpen size={13} />} onClick={onReveal}>
               {revealLabel}
-            </MenuItem>
+            </ContextMenuItem>
             {!dir && !link && (
-              <MenuItem
+              <ContextMenuItem
                 icon={<ExternalLink size={13} />}
                 onClick={onOpenExternal}
               >
                 Open with default app
-              </MenuItem>
+              </ContextMenuItem>
             )}
-            <MenuItem
+            <ContextMenuItem
               icon={<Copy size={13} />}
               onClick={() => void api.writeClipboard(row.path)}
             >
               Copy relative path
-            </MenuItem>
+            </ContextMenuItem>
             <ContextMenu.Separator className="sb-menu-separator" />
-            <MenuItem
+            <ContextMenuItem
               icon={<Pencil size={13} />}
               disabled={frozen}
               hint="F2"
               onClick={onRename}
             >
               Rename
-            </MenuItem>
-            <MenuItem
+            </ContextMenuItem>
+            <ContextMenuItem
               icon={<Trash2 size={13} />}
               disabled={frozen}
               onClick={onTrash}
             >
               Move to Trash
-            </MenuItem>
+            </ContextMenuItem>
           </ContextMenu.Popup>
         </ContextMenu.Positioner>
       </ContextMenu.Portal>
     </ContextMenu.Root>
-  );
-}
-
-function MenuItem({
-  icon,
-  children,
-  hint,
-  disabled,
-  onClick,
-}: {
-  icon: ReactNode;
-  children: ReactNode;
-  hint?: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <ContextMenu.Item
-      className="sb-menu-item"
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <span className="sb-menu-label">
-        {icon}
-        {children}
-      </span>
-      {hint && <small>{hint}</small>}
-    </ContextMenu.Item>
   );
 }
 

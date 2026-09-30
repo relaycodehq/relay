@@ -135,6 +135,108 @@ it("handles literal odd filenames, renames, deletion and untracked files", async
       ?.worktree,
   ).toBe("D");
 });
+it("ignores exactly the chosen untracked files, in .gitignore or this clone's exclude", async () => {
+  await mkdir(join(root, "logs"));
+  const odd = "logs/[a]*? b ";
+  for (const name of [odd, "logs/ab b", "logs/x.log", "keep.txt"])
+    await writeFile(join(root, name), "x\n");
+  await writeFile(join(root, ".gitignore"), "# no trailing newline");
+  git("add", ".gitignore");
+  git("commit", "-qm", "Ignore file");
+  let tree = await workingTree(root);
+  tree = await performGitAction(root, {
+    kind: "ignore",
+    revision: tree.revision,
+    paths: [odd],
+    file: "gitignore",
+  });
+  tree = await performGitAction(root, {
+    kind: "ignore",
+    revision: tree.revision,
+    paths: ["logs/x.log"],
+    file: "exclude",
+  });
+  const untracked = tree.changes
+    .filter((c) => c.index === "?")
+    .map((c) => c.path)
+    .sort();
+  expect(untracked).toEqual(["keep.txt", "logs/ab b"]);
+  expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(
+    "# no trailing newline\n/logs/\\[a]\\*\\? b\\ \n",
+  );
+  expect(git("check-ignore", "-v", "logs/x.log")).toContain("info/exclude");
+  await expect(
+    performGitAction(root, {
+      kind: "ignore",
+      revision: tree.revision,
+      paths: ["code.ts"],
+      file: "gitignore",
+    }),
+  ).rejects.toThrow("Only untracked files");
+});
+it("discards back to the index or to HEAD, keeping a copy of each file in the Trash", async () => {
+  await writeFile(join(root, "code.ts"), "staged\n");
+  git("add", "code.ts");
+  await writeFile(join(root, "code.ts"), "staged\nworking\n");
+  await writeFile(join(root, "added.ts"), "new\n");
+  git("add", "added.ts");
+  await writeFile(join(root, "loose.ts"), "untracked\n");
+  const trashed: string[] = [];
+  const trash = async (file: string) => {
+    trashed.push(await readFile(file, "utf8"));
+  };
+  let tree = await workingTree(root);
+  await expect(
+    performGitAction(
+      root,
+      {
+        kind: "discard",
+        revision: tree.revision,
+        paths: ["loose.ts"],
+        area: "unstaged",
+      },
+      trash,
+    ),
+  ).rejects.toThrow("Only tracked files");
+  await expect(
+    performGitAction(root, {
+      kind: "discard",
+      revision: tree.revision,
+      paths: ["code.ts"],
+      area: "unstaged",
+    }),
+  ).rejects.toThrow("Trash");
+  tree = await performGitAction(
+    root,
+    {
+      kind: "discard",
+      revision: tree.revision,
+      paths: ["code.ts"],
+      area: "unstaged",
+    },
+    trash,
+  );
+  expect(await readFile(join(root, "code.ts"), "utf8")).toBe("staged\n");
+  expect(tree.changes.find((c) => c.path === "code.ts")).toMatchObject({
+    index: "M",
+    worktree: " ",
+  });
+  tree = await performGitAction(
+    root,
+    {
+      kind: "discard",
+      revision: tree.revision,
+      paths: ["code.ts", "added.ts"],
+      area: "staged",
+    },
+    trash,
+  );
+  expect(await readFile(join(root, "code.ts"), "utf8")).toBe(
+    "export const a = 1;\n",
+  );
+  expect(tree.changes.map((c) => c.path)).toEqual(["loose.ts"]);
+  expect(trashed).toEqual(["staged\nworking\n", "staged\n", "new\n"]);
+});
 it("shows changed binary and oversized files as binary instead of failing", async () => {
   await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 1]));
   await writeFile(join(root, "data.json"), "1".repeat(3 * 1024 * 1024));

@@ -19,6 +19,7 @@ import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
 import { CommitSplitSheet } from "./CommitSplit";
+import { LocalChangeMenu } from "./LocalChangeMenu";
 import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "./WorkingDiff";
 import type { PaneSlots } from "./WorkspacePanes";
 import "./working-tree.css";
@@ -340,10 +341,9 @@ export function LocalChanges({
                           const code = staged ? c.index : c.worktree,
                             kind = changeKind(code, c.conflict),
                             slash = c.path.lastIndexOf("/");
-                          return (
+                          const row = (
                             <div
                               className={`working-file ${selected?.path === c.path && selected.area === s.area ? "selected" : ""}`}
-                              key={c.path}
                             >
                               <input
                                 type="checkbox"
@@ -382,6 +382,47 @@ export function LocalChanges({
                                 )}
                               </button>
                             </div>
+                          );
+                          return (
+                            <LocalChangeMenu
+                              key={c.path}
+                              change={c}
+                              area={s.area}
+                              projectId={projectId}
+                              busy={busy}
+                              trigger={row}
+                              onStage={() =>
+                                void act({
+                                  kind: s.kind,
+                                  revision: tree.revision,
+                                  paths: [c.path],
+                                })
+                              }
+                              onIgnore={(file) =>
+                                void act({
+                                  kind: "ignore",
+                                  revision: tree.revision,
+                                  paths: [c.path],
+                                  file,
+                                })
+                              }
+                              onDiscard={() =>
+                                void act({
+                                  kind: "discard",
+                                  revision: tree.revision,
+                                  paths: [c.path],
+                                  area: s.area,
+                                })
+                              }
+                              onShowArea={(area) => {
+                                setSelected({ path: c.path, area });
+                                setWanted(null);
+                                setLine(undefined);
+                              }}
+                              onOpenFile={onOpenFile}
+                              onTrashed={() => void state.refetch()}
+                              onError={setError}
+                            />
                           );
                         })}
                     </section>

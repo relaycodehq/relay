@@ -56,6 +56,7 @@ const methods = [
   "projectThumbnail",
   "revealProjectPath",
   "openProjectPath",
+  "projectAbsolutePath",
   "createProjectEntry",
   "renameProjectEntry",
   "trashProjectEntry",

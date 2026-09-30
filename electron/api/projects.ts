@@ -158,6 +158,8 @@ export function projectHandlers(ctx: ApiContext) {
         await openPath(full);
       } else shell.showItemInFolder(full);
     },
+    projectAbsolutePath: async (args) =>
+      join((await place(args[0])).root, workingPathSchema.parse(args[1])),
     openProjectPath: async (args) =>
       openPath(
         entryPath(

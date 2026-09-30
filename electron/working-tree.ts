@@ -1,8 +1,17 @@
 import { chunks } from "./chunks";
 import { keyedQueue } from "./keyed-queue";
 import { execFile } from "node:child_process";
-import { lstat, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  appendFile,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { inspectRepository } from "./repository";
 import {
   git,
@@ -298,7 +307,32 @@ function withPreviousPaths(
     ),
   ];
 }
-export async function performGitAction(root: string, action: GitAction) {
+/** Hands a copy of each file on disk to `trash`, so a discard can be undone. */
+async function keepCopies(
+  root: string,
+  paths: string[],
+  trash: (file: string) => Promise<void>,
+) {
+  for (const path of paths) {
+    const source = join(root, path);
+    const stat = await lstat(source).catch(() => null);
+    if (!stat?.isFile()) continue;
+    const dir = await mkdtemp(join(tmpdir(), "relay-discard-"));
+    try {
+      const copy = join(dir, basename(path));
+      await copyFile(source, copy);
+      await trash(copy);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+}
+export async function performGitAction(
+  root: string,
+  action: GitAction,
+  /** Moves a file to the system Trash; discarding refuses to run without it. */
+  trash?: (file: string) => Promise<void>,
+) {
   return serializeRepo(root, async () => {
     const state = await workingTree(root);
     if (action.kind === "fetch") {
@@ -325,6 +359,62 @@ export async function performGitAction(root: string, action: GitAction) {
             ? ["add", "--", ...part]
             : ["reset", "-q", "HEAD", "--", ...part],
         );
+    } else if (action.kind === "discard") {
+      if (!trash) throw new Error("Discarding needs the system Trash.");
+      if (
+        action.paths.some((p) => {
+          const c = state.changes.find((c) => c.path === p);
+          return !c || c.conflict || c.index === "?";
+        })
+      )
+        throw new Error(
+          "Only tracked files without conflicts can be discarded. Move untracked files to the Trash instead.",
+        );
+      const staged = action.area === "staged";
+      const paths = withPreviousPaths(
+        state.changes,
+        action.paths,
+        (c) => staged || /[RC]/.test(c.worktree),
+      );
+      await keepCopies(root, action.paths, trash);
+      for (const part of chunks(paths, 100))
+        await git(
+          root,
+          staged
+            ? [
+                "restore",
+                "--source=HEAD",
+                "--staged",
+                "--worktree",
+                "--",
+                ...part,
+              ]
+            : ["restore", "--worktree", "--", ...part],
+        );
+    } else if (action.kind === "ignore") {
+      if (
+        action.paths.some(
+          (p) => state.changes.find((c) => c.path === p)?.index !== "?",
+        )
+      )
+        throw new Error("Only untracked files can be ignored.");
+      const file =
+        action.file === "gitignore"
+          ? join(root, ".gitignore")
+          : resolve(
+              root,
+              (
+                await git(root, ["rev-parse", "--git-path", "info/exclude"])
+              ).trim(),
+            );
+      await mkdir(dirname(file), { recursive: true });
+      const before = await readFile(file, "utf8").catch(() => "");
+      await appendFile(
+        file,
+        (before && !before.endsWith("\n") ? "\n" : "") +
+          action.paths.map(ignorePattern).join("\n") +
+          "\n",
+      );
     } else {
       if (!state.branch || state.operation)
         throw new Error(
@@ -394,6 +484,10 @@ export async function performGitAction(root: string, action: GitAction) {
     }
     return workingTree(root);
   });
+}
+/** A pattern matching just this path from the repository root. */
+function ignorePattern(path: string) {
+  return "/" + path.replace(/[\\*?[]/g, "\\$&").replace(/ $/, "\\ ");
 }
 export async function workingDiff(
   root: string,

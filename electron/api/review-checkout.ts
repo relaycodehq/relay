@@ -1,4 +1,4 @@
-import { app, dialog } from "electron";
+import { app, dialog, shell } from "electron";
 import { z } from "zod";
 import { lineQuestionSchema } from "../../shared/questions";
 import {
@@ -52,7 +52,9 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
         workingPathSchema.parse(args[1]),
         z.enum(["staged", "unstaged"]).parse(args[2]),
       );
-    return performGitAction(root, gitActionSchema.parse(args[1]));
+    return performGitAction(root, gitActionSchema.parse(args[1]), (file) =>
+      shell.trashItem(file),
+    );
   }
 
   async function localFile(

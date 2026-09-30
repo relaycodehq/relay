@@ -629,6 +629,8 @@ export interface ProjectApi {
   projectThumbnail(where: string, path: string): Promise<string>;
   /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */
   revealProjectPath(where: string, path: string): Promise<void>;
+  /** Where a file sits on disk, whether or not it's there now. */
+  projectAbsolutePath(where: string, path: string): Promise<string>;
   /** Opens a file in the app the system picks for it. */
   openProjectPath(where: string, path: string): Promise<void>;
   createProjectEntry(
