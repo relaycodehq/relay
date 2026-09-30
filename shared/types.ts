@@ -261,6 +261,8 @@ export interface Api
   ): Promise<string[]>;
   aiSettings(): Promise<AISettings>;
   saveAISettings(settings: AISettings): Promise<AISettings>;
+  smartProjectNames(): Promise<boolean>;
+  saveSmartProjectNames(enabled: boolean): Promise<boolean>;
   saveSidebarView(view: SidebarView): Promise<void>;
   /** The agent last picked for a new thread, here or on the phone; null before either has. */
   newThreadAgent(): Promise<AgentProvider | null>;

@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useDialogContainer } from "../lib/useDialogContainer";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Info,
@@ -518,6 +518,18 @@ export function Settings({
   // by accident.
   const settings = useAISettings(),
     qc = useQueryClient();
+  const smartProjectNames = useQuery({
+    queryKey: ["smart-project-names"],
+    queryFn: () => api.smartProjectNames(),
+    staleTime: Infinity,
+  });
+  const saveSmartProjectNames = useMutation({
+    mutationFn: (enabled: boolean) => api.saveSmartProjectNames(enabled),
+    onSuccess: async (enabled) => {
+      qc.setQueryData(["smart-project-names"], enabled);
+      await qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
   const [draft, setDraft] = useState<AISettings>();
   const [saving, setSaving] = useState(false),
     [saved, setSaved] = useState(false);
@@ -674,6 +686,37 @@ export function Settings({
           checked={cacheHeat}
           onChange={setCacheHeat}
         />
+      ),
+    },
+    {
+      id: "smart-project-names",
+      category: "appearance",
+      title: "Smart project names",
+      description:
+        "Turn relay-releases into Relay Releases. Off keeps the original folder or repository name. Names you type yourself stay as typed.",
+      keywords:
+        "projects naming folder repository capitalize separators hyphen underscore original smart",
+      render: () => (
+        <>
+          <Switch
+            label="Smart project names"
+            checked={
+              (saveSmartProjectNames.isPending
+                ? saveSmartProjectNames.variables
+                : smartProjectNames.data) ?? true
+            }
+            disabled={
+              smartProjectNames.data === undefined ||
+              saveSmartProjectNames.isPending
+            }
+            onChange={(enabled) => saveSmartProjectNames.mutate(enabled)}
+          />
+          {(smartProjectNames.isError || saveSmartProjectNames.isError) && (
+            <ErrorBox
+              error={smartProjectNames.error ?? saveSmartProjectNames.error}
+            />
+          )}
+        </>
       ),
     },
     {

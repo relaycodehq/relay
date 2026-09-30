@@ -74,7 +74,9 @@ export class Projects {
   async rename(id: string, name: string) {
     this.get(id);
     await this.store.update((s) => {
-      s.projects!.find((p) => p.id === id)!.name = name;
+      const project = s.projects!.find((p) => p.id === id)!;
+      project.name = name;
+      project.automaticName = null;
     });
     return this.get(id);
   }
@@ -130,6 +132,28 @@ export class Projects {
       throw new Error("Wait for the branch switch to finish.");
   }
   constructor(private store: Store) {}
+  /** Resolve names at read time so toggling never rewrites saved or custom names. */
+  private named(project: Project): Project {
+    if (project.scratch || project.automaticName === null) return project;
+    // Older saves only kept the formatted title. Recognize their default names
+    // from the folder/repository, leaving all other names as typed.
+    const original =
+      project.automaticName ??
+      [basename(project.path), project.repository?.name].find(
+        (name) =>
+          name &&
+          (project.name === projectTitle(name) ||
+            (!this.store.get().projectTitlesTidied && project.name === name)),
+      );
+    if (!original) return project;
+    return {
+      ...project,
+      name:
+        this.store.get().smartProjectNames === false
+          ? original
+          : projectTitle(original),
+    };
+  }
   async list(client: Gitea | null) {
     // Import existing links without deleting the saved review workspace or progress.
     const known = this.store.get().projects ?? [];
@@ -145,24 +169,18 @@ export class Projects {
           additions.push({
             id: randomUUID(),
             path,
-            name: projectTitle(name),
+            name,
+            automaticName: name,
             repository: { server: client.account.server, owner, name },
             added: Date.now(),
           });
       }
-    const tidy = !this.store.get().projectTitlesTidied;
-    if (additions.length || tidy)
+    if (additions.length)
       await this.store.update((s) => {
         s.projects = [...(s.projects ?? []), ...additions];
-        if (!tidy) return;
-        // Names still equal to the folder or repo were never typed by hand.
-        for (const p of s.projects)
-          if (p.name === basename(p.path) || p.name === p.repository?.name)
-            p.name = projectTitle(p.name);
-        s.projectTitlesTidied = true;
       });
     const projects = await Promise.all(
-      (this.store.get().projects ?? []).map(withKind),
+      (this.store.get().projects ?? []).map((p) => withKind(this.named(p))),
     );
     if (client)
       for (const p of projects)
@@ -179,7 +197,7 @@ export class Projects {
   get(id: string) {
     const project = this.store.get().projects?.find((p) => p.id === id);
     if (!project) throw new Error("Project not found. Add its folder first.");
-    return project;
+    return this.named(project);
   }
   /** The project's folder: its repository's root, or a plain folder outside any. */
   async inspect(id: string) {
@@ -201,11 +219,12 @@ export class Projects {
     if (repository && repository !== root)
       throw new Error("Choose the root of its Git repository.");
     const existing = this.store.get().projects?.find((p) => p.path === root);
-    if (existing) return withKind(existing);
+    if (existing) return withKind(this.named(existing));
     const project: Project = {
       id: randomUUID(),
       path: root,
-      name: projectTitle(basename(root)),
+      name: basename(root),
+      automaticName: basename(root),
       repository: null,
       added: Date.now(),
     };
@@ -219,7 +238,7 @@ export class Projects {
         /* Local work must remain available when the Git host is offline. */
       }
     }
-    return withKind(project);
+    return withKind(this.named(project));
   }
   /**
    * A new Scratchpad chat's project. The one whose folder no thread has used

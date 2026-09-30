@@ -50,7 +50,7 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
   }
 });
 
-it("title-cases folder-named projects once and leaves typed names alone", async () => {
+it("resolves legacy automatic names without rewriting saved names", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   try {
     const store = new Store(join(dir, "state"));
@@ -66,15 +66,86 @@ it("title-cases folder-named projects once and leaves typed names alone", async 
       s.projects = [
         project("a", "/code/relay-releases", "relay-releases"),
         project("b", "/code/app", "iOS app"),
+        project("c", "/code/web-store", "Web Store"),
       ];
     });
     const projects = new Projects(store);
     expect((await projects.list(null)).map((p) => p.name)).toEqual([
       "Relay Releases",
       "iOS app",
+      "Web Store",
     ]);
+    expect(store.get().projects![0].name).toBe("relay-releases");
+    await store.update((s) => {
+      s.smartProjectNames = false;
+    });
+    expect((await projects.list(null)).map((p) => p.name)).toEqual([
+      "relay-releases",
+      "iOS app",
+      "web-store",
+    ]);
+    expect(store.get().projects![2].name).toBe("Web Store");
+    // After the old migration, a raw folder name was an explicit rename.
+    await store.update((s) => {
+      s.projectTitlesTidied = true;
+      s.smartProjectNames = true;
+    });
+    expect(projects.get("a").name).toBe("relay-releases");
     await projects.rename("a", "relay-releases");
+    await store.update((s) => {
+      s.smartProjectNames = true;
+    });
     expect((await projects.list(null))[0]!.name).toBe("relay-releases");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("toggles existing and new project names, persists the setting, and preserves explicit names", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const root = join(dir, "my-project_name.v2");
+    await mkdir(root);
+    const stateDir = join(dir, "state");
+    const store = new Store(stateDir);
+    await store.load();
+    const projects = new Projects(store);
+    const first = await projects.add(root, null);
+    expect(first.name).toBe("My Project Name.v2");
+    expect(store.get().projects![0].name).toBe("my-project_name.v2");
+    await store.update((s) => {
+      s.smartProjectNames = false;
+    });
+    expect(projects.get(first.id).name).toBe("my-project_name.v2");
+    expect((await projects.add(root, null)).name).toBe("my-project_name.v2");
+    const secondRoot = join(dir, "another-project");
+    await mkdir(secondRoot);
+    const second = await projects.add(secondRoot, null);
+    expect(second.name).toBe("another-project");
+
+    const reloaded = new Store(stateDir);
+    await reloaded.load();
+    expect(reloaded.get().smartProjectNames).toBe(false);
+    const restored = new Projects(reloaded);
+    expect((await restored.list(null)).map((p) => p.name)).toEqual([
+      "my-project_name.v2",
+      "another-project",
+    ]);
+    // Even a typed name identical to a default is deliberate.
+    await restored.rename(first.id, "my-project_name.v2");
+    await reloaded.update((s) => {
+      s.smartProjectNames = true;
+    });
+    expect(restored.get(first.id).name).toBe("my-project_name.v2");
+    expect(restored.get(second.id).name).toBe("Another Project");
+    const scratch = await restored.scratch(
+      join(dir, "Scratchpad"),
+      () => false,
+    );
+    await reloaded.update((s) => {
+      s.smartProjectNames = false;
+    });
+    expect(restored.get(scratch.id).name).toBe("Scratchpad");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

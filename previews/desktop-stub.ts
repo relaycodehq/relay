@@ -43,7 +43,14 @@ if (!localStorage.getItem("relay-appearance"))
   );
 
 const hour = 60 * 60 * 1000;
+let smartProjectNames =
+  localStorage.getItem("preview-smart-project-names") !== "false";
 const stub: Partial<Api> = {
+  smartProjectNames: async () => smartProjectNames,
+  saveSmartProjectNames: async (enabled) => {
+    localStorage.setItem("preview-smart-project-names", String(enabled));
+    return (smartProjectNames = enabled);
+  },
   saveSidebarView: async () => {},
   agentModels: (async (provider: string) =>
     provider === "claude"

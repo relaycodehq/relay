@@ -31,6 +31,8 @@ export interface Project {
   id: string;
   path: string;
   name: string;
+  /** Original automatic name; null for a name typed by hand, absent in older saves. */
+  automaticName?: string | null;
   repository: ({ server: string } & Repo) | null;
   added: number;
   /** Live: the folder isn't a Git repository, so it has no branches, changes or history. Never saved. */

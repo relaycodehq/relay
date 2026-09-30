@@ -12,7 +12,9 @@ interface State {
   projects?: import("../shared/projects").Project[];
   /** Sidebar group paths, kept even while no project is in them. */
   projectGroups?: string[];
-  /** Set once folder-named projects got title-cased names. */
+  /** Prettify automatic project names; unset keeps the original default (on). */
+  smartProjectNames?: boolean;
+  /** Legacy saves: automatic names were already title-cased by the old migration. */
   projectTitlesTidied?: true;
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */
   projectGroupsOrdered?: true;

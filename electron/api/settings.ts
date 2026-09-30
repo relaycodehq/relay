@@ -77,6 +77,14 @@ export function settingsHandlers(ctx: ApiContext) {
     setLinkedAgents(store.get().agentPaths ?? {});
   }
   return {
+    smartProjectNames: () => store.get().smartProjectNames ?? true,
+    saveSmartProjectNames: async (args) => {
+      const enabled = z.boolean().parse(args[0]);
+      await store.update((s) => {
+        s.smartProjectNames = enabled;
+      });
+      return enabled;
+    },
     saveSidebarView: async (args) => {
       const view = z.enum(["threads", "activity"]).parse(args[0]);
       await store.update((s) => {
