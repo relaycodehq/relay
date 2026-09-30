@@ -35,6 +35,7 @@ import { readHostingSetup } from "./rooms/provision";
 import { RoomService } from "./rooms/service";
 import { pathReady } from "./shell-path";
 import { setLinkedAgents } from "./executables";
+import { applyLinkedTools } from "./source-control";
 import { Store } from "./store";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
@@ -190,6 +191,7 @@ app
     }
     setGitPath(loaded.get().gitPath ?? null);
     setLinkedAgents(loaded.get().agentPaths ?? {});
+    applyLinkedTools(loaded);
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});
     const projects = new Projects(loaded);

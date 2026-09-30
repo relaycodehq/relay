@@ -112,6 +112,15 @@ export function setLinkedAgents(paths: Partial<Record<AgentProvider, string>>) {
   answered = new Map();
 }
 
+/** Other programs linked in Settings, by the name Relay looks for, e.g. `gh`. */
+let tools: Partial<Record<string, string>> = {};
+
+export function setLinkedTools(paths: Partial<Record<string, string>>) {
+  tools = { ...paths };
+}
+
+export const linkedTool = (name: string) => tools[name];
+
 export const linkedAgent = (provider: AgentProvider) => linked[provider];
 
 /** Every program called `name` in the places the CLIs usually live, in the order to try them. */
@@ -148,7 +157,7 @@ async function* candidates(name: string) {
 }
 
 async function locate(name: string) {
-  const chosen = isAgent(name) ? linked[name] : undefined;
+  const chosen = isAgent(name) ? linked[name] : tools[name];
   if (chosen) {
     await access(chosen).catch(() => {
       throw new Error(`The ${name} you linked in Settings is gone: ${chosen}`);

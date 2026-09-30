@@ -12,6 +12,10 @@ import type { AgentProvider, UsageProvider } from "./agents";
 import type { UpdateState } from "./updates";
 import type { DictationModelState } from "./dictation";
 import type { AgentVersions } from "./agent-updates";
+import type {
+  SourceControlKind,
+  SourceControlProvider,
+} from "./source-control";
 import type { LineQuestion } from "./questions";
 import type {
   ProjectCheckInfo,
@@ -374,6 +378,16 @@ export interface Api
   linkAgent(provider: AgentProvider): Promise<AgentVersions | null>;
   /** Forgets the linked CLI and finds one again. */
   unlinkAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /** The source control hosts with their tools, versions and sign-ins, looked up now. */
+  sourceControl(): Promise<SourceControlProvider[]>;
+  setSourceControlEnabled(
+    kind: SourceControlKind,
+    enabled: boolean,
+  ): Promise<SourceControlProvider[]>;
+  /** Asks for the `gh` program and links it if it says so; null if cancelled. */
+  linkGithubCli(): Promise<SourceControlProvider[] | null>;
+  /** Forgets the linked `gh` and finds one again. */
+  unlinkGithubCli(): Promise<SourceControlProvider[]>;
   /** Signs in to Cursor in the browser, downloading its SDK first if needed. */
   signInCursor(): Promise<AgentVersions>;
   signOutCursor(): Promise<AgentVersions>;
@@ -382,11 +396,10 @@ export interface Api
   applyAppearance(appearance: {
     mode: "system" | "light" | "dark";
     background: string;
-    /** The titlebar's background and text, for Windows and Linux window controls. */
-    titlebar: string;
-    titlebarText: string;
     icon: string;
   }): Promise<void>;
+  /** Colours Linux's native window controls; see lib/titlebar-tint.ts. */
+  tintTitleBar(colors: { color: string; symbolColor: string }): Promise<void>;
   /** Zooms the window to the interface size, on top of the user's own zoom. */
   setInterfaceScale(scale: number): Promise<void>;
   /**

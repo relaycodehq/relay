@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../electron/shell-path", () => ({ pathReady: async () => {} }));
 
-import { findExecutable, setLinkedAgents } from "../../electron/executables";
+import {
+  findExecutable,
+  setLinkedAgents,
+  setLinkedTools,
+} from "../../electron/executables";
 
 const posix = process.platform !== "win32";
 let root: string;
@@ -26,11 +30,13 @@ beforeEach(async () => {
   process.env.MISE_DATA_DIR = join(root, "mise");
   process.env.PATH = join(root, "bin");
   setLinkedAgents({});
+  setLinkedTools({});
 });
 
 afterEach(async () => {
   process.env = { ...saved };
   setLinkedAgents({});
+  setLinkedTools({});
   await rm(root, { recursive: true, force: true });
 });
 
@@ -84,5 +90,14 @@ describe.skipIf(!posix)("finding an agent CLI", () => {
 
   it("reports an agent that is nowhere", async () => {
     await expect(findExecutable("opencode")).rejects.toThrow(/not found/);
+  });
+
+  it("uses a linked gh before the one on PATH, and says when it is gone", async () => {
+    await program(join(root, "bin"), "gh", working("gh"));
+    const mine = await program(join(root, "elsewhere"), "gh", working("gh"));
+    setLinkedTools({ gh: mine });
+    expect(await findExecutable("gh")).toBe(mine);
+    setLinkedTools({ gh: join(root, "gone/gh") });
+    await expect(findExecutable("gh")).rejects.toThrow(/linked in Settings/);
   });
 });

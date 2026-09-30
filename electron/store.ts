@@ -35,6 +35,8 @@ interface State {
   agentPaths?: Partial<
     Record<import("../shared/agents").AgentProvider, string>
   >;
+  /** Source control hosts turned off, and the `gh` linked in Settings. */
+  sourceControl?: import("../shared/source-control").SourceControlSettings;
   version: 1;
   account?: Account;
   encryptedToken?: string;

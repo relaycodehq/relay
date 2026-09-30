@@ -9,6 +9,7 @@ import { projectFolderSchema } from "../../shared/project-folders";
 import { projectNameSchema } from "../../shared/projects";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { idSchema } from "../../shared/rooms";
+import { isSourceControlOn } from "../../shared/source-control";
 import type { Pull } from "../../shared/types";
 import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -34,6 +35,7 @@ export function projectHandlers(ctx: ApiContext) {
     projects,
     projectChats,
     ci,
+    store,
     pullRequestCreation,
     requireClient,
     place,
@@ -206,7 +208,10 @@ export function projectHandlers(ctx: ApiContext) {
               .worktreePath(chatId!)
               .catch(() => projects.root(id))
           : await projects.root(id);
-      return ci.status(root, ctx.login.client);
+      const settings = store.get().sourceControl;
+      return ci.status(root, ctx.login.client, (kind) =>
+        isSourceControlOn(settings, kind),
+      );
     },
     projectBranchPulls: pullRequests,
     projectPreparePull: pullRequests,

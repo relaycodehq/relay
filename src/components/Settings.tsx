@@ -29,10 +29,7 @@ import {
   X,
 } from "lucide-react";
 import type { Account } from "../../shared/types";
-import {
-  aiSettingsSchema,
-  type AISettings,
-} from "../../shared/settings";
+import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
 import { useAISettings } from "../lib/useAISettings";
@@ -85,6 +82,7 @@ import { UpdateCheck, updateLine } from "./UpdateCheck";
 import { AgentVersionSettings } from "./AgentUpdates";
 import { RoomHostingSettings } from "./RoomHostingSettings";
 import { GitSettings } from "./GitSettings";
+import { SourceControlSettings } from "./SourceControlSettings";
 import { PhoneRemoteSettings } from "./PhoneRemoteSettings";
 import {
   DictationMicrophoneSetting,
@@ -905,6 +903,17 @@ export function Settings({
       keywords: "git executable path program install branch folder exe",
       block: true,
       render: () => <GitSettings />,
+    },
+    {
+      id: "source-control",
+      category: "integrations",
+      title: "Source control",
+      description:
+        "GitHub and Gitea, where your repositories and their CI live. Relay finds the GitHub CLI by itself; link it here if it lives somewhere else.",
+      keywords:
+        "github gitea forgejo gh cli ci actions pull request host sign in link path",
+      block: true,
+      render: () => <SourceControlSettings />,
     },
     {
       id: "devops",

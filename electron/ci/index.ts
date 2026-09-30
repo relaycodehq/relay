@@ -2,6 +2,7 @@ import { currentBranch, git } from "../git";
 import { remoteUrl, repoOf } from "../repository";
 import type { FetchRequest, Gitea } from "../gitea";
 import type { CiRun, CiStatus } from "../../shared/ci";
+import type { SourceControlKind } from "../../shared/source-control";
 import { GitHub } from "./github";
 import { giteaDefaultBranch, readGitea } from "./gitea";
 
@@ -37,6 +38,7 @@ async function commitsSince(root: string, sha: string) {
 
 /** A CI host Relay reads, for remotes on `host`. */
 interface CiSource {
+  kind: SourceControlKind;
   host: string;
   /** As users know it, e.g. "GitHub". */
   name: string;
@@ -58,6 +60,7 @@ export class Ci {
   private sources(gitea: Gitea | null): CiSource[] {
     return [
       {
+        kind: "github",
         host: "github.com",
         name: "GitHub",
         read: (repo, branch) => this.github.read(repo, branch),
@@ -66,6 +69,7 @@ export class Ci {
       ...(gitea
         ? [
             {
+              kind: "gitea" as const,
               host: new URL(gitea.account.server).hostname,
               name: "Gitea",
               read: (repo: CiRepo, branch: string) =>
@@ -77,10 +81,17 @@ export class Ci {
     ];
   }
 
-  async status(root: string, gitea: Gitea | null): Promise<CiStatus | null> {
+  /** `isOn` says which hosts the user left turned on in Settings. */
+  async status(
+    root: string,
+    gitea: Gitea | null,
+    isOn: (kind: SourceControlKind) => boolean = () => true,
+  ): Promise<CiStatus | null> {
     const remote = await remoteRepo(root);
     if (!remote) return null;
-    const source = this.sources(gitea).find((s) => s.host === remote.host);
+    const source = this.sources(gitea).find(
+      (s) => s.host === remote.host && isOn(s.kind),
+    );
     if (!source) return null;
     const current = await currentBranch(root);
     let branch = current;
