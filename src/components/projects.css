@@ -658,8 +658,16 @@
   gap: 10px;
   text-align: left;
   min-width: 0;
-  overflow: hidden;
   font-size: 12px;
+}
+/* Only the last crumb gives way. Clipping the whole title would shave the CI
+   badge's hover square and dot, and squash the badge when space runs out. */
+.project-window-title > * {
+  flex-shrink: 0;
+}
+.project-window-title > :last-child {
+  flex-shrink: 1;
+  min-width: 0;
 }
 .project-window-title span {
   margin: 0;
