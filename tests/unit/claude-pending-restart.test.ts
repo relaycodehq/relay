@@ -40,7 +40,7 @@ afterEach(async () => {
 /** A live Claude session for the thread, with this work outstanding. */
 function leave(chatId: string, items: ChatPending[], branch = "main") {
   const key = JSON.stringify([join(root, "chats"), chatId, branch]);
-  (chats as unknown as { providerSessions: Set<string> }).providerSessions.add(
+  (chats as unknown as { sessions: { add(key: string): void } }).sessions.add(
     key,
   );
   vi.mocked(claudePending).mockImplementation((k) => (k === key ? items : []));

@@ -1581,8 +1581,10 @@ it("leaves a paused queue paused when Relay sends Claude's wake-up itself", asyn
     events.push(e),
   );
   await (
-    chats as unknown as { fireWakeup(id: string, w: string): Promise<void> }
-  ).fireWakeup(chat.id, "w");
+    chats as unknown as {
+      schedule: { fireWakeup(id: string, w: string): Promise<void> };
+    }
+  ).schedule.fireWakeup(chat.id, "w");
   await vi.waitFor(
     () => expect(chats.hasActiveProject(projectId)).toBe(false),
     { timeout: 10000 },
