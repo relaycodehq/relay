@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ComposerSelect, type ComposerSelectProps } from "./ComposerSelect";
 
 /**
  * The settings form vocabulary: a card of rows, each a label and hint on the
@@ -76,5 +77,57 @@ export function Switch({
       disabled={disabled}
       onChange={(e) => onChange(e.target.checked)}
     />
+  );
+}
+
+/** Buttons side by side, one of them pressed: a choice of a few values. */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  /** Names the group, for choices whose row doesn't already. */
+  label?: string;
+  value: T;
+  options: readonly (readonly [T, string])[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div
+      className="segmented settings-segmented"
+      role={label ? "group" : undefined}
+      aria-label={label}
+    >
+      {options.map(([option, text]) => (
+        <button
+          key={option}
+          type="button"
+          className={value === option ? "active" : ""}
+          aria-pressed={value === option}
+          onClick={() => onChange(option)}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The composer's select, as settings use it; `field` adds a class around it. */
+export function SettingsSelect<T extends string>({
+  field,
+  ...select
+}: ComposerSelectProps<T> & { field?: string }) {
+  return (
+    <div
+      className={
+        field
+          ? `composer-tools model-field ${field}`
+          : "composer-tools model-field"
+      }
+    >
+      <ComposerSelect {...select} />
+    </div>
   );
 }

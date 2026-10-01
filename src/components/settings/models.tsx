@@ -12,11 +12,15 @@ import {
   type AISettingsDraft,
 } from "../../lib/useAISettingsDraft";
 import { AgentVersionSettings } from "../AgentUpdates";
-import { ComposerSelect } from "../ComposerSelect";
 import { ProviderIcon } from "../ComposerModelPicker";
 import { ModelField } from "../ModelField";
 import { QuickSwitchSettings } from "../QuickSwitchSettings";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../SettingsCard";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+  SettingsSelect,
+} from "../SettingsCard";
 import { ErrorBox } from "../ui";
 
 export function useModelEntries(
@@ -180,18 +184,16 @@ function AgentSelect({
   onChange: (provider: AgentProvider) => void;
 }) {
   return (
-    <div className="composer-tools model-field">
-      <ComposerSelect<AgentProvider>
-        label="Default agent"
-        value={value}
-        icon={<ProviderIcon provider={value} />}
-        options={agentProviders.map((provider) => ({
-          value: provider,
-          label: agentName(provider),
-          icon: <ProviderIcon provider={provider} />,
-        }))}
-        onChange={onChange}
-      />
-    </div>
+    <SettingsSelect<AgentProvider>
+      label="Default agent"
+      value={value}
+      icon={<ProviderIcon provider={value} />}
+      options={agentProviders.map((provider) => ({
+        value: provider,
+        label: agentName(provider),
+        icon: <ProviderIcon provider={provider} />,
+      }))}
+      onChange={onChange}
+    />
   );
 }

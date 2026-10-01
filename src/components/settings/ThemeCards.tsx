@@ -14,9 +14,13 @@ import {
   type ThemeChoice,
   type ThemeKind,
 } from "../../lib/themes";
-import { ComposerSelect } from "../ComposerSelect";
 import { ThemeCodePreview } from "../ThemeCodePreview";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../SettingsCard";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+  SettingsSelect,
+} from "../SettingsCard";
 
 /** The colour modes, each pictured in its look, over a sample of code. */
 export function ThemeModes({
@@ -131,19 +135,18 @@ function ThemeSelect({
   onChange: (theme: string) => void;
 }) {
   return (
-    <div className="composer-tools model-field theme-select">
-      <ComposerSelect
-        label={`${kindLabels[kind]} theme`}
-        value={look.theme.id}
-        icon={<ThemeDot palette={look.palette} accent={look.accent} />}
-        options={themesFor(kind).map((theme) => ({
-          value: theme.id,
-          label: theme.name,
-          icon: <ThemeDot palette={theme[kind]!} />,
-        }))}
-        onChange={onChange}
-      />
-    </div>
+    <SettingsSelect
+      field="theme-select"
+      label={`${kindLabels[kind]} theme`}
+      value={look.theme.id}
+      icon={<ThemeDot palette={look.palette} accent={look.accent} />}
+      options={themesFor(kind).map((theme) => ({
+        value: theme.id,
+        label: theme.name,
+        icon: <ThemeDot palette={theme[kind]!} />,
+      }))}
+      onChange={onChange}
+    />
   );
 }
 

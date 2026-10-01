@@ -1,6 +1,6 @@
 import { useSavedSetting } from "../lib/useSavedSetting";
 import { api } from "../lib/api";
-import { ComposerSelect } from "./ComposerSelect";
+import { SettingsSelect } from "./SettingsCard";
 import { ErrorBox } from "./ui";
 
 const choices = [
@@ -25,20 +25,18 @@ export function AutoSettleSelect() {
   const value = current === null ? "off" : String(current);
   return (
     <>
-      <div className="composer-tools model-field">
-        <ComposerSelect<Choice | string>
-          label="Auto-settle quiet threads"
-          value={value}
-          options={[
-            ...choices,
-            // A value saved some other way still shows as it is.
-            ...(choices.some((c) => c.value === value)
-              ? []
-              : [{ value, label: `After ${value} days` }]),
-          ]}
-          onChange={(next) => days.set(next === "off" ? null : Number(next))}
-        />
-      </div>
+      <SettingsSelect<Choice | string>
+        label="Auto-settle quiet threads"
+        value={value}
+        options={[
+          ...choices,
+          // A value saved some other way still shows as it is.
+          ...(choices.some((c) => c.value === value)
+            ? []
+            : [{ value, label: `After ${value} days` }]),
+        ]}
+        onChange={(next) => days.set(next === "off" ? null : Number(next))}
+      />
       {days.error && <ErrorBox error={days.error} />}
     </>
   );

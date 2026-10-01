@@ -19,7 +19,7 @@ import {
   useDevOpsStatus,
   useTrackableProjects,
 } from "../../lib/plugins";
-import { SettingsCard, SettingsRow, Switch } from "../SettingsCard";
+import { Segmented, SettingsCard, SettingsRow, Switch } from "../SettingsCard";
 import { CliPathField, withCode } from "../ToolRow";
 import { ErrorBox } from "../ui";
 import {
@@ -193,26 +193,15 @@ export function DevOpsSettings() {
             />
           </SettingsRow>
           <SettingsRow label="Sign in with">
-            <div
-              className="segmented settings-segmented"
-              role="group"
-              aria-label="Sign in with"
-            >
-              <button
-                className={settings.auth === "pat" ? "active" : ""}
-                aria-pressed={settings.auth === "pat"}
-                onClick={() => void save({ auth: "pat" })}
-              >
-                Access token
-              </button>
-              <button
-                className={settings.auth === "azure-cli" ? "active" : ""}
-                aria-pressed={settings.auth === "azure-cli"}
-                onClick={() => void save({ auth: "azure-cli" })}
-              >
-                Azure CLI
-              </button>
-            </div>
+            <Segmented
+              label="Sign in with"
+              value={settings.auth}
+              options={[
+                ["pat", "Access token"],
+                ["azure-cli", "Azure CLI"],
+              ]}
+              onChange={(auth) => void save({ auth })}
+            />
           </SettingsRow>
           {settings.auth === "pat" ? (
             <SettingsRow

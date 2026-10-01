@@ -17,6 +17,7 @@ import {
   comboWords,
   useShortcutOverrides,
 } from "../../lib/shortcuts";
+import { Segmented } from "../SettingsCard";
 import { ShortcutKeys, ShortcutsResetAll } from "../ShortcutSettings";
 
 export function useShortcutEntries(): SettingEntry[] {
@@ -38,24 +39,15 @@ export function useShortcutEntries(): SettingEntry[] {
     keywords:
       "enter return send submit message newline composer chat queue steer",
     render: () => (
-      <div className="segmented settings-segmented">
-        {(
-          [
-            ["enter", "Enter"],
-            ["shift-enter", "Shift Enter"],
-            ["mod-enter", `${keys("⌘", "Ctrl ")}Enter`],
-          ] as [SendKey, string][]
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            className={sendKey === value ? "active" : ""}
-            aria-pressed={sendKey === value}
-            onClick={() => setSendKey(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Segmented<SendKey>
+        value={sendKey}
+        options={[
+          ["enter", "Enter"],
+          ["shift-enter", "Shift Enter"],
+          ["mod-enter", `${keys("⌘", "Ctrl ")}Enter`],
+        ]}
+        onChange={setSendKey}
+      />
     ),
   };
   return [
