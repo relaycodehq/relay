@@ -8,6 +8,7 @@ import {
   findClaudeModel,
   reasoningEffortsFor,
   supportedChoice,
+  withClaudeContextWindow,
   type ModelChoice,
   type ReasoningEffort,
 } from "../../shared/settings";
@@ -129,15 +130,24 @@ export function useAgentRuns(
       ...all,
       [to]: { model: all[to]?.model ?? "", reasoningEffort },
     }));
+  // Stable for the memoized effort menus.
+  const setEffort = useStableCallback(
+    (to: Recipient, reasoningEffort: ReasoningEffort) => {
+      if (to === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
+      else if (isPickAgent(to)) setPickEffort(to, reasoningEffort);
+      else setCodexEffort(reasoningEffort);
+    },
+  );
+  const claudeRuns = claude.model
+    ? claudeListed
+    : claudeModels?.find((m) => m.id === defaults.of("claude")?.model);
   return {
     /** Codex's model and effort; unset until the settings it may follow load. */
     codex,
     claudeListed,
     claudeEfforts,
     // Default says what it runs, as each agent's own settings decide.
-    claudeRuns: claude.model
-      ? claudeListed
-      : claudeModels?.find((m) => m.id === defaults.of("claude")?.model),
+    claudeRuns,
     /** The effort Claude's and Codex's Default runs at. */
     levels,
     /** Each agent's models and the one picked, for the model picker. */
@@ -208,8 +218,37 @@ export function useAgentRuns(
         }));
       onPick();
     },
+    /** Whether `to` has an effort to pick, or for Claude a context window. */
+    offersEffort: (to: AgentProvider) =>
+      !!codex &&
+      (to === "codex" ||
+        (to === "claude" &&
+          (claudeEfforts.length > 0 || !!claudeRuns?.longContext)) ||
+        (isPickAgent(to) && pickOf(to).efforts.length > 0)),
+    setEffort,
+    /** Stable, for Codex's effort menu. */
     setCodexEffort,
-    setPickEffort,
+    /**
+     * Default stays Default; a picked model also takes the `[1m]` suffix,
+     * which accounts without 1M by default still need.
+     */
+    setContextWindow(size: "200k" | "1m") {
+      setClaude((c) =>
+        size === "200k"
+          ? {
+              ...c,
+              model: withClaudeContextWindow(c.model, "200k"),
+              contextWindow: "200k",
+            }
+          : {
+              model: c.model && withClaudeContextWindow(c.model, "1m"),
+              reasoningEffort: c.reasoningEffort,
+            },
+      );
+    },
+    setFast(fast: boolean) {
+      if (codex) setChoice({ ...codex, fast });
+    },
     /** ⌘⌥←/→: `to`'s effort one level up or down. */
     stepEffort(to: Recipient, step: -1 | 1) {
       if (to === "claude")

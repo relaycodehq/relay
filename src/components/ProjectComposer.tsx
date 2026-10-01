@@ -26,7 +26,7 @@ import { useSettingCommands } from "../lib/useSettingCommands";
 import { useStopKeys } from "../lib/useStopKeys";
 import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
 import { useComposerCommands } from "./ComposerCommands";
-import { EffortControl, offersEffort } from "./ComposerEffortControl";
+import { ComposerEffortControl } from "./ComposerEffortControl";
 import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import {
@@ -325,8 +325,8 @@ export function ProjectComposer({
                   defaultNames={catalogs.defaultNames}
                 />
               ),
-              effort: to !== "message" && offersEffort(runs, to) && (
-                <EffortControl
+              effort: to !== "message" && runs.offersEffort(to) && (
+                <ComposerEffortControl
                   to={to}
                   state={composer}
                   runs={runs}
