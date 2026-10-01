@@ -17,7 +17,10 @@ export function useThreadTerminal({
   scope,
   draftWorkspace,
   inbox,
-}: ShellNavigation) {
+}: Pick<
+  ShellNavigation,
+  "project" | "chat" | "scope" | "draftWorkspace" | "inbox"
+>) {
   const key = project ? terminalKey(project.id, chat?.id ?? null) : "";
   const open = useTerminalOpen(key);
   const blocked = terminalBlocked(chat, scope, draftWorkspace);

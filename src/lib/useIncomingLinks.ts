@@ -13,7 +13,7 @@ import type { SignInFlow } from "./useSignIn";
  */
 export function useIncomingLinks(
   boot: Bootstrap | undefined,
-  { inbox, setInbox }: ShellNavigation,
+  { inbox, setInbox }: Pick<ShellNavigation, "inbox" | "setInbox">,
   signIn: SignInFlow,
   lock: NavigationLock,
   setError: (error: unknown) => void,

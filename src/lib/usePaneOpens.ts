@@ -24,7 +24,7 @@ export type PaneOpens = ReturnType<typeof usePaneOpens>;
  * the chat about.
  */
 export function usePaneOpens(
-  { project, panes, pull }: ShellNavigation,
+  { project, panes, pull }: Pick<ShellNavigation, "project" | "panes" | "pull">,
   view: ThreadView,
   folder: ThreadFolder,
   lock: NavigationLock,
