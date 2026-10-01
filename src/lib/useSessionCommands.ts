@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { agentName, agentProviders, agents } from "../../shared/agents";
 import type { RelayCommand } from "../../shared/commands";
+import { latestContext } from "../../shared/context-usage";
 import type { ChatMessage } from "../../shared/projects";
-import { latestContext } from "../components/ContextWindowMeter";
 import { api } from "./api";
 import type { ThreadHandle } from "./useThreadHandle";
 

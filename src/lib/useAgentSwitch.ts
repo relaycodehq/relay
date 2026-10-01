@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { AgentProvider } from "../../shared/projects";
-import { agentSwitchNoticeHidden } from "../components/AgentSwitchDialog";
+import { agentSwitchNoticeHidden } from "./agent-switch-notice";
 
 /** Taking over from the agent holding the thread's context loses its session: say so first. */
 export function useAgentSwitch(active: AgentProvider | undefined) {

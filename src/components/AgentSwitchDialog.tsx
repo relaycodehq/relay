@@ -1,17 +1,7 @@
 import { useState } from "react";
 import { agentName, type AgentProvider } from "../../shared/agents";
+import { hideAgentSwitchNotice } from "../lib/agent-switch-notice";
 import { Modal } from "./ui";
-
-const HIDDEN_KEY = "relay-agent-switch-notice";
-
-/** The person asked not to see the switch warning again. */
-export function agentSwitchNoticeHidden() {
-  try {
-    return localStorage.getItem(HIDDEN_KEY) === "hidden";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Warns that another agent takes over without the current one's session.
@@ -28,13 +18,7 @@ export function AgentSwitchDialog({
 }) {
   const [hide, setHide] = useState(false);
   const decide = (proceed: boolean) => {
-    if (proceed && hide) {
-      try {
-        localStorage.setItem(HIDDEN_KEY, "hidden");
-      } catch {
-        // Private mode or blocked storage: the notice simply shows again.
-      }
-    }
+    if (proceed && hide) hideAgentSwitchNotice();
     onDecide(proceed);
   };
   return (

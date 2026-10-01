@@ -1,5 +1,11 @@
 import { replyRoot, type ChatMessage } from "../../shared/projects";
-import type { SideThread } from "../components/SideQuestion";
+
+/** What a side question's thread holds, for the bar under it. */
+export interface SideThread {
+  replies: number;
+  last: number;
+  answering: boolean;
+}
 
 /** The fetched messages with any newer streamed copies, in thread order. */
 export function withUpdates(

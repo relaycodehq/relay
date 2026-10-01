@@ -5,7 +5,6 @@ import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
 import { ProjectHistory } from "./ProjectHistory";
-import type { TurnDiffTarget } from "./TurnChanges";
 import {
   NO_SLOTS,
   Pane,
@@ -15,6 +14,7 @@ import {
 } from "./WorkspacePanes";
 import { useWorkspacePanes, type PaneId } from "../lib/workspace-panes";
 import { workingTreeKey } from "../lib/working-tree-key";
+import type { TurnDiffTarget } from "../lib/turn-diff";
 import {
   ShareConversation,
   JoinConversation,

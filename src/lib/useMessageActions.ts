@@ -11,10 +11,10 @@ import {
   type ChatSummary,
   type WorktreeStatus,
 } from "../../shared/projects";
-import type { TurnDiffTarget } from "../components/TurnChanges";
 import { api } from "./api";
 import { forkThreadSettings } from "./composer-settings";
 import { prefillClaudeSignIn } from "./thread-terminals";
+import type { TurnDiffTarget } from "./turn-diff";
 import { useStableCallback } from "./useStableCallback";
 import type { ThreadHandle } from "./useThreadHandle";
 import { worktreeDiff } from "./useThreadWorktree";

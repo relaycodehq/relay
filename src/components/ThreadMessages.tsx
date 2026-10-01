@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import type {
   ChatMessage,
@@ -15,6 +15,7 @@ import {
   DeepReviewCouncil,
   DeepReviewReport,
   DeepReviewRequest,
+  findingCode,
 } from "./DeepReview";
 import { Message } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
@@ -64,7 +65,6 @@ export function ThreadMessages({
   councils: {
     review,
     plans,
-    reviewCode,
     fixFindings,
     setFindingStatus,
     resumeReview,
@@ -97,6 +97,15 @@ export function ThreadMessages({
   /** Sends the cut-short answer's input again. */
   onResume: () => void;
 }) {
+  // Keyed on the report alone: a new renderer redraws the whole summary, and
+  // the review changes with every finding dismissed or fixed.
+  const reviewCode = useMemo(
+    () =>
+      chat && review?.report
+        ? findingCode(chat.id, review.report.findings)
+        : undefined,
+    [chat?.id, review?.report],
+  );
   return (
     <div className="project-messages" ref={scroll} onScroll={onScroll}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}

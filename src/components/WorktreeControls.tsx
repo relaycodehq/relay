@@ -7,9 +7,9 @@ import type {
   WorktreeStatus,
 } from "../../shared/projects";
 import { api } from "../lib/api";
+import type { TurnDiffTarget } from "../lib/turn-diff";
 import { worktreeDiff, type ThreadWorktree } from "../lib/useThreadWorktree";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
-import type { TurnDiffTarget } from "./TurnChanges";
 import { Modal } from "./ui";
 import "./worktrees.css";
 

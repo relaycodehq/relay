@@ -3,24 +3,13 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { FolderOpen, Undo2 } from "lucide-react";
-import type { TurnFileChange } from "../../shared/projects";
 import { api } from "../lib/api";
+import type { TurnDiffTarget } from "../lib/turn-diff";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { ErrorBox, FileEntryIcon } from "./ui";
 import type { PaneSlots } from "./WorkspacePanes";
 import "./changed-files.css";
-
-export type TurnDiffTarget = {
-  chatId: string;
-  messageId: string;
-  files: TurnFileChange[];
-  path?: string;
-  /** Who answered and when, e.g. "Claude · 12:04". */
-  label: string;
-  /** Everything the thread's worktree has that the branch it came from doesn't yet. */
-  worktree?: boolean;
-};
 
 const turnSides = { deletions: "Before turn", additions: "After turn" };
 const worktreeSides = { deletions: "Branched from", additions: "Worktree" };

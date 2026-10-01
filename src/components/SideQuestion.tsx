@@ -1,16 +1,10 @@
 import { memo } from "react";
 import type { ChatMessage } from "../../shared/projects";
+import type { SideThread } from "../lib/chat-thread";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { RichText } from "./ui";
 import { agentMentionPattern, agentName } from "../../shared/agents";
 import { clock } from "../../shared/waiting";
-
-/** What a side question's thread holds, for the bar under it. */
-export interface SideThread {
-  replies: number;
-  last: number;
-  answering: boolean;
-}
 
 /**
  * A `/btw` question: outlined dashed, since the main session never heard it.

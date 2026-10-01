@@ -5,9 +5,9 @@ import type {
   Project,
   WorktreeStatus,
 } from "../../shared/projects";
-import type { TurnDiffTarget } from "../components/TurnChanges";
 import { api } from "./api";
 import { loadDraftWorkspace, saveDraftWorkspace } from "./drafts";
+import type { TurnDiffTarget } from "./turn-diff";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "./working-tree-key";
 

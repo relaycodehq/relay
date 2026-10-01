@@ -9,9 +9,9 @@ import {
   contextPace,
   formatDuration,
   formatTokens,
-  latestContext,
   nextCacheChange,
 } from "../../src/components/ContextWindowMeter";
+import { latestContext } from "../../shared/context-usage";
 import type { ChatMessage } from "../../shared/projects";
 
 const answer = (patch: Partial<ChatMessage> = {}): ChatMessage => ({

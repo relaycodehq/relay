@@ -14,14 +14,11 @@ import { Stack, router } from "expo-router";
 import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
-import type {
-  ChatMessage,
-  ContextUsage,
-  TurnFileChange,
-} from "../../../shared/projects";
+import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { remoteHistory, type RemoteSettings } from "../../../shared/remote";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
+import { latestContext } from "../../../shared/context-usage";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
@@ -48,16 +45,6 @@ import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
 import { QueueList, StoppedStrip, WaitingStrip } from "../ui/ThreadExtras";
 import { type, useTheme } from "../ui/theme";
-
-/** How full the agent's context was after its last answer (ContextWindowMeter's latestContext). */
-function latestContext(messages: ChatMessage[]): ContextUsage | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]!;
-    if (m.role !== "assistant") continue;
-    if (m.context) return m.context;
-    if (m.compaction && m.status === "complete") return;
-  }
-}
 
 /** A thread, or with `rootId` one of its side conversations. */
 export function Thread({ id, rootId }: { id: string; rootId?: string }) {
@@ -643,7 +630,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           onSettings={setSettings}
           running={running}
           disabled={remote.status !== "online"}
-          context={latestContext(listed)}
+          context={latestContext(listed)?.usage}
           placeholder={rootId ? "Reply" : undefined}
           draftKey={rootId ? `${id}:${rootId}` : id}
           onSend={send}

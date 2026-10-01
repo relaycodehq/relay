@@ -3,6 +3,7 @@ import type { ChatSummary } from "../../shared/projects";
 import { draftRecipient, threadContextAgent } from "../../shared/recipient";
 import { buildSend } from "../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../shared/settings";
+import { agentSwitchNoticeHidden } from "../lib/agent-switch-notice";
 import { api } from "../lib/api";
 import {
   composerProvider,
@@ -34,7 +35,6 @@ import { aiSettingsQuery } from "../lib/useAISettings";
 import { agentModelsQuery } from "../lib/useAgentPicks";
 import { codexModels } from "../lib/useCodexModels";
 import { newThreadAgentQuery } from "../lib/useNewThreadAgent";
-import { agentSwitchNoticeHidden } from "./AgentSwitchDialog";
 
 // A thread made for a draft whose message then failed takes the next try.
 const started = new Map<string, ChatSummary>();
