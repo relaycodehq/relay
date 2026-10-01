@@ -14,7 +14,7 @@ const REMEMBERED_THREADS = 200;
 
 type OpenPanes = Record<PaneId, boolean>;
 
-interface PaneLayout {
+export interface PaneLayout {
   order: PaneId[];
   /** The thread (or unsent draft) `open` belongs to. */
   thread: string;
@@ -100,6 +100,41 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
   }
 }
 
+/** The open panes, in order. */
+export const visiblePanes = ({
+  order,
+  open,
+}: Pick<PaneLayout, "order" | "open">) => order.filter((id) => open[id]);
+
+/** A folder without Git has no changes or history to show. */
+export const panesOf = (order: PaneId[], plain?: boolean) =>
+  plain ? order.filter((id) => id === "chat" || id === "files") : order;
+
+/**
+ * Where pane `id` sits in the row: its place in the order and its share of
+ * the row, the open panes' shares adding up to 1 so they always fill it.
+ * `previous` is the open pane before it, which its splitter resizes against.
+ */
+export function paneFrame(
+  layout: Pick<PaneLayout, "order" | "open" | "weights">,
+  id: PaneId,
+) {
+  const { order, open, weights } = layout;
+  const visible = visiblePanes(layout);
+  const index = visible.indexOf(id);
+  const previous = index > 0 ? visible[index - 1] : undefined;
+  const total = visible.reduce((sum, pane) => sum + weights[pane], 0);
+  return {
+    open: open[id],
+    order: order.indexOf(id),
+    weight: weights[id],
+    grow: weights[id] / (total || 1),
+    previous: previous && { id: previous, weight: weights[previous] },
+  };
+}
+
+export type WorkspacePanes = ReturnType<typeof useWorkspacePanes>;
+
 /**
  * Chat, changes and files are peers: each can be shown, hidden and reordered.
  * Which are open is the thread's own; order and widths are the same everywhere.
@@ -172,6 +207,6 @@ export function useWorkspacePanes(thread: string) {
       setLayout((l) => ({ ...l, weights: { ...l.weights, ...weights } })),
     [],
   );
-  const visible = layout.order.filter((id) => layout.open[id]);
+  const visible = visiblePanes(layout);
   return { layout, visible, setOpen, show, switchTo, move, resize };
 }
