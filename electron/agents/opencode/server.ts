@@ -8,6 +8,8 @@ import {
 } from "../../executables";
 import { terminate } from "../../terminate";
 import type { AgentHosts, HostedProcess } from "../../agent-host/client";
+import type { Entry } from "../../agent-host/protocol";
+import { foundSessions, inAgentHost } from "../hosted-sessions";
 
 /** A running `opencode serve`, reached over HTTP with Basic auth. */
 export interface OpenCodeServer {
@@ -24,10 +26,6 @@ let server: Promise<OpenCodeServer> | undefined;
 let child: ChildProcess | undefined;
 /** The server the agent host runs, when it does: it outlives a restart of Relay. */
 let hosted: HostedProcess | undefined;
-let hosts: AgentHosts | undefined;
-export function useOpenCodeHosts(agentHosts: AgentHosts) {
-  hosts = agentHosts;
-}
 /** What the hosted server keeps for the next Relay: where it listens, and its password. */
 type OpenCodeMeta = {
   provider: "opencode";
@@ -53,15 +51,10 @@ async function start(): Promise<OpenCodeServer> {
   const password = randomBytes(24).toString("base64url");
   const args = ["serve", "--hostname=127.0.0.1", "--port=0"];
   const env = { ...process.env, OPENCODE_SERVER_PASSWORD: password };
-  const url = hosts
-    ? await startHosted(executable, args, env, password).catch((error) => {
-        console.warn(
-          "The agent host is unavailable; OpenCode runs in Relay:",
-          error,
-        );
-        return startLocal(executable, args, env);
-      })
-    : await startLocal(executable, args, env);
+  const url =
+    (await inAgentHost("OpenCode", (hosts) =>
+      startHosted(hosts, executable, args, env, password),
+    )) ?? (await startLocal(executable, args, env));
   const auth = basic(password);
   const health = await healthOf(url, auth);
   if (!health) {
@@ -90,12 +83,13 @@ const basic = (password: string) =>
 
 /** Starts the server in the agent host and reads where it listens off its log. */
 async function startHosted(
+  hosts: AgentHosts,
   executable: string,
   args: string[],
   env: NodeJS.ProcessEnv,
   password: string,
 ) {
-  const running = await hosts!.openProcess({
+  const running = await hosts.openProcess({
     key: "opencode:server",
     meta: { provider: "opencode", password } satisfies OpenCodeMeta,
     process: {
@@ -132,10 +126,7 @@ async function startHosted(
 }
 
 /** Reads a hosted server's log for as long as it runs; its end ends the server. */
-function follow(
-  running: HostedProcess,
-  also?: (entry: import("../../agent-host/protocol").Entry) => void,
-) {
+function follow(running: HostedProcess, also?: (entry: Entry) => void) {
   running.read({
     entry: (entry) => {
       also?.(entry);
@@ -222,7 +213,6 @@ function healthOf(url: string, auth: string) {
 }
 
 function stop(process_: ChildProcess) {
-  if (process_.exitCode !== null || process_.signalCode !== null) return;
   terminate(process_, { graceMs: 3000, group: true });
 }
 
@@ -260,11 +250,9 @@ export function markOpenCodeTurn(key: string, mark: "start" | "end") {
 export async function reattachOpenCodeServer(
   owns: (key: string) => boolean,
 ): Promise<{ key: string; open: boolean }[]> {
-  if (!hosts) return [];
   const back: { key: string; open: boolean }[] = [];
-  for (const found of await hosts.discover()) {
-    const meta = found.info.meta as OpenCodeMeta | undefined;
-    if (meta?.provider !== "opencode") continue;
+  for (const found of await foundSessions("opencode", "process")) {
+    const meta = found.info.meta as OpenCodeMeta;
     const auth = basic(meta.password ?? "");
     const health =
       !server && meta.url ? await healthOf(meta.url, auth) : undefined;

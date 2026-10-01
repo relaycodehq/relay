@@ -62,6 +62,8 @@ export interface ProcessSpec {
   env: Record<string, string>;
   /** Its own process group, so stopping it stops what it started. */
   group: boolean;
+  /** Closing its input is how it's asked to stop, not SIGTERM; it may wind down first. */
+  stopByInput?: boolean;
 }
 
 export type ClientMessage =

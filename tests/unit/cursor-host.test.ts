@@ -17,8 +17,8 @@ import {
   closeCursorConnection,
   detachCursor,
   reattachCursorSessions,
-  useCursorHosts,
 } from "../../electron/agents/cursor/connection";
+import { hostAgents } from "../../electron/agents/hosted-sessions";
 import { runCursor } from "../../electron/agents/cursor/run";
 import { configureCursor } from "../../electron/agents/cursor/sdk";
 import type { AgentOptions } from "../../electron/agents/types";
@@ -90,6 +90,7 @@ const alive = (pid: number) => {
 
 afterEach(async () => {
   delete process.env.CURSOR_FAKE_LINGER;
+  delete process.env.CURSOR_FAKE_CLOSED;
   await closeCursorConnection("thread-1");
   detachCursor();
   for (const hosts of opened.splice(0)) hosts.detach();
@@ -120,7 +121,7 @@ function newRelay() {
     join(root, "agent-host.mjs"),
   );
   opened.push(hosts);
-  useCursorHosts(hosts);
+  hostAgents(hosts);
   return hosts;
 }
 
@@ -211,4 +212,18 @@ it("lets a thread that isn't Relay's go, and keeps the next turn on the same age
 
   newRelay();
   expect(await reattachCursorSessions(() => false)).toEqual([]);
+});
+
+it("lets a worker in the host close its agents when its thread's session ends", async () => {
+  const closed = join(root, "closed.log");
+  await writeFile(closed, "");
+  process.env.CURSOR_FAKE_CLOSED = closed;
+  newRelay();
+  const turn = threadTurn({ prompt: "say hello" });
+  expect(await runCursor(turn.options)).toBe("Hello");
+  await closeCursorConnection("thread-1");
+  // Told to stop by its input closing, not killed before it gets to.
+  await expect
+    .poll(() => readFile(closed, "utf8"), { timeout: 5000 })
+    .toContain(turn.seen.ids[0]);
 });

@@ -32,7 +32,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         : codexPolicy(options.runtimeMode)
       : undefined;
   const sessionKey = policy ? options.session?.key : undefined;
-  const connection = acquireCodexConnection(
+  const connection = await acquireCodexConnection(
     sessionKey,
     executable,
     [

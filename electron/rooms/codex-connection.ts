@@ -3,14 +3,8 @@ import { terminate } from "../terminate";
 import { executableCommand, spawnExecutable } from "../executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
 import { HostedChild } from "../agent-host/child";
-import type { AgentHosts } from "../agent-host/client";
 import type { Entry } from "../agent-host/protocol";
-
-let hosts: AgentHosts | undefined;
-/** Runs thread sessions' app servers in the agent host, so they outlive a restart of Relay. */
-export function useCodexHosts(agentHosts: AgentHosts) {
-  hosts = agentHosts;
-}
+import { HostedSessions } from "../agents/hosted-sessions";
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
 type CodexMeta = { provider: "codex"; started?: any };
@@ -110,56 +104,43 @@ class CodexConnection {
     terminate(child);
   }
 }
-const sessions = new Map<string, CodexConnection>();
+const sessions = new HostedSessions<CodexConnection>({
+  provider: "codex",
+  name: "Codex",
+  kind: "process",
+  close: (connection) => connection.close(),
+});
 export function acquireCodexConnection(
   key: string | undefined,
   executable: string,
   args: string[],
   cwd: string,
 ) {
-  let connection = key ? sessions.get(key) : undefined;
-  if (connection?.busy)
-    throw new Error("This Codex session is already running a turn.");
-  if (!connection || connection.closed) {
-    const local = () =>
-      spawnExecutable(executable, args, {
-        cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-      }) as ChildProcessWithoutNullStreams;
-    // A thread's session runs in the host; rooms and helper jobs end with their turn.
-    connection = new CodexConnection(async () => {
-      if (!key || !hosts) return local();
-      try {
-        const running = await hosts.openProcess({
+  // A thread's session runs in the host; rooms and helper jobs end with their turn.
+  return sessions.acquire(
+    key,
+    async () =>
+      new CodexConnection(() =>
+        sessions.spawn(
           key,
-          meta: { provider: "codex" } satisfies CodexMeta,
-          process: {
+          { provider: "codex" } satisfies CodexMeta,
+          {
             ...executableCommand(executable, args),
             cwd,
             env: { ...process.env } as Record<string, string>,
             group: false,
           },
-        });
-        const child = new HostedChild(running);
-        child.release();
-        return child;
-      } catch (error) {
-        console.warn(
-          "The agent host is unavailable; Codex runs in Relay:",
-          error,
-        );
-        return local();
-      }
-    });
-    if (key) sessions.set(key, connection);
-  }
-  connection.busy = true;
-  return connection;
+          () =>
+            spawnExecutable(executable, args, {
+              cwd,
+              stdio: ["pipe", "pipe", "pipe"],
+            }) as ChildProcessWithoutNullStreams,
+        ),
+      ),
+  );
 }
-export async function closeCodexConnection(key: string) {
-  const connection = sessions.get(key);
-  sessions.delete(key);
-  await connection?.close();
+export function closeCodexConnection(key: string) {
+  return sessions.close(key);
 }
 
 /**
@@ -167,29 +148,19 @@ export async function closeCodexConnection(key: string) {
  * restarted. One that was in a turn waits, holding what it said meanwhile,
  * for an `adopt` turn to show it.
  */
-export async function reattachCodexSessions(
-  owns: (key: string) => boolean,
-): Promise<{ key: string; open: boolean }[]> {
-  if (!hosts) return [];
-  const back: { key: string; open: boolean }[] = [];
-  for (const found of await hosts.discover()) {
+export function reattachCodexSessions(owns: (key: string) => boolean) {
+  return sessions.reattach(owns, (found) => {
     const { info } = found;
-    const meta = info.meta as CodexMeta | undefined;
-    if (meta?.provider !== "codex") continue;
-    if (!meta.started || !owns(info.key) || sessions.has(info.key)) {
-      found.close();
-      continue;
-    }
+    const meta = info.meta as CodexMeta;
+    if (!meta.started) return;
     const child = new HostedChild(found.attachProcess(), (entries) =>
       codexReplay(entries, info.split),
     );
     const connection = new CodexConnection(async () => child);
     connection.started = meta.started;
-    sessions.set(info.key, connection);
     if (!info.open) child.release();
-    back.push({ key: info.key, open: info.open });
-  }
-  return back;
+    return connection;
+  });
 }
 
 /**

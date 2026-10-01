@@ -29,6 +29,25 @@ describe("terminate", () => {
     terminate(child, { graceMs: 200 });
     expect(await done).toBe("SIGKILL");
   });
+
+  it("lets a child asked by its input wind down, and kills one that doesn't stop", async () => {
+    const tidy = spawn(process.execPath, [
+      "-e",
+      "process.stdin.resume(); process.stdin.on('end', () => setTimeout(() => process.exit(0), 100))",
+    ]);
+    const tidied = exited(tidy);
+    terminate(tidy, { byInput: true, graceMs: 5000 });
+    expect(await tidied).toBeNull();
+
+    const stuck = spawn(process.execPath, [
+      "-e",
+      "console.log('ready'); setInterval(() => {}, 1000)",
+    ]);
+    await new Promise((resolve) => stuck.stdout.once("data", resolve));
+    const killed = exited(stuck);
+    terminate(stuck, { byInput: true, graceMs: 200 });
+    expect(await killed).toBe("SIGKILL");
+  });
 });
 
 describe("withTimeout", () => {

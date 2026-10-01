@@ -4,7 +4,6 @@ import { runCodex } from "../rooms/codex";
 import {
   closeCodexConnection,
   reattachCodexSessions,
-  useCodexHosts,
 } from "../rooms/codex-connection";
 import { runClaude } from "../rooms/claude";
 import {
@@ -14,21 +13,18 @@ import {
   listClaudeCommands,
   listClaudeModels,
   reattachClaudeSessions,
-  useAgentHosts,
 } from "../rooms/claude-project";
 import { codexDefaults, codexModels, codexSkills } from "../provider-commands";
 import { presentSkill } from "../skill-presentation";
 import { runOpenCode } from "./opencode/run";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
-import { reattachOpenCodeServer, useOpenCodeHosts } from "./opencode/server";
-import type { AgentHosts } from "../agent-host/client";
+import { reattachOpenCodeServer } from "./opencode/server";
 import { runCursor } from "./cursor/run";
 import {
   closeCursorConnection,
   detachCursor,
   disposeCursor,
   reattachCursorSessions,
-  useCursorHosts,
 } from "./cursor/connection";
 import { cursorCommands, cursorDefaults, cursorModels } from "./cursor/catalog";
 import {
@@ -112,11 +108,4 @@ export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
 };
 export const agentRuntime = (provider: AgentProvider) =>
   agentRuntimes[provider];
-
-/** Every agent's sessions run in the agent host from now on, so they outlive a restart of Relay. */
-export function hostAgents(hosts: AgentHosts) {
-  useAgentHosts(hosts);
-  useCodexHosts(hosts);
-  useOpenCodeHosts(hosts);
-  useCursorHosts(hosts);
-}
+export { hostAgents } from "./hosted-sessions";

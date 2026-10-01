@@ -51,7 +51,10 @@ class FakeAgent {
     this.agentId = agentId;
     this.options = options;
   }
-  close() {}
+  close() {
+    if (process.env.CURSOR_FAKE_CLOSED)
+      appendFileSync(process.env.CURSOR_FAKE_CLOSED, this.agentId + "\n");
+  }
   async send(message, sendOptions) {
     const prompt = typeof message === "string" ? message : message.text;
     log({

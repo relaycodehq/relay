@@ -20,6 +20,7 @@ import {
   type ProcessSpec,
   type SessionInfo,
 } from "./protocol";
+import { AsyncQueue } from "../async-queue";
 
 /** What the host asks of Relay while a session runs. */
 export interface HostedHandlers {
@@ -395,8 +396,7 @@ class HostConnection {
  * restoring state and start being a turn to show.
  */
 export class HostedQuery {
-  private queue: Entry[] = [];
-  private wake?: () => void;
+  private entries = new AsyncQueue<Entry>();
   private closed = false;
   private seqs = new WeakMap<object, number>();
   private asking = new Map<number, AbortController>();
@@ -409,8 +409,7 @@ export class HostedQuery {
   ) {}
 
   entry(entry: Entry) {
-    this.queue.push(entry);
-    this.wake?.();
+    this.entries.push(entry);
   }
 
   /** The replay is over; `split` already told replay from live. */
@@ -422,11 +421,7 @@ export class HostedQuery {
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<any, void> {
-    while (true) {
-      while (!this.queue.length)
-        await new Promise<void>((resolve) => (this.wake = resolve));
-      this.wake = undefined;
-      const entry = this.queue.shift()!;
+    for await (const entry of this.entries) {
       if (entry.kind === "end") {
         this.connection.forget(this.id);
         if (entry.failure) throw new Error(entry.failure);

@@ -18,6 +18,8 @@ import {
   type ProcessSpec,
   type SessionInfo,
 } from "./protocol";
+import { AsyncQueue } from "../async-queue";
+import { terminate } from "../terminate";
 
 /** Log sizes: past this, what a restart can't need goes first. */
 const limits = { entries: 30_000, line: 8 << 20 };
@@ -147,9 +149,7 @@ export abstract class HostSession {
 
 export class ClaudeSession extends HostSession {
   readonly kind = "claude";
-  private queued: SDKUserMessage[] = [];
-  private wake?: () => void;
-  private inputClosed = false;
+  private input = new AsyncQueue<SDKUserMessage>();
   private controller = new AbortController();
   private query!: Query;
 
@@ -180,7 +180,7 @@ export class ClaudeSession extends HostSession {
         },
       ];
     this.query = query({
-      prompt: this.read(),
+      prompt: this.input,
       options: {
         ...(options as Options),
         abortController: this.controller,
@@ -253,20 +253,8 @@ export class ClaudeSession extends HostSession {
     ];
   }
 
-  private async *read(): AsyncGenerator<SDKUserMessage> {
-    while (!this.inputClosed) {
-      if (!this.queued.length)
-        await new Promise<void>((resolve) => (this.wake = resolve));
-      this.wake = undefined;
-      if (this.inputClosed) return;
-      const message = this.queued.shift();
-      if (message) yield message;
-    }
-  }
-
   push(message: unknown) {
-    this.queued.push(message as SDKUserMessage);
-    this.wake?.();
+    this.input.push(message as SDKUserMessage);
   }
 
   abort() {
@@ -274,8 +262,7 @@ export class ClaudeSession extends HostSession {
   }
 
   close() {
-    this.inputClosed = true;
-    this.wake?.();
+    this.input.close();
     try {
       this.query?.close();
     } catch {}
@@ -298,9 +285,11 @@ export class ProcessSession extends HostSession {
   private child?: ChildProcess;
   private closing = false;
   private group = false;
+  private stopByInput = false;
 
   launch(spec: ProcessSpec) {
     this.group = spec.group && process.platform !== "win32";
+    this.stopByInput = !!spec.stopByInput;
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
       env: spec.env,
@@ -347,17 +336,6 @@ export class ProcessSession extends HostSession {
     this.child.stdin!.write(message + "\n");
   }
 
-  private signal(signal: NodeJS.Signals) {
-    const child = this.child;
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    try {
-      if (this.group && child.pid) process.kill(-child.pid, signal);
-      else child.kill(signal);
-    } catch {
-      child.kill(signal);
-    }
-  }
-
   abort() {
     this.close();
   }
@@ -365,11 +343,14 @@ export class ProcessSession extends HostSession {
   close() {
     if (this.closing) return;
     this.closing = true;
-    this.child?.stdin?.end();
-    this.signal("SIGTERM");
-    const force = setTimeout(() => this.signal("SIGKILL"), 3000);
-    force.unref();
-    this.child?.once("exit", () => clearTimeout(force));
+    const child = this.child;
+    if (!child) return;
+    child.stdin?.end();
+    terminate(child, {
+      graceMs: 3000,
+      group: this.group,
+      byInput: this.stopByInput,
+    });
   }
 
   async call(): Promise<unknown> {

@@ -34,18 +34,13 @@ import {
 } from "../../shared/agent-defaults";
 import type { ProviderCommand } from "../../shared/commands";
 import type {
-  AgentHosts,
   FoundSession,
   HostedHandlers,
   HostedQuery,
 } from "../agent-host/client";
 import type { HookFrame } from "../agent-host/protocol";
-
-let hosts: AgentHosts | undefined;
-/** Runs sessions in the agent host from now on, so they outlive a restart of Relay. */
-export function useAgentHosts(agentHosts: AgentHosts) {
-  hosts = agentHosts;
-}
+import { AsyncQueue } from "../async-queue";
+import { HostedSessions, inAgentHost } from "../agents/hosted-sessions";
 
 export async function sdk(): Promise<
   typeof import("@anthropic-ai/claude-agent-sdk")
@@ -78,76 +73,18 @@ async function readSettings(stream: ClaudeStream) {
   };
   return claudeDefaultsFrom(await withSettings.getSettings?.());
 }
-class ClaudeInput {
-  private queued: SDKUserMessage[] = [];
-  private wake?: () => void;
-  private closed = false;
-  push(message: SDKUserMessage) {
-    this.queued.push(message);
-    this.wake?.();
-  }
-  close() {
-    this.closed = true;
-    this.wake?.();
-  }
-  async *read(): AsyncGenerator<SDKUserMessage> {
-    while (!this.closed) {
-      if (!this.queued.length)
-        await new Promise<void>((resolve) => {
-          this.wake = resolve;
-        });
-      this.wake = undefined;
-      if (this.closed) return;
-      const message = this.queued.shift();
-      if (message) yield message;
-    }
-  }
-}
+/** What Relay prompts a session with; closing it ends the session's input. */
+type ClaudeInput = AsyncQueue<SDKUserMessage>;
 type SDKMessage = import("@anthropic-ai/claude-agent-sdk").SDKMessage;
 /** Frames read off the stream, waiting for the turn they belong to. */
-class ClaudeFrames {
-  private queued: SDKMessage[] = [];
-  private wake?: () => void;
-  ended = false;
+class ClaudeFrames extends AsyncQueue<SDKMessage> {
   /** Why the stream ended early, when it failed rather than closed. */
   failure?: string;
-  push(message: SDKMessage) {
-    this.queued.push(message);
-    this.wake?.();
-  }
   end(failure?: unknown) {
-    this.ended = true;
     if (failure)
       this.failure =
         failure instanceof Error ? failure.message : String(failure);
-    this.wake?.();
-  }
-  /** Takes whatever the finished turn left behind. */
-  take() {
-    return this.queued.splice(0);
-  }
-  peek(): SDKMessage | undefined {
-    return this.queued[0];
-  }
-  /** Whether a frame arrived within `ms`. */
-  async wait(ms: number) {
-    if (!this.queued.length && !this.ended)
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, ms);
-        this.wake = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
-    this.wake = undefined;
-    return this.queued.length > 0;
-  }
-  /** The next frame, or undefined once the stream has ended. */
-  async next(): Promise<SDKMessage | undefined> {
-    while (!this.queued.length && !this.ended)
-      await new Promise<void>((resolve) => (this.wake = resolve));
-    this.wake = undefined;
-    return this.queued.shift();
+    super.end();
   }
 }
 export type ClaudeRunOptions = AgentOptions & {
@@ -213,7 +150,12 @@ type ClaudeSession = {
   /** The subagents it started, followed between turns too. */
   agents: SubagentTracker;
 };
-const sessions = new Map<string, ClaudeSession>();
+const sessions = new HostedSessions<ClaudeSession>({
+  provider: "claude",
+  name: "Claude",
+  kind: "claude",
+  close: closeSession,
+});
 const pendingListeners = new Set<() => void>();
 /** Hears when any session's background work or wake-ups may have changed. */
 export function onClaudePending(listener: () => void) {
@@ -476,9 +418,9 @@ async function withProbe<T>(
     sdk(),
     findExecutable("claude"),
   ]);
-  const input = new ClaudeInput();
+  const input: ClaudeInput = new AsyncQueue();
   const stream = query({
-    prompt: input.read(),
+    prompt: input,
     options: {
       pathToClaudeCodeExecutable: executable,
       strictMcpConfig: true,
@@ -698,9 +640,9 @@ export async function askClaudeSide(options: {
   ]);
   options.signal.throwIfAborted();
   // No prompt ever goes in: the session only loads to answer beside it.
-  const input = new ClaudeInput();
+  const input: ClaudeInput = new AsyncQueue();
   const stream = query({
-    prompt: input.read(),
+    prompt: input,
     options: {
       cwd: options.cwd,
       pathToClaudeCodeExecutable: executable,
@@ -864,11 +806,13 @@ async function startSession(
   config: Options,
   key?: string,
 ) {
-  if (!(hosts && (await openHosted(holder, config, key)))) {
+  const hosted = await openHosted(holder, config, key);
+  if (hosted) useHosted(holder, hosted);
+  else {
     const { promptSubmit, canUseTool } = sessionCallbacks(holder);
     const { query } = await sdk();
     holder.stream = query({
-      prompt: (holder.input as ClaudeInput).read(),
+      prompt: holder.input as ClaudeInput,
       options: {
         ...config,
         abortController: holder.controller,
@@ -903,11 +847,7 @@ function watchWindow(holder: ClaudeSession) {
     })
     .catch(() => {});
 }
-async function openHosted(
-  holder: ClaudeSession,
-  config: Options,
-  key?: string,
-) {
+function openHosted(holder: ClaudeSession, config: Options, key?: string) {
   const { options } = holder;
   const meta: HostedMeta = {
     signature: holder.signature,
@@ -923,8 +863,8 @@ async function openHosted(
       choice: options.choice,
     },
   };
-  try {
-    const hosted = await hosts!.open({
+  return inAgentHost("Claude", (hosts) =>
+    hosts.open({
       key: key ?? `once:${randomUUID()}`,
       meta,
       // The host runs Claude Code with Relay's environment as it is now.
@@ -934,13 +874,8 @@ async function openHosted(
         UserPromptSubmit: { ask: true, timeout: 4000 },
       },
       handlers: hostedHandlers(holder),
-    });
-    useHosted(holder, hosted);
-    return true;
-  } catch (error) {
-    console.warn("The agent host is unavailable; Claude runs in Relay:", error);
-    return false;
-  }
+    }),
+  );
 }
 function useHosted(holder: ClaudeSession, hosted: HostedQuery) {
   holder.hosted = hosted;
@@ -957,27 +892,16 @@ function useHosted(holder: ClaudeSession, hosted: HostedQuery) {
  * back with what it has running; one that was in a turn comes back holding it,
  * for an `adopt` turn to show. Claude starting a turn later calls `unprompted`.
  */
-export async function reattachClaudeSessions(
+export function reattachClaudeSessions(
   owns: (key: string) => boolean,
   unprompted: (key: string) => () => Promise<void>,
-): Promise<{ key: string; open: boolean }[]> {
-  if (!hosts) return [];
-  const found = await hosts.discover();
-  const back: { key: string; open: boolean }[] = [];
-  for (const session of found) {
-    const { info } = session;
-    const meta = info.meta as (HostedMeta & { provider?: string }) | undefined;
-    // Other agents' sessions are theirs to take back.
-    if (info.kind === "process" || (meta?.provider ?? "claude") !== "claude")
-      continue;
-    if (!meta?.options || !owns(info.key) || sessions.has(info.key)) {
-      session.close();
-      continue;
-    }
-    sessions.set(info.key, restoreSession(session, meta, unprompted(info.key)));
-    back.push({ key: info.key, open: info.open });
-  }
-  return back;
+) {
+  return sessions.reattach(owns, (found) => {
+    const meta = found.info.meta as HostedMeta | undefined;
+    return meta?.options
+      ? restoreSession(found, meta, unprompted(found.info.key))
+      : undefined;
+  });
 }
 function restoreSession(
   found: FoundSession,
@@ -1116,7 +1040,7 @@ export async function runClaudeProject(
         options,
         signature,
         skipsPermissions: options.runtimeMode === "full-access",
-        input: new ClaudeInput(),
+        input: new AsyncQueue<SDKUserMessage>(),
         frames: new ClaudeFrames(),
         controller,
         plan: "",

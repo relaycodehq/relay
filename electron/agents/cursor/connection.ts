@@ -4,9 +4,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { HostedChild } from "../../agent-host/child";
-import type { AgentHosts } from "../../agent-host/client";
 import type { Entry } from "../../agent-host/protocol";
+import { terminate } from "../../terminate";
 import { withTimeout } from "../../timeout";
+import { HostedSessions } from "../hosted-sessions";
 import { cursorSetup } from "./sdk";
 import type { InstalledSdk } from "./sdk-install";
 import {
@@ -16,12 +17,6 @@ import {
   type CursorMethods,
   type CursorUpdate,
 } from "./protocol";
-
-let hosts: AgentHosts | undefined;
-/** Runs threads' workers in the agent host, so they outlive a restart of Relay. */
-export function useCursorHosts(agentHosts: AgentHosts) {
-  hosts = agentHosts;
-}
 
 /** What a hosted worker keeps for the next Relay: its agent, and the turn it was in. */
 export interface CursorMeta {
@@ -155,17 +150,11 @@ export class CursorConnection {
     this.closing = true;
     this.closed = true;
     const { child } = this;
-    // Closing its input is how a worker is told to stop; the kill is for one that doesn't.
-    child.stdin.end();
-    const kill = setTimeout(() => {
-      if (child.exitCode === null) child.kill("SIGKILL");
-    }, 2000);
-    kill.unref();
-    child.once("exit", () => {
-      clearTimeout(kill);
-      void this.cleanup?.();
-    });
-    if (child instanceof HostedChild) child.kill("SIGTERM");
+    child.once("exit", () => void this.cleanup?.());
+    // Closing its input is how a worker is told to stop; the kill is for one
+    // that doesn't. The host does the same with one it runs.
+    if (child instanceof HostedChild) child.kill();
+    else terminate(child, { byInput: true });
   }
 }
 
@@ -182,39 +171,35 @@ function command(sdk: InstalledSdk, store = cursorSetup().store) {
   };
 }
 
-const sessions = new Map<string, CursorConnection>();
+const sessions = new HostedSessions<CursorConnection>({
+  provider: "cursor",
+  name: "Cursor",
+  kind: "process",
+  close: (connection) => connection.close(),
+});
 
 /**
  * The worker for a thread's session, started if it isn't running. A thread's
  * runs in the agent host; without a key it's a private one that ends with its turn.
  */
-export async function acquireCursorConnection(
+export function acquireCursorConnection(
   key: string | undefined,
   cwd: string,
   sdk: InstalledSdk,
 ): Promise<CursorConnection> {
-  let connection = key ? sessions.get(key) : undefined;
-  if (connection?.busy)
-    throw new Error("This Cursor session is already running a turn.");
-  if (!connection || connection.closed) {
-    if (key) {
-      connection = new CursorConnection(
+  return sessions.acquire(key, async () => {
+    if (key)
+      return new CursorConnection(
         await launch(key, cwd, sdk, threadStore(key)),
       );
-      sessions.set(key, connection);
-    } else {
-      // A one-off job leaves no agent behind: its history goes with it.
-      const parent = cursorSetup().store;
-      await mkdir(parent, { recursive: true });
-      const store = await mkdtemp(join(parent, "tmp-"));
-      connection = new CursorConnection(
-        await launch(undefined, cwd, sdk, store),
-        () => rm(store, { recursive: true, force: true }),
-      );
-    }
-  }
-  connection.busy = true;
-  return connection;
+    // A one-off job leaves no agent behind: its history goes with it.
+    const parent = cursorSetup().store;
+    await mkdir(parent, { recursive: true });
+    const store = await mkdtemp(join(parent, "tmp-"));
+    return new CursorConnection(await launch(undefined, cwd, sdk, store), () =>
+      rm(store, { recursive: true, force: true }),
+    );
+  });
 }
 
 /**
@@ -227,33 +212,24 @@ function threadStore(key: string) {
   return join(cursorSetup().store, "threads", name);
 }
 
-async function launch(
+function launch(
   key: string | undefined,
   cwd: string,
   sdk: InstalledSdk,
   store?: string,
 ) {
   const spec = command(sdk, store);
-  const local = () =>
-    spawn(spec.command, spec.args, {
-      cwd,
-      env: spec.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    }) as ChildProcessWithoutNullStreams;
-  if (!key || !hosts) return local();
-  try {
-    const running = await hosts.openProcess({
-      key,
-      meta: { provider: "cursor" } satisfies CursorMeta,
-      process: { ...spec, cwd, group: false },
-    });
-    const child = new HostedChild(running);
-    child.release();
-    return child;
-  } catch (error) {
-    console.warn("The agent host is unavailable; Cursor runs in Relay:", error);
-    return local();
-  }
+  return sessions.spawn(
+    key,
+    { provider: "cursor" } satisfies CursorMeta,
+    { ...spec, cwd, group: false, stopByInput: true },
+    () =>
+      spawn(spec.command, spec.args, {
+        cwd,
+        env: spec.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as ChildProcessWithoutNullStreams,
+  );
 }
 
 /**
@@ -284,48 +260,33 @@ export async function cursorCall<M extends CursorMethod>(
   }
 }
 
-export async function closeCursorConnection(key: string) {
-  const connection = sessions.get(key);
-  sessions.delete(key);
-  connection?.close();
+export function closeCursorConnection(key: string) {
+  return sessions.close(key);
 }
 
 /** Relay is quitting: workers in the host keep going, the rest end. */
 export function detachCursor() {
-  sessions.clear();
+  sessions.detach();
 }
 export function disposeCursor() {
-  for (const connection of sessions.values()) connection.close();
-  sessions.clear();
+  sessions.dispose();
 }
 
 /**
  * Takes back the workers the agent host kept running while Relay restarted.
  * One in a turn waits, holding what it said meanwhile, for an `adopt` turn.
  */
-export async function reattachCursorSessions(
-  owns: (key: string) => boolean,
-): Promise<{ key: string; open: boolean }[]> {
-  if (!hosts) return [];
-  const back: { key: string; open: boolean }[] = [];
-  for (const found of await hosts.discover()) {
+export function reattachCursorSessions(owns: (key: string) => boolean) {
+  return sessions.reattach(owns, (found) => {
     const { info } = found;
-    const meta = info.meta as CursorMeta | undefined;
-    if (meta?.provider !== "cursor") continue;
-    if (!owns(info.key) || sessions.has(info.key)) {
-      found.close();
-      continue;
-    }
     const child = new HostedChild(found.attachProcess(), (entries) =>
       cursorReplay(entries, info.split),
     );
     const connection = new CursorConnection(child);
-    connection.inflight = meta.run;
-    sessions.set(info.key, connection);
+    connection.inflight = (info.meta as CursorMeta).run;
     if (!info.open) child.release();
-    back.push({ key: info.key, open: info.open });
-  }
-  return back;
+    return connection;
+  });
 }
 
 /** What a turn cut off by a restart still has to hear: its updates and its reply. */
