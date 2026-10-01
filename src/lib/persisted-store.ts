@@ -1,5 +1,15 @@
 import { useSyncExternalStore } from "react";
 
+/** What `key` holds, parsed; undefined when it's unset, malformed or storage is unavailable. */
+export function readJson(key: string): unknown {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved === null ? undefined : JSON.parse(saved);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * A per-device preference kept in localStorage, like the theme. `parse` turns
  * what was saved (null when nothing was) into the value, and is the place to

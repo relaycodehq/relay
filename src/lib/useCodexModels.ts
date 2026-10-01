@@ -7,28 +7,25 @@ import {
   type CodexModel,
 } from "../../shared/settings";
 import { api } from "./api";
+import { readJson } from "./persisted-store";
 
 const savedKey = "relay-codex-models";
 function readSaved(): CodexModel[] | undefined {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(savedKey) || "[]");
-    const models = Array.isArray(value)
-      ? value.filter(
-          (m): m is CodexModel =>
-            modelSchema.safeParse(m?.id).success &&
-            typeof m.name === "string" &&
-            typeof m.description === "string" &&
-            typeof m.legacy === "boolean" &&
-            Array.isArray(m.efforts) &&
-            m.efforts.every(
-              (e: unknown) => reasoningEffortSchema.safeParse(e).success,
-            ),
-        )
-      : [];
-    return models.length ? models : undefined;
-  } catch {
-    return undefined;
-  }
+  const value = readJson(savedKey);
+  const models = Array.isArray(value)
+    ? value.filter(
+        (m): m is CodexModel =>
+          modelSchema.safeParse(m?.id).success &&
+          typeof m.name === "string" &&
+          typeof m.description === "string" &&
+          typeof m.legacy === "boolean" &&
+          Array.isArray(m.efforts) &&
+          m.efforts.every(
+            (e: unknown) => reasoningEffortSchema.safeParse(e).success,
+          ),
+      )
+    : [];
+  return models.length ? models : undefined;
 }
 const codexModelsQuery = {
   queryKey: ["codex-models"],

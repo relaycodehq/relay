@@ -62,6 +62,7 @@ import {
 } from "../lib/shortcuts";
 import { modifierCode } from "../../shared/shortcuts";
 import { useWindowFocused } from "../lib/window-focus";
+import { readJson } from "../lib/persisted-store";
 import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
 import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
@@ -102,13 +103,9 @@ type DropTarget =
   | { kind: "folder"; path: string }
   | { kind: "group"; path: string; where: "before" | "after" };
 
-function readJson<T>(key: string, fallback: T): T {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) ?? "null");
-    return value && typeof value === "object" ? (value as T) : fallback;
-  } catch {
-    return fallback;
-  }
+function readObject<T>(key: string, fallback: T): T {
+  const value = readJson(key);
+  return value && typeof value === "object" ? (value as T) : fallback;
 }
 
 function writeJson(key: string, value: unknown) {
@@ -134,7 +131,7 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
     return now;
   });
   const [seen, setSeen] = useState<Record<string, number>>(() =>
-    readJson("relay-thread-seen", {}),
+    readObject("relay-thread-seen", {}),
   );
   const current = chats.find((c) => c.id === chatId);
   useEffect(() => {
@@ -474,7 +471,7 @@ export function ProjectSidebar({
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       Object.entries(
-        readJson<Record<string, unknown>>("relay-project-expansion", {}),
+        readObject<Record<string, unknown>>("relay-project-expansion", {}),
       )
         .filter(([, value]) => typeof value === "boolean")
         .map(([key, value]) => [key, value === true]),
