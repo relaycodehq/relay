@@ -16,7 +16,13 @@ import {
   type FindingStatus,
   type ReviewerTask,
 } from "../shared/deep-review";
-import { councilTurn, lastAnswer, startSlots } from "./council";
+import {
+  councilTurn,
+  halted,
+  lastAnswer,
+  startSlots,
+  unfinishedSlots,
+} from "./council";
 import { leadPrompt, requestText, reviewerTask } from "./deep-review/prompts";
 import { resolveScope, type PullInfo } from "./deep-review/scope";
 
@@ -113,10 +119,7 @@ export class DeepReviews {
       throw new Error("This review is already running.");
     if (state.report)
       throw new Error("The review is done. Ask the lead to continue instead.");
-    const unfinished: number[] = [];
-    for (const [slot, r] of state.reviewers.entries())
-      if ((await this.lastAnswer(r.chatId))?.status !== "complete")
-        unfinished.push(slot);
+    const unfinished = await unfinishedSlots(this.host, state.reviewers);
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
     if (unfinished.length) await this.sendReviewers(chat, unfinished);
@@ -247,10 +250,6 @@ export class DeepReviews {
     );
   }
 
-  private lastAnswer(chatId: string) {
-    return lastAnswer(this.host, chatId);
-  }
-
   private async reviewerDone(parentId: string) {
     const chat = await this.host.load(parentId).catch(() => undefined);
     const state = chat?.deepReview;
@@ -262,13 +261,12 @@ export class DeepReviews {
       state.reviewers.map(async (reviewer, i) => ({
         number: i + 1,
         reviewer,
-        answer: await this.lastAnswer(reviewer.chatId),
+        answer: await lastAnswer(this.host, reviewer.chatId),
       })),
     );
-    // A reviewer stopped along the way, say by Relay closing: wait for Resume.
-    const stopped = reports.some((r) => r.answer?.status === "cancelled");
-    if (stopped || !reports.some((r) => r.answer?.status === "complete")) {
-      state.status = stopped ? "stopped" : "failed";
+    const halt = halted(reports.map((r) => r.answer));
+    if (halt) {
+      state.status = halt;
       await this.host.touch(chat, state.request);
       return;
     }

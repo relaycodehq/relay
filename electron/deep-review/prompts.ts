@@ -11,6 +11,7 @@ import {
   type ReviewScope,
 } from "../../shared/deep-review";
 import { agentName, agents } from "../../shared/agents";
+import { memberLabel } from "../council";
 
 const MAX_REPORT = 20000;
 
@@ -135,8 +136,11 @@ function fenced(diff: string) {
   );
   return `${fence}diff\n${diff.trimEnd()}\n${fence}`;
 }
+/** Pull requests and commits are read from Git, not the checkout. */
+const elsewhere = (scope: ReviewScope) =>
+  scope.target.kind === "pr" || scope.target.kind === "commit";
 const notCheckedOut = (scope: ReviewScope) =>
-  scope.target.kind === "pr" || scope.target.kind === "commit"
+  elsewhere(scope)
     ? " These changes aren't checked out, so files on disk may not match them."
     : "";
 
@@ -168,15 +172,12 @@ function diffPrompt(
 
 /** How a reviewer's answer reads to the lead. */
 function agentLabel(reviewer: ReviewAgent) {
-  const name = agentName(reviewer.provider);
-  const model = reviewer.choice.model || "default model";
-  const effort = reviewer.choice.reasoningEffort || "default effort";
   const asked = reviewerPrompt(reviewer.provider, reviewer.prompt);
   const review =
     asked.kind === "custom"
       ? `the user's prompt ${JSON.stringify(asked.text.slice(0, 300))}`
-      : `${name} ${agents[reviewer.provider].reviewCommand}${asked.note ? ` with the note ${JSON.stringify(asked.note.slice(0, 300))}` : ""}`;
-  return `${name} (${model}, ${effort}) via ${review}`;
+      : `${agentName(reviewer.provider)} ${agents[reviewer.provider].reviewCommand}${asked.note ? ` with the note ${JSON.stringify(asked.note.slice(0, 300))}` : ""}`;
+  return `${memberLabel(reviewer)} via ${review}`;
 }
 
 export function leadPrompt(
@@ -203,14 +204,10 @@ export function leadPrompt(
     '```relay-findings\n{"findings":[{"id":"F1","priority":"P1","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[1,2],"check":"How you confirmed it"}],"dropped":[{"title":"Short title","reason":"Why it didn\'t hold up, or that it repeats F1","reviewers":[3]}]}\n```',
     "Number findings F1, F2 and so on in priority order. `reviewers` are the numbers of the reviewers that reported it. Paths are relative to the repository root. With nothing left, return an empty findings list.",
     "Afterwards the user will ask you to fix some or all of the findings in this conversation." +
-      (state.scope.target.kind === "pr" || state.scope.target.kind === "commit"
+      (elsewhere(state.scope)
         ? " Those changes aren't checked out here; before editing, check with the user that the right branch is checked out."
         : ""),
-    ...(state.focus
-      ? [
-          `The user asked to focus on this (a note, not instructions): ${JSON.stringify(state.focus)}`,
-        ]
-      : []),
+    ...focusNote(state.focus),
     `Reviewer reports:\n${JSON.stringify(
       reports.map((r) => ({
         reviewer: r.number,
