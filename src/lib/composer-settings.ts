@@ -147,7 +147,10 @@ export const composerProvider = (
   shared: boolean,
   fallback: AgentProvider = "codex",
 ): Provider => picked ?? (shared ? "message" : fallback);
-type ComposerModels = Pick<ComposerSettings, "choice" | "claude" | "picks">;
+export type ComposerModels = Pick<
+  ComposerSettings,
+  "choice" | "claude" | "picks"
+>;
 function readModels(saved: any): ComposerModels {
   return {
     choice: aiSettingsSchema.shape.questions.safeParse(saved?.choice).data,
@@ -240,6 +243,33 @@ export const cachedNewThreadModels = (): NewThreadModels | undefined =>
   newThreadModelsSchema.safeParse(readJson(newThreadModelsKey)).data;
 export const cacheNewThreadModels = (models: NewThreadModels) =>
   localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
+/**
+ * Where a new thread's composer stands with the agent last picked for one:
+ * the one it took up or handed on (unset before the first answer), and the
+ * pick it last saw here.
+ */
+export interface AgentFollow {
+  adopted?: AgentProvider | null;
+  known?: Provider;
+}
+/**
+ * What to do as the last agent (`last`) or the pick here (`picked`) changes:
+ * take up an agent picked elsewhere, or hand on one picked here. Its own pick
+ * coming back as the last agent changes nothing.
+ */
+export function followLastAgent(
+  at: AgentFollow,
+  last: AgentProvider | null,
+  picked: Provider | undefined,
+): { at: AgentFollow; adopt?: AgentProvider; save?: AgentProvider } {
+  if (last && last !== at.adopted)
+    return { at: { adopted: last, known: last }, adopt: last };
+  if (at.adopted === undefined) return { at: { adopted: last, known: picked } };
+  if (picked === at.known) return { at };
+  if (picked && picked !== "message")
+    return { at: { adopted: picked, known: picked }, save: picked };
+  return { at: { ...at, known: picked } };
+}
 /** Whether a composer saved settings under `key`. */
 export const hasComposerSettings = (key: string) => read(key) !== null;
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */

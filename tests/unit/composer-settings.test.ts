@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   composerProvider,
   cacheNewThreadModels,
+  followLastAgent,
+  type AgentFollow,
   loadComposerSettings,
   newThreadModelsOf,
   saveComposerSettings,
@@ -310,4 +312,27 @@ it("keeps another agent's model in its own slot, apart from Codex's and Claude's
     provider: undefined,
     picks: { opencode: { model: "", reasoningEffort: "" } },
   });
+});
+
+it("hands on agents picked here and takes up ones picked on the phone, without echoing its own", () => {
+  let at: AgentFollow = {};
+  const step = (
+    last: Parameters<typeof followLastAgent>[1],
+    picked: Parameters<typeof followLastAgent>[2],
+  ) => {
+    const next = followLastAgent(at, last, picked);
+    at = next.at;
+    return { adopt: next.adopt, save: next.save };
+  };
+  // Nothing picked for a new thread yet: only noted.
+  expect(step(null, undefined)).toEqual({});
+  expect(step(null, "claude")).toEqual({ save: "claude" });
+  // Its own pick coming back as the last agent.
+  expect(step("claude", "claude")).toEqual({});
+  // Picked on the phone, then shown here.
+  expect(step("codex", "claude")).toEqual({ adopt: "codex" });
+  expect(step("codex", "codex")).toEqual({});
+  // A note to the thread is no agent to start new threads on.
+  expect(step("codex", "message")).toEqual({});
+  expect(step("codex", "opencode")).toEqual({ save: "opencode" });
 });

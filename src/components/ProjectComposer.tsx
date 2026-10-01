@@ -37,7 +37,6 @@ import {
   reasoningEffortsFor,
   effortLabels,
   type ReasoningEffort,
-  codexQuestionChoice,
   claudeEffortsFor,
   claudeContextWindow,
   findClaudeModel,
@@ -52,20 +51,14 @@ import {
   type SendSettings,
 } from "../../shared/compose-send";
 import { draftRecipient } from "../../shared/recipient";
-import { useAISettings } from "../lib/useAISettings";
 import {
-  composerProvider,
-  hasComposerSettings,
   isPickAgent,
   livePick,
-  loadComposerSettings,
   messageChoice,
   messageContext,
-  newThreadModelsOf,
   pickAgents,
-  saveComposerSettings,
-  withNewThreadModels,
 } from "../lib/composer-settings";
+import { useComposerSettings } from "../lib/useComposerSettings";
 import { useAgentPicks } from "../lib/useAgentPicks";
 import {
   agentMentionPattern,
@@ -114,12 +107,6 @@ import { QuickSwitchHud } from "./QuickSwitchHud";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import { api } from "../lib/api";
-import { useNewThreadAgent } from "../lib/useNewThreadAgent";
-import { useNewThreadModels } from "../lib/useNewThreadModels";
-import {
-  sameModel,
-  type NewThreadModels,
-} from "../../shared/new-thread-models";
 import {
   isScreenshot,
   loadDraftImages,
@@ -232,7 +219,6 @@ export function ProjectComposer({
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   const draft = useDraft(draftKey);
-  const settings = useAISettings();
   const effortKeys = useEffortKeysLabel();
   const stopKeys = useShortcutLabel("stop");
   const stopTwice = useShortcutValue(() => pressedTwice("stop"));
@@ -244,89 +230,21 @@ export function ProjectComposer({
   useShortcut("stop", running, onStop);
   const [dictationOwner] = useState(() => ({}));
   const composerForm = useRef<HTMLFormElement>(null);
-  const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
-  const [unsaved] = useState(
-    () =>
-      !hasComposerSettings(settingsKey) &&
-      !(inherit && hasComposerSettings(inherit.settingsKey)),
-  );
-  // Until an agent is picked here, the default agent setting decides, even
-  // when it loads after the composer does.
-  const [picked, setProvider] = useState(saved.provider);
-  const provider = composerProvider(
-    picked,
+  const composer = useComposerSettings(
+    { key: settingsKey, inherit },
     shared,
-    agent ?? settings.data?.threadProvider,
+    agent,
   );
-  // A new thread starts on the agent last picked for one, here or on the
-  // phone; picking one here makes it that agent for both.
-  const followsLastAgent = settingsKey.startsWith("new:") && !shared;
-  const [lastAgent, saveLastAgent] = useNewThreadAgent(followsLastAgent);
-  const adopted = useRef<AgentProvider | null>(undefined);
-  const known = useRef<typeof picked>(undefined);
-  useEffect(() => {
-    if (!followsLastAgent || lastAgent === undefined) return;
-    if (lastAgent && lastAgent !== adopted.current) {
-      adopted.current = known.current = lastAgent;
-      setProvider(lastAgent);
-      return;
-    }
-    if (adopted.current === undefined) {
-      adopted.current = lastAgent;
-      known.current = picked;
-      return;
-    }
-    if (picked === known.current) return;
-    known.current = picked;
-    if (picked && picked !== "message") {
-      adopted.current = picked;
-      saveLastAgent(picked);
-    }
-  }, [followsLastAgent, lastAgent, picked, saveLastAgent]);
-  const [choice, setChoice] = useState(saved.choice);
-  const [claude, setClaude] = useState(saved.claude);
-  const [picks, setPicks] = useState(saved.picks);
-  // Its models follow the ones last picked for a new thread or sent with,
-  // here or on the phone; picking one here makes it the model for both. A
-  // thread with nothing saved here takes them up once.
-  const followsLastModels = followsLastAgent || (unsaved && !shared);
-  const [lastModels, saveLastModel] = useNewThreadModels(followsLastModels);
-  const tookLastModels = useRef(false);
-  const models = useMemo(
-    () => newThreadModelsOf({ choice, claude, picks }),
-    [choice, claude, picks],
-  );
-  const current = useRef({ choice, claude, picks });
-  current.current = { choice, claude, picks };
-  useEffect(() => {
-    if (!followsLastModels || !lastModels) return;
-    if (!followsLastAgent && tookLastModels.current) return;
-    tookLastModels.current = true;
-    const changed = Object.fromEntries(
-      agentProviders.flatMap((p) =>
-        lastModels[p] && !sameModel(lastModels[p], models[p])
-          ? [[p, lastModels[p]]]
-          : [],
-      ),
-    );
-    if (!Object.keys(changed).length) return;
-    const next = withNewThreadModels(current.current, changed);
-    setChoice(next.choice);
-    setClaude(next.claude);
-    setPicks(next.picks);
-  }, [followsLastModels, lastModels]);
-  const shownModels = useRef<NewThreadModels>(undefined);
-  useEffect(() => {
-    const before = shownModels.current;
-    shownModels.current = models;
-    if (!followsLastAgent || !before) return;
-    for (const p of agentProviders)
-      if (
-        !sameModel(models[p], before[p]) &&
-        !sameModel(models[p], lastModels?.[p])
-      )
-        saveLastModel(p, models[p]!);
-  }, [models]);
+  const {
+    provider,
+    setProvider,
+    setChoice,
+    claude,
+    setClaude,
+    picks,
+    setPicks,
+    saveLastModel,
+  } = composer;
   const agentPicks = useAgentPicks();
   const claudeCatalog = useClaudeModels();
   const claudeModels = claudeCatalog.models;
@@ -335,34 +253,18 @@ export function ProjectComposer({
   const defaults = useAgentDefaults(projectId);
   const claudeListed = findClaudeModel(claudeModels, claude.model);
   const claudeModelEfforts = claudeEffortsFor(claudeModels, claude.model);
-  const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
-  const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
-  const [ultraplan, setUltraplan] = useState(saved.ultraplan);
-  const [council, setCouncil] = useState(saved.council);
+  const {
+    runtimeMode,
+    setRuntimeMode,
+    interactionMode,
+    setInteractionMode,
+    ultraplan,
+    setUltraplan,
+    council,
+    setCouncil,
+  } = composer;
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
   const [spark, setSpark] = useState(0);
-  useEffect(() => {
-    saveComposerSettings(settingsKey, {
-      provider: picked,
-      choice,
-      claude,
-      picks,
-      runtimeMode,
-      interactionMode,
-      ultraplan,
-      council,
-    });
-  }, [
-    settingsKey,
-    picked,
-    choice,
-    claude,
-    picks,
-    runtimeMode,
-    interactionMode,
-    ultraplan,
-    council,
-  ]);
   const input = useRef<HTMLElement>(null);
   const promptInput = useRef<PromptInputHandle>(null);
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
@@ -438,8 +340,7 @@ export function ProjectComposer({
       live = false;
     };
   }, [draftKey]);
-  const codexChoice =
-    choice ?? (settings.data && codexQuestionChoice(settings.data));
+  const codexChoice = composer.codexChoice;
   // An effort Codex no longer lists for the model runs as its default.
   const selected = useMemo(
     () => codexChoice && supportedChoice(codexChoice, codexModels),
@@ -1080,16 +981,7 @@ export function ProjectComposer({
       // Plan. Saved before sending, so a thread it starts opens that way too.
       if (councilOn) {
         setUltraplan(false);
-        saveComposerSettings(settingsKey, {
-          provider: picked,
-          choice,
-          claude,
-          picks,
-          runtimeMode,
-          interactionMode,
-          ultraplan: false,
-          council,
-        });
+        composer.save({ ultraplan: false });
       }
       const outgoing = takeDraft(true);
       const sent = await onSend(
