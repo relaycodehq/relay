@@ -739,7 +739,7 @@ export function Settings({
       category: "appearance",
       title: "Composer toolbar",
       description:
-        "Drag a control along the bar to move it, and drag the gap to choose what sits on the right. Drop a control below the bar to hide it. From the keyboard, the arrows move the focused control and Delete hides it.",
+        "Drag to reorder. Drop below the bar to hide.",
       keywords:
         "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode attach dictation microphone",
       block: true,
