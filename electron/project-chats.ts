@@ -16,6 +16,7 @@ import { assertHere, ComputerHandoff } from "./project-chats/handoff";
 import { forkFor, TurnRunner } from "./project-chats/turn-run";
 import { SideQuestions } from "./project-chats/asides";
 import { ChatQueue } from "./project-chats/queue";
+import { Councils } from "./project-chats/councils";
 import type { ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import { streamingAnswer } from "./answer-recorder";
@@ -57,14 +58,8 @@ import {
   autoSettledAt,
   DEFAULT_AUTO_SETTLE_DAYS,
 } from "../shared/chat-activity";
-import { DeepReviews, type PullInfo } from "./deep-review";
-import { Ultraplans } from "./ultraplan";
-import type { ThinkerTask } from "../shared/ultraplan";
-import type {
-  DeepReviewStart,
-  FindingStatus,
-  ReviewerTask,
-} from "../shared/deep-review";
+import type { PullInfo } from "./deep-review";
+import type { DeepReviewStart, FindingStatus } from "../shared/deep-review";
 import { codexQuestionChoice } from "../shared/settings";
 /** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
 const HANDOFF_TIMEOUT = 120000;
@@ -90,8 +85,7 @@ export class ProjectChats {
   private queue: ChatQueue;
   private control = threadControl();
   private disposing = false;
-  /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
-  private reviewSteps = new Set<Promise<void>>();
+  private councils: Councils;
   /**
    * Ends a run. The finished answer moved `updated`, so the sidebar summary
    * catches up, but only once the thread no longer counts as active; then a
@@ -111,56 +105,9 @@ export class ProjectChats {
       this.emit({ chatId: chat.id, message: structuredClone(m) });
     }
     if (unread.length) void this.storage.save(chat).catch(() => {});
-    if (turn) this.reviewStep(chat.id, turn);
+    if (turn) this.councils.step(chat.id, turn);
     void this.storage.updateSummary(chat).catch(() => {});
     void this.control(chat.id, () => this.queue.drain(chat.id)).catch(() => {});
-  }
-  private reviewStep(id: string, turn: { request?: string; answer?: string }) {
-    const step = Promise.all([
-      this.reviews
-        .finished(id, turn)
-        .catch((e) => console.warn("Deep review could not continue:", e)),
-      this.ultraplans
-        .finished(id, turn)
-        .catch((e) => console.warn("Ultraplan could not continue:", e)),
-    ]).then(() => {});
-    this.reviewSteps.add(step);
-    void step.finally(() => this.reviewSteps.delete(step));
-  }
-  /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */
-  private async touch(chat: ProjectChat, messageId: string) {
-    const message = chat.messages.find((m) => m.id === messageId);
-    if (message) message.version++;
-    await this.storage.save(chat);
-    if (message)
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
-  }
-  private reviews = new DeepReviews({
-    load: (id) => this.storage.load(id),
-    project: (id) => this.projects.get(id),
-    root: (projectId) => this.projects.root(projectId),
-    createReviewer: (parent, task) => this.createReviewer(parent, task),
-    send: (id, input) => this.send(id, input),
-    lead: (chat, input, prompt) => this.lead(chat, input, prompt),
-    active: (id) => this.active.has(id),
-    stop: (id) => this.active.get(id)?.abort.abort(),
-    close: (id) => this.sessions.close(id),
-    touch: (chat, messageId) => this.touch(chat, messageId),
-    summary: (chat) => this.storage.updateSummary(chat),
-  });
-  private ultraplans = new Ultraplans({
-    load: (id) => this.storage.load(id),
-    createThinker: (parent, task) => this.createThinker(parent, task),
-    send: (id, input) => this.send(id, input),
-    lead: (chat, input, prompt) => this.lead(chat, input, prompt),
-    active: (id) => this.active.has(id),
-    stop: (id) => this.active.get(id)?.abort.abort(),
-    close: (id) => this.sessions.close(id),
-    touch: (chat, messageId) => this.touch(chat, messageId),
-  });
-  /** Deep review reviewers and Ultraplan thinkers hold new messages back. */
-  private councilBusy(chat: ProjectChat) {
-    return this.reviews.reviewing(chat) || this.ultraplans.working(chat);
   }
   constructor(
     private store: Store,
@@ -184,6 +131,19 @@ export class ProjectChats {
       this.storage.chatChanged(id),
     );
     this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
+    this.councils = new Councils(
+      this.storage,
+      projects,
+      this.active,
+      this.sessions,
+      this.control,
+      (event) => this.emit(event),
+      {
+        send: (id, input) => this.send(id, input),
+        lead: (chat, input, prompt) => this.lead(chat, input, prompt),
+        closing: () => this.disposing,
+      },
+    );
     this.schedule = new ChatSchedule(
       store,
       this.storage,
@@ -215,7 +175,7 @@ export class ProjectChats {
       this.sessions,
       this.control,
       join(dirname(dir), "worktrees"),
-      (chat) => this.councilBusy(chat),
+      (chat) => this.councils.busy(chat),
     );
     this.files = new TurnFiles(
       this.storage,
@@ -246,7 +206,7 @@ export class ProjectChats {
             active,
             computer,
           ),
-        councilBusy: (chat) => this.councilBusy(chat),
+        councilBusy: (chat) => this.councils.busy(chat),
         closing: () => this.disposing,
       },
     );
@@ -279,7 +239,7 @@ export class ProjectChats {
       (event) => this.emit(event),
       {
         sendNow: (id, input) => this.sendNow(id, input),
-        councilBusy: (chat) => this.councilBusy(chat),
+        councilBusy: (chat) => this.councils.busy(chat),
         closing: () => this.disposing,
       },
     );
@@ -404,7 +364,7 @@ export class ProjectChats {
       return chatSummary(chat);
     }
     if (triage.kind === "archive") {
-      if (this.active.has(id) || this.councilBusy(chat))
+      if (this.active.has(id) || this.councils.busy(chat))
         throw new Error("Stop the running answer before archiving.");
       // Nothing reopens an archived thread to cancel what would still run in it.
       if (
@@ -567,68 +527,20 @@ export class ProjectChats {
     return this.handoffs.returned(id, handoffId, messages);
   }
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      this.projects.assertCheckoutAvailable(
-        (await this.storage.load(id)).projectId,
-      );
-      await this.reviews.start(id, config, pull);
-    });
+    return this.councils.startReview(id, config, pull);
   }
   resumeDeepReview(id: string) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      await this.reviews.resume(id);
-    });
+    return this.councils.resumeReview(id);
   }
   setDeepReviewFinding(
     id: string,
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ) {
-    return this.control(id, () =>
-      this.reviews.setFinding(id, findingId, status),
-    );
+    return this.councils.setFinding(id, findingId, status);
   }
   resumeUltraplan(id: string, request: string) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      await this.ultraplans.resume(id, request);
-    });
-  }
-  /** A thinker's own thread, shown only inside its council. */
-  private async createThinker(parent: ProjectChat, task: ThinkerTask) {
-    const chat: ProjectChat = {
-      id: randomUUID(),
-      projectId: parent.projectId,
-      scope: parent.scope,
-      thinker: task,
-      title: `Thinker ${task.slot + 1}`,
-      // Its name is fixed; no title is generated for it.
-      renamed: true,
-      created: Date.now(),
-      updated: Date.now(),
-      messages: [],
-    };
-    await this.storage.add(chat);
-    return chat;
-  }
-  /** A reviewer's own thread, shown only inside its review. */
-  private async createReviewer(parent: ProjectChat, task: ReviewerTask) {
-    const chat: ProjectChat = {
-      id: randomUUID(),
-      projectId: parent.projectId,
-      scope: { kind: "review" },
-      reviewer: task,
-      title: `Reviewer ${task.slot + 1}`,
-      // Its name is fixed; no title is generated for it.
-      renamed: true,
-      created: Date.now(),
-      updated: Date.now(),
-      messages: [],
-    };
-    await this.storage.add(chat);
-    return chat;
+    return this.councils.resumeUltraplan(id, request);
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
@@ -673,7 +585,7 @@ export class ProjectChats {
       if (input.sendAt) return this.schedule.add(id, input);
       if (
         !this.active.has(id) &&
-        !this.councilBusy(await this.storage.load(id))
+        !this.councils.busy(await this.storage.load(id))
       ) {
         await this.sendNow(id, input);
         // Asking an agent again picks a stopped queue back up after this
@@ -814,7 +726,7 @@ export class ProjectChats {
         ...(chat.shared ? { pending: true } : {}),
       };
       chat.messages.push(user);
-      this.reviews.sent(chat, input);
+      this.councils.sent(chat, input);
       chat.updated = Date.now();
       chat.branch = (await currentBranchOrNull(root)) ?? chat.branch;
       if (chat.messages.length === 1 && !chat.renamed)
@@ -920,7 +832,7 @@ export class ProjectChats {
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       if (input.ultraplan)
-        this.ultraplans.begin(chat, input, asked.provider, answer.id);
+        this.councils.begin(chat, input, asked.provider, answer.id);
       await this.storage.save(chat);
       this.emit({ chatId: id, message: answer });
       const { prompt, caughtUp, briefed } = turnPrompt({
@@ -1393,8 +1305,7 @@ export class ProjectChats {
     const chat = this.storage.cached(id);
     if (chat) chat.queuePaused = true;
     this.active.get(id)?.abort.abort();
-    if (chat) await this.reviews.stop(chat);
-    if (chat) await this.ultraplans.stop(chat);
+    if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }
   /**
@@ -1442,7 +1353,7 @@ export class ProjectChats {
     await Promise.allSettled(this.control.pending());
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
-    await Promise.allSettled([...this.reviewSteps]);
+    await Promise.allSettled(this.councils.stepping());
     await Promise.allSettled([
       ...this.sharing.pulling(),
       ...this.storage.busy().loads,
