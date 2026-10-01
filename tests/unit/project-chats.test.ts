@@ -914,6 +914,25 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
     { timeout: 15000 },
   );
 });
+it("lets a message's `to` decide who answers over its body's mention", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, { ...input("@codex later, maybe"), to: "message" });
+  expect((await chats.get(chat.id)).messages).toHaveLength(1);
+  expect(chats.hasActiveProject(projectId)).toBe(false);
+  await chats.send(chat.id, {
+    ...input("Explain the cache guard"),
+    to: "codex",
+  });
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)).toMatchObject({
+        role: "assistant",
+        provider: "codex",
+        status: "complete",
+      }),
+    { timeout: 6000 },
+  );
+}, 15000);
 it("previews only the images a turn read, and only when they really are images", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();

@@ -27,6 +27,7 @@ import {
   type RemoteMethod,
   type RemoteProjectIcon,
 } from "../../shared/remote";
+import { sentAgent } from "../../shared/recipient";
 import { idSchema } from "../../shared/rooms";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SpeechService } from "./phone-dictation";
@@ -178,7 +179,7 @@ export class RemoteBridge {
         ...(last
           ? {
               settings: {
-                provider: last.provider,
+                provider: sentAgent(last),
                 choice: last.choice,
                 runtimeMode: last.runtimeMode,
                 interactionMode: last.interactionMode,

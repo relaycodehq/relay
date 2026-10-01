@@ -21,6 +21,7 @@ it("addresses the picked agent, as only a leading mention makes one answer", () 
   expect(sent).toEqual({
     id,
     body: "@codex fix the flaky test",
+    to: "codex",
     provider: "codex",
     choice: { model: "gpt-5.5", fast: true, reasoningEffort: "low" },
     runtimeMode: "full-access",

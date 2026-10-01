@@ -252,6 +252,7 @@ export class DeepReviews {
         await this.host.send(reviewer.chatId, {
           id: randomUUID(),
           body,
+          to: reviewer.provider,
           provider: reviewer.provider,
           choice: reviewer.choice,
           ...councilTurn,
@@ -292,6 +293,7 @@ export class DeepReviews {
         {
           id: randomUUID(),
           body: `@${state.lead.provider}`,
+          to: state.lead.provider,
           provider: state.lead.provider,
           choice: state.lead.choice,
           runtimeMode: state.runtimeMode,

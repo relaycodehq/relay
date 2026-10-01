@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { ChatSummary } from "../../shared/projects";
-import { agentMention } from "../../shared/rooms";
+import { draftRecipient } from "../../shared/recipient";
 import { buildSend } from "../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -64,8 +64,7 @@ export async function sendDraft(
     !!chat?.shared,
     chat?.provider ?? ai.threadProvider,
   );
-  const mention = agentMention(text);
-  const recipient = mention?.provider ?? provider;
+  const recipient = draftRecipient(text, provider);
   if (
     chat?.provider &&
     recipient !== "message" &&

@@ -1,7 +1,7 @@
 import { AgentRequestCard } from "./AgentRequestCard";
 import { clock } from "../../shared/waiting";
 import type { RelayCommand } from "../../shared/commands";
-import { agentMention } from "../../shared/rooms";
+import { agentAsked, recipient } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
@@ -936,6 +936,7 @@ export function ProjectChat({
       await api.sendProjectChat(chat.id, {
         id: crypto.randomUUID(),
         body: fixRequest(review.lead.provider, findings),
+        to: review.lead.provider,
         provider: review.lead.provider,
         choice: review.lead.choice,
         runtimeMode: review.runtimeMode,
@@ -1122,8 +1123,7 @@ export function ProjectChat({
   ): Promise<boolean> {
     if (busy) return false;
     if (value.side) return askAside(value, dispatch);
-    if (!(await confirmSwitch(agentMention(value.body)?.provider)))
-      return false;
+    if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
     dispatch?.();
     setBusy(true);
     setError(undefined);
@@ -1155,11 +1155,7 @@ export function ProjectChat({
       follow.current = true;
       if (!chat) {
         saveDraftWorkspace(id, "checkout");
-        startThreadSettings(
-          id,
-          target.id,
-          agentMention(value.body)?.provider ?? "message",
-        );
+        startThreadSettings(id, target.id, recipient(value));
         await onCreated(target);
       } else await history.refetch();
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
@@ -1242,7 +1238,7 @@ export function ProjectChat({
       // A reply goes back to its side conversation, which keeps its own settings.
       saveSentSettings(
         parent ? `${id}:${parent}` : id,
-        agentMention(input.body)?.provider ?? "message",
+        recipient(input),
         input,
       );
       if (restoredCode.refs.length)

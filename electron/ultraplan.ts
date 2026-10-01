@@ -175,6 +175,7 @@ export class Ultraplans {
             requestText(asked?.body ?? ""),
             brief?.status === "complete" ? brief.body : "",
           )}`,
+          to: thinker.provider,
           provider: thinker.provider,
           choice: thinker.choice,
           ...councilTurn,
@@ -216,6 +217,7 @@ export class Ultraplans {
         {
           id: randomUUID(),
           body: `@${state.lead.provider}`,
+          to: state.lead.provider,
           provider: state.lead.provider,
           choice: state.lead.choice,
           runtimeMode: state.lead.runtimeMode,

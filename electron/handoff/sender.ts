@@ -15,7 +15,7 @@ import {
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import { remoteBridgeVersion, type HandoffPart } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
-import { agentMention } from "../../shared/rooms";
+import { sentAgent } from "../../shared/recipient";
 import { git } from "../git";
 import { portableMessages, type ProjectChats } from "../project-chats";
 import type { Projects } from "../projects";
@@ -321,7 +321,7 @@ export class Handoffs {
         title: chat.title,
         scope: chat.scope,
         settings: {
-          provider: agentMention(input.body)?.provider ?? input.provider,
+          provider: sentAgent(input),
           choice: input.choice,
           runtimeMode: input.runtimeMode,
           interactionMode: input.interactionMode,

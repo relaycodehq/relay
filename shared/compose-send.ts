@@ -1,5 +1,6 @@
 import { agentMentionPattern, agents, type AgentProvider } from "./agents";
 import type { ProjectChatSend } from "./projects";
+import { draftRecipient, type Recipient } from "./recipient";
 import { claudeContextWindow, type ModelChoice } from "./settings";
 import type { UltraplanKind } from "./ultraplan";
 
@@ -8,8 +9,8 @@ export type ComposedSend = Omit<ProjectChatSend, "id">;
 
 /** What a composer sends with, once the agent's model is picked. */
 export interface SendSettings {
-  /** The agent that answers; "message" is a note no agent answers. */
-  to: AgentProvider | "message";
+  /** The agent that answers, unless the text names another; "message" is a note no agent answers. */
+  to: Recipient;
   choice: ModelChoice;
   contextWindow?: ProjectChatSend["contextWindow"];
   runtimeMode: ProjectChatSend["runtimeMode"];
@@ -30,11 +31,20 @@ export interface SendOptions {
 
 /** A message as every composer sends it, desktop and phone alike. */
 export function buildSend(
-  { to, choice, contextWindow, runtimeMode, interactionMode }: SendSettings,
+  settings: SendSettings,
   text: string,
   options: SendOptions = {},
 ): ComposedSend {
   const body = text.trim();
+  const to = draftRecipient(body, settings.to);
+  const { runtimeMode, interactionMode } = settings;
+  // Another agent named in the text runs on its Default: the picked model is
+  // the picked agent's.
+  const picked = to === settings.to;
+  const choice: ModelChoice = picked
+    ? settings.choice
+    : { model: "", reasoningEffort: "", fast: false };
+  const contextWindow = picked ? settings.contextWindow : undefined;
   const { council, running, sendAt } = options;
   // Agents without Fast send it off; a model with 1M built in asks for nothing.
   const fast = to === "message" || agents[to].fast ? choice.fast : false;
@@ -55,11 +65,13 @@ export function buildSend(
                 : ("queue" as const),
           }
         : {}),
+    // Desktops before `to` read who answers from the mention, so it stays.
     body:
       to === "message" || agentMentionPattern.test(body)
         ? body
         : `@${to} ${body}`.trim(),
-    // A note goes in as Codex's; no agent answers it.
+    to,
+    // Older desktops require an agent even on a note, which none answers.
     provider: to === "message" ? "codex" : to,
     choice: { ...choice, fast },
     ...window,

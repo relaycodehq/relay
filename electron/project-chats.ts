@@ -58,6 +58,7 @@ import type {
   ContextUsage,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
+import { agentAsked, sentAgent } from "../shared/recipient";
 import {
   migrateAgentSessions,
   replyRoot,
@@ -411,11 +412,7 @@ export class ProjectChats {
         const active = crew[0];
         const running = [
           ...new Set(
-            crew.flatMap(({ input }) =>
-              input
-                ? [agentMention(input.body)?.provider ?? input.provider]
-                : [],
-            ),
+            crew.flatMap(({ input }) => (input ? [sentAgent(input)] : [])),
           ),
         ];
         const pending = [
@@ -1009,6 +1006,7 @@ export class ProjectChats {
       ...settings,
       id: randomUUID(),
       body: `@${provider} Carry on with this work, handed over from ${thread.from}.`,
+      to: provider,
       provider,
     }).catch((e) => console.warn("A handed-over thread couldn't start:", e));
     return this.summary(chat);
@@ -1430,7 +1428,7 @@ export class ProjectChats {
         // Asking an agent again picks a stopped queue back up after this
         // answer. Drain waits behind this control, so it sees the change.
         const chat = this.cache.get(id);
-        if (chat?.queuePaused && agentMention(input.body) && !fromRelay) {
+        if (chat?.queuePaused && agentAsked(input) && !fromRelay) {
           delete chat.queuePaused;
           await this.save(chat);
         }
@@ -1533,13 +1531,13 @@ export class ProjectChats {
       await this.save(chat);
       return this.drain(chat.id);
     }
-    const mention = agentMention(next.input.body),
+    const asked = agentAsked(next.input),
       prior = active.input,
-      running = prior && agentMention(prior.body)?.provider;
+      running = prior && agentAsked(prior)?.provider;
     if (
-      !mention ||
+      !asked ||
       !prior ||
-      mention.provider !== running ||
+      asked.provider !== running ||
       !active.steer ||
       next.input.parentId !== prior.parentId ||
       next.input.runtimeMode !== prior.runtimeMode ||
@@ -1548,8 +1546,8 @@ export class ProjectChats {
       next.input.contextWindow !== prior.contextWindow ||
       (chat.shared && next.input.images?.length) ||
       next.input.selection ||
-      /(?:^|\s)(?:\$|\/skill:)/.test(mention.question) ||
-      /^\s*\//.test(mention.question)
+      /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
+      /^\s*\//.test(asked.question)
     )
       return this.save(chat);
     const images = next.input.images?.length
@@ -1561,7 +1559,7 @@ export class ProjectChats {
       unread: true,
       role: "user",
       body: next.input.body,
-      provider: mention.provider,
+      provider: asked.provider,
       status: "complete",
       created: Date.now(),
       version: 1,
@@ -1575,7 +1573,7 @@ export class ProjectChats {
     chat.messages.push(message);
     try {
       await active.steer(
-        mention.question +
+        asked.question +
           (next.input.viewing
             ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
             : ""),
@@ -1647,15 +1645,13 @@ export class ProjectChats {
           "Send a follow-up message to continue this conversation.",
         );
       // Picking another agent before resuming hands the work to it.
-      const provider =
-        settings?.provider ??
-        agentMention(chat.lastInput.body)?.provider ??
-        chat.lastInput.provider;
+      const provider = settings?.provider ?? sentAgent(chat.lastInput);
       await this.sendNow(id, {
         ...chat.lastInput,
         ...(settings && { contextWindow: undefined }),
         ...settings,
         id: randomUUID(),
+        to: provider,
         body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
         images: undefined,
         selection: undefined,
@@ -1678,20 +1674,20 @@ export class ProjectChats {
         this.release(id, active);
         return;
       }
-      const mention = agentMention(input.body);
+      const asked = agentAsked(input);
       const skillMatches = [
-        ...(mention?.question ?? "").matchAll(
+        ...(asked?.question ?? "").matchAll(
           /(?:^|\s)(\/skill:|\$)([A-Za-z_][A-Za-z0-9_.:-]*)/g,
         ),
       ];
       let skills: CodexSkill[] = [];
-      if (skillMatches.length && mention && agents[mention.provider].skills) {
+      if (skillMatches.length && asked && agents[asked.provider].skills) {
         const available = await codexSkills(root);
         for (const match of skillMatches) {
           const skill = available.find((s) => s.name === match[2]);
           if (!skill && match[1] === "/skill:")
             throw new Error(
-              `This ${agentName(mention.provider)} skill is no longer available. Refresh the command menu.`,
+              `This ${agentName(asked.provider)} skill is no longer available. Refresh the command menu.`,
             );
           if (skill && !skills.some((s) => s.name === skill.name))
             skills.push(skill);
@@ -1705,9 +1701,9 @@ export class ProjectChats {
             .map(agentName)
             .join(" or ")}. Select it to run the skill.`,
         );
-      if (chat.shared && mention && !agents[mention.provider].helper)
+      if (chat.shared && asked && !agents[asked.provider].helper)
         throw new Error(
-          `${agentName(mention.provider)} can't answer in shared conversations yet. Pick ${helperProviders.map(agentName).join(" or ")}, or start a private thread.`,
+          `${agentName(asked.provider)} can't answer in shared conversations yet. Pick ${helperProviders.map(agentName).join(" or ")}, or start a private thread.`,
         );
       if (chat.shared && input.images?.length)
         throw new Error(
@@ -1718,22 +1714,22 @@ export class ProjectChats {
         : undefined;
       input = { ...input, parentId: parent?.id };
       active.input = input;
-      if (mention && !mention.question && !input.images?.length)
+      if (asked && !asked.question && !input.images?.length)
         throw new Error("Add a question after the agent mention.");
       if (input.ultraplan) {
-        if (!mention) throw new Error("Ultraplan needs an agent to lead it.");
+        if (!asked) throw new Error("Ultraplan needs an agent to lead it.");
         if (parent || chat.shared || chat.scope.kind === "review")
           throw new Error(
             "Ultraplan runs in the main conversation of a private thread.",
           );
-        if (/^\//.test(mention.question))
+        if (/^\//.test(asked.question))
           throw new Error("Ultraplan can't run a command. Ask a question.");
         // The lead plans; nobody edits until you ask it to build.
         input = { ...input, interactionMode: "plan" };
         active.input = input;
       }
       let evidence: unknown;
-      if (input.selection && mention) {
+      if (input.selection && asked) {
         if (!this.evidence || chat.scope.kind !== "pr")
           throw new Error(
             "Open a PR conversation before asking about selected review lines.",
@@ -1746,7 +1742,7 @@ export class ProjectChats {
         body: input.body,
         status: "complete",
         created: Date.now(),
-        provider: mention?.provider ?? input.provider,
+        provider: asked?.provider ?? input.provider,
         version: 1,
         ...(input.images?.length
           ? { images: await this.saveImages(id, input.images) }
@@ -1764,14 +1760,14 @@ export class ProjectChats {
       await this.persist(chat);
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
-      if (!mention) {
+      if (!asked) {
         this.release(id, active);
         return;
       }
       // The message is in. A handoff note can take minutes; the answer
       // starts after it without holding up the send.
       void this.start(chat, active, input, {
-        mention,
+        asked,
         parent,
         root,
         user,
@@ -1789,14 +1785,14 @@ export class ProjectChats {
     active: ActiveChat,
     input: ProjectChatSend,
     {
-      mention,
+      asked,
       parent,
       root,
       user,
       skills,
       evidence,
     }: {
-      mention: NonNullable<ReturnType<typeof agentMention>>;
+      asked: NonNullable<ReturnType<typeof agentAsked>>;
       parent: ChatMessage | undefined;
       root: string;
       user: ChatMessage;
@@ -1820,9 +1816,9 @@ export class ProjectChats {
       // Some agents only run a command or skill when the message starts with
       // it, so a command goes out alone.
       const command =
-        agents[mention.provider].commandsAlone &&
+        agents[asked.provider].commandsAlone &&
         !chat.shared &&
-        /^\/[a-zA-Z0-9_.:-]+(?:\s|$)/.test(mention.question);
+        /^\/[a-zA-Z0-9_.:-]+(?:\s|$)/.test(asked.question);
       // Another agent answered last on this branch: let it brief the new one
       // first, unless a command leaves no room for the note.
       const outgoing = [...chat.messages]
@@ -1837,7 +1833,7 @@ export class ProjectChats {
       const handoffFrom =
         !command &&
         outgoing &&
-        outgoing.provider !== mention.provider &&
+        outgoing.provider !== asked.provider &&
         outgoing.status !== "failed" &&
         agentSession(chat, outgoing.provider, parent?.id).thread
           ? outgoing.provider
@@ -1847,12 +1843,12 @@ export class ProjectChats {
             chat,
             root,
             handoffFrom,
-            mention.provider,
+            asked.provider,
             parent?.id,
             active,
           )
         : undefined;
-      const answer = streamingAnswer(mention.provider, {
+      const answer = streamingAnswer(asked.provider, {
         // With a council, the lead's first answer is its brief.
         ...(input.ultraplan ? { brief: true } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
@@ -1861,21 +1857,21 @@ export class ProjectChats {
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
       if (input.ultraplan)
-        this.ultraplans.begin(chat, input, mention.provider, answer.id);
+        this.ultraplans.begin(chat, input, asked.provider, answer.id);
       await this.save(chat);
       this.emit({ chatId: id, message: answer });
       const { prompt, caughtUp, briefed } = turnPrompt({
         chat,
         input,
-        provider: mention.provider,
-        question: mention.question,
+        provider: asked.provider,
+        question: asked.question,
         parent,
         previous: chat.messages.filter(
           (m) =>
             m.id !== user.id && m.id !== answer.id && onBranch(m) && !m.side,
         ),
-        session: agentSession(chat, mention.provider, parent?.id),
-        fork: this.forkFor(chat, mention.provider, parent?.id),
+        session: agentSession(chat, asked.provider, parent?.id),
+        fork: this.forkFor(chat, asked.provider, parent?.id),
         command,
         note,
         evidence,
@@ -1895,7 +1891,7 @@ export class ProjectChats {
         body: "",
         status: "failed",
         error: e instanceof Error ? e.message : String(e),
-        provider: mention.provider,
+        provider: asked.provider,
         created: Date.now(),
         version: 1,
         ...(input.parentId ? { parentId: input.parentId } : {}),
@@ -1979,12 +1975,11 @@ export class ProjectChats {
     parentId?: string,
   ): ProjectChatSend {
     const previous = chat.lastInput;
-    const same =
-      previous &&
-      (agentMention(previous.body)?.provider ?? previous.provider) === provider;
+    const same = previous && sentAgent(previous) === provider;
     return {
       id: randomUUID(),
       body: `@${provider}`,
+      to: provider,
       provider,
       // Matching the last turn's settings keeps the live session instead of reopening it.
       // Another provider's model id would not resolve here.
@@ -2229,10 +2224,10 @@ export class ProjectChats {
     const key = `${chat.id}:${rootId}`;
     if (this.sides.has(key))
       throw new Error("Wait for the answer to your last side question.");
-    const mention = agentMention(input.body);
-    if (!mention?.question) throw new Error("Ask a question after /btw.");
+    const asked = agentAsked(input);
+    if (!asked?.question) throw new Error("Ask a question after /btw.");
     // A side thread stays with the agent it started with.
-    const provider = root?.provider ?? mention.provider;
+    const provider = root?.provider ?? asked.provider;
     const main = agentSession(chat, provider).thread;
     if (!main && !agentSession(chat, provider, rootId).thread)
       throw new Error(
@@ -2249,7 +2244,7 @@ export class ProjectChats {
     const user: ChatMessage = {
       id: input.id,
       role: "user",
-      body: `@${provider} ${mention.question}`,
+      body: `@${provider} ${asked.question}`,
       status: "complete",
       created: Date.now(),
       provider,
@@ -2270,15 +2265,8 @@ export class ProjectChats {
     const abort = new AbortController();
     const job = (
       fromSession
-        ? this.sessionAside(
-            chat,
-            answer,
-            earlier,
-            mention.question,
-            input,
-            abort,
-          )
-        : this.forkAside(chat, answer, earlier, mention.question, input, abort)
+        ? this.sessionAside(chat, answer, earlier, asked.question, input, abort)
+        : this.forkAside(chat, answer, earlier, asked.question, input, abort)
     ).finally(() => {
       this.sides.delete(key);
       // The side answer moved `updated`, as any finished answer does.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { agentMention } from "./rooms";
+import { recipient } from "./recipient";
 import { agentProviderSchema, type AgentProvider } from "./agents";
 import { projectChatSendSchema, type ProjectChatSend } from "./projects";
 
@@ -20,9 +20,12 @@ export type NewThreadModels = z.infer<typeof newThreadModelsSchema>;
 
 /** The agent a sent message went to and its model; none when it went to people. */
 export function sentModel(
-  send: Pick<ProjectChatSend, "body" | "provider" | "choice" | "contextWindow">,
+  send: Pick<
+    ProjectChatSend,
+    "body" | "to" | "provider" | "choice" | "contextWindow"
+  >,
 ): [AgentProvider, NewThreadModel] | undefined {
-  if (agentMention(send.body)?.provider !== send.provider) return;
+  if (recipient(send) !== send.provider) return;
   return [
     send.provider,
     {

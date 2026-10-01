@@ -21,7 +21,7 @@ import type {
   PhoneDesktopMethod,
   ServerFrame,
 } from "./remote";
-import { slowPhoneMethods, slowRemoteMethods } from "./remote";
+import { recipientBridge, slowPhoneMethods, slowRemoteMethods } from "./remote";
 
 export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
 
@@ -61,6 +61,8 @@ export class RemoteClient {
   private watchdog?: ReturnType<typeof setTimeout>;
   private preferred = 0;
   private attempt = 0;
+  /** The connected desktop's bridge version; unknown before 12. */
+  private bridge?: number;
   constructor(private options: RemoteClientOptions) {
     this.target = options.start;
   }
@@ -126,6 +128,12 @@ export class RemoteClient {
     // validation rightly refuses; trailing ones simply go.
     const sent: unknown[] = [...args];
     while (sent.length && sent.at(-1) === undefined) sent.pop();
+    // Older desktops refuse a send's `to`; the mention buildSend leaves in
+    // its body tells them the same.
+    if (method === "sendProjectChat" && (this.bridge ?? 0) < recipientBridge) {
+      const { to: _, ...send } = sent[1] as { to?: unknown };
+      sent[1] = send;
+    }
     return this.request(
       "desktop",
       [method, sent],
@@ -237,6 +245,8 @@ export class RemoteClient {
           this.keepAlive(socket);
           if (!settled) {
             if (frame.t === "denied") return fail(new Denied(frame.reason));
+            if (frame.t === "paired" || frame.t === "ready")
+              this.bridge = frame.bridge;
             if (frame.t === "paired" && "link" in this.target) {
               const { link } = this.target;
               this.target = {

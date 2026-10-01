@@ -470,7 +470,17 @@ export const projectChatSendSchema = z
     choice: aiSettingsSchema.shape.questions,
     /** Claude on a 200k window; left out, the CLI picks (1M on most models). */
     contextWindow: z.literal("200k").optional(),
+    /**
+     * The agent `choice` is for. A note still names one: desktops before
+     * `recipientBridge` require it.
+     */
     provider: agentProviderSchema,
+    /**
+     * Who answers: an agent, or "message" for a note. Left out by older
+     * phones and desktops, whose body's leading mention says; see
+     * shared/recipient.
+     */
+    to: agentProviderSchema.or(z.literal("message")).optional(),
     runtimeMode: runtimeModeSchema,
     interactionMode: interactionModeSchema,
     parentId: idSchema.nullable().optional(),

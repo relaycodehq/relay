@@ -51,7 +51,7 @@ import {
   type ComposedSend,
   type SendSettings,
 } from "../../shared/compose-send";
-import { agentMention } from "../../shared/rooms";
+import { draftRecipient } from "../../shared/recipient";
 import { useAISettings } from "../lib/useAISettings";
 import {
   composerProvider,
@@ -414,8 +414,7 @@ export function ProjectComposer({
     () => codexChoice && supportedChoice(codexChoice, codexModels),
     [codexChoice, codexModels],
   );
-  const mention = agentMention(draft);
-  const recipient = mention?.provider ?? provider;
+  const recipient = draftRecipient(draft, provider);
   const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
   const pickUltraplan = useCallback((on: boolean) => {
     setUltraplan(on);

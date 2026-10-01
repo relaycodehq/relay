@@ -18,11 +18,15 @@ import {
   type RemoteCredentials,
   type RemoteEvent,
 } from "../../shared/remote";
-import type {
-  ChatMessage,
-  ChatSummary,
-  ProjectChat,
+import {
+  projectChatSendSchema,
+  type ChatMessage,
+  type ChatSummary,
+  type ProjectChat,
 } from "../../shared/projects";
+import { recipient } from "../../shared/recipient";
+import { composeSend, newThreadSettings } from "../../shared/remote-compose";
+import { defaultAISettings } from "../../shared/settings";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -347,4 +351,28 @@ it("waits longer for calls that push or write, and not for the rest", async () =
   await expect(p.client.desktop("projectFiles", projectId)).rejects.toThrow(
     "didn't answer in time",
   );
+});
+
+it("says who answers in `to` only to desktops that take it", async () => {
+  const { remote, dispatched } = await desktop();
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Pixel",
+  });
+  await p.until("online");
+  const send = composeSend(newThreadSettings(defaultAISettings), "hi", {
+    id: randomUUID(),
+  });
+  await p.client.desktop("sendProjectChat", chatId, send);
+  expect(dispatched.at(-1)?.args[1]).toEqual(send);
+  // A desktop from before bridge 12 names no version in its handshake, and
+  // refuses fields it doesn't know; the body's mention tells it the same.
+  Reflect.set(p.client, "bridge", undefined);
+  await p.client.desktop("sendProjectChat", chatId, send);
+  const older = dispatched.at(-1)?.args[1];
+  expect(older).not.toHaveProperty("to");
+  expect(
+    projectChatSendSchema.omit({ to: true }).strict().parse(older),
+  ).toEqual(older);
+  expect(recipient(older as typeof send)).toBe("codex");
 });

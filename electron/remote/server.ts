@@ -7,6 +7,7 @@ import {
   type KeyPair,
 } from "../../shared/remote-crypto";
 import {
+  remoteBridgeVersion,
   remoteMethods,
   type ClientFrame,
   type HelloFrame,
@@ -179,6 +180,7 @@ export class RemoteServer {
             deviceId: device.id,
             token,
             name: this.options.name(),
+            bridge: remoteBridgeVersion,
           });
         } else if (frame.t === "auth") {
           const device = await devices.verify(
@@ -188,7 +190,11 @@ export class RemoteServer {
           if (!device)
             throw new Error("This phone isn't paired with Relay anymore.");
           c.deviceId = device.id;
-          this.send(c, { t: "ready", name: this.options.name() });
+          this.send(c, {
+            t: "ready",
+            name: this.options.name(),
+            bridge: remoteBridgeVersion,
+          });
         } else throw new Error("Pair this phone first.");
         this.options.onPresence?.();
       } catch (e) {
