@@ -108,7 +108,6 @@ export function usePaneOpens(
     togglePane,
     openTurnDiff,
     openInEditor,
-    revealChange,
     openChatFile,
     ask,
     /** Asks the chat about lines of `pr`'s diff. */

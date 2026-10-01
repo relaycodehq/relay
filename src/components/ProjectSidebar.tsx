@@ -28,7 +28,7 @@ import { ProjectsSection, Scratchpad } from "./SidebarProjects";
 import "./sidebar.css";
 
 /** What the main pane shows, so the sidebar marks it. */
-export interface SidebarShowing {
+interface SidebarShowing {
   projectId?: string;
   chatId?: string;
   /** The unsent thread that's open, when no thread is. */
@@ -120,8 +120,7 @@ export function ProjectSidebar({
     active: sections.active,
     chatId,
     jumping: activity,
-    open: openChat,
-    settle: actions.settle,
+    actions,
   });
   const attention = useAttention(sections.active, unread, onAttention);
   const settleKeys = useShortcutLabel("settle");

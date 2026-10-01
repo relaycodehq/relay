@@ -5,7 +5,7 @@ import type { ProjectGroups } from "./useProjectGroups";
 const PROJECT_DRAG = "application/x-relay-project";
 const GROUP_DRAG = "application/x-relay-group";
 
-export type DropTarget =
+type DropTarget =
   ProjectPlace | { kind: "group"; path: string; where: "before" | "after" };
 
 /** Which half of the row under the pointer, the section's first child, it's in. */
