@@ -661,11 +661,11 @@ export class ProjectChats {
       this.titles.abort();
       // What was stopped writes its last state before the store goes to disk.
       await Promise.allSettled([
-        ...[...this.active.allSides()].map((a) => a.job),
+        ...this.active.allSides().map((a) => a.job),
         ...this.titles.running(),
       ]);
       await Promise.allSettled(
-        [...this.active.ids()].map((id) => {
+        this.active.ids().map((id) => {
           const chat = this.storage.cached(id);
           return chat && this.storage.save(chat);
         }),
@@ -685,13 +685,13 @@ export class ProjectChats {
     for (const a of this.active.all()) a.abort.abort();
     for (const a of this.active.allSides()) a.abort.abort();
     this.titles.abort();
-    await Promise.allSettled([...this.active.allSides()].map((a) => a.job));
-    await Promise.allSettled([...this.active.all()].map((a) => a.job));
+    await Promise.allSettled(this.active.allSides().map((a) => a.job));
+    await Promise.allSettled(this.active.all().map((a) => a.job));
     await Promise.allSettled(this.titles.running());
     await Promise.allSettled(this.titles.writing());
     await Promise.allSettled(this.control.pending());
     // A send already inside validation can attach its job while shutdown waits.
-    await Promise.allSettled([...this.active.all()].map((a) => a.job));
+    await Promise.allSettled(this.active.all().map((a) => a.job));
     await Promise.allSettled(this.councils.stepping());
     await Promise.allSettled([
       ...this.sharing.pulling(),
