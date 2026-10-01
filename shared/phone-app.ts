@@ -28,7 +28,7 @@ export function phoneAppStatus(app: PhoneAppReport, offered?: string): string {
   if (update?.kind === "ready")
     return `${update.version} downloaded, runs once the app restarts`;
   if (update?.kind === "apk")
-    return `${update.version} needs a new APK; the phone offers the download`;
+    return `${update.version} needs a new APK; the phone offers to install it`;
   if (!offered) return "This Relay has no phone update to hand out";
   if (app.version === offered) return "Up to date";
   if (newerVersion(app.version, offered))
