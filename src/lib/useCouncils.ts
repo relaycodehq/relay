@@ -15,6 +15,8 @@ import { api } from "./api";
 import { saveSentSettings } from "./composer-settings";
 import type { ThreadWrites } from "./useThreadWrites";
 
+export type Councils = ReturnType<typeof useCouncils>;
+
 /** A thread's deep review and ultraplans: their state, and what the thread can do with them. */
 export function useCouncils({
   chat,

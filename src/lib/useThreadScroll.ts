@@ -33,6 +33,8 @@ function scrollToPlace(view: HTMLElement, { id, offset }: ReadingPlace) {
   return true;
 }
 
+export type ThreadScroll = ReturnType<typeof useThreadScroll>;
+
 /** Keeps a thread pinned to its newest answer until the reader scrolls up,
  * then holds what they read, here and when they come back to the thread.
  * Only the latest messages are mounted; `visible` is how many. */

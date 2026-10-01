@@ -15,6 +15,8 @@ import {
   withUpdates,
 } from "./chat-thread";
 
+export type ChatThread = ReturnType<typeof useChatThread>;
+
 /** A thread's messages as fetched and streamed, and the conversation open in
  * it: the main one, or the side one from `rootId`. */
 export function useChatThread(

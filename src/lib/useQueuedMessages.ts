@@ -17,6 +17,8 @@ import { threadDraftKey } from "./thread-storage";
 import type { ComposerAttachments } from "./useComposerAttachments";
 import type { ThreadWrites } from "./useThreadWrites";
 
+export type QueuedMessageActions = ReturnType<typeof useQueuedMessages>;
+
 /** What can be done with a queued or scheduled message: send it now, move it, or take it back into the composer. */
 export function useQueuedMessages({
   chat,

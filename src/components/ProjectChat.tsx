@@ -3,7 +3,6 @@ import type { RelayCommand } from "../../shared/commands";
 import { contextAgent, threadContextAgent } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import {
-  Fragment,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -13,7 +12,7 @@ import {
   type Ref,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, RotateCcw } from "lucide-react";
+import { X } from "lucide-react";
 import { chatSettled } from "../../shared/chat-activity";
 import {
   type ChatSummary,
@@ -26,7 +25,7 @@ import { workingTreeKey } from "../lib/working-tree-key";
 import { useNavigationLock } from "../lib/navigation-lock";
 import { readDraft, writeDraft } from "../lib/drafts";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
-import { ErrorBox, IconButton, Loading } from "./ui";
+import { ErrorBox, IconButton } from "./ui";
 import { ThreadHeader } from "./ThreadHeader";
 import {
   ProjectComposer,
@@ -35,7 +34,6 @@ import {
 } from "./ProjectComposer";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
-import { Message } from "./ProjectMessage";
 import { useCouncils } from "../lib/useCouncils";
 import { useChatThread } from "../lib/useChatThread";
 import { useChatPresence } from "../lib/useChatPresence";
@@ -48,8 +46,7 @@ import { useAgentSwitch } from "../lib/useAgentSwitch";
 import { useSessionCommands } from "../lib/useSessionCommands";
 import { useThreadSend } from "../lib/useThreadSend";
 import { useQueuedMessages } from "../lib/useQueuedMessages";
-import { QueuedMessages } from "./QueuedMessages";
-import { SideQuestion } from "./SideQuestion";
+import { ThreadMessages } from "./ThreadMessages";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
@@ -59,22 +56,12 @@ import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
-import {
-  WorkspaceControl,
-  WorktreeDialogs,
-  WorktreeLanded,
-} from "./WorktreeControls";
+import { WorkspaceControl, WorktreeDialogs } from "./WorktreeControls";
 import { useThreadWorktree } from "../lib/useThreadWorktree";
 import type { TurnDiffTarget } from "./TurnChanges";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import type { PullRef } from "../../shared/types";
-import {
-  DeepReviewCouncil,
-  DeepReviewReport,
-  DeepReviewRequest,
-  DeepReviewSetup,
-} from "./DeepReview";
-import { UltraplanCouncil } from "./Ultraplan";
+import { DeepReviewSetup } from "./DeepReview";
 import { agentName } from "../../shared/agents";
 export function ProjectChat({
   onCommand,
@@ -150,17 +137,8 @@ export function ProjectChat({
   const [rootId, setRootId] = useState<string | null>(() =>
     threadStorage(id).reply.load(),
   );
-  const {
-    history,
-    messages,
-    root,
-    shown,
-    listed,
-    running,
-    replyCounts,
-    sideThreads,
-    leadAnswered,
-  } = useChatThread(chat, rootId);
+  const thread = useChatThread(chat, rootId),
+    { history, messages, root, shown, running } = thread;
   const writes = useThreadWrites(),
     { busy, error, setError } = writes;
   const presence = useChatPresence(chat, viewing);
@@ -214,18 +192,7 @@ export function ProjectChat({
       onCommand,
     });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
-  const {
-    review,
-    reviewing,
-    plans,
-    planning,
-    reviewCode,
-    startReview,
-    fixFindings,
-    setFindingStatus,
-    resumeReview,
-    resumeUltraplan,
-  } = useCouncils({
+  const councils = useCouncils({
     chat,
     projectId: project.id,
     data: history.data,
@@ -234,6 +201,7 @@ export function ProjectChat({
     onCreated,
     onSent: () => followAnswer(),
   });
+  const { reviewing, planning, startReview } = councils;
   const draftKey = threadDraftKey(id, root?.id);
   const onDraft = (v: string) => writeDraft(draftKey, v);
   useLayoutEffect(() => {
@@ -273,7 +241,7 @@ export function ProjectChat({
     onSent: () => followAnswer(),
     onOpen: setRootId,
   });
-  const { restored, steer, move, returnToComposer } = useQueuedMessages({
+  const queue = useQueuedMessages({
     chat,
     draftId: id,
     projectId: project.id,
@@ -284,15 +252,7 @@ export function ProjectChat({
     refetch: history.refetch,
     onOpen: setRootId,
   });
-  const {
-    signInToClaude,
-    openReply,
-    forkThread,
-    openChanges,
-    openFile,
-    openTurnDiff,
-    rewindTurn,
-  } = useMessageActions({
+  const actions = useMessageActions({
     projectId: project.id,
     chatId: chat?.id,
     messages,
@@ -304,6 +264,7 @@ export function ProjectChat({
     onOpenFile,
     onOpenTurnDiff,
   });
+  const { openChanges, openFile } = actions;
   const workspaceControl =
     scope.kind !== "project" || project.plain ? undefined : (
       <WorkspaceControl
@@ -321,18 +282,7 @@ export function ProjectChat({
     !history.data?.scheduled?.length &&
     !history.error &&
     (!chat || !history.isPending);
-  const {
-    scroll,
-    column,
-    composerDock,
-    onScroll,
-    visible,
-    earlier,
-    showEarlier,
-    scrolledUp,
-    dockHeight,
-    followAnswer,
-  } = useThreadScroll({
+  const view = useThreadScroll({
     place,
     rootId,
     messages,
@@ -340,6 +290,7 @@ export function ProjectChat({
     opened: !!history.data,
     isEmpty,
   });
+  const { scroll, composerDock, scrolledUp, dockHeight, followAnswer } = view;
   const scopeButtons = (
     <ScopeButtons
       project={project}
@@ -368,150 +319,18 @@ export function ProjectChat({
         onBack={root ? () => setRootId(null) : undefined}
       />
       {!isEmpty && (
-        <div className="project-messages" ref={scroll} onScroll={onScroll}>
-          {chat && history.isPending && (
-            <Loading text="Opening conversation…" />
-          )}
-          {history.error && (
-            <ErrorBox
-              error={history.error}
-              retry={() => void history.refetch()}
-            />
-          )}
-          <div className="thread-message-column" ref={column}>
-            {root && (
-              <h2 className="reply-heading">
-                {root.side ? "Side question" : "Side conversation"}
-              </h2>
-            )}
-            {earlier && (
-              <button className="load-more" onClick={showEarlier}>
-                Earlier messages
-              </button>
-            )}
-            {listed.slice(-visible).map((m) =>
-              m.side ? (
-                <SideQuestion
-                  key={m.id}
-                  message={m}
-                  thread={root ? undefined : sideThreads.get(m.id)}
-                  onOpen={() => openReply(m)}
-                />
-              ) : review && m.id === review.request ? (
-                <Fragment key={m.id}>
-                  <DeepReviewRequest message={m} state={review} />
-                  <DeepReviewCouncil
-                    state={review}
-                    hasLead={leadAnswered}
-                    busy={busy}
-                    projectRoot={project.path}
-                    onOpenFile={openFile}
-                    onResume={resumeReview}
-                  />
-                </Fragment>
-              ) : (
-                <Message
-                  key={m.id}
-                  message={m}
-                  chatId={chat?.id ?? ""}
-                  onReply={openReply}
-                  onFork={
-                    chat?.scope.kind === "review" || root?.side
-                      ? undefined
-                      : forkThread
-                  }
-                  onChanges={openChanges}
-                  onTurnDiff={openTurnDiff}
-                  onRewind={rewindTurn}
-                  projectRoot={folder}
-                  onOpenFile={openFile}
-                  replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
-                  onSignIn={
-                    m.signIn && m.id === listed.at(-1)?.id
-                      ? signInToClaude
-                      : undefined
-                  }
-                  {...(chat && review?.report?.messageId === m.id
-                    ? {
-                        inlineCode: reviewCode,
-                        after: (
-                          <DeepReviewReport
-                            chatId={chat.id}
-                            state={review}
-                            // A fix asked for while the lead works would wait in the
-                            // queue, its findings still open to ask for again.
-                            busy={busy || running}
-                            onFix={(findings) => void fixFindings(findings)}
-                            onStatus={setFindingStatus}
-                            onOpenFile={openFile}
-                          />
-                        ),
-                      }
-                    : {})}
-                  {...(plans?.[m.id]
-                    ? {
-                        after: (
-                          <UltraplanCouncil
-                            state={plans[m.id]!}
-                            brief={messages.find(
-                              (b) => b.id === plans[m.id]!.brief,
-                            )}
-                            busy={busy}
-                            projectRoot={folder}
-                            onOpenFile={openFile}
-                            onResume={() => resumeUltraplan(m.id)}
-                          />
-                        ),
-                      }
-                    : {})}
-                />
-              ),
-            )}
-            {!root && worktree.status && (
-              <WorktreeLanded status={worktree.status} />
-            )}
-            {!running &&
-              listed.some(
-                (m) => m.role === "assistant" && !m.compaction && !m.handoff,
-              ) &&
-              ["cancelled", "failed"].includes(
-                listed
-                  .filter(
-                    (m) =>
-                      m.role === "assistant" && !m.compaction && !m.handoff,
-                  )
-                  .at(-1)!.status,
-              ) &&
-              history.data?.lastInput &&
-              (history.data.lastInput.parentId ?? null) ===
-                (root?.id ?? null) && (
-                <button
-                  className="resume-answer"
-                  disabled={busy}
-                  onClick={() =>
-                    void resume(() => composer.current?.agentSettings())
-                  }
-                >
-                  <RotateCcw size={13} /> Resume answer
-                </button>
-              )}
-            <QueuedMessages
-              queue={history.data?.queue}
-              paused={history.data?.queuePaused}
-              scheduled={history.data?.scheduled}
-              running={running}
-              busy={busy}
-              onSteer={steer}
-              onMove={move}
-              onReturn={returnToComposer}
-            />
-            {root && shown.length === 1 && (
-              <p className="thread-reply-empty">
-                Dig into this message here. The main conversation stays focused.
-              </p>
-            )}
-          </div>
-        </div>
+        <ThreadMessages
+          chat={chat}
+          projectPath={project.path}
+          thread={thread}
+          view={view}
+          councils={councils}
+          actions={actions}
+          queue={queue}
+          worktree={worktree}
+          busy={busy}
+          onResume={() => void resume(() => composer.current?.agentSettings())}
+        />
       )}
       <SelectionQuote
         container={scroll}
@@ -562,7 +381,7 @@ export function ProjectChat({
           />
         ) : (
           <ProjectComposer
-            key={`${id}:${root?.id ?? "main"}:${restored}`}
+            key={`${id}:${root?.id ?? "main"}:${queue.restored}`}
             handleRef={composer}
             onCommand={runCommand}
             // A side conversation keeps its own agent and opens on the one that wrote its message.

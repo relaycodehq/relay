@@ -19,6 +19,8 @@ import { useStableCallback } from "./useStableCallback";
 import { worktreeDiff } from "./useThreadWorktree";
 import { workingTreeKey } from "./working-tree-key";
 
+export type MessageActions = ReturnType<typeof useMessageActions>;
+
 /**
  * What a thread's messages can do. Stable handlers let memoized messages skip
  * re-rendering while typing; each still sees this render's thread.
