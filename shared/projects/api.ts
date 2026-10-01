@@ -1,13 +1,40 @@
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
+import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
+import type { BranchAction, BranchList } from "../branches";
+import type {
+  ProjectCheckInfo,
+  ProjectCheckState,
+  SymbolQuery,
+  SymbolResult,
+} from "../checks";
+import type { CiStatus } from "../ci";
+import type { ProviderCommand } from "../commands";
+import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type {
   DeepReviewStart,
   FindingStatus,
   ReviewSetup,
 } from "../deep-review";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
+import type { CommitDetail, CommitLog, HistoryScope } from "../history";
 import type { DirListing, FileInfo } from "../project-files";
-import type { FilePair, LocalFile, Page, ProjectPull } from "../types";
+import type {
+  BranchPull,
+  CreatedPullRequest,
+  CreatePullRequest,
+  PullRequestPlan,
+} from "../pull-request-create";
+import type { Presence } from "../rooms";
+import type { SubagentDetail, SubagentRun } from "../subagents";
+import type {
+  BlameQuery,
+  FilePair,
+  LineBlame,
+  LocalFile,
+  Page,
+  ProjectPull,
+} from "../types";
 import type {
   ChangeArea,
   GitAction,
@@ -25,7 +52,54 @@ import type {
 } from "./threads";
 import type { WorktreeMove, WorktreeStatus } from "./worktrees";
 
-export interface ProjectApi {
+// Calls taking `where` accept a workspace id (see shared/workspaces.ts):
+// the checkout, or a thread's worktree.
+
+export interface ProjectApi
+  extends
+    ProjectListApi,
+    ProjectChatApi,
+    ProjectSharingApi,
+    ProjectCouncilApi,
+    ProjectWorktreeApi,
+    ProjectFilesApi,
+    ProjectGitApi,
+    ProjectChecksApi {}
+
+/** The sidebar's projects, their groups and Scratchpad. */
+export interface ProjectListApi {
+  projects(): Promise<Project[]>;
+  addProject(): Promise<Project | null>;
+  /** The Scratchpad project for a new chat: the unused one, or a fresh folder. */
+  createScratch(): Promise<Project>;
+  /** Threads in every Scratchpad folder, in one list for the sidebar. */
+  scratchChats(): Promise<ChatSummary[]>;
+  linkProject(id: string): Promise<Project>;
+  /** The project's own icon as a data URL, or null to keep the folder icon. */
+  projectIcon(id: string): Promise<string | null>;
+  projectGroups(): Promise<string[]>;
+  createProjectGroup(path: string): Promise<void>;
+  renameProjectGroup(from: string, to: string): Promise<void>;
+  removeProjectGroup(path: string): Promise<void>;
+  /** Places a group before sibling `before`, or last among its siblings. */
+  moveProjectGroup(path: string, before: string | null): Promise<void>;
+  moveProject(id: string, folder: string, before: string | null): Promise<void>;
+  renameProject(id: string, name: string): Promise<Project>;
+  /** Opens the project's folder in Finder. */
+  revealProject(id: string): Promise<void>;
+}
+
+/** A project's threads: the list, the conversation and its turns. */
+export interface ProjectChatApi {
+  projectChats(id: string): Promise<ChatSummary[]>;
+  createProjectChat(
+    id: string,
+    scope: ChatScope,
+    workspace?: ChatWorkspace,
+  ): Promise<ChatSummary>;
+  projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
+  sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
+  cancelProjectChat(id: string): Promise<void>;
   respondProjectChat(
     id: string,
     requestId: string,
@@ -46,18 +120,6 @@ export interface ProjectApi {
     parentId?: string | null,
     instructions?: string,
   ): Promise<void>;
-  /** The project's own icon as a data URL, or null to keep the folder icon. */
-  projectIcon(id: string): Promise<string | null>;
-  projectGroups(): Promise<string[]>;
-  createProjectGroup(path: string): Promise<void>;
-  renameProjectGroup(from: string, to: string): Promise<void>;
-  removeProjectGroup(path: string): Promise<void>;
-  /** Places a group before sibling `before`, or last among its siblings. */
-  moveProjectGroup(path: string, before: string | null): Promise<void>;
-  moveProject(id: string, folder: string, before: string | null): Promise<void>;
-  renameProject(id: string, name: string): Promise<Project>;
-  /** Opens the project's folder in Finder. */
-  revealProject(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
@@ -69,45 +131,64 @@ export interface ProjectApi {
   projectCommands(
     id: string,
     provider: AgentProvider,
-  ): Promise<import("../commands").ProviderCommand[]>;
-  projectBranchPulls(
-    where: string,
-  ): Promise<import("../pull-request-create").BranchPull[]>;
-  /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */
-  projectCiStatus(
-    id: string,
-    chatId?: string | null,
-  ): Promise<import("../ci").CiStatus | null>;
-  /** `where` is a workspace id: a thread's worktree opens its PR from its own branch. */
-  projectPreparePull(
-    where: string,
-  ): Promise<import("../pull-request-create").PullRequestPlan>;
-  projectCreatePull(
-    where: string,
-    input: import("../pull-request-create").CreatePullRequest,
-  ): Promise<import("../pull-request-create").CreatedPullRequest>;
-  projectBranches(id: string): Promise<import("../branches").BranchList>;
-  projectChangeBranch(
-    id: string,
-    action: import("../branches").BranchAction,
-  ): Promise<import("../branches").BranchList>;
+  ): Promise<ProviderCommand[]>;
   /** Sends Claude what stopped when Relay closed, or forgets it. */
   resolveStoppedWork(id: string, action: "resume" | "dismiss"): Promise<void>;
   /** Stops a background task Claude left running, or cancels its wake-up. */
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   /** The subagents Claude started in the thread's live sessions. */
-  projectChatAgents(id: string): Promise<import("../subagents").SubagentRun[]>;
+  projectChatAgents(id: string): Promise<SubagentRun[]>;
   /** One agent's whole run; null once its session is gone. */
-  projectChatAgent(
-    id: string,
-    agentId: string,
-  ): Promise<import("../subagents").SubagentDetail | null>;
+  projectChatAgent(id: string, agentId: string): Promise<SubagentDetail | null>;
   /** Stops one agent; Claude hears it was stopped. */
   stopProjectChatAgent(id: string, agentId: string): Promise<void>;
+  projectChatImage(id: string, imageId: string): Promise<string>;
+  /** An image file the agent read during the turn `messageId`, as a data URL. */
+  projectChatReadImage(
+    id: string,
+    messageId: string,
+    path: string,
+  ): Promise<string>;
+  /** Shows that image file in Finder. */
+  revealProjectChatReadImage(
+    id: string,
+    messageId: string,
+    path: string,
+  ): Promise<void>;
+  /** One file as an agent turn left it, against how the turn found it. */
+  projectTurnDiff(
+    chatId: string,
+    messageId: string,
+    path: string,
+  ): Promise<FilePair>;
+  /**
+   * Rolls a turn's files back, or redoes that rollback; all of them when
+   * `paths` is null. Conflicts come back unwritten unless `force`.
+   */
+  rewindProjectTurn(
+    chatId: string,
+    messageId: string,
+    paths: string[] | null,
+    mode: "revert" | "redo",
+    force: boolean,
+  ): Promise<{ conflicts: string[] }>;
+  /** Shows a file a turn changed in Finder; a null `messageId` means a worktree file. */
+  revealProjectTurnFile(
+    chatId: string,
+    messageId: string | null,
+    path: string,
+  ): Promise<void>;
+  onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
+  /** A project's thread list, pushed whenever any of its threads reads differently. */
+  onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
+}
+
+/** Threads shared through a room on a Relay server. */
+export interface ProjectSharingApi {
   projectChatPresence(
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,
-  ): Promise<import("../rooms").Presence[]>;
+  ): Promise<Presence[]>;
   joinProjectConversation(
     projectId: string,
     url: string,
@@ -123,44 +204,39 @@ export interface ProjectApi {
     projectId: string,
     roomId: string,
   ): Promise<ChatSummary>;
+}
 
-  // Calls taking `where` accept a workspace id (see shared/workspaces.ts):
-  // the checkout, or a thread's worktree.
-  localCheckInfo(where: string): Promise<import("../checks").ProjectCheckInfo>;
-  localCheckState(
-    where: string,
-    head: string,
-  ): Promise<import("../checks").ProjectCheckState | null>;
-  startLocalChecks(
-    where: string,
-    head: string,
-    target: string,
-  ): Promise<import("../checks").ProjectCheckState>;
-  stopLocalChecks(where: string): Promise<void>;
-  pauseLocalChecks(where: string, paused: boolean): Promise<void>;
-  updateLocalCheckBuffer(
-    where: string,
-    head: string,
-    path: string,
-    text: string | null,
+/** Deep reviews and Ultraplan councils, run inside a thread. */
+export interface ProjectCouncilApi {
+  startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** A short name for a deep review setup, written by a helper agent; null when none could. */
+  nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
+  /** Runs the council's thinkers that didn't finish, then the lead. */
+  resumeUltraplan(id: string, request: string): Promise<void>;
+  /** Runs the reviewers that didn't finish, then the lead. */
+  resumeDeepReview(id: string): Promise<void>;
+  setDeepReviewFinding(
+    id: string,
+    findingId: string,
+    status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
-  inspectLocalSymbol(
-    where: string,
-    head: string,
-    query: import("../checks").SymbolQuery,
-  ): Promise<import("../checks").SymbolResult>;
-  localBlame(
-    where: string,
-    query: import("../types").BlameQuery,
-  ): Promise<import("../types").LineBlame>;
+}
 
-  projects(): Promise<Project[]>;
-  addProject(): Promise<Project | null>;
-  /** The Scratchpad project for a new chat: the unused one, or a fresh folder. */
-  createScratch(): Promise<Project>;
-  /** Threads in every Scratchpad folder, in one list for the sidebar. */
-  scratchChats(): Promise<ChatSummary[]>;
-  linkProject(id: string): Promise<Project>;
+/** A thread's own worktree, and the ones its agent made. */
+export interface ProjectWorktreeApi {
+  projectWorktree(chatId: string): Promise<WorktreeStatus>;
+  /** One file as the worktree has it, against where its branch forks. */
+  projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
+  removeProjectWorktree(chatId: string): Promise<void>;
+  /** What moving a checkout thread into its own worktree would take, or why it can't. */
+  projectWorktreeMove(chatId: string): Promise<WorktreeMove>;
+  moveProjectChatToWorktree(chatId: string): Promise<ChatSummary>;
+  revealProjectWorktree(chatId: string): Promise<void>;
+  /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
+  revealAgentWorktree(chatId: string, path: string): Promise<void>;
+}
+
+export interface ProjectFilesApi {
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;
   /** One level of a folder from disk ("" is the root), ignored files included. */
@@ -191,6 +267,10 @@ export interface ProjectApi {
     version: string,
     contents: string,
   ): Promise<{ version: string }>;
+}
+
+/** Changes, commits, branches and pull requests. */
+export interface ProjectGitApi {
   projectWorkingTree(where: string): Promise<WorkingTree>;
   projectWorkingDiff(
     where: string,
@@ -204,20 +284,14 @@ export interface ProjectApi {
   projectPlanCommitSplit(
     where: string,
     note?: string,
-  ): Promise<import("../commit-split").CommitSplitPlan>;
+  ): Promise<CommitSplitPlan>;
   projectApplyCommitSplit(
     where: string,
-    split: import("../commit-split").ApplyCommitSplit,
+    split: ApplyCommitSplit,
   ): Promise<WorkingTree>;
   /** Merging the current branch into `base`, the default branch when omitted. */
-  projectMergePlan(
-    where: string,
-    base?: string,
-  ): Promise<import("../branch-merge").MergePlan>;
-  projectMergeBranch(
-    where: string,
-    input: import("../branch-merge").MergeBranch,
-  ): Promise<import("../branch-merge").MergeResult>;
+  projectMergePlan(where: string, base?: string): Promise<MergePlan>;
+  projectMergeBranch(where: string, input: MergeBranch): Promise<MergeResult>;
   projectDeleteBranch(where: string, name: string): Promise<void>;
   /** Merges `base` into the current branch; conflicts stay marked in its folder. */
   projectCatchUp(where: string, base: string): Promise<{ conflicts: string[] }>;
@@ -225,92 +299,58 @@ export interface ProjectApi {
   projectRebase(where: string, head: string): Promise<RebaseResult>;
   projectHistory(
     where: string,
-    scope: import("../history").HistoryScope,
+    scope: HistoryScope,
     limit: number,
-  ): Promise<import("../history").CommitLog>;
-  projectCommit(
-    where: string,
-    sha: string,
-  ): Promise<import("../history").CommitDetail>;
+  ): Promise<CommitLog>;
+  projectCommit(where: string, sha: string): Promise<CommitDetail>;
   /** One file as a commit left it, against its first parent. */
   projectCommitDiff(
     where: string,
     sha: string,
     path: string,
   ): Promise<FilePair>;
-  /** One file as an agent turn left it, against how the turn found it. */
-  projectTurnDiff(
-    chatId: string,
-    messageId: string,
-    path: string,
-  ): Promise<FilePair>;
-  /**
-   * Rolls a turn's files back, or redoes that rollback; all of them when
-   * `paths` is null. Conflicts come back unwritten unless `force`.
-   */
-  rewindProjectTurn(
-    chatId: string,
-    messageId: string,
-    paths: string[] | null,
-    mode: "revert" | "redo",
-    force: boolean,
-  ): Promise<{ conflicts: string[] }>;
+  projectBranches(id: string): Promise<BranchList>;
+  projectChangeBranch(id: string, action: BranchAction): Promise<BranchList>;
+  projectBranchPulls(where: string): Promise<BranchPull[]>;
+  /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */
+  projectCiStatus(id: string, chatId?: string | null): Promise<CiStatus | null>;
+  /** `where` is a workspace id: a thread's worktree opens its PR from its own branch. */
+  projectPreparePull(where: string): Promise<PullRequestPlan>;
+  projectCreatePull(
+    where: string,
+    input: CreatePullRequest,
+  ): Promise<CreatedPullRequest>;
   projectPulls(
     id: string,
     state: "open" | "closed" | "all",
     page: number,
   ): Promise<Page<ProjectPull>>;
-  projectChats(id: string): Promise<ChatSummary[]>;
-  createProjectChat(
-    id: string,
-    scope: ChatScope,
-    workspace?: ChatWorkspace,
-  ): Promise<ChatSummary>;
-  projectWorktree(chatId: string): Promise<WorktreeStatus>;
-  /** One file as the worktree has it, against where its branch forks. */
-  projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
-  removeProjectWorktree(chatId: string): Promise<void>;
-  /** What moving a checkout thread into its own worktree would take, or why it can't. */
-  projectWorktreeMove(chatId: string): Promise<WorktreeMove>;
-  moveProjectChatToWorktree(chatId: string): Promise<ChatSummary>;
-  revealProjectWorktree(chatId: string): Promise<void>;
-  /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
-  revealAgentWorktree(chatId: string, path: string): Promise<void>;
-  projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
-  projectChatImage(id: string, imageId: string): Promise<string>;
-  /** An image file the agent read during the turn `messageId`, as a data URL. */
-  projectChatReadImage(
-    id: string,
-    messageId: string,
+}
+
+/** Type checks, symbols and blame on the working copy. */
+export interface ProjectChecksApi {
+  localCheckInfo(where: string): Promise<ProjectCheckInfo>;
+  localCheckState(
+    where: string,
+    head: string,
+  ): Promise<ProjectCheckState | null>;
+  startLocalChecks(
+    where: string,
+    head: string,
+    target: string,
+  ): Promise<ProjectCheckState>;
+  stopLocalChecks(where: string): Promise<void>;
+  pauseLocalChecks(where: string, paused: boolean): Promise<void>;
+  updateLocalCheckBuffer(
+    where: string,
+    head: string,
     path: string,
-  ): Promise<string>;
-  /** Shows that image file in Finder. */
-  revealProjectChatReadImage(
-    id: string,
-    messageId: string,
-    path: string,
+    text: string | null,
   ): Promise<void>;
-  /** Shows a file a turn changed in Finder; a null `messageId` means a worktree file. */
-  revealProjectTurnFile(
-    chatId: string,
-    messageId: string | null,
-    path: string,
-  ): Promise<void>;
-  sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
-  cancelProjectChat(id: string): Promise<void>;
-  startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
-  /** A short name for a deep review setup, written by a helper agent; null when none could. */
-  nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
-  /** Runs the council's thinkers that didn't finish, then the lead. */
-  resumeUltraplan(id: string, request: string): Promise<void>;
-  /** Runs the reviewers that didn't finish, then the lead. */
-  resumeDeepReview(id: string): Promise<void>;
-  setDeepReviewFinding(
-    id: string,
-    findingId: string,
-    status: Extract<FindingStatus, "open" | "dismissed">,
-  ): Promise<void>;
-  onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
-  /** A project's thread list, pushed whenever any of its threads reads differently. */
-  onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
+  inspectLocalSymbol(
+    where: string,
+    head: string,
+    query: SymbolQuery,
+  ): Promise<SymbolResult>;
+  localBlame(where: string, query: BlameQuery): Promise<LineBlame>;
 }
