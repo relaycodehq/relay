@@ -54,13 +54,36 @@ export interface Services {
 /** What a method's promise resolves to in the page. */
 export type Reply<M extends ApiMethod> = Awaited<ReturnType<Api[M]>>;
 
+declare const argTypes: unique symbol;
+/**
+ * Type-only: what a `takes` handler accepts and hands on, so Handlers can
+ * hold it against the method's declared parameters.
+ */
+type ArgTypes<In, Out> = { readonly [argTypes]?: (args: In) => Out };
+
 /**
  * Handlers for some of the Api's methods, each answering with what the Api
- * declares for it.
+ * declares for it. One written with `takes` must also accept every argument
+ * list the declaration allows and parse it into one the declaration allows.
  */
 export type Handlers = {
-  [M in ApiMethod]?: (args: unknown[]) => Reply<M> | Promise<Reply<M>>;
+  [M in ApiMethod]?: ((args: unknown[]) => Reply<M> | Promise<Reply<M>>) &
+    ArgTypes<Parameters<Api[M]>, Parameters<Api[M]>>;
 };
+
+/** A handler that parses each argument with the schema at its position. */
+export function takes<const S extends readonly z.ZodType[], R>(
+  schemas: S,
+  handle: (...args: z.output<z.ZodTuple<S, null>>) => R,
+): ((args: unknown[]) => R) &
+  ArgTypes<z.input<z.ZodTuple<S, null>>, z.output<z.ZodTuple<S, null>>> {
+  return (args) =>
+    handle(
+      ...(schemas.map((schema, i) => schema.parse(args[i])) as z.output<
+        z.ZodTuple<S, null>
+      >),
+    );
+}
 
 export const pageSchema = z.number().int().min(1).max(100000);
 

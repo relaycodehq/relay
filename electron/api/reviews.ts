@@ -8,87 +8,76 @@ import {
   refSchema,
   shaSchema,
 } from "../../shared/validation";
-import { pageSchema, type ApiContext, type Handlers } from "./context";
+import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
 /** Reviewing a Gitea pull request: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
   const { store, triage, requireClient, prKey, projectChats } = ctx;
 
-  function triageOf(args: unknown[]) {
-    const ref = refSchema.parse(args[0]),
-      head = shaSchema.parse(args[1]),
-      base = shaSchema.parse(args[2]);
-    return { ref, head, base, key: prKey(ref) };
-  }
+  const triageArgs = [refSchema, shaSchema, shaSchema] as const;
 
   return {
-    search: (args) => {
-      const filter = z
-          .enum(["review_requested", "assigned", "created", "all"])
-          .parse(args[0]),
-        q = z.string().max(500).parse(args[1]),
-        state = z.enum(["open", "closed", "all"]).parse(args[2]),
-        page = pageSchema.parse(args[3]);
-      const query = new URLSearchParams({
-        type: "pulls",
-        state,
-        q,
-        ...(filter === "all" ? {} : { [filter]: "true" }),
-      });
-      return requireClient().page<Issue>(`/repos/issues/search?${query}`, page);
-    },
-    parseUrl: (args) =>
-      requireClient().parseUrl(z.string().max(4096).parse(args[0])),
-    pull: (args) => requireClient().pull(refSchema.parse(args[0])),
-    files: (args) => {
-      const r = refSchema.parse(args[0]);
-      return requireClient().files(r, pageSchema.parse(args[1]));
-    },
-    contents: (args) => {
-      const r = refSchema.parse(args[0]),
-        file = z
-          .object({
-            filename: filePathSchema,
-            previous_filename: filePathSchema.optional(),
-            status: z.string().max(30),
-            additions: z.number(),
-            deletions: z.number(),
-            changes: z.number(),
-          })
-          .parse(args[1]);
-      return requireClient().contents(
-        r,
-        file,
-        shaSchema.parse(args[2]),
-        shaSchema.parse(args[3]),
-      );
-    },
-    changedBetween: (args) =>
-      requireClient().changedBetween(
-        refSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        shaSchema.parse(args[2]),
-      ),
-    reviews: (args) => {
-      const r = refSchema.parse(args[0]);
-      return requireClient().reviews(r, pageSchema.parse(args[1]));
-    },
-    reviewComments: (args) => {
-      const r = refSchema.parse(args[0]);
-      return requireClient().reviewComments(
-        r,
-        z.number().int().positive().parse(args[1]),
-      );
-    },
-    discussion: (args) => {
-      const r = refSchema.parse(args[0]);
-      return requireClient().discussion(r, pageSchema.parse(args[1]));
-    },
-    progress: (args) =>
-      store.get().progress[prKey(refSchema.parse(args[0]))] ?? emptyProgress(),
-    saveProgress: async (args) => {
-      const key = prKey(refSchema.parse(args[0])),
-        progress = progressSchema.parse(args[1]);
+    search: takes(
+      [
+        z.enum(["review_requested", "assigned", "created", "all"]),
+        z.string().max(500),
+        z.enum(["open", "closed", "all"]),
+        pageSchema,
+      ],
+      (filter, q, state, page) => {
+        const query = new URLSearchParams({
+          type: "pulls",
+          state,
+          q,
+          ...(filter === "all" ? {} : { [filter]: "true" }),
+        });
+        return requireClient().page<Issue>(
+          `/repos/issues/search?${query}`,
+          page,
+        );
+      },
+    ),
+    parseUrl: takes([z.string().max(4096)], (url) =>
+      requireClient().parseUrl(url),
+    ),
+    pull: takes([refSchema], (r) => requireClient().pull(r)),
+    files: takes([refSchema, pageSchema], (r, page) =>
+      requireClient().files(r, page),
+    ),
+    contents: takes(
+      [
+        refSchema,
+        z.object({
+          filename: filePathSchema,
+          previous_filename: filePathSchema.optional(),
+          status: z.string().max(30),
+          additions: z.number(),
+          deletions: z.number(),
+          changes: z.number(),
+        }),
+        shaSchema,
+        shaSchema,
+      ],
+      (r, file, head, base) => requireClient().contents(r, file, head, base),
+    ),
+    changedBetween: takes([refSchema, shaSchema, shaSchema], (r, from, to) =>
+      requireClient().changedBetween(r, from, to),
+    ),
+    reviews: takes([refSchema, pageSchema], (r, page) =>
+      requireClient().reviews(r, page),
+    ),
+    reviewComments: takes([refSchema, z.number().int().positive()], (r, id) =>
+      requireClient().reviewComments(r, id),
+    ),
+    discussion: takes([refSchema, pageSchema], (r, page) =>
+      requireClient().discussion(r, page),
+    ),
+    progress: takes(
+      [refSchema],
+      (r) => store.get().progress[prKey(r)] ?? emptyProgress(),
+    ),
+    saveProgress: takes([refSchema, progressSchema], async (r, progress) => {
+      const key = prKey(r);
       await store.update((s) => {
         s.progress[key] = progress;
       });
@@ -96,63 +85,52 @@ export function reviewHandlers(ctx: ApiContext) {
       for (const c of store.get().chats ?? [])
         if (c.scope.kind === "pr" && prKey(c.scope.ref) === key)
           projectChats.summariesChanged(c.projectId);
-    },
-    submitReview: (args) =>
-      requireClient().submit(
-        refSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        z.enum(["COMMENT", "APPROVED", "REQUEST_CHANGES"]).parse(args[2]),
-        z.string().max(65536).parse(args[3]),
-        z.array(draftSchema).max(1000).parse(args[4]),
-      ),
-    resolveComment: async (args) => {
-      const r = refSchema.parse(args[0]);
-      await requireClient().resolveComment(
-        r,
-        z.number().int().positive().parse(args[1]),
-        z.boolean().parse(args[2]),
-      );
-    },
-    reply: async (args) => {
-      const r = refSchema.parse(args[0]);
-      await requireClient().reply(
-        r,
-        z.number().int().positive().parse(args[1]),
-        bodySchema.parse(args[2]),
-      );
-    },
-    comment: async (args) => {
-      const r = refSchema.parse(args[0]);
-      await requireClient().comment(r, bodySchema.parse(args[1]));
-    },
-    triageState: (args) => {
-      const { head, base, key } = triageOf(args);
-      return triage.state(key, `${base}:${head}`);
-    },
-    startTriage: (args) => {
-      const { ref, head, base, key } = triageOf(args);
-      return triage.start(requireClient(), ref, key, head, base);
-    },
-    groupPaths: (args) => {
-      const { ref, head, base, key } = triageOf(args);
-      return triage.groupPaths(
-        requireClient(),
-        ref,
-        key,
-        head,
-        base,
-        z.string().max(100).parse(args[3]),
-      );
-    },
-    cancelTriage: async (args) => {
-      const { head, base, key } = triageOf(args);
-      const state = await triage.state(key, `${base}:${head}`);
+    }),
+    submitReview: takes(
+      [
+        refSchema,
+        shaSchema,
+        z.enum(["COMMENT", "APPROVED", "REQUEST_CHANGES"]),
+        z.string().max(65536),
+        z.array(draftSchema).max(1000),
+      ],
+      (r, head, event, body, drafts) =>
+        requireClient().submit(r, head, event, body, drafts),
+    ),
+    resolveComment: takes(
+      [refSchema, z.number().int().positive(), z.boolean()],
+      async (r, id, resolved) => {
+        await requireClient().resolveComment(r, id, resolved);
+      },
+    ),
+    reply: takes(
+      [refSchema, z.number().int().positive(), bodySchema],
+      async (r, id, body) => {
+        await requireClient().reply(r, id, body);
+      },
+    ),
+    comment: takes([refSchema, bodySchema], async (r, body) => {
+      await requireClient().comment(r, body);
+    }),
+    triageState: takes(triageArgs, (r, head, base) =>
+      triage.state(prKey(r), `${base}:${head}`),
+    ),
+    startTriage: takes(triageArgs, (r, head, base) =>
+      triage.start(requireClient(), r, prKey(r), head, base),
+    ),
+    groupPaths: takes(
+      [...triageArgs, z.string().max(100)],
+      (r, head, base, id) =>
+        triage.groupPaths(requireClient(), r, prKey(r), head, base, id),
+    ),
+    cancelTriage: takes(triageArgs, async (r, head, base) => {
+      const state = await triage.state(prKey(r), `${base}:${head}`);
       if (
         state?.status === "scanning" ||
         state?.status === "classifying" ||
         state?.status === "matching"
       )
         triage.cancel();
-    },
+    }),
   } satisfies Handlers;
 }

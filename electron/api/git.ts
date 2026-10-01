@@ -13,6 +13,7 @@ import {
 } from "../../shared/history";
 import { idSchema } from "../../shared/rooms";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
+import { workspaceIdSchema } from "../../shared/workspaces";
 import {
   catchUpBranch,
   deleteMergedBranch,
@@ -24,98 +25,107 @@ import { generateCommitMessage } from "../commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../commit-split";
 import { commitDetail, commitDiff, commitLog } from "../history";
 import { performGitAction, workingDiff, workingTree } from "../working-tree";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+const branchNameSchema = z.string().min(1).max(250);
 
 /** Git in a project's checkout or a thread's worktree: changes, history, branches, commits. */
 export function gitHandlers(ctx: ApiContext) {
   const { store, projects, projectChats, projectChecks, liveSyncs, placeRoot } =
     ctx;
   return {
-    projectWorkingTree: async (args) => workingTree(await placeRoot(args[0])),
-    projectWorkingDiff: async (args) =>
-      workingDiff(
-        await placeRoot(args[0]),
-        workingPathSchema.parse(args[1]),
-        z.enum(["staged", "unstaged"]).parse(args[2]),
-      ),
-    projectHistory: async (args) =>
-      commitLog(
-        await placeRoot(args[0]),
-        historyScopeSchema.parse(args[1]),
-        historyLimitSchema.parse(args[2]),
-      ),
-    projectCommit: async (args) =>
-      commitDetail(await placeRoot(args[0]), commitShaSchema.parse(args[1])),
-    projectCommitDiff: async (args) =>
-      commitDiff(
-        await placeRoot(args[0]),
-        commitShaSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      ),
-    projectBranches: async (args) =>
-      branches(await projects.root(idSchema.parse(args[0]))),
-    projectChangeBranch: async (args) => {
-      const id = idSchema.parse(args[0]);
-      const action = branchActionSchema.parse(args[1]);
-      projects.assertCheckoutAvailable(id);
-      projects.changingBranch.add(id);
-      try {
-        const root = await projects.root(id);
-        if (projectChats.hasActiveProject(id))
-          throw new Error(
-            "Stop the running agent in this project before switching branches.",
-          );
-        if (liveSyncs.busy(root))
-          throw new Error("Pause live file sync before switching branches.");
-        const result = await changeBranch(root, action);
-        projectChecks.stop();
-        return result;
-      } finally {
-        projects.changingBranch.delete(id);
-      }
-    },
-    projectMergePlan: async (args) =>
-      mergePlan(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).optional().parse(args[1]),
-      ),
-    projectMergeBranch: async (args) =>
-      mergeBranch(await placeRoot(args[0]), mergeBranchSchema.parse(args[1])),
-    projectCatchUp: async (args) =>
-      catchUpBranch(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).parse(args[1]),
-      ),
-    projectDeleteBranch: async (args) =>
-      deleteMergedBranch(
-        await placeRoot(args[0]),
-        z.string().min(1).max(250).parse(args[1]),
-      ),
-    projectCommitMessage: async (args) =>
-      generateCommitMessage(
-        await placeRoot(args[0]),
-        z.array(workingPathSchema).min(1).max(1000).parse(args[1]),
-        store.aiSettings(),
-        AbortSignal.timeout(120_000),
-      ),
-    projectPlanCommitSplit: async (args) =>
-      planCommitSplit(
-        await placeRoot(args[0]),
-        commitSplitNoteSchema.optional().parse(args[1]) ?? "",
-        store.aiSettings(),
-        // Planning reads every change at the chosen effort; give it room.
-        AbortSignal.timeout(600_000),
-      ),
-    projectApplyCommitSplit: async (args) =>
-      applyCommitSplit(
-        await placeRoot(args[0]),
-        applyCommitSplitSchema.parse(args[1]),
-      ),
-    projectGitAction: async (args) =>
-      performGitAction(
-        await placeRoot(args[0]),
-        gitActionSchema.parse(args[1]),
-        (file) => shell.trashItem(file),
-      ),
+    projectWorkingTree: takes([workspaceIdSchema], async (where) =>
+      workingTree(await placeRoot(where)),
+    ),
+    projectWorkingDiff: takes(
+      [workspaceIdSchema, workingPathSchema, z.enum(["staged", "unstaged"])],
+      async (where, path, area) =>
+        workingDiff(await placeRoot(where), path, area),
+    ),
+    projectHistory: takes(
+      [workspaceIdSchema, historyScopeSchema, historyLimitSchema],
+      async (where, scope, limit) =>
+        commitLog(await placeRoot(where), scope, limit),
+    ),
+    projectCommit: takes(
+      [workspaceIdSchema, commitShaSchema],
+      async (where, sha) => commitDetail(await placeRoot(where), sha),
+    ),
+    projectCommitDiff: takes(
+      [workspaceIdSchema, commitShaSchema, workingPathSchema],
+      async (where, sha, path) => commitDiff(await placeRoot(where), sha, path),
+    ),
+    projectBranches: takes([idSchema], async (id) =>
+      branches(await projects.root(id)),
+    ),
+    projectChangeBranch: takes(
+      [idSchema, branchActionSchema],
+      async (id, action) => {
+        projects.assertCheckoutAvailable(id);
+        projects.changingBranch.add(id);
+        try {
+          const root = await projects.root(id);
+          if (projectChats.hasActiveProject(id))
+            throw new Error(
+              "Stop the running agent in this project before switching branches.",
+            );
+          if (liveSyncs.busy(root))
+            throw new Error("Pause live file sync before switching branches.");
+          const result = await changeBranch(root, action);
+          projectChecks.stop();
+          return result;
+        } finally {
+          projects.changingBranch.delete(id);
+        }
+      },
+    ),
+    projectMergePlan: takes(
+      [workspaceIdSchema, branchNameSchema.optional()],
+      async (where, base) => mergePlan(await placeRoot(where), base),
+    ),
+    projectMergeBranch: takes(
+      [workspaceIdSchema, mergeBranchSchema],
+      async (where, input) => mergeBranch(await placeRoot(where), input),
+    ),
+    projectCatchUp: takes(
+      [workspaceIdSchema, branchNameSchema],
+      async (where, base) => catchUpBranch(await placeRoot(where), base),
+    ),
+    projectDeleteBranch: takes(
+      [workspaceIdSchema, branchNameSchema],
+      async (where, name) => deleteMergedBranch(await placeRoot(where), name),
+    ),
+    projectCommitMessage: takes(
+      [workspaceIdSchema, z.array(workingPathSchema).min(1).max(1000)],
+      async (where, paths) =>
+        generateCommitMessage(
+          await placeRoot(where),
+          paths,
+          store.aiSettings(),
+          AbortSignal.timeout(120_000),
+        ),
+    ),
+    projectPlanCommitSplit: takes(
+      [workspaceIdSchema, commitSplitNoteSchema.optional()],
+      async (where, note) =>
+        planCommitSplit(
+          await placeRoot(where),
+          note ?? "",
+          store.aiSettings(),
+          // Planning reads every change at the chosen effort; give it room.
+          AbortSignal.timeout(600_000),
+        ),
+    ),
+    projectApplyCommitSplit: takes(
+      [workspaceIdSchema, applyCommitSplitSchema],
+      async (where, split) => applyCommitSplit(await placeRoot(where), split),
+    ),
+    projectGitAction: takes(
+      [workspaceIdSchema, gitActionSchema],
+      async (where, action) =>
+        performGitAction(await placeRoot(where), action, (file) =>
+          shell.trashItem(file),
+        ),
+    ),
   } satisfies Handlers;
 }

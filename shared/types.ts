@@ -314,9 +314,9 @@ export interface Api
   connect(server: string, token: string): Promise<Account>;
   disconnect(): Promise<void>;
   search(
-    filter: string,
+    filter: WorkspaceState["filter"],
     q: string,
-    state: string,
+    state: WorkspaceState["state"],
     page: number,
   ): Promise<Page<Issue>>;
   pull(ref: PullRef): Promise<Pull>;

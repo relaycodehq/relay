@@ -10,7 +10,9 @@ import {
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { detectProject } from "../checks/detect";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+const targetSchema = z.string().max(4096);
 
 /** Diagnostics, symbols and line history, in a project's folders and in linked pull requests. */
 export function checkHandlers(ctx: ApiContext) {
@@ -23,104 +25,88 @@ export function checkHandlers(ctx: ApiContext) {
     requireFolder,
     requireClient,
   } = ctx;
+  const local = (where: string) => "project:" + where;
   return {
-    localCheckInfo: async (args) => detectProject(await placeRoot(args[0])),
-    localCheckState: (args) =>
-      projectChecks.state(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-      ),
-    startLocalChecks: async (args) => {
-      const id = workspaceIdSchema.parse(args[0]);
-      return projectChecks.start(
-        "project:" + id,
-        await placeRoot(id),
-        null,
-        null,
-        shaSchema.parse(args[1]),
-        z.string().max(4096).parse(args[2]),
-      );
-    },
-    stopLocalChecks: (args) => {
-      projectChecks.stop("project:" + workspaceIdSchema.parse(args[0]));
-    },
-    pauseLocalChecks: (args) => {
-      projectChecks.pause(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        z.boolean().parse(args[1]),
-      );
-    },
-    updateLocalCheckBuffer: (args) =>
-      projectChecks.update(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-        textSchema.nullable().parse(args[3]),
-      ),
-    inspectLocalSymbol: (args) =>
-      projectChecks.symbol(
-        "project:" + workspaceIdSchema.parse(args[0]),
-        shaSchema.parse(args[1]),
-        symbolQuerySchema.parse(args[2]),
-      ),
-    localBlame: async (args) =>
-      blame.read(
-        await placeRoot(args[0]),
-        null,
-        null,
-        blameQuerySchema.parse(args[1]),
-      ),
-    inspectSymbol: (args) =>
-      projectChecks.symbol(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-        symbolQuerySchema.parse(args[2]),
-      ),
-    projectCheckInfo: (args) => {
-      const dir = linkedFolder(refSchema.parse(args[0]));
+    localCheckInfo: takes([workspaceIdSchema], async (where) =>
+      detectProject(await placeRoot(where)),
+    ),
+    localCheckState: takes([workspaceIdSchema, shaSchema], (where, head) =>
+      projectChecks.state(local(where), head),
+    ),
+    startLocalChecks: takes(
+      [workspaceIdSchema, shaSchema, targetSchema],
+      async (where, head, target) =>
+        projectChecks.start(
+          local(where),
+          await placeRoot(where),
+          null,
+          null,
+          head,
+          target,
+        ),
+    ),
+    stopLocalChecks: takes([workspaceIdSchema], (where) => {
+      projectChecks.stop(local(where));
+    }),
+    pauseLocalChecks: takes(
+      [workspaceIdSchema, z.boolean()],
+      (where, paused) => {
+        projectChecks.pause(local(where), paused);
+      },
+    ),
+    updateLocalCheckBuffer: takes(
+      [workspaceIdSchema, shaSchema, workingPathSchema, textSchema.nullable()],
+      (where, head, path, text) =>
+        projectChecks.update(local(where), head, path, text),
+    ),
+    inspectLocalSymbol: takes(
+      [workspaceIdSchema, shaSchema, symbolQuerySchema],
+      (where, head, query) => projectChecks.symbol(local(where), head, query),
+    ),
+    localBlame: takes(
+      [workspaceIdSchema, blameQuerySchema],
+      async (where, query) =>
+        blame.read(await placeRoot(where), null, null, query),
+    ),
+    inspectSymbol: takes(
+      [refSchema, shaSchema, symbolQuerySchema],
+      (r, head, query) => projectChecks.symbol(prKey(r), head, query),
+    ),
+    projectCheckInfo: takes([refSchema], (r) => {
+      const dir = linkedFolder(r);
       return dir ? detectProject(dir) : null;
-    },
-    projectCheckState: (args) =>
-      projectChecks.state(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-      ),
-    stopProjectChecks: (args) => {
-      projectChecks.stop(prKey(refSchema.parse(args[0])));
-    },
-    pauseProjectChecks: (args) => {
-      projectChecks.pause(
-        prKey(refSchema.parse(args[0])),
-        z.boolean().parse(args[1]),
-      );
-    },
-    startProjectChecks: (args) => {
-      const r = refSchema.parse(args[0]),
-        head = shaSchema.parse(args[1]);
-      return projectChecks.start(
-        prKey(r),
-        requireFolder(r),
-        requireClient().account.server,
-        r,
-        head,
-        z.string().max(4096).parse(args[2]),
-      );
-    },
-    updateCheckBuffer: (args) =>
-      projectChecks.update(
-        prKey(refSchema.parse(args[0])),
-        shaSchema.parse(args[1]),
-        filePathSchema.parse(args[2]),
-        textSchema.nullable().parse(args[3]),
-      ),
-    blame: (args) => {
-      const r = refSchema.parse(args[0]),
-        query = blameQuerySchema.parse(args[1]),
-        dir = requireFolder(
+    }),
+    projectCheckState: takes([refSchema, shaSchema], (r, head) =>
+      projectChecks.state(prKey(r), head),
+    ),
+    stopProjectChecks: takes([refSchema], (r) => {
+      projectChecks.stop(prKey(r));
+    }),
+    pauseProjectChecks: takes([refSchema, z.boolean()], (r, paused) => {
+      projectChecks.pause(prKey(r), paused);
+    }),
+    startProjectChecks: takes(
+      [refSchema, shaSchema, targetSchema],
+      (r, head, target) =>
+        projectChecks.start(
+          prKey(r),
+          requireFolder(r),
+          requireClient().account.server,
           r,
-          "Link this repository to a local folder to see line history.",
-        );
+          head,
+          target,
+        ),
+    ),
+    updateCheckBuffer: takes(
+      [refSchema, shaSchema, filePathSchema, textSchema.nullable()],
+      (r, head, path, text) => projectChecks.update(prKey(r), head, path, text),
+    ),
+    blame: takes([refSchema, blameQuerySchema], (r, query) => {
+      const dir = requireFolder(
+        r,
+        "Link this repository to a local folder to see line history.",
+      );
       return blame.read(dir, requireClient().account.server, r, query);
-    },
+    }),
   } satisfies Handlers;
 }
