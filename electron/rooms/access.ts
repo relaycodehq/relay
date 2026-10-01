@@ -2,6 +2,7 @@ import type { Gitea } from "../gitea";
 import type { Store } from "../store";
 import type { RoomConnection } from "../../shared/rooms";
 import { inspectRepository } from "../repository";
+import type { RoomRequest } from "./transport";
 export interface ProjectRoomContext {
   client: Gitea;
   ref: { owner: string; name: string };
@@ -13,13 +14,7 @@ export class RoomAccess {
   private inFlight = new Map<string, Promise<void>>();
   constructor(
     private store: Store,
-    private request: <T>(
-      server: string,
-      path: string,
-      token: string | undefined,
-      method?: string,
-      body?: unknown,
-    ) => Promise<T>,
+    private request: RoomRequest,
   ) {}
   private consentKey(c: ProjectRoomContext, server: string) {
     return JSON.stringify([

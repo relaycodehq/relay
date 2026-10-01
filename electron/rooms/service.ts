@@ -14,7 +14,6 @@ import {
   roomInvitation,
   connectionSchema,
   projectSchema,
-  roomHostingSchema,
   type RoomHosting,
   type ConnectRoom,
   type RoomConnection,
@@ -26,7 +25,8 @@ import {
   type Member,
   type RoomContext,
 } from "../../shared/rooms";
-import { readBounded } from "../../shared/http";
+import { roomRequest, type Network } from "./transport";
+import { Hosting } from "./hosting";
 import { redacted } from "../../shared/redact-secrets";
 
 type Context = { client: Gitea; ref: PullRef; key: string; dir?: string };
@@ -38,7 +38,6 @@ export interface RoomDelivery {
   status: "running" | "completed" | "failed" | "cancelled";
   error: string | null;
 }
-type Network = (url: string, init?: RequestInit) => Promise<Response>;
 export class RoomService {
   private contexts = new Map<string, ProjectRoomContext>();
   private access: RoomAccess;
@@ -53,87 +52,32 @@ export class RoomService {
     job?: Promise<void>;
   } | null = null;
   private flushing = new Set<string>();
+  private request: ReturnType<typeof roomRequest>;
+  private hosting: Hosting;
   constructor(
     private store: Store,
-    private fetcher: Network,
+    fetcher: Network,
     private encrypt: (s: string) => Promise<string | null>,
     private decrypt: (s: string) => Promise<string>,
   ) {
     this.access = new RoomAccess(store, (...args) => this.request(...args));
+    this.request = roomRequest(fetcher, async (secret) => {
+      const context = this.contexts.get(secret);
+      const connection = context && (await this.connection(context));
+      if (!context || !connection) return false;
+      await this.access.ensure(context, connection, true);
+      return true;
+    });
+    this.hosting = new Hosting(store, this.request, encrypt, decrypt);
   }
   async allowAccess(c: ProjectRoomContext, server: string) {
     await this.access.allow(c, server);
   }
-  private async hosting(): Promise<RoomHosting | null> {
-    const saved = this.store.get().roomHosting;
-    return saved
-      ? roomHostingSchema.parse(JSON.parse(await this.decrypt(saved)))
-      : null;
+  hostingStatus() {
+    return this.hosting.status();
   }
-  async hostingStatus() {
-    return { server: (await this.hosting())?.server ?? null };
-  }
-  async saveHosting(input: RoomHosting | null) {
-    let encrypted: string | null = null;
-    if (input) {
-      const value = roomHostingSchema.parse(input);
-      // Check the key with that server, without creating a project there.
-      await this.request(value.server, "/v1/setup", value.secret);
-      encrypted = await this.encrypt(JSON.stringify(value));
-      if (!encrypted)
-        throw new Error(
-          "Secure credential storage is required to save room hosting access.",
-        );
-    }
-    await this.store.update((s) => {
-      if (encrypted) s.roomHosting = encrypted;
-      else delete s.roomHosting;
-    });
-  }
-  private async request<T>(
-    server: string,
-    path: string,
-    secret: string | undefined,
-    method = "GET",
-    body?: unknown,
-    retryAccess = true,
-  ): Promise<T> {
-    const response = await this.fetcher(server + path, {
-      method,
-      headers: {
-        ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      redirect: "error",
-      signal: AbortSignal.timeout(10000),
-    });
-    const text = await readBounded(
-      response,
-      8_000_000,
-      "Room server returned too much data.",
-    );
-    let value: any;
-    try {
-      value = JSON.parse(text);
-    } catch {
-      throw new Error("The room server returned an invalid response.");
-    }
-    if (response.status === 428 && retryAccess && secret) {
-      const context = this.contexts.get(secret);
-      const connection = context && (await this.connection(context));
-      if (context && connection) {
-        await this.access.ensure(context, connection, true);
-        return this.request(server, path, secret, method, body, false);
-      }
-    }
-    if (!response.ok)
-      throw new Error(
-        typeof value?.error === "string"
-          ? value.error.slice(0, 1000)
-          : `Room server returned ${response.status}.`,
-      );
-    return value as T;
+  saveHosting(input: RoomHosting | null) {
+    return this.hosting.save(input);
   }
   private project(c: ProjectRoomContext) {
     return projectSchema.parse({
@@ -286,14 +230,14 @@ export class RoomService {
   async projectServer(c: ProjectRoomContext) {
     return (
       (await this.connection(c))?.server ??
-      (await this.hosting())?.server ??
+      (await this.hosting.get())?.server ??
       null
     );
   }
   async projectSession(c: ProjectRoomContext) {
     let connection = await this.connection(c);
     if (!connection) {
-      const hosting = await this.hosting();
+      const hosting = await this.hosting.get();
       if (!hosting)
         throw new Error(
           "Configure room hosting in Settings or join a project invitation first.",
@@ -381,7 +325,7 @@ export class RoomService {
   }
   async invite(c: Context) {
     if (!(await this.connection(c))) {
-      const hosting = await this.hosting();
+      const hosting = await this.hosting.get();
       if (!hosting)
         throw new Error(
           "Set up shared-room hosting once in Settings, or open a colleague’s invitation.",
