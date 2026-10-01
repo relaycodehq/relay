@@ -1379,7 +1379,11 @@ export function ProjectChat({
     ) => {
       const { chatId } = latest.current;
       if (!chatId) return Promise.resolve({ conflicts: [] });
-      return api.rewindProjectTurn(chatId, m.id, paths, mode, force);
+      return api
+        .rewindProjectTurn(chatId, m.id, paths, mode, force)
+        .finally(
+          () => void qc.invalidateQueries({ queryKey: workingTreeKey() }),
+        );
     },
     [],
   );
