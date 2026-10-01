@@ -2,35 +2,14 @@ import type { QuestionTarget } from "../../shared/questions";
 import { useSymbolNavigation } from "./SymbolNavigation";
 import { useLineBlame } from "./LineBlame";
 import type { CodeViewHandle } from "@pierre/diffs/react";
-import { clickedLine, selectedSpan } from "../lib/diff-selection";
-import {
-  diagnosticSummary,
-  diagnosticSeverity,
-  type ProjectCheckState,
-  type ProjectDiagnostic,
-} from "../../shared/checks";
+import { clickedLine } from "../lib/diff-selection";
+import type { ProjectCheckState } from "../../shared/checks";
 import { useContentHash } from "../lib/diagnostics";
-import { DiagnosticMessage } from "./ProjectChecks";
+import { useFileChecks } from "../lib/file-checks";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type {
-  CodeViewDiffItem,
-  DiffLineAnnotation,
-  SelectedLineRange,
-  CodeViewLineSelection,
-} from "@pierre/diffs";
-import {
-  Bookmark,
-  MessageSquare,
-  Terminal,
-  Trash2,
-  X,
-  Pencil,
-} from "lucide-react";
+import type { CodeViewDiffItem, CodeViewLineSelection } from "@pierre/diffs";
 import type {
   ChangedFile,
-  Draft,
-  LineMark,
   Progress,
   Pull,
   ReviewComment,
@@ -39,14 +18,24 @@ import type {
 import { revisionOf } from "../../shared/types";
 import { api } from "../lib/api";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
-import { ErrorBox, IconButton, Loading, RichText } from "./ui";
+import { ErrorBox, Loading } from "./ui";
 import { useTheme } from "../lib/useTheme";
 import { useAISettings } from "../lib/useAISettings";
 import { agentName } from "../../shared/agents";
 import { useSyntaxThemes } from "../lib/appearance";
 import { useFileDiff } from "../lib/useFileDiff";
+import { usePullFileContents } from "../lib/usePullFileContents";
+import { lineAnnotations, type LineNotes } from "../lib/diff-annotations";
+import { useLineComposer } from "../lib/useLineComposer";
 import { labelDiffGapControls } from "../lib/diffGapControls";
-interface Props {
+import { SelectionToolbar } from "./diff-viewer/SelectionToolbar";
+import { FileChecks } from "./diff-viewer/FileChecks";
+import {
+  LineAnnotations,
+  type NoteActions,
+} from "./diff-viewer/LineAnnotations";
+
+interface Props extends NoteActions {
   /** A project thread's workspace, where blame is read instead of the PR's linked folder. */
   workspace?: string;
   checks?: ProjectCheckState | null;
@@ -57,38 +46,13 @@ interface Props {
   fullContext: boolean;
   comments: ReviewComment[];
   progress: Progress;
-  addDraft: (
-    path: string,
-    line: number,
-    side: Side,
-    body: string,
-    id: string,
-  ) => void;
-  removeDraft: (id: string) => void;
-  onReply: (id: number, body: string) => Promise<void>;
-  onResolve: (id: number, resolved: boolean) => Promise<void>;
-  onCodex: (t: {
-    path: string;
-    line: number;
-    side: Side;
-    body: string;
-  }) => void;
-  onError: (e: unknown) => void;
   onMark: (start: number, end: number, side: Side) => void;
-  onRemoveMark: (id: string) => void;
   onAskAboutLines: (target: QuestionTarget) => void;
   onDiscuss: (target: QuestionTarget) => void;
   onEditLine: (line: number) => void;
 }
-interface Annotation {
-  diagnostics: ProjectDiagnostic[];
-  comments: ReviewComment[];
-  drafts: Draft[];
-  marks: LineMark[];
-  composer?: boolean;
-  line: number;
-  side: Side;
-}
+
+/** A PR file's diff with its comments, drafts, marks and problems on the lines. */
 export function DiffViewer({
   checks,
   pull,
@@ -99,36 +63,19 @@ export function DiffViewer({
   fullContext,
   comments,
   progress,
-  addDraft,
-  removeDraft,
-  onReply,
-  onResolve,
-  onCodex,
   onError,
   onMark,
-  onRemoveMark,
   onEditLine,
   onAskAboutLines,
   onDiscuss,
+  ...actions
 }: Props) {
+  const noteActions = { ...actions, onError };
   const questionAgent = agentName(
     useAISettings().data?.questionsProvider ?? "codex",
   );
-  const contents = useQuery({
-    queryKey: [
-      "contents",
-      pull.owner,
-      pull.name,
-      pull.number,
-      pull.head.sha,
-      pull.merge_base,
-      file.filename,
-    ],
-    queryFn: () => api.contents(pull, file, pull.head.sha, pull.merge_base),
-    gcTime: 0,
-    staleTime: Infinity,
-  });
-  const viewer = useRef<CodeViewHandle<Annotation, undefined>>(null);
+  const contents = usePullFileContents(pull, file);
+  const viewer = useRef<CodeViewHandle<LineNotes, undefined>>(null);
   const [problemLine, setProblemLine] = useState<number>();
   useEffect(() => {
     if (problemLine === undefined) return;
@@ -167,23 +114,23 @@ export function DiffViewer({
     },
     layout,
   );
-  const checked =
-    checks?.status === "ready" ? checks.files[file.filename] : undefined;
-  const aligned = !!checked && checked.hash === contentHash;
-  const fileDiagnostics = useMemo(
-    () =>
-      checks?.status === "ready"
-        ? checks.diagnostics.filter((d) => d.path === file.filename)
-        : [],
-    [checks, file.filename],
+  const { checked, aligned, diagnostics } = useFileChecks(
+    checks,
+    file.filename,
+    contentHash,
   );
   const { diff, error: diffError } = useFileDiff(contents.data);
-  const [composer, setComposer] = useState<{
-      id: string;
-      line: number;
-      side: Side;
-    } | null>(null),
-    [selection, setSelection] = useState<CodeViewLineSelection | null>(null);
+  const [selection, setSelection] = useState<CodeViewLineSelection | null>(
+    null,
+  );
+  const composer = useLineComposer({
+    path: file.filename,
+    drafts: progress.drafts,
+    addDraft: actions.addDraft,
+    removeDraft: actions.removeDraft,
+    onSaved: () => setSelection(null),
+  });
+  const open = composer.composer;
   const revision = revisionOf(pull);
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
@@ -191,57 +138,30 @@ export function DiffViewer({
   const isLarge =
     !!diff &&
     Math.max(diff.additionLines.length, diff.deletionLines.length) > 5000;
-  const annotations = useMemo(() => {
-    const map = new Map<string, DiffLineAnnotation<Annotation>>();
-    const get = (line: number, side: Side) => {
-      const key = `${side}:${line}`;
-      if (!map.has(key))
-        map.set(key, {
-          lineNumber: line,
-          side,
-          metadata: {
-            line,
-            side,
-            comments: [],
-            drafts: [],
-            marks: [],
-            diagnostics: [],
-          },
-        });
-      return map.get(key)!.metadata;
-    };
-    for (const c of comments) {
-      if (c.path !== file.filename || c.commit_id !== pull.head.sha) continue;
-      const line = c.position || c.original_position;
-      if (line > 0)
-        get(line, c.position > 0 ? "additions" : "deletions").comments.push(c);
-    }
-    for (const d of progress.drafts)
-      if (
-        d.path === file.filename &&
-        d.revision === revision &&
-        d.id !== composer?.id
-      )
-        get(d.line, d.side).drafts.push(d);
-    for (const m of progress.marks)
-      if (m.path === file.filename && m.revision === revision)
-        get(m.end, m.side).marks.push(m);
-    if (aligned)
-      for (const d of fileDiagnostics)
-        if (d.line) get(d.line, "additions").diagnostics.push(d);
-    if (composer) get(composer.line, composer.side).composer = true;
-    return [...map.values()];
-  }, [
-    comments,
-    progress,
-    file.filename,
-    revision,
-    composer,
-    pull.head.sha,
-    aligned,
-    fileDiagnostics,
-  ]);
-  const items = useMemo<CodeViewDiffItem<Annotation>[]>(
+  const annotations = useMemo(
+    () =>
+      lineAnnotations({
+        path: file.filename,
+        head: pull.head.sha,
+        revision,
+        comments,
+        drafts: progress.drafts,
+        marks: progress.marks,
+        diagnostics: aligned ? diagnostics : [],
+        composer: open,
+      }),
+    [
+      comments,
+      progress,
+      file.filename,
+      revision,
+      open,
+      pull.head.sha,
+      aligned,
+      diagnostics,
+    ],
+  );
+  const items = useMemo<CodeViewDiffItem<LineNotes>[]>(
     () =>
       diff
         ? [
@@ -256,14 +176,6 @@ export function DiffViewer({
         : [],
     [diff, annotations, file.filename],
   );
-  const beginComment = (range: SelectedLineRange | null) => {
-    if (range)
-      setComposer({
-        id: crypto.randomUUID(),
-        line: range.end,
-        side: range.endSide ?? range.side ?? "additions",
-      });
-  };
   if (contents.error)
     return (
       <div className="diff-state">
@@ -311,123 +223,31 @@ export function DiffViewer({
         </div>
       )}
       {selection && (
-        <div className="selection-toolbar">
-          <span>
-            {selection.range.side === "deletions" ? "Base" : "Head"} ·{" "}
-            {selection.range.start === selection.range.end
-              ? `line ${selection.range.start}`
-              : `lines ${selection.range.start}–${selection.range.end}`}
-          </span>
-          <button
-            onClick={() => {
-              const span = selectedSpan(selection.range);
-              if ("error" in span) {
-                onError(
-                  new Error(
-                    span.error === "two-sides"
-                      ? `Select lines on one side to ask ${questionAgent}.`
-                      : `Select up to 200 lines to ask ${questionAgent}.`,
-                  ),
-                );
-                return;
-              }
-              onAskAboutLines({ path: file.filename, ...span });
-            }}
-          >
-            <Terminal size={13} /> Ask {questionAgent}
-          </button>
-          <button
-            onClick={() => {
-              const span = selectedSpan(selection.range);
-              if ("error" in span) {
-                onError(
-                  new Error("Select up to 200 lines on one side to discuss."),
-                );
-                return;
-              }
-              onDiscuss({ path: file.filename, ...span });
-            }}
-          >
-            <MessageSquare size={13} />
-            Discuss in room
-          </button>
-          <button onClick={() => beginComment(selection.range)}>
-            <MessageSquare size={13} />
-            Comment
-          </button>
-          {selection.range.side !== "deletions" &&
-            selection.range.endSide !== "deletions" && (
-              <button
-                aria-label="Edit selected line locally"
-                onClick={() => onEditLine(selection.range.start)}
-              >
-                <Pencil size={13} /> Edit locally
-              </button>
-            )}
-          <button
-            onClick={() => {
-              if (
-                selection.range.endSide &&
-                selection.range.endSide !== selection.range.side
-              ) {
-                onError(new Error("Select a range on one side to mark it."));
-                return;
-              }
-              onMark(
-                Math.min(selection.range.start, selection.range.end),
-                Math.max(selection.range.start, selection.range.end),
-                selection.range.side ?? "additions",
-              );
-              setSelection(null);
-            }}
-          >
-            <Bookmark size={13} />
-            Mark for later
-          </button>
-          <IconButton
-            label="Clear selected lines"
-            onClick={() => setSelection(null)}
-          >
-            <X size={14} />
-          </IconButton>
-        </div>
+        <SelectionToolbar
+          range={selection.range}
+          path={file.filename}
+          questionAgent={questionAgent}
+          onAskAboutLines={onAskAboutLines}
+          onDiscuss={onDiscuss}
+          onComment={() => composer.begin(selection.range)}
+          onEditLine={onEditLine}
+          onMark={(start, end, side) => {
+            onMark(start, end, side);
+            setSelection(null);
+          }}
+          onClear={() => setSelection(null)}
+          onError={onError}
+        />
       )}
-      {checks && checks.status !== "stopped" && (
-        <div
-          className={`file-check-status ${checked?.errors ? "has-errors" : ""}`}
-        >
-          {checks.status === "checking"
-            ? "Checking local project…"
-            : checks.status === "failed"
-              ? "Live checks unavailable — open project checks for details"
-              : !checked
-                ? "This file is outside the selected compiler configuration"
-                : !aligned
-                  ? `Local file differs from PR · ${diagnosticSummary(checked)} in local version`
-                  : diagnosticSeverity(checked)
-                    ? `${diagnosticSummary(checked)} in this file`
-                    : "No compiler errors in this file"}
-          {!!fileDiagnostics.length && !aligned && (
-            <button onClick={() => onEditLine(fileDiagnostics[0].line ?? 1)}>
-              Inspect local diagnostics
-            </button>
-          )}
-        </div>
-      )}
-      {aligned && !!fileDiagnostics.length && (
-        <details className="review-file-problems">
-          <summary>Problems in this file · {fileDiagnostics.length}</summary>
-          <div>
-            {fileDiagnostics.map((d, i) => (
-              <button key={i} onClick={() => setProblemLine(d.line ?? 1)}>
-                <small>Line {d.line}</small>
-                <DiagnosticMessage diagnostic={d} />
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
-      <StyledDiffCodeView<Annotation>
+      <FileChecks
+        checks={checks}
+        checked={checked}
+        aligned={aligned}
+        diagnostics={diagnostics}
+        onEditLine={onEditLine}
+        onProblem={setProblemLine}
+      />
+      <StyledDiffCodeView<LineNotes>
         viewerRef={viewer}
         className="diff-code-view"
         scrollPastEnd
@@ -453,7 +273,7 @@ export function DiffViewer({
           lineDiffType: "word-alt",
           enableLineSelection: true,
           enableGutterUtility: true,
-          onGutterUtilityClick: beginComment,
+          onGutterUtilityClick: composer.begin,
           disableFileHeader: true,
           hunkSeparators: "line-info",
           tokenizeMaxLineLength: 1000,
@@ -464,91 +284,12 @@ export function DiffViewer({
           },
         }}
         renderAnnotation={(a) => (
-          <div className="line-annotations">
-            {a.metadata.diagnostics.map((d, i) => (
-              <div className={`inline-diagnostic ${d.severity}`} key={i}>
-                <DiagnosticMessage diagnostic={d} />
-              </div>
-            ))}
-            {a.metadata.marks.map((m) => (
-              <div className="line-bookmark" key={m.id}>
-                <Bookmark size={13} />
-                <span>
-                  Marked for later · lines {m.start}–{m.end}
-                </span>
-                <IconButton
-                  label="Remove line mark"
-                  onClick={() => onRemoveMark(m.id)}
-                >
-                  <X size={13} />
-                </IconButton>
-              </div>
-            ))}
-            {a.metadata.comments.map((c) => (
-              <ThreadComment
-                key={c.id}
-                comment={c}
-                onReply={onReply}
-                onResolve={onResolve}
-                onCodex={() =>
-                  onCodex({
-                    path: file.filename,
-                    line: a.metadata.line,
-                    side: a.metadata.side,
-                    body: c.body,
-                  })
-                }
-                onError={onError}
-              />
-            ))}
-            {a.metadata.drafts.map((d) => (
-              <DraftComment
-                key={d.id}
-                draft={d}
-                onChange={(body) =>
-                  addDraft(d.path, d.line, d.side, body, d.id)
-                }
-                onRemove={() => removeDraft(d.id)}
-                onCodex={() =>
-                  onCodex({
-                    path: d.path,
-                    line: d.line,
-                    side: d.side,
-                    body: d.body,
-                  })
-                }
-              />
-            ))}
-            {a.metadata.composer && (
-              <NewComment
-                body={
-                  progress.drafts.find((d) => d.id === composer?.id)?.body ?? ""
-                }
-                onChange={(body) => {
-                  if (!composer) return;
-                  // A draft exists only while it has text, so a box left
-                  // open when the reader moves on leaves nothing behind.
-                  if (body)
-                    addDraft(
-                      file.filename,
-                      composer.line,
-                      composer.side,
-                      body,
-                      composer.id,
-                    );
-                  else removeDraft(composer.id);
-                }}
-                onSave={() => {
-                  setComposer(null);
-                  setSelection(null);
-                }}
-                onCancel={() => {
-                  if (composer) removeDraft(composer.id);
-                  setComposer(null);
-                }}
-              />
-            )}
-          </div>
+          <LineAnnotations
+            notes={a.metadata}
+            path={file.filename}
+            composer={composer}
+            actions={noteActions}
+          />
         )}
       />
       {diff.hunks.length === 0 && (
@@ -559,168 +300,5 @@ export function DiffViewer({
         </div>
       )}
     </div>
-  );
-}
-function NewComment({
-  body,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  body: string;
-  onChange: (s: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <form
-      className="inline-composer"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (body.trim()) onSave();
-      }}
-    >
-      <div className="comment-heading">
-        <strong>New line comment</strong>
-        <span>Local draft</span>
-      </div>
-      <textarea
-        autoFocus
-        aria-label="Line comment"
-        placeholder="What needs a closer look? Markdown supported."
-        rows={3}
-        value={body}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && body.trim()) {
-            e.preventDefault();
-            onSave();
-          }
-        }}
-      />
-      <div className="inline-actions">
-        <span>Publish when you finish your review</span>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="primary" disabled={!body.trim()}>
-          Add draft
-        </button>
-      </div>
-    </form>
-  );
-}
-function DraftComment({
-  draft,
-  onChange,
-  onRemove,
-  onCodex,
-}: {
-  draft: Draft;
-  onChange: (s: string) => void;
-  onRemove: () => void;
-  onCodex: () => void;
-}) {
-  const [edit, setEdit] = useState(false);
-  return (
-    <article className="inline-comment draft">
-      <div className="comment-heading">
-        <strong>You</strong>
-        <span className="draft-label">Pending review</span>
-        <IconButton label="Delete draft comment" onClick={onRemove}>
-          <Trash2 size={13} />
-        </IconButton>
-      </div>
-      {edit ? (
-        <textarea
-          aria-label="Edit draft comment"
-          value={draft.body}
-          rows={3}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <RichText text={draft.body} />
-      )}
-      <div className="comment-actions">
-        <button onClick={() => setEdit((v) => !v)}>
-          {edit ? "Done" : "Edit"}
-        </button>
-        <button onClick={onCodex} disabled={!draft.body.trim()}>
-          <Terminal size={13} />
-          Fix with Codex
-        </button>
-      </div>
-    </article>
-  );
-}
-function ThreadComment({
-  comment,
-  onReply,
-  onResolve,
-  onCodex,
-  onError,
-}: {
-  comment: ReviewComment;
-  onReply: (id: number, body: string) => Promise<void>;
-  onResolve: (id: number, resolved: boolean) => Promise<void>;
-  onCodex: () => void;
-  onError: (e: unknown) => void;
-}) {
-  const [reply, setReply] = useState(false),
-    [body, setBody] = useState(""),
-    [busy, setBusy] = useState(false);
-  return (
-    <article className="inline-comment">
-      <div className="comment-heading">
-        <strong>{comment.user.login}</strong>
-        <span>{comment.resolver ? "Resolved" : "Review comment"}</span>
-      </div>
-      <RichText text={comment.body} />
-      <div className="comment-actions">
-        <button
-          onClick={() =>
-            void onResolve(comment.id, !comment.resolver).catch(onError)
-          }
-        >
-          {comment.resolver ? "Reopen" : "Resolve"}
-        </button>
-        <button onClick={() => setReply((v) => !v)}>
-          <MessageSquare size={12} />
-          Reply
-        </button>
-        <button onClick={onCodex}>
-          <Terminal size={13} />
-          Fix with Codex
-        </button>
-      </div>
-      {reply && (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            try {
-              await onReply(comment.id, body);
-              setBody("");
-              setReply(false);
-            } catch (e) {
-              onError(e);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <textarea
-            aria-label="Reply to line comment"
-            placeholder="Reply…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={3}
-          />
-          <button className="primary" disabled={!body.trim() || busy}>
-            {busy ? "Posting…" : "Post reply"}
-          </button>
-        </form>
-      )}
-    </article>
   );
 }

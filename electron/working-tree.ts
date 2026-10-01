@@ -27,6 +27,7 @@ import { NotText, decodeText, readWorkingFile } from "./working-files";
 import { parseNumstat } from "./turn-changes";
 import {
   checkoutChanged,
+  isStaged,
   workingPathSchema,
   type WorkingTree,
   type GitAction,
@@ -437,7 +438,7 @@ export async function performGitAction(
           120000,
         );
       } else if (action.kind === "commit") {
-        if (!state.changes.some((c) => c.index !== " " && c.index !== "?"))
+        if (!state.changes.some(isStaged))
           throw new Error("Stage the changes you want to commit first.");
         await git(root, ["commit", "-m", action.message], 120000);
       } else if (action.kind === "pull") {

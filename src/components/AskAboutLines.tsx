@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { MessageSquare, Terminal } from "lucide-react";
 import type { ChangedFile, LocalFolder, Pull } from "../../shared/types";
 import { lineExcerpt, type QuestionTarget } from "../../shared/questions";
@@ -7,6 +6,7 @@ import { choiceLabel } from "../../shared/settings";
 import { agentName, agents } from "../../shared/agents";
 import { useAISettings } from "../lib/useAISettings";
 import { api } from "../lib/api";
+import { usePullFileContents } from "../lib/usePullFileContents";
 import { ErrorBox, Modal } from "./ui";
 
 /** Opens the line-question agent in a terminal, about lines picked in a diff. */
@@ -32,20 +32,7 @@ export function AskAboutLines({
   const [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  const contents = useQuery({
-    queryKey: [
-      "contents",
-      pull.owner,
-      pull.name,
-      pull.number,
-      pull.head.sha,
-      pull.merge_base,
-      file.filename,
-    ],
-    queryFn: () => api.contents(pull, file, pull.head.sha, pull.merge_base),
-    gcTime: 0,
-    staleTime: Infinity,
-  });
+  const contents = usePullFileContents(pull, file);
   const context = useMemo(() => {
     const source =
       target.side === "deletions" ? contents.data?.old : contents.data?.next;

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ChangeArea, WorkingChange } from "../../shared/working-tree";
 import { api } from "../lib/api";
+import { otherArea } from "../lib/working-changes";
 import { ContextMenuItem } from "./ContextMenuItem";
 import { revealLabel } from "./FileTree";
 
@@ -50,14 +51,7 @@ export function LocalChangeMenu({
     onDisk = change.worktree !== "D",
     untracked = change.index === "?",
     // A partly staged file has a diff on both sides of the index.
-    other: ChangeArea | null =
-      area === "staged"
-        ? change.worktree !== " " || change.conflict
-          ? "unstaged"
-          : null
-        : change.index !== " " && !untracked
-          ? "staged"
-          : null;
+    other = otherArea(change, area);
   const run = (work: () => Promise<unknown>) => void work().catch(onError);
   return (
     <ContextMenu.Root>
