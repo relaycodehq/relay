@@ -12,11 +12,11 @@ import {
   sessionFor,
 } from "./project-chats/sessions";
 import { interrupt } from "./project-chats/revive";
+import { ChatSchedule } from "./project-chats/schedule";
 import { imageFileData } from "./project-chats/images";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
-import { stopClaudeTask } from "./rooms/claude-project";
 import { agentRuntime, agentRuntimes } from "./agents";
 import type { AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
@@ -33,14 +33,11 @@ import type {
   WorktreeStatus,
   ChatPending,
   ChatSummary,
-  HeldWakeup,
   ChatTriage,
   ChatMessage,
   ForkPoint,
   ProjectChatSend,
   ResumeSettings,
-  ScheduledChatMessage,
-  StoppedWork,
   AgentProvider,
   KnownMessages,
   ProjectChatPatch,
@@ -184,6 +181,7 @@ export class ProjectChats {
   private storage: ChatStorage;
   private sessions: ProviderSessions;
   private active: ActiveTurns;
+  private schedule: ChatSchedule;
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -198,8 +196,6 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
-  /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
-  private timers = new Map<string, NodeJS.Timeout>();
   private titleJobs = new Map<
     string,
     { abort: AbortController; job: Promise<void> }
@@ -301,6 +297,13 @@ export class ProjectChats {
       this.storage.chatChanged(id),
     );
     this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
+    this.schedule = new ChatSchedule(store, this.storage, this.sessions, {
+      control: (id, action) => this.control(id, action),
+      send: (id, input, fromRelay) => this.send(id, input, fromRelay),
+      sessionInput: (chat, provider, parentId) =>
+        this.sessionInput(chat, provider, parentId),
+      closing: () => this.disposing,
+    });
   }
   /**
    * Hears which project's thread list may read differently: a summary saved,
@@ -379,27 +382,6 @@ export class ProjectChats {
           : listed;
       });
   }
-  /**
-   * Stops a background task Claude left running, or cancels a wake-up it
-   * scheduled. The SDK can't delete wake-ups, so Claude is asked to, in the open.
-   */
-  async stopPending(id: string, pendingId: string) {
-    const chat = await this.storage.load(id);
-    // Its timer finds it gone and sends nothing.
-    if (chat.heldWakeups?.some((w) => w.id === pendingId))
-      return this.dropWakeup(chat, pendingId);
-    const work = this.sessions.pending(id).find((p) => p.item.id === pendingId);
-    if (!work) throw new Error("That work has already finished.");
-    if (work.item.kind === "task") return stopClaudeTask(work.key, pendingId);
-    return this.send(
-      id,
-      {
-        ...this.sessionInput(chat, "claude", work.parentId),
-        body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
-      },
-      true,
-    );
-  }
   /** The subagents Claude started in a thread, its side conversations' too. */
   agents(id: string) {
     return this.sessions.subagents(id);
@@ -417,161 +399,19 @@ export class ProjectChats {
       .map((p) => p.item)
       .filter((item) => item.kind === "task");
   }
+  /**
+   * Stops a background task Claude left running, or cancels a wake-up it
+   * scheduled.
+   */
+  stopPending(id: string, pendingId: string) {
+    return this.schedule.stopPending(id, pendingId);
+  }
   /** Arms the wake-ups kept when Relay last closed, and scheduled messages. */
   armWakeups() {
-    for (const chat of this.store.get().chats ?? []) {
-      for (const wakeup of chat.heldWakeups ?? []) this.arm(chat.id, wakeup);
-      if (chat.nextSend) this.armSend(chat.id, chat.nextSend);
-    }
+    this.schedule.armAll();
   }
-  /**
-   * Runs `due` at `at`, replacing the key's timer; no `at` just clears it. A
-   * timer waits at most about 24.8 days, so a later one re-arms when it fires.
-   */
-  private armTimer(
-    key: string,
-    at: number | undefined,
-    due: () => Promise<void>,
-  ) {
-    clearTimeout(this.timers.get(key));
-    this.timers.delete(key);
-    if (!at || this.disposing) return;
-    const delay = Math.min(Math.max(at - Date.now(), 0), 2 ** 31 - 1);
-    this.timers.set(
-      key,
-      setTimeout(() => {
-        this.timers.delete(key);
-        if (Date.now() < at) return this.armTimer(key, at, due);
-        void due().catch((e) =>
-          console.warn("Could not send a scheduled message:", e),
-        );
-      }, delay),
-    );
-  }
-  /** One that came due while Relay was closed goes out right after launch. */
-  private armSend(chatId: string, at: number | undefined) {
-    this.armTimer("send:" + chatId, at, () => this.sendScheduled(chatId));
-  }
-  private async saveScheduled(chat: ProjectChat) {
-    if (!chat.scheduled?.length) delete chat.scheduled;
-    await this.storage.persist(chat);
-    this.armSend(chat.id, nextSend(chat.scheduled));
-  }
-  /** Sends the scheduled messages that are due, oldest first. */
-  private async sendScheduled(chatId: string) {
-    if (this.disposing) return;
-    const due = await this.control(chatId, async () => {
-      const chat = await this.storage.load(chatId);
-      const now = Date.now();
-      const due = (chat.scheduled ?? [])
-        .filter((s) => !s.error && s.at <= now)
-        .sort((a, b) => a.at - b.at);
-      chat.scheduled = chat.scheduled?.filter((s) => !due.includes(s));
-      await this.saveScheduled(chat);
-      return due;
-    });
-    for (const item of due) await this.dispatchScheduled(chatId, item);
-  }
-  /** Sends a scheduled message now; if that fails it stays, with the error. */
-  private async dispatchScheduled(chatId: string, item: ScheduledChatMessage) {
-    try {
-      await this.send(chatId, item.input);
-    } catch (e) {
-      await this.control(chatId, async () => {
-        const chat = await this.storage.load(chatId);
-        (chat.scheduled ??= []).push({
-          ...item,
-          error: e instanceof Error ? e.message : String(e),
-        });
-        await this.saveScheduled(chat);
-      });
-    }
-  }
-  private arm(chatId: string, wakeup: HeldWakeup) {
-    // One that came due while Relay was closed goes out shortly after launch.
-    this.armTimer(
-      `wake:${chatId}:${wakeup.id}`,
-      Math.max(wakeup.at, Date.now() + 15_000),
-      () => this.fireWakeup(chatId, wakeup.id),
-    );
-  }
-  private async dropWakeup(chat: ProjectChat, id: string) {
-    chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
-    if (!chat.heldWakeups?.length) delete chat.heldWakeups;
-    await this.storage.persist(chat);
-  }
-  private async fireWakeup(chatId: string, id: string) {
-    if (this.disposing) return;
-    const chat = await this.storage.load(chatId);
-    const wakeup = chat.heldWakeups?.find((w) => w.id === id);
-    if (!wakeup) return;
-    await this.dropWakeup(chat, id);
-    await this.send(
-      chatId,
-      {
-        ...this.sessionInput(chat, "claude", wakeup.parentId),
-        body: `@claude Relay restarted before your scheduled wake-up, so it's sending it for you:\n\n${wakeup.prompt}`,
-      },
-      true,
-    );
-  }
-  /**
-   * Relay is closing, and Claude's sessions with it. Background work dies
-   * with them: remember it, so the thread can offer to pick it back up.
-   * One-shot wake-ups carry their prompt and time, so Relay sends those itself.
-   */
-  private async keepPending() {
-    const now = Date.now();
-    const left = this.sessions.pending();
-    for (const chatId of new Set(left.map((p) => p.chatId))) {
-      const chat = await this.storage.load(chatId).catch(() => undefined);
-      if (!chat) continue;
-      const stopped: StoppedWork[] = [];
-      const work = left.filter((p) => p.chatId === chatId);
-      for (const { item, parentId } of work) {
-        const reply = parentId ? { parentId } : {};
-        if (item.kind === "wakeup" && !item.recurring && item.at)
-          (chat.heldWakeups ??= []).push({
-            id: item.id,
-            prompt: item.prompt,
-            at: item.at,
-            ...reply,
-          });
-        else stopped.push({ ...item, ...reply });
-      }
-      if (stopped.length)
-        chat.stopped = {
-          at: now,
-          items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
-        };
-      await this.storage.persist(chat);
-    }
-  }
-  async resolveStoppedWork(id: string, action: "resume" | "dismiss") {
-    const chat = await this.storage.load(id);
-    const stopped = chat.stopped;
-    if (!stopped) return;
-    delete chat.stopped;
-    await this.storage.persist(chat);
-    if (action === "dismiss") return;
-    // Each conversation's Claude hears about the work it started.
-    for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {
-      const lines = stopped.items
-        .filter((item) => item.parentId === parentId)
-        .map((item) =>
-          item.kind === "task"
-            ? `- Background work: ${item.description}`
-            : `- Recurring wake-up: ${item.prompt}`,
-        );
-      await this.send(
-        id,
-        {
-          ...this.sessionInput(chat, "claude", parentId),
-          body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
-        },
-        true,
-      );
-    }
+  resolveStoppedWork(id: string, action: "resume" | "dismiss") {
+    return this.schedule.resolveStopped(id, action);
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
@@ -794,7 +634,7 @@ export class ProjectChats {
       if (chat.queue?.length || chat.scheduled?.length) {
         delete chat.queue;
         delete chat.scheduled;
-        this.armSend(id, undefined);
+        this.schedule.armSend(id, undefined);
       }
       const root = chat.worktree.path!;
       const latest = chat.messages.at(-1);
@@ -1134,7 +974,7 @@ export class ProjectChats {
         if (input.side || replyRoot(chat.messages, input.parentId!).side)
           return this.askAside(chat, input);
       }
-      if (input.sendAt) return this.schedule(id, input);
+      if (input.sendAt) return this.schedule.add(id, input);
       if (
         !this.active.has(id) &&
         !this.councilBusy(await this.storage.load(id))
@@ -1175,43 +1015,6 @@ export class ProjectChats {
       await this.storage.save(chat);
       if (input.delivery === "steer") await this.steerQueued(chat, input.id);
     });
-  }
-  /** Holds a Send later message until its time; it then goes out like any other. */
-  private async schedule(
-    id: string,
-    { sendAt, delivery, ...input }: ProjectChatSend,
-  ) {
-    const at = sendAt!;
-    if (at <= Date.now()) throw new Error("Choose a time in the future.");
-    if (at > Date.now() + 366 * 86_400_000)
-      throw new Error("Schedule a message at most a year ahead.");
-    const chat = await this.storage.load(id);
-    if (
-      chat.messages.some((m) => m.id === input.id) ||
-      chat.scheduled?.some((s) => s.input.id === input.id)
-    )
-      return;
-    if ((chat.scheduled?.length ?? 0) >= 20)
-      throw new Error("This thread already has 20 scheduled messages.");
-    if (
-      Buffer.byteLength(JSON.stringify(chat.scheduled ?? [])) +
-        Buffer.byteLength(JSON.stringify(input)) >
-      8 * 1024 * 1024
-    )
-      throw new Error(
-        "Too many scheduled attachments. Send or remove scheduled messages first.",
-      );
-    (chat.scheduled ??= []).push({
-      input: {
-        ...input,
-        parentId: input.parentId
-          ? replyRoot(chat.messages, input.parentId).id
-          : undefined,
-      },
-      at,
-      created: Date.now(),
-    });
-    await this.saveScheduled(chat);
   }
   private async drain(id: string) {
     if (this.disposing || this.active.has(id)) return;
@@ -1325,7 +1128,7 @@ export class ProjectChats {
       const scheduled = chat.scheduled?.find((s) => s.input.id === messageId);
       if (scheduled && action !== "move") {
         chat.scheduled = chat.scheduled!.filter((s) => s !== scheduled);
-        await this.saveScheduled(chat);
+        await this.schedule.save(chat);
         return action === "steer" ? scheduled : undefined;
       }
       if (action === "steer") {
@@ -1346,7 +1149,7 @@ export class ProjectChats {
     });
     // Outside the control above, since send takes its own turn.
     if (sendNow)
-      await this.dispatchScheduled(id, { ...sendNow, error: undefined });
+      await this.schedule.dispatch(id, { ...sendNow, error: undefined });
   }
   resume(id: string, settings?: ResumeSettings) {
     return this.control(id, async () => {
@@ -2977,7 +2780,7 @@ export class ProjectChats {
     this.sessions.stopListening();
     if (detach) {
       this.disposing = true;
-      for (const timer of this.timers.values()) clearTimeout(timer);
+      this.schedule.stop();
       for (const a of this.active.allSides()) a.abort.abort();
       for (const a of this.titleJobs.values()) a.abort.abort();
       // What was stopped writes its last state before the store goes to disk.
@@ -2997,10 +2800,12 @@ export class ProjectChats {
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
     }
-    await this.keepPending().catch((e) =>
-      console.warn("Could not keep Claude's background work:", e),
-    );
-    for (const timer of this.timers.values()) clearTimeout(timer);
+    await this.schedule
+      .keepPending()
+      .catch((e) =>
+        console.warn("Could not keep Claude's background work:", e),
+      );
+    this.schedule.stop();
     this.disposing = true;
     for (const a of this.active.all()) a.abort.abort();
     for (const a of this.active.allSides()) a.abort.abort();
