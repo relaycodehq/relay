@@ -3,7 +3,6 @@ import { HandoffButton } from "./HandoffButton";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
-import type { FileTarget } from "../lib/file-link-target";
 import { ProjectHistory } from "./ProjectHistory";
 import {
   NO_SLOTS,
@@ -15,13 +14,12 @@ import {
 import type { PaneId } from "../lib/workspace-panes";
 import { useShellNavigation } from "../lib/useShellNavigation";
 import { NO_VIEWING, useThreadView } from "../lib/useThreadView";
-import type { TurnDiffTarget } from "../lib/turn-diff";
 import {
   ShareConversation,
   JoinConversation,
   BrowseShared,
 } from "./ProjectSharingDialogs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useShortcut } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -65,10 +63,6 @@ import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
 import { sendDraft } from "../lib/draft-send";
-import {
-  matchLink,
-  type ProjectFileLink,
-} from "../../shared/project-file-links";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectBadge } from "./ProjectBadge";
 import { NewThreadPicker } from "./NewThreadPicker";
@@ -82,7 +76,7 @@ import { fitHeader } from "../lib/header-fit";
 import { useSidebarVisibility } from "../lib/useSidebarVisibility";
 import { useThreadFolder } from "../lib/useThreadFolder";
 import { useThreadTerminal } from "../lib/useThreadTerminal";
-import { requestChannel } from "../lib/request-channel";
+import { usePaneOpens } from "../lib/usePaneOpens";
 import {
   NavigationLockProvider,
   useNavigationLockRoot,
@@ -163,13 +157,6 @@ export default function ProjectShell() {
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
-  // Files the chat asks the Files and Changes panes to show. One per project,
-  // so a file asked for in one never opens in the next.
-  const fileOpens = useMemo(() => requestChannel<FileTarget>(), [project?.id]);
-  const changeReveals = useMemo(
-    () => requestChannel<ProjectFileLink>(),
-    [project?.id],
-  );
   const [share, setShare] = useState<ChatSummary>(),
     [invitation, setInvitation] = useState<string>(),
     [browseShared, setBrowseShared] = useState(false);
@@ -179,6 +166,9 @@ export default function ProjectShell() {
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
   const folder = useThreadFolder(nav);
   const { where, checks } = folder;
+  const opens = usePaneOpens(nav, view, folder, lock, setError);
+  const { openCode, togglePane, openTurnDiff, openInEditor, openChatFile } =
+    opens;
   useEffect(() => {
     // The page took its link when it opened; coming back mustn't open it again.
     if (!legacy) setIncoming(undefined);
@@ -336,73 +326,6 @@ export default function ProjectShell() {
     if (reviewOpen && pull && !chat && chats.data && !lock.locked)
       void startReviewThread(pull);
   }, [reviewOpen, pull?.number, chat?.id, !!chats.data]);
-  function openCode(next: "changes" | "files") {
-    panes.show(next === "files" || project?.plain ? "files" : "changes");
-  }
-  function togglePane(id: PaneId) {
-    const open = panes.layout.open[id];
-    if (open && id === "files" && lock.blocked()) return;
-    panes.setOpen(id, !open);
-    if (open && id !== "chat") view.setViewing(NO_VIEWING);
-  }
-  function openTurnDiff(target: TurnDiffTarget) {
-    view.showTurn(target);
-    panes.show("changes");
-  }
-  function openInEditor(target: ProjectFileLink & { search?: string }) {
-    if (lock.blocked()) return;
-    fileOpens.send(target);
-    panes.show("files");
-  }
-  function revealChange(target: ProjectFileLink) {
-    changeReveals.send(target);
-    view.closeTurn();
-    panes.show("changes");
-  }
-  // A file clicked in the chat shows its diff in Changes (Review in a PR
-  // thread), or opens in Files when it has none. A name that fits several
-  // files lists them in Files.
-  async function openChatFile(target: ProjectFileLink) {
-    if (pull) return revealChange(target);
-    const id = where;
-    try {
-      const changes = project!.plain
-        ? []
-        : (folder.tree ?? (await api.projectWorkingTree(id))).changes.map(
-            (c) => c.path,
-          );
-      const changed = matchLink(target, changes);
-      if (target.directory ? changed.length : changed.length === 1)
-        return revealChange(
-          target.directory ? target : { ...target, path: changed[0] },
-        );
-      if (target.directory) return openInEditor(target);
-      const found = matchLink(
-        target,
-        await qc.fetchQuery({
-          queryKey: ["project-files", id],
-          queryFn: () => api.projectFiles(id),
-          staleTime: 5000,
-        }),
-      );
-      // Ignored files (an agent's output folder) aren't in Git's list but are on disk.
-      const onDisk =
-        !found.length &&
-        (await api.projectFileInfo(id, target.path).then(
-          () => true,
-          () => false,
-        ));
-      openInEditor(
-        found.length === 1
-          ? { ...target, path: found[0] }
-          : onDisk
-            ? target
-            : { ...target, search: target.path },
-      );
-    } catch (e) {
-      setError(e);
-    }
-  }
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pickNewThread() {
     if (lock.blocked()) return;
@@ -822,7 +745,7 @@ export default function ProjectShell() {
                               slots: changesSlots,
                               onEditFile: (path, line) =>
                                 openInEditor({ path, line, directory: false }),
-                              reveals: changeReveals,
+                              reveals: opens.changeReveals,
                               onPresence: (next) => {
                                 view.setViewing(next);
                                 if (next.path)
@@ -833,9 +756,8 @@ export default function ProjectShell() {
                               },
                               onDiscuss: (target, selectedPull) => {
                                 void discuss(selectedPull)
-                                  .then(() => {
-                                    view.setContext({
-                                      id: crypto.randomUUID(),
+                                  .then(() =>
+                                    opens.ask({
                                       text: `About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
                                       selection: {
                                         ...target,
@@ -843,9 +765,8 @@ export default function ProjectShell() {
                                         base: selectedPull.merge_base,
                                         question: "Explain this code.",
                                       },
-                                    });
-                                    panes.show("chat");
-                                  })
+                                    }),
+                                  )
                                   .catch(setError);
                               },
                             }}
@@ -884,15 +805,8 @@ export default function ProjectShell() {
                         }
                         turn={view.turnDiff}
                         onCloseTurn={() => view.closeTurn()}
-                        reveals={changeReveals}
-                        onAsk={(code) => {
-                          view.setContext({
-                            id: crypto.randomUUID(),
-                            text: "",
-                            code,
-                          });
-                          panes.show("chat");
-                        }}
+                        reveals={opens.changeReveals}
+                        onAsk={(code) => opens.ask({ text: "", code })}
                       />
                     )}
                   </>
@@ -915,7 +829,7 @@ export default function ProjectShell() {
                       where={where}
                       checks={checks}
                       onViewing={view.setViewing}
-                      opens={fileOpens}
+                      opens={opens.fileOpens}
                     />
                   </>
                 )}
