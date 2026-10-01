@@ -27,6 +27,12 @@ export interface Sketch {
   height: number;
   strokes: Stroke[];
 }
+/** Undo / redo for one screenshot, kept while the draft lives. */
+export interface SketchHistory {
+  past: Stroke[][];
+  present: Stroke[];
+  future: Stroke[][];
+}
 
 export const sketchColors = [
   "#ff3b30",

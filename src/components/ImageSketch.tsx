@@ -25,17 +25,11 @@ import {
   type Point,
   type Shape,
   type Sketch,
+  type SketchHistory,
   type Stroke,
 } from "../lib/sketch";
 import "./image-sketch.css";
 import { mac } from "../lib/mod-key";
-
-/** Undo / redo for one screenshot, kept while the draft lives. */
-export interface SketchHistory {
-  past: Stroke[][];
-  present: Stroke[];
-  future: Stroke[][];
-}
 
 const PEN_KEY = "relay-sketch-pen";
 interface Pen {

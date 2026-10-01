@@ -11,13 +11,12 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
   type Ref,
 } from "react";
-import { ArrowUp, GitBranch, Paperclip, X } from "lucide-react";
+import { ArrowUp, GitBranch, Paperclip } from "lucide-react";
 import type { ResumeSettings } from "../../shared/projects";
 import {
   buildSend,
@@ -52,36 +51,15 @@ import { useQuickSwitchHud } from "../lib/useQuickSwitchHud";
 import { useSettingCommands } from "../lib/useSettingCommands";
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { EffortControl, offersEffort } from "./ComposerEffortControl";
-import { api } from "../lib/api";
-import {
-  isScreenshot,
-  loadDraftImages,
-  prepareScreenshot,
-  saveDraftImages,
-  type DraftImage,
-} from "../lib/draft-images";
-import {
-  attachedImages,
-  dataUrlBytes,
-  nextImageNumber,
-  numberImages,
-} from "../lib/image-refs";
-import { useImagePills } from "../lib/image-pills";
-import { readDraft, useDraft } from "../lib/drafts";
-import { takeLegacyPastes } from "../lib/thread-storage";
-import { flattenSketch, type Sketch } from "../lib/sketch";
-import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
-import { CopyImageMenu } from "./CopyImageMenu";
-import {
-  cleanPaste,
-  isLongPaste,
-  pasteMarkdown,
-  pastedTexts,
-  type PastedText,
-} from "../../shared/pasted-texts";
-import { PastedTextCard, PastedTextDialog } from "./PastedTextCard";
+import type { DraftImage } from "../lib/draft-images";
+import { numberImages } from "../lib/image-refs";
+import { flattenSketch } from "../lib/sketch";
+import { SketchEditor } from "./ImageSketch";
+import { PastedTextDialog } from "./PastedTextCard";
 import { SendLaterMenu } from "./SendLaterMenu";
 import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
+import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
+import { useComposerDraft } from "../lib/useComposerDraft";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -163,7 +141,6 @@ export function ProjectComposer({
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
-  const draft = useDraft(draftKey);
   const stopKeys = useShortcutLabel("stop");
   const stopTwice = useShortcutValue(() => pressedTwice("stop"));
   const stopArmed = useDoubleEscape(
@@ -212,66 +189,15 @@ export function ProjectComposer({
     [],
   );
   const filePick = useRef<HTMLInputElement>(null);
-  const [images, setImages] = useState<DraftImage[]>([]);
-  const [imageError, setImageError] = useState<string>();
-  const [preparing, setPreparing] = useState(false);
-  const preparation = useRef(false);
+  const draft = useComposerDraft({
+    key: draftKey,
+    shared,
+    editor: promptInput,
+    onDraft,
+  });
   const sending = useRef(false);
-  const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
-  const [sketching, setSketching] = useState<string>();
-  const sketchHistories = useRef(new Map<string, SketchHistory>());
-  const imagePills = useImagePills();
-  // A screenshot goes with the message while its pill is in the draft.
-  const attached = useMemo(
-    () => attachedImages(draft, images),
-    [draft, images],
-  );
-  const imageChips = useMemo(
-    () =>
-      images.flatMap(({ n, name, dataUrl }) =>
-        n === undefined
-          ? []
-          : [{ n, name, src: dataUrl, bytes: dataUrlBytes(dataUrl) }],
-      ),
-    [images],
-  );
-  // Paste pills live in the draft text; their cards mirror them in order.
-  const pastes = useMemo(() => pastedTexts(draft), [draft]);
   const [viewingPaste, setViewingPaste] = useState<number>();
-  // Earlier versions kept pastes beside the draft; move any left into it.
-  useEffect(() => {
-    const kept = takeLegacyPastes(draftKey);
-    if (kept === null) return;
-    try {
-      const value: unknown = JSON.parse(kept);
-      const blocks = (Array.isArray(value) ? value : [])
-        .filter(
-          (p): p is PastedText =>
-            Number.isInteger(p?.n) && typeof p.text === "string",
-        )
-        .map(pasteMarkdown)
-        .join("");
-      if (blocks) onDraft(draft.trimEnd() + blocks);
-    } catch {
-      // Nothing readable to keep.
-    }
-  }, [draftKey]);
-  useEffect(() => {
-    let live = true;
-    const loaded = loadDraftImages(draftKey);
-    imageQueue.current = loaded;
-    void loaded
-      .then((saved) => {
-        if (live) setImages(saved);
-      })
-      .catch(() => {
-        if (live) setImageError("Could not restore pasted screenshots.");
-      });
-    return () => {
-      live = false;
-    };
-  }, [draftKey]);
-  const recipient = draftRecipient(draft, provider);
+  const recipient = draftRecipient(draft.text, provider);
   const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
   const pickUltraplan = useCallback((on: boolean) => {
     setUltraplan(on);
@@ -282,11 +208,11 @@ export function ProjectComposer({
   const quick = useQuickSwitchHud(runs, recipient);
   /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
-    const prefix = agentMentionPattern.exec(draft.trimStart())?.[0];
+    const prefix = agentMentionPattern.exec(draft.text.trimStart())?.[0];
     if (prefix)
       promptInput.current?.insertText({
         start: 0,
-        end: draft.length - draft.trimStart().length + prefix.length,
+        end: draft.text.length - draft.text.trimStart().length + prefix.length,
         text: "",
       });
   }
@@ -298,7 +224,7 @@ export function ProjectComposer({
     onCommand,
   });
   const commands = useComposerCommands({
-    draft,
+    draft: draft.text,
     onDraft,
     projectId,
     provider: recipient,
@@ -309,137 +235,15 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
-  async function addImages(
-    files: File[],
-    point?: { left: number; top: number },
-  ) {
-    if (!files.length) return;
-    if (shared) {
-      setImageError(
-        "Screenshots in shared conversations are not supported yet.",
-      );
-      return;
-    }
-    if (preparation.current) return;
-    preparation.current = true;
-    setPreparing(true);
-    setImageError(undefined);
-    try {
-      const existing = await imageQueue.current;
-      const kept = attachedImages(draft, existing);
-      if (kept.length + files.length > 3)
-        throw new Error("Attach up to three screenshots per message.");
-      const first = nextImageNumber(draft, existing);
-      // Without pills a screenshot has no number, so it always goes along.
-      const prepared = (await Promise.all(files.map(prepareScreenshot))).map(
-        (image, i) => (imagePills ? { ...image, n: first + i } : image),
-      );
-      // Screenshots whose pills were deleted make room here, not on undo.
-      const next = [...kept, ...prepared];
-      await saveDraftImages(draftKey, next);
-      imageQueue.current = Promise.resolve(next);
-      setImages(next);
-      promptInput.current?.insertImages(
-        prepared.flatMap((image) => image.n ?? []),
-        point,
-      );
-    } catch (error) {
-      setImageError(
-        error instanceof Error ? error.message : "Could not attach screenshot.",
-      );
-    } finally {
-      preparation.current = false;
-      setPreparing(false);
-    }
-  }
-  /** Screenshots attach; any other file goes in as its path, which the agent reads itself. */
-  function addFiles(files: File[], point?: { left: number; top: number }) {
-    const others = files.filter((file) => !isScreenshot(file));
-    if (others.length) insertPaths(others, point);
-    void addImages(files.filter(isScreenshot), point);
-  }
-  function insertPaths(files: File[], point?: { left: number; top: number }) {
-    if (shared) {
-      setImageError("Files in shared conversations are not supported yet.");
-      return;
-    }
-    const paths = files.map((file) => api.pathForFile(file));
-    const missing = files.find((_, i) => !paths[i]);
-    if (missing) {
-      setImageError(
-        `Relay can't tell where "${missing.name}" is saved. Save it to disk and drop it again.`,
-      );
-      return;
-    }
-    setImageError(undefined);
-    promptInput.current?.insertFiles(paths, point);
-  }
-  function removeImage({ id, n }: DraftImage) {
-    if (n !== undefined) promptInput.current?.removeImage(n);
-    const next = images.filter((image) => image.id !== id);
-    setImages(next);
-    imageQueue.current = saveDraftImages(draftKey, next)
-      .then(() => next)
-      .catch(() => {
-        setImageError("Could not remove screenshot from the draft.");
-        return next;
-      });
-  }
-  function finishSketch(
-    id: string,
-    history: SketchHistory,
-    size: Pick<Sketch, "width" | "height">,
-  ) {
-    sketchHistories.current.set(id, history);
-    setSketching(undefined);
-    const next = images.map((image) =>
-      image.id === id
-        ? {
-            ...image,
-            sketch: history.present.length
-              ? { ...size, strokes: history.present }
-              : undefined,
-          }
-        : image,
-    );
-    setImages(next);
-    imageQueue.current = saveDraftImages(draftKey, next)
-      .then(() => next)
-      .catch(() => {
-        setImageError("Could not save the drawing to the draft.");
-        return next;
-      });
-  }
   const sendDisabled =
     busy ||
-    (!draft.trim() && !attached.length && !allowEmpty) ||
+    (!draft.text.trim() && !draft.attached.length && !allowEmpty) ||
     // A note to the thread has no agent to show a screenshot to.
-    (recipient === "message" && !draft.trim()) ||
-    preparing ||
+    (recipient === "message" && !draft.text.trim()) ||
+    draft.preparing ||
     !selected;
   /** `sendAt` holds the message until then (Send later). */
   agentSettings.current = runs.resumeSettings;
-  /**
-   * Empties the composer as the message goes out; a message that is turned
-   * down comes back, ahead of anything typed since.
-   */
-  function takeDraft(withImages: boolean) {
-    let taken: { text: string; images: DraftImage[] } | undefined;
-    return {
-      dispatch() {
-        taken = { text: draft, images: withImages ? images : [] };
-        onDraft("");
-        if (withImages) setImages([]);
-      },
-      restore() {
-        if (!taken) return;
-        const { text, images: back } = taken,
-          typed = readDraft(draftKey).trim();
-        onDraft(typed ? `${text.trimEnd()}\n\n${typed}` : text);
-        if (back.length) setImages((now) => [...back, ...now]);
-      },
-    };
-  }
   // Sending mid-dictation waits for the last words to land in the draft.
   const [sendAfterDictation, setSendAfterDictation] = useState<{
     steer: boolean;
@@ -459,11 +263,11 @@ export function ProjectComposer({
       return;
     }
     // `/btw` goes to the agent picked here, beside whatever the thread runs.
-    const btw = relayCommand(draft);
+    const btw = relayCommand(draft.text);
     if (btw?.name === "btw" && btw.args && recipient !== "message") {
       if (busy || sending.current) return;
       sending.current = true;
-      const outgoing = takeDraft(false);
+      const outgoing = draft.take(false);
       try {
         const sent = await onSend(
           buildSend(sendSettings(recipient)!, `@${recipient} ${btw.args}`, {
@@ -479,7 +283,7 @@ export function ProjectComposer({
     }
     if (busy || commands.interceptSend()) return;
     if (sendDisabled || sending.current) return;
-    const outgoingImages = numberImages(draft.trim(), images);
+    const outgoingImages = numberImages(draft.text.trim(), draft.images);
     const body = outgoingImages.text;
     sending.current = true;
     try {
@@ -487,7 +291,7 @@ export function ProjectComposer({
       try {
         flattened = await Promise.all(outgoingImages.images.map(flattenSketch));
       } catch {
-        setImageError("Could not apply the drawing to the screenshot.");
+        draft.setError("Could not apply the drawing to the screenshot.");
         return;
       }
       // A council is one question's worth: follow-ups go to the lead, in
@@ -496,7 +300,7 @@ export function ProjectComposer({
         setUltraplan(false);
         composer.save({ ultraplan: false });
       }
-      const outgoing = takeDraft(true);
+      const outgoing = draft.take(true);
       const sent = await onSend(
         buildSend(sendSettings(recipient)!, body, {
           ...(councilOn ? { council } : {}),
@@ -518,17 +322,7 @@ export function ProjectComposer({
           choice: choiceFor(recipient)!,
           ...contextFor(recipient),
         });
-      if (sent && images.length) {
-        try {
-          await saveDraftImages(draftKey, []);
-          imageQueue.current = Promise.resolve([]);
-          sketchHistories.current.clear();
-        } catch {
-          setImageError(
-            "Screenshot was sent, but its draft copy could not be cleared.",
-          );
-        }
-      }
+      if (sent) await draft.forgetSent();
     } finally {
       sending.current = false;
     }
@@ -617,50 +411,14 @@ export function ProjectComposer({
       >
         {councilOn && <UltraplanRing key={spark} />}
         {attachment}
-        {(attached.length > 0 || pastes.length > 0) && (
-          <div className="composer-images" aria-label="Attachments">
-            {attached.map((image) => (
-              <CopyImageMenu
-                className="composer-image"
-                key={image.id}
-                source={async () => (await flattenSketch(image)).dataUrl}
-              >
-                <button
-                  type="button"
-                  className="composer-image-open"
-                  aria-label={`Draw on ${image.name}`}
-                  title="Draw on screenshot"
-                  onClick={() => setSketching(image.id)}
-                >
-                  <img src={image.dataUrl} alt={image.name} />
-                  {image.sketch && (
-                    <SketchOverlay sketch={image.sketch} src={image.dataUrl} />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="composer-image-remove"
-                  disabled={preparing}
-                  aria-label={`Remove ${image.name}`}
-                  onClick={() => removeImage(image)}
-                >
-                  <X size={13} />
-                </button>
-              </CopyImageMenu>
-            ))}
-            {pastes.map((paste, index) => (
-              <PastedTextCard
-                key={index}
-                paste={paste}
-                onOpen={() => setViewingPaste(index)}
-                onRemove={() => promptInput.current?.removePaste(index)}
-              />
-            ))}
-          </div>
-        )}
-        {imageError && (
+        <ComposerAttachmentStrip
+          draft={draft}
+          onOpenPaste={setViewingPaste}
+          onRemovePaste={(index) => promptInput.current?.removePaste(index)}
+        />
+        {draft.error && (
           <p className="composer-image-error" role="alert">
-            {imageError}
+            {draft.error}
           </p>
         )}
         <ComposerPromptInput
@@ -676,13 +434,13 @@ export function ProjectComposer({
           }
           aria-autocomplete={commands.visible ? "list" : undefined}
           onBlur={commands.dismiss}
-          value={draft}
+          value={draft.text}
           onChange={onDraft}
           onCursor={commands.setCursor}
           onOpenPaste={setViewingPaste}
-          images={imageChips}
+          images={draft.chips}
           onOpenImage={(n) =>
-            setSketching(images.find((image) => image.n === n)?.id)
+            draft.sketch(draft.images.find((image) => image.n === n)?.id)
           }
           placeholder={
             recipient === "message"
@@ -712,37 +470,8 @@ export function ProjectComposer({
               send(action === "steer");
             }
           }}
-          onPasteCapture={(event) => {
-            const files = event.clipboardData.files.length
-              ? Array.from(event.clipboardData.files)
-              : Array.from(event.clipboardData.items)
-                  .map((item) => item.getAsFile())
-                  .filter((file): file is File => !!file);
-            if (files.some((file) => file.type.startsWith("image/"))) {
-              event.preventDefault();
-              event.stopPropagation();
-              void addImages(files);
-              return;
-            }
-            // A long paste becomes a pill at the caret instead of flooding the draft.
-            const text = cleanPaste(event.clipboardData.getData("text/plain"));
-            if (!isLongPaste(text) || pastedTexts(text).length) return;
-            event.preventDefault();
-            event.stopPropagation();
-            if (promptInput.current?.insertPaste(text))
-              setImageError(undefined);
-            else
-              setImageError(
-                "That paste is too long. A message holds up to 32,000 characters.",
-              );
-          }}
-          onDrop={(event) => {
-            const files = Array.from(event.dataTransfer.files);
-            if (!files.length) return;
-            event.preventDefault();
-            event.stopPropagation();
-            addFiles(files, { left: event.clientX, top: event.clientY });
-          }}
+          onPasteCapture={draft.paste}
+          onDrop={draft.drop}
           onDragOver={(event) => {
             if (event.dataTransfer.types.includes("Files"))
               event.preventDefault();
@@ -764,7 +493,7 @@ export function ProjectComposer({
             multiple
             hidden
             onChange={(event) => {
-              addFiles(Array.from(event.target.files ?? []));
+              draft.addFiles(Array.from(event.target.files ?? []));
               event.target.value = "";
             }}
           />
@@ -862,7 +591,7 @@ export function ProjectComposer({
               )}
             </button>
           )}
-          {(!running || !!draft.trim() || !!attached.length) && (
+          {(!running || !!draft.text.trim() || !!draft.attached.length) && (
             <SendLaterMenu
               disabled={sendDisabled}
               onPick={(at) => void send(false, at)}
@@ -883,25 +612,21 @@ export function ProjectComposer({
           )}
         </div>
       </form>
-      {images
-        .filter((image) => image.id === sketching)
+      {draft.images
+        .filter((image) => image.id === draft.sketching)
         .map((image) => (
           <SketchEditor
             key={image.id}
             image={image}
-            history={
-              sketchHistories.current.get(image.id) ?? {
-                past: [],
-                present: image.sketch?.strokes ?? [],
-                future: [],
-              }
+            history={draft.historyOf(image)}
+            onClose={(history, size) =>
+              draft.finishSketch(image.id, history, size)
             }
-            onClose={(history, size) => finishSketch(image.id, history, size)}
           />
         ))}
-      {viewingPaste !== undefined && pastes[viewingPaste] && (
+      {viewingPaste !== undefined && draft.pastes[viewingPaste] && (
         <PastedTextDialog
-          paste={pastes[viewingPaste]}
+          paste={draft.pastes[viewingPaste]}
           onClose={() => setViewingPaste(undefined)}
           onInline={() => promptInput.current?.inlinePaste(viewingPaste)}
         />
