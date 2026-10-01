@@ -160,7 +160,7 @@ export class ChatSharing {
     const metadata = (await this.list(projectId)).find((c) => c.id === roomId);
     if (!metadata)
       throw new Error("Shared conversation not found in this project.");
-    if (this.core.store.get().chats?.some((c) => c.id === roomId)) {
+    if (this.core.storage.has(roomId)) {
       const existing = await this.core.storage.load(roomId);
       if (existing.projectId !== projectId)
         throw new Error(

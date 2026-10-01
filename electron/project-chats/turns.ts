@@ -473,10 +473,8 @@ export class ChatTurns {
         (
           (await runtime.reattach?.(
             (key) =>
-              this.core.sessions.owns(
-                key,
-                (chatId) =>
-                  !!this.core.store.get().chats?.some((c) => c.id === chatId),
+              this.core.sessions.owns(key, (chatId) =>
+                this.core.storage.has(chatId),
               ),
             (key) => () => this.unpromptedFor(key),
           )) ?? []
