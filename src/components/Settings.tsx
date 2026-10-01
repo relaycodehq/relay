@@ -1,31 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
   Check,
-  Info,
-  Keyboard,
-  Mic,
-  ListTodo,
   LogIn,
   LogOut,
   Monitor,
   Moon,
-  Palette,
-  Puzzle,
   RotateCcw,
   Search,
-  Sparkles,
   Sun,
-  UserRound,
-  Users,
-  Smartphone,
-  MonitorUp,
-  X,
 } from "lucide-react";
-import { PaneResizer } from "./PaneResizer";
-import { SIDEBAR_WIDTH, type SettingsCategory } from "../lib/settings-page";
+import type { SettingsCategory } from "../lib/settings-page";
 import {
-  highlight,
   matches,
   searchWords,
   sections,
@@ -117,6 +102,9 @@ import { QuickSwitchSettings } from "./QuickSwitchSettings";
 import { PluginCard } from "./plugins/PluginSettings";
 import { pluginIds, plugins } from "../../shared/plugins";
 import { usePluginEnabled } from "../lib/plugins";
+import { categories, categoryOf } from "./settings/categories";
+import { Setting } from "./settings/Setting";
+import { SettingsNav } from "./settings/SettingsNav";
 import "./settings.css";
 import {
   agentName,
@@ -126,97 +114,6 @@ import {
 } from "../../shared/agents";
 
 export type { SettingsCategory };
-type CategoryId = SettingsCategory;
-
-const categories: {
-  id: CategoryId;
-  label: string;
-  description: string;
-  icon: typeof Palette;
-}[] = [
-  {
-    id: "appearance",
-    label: "Appearance",
-    description: "Theme, typography, colour mode, accent and app icon.",
-    icon: Palette,
-  },
-  {
-    id: "account",
-    label: "Account",
-    description: "Your Gitea connection and credential storage.",
-    icon: UserRound,
-  },
-  {
-    id: "models",
-    label: "AI models",
-    description:
-      "The agent new threads start on, and the models for grouping, line questions and commits.",
-    icon: Sparkles,
-  },
-  {
-    id: "integrations",
-    label: "Integrations",
-    description:
-      "Git, and the hosts your pull requests, CI and work items come from.",
-    icon: ListTodo,
-  },
-  {
-    id: "plugins",
-    label: "Plugins",
-    description:
-      "Extras that ship with Relay and stay out of sight until you turn them on.",
-    icon: Puzzle,
-  },
-  {
-    id: "rooms",
-    label: "Shared rooms",
-    description: "Host rooms for shared conversations.",
-    icon: Users,
-  },
-  {
-    id: "phone",
-    label: "Phone",
-    description: "Follow and answer your threads from the Relay phone app.",
-    icon: Smartphone,
-  },
-  {
-    id: "computers",
-    label: "Computers",
-    description:
-      "Hand a thread to another computer running Relay, like a Mac mini at home, and bring it back later.",
-    icon: MonitorUp,
-  },
-  {
-    id: "dictation",
-    label: "Dictation",
-    description: "Speak your messages; words appear as you talk.",
-    icon: Mic,
-  },
-  {
-    id: "shortcuts",
-    label: "Keyboard shortcuts",
-    description: "Everything you can do from the keyboard.",
-    icon: Keyboard,
-  },
-  {
-    id: "about",
-    label: "About",
-    description: "Version, changelog and credits.",
-    icon: Info,
-  },
-];
-
-function Highlight({ text, query }: { text: string; query: string }) {
-  const parts = highlight(text, query);
-  if (!parts) return <>{text}</>;
-  return (
-    <>
-      {parts[0]}
-      <mark>{parts[1]}</mark>
-      {parts[2]}
-    </>
-  );
-}
 
 /** A miniature window per look; two looks share it half and half. */
 function ThemePreview({ looks }: { looks: ResolvedAppearance[] }) {
@@ -493,7 +390,7 @@ export function Settings({
   const searchInput = useRef<HTMLInputElement>(null);
   const headingId = useId();
   useEffect(() => searchInput.current?.focus(), []);
-  const [category, setCategory] = useState<CategoryId>(initialCategory);
+  const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const [query, setQuery] = useState("");
   // Escape clears the search, then leaves.
   useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
@@ -1138,101 +1035,28 @@ export function Settings({
   ];
 
   const words = searchWords(query);
-  const labelOf = (id: CategoryId) =>
-    categories.find((c) => c.id === id)!.label;
   const results = words.length
-    ? entries.filter((e) => matches(e, words, labelOf(e.category)))
+    ? entries.filter((e) => matches(e, words, categoryOf(e.category).label))
     : [];
-  const current = categories.find((c) => c.id === category)!;
+  const current = categoryOf(category);
   const where = words.length ? "Search results" : current.label;
   useEffect(() => onWhere?.(where), [where]);
 
-  const row = (entry: SettingEntry) => {
-    if (entry.card)
-      return (
-        <section
-          key={entry.id}
-          className="setting card"
-          aria-label={entry.title}
-        >
-          {entry.card(<Highlight text={entry.title} query={query} />)}
-        </section>
-      );
-    const text = (
-      <div className="setting-text">
-        <h4>
-          <Highlight text={entry.title} query={query} />
-        </h4>
-        {entry.description && <p>{entry.description}</p>}
-      </div>
-    );
-    return (
-      <section
-        key={entry.id}
-        className={`setting ${entry.block ? "block" : ""}`}
-        aria-label={entry.title}
-      >
-        {entry.accessory ? (
-          <div className="setting-head">
-            {text}
-            {entry.accessory()}
-          </div>
-        ) : (
-          text
-        )}
-        <div className="setting-control">{entry.render?.()}</div>
-      </section>
-    );
-  };
-
   return (
     <section className="settings-screen" aria-labelledby={headingId}>
-      <aside className="projects-sidebar settings-nav">
-        <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
-        <button type="button" className="settings-back" onClick={onClose}>
-          <ArrowLeft size={15} />
-          <span>Back to app</span>
-        </button>
-        <h2 id={headingId}>Settings</h2>
-        <div className="settings-search">
-          <Search size={14} />
-          <input
-            ref={searchInput}
-            aria-label="Search settings"
-            placeholder="Search settings"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button aria-label="Clear search" onClick={() => setQuery("")}>
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <nav aria-label="Settings categories">
-          {categories.map(({ id, label, icon: Icon }) => {
-            const count = words.length
-              ? results.filter((e) => e.category === id).length
-              : null;
-            return (
-              <button
-                key={id}
-                className={!words.length && category === id ? "active" : ""}
-                aria-current={!words.length && category === id}
-                disabled={count === 0}
-                onClick={() => {
-                  setQuery("");
-                  setCategory(id);
-                }}
-              >
-                <Icon size={15} />
-                <span>{label}</span>
-                {count != null && count > 0 && <small>{count}</small>}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
+      <SettingsNav
+        headingId={headingId}
+        inputRef={searchInput}
+        query={query}
+        setQuery={setQuery}
+        category={category}
+        results={words.length ? results : null}
+        onPick={(id) => {
+          setQuery("");
+          setCategory(id);
+        }}
+        onClose={onClose}
+      />
       <main className="settings-pane">
         <header>
           <h3>{where}</h3>
@@ -1250,7 +1074,11 @@ export function Settings({
                 .map((c) => (
                   <div key={c.id} className="settings-group">
                     <h5>{c.label}</h5>
-                    {results.filter((e) => e.category === c.id).map(row)}
+                    {results
+                      .filter((e) => e.category === c.id)
+                      .map((e) => (
+                        <Setting key={e.id} entry={e} query={query} />
+                      ))}
                   </div>
                 ))
             ) : (
@@ -1264,7 +1092,9 @@ export function Settings({
               ({ section, list }, i) => (
                 <div key={section ?? i} className="settings-group">
                   {section && <h5>{section}</h5>}
-                  {list.map(row)}
+                  {list.map((e) => (
+                    <Setting key={e.id} entry={e} query={query} />
+                  ))}
                 </div>
               ),
             )
