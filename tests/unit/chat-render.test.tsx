@@ -196,7 +196,7 @@ it("renders an active T3-style turn, then folds its trace after completion", () 
     />,
   );
   expect(done).toContain("Ran 1 command");
-  expect(done).toContain("5.0s");
+  expect(done).toContain("5s");
   expect(done).not.toContain('<details class="agent-activity" open=""');
 });
 

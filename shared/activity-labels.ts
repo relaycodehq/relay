@@ -2,12 +2,10 @@
 import type { AgentActivity } from "./projects";
 
 export function duration(ms: number) {
-  const seconds = Math.max(0, ms / 1000);
-  return seconds < 10
-    ? `${seconds.toFixed(1)}s`
-    : seconds < 60
-      ? `${Math.floor(seconds)}s`
-      : `${Math.floor(seconds / 60)}m ${Math.floor(seconds % 60)}s`;
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 export const plural = (count: number, one: string, many = `${one}s`) =>
