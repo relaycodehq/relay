@@ -102,6 +102,11 @@ export interface WorktreeStatus {
   pr?: ChatWorktree["pr"];
   removed: boolean;
 }
+/** Every uncommitted edit in the project folder, with the other threads whose turns changed each. */
+export interface WorktreeMove {
+  blocked?: string;
+  files: (TurnFileChange & { threads?: string[] })[];
+}
 export interface ChatSummary {
   id: string;
   projectId: string;
@@ -365,6 +370,8 @@ export interface ProjectChat extends ChatSummary {
   checkoutNotes?: string[];
   /** Local: the scope each agent session last heard, by `provider:branch`. */
   scopeHeard?: Record<string, string>;
+  /** Local: moved from the project folder into its worktree; `owed` are the sessions not yet told. */
+  movedIn?: { from: string; to: string; owed: string[] };
   deepReview?: DeepReviewState;
   /** Ultraplan councils, by the user message each one works on. */
   ultraplans?: Record<string, UltraplanState>;
@@ -730,6 +737,9 @@ export interface ProjectApi {
   /** One file as the worktree has it, against where its branch forks. */
   projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
   removeProjectWorktree(chatId: string): Promise<void>;
+  /** What moving a checkout thread into its own worktree would take, or why it can't. */
+  projectWorktreeMove(chatId: string): Promise<WorktreeMove>;
+  moveProjectChatToWorktree(chatId: string): Promise<ChatSummary>;
   revealProjectWorktree(chatId: string): Promise<void>;
   /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
   revealAgentWorktree(chatId: string, path: string): Promise<void>;

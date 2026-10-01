@@ -119,6 +119,7 @@ import {
   WorktreeLanded,
   WorktreeMenu,
 } from "./WorktreeControls";
+import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
 import type { TurnDiffTarget } from "./TurnChanges";
 import { CompactionRow } from "./CompactionRow";
 import {
@@ -810,6 +811,7 @@ export function ProjectChat({
       : project.path;
   const [worktreeBusy, setWorktreeBusy] = useState(false);
   const [removingWorktree, setRemovingWorktree] = useState(false);
+  const [movingToWorktree, setMovingToWorktree] = useState(false);
   useEffect(() => {
     // A finished turn leaves new changes to count.
     if (!running && chat?.worktree) void worktree.refetch();
@@ -1499,6 +1501,7 @@ export function ProjectChat({
         onReveal={(path) =>
           void api.revealAgentWorktree(chat.id, path).catch(setError)
         }
+        onMove={chat.shared ? undefined : () => setMovingToWorktree(true)}
       />
     );
   // A first message scheduled with Send later still shows, to send or take back.
@@ -2291,6 +2294,12 @@ export function ProjectChat({
           />
         )}
       </div>
+      {movingToWorktree && chat && (
+        <MoveToWorktreeDialog
+          chatId={chat.id}
+          onClose={() => setMovingToWorktree(false)}
+        />
+      )}
       {removingWorktree && (
         <RemoveWorktreeDialog
           files={worktree.data?.files.length ?? 0}

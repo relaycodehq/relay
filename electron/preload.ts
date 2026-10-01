@@ -93,6 +93,8 @@ const methods = [
   "projectWorktree",
   "projectWorktreeDiff",
   "removeProjectWorktree",
+  "projectWorktreeMove",
+  "moveProjectChatToWorktree",
   "revealProjectWorktree",
   "revealAgentWorktree",
   "projectChat",

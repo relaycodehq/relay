@@ -203,6 +203,10 @@ export function chatHandlers(ctx: ApiContext) {
       ),
     removeProjectWorktree: (args) =>
       projectChats.removeWorktree(idSchema.parse(args[0])),
+    projectWorktreeMove: (args) =>
+      projectChats.worktreeMovePreview(idSchema.parse(args[0])),
+    moveProjectChatToWorktree: (args) =>
+      projectChats.moveToWorktree(idSchema.parse(args[0])),
     revealProjectWorktree: (args) =>
       openPath(projectChats.worktreePath(idSchema.parse(args[0]))),
     revealAgentWorktree: (args) =>

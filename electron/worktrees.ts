@@ -2,8 +2,10 @@ import { lstat, mkdir, rm, stat, symlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { git as gitIn } from "./git";
 import {
+  apply,
   commitTree,
   parseNumstat,
+  plan,
   revisionDiff,
   snapshotTree,
 } from "./turn-changes";
@@ -24,6 +26,8 @@ export type MadeWorktree = Required<
 
 /** What a worktree held when it was removed, in case it's wanted back. */
 const keptRef = (chatId: string) => `refs/relay/worktrees/${chatId}/kept`;
+/** The checkout's edits as they moved into a thread's worktree. */
+const movedRef = (chatId: string) => `refs/relay/worktrees/${chatId}/moved`;
 
 const slug = (text: string) =>
   text
@@ -100,6 +104,87 @@ export async function createWorktree(
     base: head,
     ...(from ? { from } : {}),
   };
+}
+
+/** The checkout's uncommitted edits, untracked files included, against its commit. */
+export async function uncommitted(root: string) {
+  const head = (
+    await git(root, ["rev-parse", "-q", "--verify", "HEAD^{commit}"]).catch(
+      () => {
+        throw new Error("Make a first commit before working in a worktree.");
+      },
+    )
+  ).trim();
+  const tree = await snapshotTree(root);
+  const diff = await git(root, [
+    "diff",
+    "--numstat",
+    "-z",
+    "--no-renames",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    head,
+    tree,
+  ]);
+  return { head, tree, files: parseNumstat(diff) };
+}
+
+/**
+ * Moves every uncommitted edit in the checkout into a new worktree, as
+ * uncommitted edits there, and puts the checkout's files back to its commit.
+ * What moved is kept under a ref first. Anything edited while moving stays in
+ * the checkout where it merges; when it doesn't, nothing in the checkout changes.
+ */
+export async function moveIntoWorktree(
+  root: string,
+  dir: string,
+  name: string,
+  chatId: string,
+): Promise<MadeWorktree> {
+  const { head, tree, files } = await uncommitted(root);
+  const made = await createWorktree(root, dir, name);
+  const paths = files.map((f) => f.path);
+  let steps: Awaited<ReturnType<typeof plan>>["steps"] = [];
+  try {
+    if (made.head !== head)
+      throw new Error(
+        "The project folder got a new commit while moving. Try again.",
+      );
+    if (paths.length) {
+      // The fresh worktree's files become the snapshot's, unstaged like they were.
+      await git(made.path, ["read-tree", "-u", "--reset", tree], 120000);
+      await git(made.path, ["reset", "-q"]);
+      await git(root, [
+        "update-ref",
+        movedRef(chatId),
+        await commitTree(
+          root,
+          tree,
+          head,
+          "Relay: the project folder's edits as they moved into a worktree",
+        ),
+      ]);
+      const planned = await plan(root, paths, tree, head, false);
+      if (planned.conflicts.length)
+        throw new Error(
+          `${planned.conflicts.slice(0, 3).join(", ")}${planned.conflicts.length > 3 ? ` and ${planned.conflicts.length - 3} more` : ""} changed while moving. Try again.`,
+        );
+      steps = planned.steps;
+    }
+  } catch (e) {
+    await git(root, ["worktree", "remove", "--force", made.path])
+      .catch(() => rm(made.path, { recursive: true, force: true }))
+      .then(() => git(root, ["branch", "-D", made.branch]))
+      .catch(() => {});
+    throw e;
+  }
+  // From here the worktree holds the edits, so it stays even if this fails.
+  await apply(root, head, steps);
+  // A staged edit would otherwise linger in the checkout's index.
+  for (let i = 0; i < paths.length; i += 500)
+    await git(root, ["reset", "-q", "--", ...paths.slice(i, i + 500)]);
+  return made;
 }
 
 /**

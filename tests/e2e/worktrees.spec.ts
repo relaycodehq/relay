@@ -266,3 +266,139 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a project-folder thread moves into its own worktree mid-conversation and its agent carries on there", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-move-")));
+  const repo = join(root, "project"),
+    bin = join(root, "bin"),
+    data = join(root, "data"),
+    capture = join(root, "agent.jsonl");
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+  const fixture = await fixtureServer();
+  await mkdir(repo);
+  await mkdir(bin);
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "config", "user.name", "Test");
+  git(repo, "config", "user.email", "test@example.invalid");
+  git(
+    repo,
+    "remote",
+    "add",
+    "origin",
+    fixture.serverUrl + "/Web/web-store.git",
+  );
+  await writeFile(join(repo, "README.md"), "# Cache\n");
+  await writeFile(join(repo, ".gitignore"), ".env\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-qm", "Base");
+  // Uncommitted work no thread made moves along too; ignored files stay.
+  await writeFile(join(repo, "notes.txt"), "mine\n");
+  await writeFile(join(repo, ".env"), "SECRET=1\n");
+  await fakeCli(
+    join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+    ),
+  ) as Record<string, string>;
+  const app = await electron.launch({
+    args: ["tests/fixtures/launch.cjs"],
+    env: {
+      ...env,
+      ...pathWith(env, bin),
+      RELAY_AGENT_CAPTURE: capture,
+      RELAY_TEST_DATA: data,
+      RELAY_TEST_HEADED: "0",
+      RELAY_TEST_NATIVE_STORAGE: "0",
+    },
+  });
+  const records = async () =>
+    (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+  const send = async (text: string) => {
+    await page.getByLabel("Message project").fill(text);
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+  };
+  const page = await app.firstWindow();
+  try {
+    await app.evaluate(({ dialog }, repo) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [repo],
+      });
+    }, repo);
+    await page.evaluate(async (url) => {
+      await window.relay.connect(url, "test-token");
+      await window.relay.addProject();
+    }, fixture.serverUrl);
+    await page.reload();
+
+    await send("fixture edit files");
+    await expect(page.getByText("needed no change")).toBeVisible();
+    expect(await readFile(join(repo, "src/guard.ts"), "utf8")).toBe(
+      "export const guard = true;\n",
+    );
+
+    await page.getByRole("button", { name: /Project folder/ }).click();
+    await page
+      .getByRole("menuitem", { name: "Move into its own worktree…" })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Move into its own worktree?",
+    });
+    for (const name of ["README.md", "guard.ts", "notes.txt"])
+      await expect(dialog.getByTitle(new RegExp(name))).toBeVisible();
+    await expect(dialog.getByTitle(".env", { exact: true })).toHaveCount(0);
+    await screenshot(page, { path: "test-results/worktree-move-dialog.png" });
+    await dialog.getByRole("button", { name: "Move to worktree" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: /^Worktree/ })).toBeVisible();
+
+    const folder = join(data, "worktrees", "project");
+    const [leaf] = await readdir(folder);
+    const worktree = join(folder, leaf);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+    expect(await readFile(join(repo, ".env"), "utf8")).toBe("SECRET=1\n");
+    expect(await readFile(join(worktree, "src/guard.ts"), "utf8")).toBe(
+      "export const guard = true;\n",
+    );
+    expect(await readFile(join(worktree, "notes.txt"), "utf8")).toBe("mine\n");
+    expect(await readFile(join(worktree, "README.md"), "utf8")).toContain(
+      "Edited by the agent.",
+    );
+
+    // The same session resumes in the worktree, told once that it moved.
+    await send("where are we now");
+    await expect(page.getByText("The cache guard prevents")).toBeVisible();
+    let seen = await records();
+    const resumed = seen.filter((r) => r.method === "thread/resume").at(-1);
+    expect(resumed.thread).toMatchObject({
+      threadId: "fixture-thread",
+      cwd: worktree,
+    });
+    const told = (r: { turn?: { input: { text?: string }[] } }) =>
+      r.turn?.input.some((i) =>
+        i.text?.includes("moved out of the project folder"),
+      );
+    expect(seen.filter(told)).toHaveLength(1);
+    expect(seen.filter(told)[0].turn.input.at(-1).text).toContain(worktree);
+
+    await send("and again");
+    await expect(page.getByText("The cache guard prevents")).toHaveCount(2);
+    seen = await records();
+    expect(seen.filter((r) => r.turn).length).toBe(3);
+    expect(seen.filter(told)).toHaveLength(1);
+    await screenshot(page, { path: "test-results/worktree-moved.png" });
+  } finally {
+    await app.close();
+    await fixture.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

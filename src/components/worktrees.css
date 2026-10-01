@@ -84,3 +84,47 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Moving a project-folder thread into its own worktree. */
+.worktree-move-shared {
+  color: var(--muted);
+}
+.worktree-move-files {
+  display: flex;
+  max-height: 260px;
+  flex-direction: column;
+  gap: 2px;
+  margin: 12px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 12px;
+}
+.worktree-move-files li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.worktree-move-files .file-entry-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.worktree-move-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.worktree-move-name small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.worktree-move-name .worktree-move-also {
+  color: var(--accent);
+}

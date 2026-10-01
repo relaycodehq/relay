@@ -79,19 +79,47 @@ const folderName = (path: string) => path.split(/[\\/]/).pop() || path;
 export function CheckoutControl({
   worktrees = [],
   onReveal,
+  onMove,
 }: {
   worktrees?: AgentWorktree[];
   onReveal: (path: string) => void;
+  /** Moves the thread into a worktree of its own; unset where it can't. */
+  onMove?: () => void;
 }) {
+  const move = onMove && (
+    <Menu.Item className="composer-select-item worktree-item" onClick={onMove}>
+      <FolderGit2 size={14} />
+      Move into its own worktree…
+    </Menu.Item>
+  );
   if (!worktrees.length)
     return (
-      <span
-        className="composer-branch-trigger workspace-trigger static"
-        title="Edits go straight into the project folder, alongside any other thread working there"
-      >
-        <Folder size={13} />
-        <span>Project folder</span>
-      </span>
+      <Menu.Root>
+        <Menu.Trigger
+          className={`composer-branch-trigger workspace-trigger${move ? "" : " static"}`}
+          disabled={!move}
+          title="Edits go straight into the project folder, alongside any other thread working there"
+        >
+          <Folder size={13} />
+          <span>Project folder</span>
+          {move && <ChevronDown size={12} />}
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner
+            className="composer-popup-positioner"
+            side="top"
+            align="end"
+            sideOffset={6}
+          >
+            <Menu.Popup
+              className="composer-select-popup worktree-menu"
+              aria-label="Workspace"
+            >
+              {move}
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
     );
   const [latest] = worktrees.slice(-1);
   return (
@@ -144,6 +172,8 @@ export function CheckoutControl({
                 </span>
               </Menu.Item>
             ))}
+            {move && <Menu.Separator className="composer-menu-separator" />}
+            {move}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

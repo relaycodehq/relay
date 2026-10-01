@@ -78,7 +78,9 @@ import {
 import { cleanTitle, generateThreadTitle, promptTitle } from "./thread-titles";
 import {
   createWorktree,
+  moveIntoWorktree,
   removeWorktree,
+  uncommitted,
   worktreeChanges,
   worktreeDiff,
   worktreeExists,
@@ -1160,6 +1162,7 @@ export class ProjectChats {
     replySessions,
     checkoutNotes,
     scopeHeard,
+    movedIn,
     deepReview,
     ultraplans,
     handover,
@@ -1925,12 +1928,22 @@ export class ProjectChats {
           ? `\n\nFile rollbacks since your earlier turns; re-read these files before relying on what you saw:\n${chat.checkoutNotes.map((n) => `- ${n}`).join("\n")}`
           : "";
       if (rollbacks) delete chat.checkoutNotes;
+      // A session from before the move still remembers the project folder's paths.
+      const movedIn = chat.movedIn;
+      const moved =
+        !command && movedIn?.owed.includes(heardKey)
+          ? `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
+          : "";
+      if (moved) {
+        movedIn!.owed = movedIn!.owed.filter((k) => k !== heardKey);
+        if (!movedIn!.owed.length) delete chat.movedIn;
+      }
       // A command goes out alone, so a session it starts hears the scope next turn.
       (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
       const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
       const prompt = command
         ? mention.question
-        : `${mention.question ? `My request: ${mention.question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`.trimStart();
+        : `${mention.question ? `My request: ${mention.question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`.trimStart();
       this.reply(chat, active, answer, root, prompt, input, {
         skills,
         // What a command couldn't carry, the session hears next turn.
@@ -2927,6 +2940,94 @@ export class ProjectChats {
       );
       worktree.removedAt = Date.now();
       await this.persist(chat);
+    });
+  }
+  /** Why a checkout thread can't move into a worktree now, if it can't. */
+  private async moveBlocked(chat: ProjectChat) {
+    if (chat.worktree) return "This thread already has its own worktree.";
+    if (chat.scope.kind !== "project" || chat.reviewer || chat.thinker)
+      return "Only repository threads can work in a worktree.";
+    if (chat.shared) return "Shared conversations stay in the project folder.";
+    if ((await this.projects.inspect(chat.projectId)).plain)
+      return "Worktrees need a Git repository.";
+    if (this.active.has(chat.id) || this.councilBusy(chat))
+      return "Wait for the answer to finish first.";
+    if (this.pending(chat.id).length || chat.heldWakeups?.length)
+      return "Claude left background work or a wake-up in this thread. Stop it first.";
+    const busy = (this.store.get().chats ?? []).find(
+      (c) =>
+        c.id !== chat.id &&
+        c.projectId === chat.projectId &&
+        !c.worktree &&
+        this.active.has(c.id),
+    );
+    if (busy)
+      return `“${busy.title}” is working in the project folder. Wait for it to finish first.`;
+  }
+  /**
+   * What moving the thread into its own worktree would take: every
+   * uncommitted edit in the project folder, each with the other threads
+   * whose turns changed it.
+   */
+  async worktreeMovePreview(id: string) {
+    const chat = await this.load(id);
+    const blocked = await this.moveBlocked(chat);
+    if (blocked) return { blocked, files: [] };
+    const { files } = await uncommitted(
+      await this.projects.root(chat.projectId),
+    );
+    const touched = new Map<string, string[]>();
+    const others = (this.store.get().chats ?? []).filter(
+      (c) =>
+        c.id !== id &&
+        c.projectId === chat.projectId &&
+        !c.worktree &&
+        !c.archivedAt &&
+        !c.empty,
+    );
+    for (const other of others) {
+      const paths = new Set(
+        (await this.load(other.id)).messages.flatMap(
+          (m) => m.changes?.map((f) => f.path) ?? [],
+        ),
+      );
+      for (const path of paths)
+        touched.set(path, [...(touched.get(path) ?? []), other.title]);
+    }
+    return {
+      files: files.map((f) => {
+        const threads = touched.get(f.path);
+        return threads ? { ...f, threads } : f;
+      }),
+    };
+  }
+  /**
+   * Moves a checkout thread into a worktree of its own, taking every
+   * uncommitted edit in the project folder with it. Its agents carry on in
+   * their sessions there, told once where they are now.
+   */
+  moveToWorktree(id: string) {
+    return this.control(id, async () => {
+      const chat = await this.load(id);
+      const blocked = await this.moveBlocked(chat);
+      if (blocked) throw new Error(blocked);
+      this.projects.assertCheckoutAvailable(chat.projectId);
+      const root = await this.projects.root(chat.projectId);
+      chat.worktree = await moveIntoWorktree(
+        root,
+        join(dirname(this.dir), "worktrees"),
+        chat.title,
+        id,
+      );
+      chat.movedIn = {
+        from: root,
+        to: chat.worktree.path!,
+        owed: Object.keys(chat.scopeHeard ?? {}),
+      };
+      // Live sessions started in the project folder; resumed, they start in the worktree.
+      this.closeSessions(id);
+      await this.persist(chat);
+      return this.summary(chat);
     });
   }
   /** Where the thread's terminal opens: its worktree, or the project's checkout. */

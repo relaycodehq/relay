@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createWorktree,
+  moveIntoWorktree,
   removeWorktree,
   worktreeChanges,
   type MadeWorktree,
@@ -141,4 +142,52 @@ it("links the project's ignored node_modules into a new worktree", async () => {
     true,
   );
   expect(await paths(worktree)).toEqual([]);
+});
+
+it("moves every uncommitted edit into a new worktree, leaving the checkout at its commit", async () => {
+  await writeFile(join(root, ".gitignore"), ".env\n");
+  await writeFile(join(root, "gone.ts"), "bye\n");
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Ignore env");
+  await writeFile(join(root, "a.ts"), "one\ntwo\nthree\nfour\nfive\nwip\n");
+  await writeFile(join(root, "b.ts"), "staged\n");
+  git(root, "add", "b.ts");
+  await mkdir(join(root, "src/deep"), { recursive: true });
+  await writeFile(join(root, "src/deep/new.ts"), "untracked\n");
+  await writeFile(join(root, ".env"), "SECRET=1\n");
+  await rm(join(root, "gone.ts"));
+  const head = git(root, "rev-parse", "HEAD");
+
+  const worktree = await moveIntoWorktree(root, dir, "Split the store", "c1");
+
+  expect(git(root, "status", "--porcelain")).toBe("");
+  expect(existsSync(join(root, "src"))).toBe(false);
+  // Ignored files never move.
+  expect(await read(join(root, ".env"))).toBe("SECRET=1\n");
+  expect(existsSync(join(worktree.path, ".env"))).toBe(false);
+
+  expect(worktree).toMatchObject({ head, start: head, from: "main" });
+  expect(await read(join(worktree.path, "a.ts"))).toContain("wip");
+  // Unstaged there, as they were here except the one staged edit.
+  expect(git(worktree.path, "diff", "--cached", "--name-only")).toBe("");
+  expect(git(worktree.path, "status", "--porcelain").split("\n")).toEqual([
+    "M a.ts",
+    " M b.ts",
+    " D gone.ts",
+    "?? src/",
+  ]);
+  expect(await paths(worktree)).toEqual([
+    "a.ts",
+    "b.ts",
+    "gone.ts",
+    "src/deep/new.ts",
+  ]);
+  const kept = git(root, "rev-parse", "refs/relay/worktrees/c1/moved");
+  expect(git(root, "show", `${kept}:src/deep/new.ts`)).toBe("untracked");
+});
+
+it("moves a clean checkout's thread into a fresh worktree", async () => {
+  const worktree = await moveIntoWorktree(root, dir, "Split the store", "c1");
+  expect(await paths(worktree)).toEqual([]);
+  expect(git(root, "status", "--porcelain")).toBe("");
 });

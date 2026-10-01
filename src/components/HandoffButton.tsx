@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu } from "@base-ui/react/menu";
-import { MonitorUp, Settings2 } from "lucide-react";
+import { FolderGit2, MonitorUp, Settings2 } from "lucide-react";
 import type { ChatSummary } from "../../shared/projects";
 import type { HandoffTarget, PairedComputer } from "../../shared/handoff";
 import { api } from "../lib/api";
 import { DeviceIcon } from "./DeviceIcon";
+import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
 import "./handoff.css";
+
+const worktreeFirst =
+  "Only a thread in its own worktree can move to another computer.";
 
 /** Why this thread can't move to another computer, if it can't. */
 export function handoffBlocked(chat: ChatSummary) {
@@ -15,8 +19,7 @@ export function handoffBlocked(chat: ChatSummary) {
     return "A deep review stays on this computer.";
   if (chat.cameFrom)
     return `This thread came from ${chat.cameFrom.computer}; bring it back there.`;
-  if (!chat.worktree)
-    return "Only a thread in its own worktree can move to another computer.";
+  if (!chat.worktree) return worktreeFirst;
   if (chat.empty) return "Send a first message, then hand it off.";
 }
 
@@ -36,6 +39,7 @@ export function HandoffButton({
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(false);
   const computers = useQuery({
     queryKey: ["paired-computers"],
     queryFn: () => api.pairedComputers(),
@@ -116,6 +120,17 @@ export function HandoffButton({
                 {blocked ??
                   "The agent stops and writes a handoff note, everything in the worktree is committed, and the thread carries on there. Ignored files such as .env stay here."}
               </p>
+              {blocked === worktreeFirst && chat.scope.kind === "project" && (
+                <Menu.Item
+                  className="composer-select-item handoff-target"
+                  onClick={() => setMoving(true)}
+                >
+                  <FolderGit2 size={14} />
+                  <span className="handoff-target-text">
+                    <span>Move into its own worktree…</span>
+                  </span>
+                </Menu.Item>
+              )}
               <Menu.Separator className="handoff-menu-separator" />
               <Menu.Item
                 className="composer-select-item handoff-target"
@@ -130,6 +145,12 @@ export function HandoffButton({
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
+      {moving && (
+        <MoveToWorktreeDialog
+          chatId={chat.id}
+          onClose={() => setMoving(false)}
+        />
+      )}
     </div>
   );
 }
