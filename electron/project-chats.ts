@@ -14,6 +14,7 @@ import {
 import { interrupt } from "./project-chats/revive";
 import { ChatSchedule } from "./project-chats/schedule";
 import { ThreadTitles } from "./project-chats/titles";
+import { ChatSharing } from "./project-chats/sharing";
 import { imageFileData } from "./project-chats/images";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
@@ -179,6 +180,7 @@ export class ProjectChats {
   private active: ActiveTurns;
   private schedule: ChatSchedule;
   private titles: ThreadTitles;
+  private sharing: ChatSharing;
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -274,7 +276,7 @@ export class ProjectChats {
       message: ChatMessage;
       title?: string;
     }) => void,
-    private sharing?: ProjectSharing,
+    sharing?: ProjectSharing,
     private evidence?: (
       chat: ProjectChat,
       selection: LineQuestion,
@@ -299,6 +301,11 @@ export class ProjectChats {
       busy: (id) => this.active.has(id),
       choice: (chat, provider) => this.sessionInput(chat, provider).choice,
       closing: () => this.disposing,
+    });
+    this.sharing = new ChatSharing(store, this.storage, sharing, {
+      emit: (event) => this.emit(event),
+      busy: (id) => this.active.has(id),
+      sync: (id) => this.sync(id),
     });
   }
   /**
@@ -1104,7 +1111,7 @@ export class ProjectChats {
     chat.queue = chat.queue!.filter((q) => q !== next);
     await this.storage.save(chat);
     this.emit({ chatId: chat.id, message });
-    if (chat.shared) await this.deliver(chat).catch(() => {});
+    if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
   }
   async queueAction(
     id: string,
@@ -1267,7 +1274,7 @@ export class ProjectChats {
       this.storage.keep(chat);
       await this.storage.persist(chat);
       this.emit({ chatId: id, message: user });
-      if (chat.shared) await this.deliver(chat).catch(() => {});
+      if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (!asked) {
         this.active.release(id, active);
         return;
@@ -2103,7 +2110,7 @@ export class ProjectChats {
       chat.updated = ended.ended;
       answer.end();
       await this.storage.save(chat);
-      if (chat.shared) await this.deliver(chat).catch(() => {});
+      if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&
         rules.titles &&
@@ -2458,165 +2465,41 @@ export class ProjectChats {
   regenerateTitle(id: string) {
     return this.titles.regenerate(id);
   }
-  private syncing = new Map<string, Promise<void>>();
-  private async deliver(chat: ProjectChat) {
-    const pending = chat.messages.filter(
-      (m) => m.pending && m.status !== "streaming",
-    );
-    if (!pending.length) return;
-    const result = await this.sharing!.send(chat, pending);
-    for (const remote of result) {
-      const local = chat.messages.find((m) => m.id === remote.id);
-      if (local) {
-        Object.assign(local, {
-          author: remote.author,
-          authorId: remote.authorId,
-          seq: remote.seq,
-          pending: false,
-        });
-        local.version++;
-        this.emit({ chatId: chat.id, message: structuredClone(local) });
-      }
-    }
-    await this.storage.save(chat);
+  shareInfo(id: string) {
+    return this.sharing.info(id);
   }
-  async shareInfo(id: string) {
-    const chat = await this.storage.load(id);
-    if (!this.sharing) throw new Error("Sharing is unavailable.");
-    return {
-      ...(await this.sharing.info(chat.projectId)),
-      messages: chat.messages.length,
-    };
-  }
-  async share(id: string) {
-    if (this.active.has(id))
-      throw new Error(
-        "Stop or finish the current answer before sharing this conversation.",
-      );
-    const chat = await this.storage.load(id);
-    if (chat.messages.some((message) => message.images?.length))
-      throw new Error(
-        "This conversation contains private screenshots and cannot be shared yet.",
-      );
-    if (chat.scope.kind === "review")
-      throw new Error("Deep reviews can't be shared yet.");
-    if (chat.shared) return chatSummary(chat);
-    if (!this.sharing) throw new Error("Sharing is unavailable.");
-    await this.sharing.allow(chat.projectId);
-    chat.shared = await this.sharing.share(chat);
-    await this.storage.persist(chat);
-    await this.sync(id);
-    return chatSummary(chat);
+  share(id: string) {
+    return this.sharing.share(id);
   }
   async sync(id: string) {
-    await this.pull(id);
+    await this.sharing.pull(id);
     return this.get(id);
   }
   /** Sync, answering like changes. */
   async syncChanges(id: string, known: KnownMessages) {
-    await this.pull(id);
+    await this.sharing.pull(id);
     return this.changes(id, known);
   }
-  private async pull(id: string) {
-    const existing = this.syncing.get(id);
-    if (existing) return existing;
-    const job = (async () => {
-      const chat = await this.storage.load(id);
-      if (!chat.shared) return;
-      if (!this.sharing) throw new Error("Sharing is unavailable.");
-      await this.deliver(chat);
-      let changed = false;
-      for (let page = 0; page < 10; page++) {
-        const result = await this.sharing.poll(chat, chat.sharedCursor ?? 0);
-        changed ||=
-          result.messages.length > 0 || chat.sharedCursor !== result.next;
-        chat.updated = Math.max(chat.updated, result.conversation.updated);
-        for (const message of result.messages) {
-          const local = chat.messages.find((m) => m.id === message.id);
-          if (local) {
-            Object.assign(local, {
-              author: message.author,
-              authorId: message.authorId,
-              seq: message.seq,
-              pending: false,
-            });
-            local.version++;
-          } else chat.messages.push(message);
-        }
-        chat.sharedCursor = result.next;
-        if (!result.more) break;
-      }
-      if (changed) {
-        // Shared messages go by their place on the server and ones still to
-        // deliver go last. A message never shared, like a handoff note or a
-        // compaction, stays right after the one it followed.
-        let after = 0;
-        const place = new Map(
-          chat.messages.map((m) => [
-            m,
-            m.seq ? (after = m.seq) : m.pending ? Infinity : after + 0.5,
-          ]),
-        );
-        chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
-        await this.storage.persist(chat);
-      }
-    })();
-    this.syncing.set(id, job);
-    try {
-      await job;
-    } finally {
-      this.syncing.delete(id);
-    }
-  }
-  async presence(
+  presence(
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,
   ) {
-    const chat = await this.storage.load(id);
-    if (!chat.shared || !this.sharing) return [];
-    return this.sharing.presence(chat, value);
+    return this.sharing.presence(id, value);
   }
-  async workspace(id: string) {
-    const chat = await this.storage.load(id);
-    if (!chat.shared || !this.sharing)
-      throw new Error("Share the conversation before enabling live sync.");
-    return this.sharing.workspace(chat);
+  workspace(id: string) {
+    return this.sharing.workspace(id);
   }
-  async invite(id: string) {
-    const chat = await this.storage.load(id);
-    if (!chat.shared || !this.sharing)
-      throw new Error("Share this conversation before inviting someone.");
-    return this.sharing.invite(chat);
+  invite(id: string) {
+    return this.sharing.invite(id);
   }
-  async sharedList(projectId: string) {
-    if (!this.sharing) throw new Error("Sharing is unavailable.");
+  sharedList(projectId: string) {
     return this.sharing.list(projectId);
   }
-  async openShared(projectId: string, roomId: string) {
-    const metadata = (await this.sharedList(projectId)).find(
-      (c) => c.id === roomId,
-    );
-    if (!metadata)
-      throw new Error("Shared conversation not found in this project.");
-    if (this.store.get().chats?.some((c) => c.id === roomId)) {
-      const existing = await this.storage.load(roomId);
-      if (existing.projectId !== projectId)
-        throw new Error(
-          "This conversation is linked to another local project.",
-        );
-      return chatSummary(existing);
-    }
-    const chat: ProjectChat = { ...metadata, messages: [] };
-    this.storage.keep(chat);
-    await this.storage.save(chat);
-    await this.storage.addSummary(chat);
-    await this.sync(chat.id);
-    return chatSummary(chat);
+  openShared(projectId: string, roomId: string) {
+    return this.sharing.open(projectId, roomId);
   }
-  async join(projectId: string, url: string) {
-    if (!this.sharing) throw new Error("Sharing is unavailable.");
-    const roomId = await this.sharing.join(projectId, url);
-    return roomId ? this.openShared(projectId, roomId) : null;
+  join(projectId: string, url: string) {
+    return this.sharing.join(projectId, url);
   }
   respond(id: string, requestId: string, response: AgentResponse) {
     const active = this.active.get(id);
@@ -2680,7 +2563,7 @@ export class ProjectChats {
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
     await Promise.allSettled([...this.reviewSteps]);
     await Promise.allSettled([
-      ...this.syncing.values(),
+      ...this.sharing.pulling(),
       ...this.storage.busy().loads,
     ]);
     await Promise.all(this.storage.busy().writes);
