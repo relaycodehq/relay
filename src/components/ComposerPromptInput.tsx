@@ -1,72 +1,27 @@
-import { EditorContent, useEditor, type UseEditorOptions } from "@tiptap/react";
-import { createPortal } from "react-dom";
+import { EditorContent } from "@tiptap/react";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import { Slice } from "@tiptap/pm/model";
-import { closeHistory } from "@tiptap/pm/history";
-import {
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  type Ref,
-  type RefObject,
-  type HTMLAttributes,
-} from "react";
-import { pastesAfter } from "../../shared/pasted-texts";
-import { promptContent } from "../lib/prompt-content";
-import { pasteIndex, quotesIn } from "../lib/prompt-pills";
-import { promptText, serialize } from "../lib/prompt-text";
-import { ImagePeek, PEEK_DELAY } from "./ImagePeek";
-import type { DictationTarget } from "../lib/dictation/session";
-import { draftChips } from "../lib/thread-storage";
-import {
-  beginDictation,
-  endDictation,
-  updateDictation,
-} from "./composer-prompt/dictation";
-import {
-  inlinePaste,
-  insertPaste,
-  insertQuote,
-  insertSkill,
-  insertTags,
-  removeImage,
-  removePaste,
-  replaceText,
-  type SkillPick,
-} from "./composer-prompt/edits";
-import { promptExtensions } from "./composer-prompt/extensions";
+import type { HTMLAttributes, Ref, RefObject } from "react";
+import { useDraftPills } from "../lib/useDraftPills";
 import type { ImageChip } from "./composer-prompt/image-pill";
-export type { ImageChip, SkillPick };
-export interface PromptInputHandle {
-  insertSkill: (skill: SkillPick) => void;
-  /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
-  insertText: (range: { start: number; end: number; text: string }) => void;
-  /** Puts files in as tags where the pointer is, or at the caret without one. */
-  insertFiles: (paths: string[], point?: { left: number; top: number }) => void;
-  /** Puts screenshot pills in, like files. */
-  insertImages: (ns: number[], point?: { left: number; top: number }) => void;
-  /** Drops every pill for screenshot n. */
-  removeImage: (n: number) => void;
-  /** Puts a quoted passage at the caret as a pill. */
-  insertQuote: (text: string) => void;
-  /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
-  insertPaste: (text: string) => boolean;
-  /** Drops the nth paste pill. */
-  removePaste: (index: number) => void;
-  /** Swaps the nth paste pill for its text. */
-  inlinePaste: (index: number) => void;
-  /** Where dictated words go: live at the caret, greyed while they may still change. */
-  dictation: DictationTarget;
-}
-/** The full passage shown while a quote pill is hovered. */
-interface QuoteTip {
-  text: string;
-  left: number;
-  top: number;
-  bottom: number;
-}
+import { QuoteTooltip, useQuoteTip } from "./composer-prompt/QuoteTip";
+import { useImagePeek } from "./composer-prompt/useImagePeek";
+import {
+  usePromptEditor,
+  type PromptEvents,
+} from "./composer-prompt/usePromptEditor";
+import {
+  usePromptHandle,
+  type PromptInputHandle,
+} from "./composer-prompt/usePromptHandle";
+import {
+  useComboboxRole,
+  usePromptSync,
+} from "./composer-prompt/usePromptSync";
+import { ImagePeek } from "./ImagePeek";
+export type { SkillPick } from "./composer-prompt/edits";
+export type { ImageChip, PromptInputHandle };
+
+/** The composer's message: the draft's text with its pills, in a TipTap editor. */
 export function ComposerPromptInput({
   value,
   onChange,
@@ -86,318 +41,30 @@ export function ComposerPromptInput({
   ...events
 }: {
   value: string;
-  onChange: (v: string) => void;
-  onCursor: (pos: number) => void;
-  /** Opens the nth paste pill's text. */
-  onOpenPaste?: (index: number) => void;
-  /** Opens screenshot n, from its pill. */
-  onOpenImage?: (n: number) => void;
   images?: ImageChip[];
   placeholder: string;
   inputRef: RefObject<HTMLElement | null>;
   handleRef: Ref<PromptInputHandle>;
   draftKey: string;
-} & Omit<HTMLAttributes<HTMLDivElement>, "onChange">) {
-  const callbacks = useRef({ onChange, onCursor, onOpenPaste, onOpenImage });
-  callbacks.current = { onChange, onCursor, onOpenPaste, onOpenImage };
-  const [tip, setTip] = useState<QuoteTip | null>(null);
-  const [peek, setPeek] = useState<{ anchor: Element; src: string } | null>(
-    null,
+} & PromptEvents &
+  Omit<HTMLAttributes<HTMLDivElement>, "onChange">) {
+  const pills = useDraftPills(draftKey);
+  const editor = usePromptEditor(
+    value,
+    placeholder,
+    pills,
+    { onChange, onCursor, onOpenPaste, onOpenImage },
+    inputRef,
   );
-  const chips = useMemo(() => draftChips(draftKey), [draftKey]);
-  const labels = useRef<Record<string, string>>(null!);
-  const quotes = useRef<string[]>(null!);
-  const files = useRef<string[]>(null!);
-  labels.current ??= chips.skills.load();
-  quotes.current ??= chips.quotes.load();
-  files.current ??= chips.files.load();
-  // Built once: the editor only reads these when it is made, and options that
-  // differ on a render make useEditor reset the view's props on every keystroke.
-  const [options] = useState<UseEditorOptions>(() => ({
-    extensions: promptExtensions(),
-    content: promptContent(
-      value,
-      labels.current,
-      quotes.current,
-      files.current,
-    ),
-    // The composer remounts per thread, so opening one lands in its input.
-    autofocus: "end",
-    editorProps: {
-      attributes: {
-        role: "textbox",
-        "aria-label": "Message project",
-        "aria-multiline": "true",
-        class: "composer-prompt-input",
-        "data-placeholder": placeholder,
-      },
-      handlePaste(view, event) {
-        if (event.clipboardData?.files.length) return false;
-        const plain = event.clipboardData?.getData("text/plain");
-        if (plain === undefined) return false;
-        // A pill copied within the draft, or from another, gets a new number.
-        const fragment = view.state.schema.nodeFromJSON(
-          promptContent(
-            pastesAfter(promptText(view.state.doc), plain),
-            labels.current,
-            quotes.current,
-            files.current,
-          ),
-        ).firstChild!.content;
-        view.dispatch(
-          view.state.tr
-            .replaceSelection(new Slice(fragment, 0, 0))
-            .scrollIntoView(),
-        );
-        return true;
-      },
-      clipboardTextSerializer: (slice) => serialize(slice.content),
-      // The × inside a quote or paste pill removes it; the pill itself stays an atom.
-      handleClickOn(view, _pos, node, nodePos, event) {
-        if (node.type.name === "relayImage") {
-          callbacks.current.onOpenImage?.(node.attrs.n);
-          return true;
-        }
-        if (
-          node.type.name === "relayPaste" &&
-          !(
-            event.target instanceof Element &&
-            event.target.closest(".composer-quote-remove")
-          )
-        ) {
-          callbacks.current.onOpenPaste?.(pasteIndex(view.state.doc, nodePos));
-          return true;
-        }
-        if (
-          !["relayQuote", "relayPaste"].includes(node.type.name) ||
-          !(event.target instanceof Element) ||
-          !event.target.closest(".composer-quote-remove")
-        )
-          return false;
-        view.dispatch(
-          closeHistory(
-            view.state.tr.delete(nodePos, nodePos + node.nodeSize),
-          ).scrollIntoView(),
-        );
-        return true;
-      },
-    },
-    onUpdate({ editor }) {
-      setTip(null);
-      callbacks.current.onCursor(
-        promptText(editor.state.doc, editor.state.selection.from).length,
-      );
-      callbacks.current.onChange(promptText(editor.state.doc));
-    },
-    onSelectionUpdate({ editor }) {
-      callbacks.current.onCursor(
-        promptText(editor.state.doc, editor.state.selection.from).length,
-      );
-    },
-  }));
-  const editor = useEditor(options);
-  useEffect(() => {
-    if (!editor) return;
-    inputRef.current = editor.view.dom;
-    return () => {
-      inputRef.current = null;
-    };
-  }, [editor, inputRef]);
-  // Hovering a pill shows the whole passage above it after a short pause.
-  useEffect(() => {
-    if (!editor) return;
-    const dom = editor.view.dom;
-    let timer: number | undefined;
-    const chipOf = (target: EventTarget | null) =>
-      target instanceof Element ? target.closest(".composer-quote-chip") : null;
-    const hide = () => {
-      window.clearTimeout(timer);
-      setTip(null);
-    };
-    const over = (event: MouseEvent) => {
-      const chip = chipOf(event.target);
-      if (!chip) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const rect = chip.getBoundingClientRect();
-        setTip({
-          text: chip.getAttribute("data-quote") ?? "",
-          left: rect.left,
-          top: rect.top,
-          bottom: rect.bottom,
-        });
-      }, 150);
-    };
-    const out = (event: MouseEvent) => {
-      const chip = chipOf(event.target);
-      if (
-        chip &&
-        !(
-          event.relatedTarget instanceof Element &&
-          chip.contains(event.relatedTarget)
-        )
-      )
-        hide();
-    };
-    dom.addEventListener("mouseover", over);
-    dom.addEventListener("mouseout", out);
-    window.addEventListener("scroll", hide, true);
-    return () => {
-      hide();
-      dom.removeEventListener("mouseover", over);
-      dom.removeEventListener("mouseout", out);
-      window.removeEventListener("scroll", hide, true);
-    };
-  }, [editor]);
-  // Hovering a screenshot pill grows its picture above it, as in the thread.
-  useEffect(() => {
-    if (!editor) return;
-    const dom = editor.view.dom;
-    let timer: number | undefined;
-    let hovered: Element | null = null;
-    const hide = () => {
-      window.clearTimeout(timer);
-      hovered = null;
-      setPeek(null);
-    };
-    const over = (event: MouseEvent) => {
-      const chip =
-        event.target instanceof Element
-          ? event.target.closest(".composer-image-chip")
-          : null;
-      if (chip === hovered) return;
-      hide();
-      const thumb = chip?.querySelector<HTMLImageElement>("img");
-      if (!chip || !thumb) return;
-      hovered = chip;
-      timer = window.setTimeout(
-        () => setPeek({ anchor: chip, src: thumb.src }),
-        PEEK_DELAY,
-      );
-    };
-    dom.addEventListener("mouseover", over);
-    dom.addEventListener("mouseleave", hide);
-    // Clicking opens the drawing editor, and typing may take the pill away.
-    dom.addEventListener("mousedown", hide);
-    dom.addEventListener("keydown", hide);
-    window.addEventListener("scroll", hide, true);
-    return () => {
-      hide();
-      dom.removeEventListener("mouseover", over);
-      dom.removeEventListener("mouseleave", hide);
-      dom.removeEventListener("mousedown", hide);
-      dom.removeEventListener("keydown", hide);
-      window.removeEventListener("scroll", hide, true);
-    };
-  }, [editor]);
-  useEffect(() => {
-    if (editor && promptText(editor.state.doc) !== value)
-      editor.commands.setContent(
-        promptContent(value, labels.current, quotes.current, files.current),
-        { emitUpdate: false },
-      );
-  }, [value, editor]);
-  useEffect(() => {
-    if (!editor) return;
-    const storage = editor.storage.relayImage;
-    storage.images = new Map(images?.map((image) => [image.n, image]));
-    for (const draw of storage.views) draw();
-  }, [images, editor]);
-  useEffect(() => {
-    editor?.view.dom.setAttribute("data-placeholder", placeholder);
-  }, [placeholder, editor]);
-  useEffect(() => {
-    if (!editor) return;
-    const dom = editor.view.dom;
-    dom.setAttribute("role", expanded ? "combobox" : "textbox");
-    for (const [key, value] of Object.entries({
-      "aria-expanded": expanded,
-      "aria-controls": controls,
-      "aria-activedescendant": activeId,
-      "aria-autocomplete": autocomplete,
-    })) {
-      if (value === undefined) dom.removeAttribute(key);
-      else dom.setAttribute(key, String(value));
-    }
-  }, [editor, expanded, controls, activeId, autocomplete]);
-  useImperativeHandle(
-    handleRef,
-    () => ({
-      insertSkill(pick) {
-        if (!editor) return;
-        labels.current[pick.token] = pick.label;
-        chips.skills.save(labels.current);
-        insertSkill(editor, pick);
-      },
-      insertText(range) {
-        if (editor) replaceText(editor, range);
-      },
-      insertFiles(paths, point) {
-        if (!editor || !paths.length) return;
-        files.current = [...new Set([...files.current, ...paths])];
-        chips.files.save(files.current);
-        insertTags(
-          editor,
-          paths.map((path) => ({ type: "relayFile", attrs: { path } })),
-          point,
-        );
-      },
-      insertImages(ns, point) {
-        if (!editor || !ns.length) return;
-        insertTags(
-          editor,
-          ns.map((n) => ({ type: "relayImage", attrs: { n } })),
-          point,
-        );
-      },
-      removeImage(n) {
-        if (editor) removeImage(editor, n);
-      },
-      insertQuote(quote) {
-        if (!editor || !quote) return;
-        quotes.current = [...new Set([...quotesIn(editor.state.doc), quote])];
-        chips.quotes.save(quotes.current);
-        insertQuote(editor, quote);
-      },
-      insertPaste: (pasted) => !!editor && insertPaste(editor, pasted),
-      removePaste(index) {
-        if (editor) removePaste(editor, index);
-      },
-      inlinePaste(index) {
-        if (editor) inlinePaste(editor, index);
-      },
-      dictation: {
-        begin: () => editor?.isDestroyed === false && beginDictation(editor),
-        update: (settled, tentative) =>
-          editor?.isDestroyed === false &&
-          updateDictation(editor, settled, tentative),
-        end: (text) =>
-          editor?.isDestroyed === false && endDictation(editor, text),
-      },
-    }),
-    [editor, draftKey],
-  );
-  const tipAbove = !!tip && tip.top > 160;
+  const tip = useQuoteTip(editor);
+  const [peek, setPeek] = useImagePeek(editor);
+  usePromptSync(editor, value, pills, images, placeholder);
+  useComboboxRole(editor, expanded, controls, activeId, autocomplete);
+  usePromptHandle(handleRef, editor, draftKey, pills);
   return (
     <div {...events}>
       <EditorContent editor={editor} />
-      {tip &&
-        createPortal(
-          <div
-            role="tooltip"
-            className="composer-quote-tooltip"
-            style={{
-              left: Math.max(12, Math.min(tip.left, innerWidth - 12 - 440)),
-              top: tipAbove ? tip.top : tip.bottom,
-              transform: tipAbove
-                ? "translateY(calc(-100% - 6px))"
-                : "translateY(6px)",
-            }}
-          >
-            "{tip.text}"
-          </div>,
-          document.body,
-        )}
+      {tip && <QuoteTooltip tip={tip} />}
       <PreviewCard.Root
         open={!!peek}
         onOpenChange={(open) => !open && setPeek(null)}

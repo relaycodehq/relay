@@ -35,11 +35,15 @@ type Point = { left: number; top: number };
 
 /** What the draft asks of the editor showing it. */
 export interface DraftEditor {
+  /** Puts files in as tags where the pointer is, or at the caret without one. */
   insertFiles: (paths: string[], point?: Point) => void;
+  /** Puts screenshot pills in, like files. */
   insertImages: (ns: number[], point?: Point) => void;
+  /** Drops every pill for screenshot n. */
   removeImage: (n: number) => void;
-  /** False when the message cannot hold it. */
+  /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
   insertPaste: (text: string) => boolean;
+  /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
   insertText: (range: { start: number; end: number; text: string }) => void;
 }
 

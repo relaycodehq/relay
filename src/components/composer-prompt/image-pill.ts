@@ -1,4 +1,4 @@
-import { Node } from "@tiptap/core";
+import { Node, type Editor } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { formatSize } from "../../lib/file-tree";
@@ -120,3 +120,10 @@ export const ImageTag = Node.create<object, ImageStorage>({
     };
   },
 });
+
+/** Gives the screenshot pills the draft's screenshots, redrawing the ones showing. */
+export function showImages(editor: Editor, images: ImageChip[] | undefined) {
+  const storage = editor.storage.relayImage;
+  storage.images = new Map(images?.map((image) => [image.n, image]));
+  for (const draw of storage.views) draw();
+}
