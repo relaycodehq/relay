@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import type { ComposedSend } from "../../shared/compose-send";
 import type {
   AgentProvider,
@@ -12,6 +11,7 @@ import { startThreadSettings } from "./composer-settings";
 import { withAttachments } from "./draft-attachments";
 import { saveDraftWorkspace } from "./drafts";
 import type { ComposerAttachments } from "./useComposerAttachments";
+import type { NewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
 
 /**
@@ -21,31 +21,28 @@ import type { ThreadHandle } from "./useThreadHandle";
  */
 export function useThreadSend({
   handle: { chat, id, busy, run, setError, refetch, listChanged },
-  create,
+  newThread,
   root,
   attachments,
   viewing,
   confirmSwitch,
-  onCreated,
   onSent,
   onOpen,
 }: {
   handle: ThreadHandle;
-  /** Makes the thread the first message goes to. */
-  create: () => Promise<ChatSummary>;
+  /** The thread the first message makes. */
+  newThread: NewThread;
   /** The side conversation's first message, while one is open. */
   root?: ChatMessage;
   attachments: ComposerAttachments;
   /** The file open beside the thread, which the agent hears about. */
   viewing: string | null;
   confirmSwitch: (to: AgentProvider | undefined) => Promise<boolean>;
-  onCreated: (c: ChatSummary) => Promise<void>;
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
   /** Opens a conversation of the thread: a side one by its first message, or the main one. */
   onOpen: (rootId: string | null) => void;
 }) {
-  const created = useRef<ChatSummary | undefined>(undefined);
   async function send(
     value: ComposedSend,
     dispatch?: () => void,
@@ -54,9 +51,7 @@ export function useThreadSend({
     if (value.side) return askAside(value, dispatch);
     if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
     dispatch?.();
-    return run(async () => {
-      const target = chat ?? created.current ?? (await create());
-      created.current = target;
+    async function post(target: ChatSummary) {
       await api.sendProjectChat(target.id, {
         // A side conversation leaves the thread's attachments waiting.
         ...withAttachments(value, root ? { codeRefs: [] } : attachments),
@@ -66,11 +61,17 @@ export function useThreadSend({
       });
       if (!root) attachments.clear();
       onSent();
-      if (!chat) {
-        saveDraftWorkspace(id, "checkout");
-        startThreadSettings(id, target.id, recipient(value));
-        await onCreated(target);
-      } else await refetch();
+    }
+    return run(async () => {
+      if (chat) {
+        await post(chat);
+        await refetch();
+      } else
+        await newThread(async (thread) => {
+          await post(thread);
+          saveDraftWorkspace(id, "checkout");
+          startThreadSettings(id, thread.id, recipient(value));
+        });
       await listChanged();
     });
   }

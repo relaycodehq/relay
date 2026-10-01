@@ -31,6 +31,7 @@ import { useChatThread } from "../lib/useChatThread";
 import { useComposerAttachments } from "../lib/useComposerAttachments";
 import { useCouncils } from "../lib/useCouncils";
 import { useMessageActions } from "../lib/useMessageActions";
+import { useNewThread } from "../lib/useNewThread";
 import { useQueuedMessages } from "../lib/useQueuedMessages";
 import { useSessionCommands } from "../lib/useSessionCommands";
 import { useThreadScroll } from "../lib/useThreadScroll";
@@ -184,19 +185,22 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
-  const { send, resume } = useThreadSend({
-    handle,
-    create: () =>
+  const newThread = useNewThread(
+    () =>
       api.createProjectChat(
         project.id,
         scope,
         scope.kind === "project" ? workspace : undefined,
       ),
+    onCreated,
+  );
+  const { send, resume } = useThreadSend({
+    handle,
+    newThread,
     root,
     attachments,
     viewing: viewing.path,
     confirmSwitch: agentSwitch.confirm,
-    onCreated,
     onSent: () => followAnswer(),
     onOpen: setRootId,
   });

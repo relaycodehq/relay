@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import {
   fixRequest,
   type DeepReviewStart,
@@ -12,6 +12,7 @@ import { councilWorking } from "../../shared/ultraplan";
 import { findingCode } from "../components/DeepReview";
 import { api } from "./api";
 import { saveSentSettings } from "./composer-settings";
+import { useNewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
 
 export type Councils = ReturnType<typeof useCouncils>;
@@ -45,25 +46,25 @@ export function useCouncils({
     [chat?.id, review?.report],
   );
   // A start that failed leaves its thread for the next try. Kept apart from
-  // `created`, so a message sent from this draft instead gets a thread of its own.
-  const reviewThread = useRef<ChatSummary | undefined>(undefined);
+  // the composer's, so a message sent from this draft instead gets a thread of its own.
+  const reviewThread = useNewThread(
+    () => api.createProjectChat(projectId, { kind: "review" }),
+    onCreated,
+  );
   async function startReview(config: DeepReviewStart) {
     if (busy) return false;
     return run(async () => {
-      const target =
-        reviewThread.current ??
-        (await api.createProjectChat(projectId, { kind: "review" }));
-      reviewThread.current = target;
-      // Messages in the thread go to the lead, with the lead's settings.
-      const { lead } = config;
-      saveSentSettings(target.id, lead.provider, {
-        ...lead,
-        runtimeMode: config.runtimeMode,
-        interactionMode: "default",
+      await reviewThread(async (thread) => {
+        // Messages in the thread go to the lead, with the lead's settings.
+        const { lead } = config;
+        saveSentSettings(thread.id, lead.provider, {
+          ...lead,
+          runtimeMode: config.runtimeMode,
+          interactionMode: "default",
+        });
+        await api.startDeepReview(thread.id, config);
+        onSent();
       });
-      await api.startDeepReview(target.id, config);
-      onSent();
-      await onCreated(target);
       await listChanged();
     });
   }
