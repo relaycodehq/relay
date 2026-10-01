@@ -365,7 +365,7 @@ it("says who answers in `to` only to desktops that take it", async () => {
   });
   await p.client.desktop("sendProjectChat", chatId, send);
   expect(dispatched.at(-1)?.args[1]).toEqual(send);
-  // A desktop from before bridge 12 names no version in its handshake, and
+  // A desktop from before `to` names no version in its handshake, and
   // refuses fields it doesn't know; the body's mention tells it the same.
   Reflect.set(p.client, "bridge", undefined);
   await p.client.desktop("sendProjectChat", chatId, send);

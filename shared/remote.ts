@@ -131,9 +131,12 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 12;
-/** From this bridge on, a desktop takes a send's `to`; older ones refuse fields they don't know. */
-export const recipientBridge = 12;
+export const remoteBridgeVersion = 11;
+/**
+ * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
+ * older ones report none and refuse fields they don't know.
+ */
+export const recipientBridge = 11;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -474,7 +477,7 @@ export type ClientFrame =
   | { t: "auth"; deviceId: string; token: string }
   | { t: "call"; id: number; method: RemoteMethod; args: unknown[] };
 export type ServerFrame =
-  /** `bridge` is the desktop's `remoteBridgeVersion`; missing before version 12. */
+  /** `bridge` is the desktop's `remoteBridgeVersion`; desktops before `to` send none. */
   | {
       t: "paired";
       deviceId: string;

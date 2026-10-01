@@ -61,7 +61,7 @@ export class RemoteClient {
   private watchdog?: ReturnType<typeof setTimeout>;
   private preferred = 0;
   private attempt = 0;
-  /** The connected desktop's bridge version; unknown before 12. */
+  /** The connected desktop's bridge version; older desktops don't say. */
   private bridge?: number;
   constructor(private options: RemoteClientOptions) {
     this.target = options.start;
