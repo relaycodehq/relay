@@ -247,6 +247,8 @@ it("streams thread changes to the phone and cuts it off when removed", async () 
   };
   summary.updated = 3;
   remote.chatEvent({ chatId, message });
+  // The answer moved the thread's summary, which main.ts hears separately.
+  remote.chatsEvent({ projectId, chats: [summary] });
   await vi.waitFor(() =>
     expect(p.events.map((e) => e.kind)).toEqual(["message", "chats"]),
   );

@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 import { z } from "zod";
 import type { Store } from "../store";
+import type { ProjectChatsEvent } from "../../shared/events";
 import { toBase64Url } from "../../shared/remote-crypto";
 import {
   computerMethods,
@@ -171,6 +172,9 @@ export class PhoneRemote {
   }
   chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0]) {
     if (this.server.listening) this.bridge.chatEvent(event);
+  }
+  chatsEvent(event: ProjectChatsEvent) {
+    if (this.server.listening) this.bridge.chatsChanged(event.projectId);
   }
   async state(): Promise<PhoneRemoteState> {
     const [tailnet, phoneApp] = await Promise.all([

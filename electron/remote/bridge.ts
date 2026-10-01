@@ -105,8 +105,7 @@ export class RemoteBridge {
     { timer: NodeJS.Timeout; event: Extract<RemoteEvent, { kind: "message" }> }
   >();
   private lastChats = "";
-  private poll?: NodeJS.Timeout;
-  private polls = 0;
+  private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
   constructor(
@@ -208,7 +207,7 @@ export class RemoteBridge {
     },
     desktop: async (method, args) => {
       const value = await this.host.dispatch(method, args);
-      // Sends, stops and triage move thread states; say so without waiting for the watch.
+      // Sends, stops and triage move thread states; phones hear before the call returns.
       this.refresh();
       return value;
     },
@@ -289,25 +288,23 @@ export class RemoteBridge {
       this.streams.delete(event.message.id);
     }
     this.broadcast(next);
-    this.refresh();
   }
-  /** Watches thread states while a phone is connected; they aren't all evented. */
+  /** Follows thread states while a phone is connected. */
   setWatching(watching: boolean) {
-    if (!watching) {
-      clearInterval(this.poll);
-      this.poll = undefined;
-      this.lastChats = "";
-      return;
-    }
-    this.poll ??= setInterval(() => {
-      // New projects are rare; threads move all the time.
-      if (++this.polls % 15 === 0)
-        void this.host
-          .projects()
-          .then((projects) => (this.projectIds = projects.map((p) => p.id)))
-          .catch(() => {});
-      this.refresh();
-    }, 2000);
+    this.watching = watching;
+    if (!watching) this.lastChats = "";
+  }
+  /** A project's thread list changed; one new since the overview joins the watch. */
+  chatsChanged(projectId: string) {
+    if (!this.watching || !this.projectIds) return;
+    if (this.projectIds.includes(projectId)) return this.refresh();
+    void this.host
+      .projects()
+      .then((projects) => {
+        this.projectIds = projects.map((p) => p.id);
+        this.refresh();
+      })
+      .catch(() => {});
   }
   /** Tells phones when a thread starts, finishes, or starts waiting on them. */
   refresh() {

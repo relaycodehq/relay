@@ -297,6 +297,7 @@ app
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
       window.send("relay:project-chats", event);
+      phoneRemote?.chatsEvent(event);
     });
     chats.onSummaries((projectId) => {
       summaries.changed(projectId);

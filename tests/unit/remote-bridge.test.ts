@@ -5,7 +5,7 @@ import {
   toRemoteDiff,
   type RemoteHost,
 } from "../../electron/remote/bridge";
-import type { ChatMessage } from "../../shared/projects";
+import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { RemoteDiff, RemoteEvent } from "../../shared/remote";
 
 afterEach(() => vi.useRealTimers());
@@ -89,6 +89,58 @@ it("watches thread states only once the phone has the overview, and only reports
   b.refresh();
   b.refresh();
   expect(events.map((e) => e.kind)).toEqual(["chats"]);
+});
+
+it("tells a watching phone about thread lists as they change, a new project's too", async () => {
+  const otherId = randomUUID();
+  const projects = [{ id: projectId, name: "Relay" }];
+  const lists: Record<string, ChatSummary[]> = {
+    [projectId]: [
+      {
+        id: chatId,
+        projectId,
+        title: "New chat",
+        scope: { kind: "project" },
+        created: 1,
+        updated: 2,
+      },
+    ],
+  };
+  const events: RemoteEvent[] = [];
+  const b = new RemoteBridge(
+    {
+      projects: async () => projects,
+      chats: (id: string) => lists[id] ?? [],
+      name: () => "Studio",
+    } as unknown as RemoteHost,
+    (e) => events.push(e),
+  );
+  const titles = () =>
+    events.map((e) => (e.kind === "chats" ? e.chats.map((c) => c.title) : []));
+  await b.handle("overview", []);
+  lists[projectId]![0]!.title = "Cache guard";
+  b.chatsChanged(projectId);
+  expect(events).toEqual([]);
+
+  b.setWatching(true);
+  b.chatsChanged(projectId);
+  b.chatsChanged(projectId);
+  expect(titles()).toEqual([["Cache guard"]]);
+
+  projects.push({ id: otherId, name: "Site" });
+  lists[otherId] = [
+    {
+      ...lists[projectId]![0]!,
+      id: randomUUID(),
+      projectId: otherId,
+      title: "Hero",
+      updated: 3,
+    },
+  ];
+  b.chatsChanged(otherId);
+  await vi.waitFor(() =>
+    expect(titles()).toEqual([["Cache guard"], ["Hero", "Cache guard"]]),
+  );
 });
 
 it("asks the desktop for each kind of diff and sends it as lines", async () => {
