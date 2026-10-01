@@ -1,7 +1,6 @@
 import { AgentRequestCard } from "./AgentRequestCard";
 import type { RelayCommand } from "../../shared/commands";
 import {
-  agentAsked,
   contextAgent,
   recipient,
   threadContextAgent,
@@ -51,14 +50,9 @@ import {
   imagesAfter,
   nextImageNumber,
 } from "../lib/image-refs";
-import { readDraft, saveDraftWorkspace, writeDraft } from "../lib/drafts";
-import { withAttachments } from "../lib/draft-attachments";
+import { readDraft, writeDraft } from "../lib/drafts";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
-import type { ComposedSend } from "../../shared/compose-send";
-import {
-  startThreadSettings,
-  saveSentSettings,
-} from "../lib/composer-settings";
+import { saveSentSettings } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
@@ -80,6 +74,7 @@ import { useThreadWrites } from "../lib/useThreadWrites";
 import { useComposerAttachments } from "../lib/useComposerAttachments";
 import { useAgentSwitch } from "../lib/useAgentSwitch";
 import { useSessionCommands } from "../lib/useSessionCommands";
+import { useThreadSend } from "../lib/useThreadSend";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -233,7 +228,6 @@ export function ProjectChat({
   const attachments = useComposerAttachments(id),
     { selection, setSelection, workItem, setWorkItem, codeRefs, setCodeRefs } =
       attachments;
-  const created = useRef<ChatSummary | undefined>(undefined);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
   useImperativeHandle(
@@ -281,8 +275,7 @@ export function ProjectChat({
       refetch: history.refetch,
       onCommand,
     });
-  const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id)),
-    confirmSwitch = agentSwitch.confirm;
+  const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
   const {
     review,
     reviewing,
@@ -322,74 +315,26 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
-  /** Carries on the stopped answer with whichever agent the composer has picked. */
-  async function resume() {
-    if (!chat || busy) return;
-    const settings = composer.current?.agentSettings();
-    if (!(await confirmSwitch(settings?.provider))) return;
-    await run(async () => {
-      await api.resumeProjectChat(chat.id, settings);
-      await history.refetch();
-    });
-  }
-  async function send(
-    value: ComposedSend,
-    dispatch?: () => void,
-  ): Promise<boolean> {
-    if (busy) return false;
-    if (value.side) return askAside(value, dispatch);
-    if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
-    dispatch?.();
-    return run(async () => {
-      const target =
-        chat ??
-        created.current ??
-        (await api.createProjectChat(
-          project.id,
-          scope,
-          scope.kind === "project" ? workspace : undefined,
-        ));
-      created.current = target;
-      await api.sendProjectChat(target.id, {
-        // A side conversation leaves the thread's attachments waiting.
-        ...withAttachments(
-          value,
-          root ? { codeRefs: [] } : { workItem, codeRefs, selection },
-        ),
-        id: crypto.randomUUID(),
-        ...(root ? { parentId: root.id } : {}),
-        ...(viewing.path ? { viewing: viewing.path } : {}),
-      });
-      if (!root) attachments.clear();
-      followAnswer();
-      if (!chat) {
-        saveDraftWorkspace(id, "checkout");
-        startThreadSettings(id, target.id, recipient(value));
-        await onCreated(target);
-      } else await history.refetch();
-      await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    });
-  }
-  /** `/btw`: its thread opens, and the main thread's draft and attachments wait. */
-  async function askAside(value: ComposedSend, dispatch?: () => void) {
-    if (!chat) {
-      setError(
-        new Error("Ask the agent something first, then ask on the side."),
-      );
-      return false;
-    }
-    dispatch?.();
-    return run(async () => {
-      const question = crypto.randomUUID();
-      await api.sendProjectChat(chat.id, {
-        ...value,
-        id: question,
-        side: true,
-      });
-      await history.refetch();
-      setRootId(question);
-    });
-  }
+  const { send, resume } = useThreadSend({
+    chat,
+    draftId: id,
+    projectId: project.id,
+    create: () =>
+      api.createProjectChat(
+        project.id,
+        scope,
+        scope.kind === "project" ? workspace : undefined,
+      ),
+    root,
+    attachments,
+    viewing: viewing.path,
+    writes,
+    confirmSwitch: agentSwitch.confirm,
+    refetch: history.refetch,
+    onCreated,
+    onSent: () => followAnswer(),
+    onOpen: setRootId,
+  });
   async function returnToComposer(input: ProjectChatSend) {
     if (!chat || busy) return;
     await run(async () => {
@@ -789,7 +734,9 @@ export function ProjectChat({
                 <button
                   className="resume-answer"
                   disabled={busy}
-                  onClick={() => void resume()}
+                  onClick={() =>
+                    void resume(() => composer.current?.agentSettings())
+                  }
                 >
                   <RotateCcw size={13} /> Resume answer
                 </button>
