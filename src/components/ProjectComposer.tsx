@@ -30,14 +30,8 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { ArrowUp, GitBranch, Zap, Paperclip, X } from "lucide-react";
-import {
-  reasoningEffortsFor,
-  effortLabels,
-  type ReasoningEffort,
-  withClaudeContextWindow,
-  reasoningEffortSchema,
-} from "../../shared/settings";
+import { ArrowUp, GitBranch, Paperclip, X } from "lucide-react";
+import { effortLabels } from "../../shared/settings";
 import type { ResumeSettings } from "../../shared/projects";
 import {
   buildSend,
@@ -65,17 +59,12 @@ import {
   useShortcutLabel,
   useShortcutValue,
 } from "../lib/shortcuts";
-import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
 import { DictationButton } from "./DictationButton";
 import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
 import { useComposerToolbar } from "../lib/composer-toolbar";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
-import {
-  effortStep,
-  quickStep,
-  useEffortKeysLabel,
-} from "../lib/effort-shortcut";
+import { effortStep, quickStep } from "../lib/effort-shortcut";
 import {
   presetIndex,
   quickItems,
@@ -83,8 +72,7 @@ import {
   useQuickSwitch,
 } from "../lib/quick-switch";
 import { QuickSwitchHud } from "./QuickSwitchHud";
-import { ComposerSelect } from "./ComposerSelect";
-import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
+import { EffortControl, offersEffort } from "./ComposerEffortControl";
 import { api } from "../lib/api";
 import {
   isScreenshot,
@@ -197,7 +185,6 @@ export function ProjectComposer({
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   const draft = useDraft(draftKey);
-  const effortKeys = useEffortKeysLabel();
   const stopKeys = useShortcutLabel("stop");
   const stopTwice = useShortcutValue(() => pressedTwice("stop"));
   const stopArmed = useDoubleEscape(
@@ -227,14 +214,11 @@ export function ProjectComposer({
   const {
     codex: selected,
     claudeListed,
-    claudeEfforts: claudeModelEfforts,
-    claudeRuns,
     levels: { claude: claudeDefaultLevel, codex: codexDefaultLevel },
     pickOf,
     choiceFor,
     contextFor,
     sendSettings,
-    setCodexEffort,
     setPickEffort,
   } = runs;
   const {
@@ -333,21 +317,6 @@ export function ProjectComposer({
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const [pickModel, setPickModel] = useState(0);
-  const codexEffortOptions = useMemo(
-    () =>
-      selected
-        ? [
-            {
-              value: "" as ReasoningEffort,
-              label: defaultEffortLabel(codexDefaultLevel),
-            },
-            ...reasoningEffortsFor(selected.model, codexModels).map(
-              (value) => ({ value, label: effortLabels[value] }),
-            ),
-          ]
-        : [],
-    [selected, codexModels, codexDefaultLevel],
-  );
   // Quick switch: with presets set up, ⌃⌘←/→ steps through them.
   const quickSwitch = useQuickSwitch();
   const quickPresets = quickSwitch.enabled ? quickSwitch.presets : [];
@@ -379,68 +348,6 @@ export function ProjectComposer({
       hideQuickSoon();
     } else pickPreset(at, step);
   }
-  const effortHint = effortKeys || undefined;
-  const claudeTraits = useMemo(
-    () => [
-      ...(claudeModelEfforts.length > 0
-        ? [
-            {
-              label: "Reasoning",
-              hint: effortHint,
-              value: claude.reasoningEffort,
-              options: [
-                { value: "", label: defaultEffortLabel(claudeDefaultLevel) },
-                ...claudeModelEfforts.map((value) => ({
-                  value,
-                  label: effortLabels[value],
-                })),
-              ],
-              onChange: (value: string) =>
-                setClaude((c) => ({
-                  ...c,
-                  reasoningEffort: reasoningEffortSchema.parse(value),
-                })),
-            },
-          ]
-        : []),
-      ...(claudeRuns?.longContext
-        ? [
-            {
-              label: "Context window",
-              value: claude.contextWindow ?? "1m",
-              options: [
-                { value: "200k", label: "200k" },
-                { value: "1m", label: "1M" },
-              ],
-              // Default stays Default; a picked model also takes the `[1m]`
-              // suffix, which accounts without 1M by default still need.
-              onChange: (value: string) =>
-                setClaude((c) =>
-                  value === "200k"
-                    ? {
-                        ...c,
-                        model: withClaudeContextWindow(c.model, "200k"),
-                        contextWindow: "200k",
-                      }
-                    : {
-                        model:
-                          c.model && withClaudeContextWindow(c.model, "1m"),
-                        reasoningEffort: c.reasoningEffort,
-                      },
-                ),
-            },
-          ]
-        : []),
-    ],
-    // The efforts list is rebuilt each render; its contents are what matter.
-    [
-      claude,
-      claudeRuns?.longContext,
-      claudeModelEfforts.join(),
-      claudeDefaultLevel,
-      effortHint,
-    ],
-  );
   /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
     const prefix = agentMentionPattern.exec(draft.trimStart())?.[0];
@@ -804,53 +711,6 @@ export function ProjectComposer({
       sending.current = false;
     }
   }
-  const effortControl =
-    recipient === "codex" && selected ? (
-      <>
-        <ComposerSelect<ReasoningEffort>
-          label="Reasoning effort"
-          value={selected.reasoningEffort}
-          options={codexEffortOptions}
-          onChange={setCodexEffort}
-          heading={{ label: "Reasoning", hint: effortHint }}
-        />
-        <button
-          type="button"
-          className="composer-control composer-fast"
-          aria-label="Fast mode"
-          aria-pressed={selected.fast}
-          title={selected.fast ? "Fast mode enabled" : "Enable Fast mode"}
-          onClick={() => setChoice({ ...selected, fast: !selected.fast })}
-        >
-          <Zap size={14} />
-          Fast
-        </button>
-      </>
-    ) : recipient === "claude" &&
-      selected &&
-      (claudeModelEfforts.length > 0 || claudeRuns?.longContext) ? (
-      <ComposerTraitsMenu
-        label="Reasoning effort and context window"
-        sections={claudeTraits}
-      />
-    ) : isPickAgent(recipient) &&
-      selected &&
-      pickOf(recipient).efforts.length > 0 ? (
-      <ComposerSelect<ReasoningEffort>
-        label="Reasoning effort"
-        value={pickOf(recipient).reasoningEffort}
-        options={[
-          { value: "", label: "Default" },
-          ...pickOf(recipient).efforts.map((value) => ({
-            value,
-            label: effortLabels[value],
-          })),
-        ]}
-        onChange={(effort) => setPickEffort(recipient, effort)}
-        heading={{ label: "Reasoning", hint: effortHint }}
-      />
-    ) : null;
-
   return (
     <div className="thread-compose-wrap">
       {planProvider && (
@@ -1103,7 +963,15 @@ export function ProjectComposer({
                   defaultNames={defaultNames}
                 />
               ),
-              effort: effortControl,
+              effort: recipient !== "message" &&
+                offersEffort(runs, recipient) && (
+                  <EffortControl
+                    to={recipient}
+                    state={composer}
+                    runs={runs}
+                    codexModels={codexModels}
+                  />
+                ),
               context: contextMeter,
               access: recipient !== "message" && (
                 <RuntimeModeSelect
