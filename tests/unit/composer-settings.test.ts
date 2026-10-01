@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   composerProvider,
   cacheNewThreadModels,
+  claudeOn,
   followLastAgent,
   type AgentFollow,
   loadComposerSettings,
@@ -335,4 +336,21 @@ it("hands on agents picked here and takes up ones picked on the phone, without e
   // A note to the thread is no agent to start new threads on.
   expect(step("codex", "message")).toEqual({});
   expect(step("codex", "opencode")).toEqual({ save: "opencode" });
+});
+
+it("keeps Claude on a 200k window across models, unless the model is a [1m] one", () => {
+  const opus = {
+    model: "opus",
+    reasoningEffort: "high" as const,
+    contextWindow: "200k" as const,
+  };
+  expect(claudeOn(opus, "sonnet", "")).toEqual({
+    model: "sonnet",
+    reasoningEffort: "",
+    contextWindow: "200k",
+  });
+  expect(claudeOn(opus, "sonnet[1m]", "max")).toEqual({
+    model: "sonnet[1m]",
+    reasoningEffort: "max",
+  });
 });

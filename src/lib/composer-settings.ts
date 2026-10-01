@@ -20,6 +20,7 @@ import {
 } from "../../shared/ultraplan";
 import {
   aiSettingsSchema,
+  claudeContextWindow,
   claudeEfforts,
   modelSchema,
   reasoningEffortSchema,
@@ -134,6 +135,21 @@ export function messageChoice(
     };
   return selected;
 }
+/**
+ * Claude on `model` at `reasoningEffort`. A 200k window picked before stays,
+ * except on a `[1m]` model: picking one asks for 1M.
+ */
+export const claudeOn = (
+  claude: ComposerSettings["claude"],
+  model: string,
+  reasoningEffort: ReasoningEffort,
+): ComposerSettings["claude"] => ({
+  model,
+  reasoningEffort,
+  ...(claude.contextWindow && claudeContextWindow(model) !== "1m"
+    ? { contextWindow: claude.contextWindow }
+    : {}),
+});
 export const messageContext = (
   to: string,
   claude: ComposerSettings["claude"],

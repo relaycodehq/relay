@@ -32,14 +32,9 @@ import {
 } from "react";
 import { ArrowUp, GitBranch, Zap, Paperclip, X } from "lucide-react";
 import {
-  type ModelChoice,
-  supportedChoice,
   reasoningEffortsFor,
   effortLabels,
   type ReasoningEffort,
-  claudeEffortsFor,
-  claudeContextWindow,
-  findClaudeModel,
   withClaudeContextWindow,
   reasoningEffortSchema,
 } from "../../shared/settings";
@@ -48,34 +43,21 @@ import {
   buildSend,
   implementPlan,
   type ComposedSend,
-  type SendSettings,
 } from "../../shared/compose-send";
 import { draftRecipient } from "../../shared/recipient";
-import {
-  isPickAgent,
-  livePick,
-  messageChoice,
-  messageContext,
-  pickAgents,
-} from "../lib/composer-settings";
+import { isPickAgent } from "../lib/composer-settings";
 import { useComposerSettings } from "../lib/useComposerSettings";
-import { useAgentPicks } from "../lib/useAgentPicks";
+import { useModelCatalogs } from "../lib/useModelCatalogs";
+import { useAgentRuns } from "../lib/useAgentRuns";
 import {
   agentMentionPattern,
   agentName,
   agentProviders,
   agents,
-  type AgentModel,
   type AgentProvider,
   reportsUsage,
 } from "../../shared/agents";
-import {
-  ComposerModelPicker,
-  type MessageProvider,
-} from "./ComposerModelPicker";
-import { useCodexModels } from "../lib/useCodexModels";
-import { useClaudeModels } from "../lib/useClaudeModels";
-import { useAgentDefaults } from "../lib/useAgentDefaults";
+import { ComposerModelPicker } from "./ComposerModelPicker";
 import { useDoubleEscape } from "../lib/useDoubleEscape";
 import {
   pressedTwice,
@@ -93,15 +75,12 @@ import {
   effortStep,
   quickStep,
   useEffortKeysLabel,
-  stepEffort,
 } from "../lib/effort-shortcut";
 import {
   presetIndex,
   quickItems,
   stepPreset,
   useQuickSwitch,
-  type ComposerRun,
-  type QuickPreset,
 } from "../lib/quick-switch";
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { ComposerSelect } from "./ComposerSelect";
@@ -123,7 +102,6 @@ import {
 import { useImagePills } from "../lib/image-pills";
 import { readDraft, useDraft } from "../lib/drafts";
 import { takeLegacyPastes } from "../lib/thread-storage";
-import { useStableCallback } from "../lib/useStableCallback";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
 import { CopyImageMenu } from "./CopyImageMenu";
@@ -235,24 +213,30 @@ export function ProjectComposer({
     shared,
     agent,
   );
+  const { provider, setProvider, setChoice, claude, setClaude, saveLastModel } =
+    composer;
+  const catalogs = useModelCatalogs(projectId);
   const {
-    provider,
-    setProvider,
-    setChoice,
-    claude,
-    setClaude,
-    picks,
-    setPicks,
-    saveLastModel,
-  } = composer;
-  const agentPicks = useAgentPicks();
-  const claudeCatalog = useClaudeModels();
-  const claudeModels = claudeCatalog.models;
-  const codex = useCodexModels();
-  const codexModels = codex.models;
-  const defaults = useAgentDefaults(projectId);
-  const claudeListed = findClaudeModel(claudeModels, claude.model);
-  const claudeModelEfforts = claudeEffortsFor(claudeModels, claude.model);
+    codex: codexModels,
+    picks: pickCatalogs,
+    defaults,
+    of: modelsOf,
+    defaultNames,
+  } = catalogs;
+  const runs = useAgentRuns(composer, catalogs, dropMention);
+  const {
+    codex: selected,
+    claudeListed,
+    claudeEfforts: claudeModelEfforts,
+    claudeRuns,
+    levels: { claude: claudeDefaultLevel, codex: codexDefaultLevel },
+    pickOf,
+    choiceFor,
+    contextFor,
+    sendSettings,
+    setCodexEffort,
+    setPickEffort,
+  } = runs;
   const {
     runtimeMode,
     setRuntimeMode,
@@ -340,12 +324,6 @@ export function ProjectComposer({
       live = false;
     };
   }, [draftKey]);
-  const codexChoice = composer.codexChoice;
-  // An effort Codex no longer lists for the model runs as its default.
-  const selected = useMemo(
-    () => codexChoice && supportedChoice(codexChoice, codexModels),
-    [codexChoice, codexModels],
-  );
   const recipient = draftRecipient(draft, provider);
   const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
   const pickUltraplan = useCallback((on: boolean) => {
@@ -354,119 +332,7 @@ export function ProjectComposer({
   }, []);
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
-  const pickOf = (to: AgentProvider) =>
-    livePick(picks[to], agentPicks.catalogs[to]?.models);
-  const choiceFor = (to: string): ModelChoice | undefined =>
-    messageChoice(
-      to,
-      selected,
-      claude,
-      isPickAgent(to) ? pickOf(to) : { model: "", reasoningEffort: "" },
-    );
-  const contextFor = (to: string) => messageContext(to, claude);
-  const sendSettings = (to: MessageProvider): SendSettings | undefined => {
-    const choice = choiceFor(to);
-    return (
-      choice && { to, choice, ...contextFor(to), runtimeMode, interactionMode }
-    );
-  };
   const [pickModel, setPickModel] = useState(0);
-  const catalogs = useMemo(
-    () => ({
-      codex: { models: codexModels, model: selected?.model ?? "" },
-      claude: { models: claudeModels, model: claudeListed?.id ?? claude.model },
-      ...Object.fromEntries(
-        pickAgents.map((p) => [
-          p,
-          {
-            models: agentPicks.catalogs[p]?.models,
-            model: picks[p]?.model ?? "",
-          },
-        ]),
-      ),
-    }),
-    [
-      codexModels,
-      selected?.model,
-      claudeModels,
-      claudeListed?.id,
-      claude.model,
-      agentPicks.catalogs,
-      picks,
-    ],
-  );
-  const selectModel = useStableCallback(function selectModel(
-    next: MessageProvider,
-    model: string,
-  ) {
-    setProvider(next);
-    if (isPickAgent(next)) {
-      const efforts =
-        agentPicks.catalogs[next]?.models?.find((m) => m.id === model)
-          ?.efforts ?? [];
-      setPicks((all) => ({
-        ...all,
-        [next]: {
-          model,
-          reasoningEffort: efforts.includes(all[next]?.reasoningEffort ?? "")
-            ? all[next]!.reasoningEffort
-            : "",
-        },
-      }));
-    }
-    if (next === "claude") {
-      const efforts = claudeEffortsFor(claudeModels, model);
-      setClaude((c) => ({
-        model,
-        reasoningEffort: efforts.includes(c.reasoningEffort)
-          ? c.reasoningEffort
-          : "",
-        // Picking a `[1m]` model asks for 1M.
-        ...(c.contextWindow && claudeContextWindow(model) !== "1m"
-          ? { contextWindow: c.contextWindow }
-          : {}),
-      }));
-    }
-    if (next === "codex" && selected)
-      setChoice(supportedChoice({ ...selected, model }, codexModels));
-    dropMention();
-  });
-  const openModelPicker = useStableCallback(() => {
-    // Signing in or updating a CLI changes its list; ask again.
-    claudeCatalog.refresh();
-    codex.refresh();
-    defaults.refresh();
-    agentPicks.refresh();
-  });
-  // Default says what it runs, as each agent's own settings decide.
-  const claudeRuns = claude.model
-    ? claudeListed
-    : claudeModels?.find((m) => m.id === defaults.of("claude")?.model);
-  const claudeDefaultLevel = defaults.effort(
-    "claude",
-    claude.model ? (claudeListed?.id ?? claude.model) : "",
-  );
-  const codexDefaultLevel = defaults.effort("codex", selected?.model ?? "");
-  const modelsOf = (p: AgentProvider): AgentModel[] | undefined =>
-    p === "codex"
-      ? codexModels
-      : p === "claude"
-        ? claudeModels
-        : agentPicks.catalogs[p]?.models;
-  // The model each agent's Default runs, by its listed name.
-  const defaultModels = agentProviders.map((p) => defaults.of(p)?.model ?? "");
-  const defaultNames = useMemo(
-    (): Partial<Record<AgentProvider, string>> =>
-      Object.fromEntries(
-        agentProviders.flatMap((p, i) => {
-          const runs = defaultModels[i];
-          return runs
-            ? [[p, modelsOf(p)?.find((m) => m.id === runs)?.name ?? runs]]
-            : [];
-        }),
-      ),
-    [defaultModels.join("\0"), codexModels, claudeModels, agentPicks.catalogs],
-  );
   const codexEffortOptions = useMemo(
     () =>
       selected
@@ -482,43 +348,6 @@ export function ProjectComposer({
         : [],
     [selected, codexModels, codexDefaultLevel],
   );
-  const setCodexEffort = useStableCallback(
-    (reasoningEffort: ReasoningEffort) =>
-      selected && setChoice({ ...selected, reasoningEffort }),
-  );
-  function stepRecipientEffort(step: -1 | 1) {
-    if (recipient === "claude")
-      setClaude((c) => ({
-        ...c,
-        reasoningEffort: stepEffort(
-          claudeModelEfforts,
-          c.reasoningEffort,
-          claudeDefaultLevel,
-          step,
-        ),
-      }));
-    else if (recipient === "codex" && selected)
-      setCodexEffort(
-        stepEffort(
-          reasoningEffortsFor(selected.model, codexModels),
-          selected.reasoningEffort,
-          codexDefaultLevel,
-          step,
-        ),
-      );
-    else if (isPickAgent(recipient)) {
-      const pick = pickOf(recipient);
-      setPickEffort(
-        recipient,
-        stepEffort(pick.efforts, pick.reasoningEffort, "", step),
-      );
-    }
-  }
-  const setPickEffort = (to: AgentProvider, reasoningEffort: ReasoningEffort) =>
-    setPicks((all) => ({
-      ...all,
-      [to]: { model: all[to]?.model ?? "", reasoningEffort },
-    }));
   // Quick switch: with presets set up, ⌃⌘←/→ steps through them.
   const quickSwitch = useQuickSwitch();
   const quickPresets = quickSwitch.enabled ? quickSwitch.presets : [];
@@ -532,45 +361,13 @@ export function ProjectComposer({
       if (!quickHover.current) setQuick((q) => ({ ...q, open: false }));
     }, 1400);
   };
-  const runNow = (): ComposerRun | undefined =>
-    recipient === "message"
-      ? undefined
-      : recipient === "codex"
-        ? selected && { provider: "codex", ...selected }
-        : recipient === "claude"
-          ? { provider: "claude", ...claude, fast: false }
-          : { provider: recipient, ...pickOf(recipient), fast: false };
-  function applyPreset(p: QuickPreset) {
-    setProvider(p.provider);
-    if (p.provider === "claude")
-      setClaude((c) => ({
-        model: p.model,
-        reasoningEffort: p.reasoningEffort,
-        ...(c.contextWindow && claudeContextWindow(p.model) !== "1m"
-          ? { contextWindow: c.contextWindow }
-          : {}),
-      }));
-    else if (p.provider === "codex")
-      setChoice(
-        supportedChoice(
-          { model: p.model, reasoningEffort: p.reasoningEffort, fast: p.fast },
-          codexModels,
-        ),
-      );
-    else
-      setPicks((all) => ({
-        ...all,
-        [p.provider]: { model: p.model, reasoningEffort: p.reasoningEffort },
-      }));
-    dropMention();
-  }
   const pickPreset = (at: number, dir: number) => {
-    applyPreset(quickPresets[at]);
+    runs.applyPreset(quickPresets[at]);
     setQuick({ open: true, at, dir });
     hideQuickSoon();
   };
   function stepQuick(step: -1 | 1) {
-    const run = runNow();
+    const run = runs.now(recipient);
     const from = run ? presetIndex(quickPresets, run, quick.at) : -1;
     // The revolver goes on round past the ends; the other styles stop there.
     const wrap = quickSwitch.style === "revolver";
@@ -697,7 +494,7 @@ export function ProjectComposer({
               ? `Claude · ${claudeListed ? claudeListed.name + (claude.contextWindow ? " · 200k" : "") : claude.model || "default model"}`
               : value === "message"
                 ? "Send without running an agent"
-                : `${agentName(value)} · ${agentPicks.catalogs[value]?.models?.find((m) => m.id === pickOf(value).model)?.name ?? (pickOf(value).model || "default model")}`,
+                : `${agentName(value)} · ${pickCatalogs[value]?.models?.find((m) => m.id === pickOf(value).model)?.name ?? (pickOf(value).model || "default model")}`,
         current: value === recipient,
       }));
     if (command === "model") return modelOptions();
@@ -754,10 +551,9 @@ export function ProjectComposer({
     const change = composerCommand(command, args, commandSettings());
     if (typeof change === "string") return change;
     if (change.command === "provider") {
-      setProvider(change.provider);
-      dropMention();
+      runs.pickAgent(change.provider);
     } else if (change.command === "model")
-      selectModel(change.provider, change.model);
+      runs.select(change.provider, change.model);
     else if (change.command === "effort") {
       const { reasoningEffort } = change;
       if (recipient === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
@@ -893,19 +689,7 @@ export function ProjectComposer({
     preparing ||
     !selected;
   /** `sendAt` holds the message until then (Send later). */
-  agentSettings.current = () => {
-    if (provider === "message") return;
-    const choice = choiceFor(provider);
-    return choice
-      ? {
-          provider,
-          choice,
-          ...contextFor(provider),
-          runtimeMode,
-          interactionMode,
-        }
-      : undefined;
-  };
+  agentSettings.current = runs.resumeSettings;
   /**
    * Empties the composer as the message goes out; a message that is turned
    * down comes back, ahead of anything typed since.
@@ -1234,7 +1018,7 @@ export function ProjectComposer({
             const step = effortStep(e);
             if (step) {
               e.preventDefault();
-              stepRecipientEffort(step);
+              runs.stepEffort(recipient, step);
               return;
             }
             const quickDir = quickPresets.length ? quickStep(e) : 0;
@@ -1312,10 +1096,10 @@ export function ProjectComposer({
                 <ComposerModelPicker
                   provider={recipient}
                   ready={!!selected}
-                  catalogs={catalogs}
-                  onOpen={openModelPicker}
+                  catalogs={runs.picker}
+                  onOpen={catalogs.refresh}
                   openSignal={pickModel}
-                  onSelect={selectModel}
+                  onSelect={runs.select}
                   defaultNames={defaultNames}
                 />
               ),
