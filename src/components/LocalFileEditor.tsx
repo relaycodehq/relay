@@ -4,18 +4,8 @@ import { useLineBlame } from "./LineBlame";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { useContentHash } from "../lib/diagnostics";
 import { DiagnosticMessage } from "./ProjectChecks";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  EditProvider,
-  type CodeViewHandle,
-  type CodeViewProps,
-} from "@pierre/diffs/react";
-import {
-  Editor,
-  type EditorFactory,
-  type EditorKeymap,
-} from "@pierre/diffs/edit";
-import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
+import { useEffect, useState, type ReactNode } from "react";
+import { EditProvider } from "@pierre/diffs/react";
 import {
   Columns2,
   FolderGit2,
@@ -26,36 +16,18 @@ import {
   X,
 } from "lucide-react";
 import type { Pull } from "../../shared/types";
-import { api } from "../lib/api";
-import { matches, useShortcutLabel } from "../lib/shortcuts";
+import { useShortcutLabel } from "../lib/shortcuts";
 import { useTheme } from "../lib/useTheme";
 import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
-import { useFileDiff } from "../lib/useFileDiff";
+import { useEditableDiff } from "../lib/useEditableDiff";
+import { editorKeys } from "../lib/editor-keys";
+import { createEditor } from "./local-file-editor/create-editor";
 import { useLocalFile, type LocalProject } from "../lib/useLocalFile";
 import { useSaveShortcut } from "../lib/useSaveShortcut";
-import { indentedNewline } from "../lib/newline-indent";
 import { checkStatus } from "../lib/editor-checks";
 import { useBufferChecks } from "../lib/useBufferChecks";
-
-const keymap: EditorKeymap = [
-  {
-    bindings: {
-      "cmdOrCtrl+d": "copyLineDown",
-      "cmdOrCtrl+r": "openSearchReplacePanel",
-      "shift+alt+ArrowUp": "moveLineUp",
-      "shift+alt+ArrowDown": "moveLineDown",
-    },
-  },
-];
-const createEditor: EditorFactory<undefined, undefined> = (type, options) =>
-  new Editor(type, {
-    ...options,
-    historyMaxEntries: 200,
-    keymap,
-    clipboard: { readText: (type) => (type ? "" : api.readClipboard()) },
-  });
 
 export default function LocalFileEditor({
   checks,
@@ -107,27 +79,6 @@ export default function LocalFileEditor({
     projectId: project!.id,
     head: { sha: source?.head ?? project!.head },
   };
-  const compared = useFileDiff(
-    useMemo(
-      () =>
-        source && {
-          editable: true,
-          old: {
-            name: path,
-            contents: source.original,
-            cacheKey: `${revision}:${path}`,
-          },
-          next: {
-            name: path,
-            contents: source.contents,
-            cacheKey: `local:${source.version}`,
-          },
-          binary: false,
-        },
-      [source],
-    ),
-  );
-  const diff = compared.diff;
   const blame = useLineBlame(
     target,
     plain
@@ -159,14 +110,14 @@ export default function LocalFileEditor({
       <IconButton
         label="Undo code edit"
         className="editor-history"
-        onClick={() => viewer.current?.getEditor(path)?.undo()}
+        onClick={() => editor()?.undo()}
       >
         <Undo2 size={size} />
       </IconButton>
       <IconButton
         label="Redo code edit"
         className="editor-history"
-        onClick={() => viewer.current?.getEditor(path)?.redo()}
+        onClick={() => editor()?.redo()}
       >
         <Redo2 size={size} />
       </IconButton>
@@ -186,50 +137,14 @@ export default function LocalFileEditor({
     bufferHash,
     file.setError,
   );
-  const markersRef = useRef(markers);
-  markersRef.current = markers;
-  const live = useRef(true);
-  useEffect(() => {
-    live.current = true;
-    return () => {
-      live.current = false;
-    };
-  }, []);
-  const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
-  const focusedDiff = useRef<FileDiffMetadata | undefined>(undefined);
-  useEffect(() => {
-    viewer.current?.getEditor(path)?.setMarkers(markers);
-  }, [markers, path, diff]);
-  const editorOptions = useMemo<
-    CodeViewProps<undefined, undefined>["editorOptions"]
-  >(
-    () => ({
-      onAttach: (editor) => {
-        editor.setMarkers(markersRef.current);
-        if (focusedDiff.current === diff) return;
-        focusedDiff.current = diff;
-        requestAnimationFrame(() => {
-          if (live.current) editor.focus({ lineNumber: line ?? 1 });
-        });
-      },
-    }),
-    [diff, line],
-  );
-  const items = useMemo<CodeViewDiffItem[]>(
-    () =>
-      diff
-        ? [
-            {
-              id: path,
-              type: "diff",
-              fileDiff: diff,
-              edit: true,
-              version: Date.now(),
-            },
-          ]
-        : [],
-    [diff],
-  );
+  const {
+    diff,
+    viewer,
+    items,
+    editorOptions,
+    editor,
+    error: diffError,
+  } = useEditableDiff(path, source, revision, line, markers);
   const saveKeys = useShortcutLabel("save");
   useSaveShortcut(file.save);
   const large = (source?.contents.split("\n").length ?? 0) > 5000;
@@ -307,9 +222,7 @@ export default function LocalFileEditor({
         </span>
         {source?.branch && <small>{source.branch}</small>}
       </div>
-      {!!(error || compared.error) && (
-        <ErrorBox error={error || compared.error} />
-      )}
+      {!!(error || diffError) && <ErrorBox error={error || diffError} />}
       {confirmation && (
         <div className="editor-confirmation" role="alert">
           <strong>Keep your unsaved edits?</strong>
@@ -375,7 +288,7 @@ export default function LocalFileEditor({
                       <button
                         key={i}
                         onClick={() =>
-                          viewer.current?.getEditor(path)?.focus({
+                          editor()?.focus({
                             lineNumber: d.line ?? 1,
                             character: (d.column ?? 1) - 1,
                           })
@@ -401,52 +314,7 @@ export default function LocalFileEditor({
             {...blame.handlers}
             inert={loading}
             aria-busy={loading}
-            onKeyDownCapture={(event) => {
-              const lookup = matches("references", event)
-                ? "references"
-                : matches("definition", event)
-                  ? "definition"
-                  : undefined;
-              if (lookup) {
-                const caret = viewer.current?.getEditor(path)?.getViewState()
-                  .selections?.[0]?.start;
-                if (caret) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  symbols.at(caret.line + 1, caret.character + 1, lookup);
-                }
-                return;
-              }
-              // Match the current file's indentation when inserting a new line.
-              const target = event.nativeEvent.composedPath()[0];
-              if (
-                event.key !== "Enter" ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.altKey ||
-                event.shiftKey ||
-                event.nativeEvent.isComposing ||
-                !(target instanceof HTMLElement) ||
-                !target.isContentEditable
-              )
-                return;
-              const editor = viewer.current?.getEditor(path);
-              const selections = editor?.getViewState().selections;
-              if (!editor || selections?.length !== 1) return;
-              const { start, end } = selections[0];
-              if (start.line !== end.line || start.character !== end.character)
-                return;
-              const { text: newText, caret } = indentedNewline(
-                editor.getText(),
-                start,
-              );
-              event.preventDefault();
-              event.stopPropagation();
-              editor.applyEdits([{ range: { start, end }, newText }]);
-              editor.setSelections([
-                { start: caret, end: caret, direction: "none" },
-              ]);
-            }}
+            onKeyDownCapture={editorKeys(editor, symbols.at)}
           >
             {!diff ? (
               <Loading text="Preparing editable diff…" />
