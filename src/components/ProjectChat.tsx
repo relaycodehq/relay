@@ -1,10 +1,6 @@
 import { AgentRequestCard } from "./AgentRequestCard";
 import type { RelayCommand } from "../../shared/commands";
-import {
-  contextAgent,
-  recipient,
-  threadContextAgent,
-} from "../../shared/recipient";
+import { contextAgent, threadContextAgent } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
@@ -25,35 +21,21 @@ import {
   GitPullRequest,
   FolderGit2,
   ChevronDown,
-  ArrowUp,
-  Clock3,
-  CalendarClock,
   RotateCcw,
   ScanSearch,
 } from "lucide-react";
-import { chatSettled, wakeLabel } from "../../shared/chat-activity";
+import { chatSettled } from "../../shared/chat-activity";
 import {
-  replyRoot,
   type ChatSummary,
   type Project,
   type ChatScope,
   type ChatWorkspace,
-  type ProjectChatSend,
-  type ProjectChat as ProjectChatData,
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { useNavigationLock } from "../lib/navigation-lock";
-import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
-import {
-  attachedImages,
-  imagesAfter,
-  nextImageNumber,
-} from "../lib/image-refs";
 import { readDraft, writeDraft } from "../lib/drafts";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
-import { saveSentSettings } from "../lib/composer-settings";
-import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading } from "./ui";
 import { LiveSyncControls } from "./LiveSyncControls";
 import {
@@ -75,22 +57,16 @@ import { useComposerAttachments } from "../lib/useComposerAttachments";
 import { useAgentSwitch } from "../lib/useAgentSwitch";
 import { useSessionCommands } from "../lib/useSessionCommands";
 import { useThreadSend } from "../lib/useThreadSend";
+import { useQueuedMessages } from "../lib/useQueuedMessages";
+import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
-import {
-  parseCodeReferences,
-  type CodeReference,
-} from "../../shared/code-references";
+import type { CodeReference } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
-import {
-  pastedTexts,
-  pastesAfter,
-  replacePastedTexts,
-} from "../../shared/pasted-texts";
 import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
 import { SubagentsIndicator } from "./Subagents";
@@ -111,27 +87,7 @@ import {
   DeepReviewSetup,
 } from "./DeepReview";
 import { UltraplanCouncil } from "./Ultraplan";
-import { agentMentionPattern, agentName } from "../../shared/agents";
-/** A queued message's text, with its attachments counted rather than shown. */
-function QueuedBody({ input }: { input: ProjectChatSend }) {
-  const code = parseCodeReferences(input.body);
-  const pastes = pastedTexts(code.body);
-  const body = replacePastedTexts(code.body, () => "\n\n").trim();
-  return (
-    <>
-      <p>{body.replace(agentMentionPattern, "")}</p>
-      {!!code.refs.length && (
-        <small>{code.refs.length} code reference(s)</small>
-      )}
-      {!!input.images?.length && (
-        <small>{input.images.length} screenshot(s)</small>
-      )}
-      {!!pastes.length && <small>{pastes.length} pasted text(s)</small>}
-    </>
-  );
-}
-/** Drag type for reordering queued messages, so other drops are ignored. */
-const QUEUED_DRAG = "application/x-relay-queued-message";
+import { agentName } from "../../shared/agents";
 export function ProjectChat({
   onCommand,
   project,
@@ -217,9 +173,8 @@ export function ProjectChat({
     sideThreads,
     leadAnswered,
   } = useChatThread(chat, rootId);
-  const [composerRevision, setComposerRevision] = useState(0);
   const writes = useThreadWrites(),
-    { busy, error, setError, run } = writes;
+    { busy, error, setError } = writes;
   const { peers, sharePresence, setSharePresence } = useChatPresence(
     chat,
     viewing,
@@ -264,7 +219,6 @@ export function ProjectChat({
   };
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
-  const sendKey = useSendKey();
   const { context, compacting, showContext, compact, runCommand } =
     useSessionCommands({
       chat,
@@ -297,7 +251,7 @@ export function ProjectChat({
     onSent: () => followAnswer(),
   });
   const draftKey = threadDraftKey(id, root?.id);
-  const onDraft = (v: string, key = draftKey) => writeDraft(key, v);
+  const onDraft = (v: string) => writeDraft(draftKey, v);
   useLayoutEffect(() => {
     threadStorage(id).reply.save(rootId);
   }, [place]);
@@ -310,7 +264,7 @@ export function ProjectChat({
       if (text) {
         const key = threadDraftKey(id),
           old = readDraft(key);
-        onDraft(`${old}${old ? "\n\n" : ""}${text}`, key);
+        writeDraft(key, `${old}${old ? "\n\n" : ""}${text}`);
       }
       onContextUsed();
     }
@@ -335,107 +289,17 @@ export function ProjectChat({
     onSent: () => followAnswer(),
     onOpen: setRootId,
   });
-  async function returnToComposer(input: ProjectChatSend) {
-    if (!chat || busy) return;
-    await run(async () => {
-      const parent = input.parentId
-        ? replyRoot(messages, input.parentId).id
-        : null;
-      const key = threadDraftKey(id, parent);
-      const old = readDraft(key);
-      const restoredCode = parent
-        ? { refs: [], body: input.body }
-        : parseCodeReferences(input.body);
-      const existing = await loadDraftImages(key);
-      // The message's tokens count on from the draft's own.
-      const back = imagesAfter(
-        pastesAfter(old, restoredCode.body),
-        (input.images ?? []).map((image) => ({
-          ...image,
-          id: crypto.randomUUID(),
-        })),
-        nextImageNumber(old, existing) - 1,
-      );
-      const body = [old.trim(), back.text.trim()].filter(Boolean).join("\n\n");
-      if (body.length > 32000)
-        throw new Error(
-          "Send or shorten the current draft before restoring this message.",
-        );
-      const restored = [...attachedImages(old, existing), ...back.images];
-      if (restored.length > 3)
-        throw new Error(
-          "Remove draft screenshots before restoring this message; a message can hold three.",
-        );
-      if (input.selection && selection)
-        throw new Error(
-          "Remove the current code selection before restoring this message.",
-        );
-      // Persist the complete draft before removing the durable queue entry.
-      await saveDraftImages(key, restored);
-      onDraft(body, key);
-      // A reply goes back to its side conversation, which keeps its own settings.
-      saveSentSettings(
-        parent ? `${id}:${parent}` : id,
-        recipient(input),
-        input,
-      );
-      attachments.addCodeRefs(restoredCode.refs);
-      // The queue entry goes next.
-      if (input.selection) attachments.restoreSelection(input.selection);
-      setRootId(parent);
-      setComposerRevision((value) => value + 1);
-      await api.projectChatQueueAction(chat.id, "remove", input.id);
-      await history.refetch();
-      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    });
-  }
-  async function queueAction(
-    action: "remove" | "steer" | "move",
-    messageId: string,
-    index?: number,
-  ) {
-    if (!chat || busy) return;
-    await run(async () => {
-      await api.projectChatQueueAction(chat.id, action, messageId, index);
-      await history.refetch();
-      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    });
-  }
-  const [draggingQueued, setDraggingQueued] = useState<string | null>(null);
-  const [queueDrop, setQueueDrop] = useState<{
-    id: string;
-    where: "before" | "after";
-  } | null>(null);
-  const clearQueueDrag = () => {
-    setDraggingQueued(null);
-    setQueueDrop(null);
-  };
-  function dropQueued() {
-    const queue = history.data?.queue,
-      moving = draggingQueued,
-      target = queueDrop;
-    clearQueueDrag();
-    if (!chat || !queue || !moving || !target || target.id === moving) return;
-    const rest = queue.filter((q) => q.input.id !== moving),
-      index =
-        rest.findIndex((q) => q.input.id === target.id) +
-        (target.where === "after" ? 1 : 0);
-    if (queue.findIndex((q) => q.input.id === moving) === index) return;
-    // Reorder right away; the refetch after the move confirms it.
-    qc.setQueryData<ProjectChatData>(["project-chat", chat.id], (data) =>
-      data?.queue
-        ? {
-            ...data,
-            queue: [
-              ...rest.slice(0, index),
-              queue.find((q) => q.input.id === moving)!,
-              ...rest.slice(index),
-            ],
-          }
-        : data,
-    );
-    void queueAction("move", moving, index);
-  }
+  const { restored, steer, move, returnToComposer } = useQueuedMessages({
+    chat,
+    draftId: id,
+    projectId: project.id,
+    messages,
+    queue: history.data?.queue,
+    attachments,
+    writes,
+    refetch: history.refetch,
+    onOpen: setRootId,
+  });
   const {
     signInToClaude,
     openReply,
@@ -741,162 +605,16 @@ export function ProjectChat({
                   <RotateCcw size={13} /> Resume answer
                 </button>
               )}
-            {!!history.data?.queue?.length && (
-              <section className="chat-queue" aria-label="Queued messages">
-                {history.data.queue.map((queued, index, queue) => (
-                  <div
-                    key={queued.input.id}
-                    className={[
-                      "queued-message",
-                      draggingQueued === queued.input.id && "dragging",
-                      queueDrop?.id === queued.input.id &&
-                        draggingQueued !== queued.input.id &&
-                        `drop-${queueDrop.where}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    draggable={queue.length > 1 && !busy}
-                    title={queue.length > 1 ? "Drag to reorder" : undefined}
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(QUEUED_DRAG, queued.input.id);
-                      e.dataTransfer.effectAllowed = "move";
-                      setDraggingQueued(queued.input.id);
-                    }}
-                    onDragEnd={clearQueueDrag}
-                    onDragOver={(e) => {
-                      if (
-                        !draggingQueued ||
-                        !e.dataTransfer.types.includes(QUEUED_DRAG)
-                      )
-                        return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      const box = e.currentTarget.getBoundingClientRect(),
-                        where =
-                          e.clientY < box.top + box.height / 2
-                            ? "before"
-                            : "after";
-                      setQueueDrop((current) =>
-                        current?.id === queued.input.id &&
-                        current.where === where
-                          ? current
-                          : { id: queued.input.id, where },
-                      );
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      dropQueued();
-                    }}
-                  >
-                    <QueuedBody input={queued.input} />
-                    <footer>
-                      <span
-                        className="queued-status"
-                        title={
-                          history.data?.queuePaused
-                            ? (queued.error ?? "Waits for Send now")
-                            : index === 0
-                              ? "Sends when the current answer finishes"
-                              : "Sends after the messages above it"
-                        }
-                      >
-                        <Clock3 size={13} />{" "}
-                        {history.data?.queuePaused ? "Paused" : "Queued"}
-                      </span>
-                      <span className="queued-actions">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label={running ? "Steer now" : "Send now"}
-                          title={
-                            running
-                              ? "Steer the current answer, or send this next when it can't be steered"
-                              : "Send now"
-                          }
-                          onPointerDown={(e) => e.preventDefault()}
-                          onClick={() =>
-                            void queueAction("steer", queued.input.id)
-                          }
-                        >
-                          <ArrowUp size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label="Cancel and return to the composer"
-                          title="Cancel and return to the composer"
-                          onPointerDown={(e) => e.preventDefault()}
-                          onClick={() => void returnToComposer(queued.input)}
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    </footer>
-                  </div>
-                ))}
-                {running && (
-                  <p className="chat-queue-hint">
-                    <kbd>{sendKeyLabel(sendKey)}</kbd> to queue ·{" "}
-                    <kbd>{steerKeyLabel(sendKey)}</kbd> to steer
-                  </p>
-                )}
-              </section>
-            )}
-            {!!history.data?.scheduled?.length && (
-              <section className="chat-queue" aria-label="Scheduled messages">
-                {[...history.data.scheduled]
-                  .sort((a, b) => a.at - b.at)
-                  .map((scheduled) => (
-                    <div key={scheduled.input.id} className="queued-message">
-                      <QueuedBody input={scheduled.input} />
-                      <footer>
-                        <span
-                          className={`queued-status${scheduled.error ? " error" : ""}`}
-                          title={
-                            scheduled.error ??
-                            new Date(scheduled.at).toLocaleString()
-                          }
-                        >
-                          <CalendarClock size={13} />{" "}
-                          {scheduled.error
-                            ? "Didn't send"
-                            : `Sends ${wakeLabel(scheduled.at, new Date())}`}
-                        </span>
-                        <span className="queued-actions">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            aria-label="Send now"
-                            title={
-                              running
-                                ? "Queue now, to send when the current answer finishes"
-                                : "Send now"
-                            }
-                            onPointerDown={(e) => e.preventDefault()}
-                            onClick={() =>
-                              void queueAction("steer", scheduled.input.id)
-                            }
-                          >
-                            <ArrowUp size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            aria-label="Cancel and return to the composer"
-                            title="Cancel and return to the composer"
-                            onPointerDown={(e) => e.preventDefault()}
-                            onClick={() =>
-                              void returnToComposer(scheduled.input)
-                            }
-                          >
-                            <X size={14} />
-                          </button>
-                        </span>
-                      </footer>
-                    </div>
-                  ))}
-              </section>
-            )}
+            <QueuedMessages
+              queue={history.data?.queue}
+              paused={history.data?.queuePaused}
+              scheduled={history.data?.scheduled}
+              running={running}
+              busy={busy}
+              onSteer={steer}
+              onMove={move}
+              onReturn={returnToComposer}
+            />
             {root && shown.length === 1 && (
               <p className="thread-reply-empty">
                 Dig into this message here. The main conversation stays focused.
@@ -989,7 +707,7 @@ export function ProjectChat({
           />
         ) : (
           <ProjectComposer
-            key={`${id}:${root?.id ?? "main"}:${composerRevision}`}
+            key={`${id}:${root?.id ?? "main"}:${restored}`}
             handleRef={composer}
             onCommand={runCommand}
             // A side conversation keeps its own agent and opens on the one that wrote its message.
