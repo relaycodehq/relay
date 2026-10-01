@@ -69,6 +69,7 @@ import {
   type HandoffThread,
 } from "../shared/handoff";
 import { readTurn } from "../shared/agent-trace";
+import { answerImagePaths } from "../shared/answer-images";
 import {
   dropRevert,
   finishTurn,
@@ -1421,12 +1422,23 @@ export class ProjectChats {
     const bytes = await readFile(this.imagePath(chatId, image));
     return `data:${image.mimeType};base64,${bytes.toString("base64")}`;
   }
-  /** Only a path the turn itself read, so the renderer can't reach any other file on disk. */
+  /** Only a path the turn itself read or its answer shows, so the renderer can't reach any other file on disk. */
   async turnImagePath(chatId: string, messageId: string, path: string) {
     const chat = await this.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
-    if (!message || !isAbsolute(path) || !turnImages(message).includes(path))
+    if (!message || !isAbsolute(path))
       throw new Error("This turn didn't read that image.");
+    if (turnImages(message).includes(path)) return path;
+    const root = await this.terminalFolder(chat.projectId, chatId).catch(
+      () => null,
+    );
+    if (
+      message.role !== "assistant" ||
+      !message.body ||
+      !root ||
+      !answerImagePaths(message.body, root).includes(path)
+    )
+      throw new Error("This turn didn't read or show that image.");
     return path;
   }
   async readImage(chatId: string, messageId: string, path: string) {

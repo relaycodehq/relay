@@ -85,3 +85,29 @@ export function ImageThumbnail({
     </div>
   );
 }
+
+/** An image an answer embeds, drawn where the text puts it; nothing at all if it won't load. */
+export function AnswerImage({
+  image,
+  alt,
+  onOpen,
+}: {
+  image: PreviewImage;
+  alt: string;
+  onOpen: () => void;
+}) {
+  const { data: source } = useImageSource(image);
+  if (!source) return null;
+  return (
+    <CopyImageMenu source={source} inline className="answer-image">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${alt || image.name}`}
+        title={image.location ?? image.name}
+      >
+        <img src={source} alt={alt || image.name} />
+      </button>
+    </CopyImageMenu>
+  );
+}

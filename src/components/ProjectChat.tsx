@@ -70,11 +70,13 @@ import {
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText, Spinner } from "./ui";
 import {
+  AnswerImage,
   ImageThumbnail,
   useWorkingImages,
   type PreviewImage,
 } from "./ImagePreview";
 import { ImageViewer } from "./ImageViewer";
+import { answerImagePaths, localImagePath } from "../../shared/answer-images";
 import { LiveSyncControls } from "./LiveSyncControls";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
 import {
@@ -155,7 +157,8 @@ function userImage(chatId: string, image: ChatImage): PreviewImage {
     load: () => api.projectChatImage(chatId, image.id),
   };
 }
-/** An image file the agent read in the turn `messageId`, as it is on disk now. */
+const hiddenImage = () => null;
+/** An image file the agent read or showed in the turn `messageId`, as it is on disk now. */
 function readImage(
   chatId: string,
   messageId: string,
@@ -348,19 +351,46 @@ const Message = memo(function Message({
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
+  // The answer's own images show in its text; the strip keeps the rest.
+  const shown = useMemo(
+    () =>
+      m.role === "assistant" && m.body
+        ? answerImagePaths(m.body, projectRoot)
+        : [],
+    [m.role, m.body, projectRoot],
+  );
   const allImages = useMemo(
     () =>
       chatId
         ? [
             ...(m.images ?? []).map((image) => userImage(chatId, image)),
-            ...turnImages(m).map((path) =>
-              readImage(chatId, m.id, path, projectRoot),
-            ),
+            ...[
+              ...shown,
+              ...turnImages(m).filter((path) => !shown.includes(path)),
+            ].map((path) => readImage(chatId, m.id, path, projectRoot)),
           ]
         : [],
-    [chatId, m, projectRoot],
+    [chatId, m, projectRoot, shown],
   );
   const images = useWorkingImages(allImages, viewing);
+  const stripImages = images.filter(
+    (image) => !image.path || !shown.includes(image.path),
+  );
+  const answerImage = useCallback(
+    (src: string, alt: string) => {
+      const path = chatId && localImagePath(src, projectRoot);
+      if (!path) return undefined;
+      const image = readImage(chatId, m.id, path, projectRoot);
+      return (
+        <AnswerImage
+          image={image}
+          alt={alt}
+          onOpen={() => setViewing(image.key)}
+        />
+      );
+    },
+    [chatId, m.id, projectRoot],
+  );
   const viewingIndex = images.findIndex((image) => image.key === viewing);
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
@@ -463,6 +493,8 @@ const Message = memo(function Message({
             projectRoot={projectRoot}
             onOpenFile={onOpenFile}
             inlineCode={inlineCode}
+            // Main only reads an image once the saved answer names it.
+            image={m.status === "streaming" ? hiddenImage : answerImage}
           />
         )
       ) : null}
@@ -484,9 +516,9 @@ const Message = memo(function Message({
         />
       )}
       {/* The images the agent read show once its turn ends, after the answer. */}
-      {!!images.length && m.status !== "streaming" && (
+      {!!stripImages.length && m.status !== "streaming" && (
         <div className="message-images">
-          {images.map((image) => (
+          {stripImages.map((image) => (
             <ImageThumbnail
               key={image.key}
               image={image}

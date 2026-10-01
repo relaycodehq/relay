@@ -592,7 +592,9 @@ if (args.includes("--permission-prompt-tool")) {
       // Answers that link project files, for the chat's file links.
       // Relay's private note, when there is one, comes before the prompt.
       const said = m.params.input.filter((i) => i.type === "text").at(-1).text;
+      const echo = said.indexOf("fixture echo:");
       const answer =
+        (echo >= 0 ? said.slice(echo + "fixture echo:".length).trim() : null) ??
         Object.entries({
           // A review whose focus asks for it reports two findings.
           "fixture two findings": twoFindings,

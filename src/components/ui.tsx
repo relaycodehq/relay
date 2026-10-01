@@ -17,7 +17,11 @@ import {
   type ErrorInfo,
 } from "react";
 import { X, AlertCircle, Folder, Copy, Check } from "lucide-react";
-import Markdown, { type Components } from "react-markdown";
+import Markdown, {
+  defaultUrlTransform,
+  type Components,
+  type UrlTransform,
+} from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
@@ -390,6 +394,13 @@ function FileLinkChip({
     </button>
   );
 }
+// The default drops data: and file: URLs; an image may use either, a link may not.
+const urlTransform: UrlTransform = (url, key, node) =>
+  key === "src" &&
+  node.tagName === "img" &&
+  /^(?:data:image\/|file:)/i.test(url)
+    ? url
+    : defaultUrlTransform(url);
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   components,
@@ -403,7 +414,11 @@ const MarkdownBlock = memo(function MarkdownBlock({
     [],
   );
   return (
-    <Markdown remarkPlugins={remarkPlugins} components={components}>
+    <Markdown
+      remarkPlugins={remarkPlugins}
+      components={components}
+      urlTransform={urlTransform}
+    >
       {text}
     </Markdown>
   );
@@ -413,12 +428,15 @@ export const RichText = memo(function RichText({
   projectRoot,
   onOpenFile,
   inlineCode,
+  image,
 }: {
   text: string;
   projectRoot?: string;
   onOpenFile?: (target: ProjectFileLink) => void;
   /** Shows some inline code as something else, like a finding's `F1`. */
   inlineCode?: (value: string) => ReactNode | undefined;
+  /** Shows an `![alt](src)`; undefined leaves it to the default, which only draws data URLs. */
+  image?: (src: string, alt: string) => ReactNode | undefined;
 }) {
   // Components must keep their identity across renders, or React remounts
   // every code span, table and quote whenever the text changes.
@@ -488,10 +506,30 @@ export const RichText = memo(function RichText({
           <code className={className}>{children}</code>
         );
       },
-      img: ({ alt }) => <span className="muted">[Image: {alt}]</span>,
+      img: ({ src, alt }) => {
+        if (typeof src !== "string") return null;
+        const shown = image?.(src, alt ?? "");
+        if (shown !== undefined) return shown;
+        // Remote images stay links: loading one would tell its server the thread was read.
+        if (/^https?:/i.test(src))
+          return (
+            <a
+              href={src}
+              onClick={(e) => {
+                e.preventDefault();
+                void api.openExternal(src).catch(() => {});
+              }}
+            >
+              {alt || src}
+            </a>
+          );
+        return /^data:image\//i.test(src) ? (
+          <img className="markdown-image" src={src} alt={alt ?? ""} />
+        ) : null;
+      },
     }),
     // A new renderer redraws text that was shown before it arrived.
-    [projectRoot, linksFiles, inlineCode],
+    [projectRoot, linksFiles, inlineCode, image],
   );
   const blocks = useMemo(() => markdownBlocks(text), [text]);
   // Streaming changes the text every token; keep the map (and the chips
