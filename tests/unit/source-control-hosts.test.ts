@@ -13,7 +13,7 @@ vi.mock("../../electron/source-control/clis", async (original) => ({
 
 import { clis } from "../../electron/source-control/clis";
 import { azureDevOps } from "../../electron/source-control/azure-devops";
-import { DevOps } from "../../electron/devops";
+import { DevOps } from "../../electron/plugins/devops/service";
 import { Store } from "../../electron/store";
 import {
   defaultDevOpsSettings,

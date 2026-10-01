@@ -3,7 +3,7 @@ import {
   sourceControlNames,
   type SourceControlProvider,
 } from "../../shared/source-control";
-import { DevOpsUnreachable, type DevOps } from "../devops";
+import { DevOpsUnreachable, type DevOps } from "../plugins/devops/service";
 import { cliFields, probeCli } from "./clis";
 
 /**

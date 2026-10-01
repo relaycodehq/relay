@@ -16,10 +16,10 @@ import {
   type WorkItemField,
   type WorkItemScope,
   type WorkItemsResult,
-} from "../shared/devops";
-import type { Project } from "../shared/projects";
-import { findExecutable } from "./executables";
-import type { Store } from "./store";
+} from "../../../shared/devops";
+import type { Project } from "../../../shared/projects";
+import { findExecutable } from "../../executables";
+import type { Store } from "../../store";
 
 const exec = promisify(execFile);
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;

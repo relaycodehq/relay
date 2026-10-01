@@ -11,7 +11,7 @@ import type { AppWindow } from "../app/window";
 import type { BlameService } from "../blame";
 import type { Ci } from "../ci";
 import type { ProjectChecks } from "../checks/service";
-import type { DevOps } from "../devops";
+import type { DevOps } from "../plugins/devops/service";
 import type { ClockifyPlugin } from "../plugins/clockify/service";
 import type { Dictation } from "../dictation/service";
 import type { LiveSyncs } from "../live-sync";

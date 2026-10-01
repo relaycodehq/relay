@@ -18,7 +18,7 @@ import { AppWindow } from "./app/window";
 import { BlameService } from "./blame";
 import { Ci } from "./ci";
 import { ProjectChecks } from "./checks/service";
-import { DevOps } from "./devops";
+import { DevOps } from "./plugins/devops/service";
 import { ClockifyPlugin } from "./plugins/clockify/service";
 import { PluginSecrets } from "./plugins/secrets";
 import { Dictation } from "./dictation/service";
