@@ -5,6 +5,7 @@ import type { AppWindow } from "../app/window";
 import { accountHandlers } from "./account";
 import { chatHandlers } from "./chats";
 import { checkHandlers } from "./checks";
+import { combine } from "./combine";
 import { computerHandlers } from "./computers";
 import type { ApiContext, Handlers } from "./context";
 import { desktopHandlers } from "./desktop";
@@ -21,22 +22,22 @@ export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
 
 /** Runs an Api call; its arguments come from the renderer or the phone, so every handler parses them. */
 export function createDispatch(ctx: ApiContext): Dispatch {
-  const handlers = {
-    ...accountHandlers(ctx),
-    ...reviewHandlers(ctx),
-    ...reviewCheckoutHandlers(ctx),
-    ...checkHandlers(ctx),
-    ...projectHandlers(ctx),
-    ...gitHandlers(ctx),
-    ...chatHandlers(ctx),
-    ...terminalHandlers(ctx),
-    ...roomHandlers(ctx),
-    ...settingsHandlers(ctx),
-    ...pluginHandlers(ctx),
-    ...desktopHandlers(ctx),
-    ...computerHandlers(ctx),
+  const handlers = combine([
+    accountHandlers(ctx),
+    reviewHandlers(ctx),
+    reviewCheckoutHandlers(ctx),
+    checkHandlers(ctx),
+    projectHandlers(ctx),
+    gitHandlers(ctx),
+    chatHandlers(ctx),
+    terminalHandlers(ctx),
+    roomHandlers(ctx),
+    settingsHandlers(ctx),
+    pluginHandlers(ctx),
+    desktopHandlers(ctx),
+    computerHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
-  } satisfies Required<Handlers>;
+  ]) satisfies Required<Handlers>;
   return async (method, args) => {
     // Own keys only: names the renderer made up, "toString" among them, stay unknown.
     if (!Object.hasOwn(handlers, method))
