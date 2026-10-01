@@ -1,9 +1,14 @@
 import { agentMentionPattern, type AgentProvider } from "./agents";
 import { buildSend } from "./compose-send";
+import {
+  modelEfforts,
+  type ComposerChange,
+  type ModelCatalogs,
+} from "./composer-commands";
 import type { ProjectChatSend } from "./projects";
 import type { RemoteSettings } from "./remote";
 import type { RemoteClient } from "./remote-client";
-import type { AISettings } from "./settings";
+import { claudeContextWindow, type AISettings } from "./settings";
 import type { NewThreadModels } from "./new-thread-models";
 
 export const withoutMention = (body: string) =>
@@ -93,6 +98,56 @@ export function switchAgent(
     provider,
     choice: { model: "", fast: false, reasoningEffort: "" },
   };
+}
+
+/**
+ * `settings` after a composer command (shared/composer-commands). `switchTo`
+ * puts it on another agent, with whatever model the composer kept for it.
+ */
+export function withComposerChange(
+  settings: RemoteSettings,
+  change: ComposerChange<AgentProvider>,
+  catalogs: ModelCatalogs,
+  switchTo: typeof switchAgent = switchAgent,
+): RemoteSettings {
+  const { choice } = settings;
+  switch (change.command) {
+    case "provider":
+      return switchTo(settings, change.provider);
+    case "model": {
+      const { provider, model } = change;
+      const { contextWindow, ...on } = switchTo(settings, provider);
+      // As on the desktop: an effort the model lacks goes back to Default,
+      // and a model with 1M built in drops the 200k window.
+      const effort = on.choice.reasoningEffort;
+      return {
+        ...on,
+        choice: {
+          ...on.choice,
+          model,
+          reasoningEffort: modelEfforts(provider, model, catalogs).includes(
+            effort,
+          )
+            ? effort
+            : "",
+        },
+        ...(contextWindow && claudeContextWindow(model) !== "1m"
+          ? { contextWindow }
+          : {}),
+      };
+    }
+    case "effort":
+      return {
+        ...settings,
+        choice: { ...choice, reasoningEffort: change.reasoningEffort },
+      };
+    case "permissions":
+      return { ...settings, runtimeMode: change.runtimeMode };
+    case "plan":
+      return { ...settings, interactionMode: change.plan ? "plan" : "default" };
+    case "fast":
+      return { ...settings, choice: { ...choice, fast: change.fast } };
+  }
 }
 
 export interface SendExtras {

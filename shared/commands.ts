@@ -49,6 +49,13 @@ export const composerCommands: readonly RelayCommand[] = [
   "permissions",
   "fast",
 ];
+export type ComposerCommand = Extract<
+  RelayCommand,
+  "provider" | "model" | "effort" | "plan" | "permissions" | "fast"
+>;
+export const isComposerCommand = (
+  name: RelayCommand,
+): name is ComposerCommand => composerCommands.includes(name);
 export interface ProviderCommand {
   displayName?: string;
   source?:

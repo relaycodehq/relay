@@ -86,8 +86,8 @@ export const withClaudeContextWindow = (
   contextWindow: ClaudeContextWindow,
 ) => model.replace(/\[1m\]$/, "") + (contextWindow === "1m" ? "[1m]" : "");
 /** The listed model an id refers to, whichever context window it asks for. */
-export const findClaudeModel = (
-  models: ClaudeModel[] | undefined,
+export const findClaudeModel = <M extends { id: string }>(
+  models: readonly M[] | undefined,
   id: string,
 ) =>
   models?.find(
@@ -105,7 +105,7 @@ export const claudeEfforts: ReasoningEffort[] = [
 ];
 /** A model the CLI didn't list (custom, or the list failed) offers every level. */
 export const claudeEffortsFor = (
-  models: ClaudeModel[] | undefined,
+  models: readonly Pick<ClaudeModel, "id" | "efforts">[] | undefined,
   id: string,
 ) => findClaudeModel(models, id)?.efforts ?? claudeEfforts;
 /** Only efforts Claude accepts; Codex-only levels fall back to its default. */
@@ -121,7 +121,7 @@ export const claudeArgs = (choice: {
 /** A model Codex didn't list (custom, or the list failed) offers every level. */
 export const reasoningEffortsFor = (
   model: string,
-  listed: CodexModel[] = fallbackCodexModels,
+  listed: readonly Pick<CodexModel, "id" | "efforts">[] = fallbackCodexModels,
 ): ReasoningEffort[] =>
   (
     listed.find((m) => m.id === model) ??

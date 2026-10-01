@@ -3,6 +3,7 @@ import {
   composeSend,
   desktopNewThreadSettings,
   newThreadSettings,
+  withComposerChange,
   withRememberedModel,
   switchAgent,
 } from "../../shared/remote-compose";
@@ -101,4 +102,59 @@ it("starts new threads on the agent last picked for one, else the default agent"
     (await desktopNewThreadSettings(desktop(new Error("Invalid enum"))))
       .provider,
   ).toBe("cursor");
+});
+
+it("puts /model on the model's agent, as the desktop does", () => {
+  const catalogs = {
+    claude: [
+      {
+        id: "opus",
+        name: "Opus",
+        description: "",
+        efforts: ["high" as const],
+        longContext: true,
+      },
+    ],
+  };
+  const codex = {
+    ...newThreadSettings(defaultAISettings, "codex"),
+    choice: {
+      model: "gpt-6-luna",
+      fast: true,
+      reasoningEffort: "high" as const,
+    },
+  };
+  // The composer keeps each agent's settings; here Claude kept max and 200k.
+  const kept: typeof switchAgent = (s, to) =>
+    to === "claude"
+      ? {
+          ...switchAgent(s, to),
+          choice: { model: "", fast: false, reasoningEffort: "max" },
+          contextWindow: "200k",
+        }
+      : switchAgent(s, to);
+  const change = {
+    command: "model",
+    provider: "claude",
+    model: "opus",
+  } as const;
+  // Opus has no max, so Default; the 200k window stays.
+  expect(withComposerChange(codex, change, catalogs, kept)).toEqual({
+    ...codex,
+    provider: "claude",
+    choice: { model: "opus", fast: false, reasoningEffort: "" },
+    contextWindow: "200k",
+  });
+  // A model with 1M built in has no 200k window to keep.
+  expect(
+    withComposerChange(codex, { ...change, model: "opus[1m]" }, catalogs, kept),
+  ).not.toHaveProperty("contextWindow");
+  // Staying on Codex keeps an effort its unlisted model takes.
+  expect(
+    withComposerChange(
+      codex,
+      { command: "model", provider: "codex", model: "gpt-7" },
+      catalogs,
+    ).choice,
+  ).toEqual({ model: "gpt-7", fast: true, reasoningEffort: "high" });
 });

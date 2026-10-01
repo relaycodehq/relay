@@ -15,12 +15,13 @@ import * as Haptics from "expo-haptics";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
 import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
-import { atHour, wakeLabel } from "../../../shared/chat-activity";
-import { composerCommands, relayCommand, type RelayCommand } from "../../../shared/commands";
+import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
+import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
+import { composerCommand, type ModelCatalogs } from "../../../shared/composer-commands";
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
-import { reasoningEffortSchema, type ModelChoice } from "../../../shared/settings";
-import { switchAgent, withRememberedModel } from "../../../shared/remote-compose";
+import type { ModelChoice } from "../../../shared/settings";
+import { switchAgent, withComposerChange, withRememberedModel } from "../../../shared/remote-compose";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
 import {
   cancelDictation,
@@ -70,21 +71,6 @@ export interface ComposerHandle {
   /** Puts a queued message's text back to edit, after anything already typed. */
   restore(text: string): void;
 }
-
-/** The desktop's Send later choices (src/components/SendLaterMenu.tsx). */
-function sendLaterPresets(now: Date) {
-  const presets = [
-    { label: "In 30 minutes", at: now.getTime() + 1_800_000 },
-    { label: "In 1 hour", at: now.getTime() + 3_600_000 },
-    { label: "In 3 hours", at: now.getTime() + 10_800_000 },
-  ];
-  if (now.getHours() < 17) presets.push({ label: "This evening", at: atHour(now, 0, 18) });
-  presets.push({ label: "Tomorrow morning", at: atHour(now, 1, 9) });
-  return presets;
-}
-
-const toggle = (args: string, current: boolean) =>
-  args.toLowerCase() === "on" ? true : args.toLowerCase() === "off" ? false : !current;
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
 export const Composer = forwardRef<
@@ -140,7 +126,7 @@ export const Composer = forwardRef<
   }, [settings]);
   useEffect(() => setError(undefined), [text]);
 
-  const { overview } = useRemote();
+  const { overview, desktop } = useRemote();
   // Desktops from before phone dictation don't say, and can't.
   const canDictate = phoneHasMic && !!overview?.dictation && overview.dictation !== "unsupported";
   const [dictationOwner] = useState(() => ({}));
@@ -213,59 +199,53 @@ export const Composer = forwardRef<
     [dictationOwner, draftKey],
   );
 
-  const switchTo = (next: RemoteSettings, to: AgentProvider) => {
-    if (to === next.provider) return onSettings(next);
+  /** `next` on agent `to`, with the model kept for it here, else the one it last ran with. */
+  const switched = (next: RemoteSettings, to: AgentProvider): RemoteSettings => {
+    if (to === next.provider) return next;
     const kept = picks.current[to];
-    const switched = switchAgent(next, to);
-    onSettings(
-      kept
-        ? {
-            ...switched,
-            choice: { model: kept.model, fast: kept.fast, reasoningEffort: kept.reasoningEffort },
-            ...(kept.contextWindow ? { contextWindow: kept.contextWindow } : {}),
-          }
-        : withRememberedModel(switched, remembered ?? {}),
+    const other = switchAgent(next, to);
+    return kept
+      ? {
+          ...other,
+          choice: { model: kept.model, fast: kept.fast, reasoningEffort: kept.reasoningEffort },
+          ...(kept.contextWindow ? { contextWindow: kept.contextWindow } : {}),
+        }
+      : withRememberedModel(other, remembered ?? {});
+  };
+  const switchTo = (next: RemoteSettings, to: AgentProvider) => onSettings(switched(next, to));
+  // The desktop lists each agent's models once; one it couldn't list is asked again next time.
+  const catalogs = useRef<ModelCatalogs>({});
+  useEffect(() => {
+    catalogs.current = {};
+  }, [desktop]);
+  const loadCatalogs = async (wanted: readonly AgentProvider[]) => {
+    await Promise.all(
+      wanted
+        .filter((p) => !catalogs.current[p])
+        .map((p) => desktop("agentModels", p).then((list) => void (catalogs.current[p] = list), () => {})),
     );
+    return catalogs.current;
   };
   /** The desktop's runCommand for a composer setting; with no value, its picker opens. */
-  const setting = (name: RelayCommand, args: string): CommandResult => {
-    const value = args.toLowerCase();
-    if (name === "provider") {
-      if (!value) return setSheet("model"), true;
-      const to = agentProviders.find((p) => p === value);
-      if (!to) return `Choose one of: ${agentProviders.join(", ")}.`;
-      return switchTo(settings, to), true;
-    }
-    if (name === "model") {
-      if (!args) return setSheet("model"), true;
-      onSettings({ ...settings, choice: { ...settings.choice, model: value === "default" ? "" : args } });
-      return true;
-    }
-    if (name === "effort") {
-      if (!args) return setSheet("model"), true;
-      const effort = reasoningEffortSchema.safeParse(value === "default" ? "" : value);
-      if (!effort.success) return "Choose a reasoning level such as low, medium or high.";
-      onSettings({ ...settings, choice: { ...settings.choice, reasoningEffort: effort.data } });
-      return true;
-    }
-    if (name === "permissions") {
-      if (!args) return setSheet("mode"), true;
-      const mode = runtimeModes.find((m) => m.value === value || m.label.toLowerCase() === value);
-      if (!mode) return `Choose one of: ${runtimeModes.map((m) => m.value).join(", ")}.`;
-      return onSettings({ ...settings, runtimeMode: mode.value }), true;
-    }
-    if (args && !["on", "off"].includes(value)) return `Use /${name} on or /${name} off.`;
-    if (name === "plan") {
-      const plan = toggle(args, settings.interactionMode === "plan");
-      return onSettings({ ...settings, interactionMode: plan ? "plan" : "default" }), true;
-    }
-    if (!agents[provider].fast)
-      return `Fast mode is only available for ${agentProviders.filter((p) => agents[p].fast).map((p) => agentNames[p]).join(" and ")}.`;
-    return onSettings({ ...settings, choice: { ...settings.choice, fast: toggle(args, settings.choice.fast) } }), true;
+  const setting = async (name: ComposerCommand, args: string): Promise<CommandResult> => {
+    if (!args && name !== "plan" && name !== "fast") return setSheet(name === "permissions" ? "mode" : "model"), true;
+    const known =
+      name === "model" ? await loadCatalogs(agentProviders) : name === "effort" ? await loadCatalogs([provider]) : {};
+    const change = composerCommand(name, args, {
+      recipient: provider,
+      targets: agentProviders,
+      model: settings.choice.model,
+      fast: settings.choice.fast,
+      plan: settings.interactionMode === "plan",
+      catalogs: known,
+    });
+    if (typeof change === "string") return change;
+    onSettings(withComposerChange(settings, change, known, switched));
+    return true;
   };
   const run = async (name: RelayCommand, args: string) => {
-    const result: CommandResult = composerCommands.includes(name)
-      ? setting(name, args)
+    const result: CommandResult = isComposerCommand(name)
+      ? await setting(name, args)
       : name === "context"
         ? (setSheet("usage"), true)
         : onCommand
@@ -278,7 +258,7 @@ export const Composer = forwardRef<
     if (item.kind === "relay") {
       // Required values are picked or typed after it; the rest run now.
       if (item.name === "btw") return setText("/btw ");
-      if (item.args?.startsWith("<") && !composerCommands.includes(item.name)) return setText(`/${item.name} `);
+      if (item.args?.startsWith("<") && !isComposerCommand(item.name)) return setText(`/${item.name} `);
       return void run(item.name, "");
     }
     if (item.kind === "command") return setText(`/${item.name} `);
