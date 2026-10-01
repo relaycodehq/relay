@@ -101,7 +101,7 @@ export function ProjectSidebar({
     const p = byId.get(c.projectId);
     if (p) onOpen(p, c);
   };
-  const onNew = (p: Project) => onOpen(p, undefined, true);
+  const newThread = (p: Project) => onOpen(p, undefined, true);
   const { all, away } = useSidebarThreads(realProjects, chatId);
   const unread = useUnread(chatId, all);
   const search = useThreadSearch(all, byId);
@@ -112,17 +112,16 @@ export function ProjectSidebar({
     projects: byId,
     scratch: scratchIds,
     open: openChat,
-    onNew,
+    onNew: newThread,
     setError,
   });
-  const { open, settle } = actions;
   const activity = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
     active: sections.active,
     chatId,
     jumping: activity,
-    open,
-    settle,
+    open: openChat,
+    settle: actions.settle,
   });
   const attention = useAttention(sections.active, unread, onAttention);
   const settleKeys = useShortcutLabel("settle");
@@ -209,7 +208,7 @@ export function ProjectSidebar({
               rows={rows}
               threads={all}
               current={projectId}
-              onNew={onNew}
+              onNew={newThread}
               onShared={onShared}
               error={error}
               empty={!realProjects.length}
