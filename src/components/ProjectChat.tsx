@@ -900,6 +900,7 @@ export function ProjectChat({
   const [agentView, setAgentView] = useState<string | null>(null);
   const sendKey = useSendKey();
   const context = latestContext(shown);
+  const threadCost = shown.reduce((sum, m) => sum + (m.cost ?? 0), 0);
   const compacting = shown.some(
     (m) => m.compaction && m.status === "streaming",
   );
@@ -2234,6 +2235,7 @@ export function ProjectChat({
                 />
               )
             }
+            threadCost={threadCost}
             context={contextButtons}
             allowEmpty={!root && (!!workItem || !!codeRefs.length)}
             attachment={

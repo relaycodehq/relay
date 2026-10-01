@@ -150,6 +150,14 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     };
     options.onContext?.(usage);
   };
+  /** Each finished step's cost, so a repeated update only adds what changed. */
+  const stepCosts = new Map<string, number>();
+  const charge = (part: { id: string; cost?: unknown }) => {
+    if (typeof part.cost !== "number" || !Number.isFinite(part.cost)) return;
+    const delta = part.cost - (stepCosts.get(part.id) ?? 0);
+    stepCosts.set(part.id, part.cost);
+    if (delta) options.onCost?.(delta);
+  };
   let lastModel = options.choice.model;
   let retrying = false;
 
@@ -254,7 +262,10 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           );
           return;
         }
-        if (part.type === "step-finish") report(part.tokens);
+        if (part.type === "step-finish") {
+          report(part.tokens);
+          charge(part);
+        }
         return;
       }
       case "message.part.delta": {

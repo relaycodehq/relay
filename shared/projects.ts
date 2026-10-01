@@ -270,6 +270,8 @@ export interface ChatMessage {
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
   unprompted?: boolean;
   context?: ContextUsage;
+  /** Local: dollars this answer cost, as its agent priced it. */
+  cost?: number;
   /** Local: the model and settings this answer ran on. */
   model?: TurnModel;
   /** Local proposed-plan action; shared chats receive the final text only. */

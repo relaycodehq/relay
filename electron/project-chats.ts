@@ -2621,6 +2621,7 @@ export class ProjectChats {
         compact: turn.kind === "compact",
         adopt: turn.kind === "adopt",
         onContext: (usage: ContextUsage) => answer.context(usage),
+        onCost: (usd: number) => answer.cost(usd),
         cwd: root,
         prompt,
         context: async () =>

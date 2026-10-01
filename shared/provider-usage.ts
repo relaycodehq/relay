@@ -54,7 +54,7 @@ function compactDuration(ms: number): string | null {
   return `${minutes}m`;
 }
 
-function resetsIn(at: number, now: number): string | null {
+export function resetsIn(at: number, now: number): string | null {
   if (at - now <= FIVE_MINUTES) return "Resets soon";
   const compact = compactDuration(at - now);
   return compact ? `Resets in ${compact}` : null;

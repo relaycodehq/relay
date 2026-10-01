@@ -294,6 +294,10 @@ export interface Api
     provider: UsageProvider,
     force?: boolean,
   ): Promise<ProviderUsage>;
+  /** Credit on the OpenRouter key OpenCode runs on; `force` skips the cache. */
+  openRouterCredit(
+    force?: boolean,
+  ): Promise<import("./openrouter-credit").OpenRouterCredit>;
   /** An agent's models; Codex's and Claude's carry their own extra fields. */
   agentModels<P extends import("./agents").AgentProvider>(
     provider: P,

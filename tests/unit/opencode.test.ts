@@ -42,6 +42,7 @@ function turn(prompt: string, extra: Partial<AgentOptions> = {}) {
     activity: [] as string[],
     edits: new Set<string>(),
     context: 0,
+    cost: 0,
     requests: [] as string[],
     session: undefined as string | undefined,
     point: undefined as string | undefined,
@@ -58,6 +59,7 @@ function turn(prompt: string, extra: Partial<AgentOptions> = {}) {
     onActivity: (a) => seen.activity.push(`${a.kind}:${a.status}:${a.label}`),
     onEdit: (paths) => paths.forEach((p) => seen.edits.add(p)),
     onContext: (usage) => (seen.context = usage.usedTokens),
+    onCost: (usd) => (seen.cost += usd),
     onRequest: async (request) => {
       seen.requests.push(`${request.title} ${request.detail}`);
       return { kind: "approval", decision: "accept" };
@@ -85,6 +87,8 @@ it("runs a turn: commentary before a tool, the ask, the edit and the answer", as
   expect(seen.activity).toContain(`file:complete:${root}/notes.md`);
   expect([...seen.edits]).toEqual([`${root}/notes.md`]);
   expect(seen.context).toBe(1500);
+  // Each step counted once, at its latest price.
+  expect(seen.cost).toBeCloseTo(0.037);
   expect(seen.session).toMatch(/^ses_/);
   expect(seen.point).toMatch(/^msg_/);
   const calls = await captured();

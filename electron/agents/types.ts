@@ -39,6 +39,8 @@ export interface AgentOptions {
   onTitle?: (title: string) => void;
   onPlan?: (text: string) => void;
   onContext?: (usage: ContextUsage) => void;
+  /** Dollars the turn cost since the last call, as the agent prices it. */
+  onCost?: (usd: number) => void;
   /** Private context for this turn: the agent reads it, the transcript never shows it. */
   context?: () => Promise<string | undefined>;
   /** Compact the resumed session instead of sending `prompt`. */

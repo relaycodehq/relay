@@ -210,6 +210,7 @@ const methods = [
   "submitClockifyReview",
   "discardClockifyReview",
   "providerUsage",
+  "openRouterCredit",
   "agentModels",
   "agentDefaults",
   "openExternal",

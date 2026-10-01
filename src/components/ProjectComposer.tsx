@@ -92,6 +92,7 @@ import {
 } from "../lib/shortcuts";
 import { defaultEffortLabel } from "../../shared/agent-defaults";
 import { UsageRing } from "./UsageRing";
+import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { DictationButton } from "./DictationButton";
 import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
 import { useComposerToolbar } from "../lib/composer-toolbar";
@@ -184,6 +185,7 @@ export function ProjectComposer({
   onStop,
   planProvider,
   contextMeter,
+  threadCost,
   notice,
   placeholder,
   inherit,
@@ -226,6 +228,8 @@ export function ProjectComposer({
   /** The main conversation of a private thread can plan with a council first. */
   ultraplanOffered?: boolean;
   contextMeter?: ReactNode;
+  /** Dollars this thread's answers cost, where their agent priced them. */
+  threadCost?: number;
   /** Sits on top of the input, attached to it. */
   notice?: ReactNode;
   placeholder?: string;
@@ -553,6 +557,14 @@ export function ProjectComposer({
       : p === "claude"
         ? claudeModels
         : agentPicks.catalogs[p]?.models;
+  // OpenRouter bills per token, so its spend shows instead of a usage ring.
+  const runsOnOpenRouter =
+    recipient === "opencode" &&
+    (
+      pickOf("opencode").model ||
+      defaults.of("opencode")?.model ||
+      ""
+    ).startsWith("openrouter/");
   // The model each agent's Default runs, by its listed name.
   const defaultModels = agentProviders.map((p) => defaults.of(p)?.model ?? "");
   const defaultNames = useMemo(
@@ -1464,8 +1476,12 @@ export function ProjectComposer({
                   <Paperclip size={15} />
                 </button>
               ),
-              usage: reportsUsage(recipient) && (
+              usage: reportsUsage(recipient) ? (
                 <UsageRing provider={recipient} />
+              ) : (
+                runsOnOpenRouter && (
+                  <OpenRouterCreditButton threadCost={threadCost} />
+                )
               ),
               mic: (
                 <DictationButton
