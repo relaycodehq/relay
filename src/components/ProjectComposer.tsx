@@ -11,7 +11,6 @@ import { reportsUsage, type AgentProvider } from "../../shared/agents";
 import type { RelayCommand } from "../../shared/commands";
 import type { ComposedSend } from "../../shared/compose-send";
 import type { ResumeSettings } from "../../shared/projects";
-import { draftRecipient } from "../../shared/recipient";
 import type { InheritedSettings } from "../lib/composer-settings";
 import { useComposerToolbar } from "../lib/composer-toolbar";
 import { effortStep, quickStep } from "../lib/effort-shortcut";
@@ -19,7 +18,7 @@ import { quickItems } from "../lib/quick-switch";
 import { sendAction, useSendKey } from "../lib/send-key";
 import { useAgentRuns } from "../lib/useAgentRuns";
 import { useComposerDraft } from "../lib/useComposerDraft";
-import { useComposerSend } from "../lib/useComposerSend";
+import { sendTarget, useComposerSend } from "../lib/useComposerSend";
 import { useComposerSettings } from "../lib/useComposerSettings";
 import { useModelCatalogs } from "../lib/useModelCatalogs";
 import { useQuickSwitchHud } from "../lib/useQuickSwitchHud";
@@ -72,14 +71,7 @@ export function ProjectComposer({
   ref,
   projectId,
   keys,
-  conversation: {
-    shared,
-    running,
-    busy,
-    agent,
-    planner,
-    ultraplan: ultraplanOffered = false,
-  },
+  conversation,
   context,
   notice,
   meter,
@@ -112,6 +104,14 @@ export function ProjectComposer({
   /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
+  const {
+    shared,
+    running,
+    busy,
+    agent,
+    planner,
+    ultraplan: ultraplanOffered = false,
+  } = conversation;
   const stop = useStopKeys(running, onStop);
   const form = useRef<HTMLFormElement>(null);
   const composer = useComposerSettings({
@@ -143,28 +143,27 @@ export function ProjectComposer({
   agentSettings.current = runs.resumeSettings;
   const filePick = useRef<HTMLInputElement>(null);
   const [viewingPaste, setViewingPaste] = useState<number>();
-  const recipient = draftRecipient(draft.text, composer.provider);
-  const councilOn =
-    ultraplanOffered && composer.ultraplan && recipient !== "message";
+  const target = sendTarget(draft.text, composer, ultraplanOffered);
+  const { to, councilOn } = target;
   const pickUltraplan = useCallback((on: boolean) => {
     composer.setUltraplan(on);
     if (on) setSpark((n) => n + 1);
   }, []);
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
-  const quick = useQuickSwitchHud(runs, recipient);
+  const quick = useQuickSwitchHud(runs, to);
   const settingCommands = useSettingCommands({
     state: composer,
     runs,
     catalogs,
-    to: recipient,
+    to,
     onCommand,
   });
   const commands = useComposerCommands({
     draft: draft.text,
     onDraft: draft.set,
     projectId,
-    provider: recipient,
+    provider: to,
     onCommand: settingCommands.run,
     options: settingCommands.options,
     input,
@@ -176,10 +175,8 @@ export function ProjectComposer({
     draft,
     state: composer,
     runs,
-    to: recipient,
-    councilOn,
-    busy,
-    running,
+    target,
+    conversation,
     complete: !!attachment?.complete,
     intercept: commands.interceptSend,
     onSend,
@@ -260,7 +257,7 @@ export function ProjectComposer({
             draft.sketch(draft.images.find((image) => image.n === n)?.id)
           }
           placeholder={
-            recipient === "message"
+            to === "message"
               ? "Leave a note or message your colleague…"
               : (placeholder ??
                 (councilOn
@@ -272,7 +269,7 @@ export function ProjectComposer({
             const step = effortStep(e);
             if (step) {
               e.preventDefault();
-              runs.stepEffort(recipient, step);
+              runs.stepEffort(to, step);
               return;
             }
             const quickDir = quick.presets.length ? quickStep(e) : 0;
@@ -319,7 +316,7 @@ export function ProjectComposer({
             controls={{
               model: (
                 <ComposerModelPicker
-                  provider={recipient}
+                  provider={to}
                   ready={!!runs.codex}
                   catalogs={runs.picker}
                   onOpen={catalogs.refresh}
@@ -328,24 +325,23 @@ export function ProjectComposer({
                   defaultNames={catalogs.defaultNames}
                 />
               ),
-              effort: recipient !== "message" &&
-                offersEffort(runs, recipient) && (
-                  <EffortControl
-                    to={recipient}
-                    state={composer}
-                    runs={runs}
-                    codexModels={catalogs.codex}
-                  />
-                ),
+              effort: to !== "message" && offersEffort(runs, to) && (
+                <EffortControl
+                  to={to}
+                  state={composer}
+                  runs={runs}
+                  codexModels={catalogs.codex}
+                />
+              ),
               context: meter,
-              access: recipient !== "message" && (
+              access: to !== "message" && (
                 <RuntimeModeSelect
-                  provider={recipient}
+                  provider={to}
                   runtimeMode={composer.runtimeMode}
                   onRuntimeMode={composer.setRuntimeMode}
                 />
               ),
-              mode: recipient !== "message" && (
+              mode: to !== "message" && (
                 <InteractionModeMenu
                   interactionMode={composer.interactionMode}
                   ultraplan={councilOn}
@@ -369,9 +365,7 @@ export function ProjectComposer({
                   <Paperclip size={15} />
                 </button>
               ),
-              usage: reportsUsage(recipient) && (
-                <UsageRing provider={recipient} />
-              ),
+              usage: reportsUsage(to) && <UsageRing provider={to} />,
               mic: (
                 <DictationButton
                   owner={sending.dictation}

@@ -6,7 +6,7 @@ import {
   implementPlan,
   type ComposedSend,
 } from "../../shared/compose-send";
-import type { Recipient } from "../../shared/recipient";
+import { draftRecipient, type Recipient } from "../../shared/recipient";
 import { dictationSnapshot, stopDictation } from "./dictation/session";
 import type { DraftImage } from "./draft-images";
 import { numberImages } from "./image-refs";
@@ -15,8 +15,24 @@ import type { AgentRuns } from "./useAgentRuns";
 import type { ComposerDraft } from "./useComposerDraft";
 import type { ComposerState } from "./useComposerSettings";
 
+/** Who the draft goes to, and whether a council thinks it over first; see shared/ultraplan. */
+export interface SendTarget {
+  to: Recipient;
+  councilOn: boolean;
+}
+
+/** `offered`: the conversation can plan with a council. */
+export function sendTarget(
+  text: string,
+  { provider, ultraplan }: Pick<ComposerState, "provider" | "ultraplan">,
+  offered: boolean,
+): SendTarget {
+  const to = draftRecipient(text, provider);
+  return { to, councilOn: offered && ultraplan && to !== "message" };
+}
+
 /**
- * Sending the draft to `to`: as a message, queued or steering while an
+ * Sending the draft to `target.to`: as a message, queued or steering while an
  * answer runs, as a `/btw` on the side, or as the go-ahead for a proposed
  * plan. One goes out at a time.
  */
@@ -24,10 +40,8 @@ export function useComposerSend({
   draft,
   state,
   runs,
-  to,
-  councilOn,
-  busy,
-  running,
+  target: { to, councilOn },
+  conversation: { busy, running },
   complete,
   intercept,
   onSend,
@@ -35,11 +49,8 @@ export function useComposerSend({
   draft: ComposerDraft;
   state: ComposerState;
   runs: AgentRuns;
-  to: Recipient;
-  /** The message goes to a council first; see shared/ultraplan. */
-  councilOn: boolean;
-  busy: boolean;
-  running: boolean;
+  target: SendTarget;
+  conversation: { busy: boolean; running: boolean };
   /** What's attached beside the draft is a complete message on its own. */
   complete: boolean;
   /** Whether something else, like the command menu, takes the send. */
