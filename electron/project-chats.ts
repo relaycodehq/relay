@@ -65,7 +65,12 @@ import {
   replyRoot,
   turnImages,
 } from "../shared/projects";
-import { agentName, agents, helperProviders } from "../shared/agents";
+import {
+  agentName,
+  agents,
+  helperFallbacks,
+  helperProviders,
+} from "../shared/agents";
 import type { ProjectSharing } from "./project-sharing";
 import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
@@ -95,6 +100,7 @@ import {
 import {
   cleanTitle,
   generateThreadTitle,
+  namesItself,
   promptTitle,
   regenerateThreadTitle,
 } from "./thread-titles";
@@ -1909,6 +1915,7 @@ export class ProjectChats {
       this.cache.set(id, chat);
       await this.persist(chat);
       this.emit({ chatId: id, message: user });
+      if (chat.messages.length === 1) this.generateTitle(chat, input.choice);
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!asked) {
         this.release(id, active);
@@ -2785,22 +2792,28 @@ export class ProjectChats {
         firstUser &&
         firstUser.id === input.id
       )
-        this.generateTitle(chat, ended, input.choice);
+        this.generateTitle(chat, input.choice, ended);
     }
     // A steer moves the rest of the answer to a message of its own.
     return answer.message;
   }
-  /** Generated once per thread; the prompt excerpt stays until one lands. */
+  /**
+   * Generated once per thread, from the first message as soon as it's sent;
+   * a message of only screenshots waits for the first answer. The prompt
+   * excerpt stays until a title lands.
+   */
   private generateTitle(
     chat: ProjectChat,
-    answer: ChatMessage,
     choice: ProjectChatSend["choice"],
+    answer?: ChatMessage,
   ) {
     const firstUser = chat.messages.find((m) => m.role === "user");
+    const provider = answer?.provider ?? firstUser?.provider;
     if (
       this.disposing ||
       !firstUser ||
-      !answer.provider ||
+      !provider ||
+      (!answer && !namesItself(firstUser.body)) ||
       chat.renamed ||
       chat.title !== promptTitle(firstUser.body) ||
       this.titlesAsked.has(chat.id)
@@ -2812,27 +2825,23 @@ export class ProjectChats {
     const job = (async () => {
       // One exhausted or unavailable CLI must not leave every thread named
       // after its prompt, so try the helper agents next.
-      const providers = [
-        answer.provider,
-        ...helperProviders.filter((p) => p !== answer.provider),
-      ];
-      for (const provider of providers) {
+      for (const by of helperFallbacks(provider)) {
         try {
           const title = await generateThreadTitle({
             user: firstUser.body,
-            answer: answer.body,
-            provider,
+            answer: answer?.body,
+            provider: by,
             // The other provider cannot use this provider's model id.
-            choice:
-              provider === answer.provider ? choice : { ...choice, model: "" },
+            choice: by === provider ? choice : { ...choice, model: "" },
             signal: titleAbort.signal,
           });
           if (titleAbort.signal.aborted) return;
-          if (title) return await this.updateTitle(chat, answer, title);
+          if (title)
+            return await this.updateTitle(chat, answer ?? firstUser, title);
         } catch (error) {
           if (titleAbort.signal.aborted) return;
           console.warn(
-            `Thread title via ${provider} failed:`,
+            `Thread title via ${by} failed:`,
             error instanceof Error ? error.message : error,
           );
         }
@@ -3184,14 +3193,15 @@ export class ProjectChats {
   /** Retries titles for threads whose first title run failed earlier. */
   ensureTitle(id: string) {
     const chat = this.cache.get(id);
-    if (!chat || this.active.has(id) || chat.shared) return;
+    if (!chat || chat.shared) return;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const answer = chat.messages.find(
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
     );
-    if (!firstUser || !answer) return;
-    const { choice } = this.sessionInput(chat, answer.provider);
-    this.generateTitle(chat, answer, choice);
+    const provider = answer?.provider ?? firstUser?.provider;
+    if (!provider) return;
+    const { choice } = this.sessionInput(chat, provider);
+    this.generateTitle(chat, choice, answer);
   }
   /**
    * The model a hidden turn runs on when the session's last turn was another

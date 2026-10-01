@@ -59,6 +59,12 @@ afterEach(async () => {
   // Windows holds a folder a just-stopped agent ran in for a moment.
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
+/** The capture log, the agent's own calls only unless helper jobs are asked for. */
+const agentCalls = async ({ helpers = false } = {}) =>
+  (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .split("\n")
+    .filter((line) => helpers || !/^\{"cwd":"[^"]*relay-helper-/.test(line))
+    .join("\n");
 const input = (body: string) => ({
   id: randomUUID(),
   body,
@@ -134,7 +140,7 @@ it("streams locally, persists final answers, and resumes the same Codex session 
       ),
     { timeout: 6000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -168,23 +174,28 @@ it("streams locally, persists final answers, and resumes the same Codex session 
     "The cache guard prevents duplicate requests.",
   );
 }, 15000);
-it("generates a separate title when Codex sends no thread name and persists it", async () => {
+it("names a thread from its first message while the answer is still running", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "4000");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await vi.waitFor(
     async () =>
       expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
-    { timeout: 8000 },
+    { timeout: 3000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("streaming");
+  const titling = (await agentCalls({ helpers: true }))
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line));
-  expect(requests.filter((r) => r.turn)).toHaveLength(2);
-  expect(requests.filter((r) => r.turn)[1].turn.input[0].text).toContain(
-    "Generate a short title",
-  );
+    .map((line) => JSON.parse(line))
+    .find((r) => r.turn?.input[0].text.startsWith("Generate a short title"));
+  expect(titling.turn).toMatchObject({
+    model: "fixture-model",
+    effort: "low",
+  });
+  expect(titling.turn.input[0].text).toContain("Explain the cache guard");
+  expect(titling.turn.input[0].text).not.toContain('"answer"');
   await chats.dispose();
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
@@ -195,7 +206,7 @@ it("retries a missing title once, not every time the thread is read", async () =
   // The generated title is the prompt excerpt already.
   await chats.send(chat.id, input("@codex Cache guard behavior"));
   const titleRuns = async () =>
-    (await readFile(join(root, "capture.jsonl"), "utf8"))
+    (await agentCalls({ helpers: true }))
       .split("\n")
       .filter((line) => line.includes("Generate a short title")).length;
   await vi.waitFor(async () => expect(await titleRuns()).toBe(1), {
@@ -237,7 +248,7 @@ it("retries a title with the answering agent's own model after another agent too
   await chats.get(chat.id);
   chats.ensureTitle(chat.id);
   const models = async () =>
-    (await readFile(join(root, "capture.jsonl"), "utf8"))
+    (await agentCalls({ helpers: true }))
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line))
@@ -247,6 +258,23 @@ it("retries a title with the answering agent's own model after another agent too
   // Codex can't run Claude's model; it retries with its own settings.
   expect(await models()).not.toContain("claude-model");
 }, 20000);
+it("waits for the first answer to name a thread of only screenshots", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex [Image #1]"));
+  expect((await chats.get(chat.id)).title).toBe("[Image #1]");
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
+    { timeout: 8000 },
+  );
+  const titling = (await agentCalls({ helpers: true }))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .find((r) => r.turn?.input[0].text.startsWith("Generate a short title"));
+  expect(titling.turn.input[0].text).toContain('"answer"');
+}, 12000);
 it("keeps the furthest read mark, and lists it for the desktop and phones", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.markSeen(chat.id, 500);
@@ -269,7 +297,7 @@ it("keeps a user's thread name over the prompt excerpt and generated titles", as
       ),
     { timeout: 8000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -319,7 +347,7 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(after.queuePaused).toBeFalsy();
   expect(after.lastInput?.body).toBe("@claude Now fix it");
   expect(after.sessions?.codex?.through).toBe(after.messages[1]!.id);
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -394,7 +422,7 @@ it("tells an agent coming back what was asked of the other agent meanwhile", asy
       { timeout: 10000 },
     );
   }
-  const codex = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const codex = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -428,7 +456,7 @@ it("still tells a compacted session the notes left since its last answer", async
   await settled(4);
   await chats.send(chat.id, input("@codex Go on"));
   await settled(6);
-  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const prompt = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -490,15 +518,22 @@ it("generates a title for Claude conversations, which have no thread-name event"
     provider: "claude",
   });
   await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
+    async () => {
+      const saved = await chats.get(chat.id);
+      expect(saved.title).toBe("Cache guard behavior");
+      expect(saved.messages.at(-1)?.status).toBe("complete");
+    },
     { timeout: 8000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const titling = (await agentCalls({ helpers: true }))
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line));
-  expect(requests.filter((r) => r.provider === "claude")).toHaveLength(2);
+    .map((line) => JSON.parse(line))
+    .filter((r) => r.provider === "claude" && r.prompt.includes("short title"));
+  expect(titling).toHaveLength(1);
+  expect(titling[0].args.join(" ")).toContain(
+    "--model fixture-model --effort low",
+  );
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
 }, 12000);
 it("shows a turn Claude starts by itself as its own answer, so later answers stay under their questions", async () => {
@@ -669,7 +704,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
     ["user", "@codex Use the blue one", "complete"],
     ["assistant", "Noted: Use the blue one", "complete"],
   ]);
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -749,7 +784,7 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
   expect(
     await readFile(join(root, "chats", chat.id + ".json"), "utf8"),
   ).not.toContain(tinyPng);
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -789,7 +824,7 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
       ),
     { timeout: 6000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -823,7 +858,7 @@ it("sends a screenshot on its own without inventing a request", async () => {
   );
   const saved = await chats.get(chat.id);
   expect(saved.messages[0].body).toBe("@claude");
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -851,7 +886,7 @@ it("sends a Claude slash command as the whole prompt so Claude runs it", async (
       ),
     { timeout: 6000 },
   );
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -879,7 +914,7 @@ it("tells a Claude session begun with a command what the thread is about on its 
       { timeout: 6000 },
     );
   }
-  const prompts = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const prompts = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -909,7 +944,7 @@ it("tells Claude on its next turn what a command it began with couldn't carry", 
       { timeout: 10000 },
     );
   }
-  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const prompt = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -1110,7 +1145,7 @@ it("validates selected PR evidence before saving a question and passes exact old
       ),
     { timeout: 6000 },
   );
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -1147,7 +1182,7 @@ it("keeps replies one level deep, isolates their agent session, and retains loca
   const saved = await chats.get(chat.id);
   expect(saved.messages.at(-1)?.parentId).toBeUndefined();
   expect(saved.replySessions?.[main.id]?.codex?.through).toBe(second.id);
-  const requests = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const requests = (await agentCalls())
     .trim()
     .split("\n")
     .map((l) => JSON.parse(l));
@@ -1234,7 +1269,7 @@ it("forks Claude's session for a side conversation, and gives another agent the 
   await ask("@claude BRANCH question", "claude", 4, main.id);
   // Codex joins the side conversation: Claude's side session hands off first.
   await ask("@codex OTHER question", "codex", 7, main.id);
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -1305,7 +1340,7 @@ it("forks a thread at an answer, and its first turn continues that answer's sess
   expect((await chats.get(chat.id)).messages).toHaveLength(4);
 
   await ask(fork.id, "@claude FORKED question", 4);
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -1331,7 +1366,7 @@ it("discovers an enabled skill and sends its native input to Codex without trust
   const { codexSkills } = await import("../../electron/provider-commands");
   const skills = await codexSkills(join(root, "repo"));
   expect(skills.map((s) => s.name)).toEqual(["explain"]);
-  const discovery = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const discovery = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -1349,7 +1384,7 @@ it("discovers an enabled skill and sends its native input to Codex without trust
       ),
     { timeout: 6000 },
   );
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -1392,7 +1427,7 @@ it("steers an active Codex turn natively and resumes its saved session after sto
       ),
     { timeout: 6000 },
   );
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -1437,7 +1472,7 @@ it("steers an active Codex turn with a screenshot", async () => {
   const steered = saved.messages.find((m) => m.id === followup.id);
   expect(steered?.steered).toBe(true);
   expect(steered?.images).toHaveLength(1);
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((s) => JSON.parse(s));
@@ -1518,7 +1553,7 @@ it("tells an agent about steering that went to the other agent", async () => {
   await idle();
   await chats.send(chat.id, claude("@claude Carry on"));
   await idle();
-  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const prompt = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -1668,9 +1703,7 @@ it("stops during provider initialization without waiting for the RPC timeout", a
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Start"));
   await vi.waitFor(async () =>
-    expect(await readFile(join(root, "capture.jsonl"), "utf8")).toContain(
-      '"initializing"',
-    ),
+    expect(await agentCalls()).toContain('"initializing"'),
   );
   await chats.cancel(chat.id);
   await vi.waitFor(
@@ -1724,9 +1757,7 @@ it("queues incompatible steering first without pausing or changing permissions",
   expect(saved.queue?.map((q) => q.input.id)[0]).toBe(followup.id);
   expect(saved.queue?.[0].error).toBeUndefined();
   expect(saved.messages.some((m) => m.id === followup.id)).toBe(false);
-  expect(await readFile(join(root, "capture.jsonl"), "utf8")).not.toContain(
-    '"steer"',
-  );
+  expect(await agentCalls()).not.toContain('"steer"');
   await chats.queueAction(chat.id, "move", followup.id, 1);
   expect((await chats.get(chat.id)).queue?.map((q) => q.input.body)).toEqual([
     "@codex Earlier",
@@ -1752,9 +1783,7 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
       "streaming",
     );
-    expect(await readFile(join(root, "capture.jsonl"), "utf8")).not.toContain(
-      '"response"',
-    );
+    expect(await agentCalls()).not.toContain('"response"');
     expect(
       await readFile(join(root, "chats", chat.id + ".json"), "utf8"),
     ).not.toContain("Run this command?");
@@ -1767,7 +1796,7 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
         "complete",
       ),
     );
-    const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    const calls = (await agentCalls())
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
@@ -1822,7 +1851,7 @@ it("uses native Plan mode and answers harness questions without adding answers t
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -1861,7 +1890,7 @@ it("replaces automatic review policy when returning to Full access in a saved th
       expect(chats.hasActiveProject(projectId)).toBe(false),
     );
   }
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -1921,7 +1950,7 @@ it.each(["accept", "decline", "acceptForSession"] as const)(
         ),
       { timeout: 6000 },
     );
-    const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    const calls = (await agentCalls())
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
@@ -1986,7 +2015,7 @@ it("shows Claude planning questions and captures ExitPlanMode as a proposal with
     proposedPlan: true,
     body: expect.stringContaining("## Proposed plan"),
   });
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -2029,7 +2058,7 @@ it.each(["codex", "claude"] as const)(
         ),
       { timeout: 6000 },
     );
-    const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    const calls = (await agentCalls())
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
@@ -2085,7 +2114,7 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
     provider: "claude",
   });
   await finished("claude");
-  const calls = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const calls = (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -2168,7 +2197,7 @@ it("keeps a shared thread's local handoff note where it happened when others' me
   ]);
 }, 30000);
 const captured = async () =>
-  (await readFile(join(root, "capture.jsonl"), "utf8"))
+  (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
@@ -2338,7 +2367,7 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   await settled("failed");
   vi.mocked(findExecutable).mockResolvedValue(cli);
   const prompts = async () =>
-    (await readFile(join(root, "capture.jsonl"), "utf8"))
+    (await agentCalls())
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line))
@@ -2425,8 +2454,11 @@ it("regenerates a title from the whole thread, even over a name you typed", asyn
   await expect(chats.regenerateTitle(chat.id)).rejects.toThrow("first answer");
   await chats.send(chat.id, input("@codex Explain the cache guard"));
   await vi.waitFor(
-    async () =>
-      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
+    async () => {
+      const saved = await chats.get(chat.id);
+      expect(saved.title).toBe("Cache guard behavior");
+      expect(saved.messages.at(-1)?.status).toBe("complete");
+    },
     { timeout: 8000 },
   );
   await chats.rename(chat.id, "My name for it");
@@ -2434,7 +2466,7 @@ it("regenerates a title from the whole thread, even over a name you typed", asyn
     title: "Cache guard rework",
   });
   expect((await chats.get(chat.id)).renamed).toBeUndefined();
-  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+  const prompt = (await agentCalls({ helpers: true }))
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
