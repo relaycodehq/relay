@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { Stack, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
@@ -20,13 +19,16 @@ import {
 import { NeedsYou } from "../ui/NeedsYou";
 import { Sidebar } from "../ui/Sidebar";
 import { ThemeProvider } from "../ui/ThemeProvider";
+import { StartupSplash } from "../ui/StartupSplash";
 import { useTheme } from "../ui/theme";
 
 export default function Layout() {
   return (
     <RemoteProvider>
       <ThemeProvider>
-        <Screens />
+        <StartupSplash>
+          <Screens />
+        </StartupSplash>
       </ThemeProvider>
     </RemoteProvider>
   );
@@ -70,7 +72,6 @@ function Screens() {
   return (
     <FullWidthContext.Provider value={setFullWidth}>
       <HeaderHeightContext.Provider value={setHeaderHeight}>
-        <StatusBar style={t.kind === "dark" ? "light" : "dark"} />
         <View style={[styles.panes, { backgroundColor: t.background }]}>
           {sidebar && (
             <Sidebar
