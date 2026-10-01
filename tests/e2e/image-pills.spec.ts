@@ -225,6 +225,16 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
     expect(await Promise.all(sent.map((item) => pngWidth(item.path!)))).toEqual(
       [500, 300],
     );
+
+    // Pasted into an empty draft, a screenshot only sits in the strip: a pill
+    // means something only next to words.
+    await expect(input).toHaveText("");
+    await input.focus();
+    await pasteShot(page, 200, "#f76b15");
+    await expect(strip).toHaveCount(1);
+    await expect(pills).toHaveCount(0);
+    await page.keyboard.type("What is this?");
+    await expect(pills).toHaveCount(0);
   } finally {
     await app?.close();
     await fixture.close();
