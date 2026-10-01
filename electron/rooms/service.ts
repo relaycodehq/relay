@@ -1,6 +1,5 @@
 import { RoomAccess, type ProjectRoomContext } from "./access";
 import { agentRuntime } from "../agents";
-import { randomBytes, createHash } from "node:crypto";
 import type { Store } from "../store";
 import type { Gitea } from "../gitea";
 import type { PullRef } from "../../shared/types";
@@ -12,11 +11,9 @@ import { agentName, type HelperProvider } from "../../shared/agents";
 import {
   roomMention,
   roomInvitation,
-  connectionSchema,
   projectSchema,
   type RoomHosting,
   type ConnectRoom,
-  type RoomConnection,
   type RoomState,
   type RoomPage,
   type RoomMessage,
@@ -27,6 +24,7 @@ import {
 } from "../../shared/rooms";
 import { roomRequest, type Network } from "./transport";
 import { Hosting } from "./hosting";
+import { RoomConnections, roomProject } from "./connections";
 import { redacted } from "../../shared/redact-secrets";
 
 type Context = { client: Gitea; ref: PullRef; key: string; dir?: string };
@@ -39,10 +37,7 @@ export interface RoomDelivery {
   error: string | null;
 }
 export class RoomService {
-  private contexts = new Map<string, ProjectRoomContext>();
   private access: RoomAccess;
-  private connections = new Map<string, RoomConnection>();
-  private pendingJoins = new Map<string, string>();
   private rooms = new Map<string, RoomState>();
   private active: {
     id: string;
@@ -53,21 +48,30 @@ export class RoomService {
   } | null = null;
   private flushing = new Set<string>();
   private request: ReturnType<typeof roomRequest>;
+  private connections: RoomConnections;
   private hosting: Hosting;
   constructor(
     private store: Store,
     fetcher: Network,
-    private encrypt: (s: string) => Promise<string | null>,
-    private decrypt: (s: string) => Promise<string>,
+    encrypt: (s: string) => Promise<string | null>,
+    decrypt: (s: string) => Promise<string>,
   ) {
     this.access = new RoomAccess(store, (...args) => this.request(...args));
     this.request = roomRequest(fetcher, async (secret) => {
-      const context = this.contexts.get(secret);
-      const connection = context && (await this.connection(context));
+      const context = this.connections.context(secret);
+      const connection = context && (await this.connections.get(context));
       if (!context || !connection) return false;
       await this.access.ensure(context, connection, true);
       return true;
     });
+    this.connections = new RoomConnections(
+      store,
+      this.request,
+      this.access,
+      encrypt,
+      decrypt,
+      (key) => this.clearRooms(key),
+    );
     this.hosting = new Hosting(store, this.request, encrypt, decrypt);
   }
   async allowAccess(c: ProjectRoomContext, server: string) {
@@ -79,28 +83,8 @@ export class RoomService {
   saveHosting(input: RoomHosting | null) {
     return this.hosting.save(input);
   }
-  private project(c: ProjectRoomContext) {
-    return projectSchema.parse({
-      server: c.client.account.server,
-      owner: c.ref.owner,
-      name: c.ref.name,
-    });
-  }
-  private async connection(c: ProjectRoomContext) {
-    let connection = this.connections.get(c.key);
-    if (!connection && this.store.get().roomConnections?.[c.key]) {
-      connection = connectionSchema.parse(
-        JSON.parse(
-          await this.decrypt(this.store.get().roomConnections![c.key]),
-        ),
-      );
-      this.connections.set(c.key, connection);
-    }
-    if (connection) this.contexts.set(connection.token, c);
-    return connection;
-  }
   async state(c: Context): Promise<RoomState> {
-    const connection = await this.connection(c);
+    const connection = await this.connections.get(c);
     if (!connection) return { connection: null, room: null };
     await this.access.ensure(c, connection);
     const key = `${c.key}:${c.ref.number}`;
@@ -113,7 +97,7 @@ export class RoomService {
     );
     if (
       JSON.stringify(projectSchema.parse(identity.project)) !==
-      JSON.stringify(this.project(c))
+      JSON.stringify(roomProject(c))
     )
       throw new Error(
         "This room invitation belongs to a different Gitea repository.",
@@ -130,7 +114,7 @@ export class RoomService {
     const state = {
       connection: {
         ...publicConnection,
-        persistent: !!this.store.get().roomConnections?.[c.key],
+        persistent: this.connections.persistent(c.key),
       },
       room,
     };
@@ -149,7 +133,7 @@ export class RoomService {
       );
     // Verify repository access before consuming an invitation or creating membership.
     await c.client.request(c.client.repo(c.ref));
-    const current = await this.connection(c);
+    const current = await this.connections.get(c);
     if (
       input.projectId &&
       current?.projectId === input.projectId &&
@@ -158,84 +142,17 @@ export class RoomService {
       await this.access.ensure(c, current);
       return current;
     }
-    const fingerprint = createHash("sha256")
-      .update(JSON.stringify([c.key, input]))
-      .digest("hex");
-    // Save the client-generated session token before redeeming a one-use invitation. A lost response is retryable.
-    let token = this.pendingJoins.get(fingerprint);
-    const pending = this.store.get().roomJoins?.[fingerprint];
-    if (!token && pending) token = await this.decrypt(pending);
-    if (!token) {
-      token = randomBytes(32).toString("base64url");
-    }
-    this.pendingJoins.set(fingerprint, token);
-    if (!pending) {
-      const encrypted = await this.encrypt(token);
-      if (encrypted)
-        await this.store.update((s) => {
-          s.roomJoins ??= {};
-          s.roomJoins[fingerprint] = encrypted;
-        });
-    }
-    const name = (
-      c.client.account.user.full_name || c.client.account.user.login
-    ).slice(0, 80);
-    const identity = await this.access.credential(
-      c,
-      input.server,
-      (giteaToken) =>
-        this.request<any>(
-          input.server,
-          input.projectId ? "/v1/join" : "/v1/projects",
-          input.projectId ? undefined : input.secret,
-          "POST",
-          input.projectId
-            ? {
-                projectId: input.projectId,
-                code: input.secret,
-                project: this.project(c),
-                name,
-                sessionToken: token,
-                giteaToken,
-              }
-            : {
-                project: this.project(c),
-                name,
-                sessionToken: token,
-                giteaToken,
-              },
-        ),
-    );
-    const connection = connectionSchema.parse({
-      server: input.server,
-      token,
-      ...identity,
-    });
-    if (JSON.stringify(connection.project) !== JSON.stringify(this.project(c)))
-      throw new Error(
-        "This invitation belongs to another repository. Open that repository’s PR first.",
-      );
-    const encrypted = await this.encrypt(JSON.stringify(connection));
-    await this.store.update((s) => {
-      s.roomConnections ??= {};
-      if (encrypted) s.roomConnections[c.key] = encrypted;
-      else delete s.roomConnections[c.key];
-      if (s.roomJoins) delete s.roomJoins[fingerprint];
-    });
-    this.pendingJoins.delete(fingerprint);
-    this.connections.set(c.key, connection);
-    this.clearRooms(c.key);
-    return connection;
+    return this.connections.join(c, input);
   }
   async projectServer(c: ProjectRoomContext) {
     return (
-      (await this.connection(c))?.server ??
+      (await this.connections.get(c))?.server ??
       (await this.hosting.get())?.server ??
       null
     );
   }
   async projectSession(c: ProjectRoomContext) {
-    let connection = await this.connection(c);
+    let connection = await this.connections.get(c);
     if (!connection) {
       const hosting = await this.hosting.get();
       if (!hosting)
@@ -265,7 +182,7 @@ export class RoomService {
   }
   private async ready(c: Context) {
     const state = await this.state(c),
-      connection = await this.connection(c);
+      connection = await this.connections.get(c);
     if (!state.room || !connection)
       throw new Error("Connect this project to a shared room first.");
     return { connection, room: state.room };
@@ -288,11 +205,7 @@ export class RoomService {
   }
   async disconnect(c: Context) {
     if (this.active?.key === c.key) this.active.abort.abort();
-    await this.store.update((s) => {
-      if (s.roomConnections) delete s.roomConnections[c.key];
-    });
-    this.connections.delete(c.key);
-    this.clearRooms(c.key);
+    await this.connections.forget(c.key);
   }
   async poll(c: Context, after: number, before?: number): Promise<RoomPage> {
     const { connection, room } = await this.ready(c);
@@ -324,7 +237,7 @@ export class RoomService {
     return page;
   }
   async invite(c: Context) {
-    if (!(await this.connection(c))) {
+    if (!(await this.connections.get(c))) {
       const hosting = await this.hosting.get();
       if (!hosting)
         throw new Error(
@@ -347,7 +260,7 @@ export class RoomService {
           projectId: connection.projectId,
           secret: invitation.code,
         },
-        { project: this.project(c), number: c.ref.number },
+        { project: roomProject(c), number: c.ref.number },
       ),
       expiresAt: invitation.expiresAt,
     };
@@ -546,7 +459,7 @@ export class RoomService {
     if (this.flushing.has(c.key)) return;
     this.flushing.add(c.key);
     try {
-      const connection = await this.connection(c);
+      const connection = await this.connections.get(c);
       if (!connection) return;
       await this.access.ensure(c, connection);
       for (const [id, pending] of Object.entries(
@@ -598,6 +511,5 @@ export class RoomService {
     await current?.job;
     this.rooms.clear();
     this.connections.clear();
-    this.pendingJoins.clear();
   }
 }
