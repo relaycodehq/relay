@@ -5,6 +5,7 @@ import {
   type AgentResponse,
 } from "./agent-modes";
 import { lineQuestionSchema } from "./questions";
+import { isImagePath } from "./answer-images";
 import { z } from "zod";
 import { agentProviderSchema, type AgentProvider } from "./agents";
 import { idSchema } from "./rooms";
@@ -14,7 +15,12 @@ import type { TurnModel } from "./turn-model";
 import type { ProjectChatEvent, ProjectChatsEvent } from "./events";
 import type { DirListing, FileInfo } from "./project-files";
 import type { FilePair, LocalFile, Page, ProjectPull, Repo } from "./types";
-import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
+import type {
+  GitAction,
+  WorkingTree,
+  ChangeArea,
+  RebaseResult,
+} from "./working-tree";
 import type {
   DeepReviewStart,
   DeepReviewState,
@@ -50,6 +56,12 @@ export const projectTitle = (folder: string) =>
     .map((word) => word[0]!.toUpperCase() + word.slice(1))
     .join(" ") || folder;
 /** A project's sidebar name, typed in place. */
+export const threadTitleSchema = z
+  .string()
+  .trim()
+  .min(1, "Name the thread.")
+  .max(120)
+  .refine((value) => !/[\x00-\x1f]/.test(value), "Use a plain name.");
 export const projectNameSchema = z
   .string()
   .trim()
@@ -126,10 +138,18 @@ export interface ChatSummary {
   empty?: boolean;
   /** Settled until a newer update; see shared/chat-activity. */
   settledAt?: number;
+  /** Moved back to activity by hand; auto-settle leaves it alone until newer activity. */
+  unsettledAt?: number;
+  /** Never settled automatically; only the thread's menu turns it back on. */
+  autoSettleOff?: true;
+  /** Live: settled by inactivity or a merged PR, not by hand; never persisted. */
+  autoSettled?: true;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** The `updated` this thread was last read up to, on the desktop or a phone. */
   seenAt?: number;
+  /** Marked unread by hand; reading it again clears this. */
+  markedUnread?: true;
   /** Archived threads are hidden from the sidebar. */
   archivedAt?: number;
   /** Branch checked out when the latest message was sent. */
@@ -198,6 +218,8 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("wake") }).strict(),
   z.object({ kind: z.literal("archive") }).strict(),
+  z.object({ kind: z.literal("unread") }).strict(),
+  z.object({ kind: z.literal("auto-settle"), enabled: z.boolean() }).strict(),
 ]);
 export type ChatTriage = z.infer<typeof chatTriageSchema>;
 /** How full the provider session's context window was after this answer. */
@@ -316,8 +338,7 @@ export interface AgentActivity {
 export type AgentTrace =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "activity"; id: string; activity: AgentActivity };
-export const isImagePath = (path: string) =>
-  /\.(?:png|jpe?g|gif|webp)$/i.test(path);
+export { isImagePath } from "./answer-images";
 /** Images the agent looked at during a turn, subagents included, by path in first-read order. */
 export function turnImages(message: ChatMessage): string[] {
   const calls = message.trace
@@ -550,8 +571,10 @@ export interface ProjectApi {
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
   markProjectChatSeen(id: string, seenAt: number): Promise<void>;
-  /** A new thread holding the conversation up to this answer. */
-  forkProjectChat(id: string, messageId: string): Promise<ChatSummary>;
+  /** A new thread holding the conversation up to this answer, or up to the latest finished one. */
+  forkProjectChat(id: string, messageId?: string): Promise<ChatSummary>;
+  /** Names the thread again from the whole conversation; replaces a name you typed too. */
+  regenerateProjectChatTitle(id: string): Promise<ChatSummary>;
   projectCommands(
     id: string,
     provider: AgentProvider,
@@ -707,6 +730,8 @@ export interface ProjectApi {
   projectDeleteBranch(where: string, name: string): Promise<void>;
   /** Merges `base` into the current branch; conflicts stay marked in its folder. */
   projectCatchUp(where: string, base: string): Promise<{ conflicts: string[] }>;
+  /** Rebases the checkout's commits onto its upstream, if `head` is still where they end. */
+  projectRebase(where: string, head: string): Promise<RebaseResult>;
   projectHistory(
     where: string,
     scope: import("./history").HistoryScope,

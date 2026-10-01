@@ -1,0 +1,82 @@
+/* Preview frame only; the real styles live in src/components. */
+.rw-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+.rw-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+.rw-controls p {
+  margin: 0 0 2px;
+}
+.rw-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.rw-choice > span {
+  width: 42px;
+}
+.rw-choice button {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+.rw-window {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.rw-thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.rw-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 24px 28px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.rw-message {
+  margin-bottom: 16px;
+}
+.rw-message.user {
+  margin-left: auto;
+  max-width: 80%;
+  padding: 9px 13px;
+  border-radius: 12px;
+  background: var(--toolbar);
+}
+.project-chat.rw-composer {
+  flex: none;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto 16px;
+}
+.rw-textarea {
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  padding: 14px;
+  resize: none;
+  color: var(--text);
+}

@@ -7,12 +7,15 @@ import { api } from "../lib/api";
 export function CopyImageMenu({
   source,
   inDialog = false,
+  inline = false,
   className = "copy-image-trigger",
   children,
 }: {
   /** A data URL, or a function that builds one when the menu item is picked. */
   source: string | (() => Promise<string>);
   inDialog?: boolean;
+  /** Wraps in a span, for an image inside a paragraph. */
+  inline?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -28,7 +31,11 @@ export function CopyImageMenu({
     );
   return (
     <ContextMenu.Root disabled={inDialog && !dialog}>
-      <ContextMenu.Trigger ref={trigger} className={className}>
+      <ContextMenu.Trigger
+        ref={trigger}
+        className={className}
+        render={inline ? <span /> : undefined}
+      >
         {children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal container={dialog ?? undefined}>

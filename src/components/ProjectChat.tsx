@@ -69,17 +69,20 @@ import { withAttachments } from "../lib/draft-attachments";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import type { ComposedSend } from "../../shared/compose-send";
 import {
+  forkThreadSettings,
   startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { ErrorBox, IconButton, Loading, RichText, Spinner } from "./ui";
 import {
+  AnswerImage,
   ImageThumbnail,
   useWorkingImages,
   type PreviewImage,
 } from "./ImagePreview";
 import { ImageViewer } from "./ImageViewer";
+import { answerImagePaths, localImagePath } from "../../shared/answer-images";
 import { LiveSyncControls } from "./LiveSyncControls";
 import {
   ProjectComposer,
@@ -162,7 +165,8 @@ function userImage(chatId: string, image: ChatImage): PreviewImage {
     load: () => api.projectChatImage(chatId, image.id),
   };
 }
-/** An image file the agent read in the turn `messageId`, as it is on disk now. */
+const hiddenImage = () => null;
+/** An image file the agent read or showed in the turn `messageId`, as it is on disk now. */
 function readImage(
   chatId: string,
   messageId: string,
@@ -355,19 +359,46 @@ const Message = memo(function Message({
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
+  // The answer's own images show in its text; the strip keeps the rest.
+  const shown = useMemo(
+    () =>
+      m.role === "assistant" && m.body
+        ? answerImagePaths(m.body, projectRoot)
+        : [],
+    [m.role, m.body, projectRoot],
+  );
   const allImages = useMemo(
     () =>
       chatId
         ? [
             ...(m.images ?? []).map((image) => userImage(chatId, image)),
-            ...turnImages(m).map((path) =>
-              readImage(chatId, m.id, path, projectRoot),
-            ),
+            ...[
+              ...shown,
+              ...turnImages(m).filter((path) => !shown.includes(path)),
+            ].map((path) => readImage(chatId, m.id, path, projectRoot)),
           ]
         : [],
-    [chatId, m, projectRoot],
+    [chatId, m, projectRoot, shown],
   );
   const images = useWorkingImages(allImages, viewing);
+  const stripImages = images.filter(
+    (image) => !image.path || !shown.includes(image.path),
+  );
+  const answerImage = useCallback(
+    (src: string, alt: string) => {
+      const path = chatId && localImagePath(src, projectRoot);
+      if (!path) return undefined;
+      const image = readImage(chatId, m.id, path, projectRoot);
+      return (
+        <AnswerImage
+          image={image}
+          alt={alt}
+          onOpen={() => setViewing(image.key)}
+        />
+      );
+    },
+    [chatId, m.id, projectRoot],
+  );
   const viewingIndex = images.findIndex((image) => image.key === viewing);
   const parsed = useMemo(() => {
     if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
@@ -470,6 +501,8 @@ const Message = memo(function Message({
             projectRoot={projectRoot}
             onOpenFile={onOpenFile}
             inlineCode={inlineCode}
+            // Main only reads an image once the saved answer names it.
+            image={m.status === "streaming" ? hiddenImage : answerImage}
           />
         )
       ) : null}
@@ -491,9 +524,9 @@ const Message = memo(function Message({
         />
       )}
       {/* The images the agent read show once its turn ends, after the answer. */}
-      {!!images.length && m.status !== "streaming" && (
+      {!!stripImages.length && m.status !== "streaming" && (
         <div className="message-images">
-          {images.map((image) => (
+          {stripImages.map((image) => (
             <ImageThumbnail
               key={image.key}
               image={image}
@@ -583,6 +616,7 @@ export function ProjectChat({
   onOpenFile,
   onOpenTurnDiff,
   onDraftWorkspace,
+  onStartThread,
   viewing,
   ref,
 }: {
@@ -614,6 +648,8 @@ export function ProjectChat({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
+  /** Opens a new project-folder thread on `text`, sent or as a draft. */
+  onStartThread?: (text: string, send: boolean) => Promise<void>;
   viewing: { path: string | null; viewed: number; total: number };
   /** The thread's composer, while it shows one. */
   ref?: Ref<ComposerControls>;
@@ -1343,7 +1379,9 @@ export function ProjectChat({
     if (!chatId) return;
     setError(undefined);
     try {
-      await onCreated(await api.forkProjectChat(chatId, m.id));
+      const forked = await api.forkProjectChat(chatId, m.id);
+      forkThreadSettings(chatId, forked.id, m.provider);
+      await onCreated(forked);
     } catch (e) {
       setError(e);
     }
@@ -2073,6 +2111,7 @@ export function ProjectChat({
             plain={project.plain}
             projectId={project.id}
             checkoutDisabled={checkoutDisabled}
+            onStartThread={onStartThread}
             workspace={
               <>
                 {agentBatch.length > 0 && (

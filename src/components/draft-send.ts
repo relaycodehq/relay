@@ -41,18 +41,18 @@ const started = new Map<string, ChatSummary>();
 /**
  * Sends a thread's main draft the way its composer would, without opening
  * it: on the agent, models and modes last set there, with its screenshots
- * and attachments. False when it needs its thread open: a command, a review
- * still to set up, or another agent taking over.
+ * and attachments. Returns the thread it went to, or null when it needs its
+ * thread open: a command, a review still to set up, or another agent taking over.
  */
 export async function sendDraft(
   qc: QueryClient,
   { key, id, project, chat }: ActivityDraft,
-): Promise<boolean> {
+): Promise<ChatSummary | null> {
   const text = readDraft(key).trim();
   const scope = chat?.scope ?? loadDraftScope(id);
   // Commands run in the composer; a review starts from its setup.
   if (!text || text.startsWith("/") || (scope.kind === "review" && !chat))
-    return false;
+    return null;
   const ai = await qc.fetchQuery(aiSettingsQuery);
   const settings = loadComposerSettings(id);
   // A new thread's composer takes up the agent last picked for one.
@@ -73,7 +73,7 @@ export async function sendDraft(
     recipient !== holder &&
     !agentSwitchNoticeHidden()
   )
-    return false;
+    return null;
   const selected = supportedChoice(
     settings.choice ?? codexQuestionChoice(ai),
     await codexModels(qc),
@@ -85,7 +85,7 @@ export async function sendDraft(
       )
     : { model: "", reasoningEffort: "" as const };
   const choice = messageChoice(recipient, selected, settings.claude, pick);
-  if (!choice) return false;
+  if (!choice) return null;
   const council =
     settings.ultraplan &&
     recipient !== "message" &&
@@ -138,5 +138,5 @@ export async function sendDraft(
   await saveDraftImages(key, []).catch(() => {});
   await qc.invalidateQueries({ queryKey: ["project-chats"] });
   if (chat) await qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
-  return true;
+  return target;
 }

@@ -91,7 +91,7 @@ test("a worktree thread goes to another computer from its header and comes back 
     // The mini accepts connections and shows its link in Settings → Computers.
     const openComputers = async (page: typeof mini.page) => {
       await page.getByRole("button", { name: "Open settings" }).first().click();
-      const settings = page.getByRole("dialog", {
+      const settings = page.getByRole("region", {
         name: "Settings",
         exact: true,
       });
@@ -125,7 +125,7 @@ test("a worktree thread goes to another computer from its header and comes back 
     await laptop.page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
-    const pair = laptop.page.getByRole("dialog", {
+    const pair = laptop.page.getByRole("region", {
       name: "Settings",
       exact: true,
     });
@@ -161,7 +161,7 @@ test("a worktree thread goes to another computer from its header and comes back 
       .getByRole("button", { name: "Open settings" })
       .first()
       .click();
-    const listed = laptop.page.getByRole("dialog", {
+    const listed = laptop.page.getByRole("region", {
       name: "Settings",
       exact: true,
     });

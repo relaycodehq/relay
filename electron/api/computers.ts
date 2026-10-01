@@ -26,8 +26,9 @@ export function computerHandlers(ctx: ApiContext) {
       handoffs().sender.retry(chatId),
     ),
     handoffView: takes([idSchema], (chatId) => handoffs().sender.view(chatId)),
-    bringBackThread: takes([idSchema], (chatId) =>
-      handoffs().sender.bringBack(chatId),
+    handoffViews: () => handoffs().sender.views(),
+    bringBackThread: takes([idSchema, z.boolean().optional()], (chatId, park) =>
+      handoffs().sender.bringBack(chatId, park),
     ),
     keepThreadHere: takes([idSchema], (chatId) =>
       handoffs().sender.keepHere(chatId),

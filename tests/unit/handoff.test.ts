@@ -329,6 +329,92 @@ it("hands a worktree thread to the other computer and brings it back", async () 
   expect(resumed).toContain("handed over from another computer");
 }, 60000);
 
+/** A worktree thread handed to the mini with CHANGELOG.md in it; the worktrees on both sides. */
+async function awayWithChangelog() {
+  const paired = await pairedComputers();
+  const { laptop, mini, sender, computerId } = paired;
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  const here = (await laptop.chats.get(thread.id)).worktree!.path!;
+  await writeFile(join(here, "CHANGELOG.md"), "- 1.0 First\n");
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
+    { timeout: 15000 },
+  );
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+  const there = arrived!.worktree!.path!;
+  const commitHere = async (file: string, text: string) => {
+    await writeFile(join(here, file), text);
+    git(here, "add", file);
+    git(here, "commit", "-qm", `Here: ${file}`);
+  };
+  return { ...paired, thread, here, there, commitHere };
+}
+
+it("replays work that comes back onto a worktree that moved on meanwhile", async () => {
+  const { sender, thread, here, there, commitHere } = await awayWithChangelog();
+  await commitHere("NOTES.md", "made here\n");
+  const made = git(here, "rev-parse", "HEAD");
+  await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () => expect(await sender.view(thread.id)).toBeNull(),
+    { timeout: 15000 },
+  );
+  expect(await readFile(join(here, "CHANGELOG.md"), "utf8")).toBe(
+    "- 1.1 Second\n- 1.0 First\n",
+  );
+  expect(await readFile(join(here, "NOTES.md"), "utf8")).toBe("made here\n");
+  // The returned commits went on top of the one made here, which stays as it was.
+  expect(git(here, "rev-list", "--first-parent", "HEAD")).toContain(made);
+  expect(
+    Number(git(here, "rev-list", "--count", `${made}..HEAD`)),
+  ).toBeGreaterThan(0);
+  expect(git(here, "rev-list", "--merges", "HEAD")).toBe("");
+  expect(git(here, "status", "--porcelain")).toBe("");
+  expect(git(here, "for-each-ref", "refs/relay/handoffs/")).toBe("");
+}, 60000);
+
+it("brings a thread back with its clashing work set aside, to resolve it there", async () => {
+  const { sender, laptop, thread, here, there, commitHere } =
+    await awayWithChangelog();
+  await commitHere("CHANGELOG.md", "- 1.0 Made here\n");
+  await writeFile(join(there, "CHANGELOG.md"), "- 1.0 Made there\n");
+  const head = git(here, "rev-parse", "HEAD");
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo).toMatchObject({
+        state: "returning",
+        conflicts: ["CHANGELOG.md"],
+      }),
+    { timeout: 15000 },
+  );
+  expect(git(here, "rev-parse", "HEAD")).toBe(head);
+  expect(git(here, "status", "--porcelain")).toBe("");
+
+  const { id } = (await laptop.chats.get(thread.id)).sentTo!;
+  await sender.bringBack(thread.id, true);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+    { timeout: 15000 },
+  );
+  expect(git(here, "rev-parse", "HEAD")).toBe(head);
+  const parked = `refs/relay/handoffs/${id}`;
+  expect(git(here, "show", `${parked}:CHANGELOG.md`)).toBe("- 1.0 Made there");
+}, 60000);
+
 it("tells the computer it came from when a turn there fails", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const thread = await laptop.chats.create(
@@ -368,6 +454,71 @@ it("tells the computer it came from when a turn there fails", async () => {
   );
   const [shown] = (await sender.overview()).computers[0]!.threads;
   expect(shown).toMatchObject({ state: "stopped", error: expect.any(String) });
+}, 60000);
+
+it("lets the computer it came from peek at what the turn there is doing", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
+    { timeout: 15000 },
+  );
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+  // The turn the mini ran on arrival: its calls and what its agent said.
+  const command = {
+    kind: "command",
+    label: "git diff --stat",
+    status: "complete",
+  };
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.remote).toMatchObject({
+        running: false,
+        provider: "codex",
+        model: "fixture-model",
+        says: "I'll inspect the cache guard first.",
+        recent: expect.arrayContaining([expect.objectContaining(command)]),
+      }),
+    { timeout: 8000, interval: 500 },
+  );
+
+  // One that keeps going: running since about now, by this computer's clock.
+  const sent = Date.now();
+  await mini.chats.send(arrived!.id, input("@codex fixture codex steer"));
+  await vi.waitFor(
+    async () => {
+      const remote = (await sender.view(thread.id))?.remote;
+      expect(remote).toMatchObject({
+        running: true,
+        waiting: false,
+        recent: expect.arrayContaining([expect.objectContaining(command)]),
+      });
+      expect(remote!.runningSince).toBeGreaterThanOrEqual(sent - 1000);
+      expect(remote!.runningSince).toBeLessThanOrEqual(Date.now());
+    },
+    { timeout: 10000, interval: 500 },
+  );
+  // The sidebar asks for every away thread at once.
+  expect((await sender.views())[thread.id]).toMatchObject({
+    sentTo: { state: "away" },
+    online: true,
+    remote: { running: true },
+  });
+
+  await mini.chats.send(arrived!.id, {
+    ...input("@codex Use the blue one"),
+    delivery: "steer",
+  });
+  await finished(mini.chats, arrived!.id);
 }, 60000);
 
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {

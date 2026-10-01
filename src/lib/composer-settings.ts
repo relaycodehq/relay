@@ -295,6 +295,23 @@ export function startThreadSettings(
   });
 }
 /**
+ * A fork's composer starts on its source thread's models, on the agent of the
+ * answer it was forked from, in Build like any new thread.
+ */
+export function forkThreadSettings(
+  from: string,
+  to: string,
+  provider: AgentProvider | undefined,
+) {
+  const settings = loadComposerSettings(from);
+  saveComposerSettings(to, {
+    ...settings,
+    ...(provider ? { provider } : {}),
+    interactionMode: "default",
+    ultraplan: false,
+  });
+}
+/**
  * Opens a composer on what a message was sent with. The choice is the model
  * of the agent it went to, so it goes to that agent's slot; the others keep
  * their own.

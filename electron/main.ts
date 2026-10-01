@@ -305,6 +305,8 @@ app
     });
     // Whether a PR thread's review began reads with the account.
     login.changed = () => chats.summariesChanged();
+    // A quiet thread settles itself as days pass; the feed sends only what changed.
+    setInterval(() => chats.summariesChanged(), 5 * 60_000).unref();
     const handoffDir = join(app.getPath("userData"), "handoffs");
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {

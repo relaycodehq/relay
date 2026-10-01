@@ -8,7 +8,12 @@
  */
 import type { AgentProvider } from "./agents";
 import type { UpdateState } from "./updates";
-import type { ChatMessage, ChatScope, ProjectChatSend } from "./projects";
+import type {
+  AgentActivity,
+  ChatMessage,
+  ChatScope,
+  ProjectChatSend,
+} from "./projects";
 
 /** On the computer that handed the thread off: where it is now. */
 export interface ChatSentTo {
@@ -24,6 +29,8 @@ export interface ChatSentTo {
   state: "sending" | "away" | "returning";
   /** Why the last step failed; the thread stays where the state says. */
   error?: string;
+  /** Coming back, its work clashed with commits made here meanwhile, in these files. */
+  conflicts?: string[];
 }
 
 /** On the computer that took a thread over: where it came from. */
@@ -109,7 +116,26 @@ export interface HandoffRemoteStatus {
   /** The latest turn there ended in this error. */
   failed?: string;
   returned: boolean;
+  /**
+   * What the peek shows; a Relay from before them leaves them out. The
+   * latest turn's own calls, not its subagents', the last few of them.
+   */
+  recent?: AgentActivity[];
+  /** How many calls the latest turn made. */
+  calls?: number;
+  /** The latest thing its agent said between calls. */
+  says?: string;
+  provider?: AgentProvider;
+  model?: string;
+  /** What its agent asks while it waits. */
+  question?: string;
+  /** How long the running turn has run; the sender turns it into `runningSince`. */
+  runningFor?: number;
+  /** When the running turn started, on this computer's clock. */
+  runningSince?: number;
 }
+/** Calls a status carries; the peek shows as many. */
+export const remoteRecentCalls = 6;
 
 /** Say this and send the whole history: the other side lacks the base commits. */
 export const needsFullBundle = "HANDOFF_NEEDS_FULL_BUNDLE";
@@ -196,7 +222,10 @@ export interface ComputersApi {
   /** Sends a handoff that failed on its way again. */
   retryHandoff(chatId: string): Promise<void>;
   handoffView(chatId: string): Promise<HandoffView | null>;
-  bringBackThread(chatId: string): Promise<void>;
+  /** Every thread that's on another computer, or on its way, by chat id. */
+  handoffViews(): Promise<Record<string, HandoffView>>;
+  /** `park` brings it back even if its work clashes, left at its handoff ref. */
+  bringBackThread(chatId: string, park?: boolean): Promise<void>;
   /** Keeps a thread whose handoff failed here; refused once the other side has it. */
   keepThreadHere(chatId: string): Promise<void>;
   /** Has a paired computer update Relay and restart; it reconnects by itself. */

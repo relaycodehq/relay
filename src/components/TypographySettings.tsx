@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useDialogContainer } from "../lib/useDialogContainer";
 import { RotateCcw } from "lucide-react";
 import { useAppearance } from "../lib/appearance";
 import { terminalTheme } from "../lib/terminal-theme";
@@ -36,13 +35,10 @@ function SizeSelect({
   options: number[];
   onChange: (size: number) => void;
 }) {
-  // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [ref, container] = useDialogContainer();
   return (
-    <div ref={ref} className="composer-tools model-field size-select">
+    <div className="composer-tools model-field size-select">
       <ComposerSelect
         label={label}
-        container={container}
         value={String(value)}
         options={options.map((size) => ({
           value: String(size),

@@ -190,6 +190,29 @@
   font-weight: 500;
   color: var(--muted);
 }
+/* Like a group label: the toggle fills the row, so hover lights the row. */
+.sb-section-heading:has(.sb-section-toggle) {
+  padding-left: 0;
+}
+.sb-section-heading h2 {
+  flex: 1;
+  min-width: 0;
+}
+.sb .sb-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font: inherit;
+  color: inherit;
+}
+.sb .sb-section-toggle:hover {
+  color: var(--text);
+  background: var(--hover);
+}
 .sb-view-heading small {
   color: var(--muted);
   font-size: 11px;
@@ -413,6 +436,7 @@
   color: var(--text);
 }
 .sb .sb-project-name:hover > .sb-project-chevron,
+.sb .sb-section-toggle:hover > .sb-project-chevron,
 .sb .sb-project-chevron:not([data-open]) {
   opacity: 1;
 }
@@ -432,6 +456,47 @@
   font-weight: inherit;
   letter-spacing: normal;
   text-transform: none;
+}
+/* Renaming a thread in place, in a row, a card or a shelf. */
+.sb-thread-rename {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.sb-thread-rename .sb-group-input {
+  margin-top: 0;
+}
+.sb-thread-rename input {
+  height: 26px;
+  font-size: 12.5px;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.sb-thread-input {
+  padding: 2px 6px 2px 31px;
+}
+.sb-thread-list.flat .sb-thread-input {
+  padding-left: 6px;
+}
+.sb-card-title-input,
+.sb-compact-title-input {
+  padding: 0;
+}
+.sb-title-regenerating {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+/* The thread whose right-click menu is open. */
+.sb-thread-row[data-popup-open] .sb-thread:not(.selected),
+.sb-compact[data-popup-open] {
+  background: var(--hover);
+}
+.sb-card[data-popup-open]:not(.selected) {
+  background: color-mix(in srgb, var(--hover) 60%, transparent);
+}
+.sb-card.dim[data-popup-open] {
+  opacity: 1;
 }
 .sb-nav,
 .sb-thread-list,
@@ -1233,4 +1298,21 @@
   from {
     transform: scale(0.4);
   }
+}
+/* A thread on another computer: which one, before who's answering there. */
+.sb-card-where {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.sb-card-where + .sb-card-provider {
+  margin-left: 0;
+}
+.sb-card-where.offline {
+  opacity: 0.7;
+}
+.sb-card-state.stopped {
+  color: var(--muted);
 }

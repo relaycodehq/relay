@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { AgentQuestion, AgentResponse } from "../../shared/agent-modes";
-import { isTypingTarget } from "../lib/shortcuts";
+import { isTypingTarget, popupOpen } from "../lib/shortcuts";
 
 export function AgentQuestionForm({
   questions,
@@ -50,7 +50,8 @@ export function AgentQuestionForm({
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        isTypingTarget(event)
+        isTypingTarget(event) ||
+        popupOpen()
       )
         return;
       const option = question.options?.[Number(event.key) - 1];

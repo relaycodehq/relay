@@ -9,12 +9,15 @@ import {
 import type { Bootstrap, SidebarView } from "../../shared/types";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
+import { ThreadMenu, type ThreadMenuAction } from "./ThreadMenu";
+import { forkThreadSettings } from "../lib/composer-settings";
 import {
   Archive,
   Bell,
   Check,
   ChevronRight,
   CalendarClock,
+  CircleAlert,
   Copy,
   Ellipsis,
   Folder,
@@ -35,6 +38,7 @@ import {
 } from "lucide-react";
 import {
   projectNameSchema,
+  threadTitleSchema,
   type Project,
   type ChatPending,
   type ChatSummary,
@@ -88,6 +92,13 @@ import {
   type ProjectFolderNode,
 } from "../../shared/project-folders";
 import "./sidebar.css";
+import {
+  awayStopped,
+  AwayPeek,
+  AwayWhere,
+  useAwayViews,
+  withAway,
+} from "./AwayCard";
 
 const THREADS_PER_PROJECT = 5;
 const SEARCH_RESULTS = 50;
@@ -133,8 +144,20 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
     readObject("relay-thread-seen", {}),
   );
   const current = chats.find((c) => c.id === chatId);
+  /** The thread last read here; marking it unread while it's open holds until it's opened again. */
+  const opened = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!focused || !current || (seen[current.id] ?? 0) >= current.updated)
+    if (!current) {
+      opened.current = undefined;
+      return;
+    }
+    if (!focused) return;
+    const reopened = opened.current !== current.id;
+    opened.current = current.id;
+    if (
+      !(current.markedUnread && reopened) &&
+      (seen[current.id] ?? 0) >= current.updated
+    )
       return;
     setSeen((s) => {
       const next = { ...s, [current.id]: current.updated };
@@ -147,8 +170,28 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
       .catch(() => {});
   }, [focused, current?.id, current?.updated]);
   return (c: ChatSummary) =>
-    (c.id !== chatId || (!focused && !c.running)) &&
+    ((c.id !== chatId || (!focused && !c.running)) && !!c.markedUnread) ||
     movedSinceSeen(c, since, seen);
+}
+
+/** A thread's name, dimmed while it's being generated again. */
+function ThreadTitle({
+  className,
+  title,
+  regenerating,
+}: {
+  className: string;
+  title: string;
+  regenerating: boolean;
+}) {
+  return (
+    <span
+      className={`${className} ${regenerating ? "sb-title-regenerating" : ""}`}
+      aria-busy={regenerating || undefined}
+    >
+      {title}
+    </span>
+  );
 }
 
 /** The row that expands or collapses a long thread list. */
@@ -167,6 +210,35 @@ function ShowMore({
         {more ? "Show less" : `Show ${hidden} more`}
       </span>
     </button>
+  );
+}
+
+/** A section's heading; the label folds the list beneath it. */
+function SectionTitle({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <h2>
+      <button
+        className="sb-section-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        {label}
+        <ChevronRight
+          size={11}
+          className="sb-project-chevron"
+          data-open={open || undefined}
+          aria-hidden
+        />
+      </button>
+    </h2>
   );
 }
 
@@ -258,10 +330,13 @@ function CardState({
   chat,
   unread,
   now,
+  stopped,
 }: {
   chat: ChatSummary;
   unread: boolean;
   now: number;
+  /** Its turn on another computer ended in an error. */
+  stopped?: boolean;
 }) {
   if (chat.waiting)
     return (
@@ -280,6 +355,13 @@ function CardState({
         <Spinner size={11} steady />
         Working
         {since && <Elapsed since={since} />}
+      </span>
+    );
+  if (stopped)
+    return (
+      <span className="sb-card-state stopped">
+        <CircleAlert size={12} />
+        Stopped
       </span>
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
@@ -337,7 +419,10 @@ function GroupNameInput({
 }: {
   label: string;
   initial?: string;
-  schema?: typeof projectGroupNameSchema | typeof projectNameSchema;
+  schema?:
+    | typeof projectGroupNameSchema
+    | typeof projectNameSchema
+    | typeof threadTitleSchema;
   placeholder?: string;
   className?: string;
   onSubmit: (name: string) => void;
@@ -363,7 +448,13 @@ function GroupNameInput({
         autoFocus
         aria-label={label}
         placeholder={placeholder}
-        maxLength={schema === projectNameSchema ? 80 : 60}
+        maxLength={
+          schema === threadTitleSchema
+            ? 120
+            : schema === projectNameSchema
+              ? 80
+              : 60
+        }
         value={value}
         aria-invalid={invalid}
         title={invalid ? parsed.error?.issues[0].message : undefined}
@@ -478,6 +569,19 @@ export function ProjectSidebar({
     ),
   );
   useEffect(() => writeJson("relay-project-expansion", expanded), [expanded]);
+  const [folded, setFolded] = useState(() => {
+    const saved = readObject<Record<string, unknown>>(
+      "relay-sidebar-folded",
+      {},
+    );
+    return {
+      scratchpad: saved.scratchpad === true,
+      projects: saved.projects === true,
+    };
+  });
+  useEffect(() => writeJson("relay-sidebar-folded", folded), [folded]);
+  const fold = (section: keyof typeof folded) =>
+    setFolded((s) => ({ ...s, [section]: !s[section] }));
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [shelves, setShelves] = useState({ snoozed: false, settled: false });
   const [shelfShown, setShelfShown] = useState({
@@ -492,6 +596,15 @@ export function ProjectSidebar({
   const [draft, setDraft] = useState<{ parent: string; project?: string }>();
   const [renaming, setRenaming] = useState<string>();
   const [renamingProject, setRenamingProject] = useState<string>();
+  const [renamingThread, setRenamingThread] = useState<string>();
+  /** Threads whose title is being generated again. */
+  const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const autoSettleDays = useQuery({
+    queryKey: ["auto-settle-days"],
+    queryFn: () => api.autoSettleDays(),
+  }).data;
   const [groupError, setGroupError] = useState<string>();
   const refreshGroups = () =>
     Promise.all([
@@ -711,38 +824,149 @@ export function ProjectSidebar({
     };
   }, []);
   const byId = new Map(projects.map((p) => [p.id, p]));
+  const away = useAwayViews(lists.flatMap((q) => q.data ?? []));
   const all = lists
     .flatMap((q) => q.data ?? [])
     .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
+    .map((c) => withAway(c, away[c.id]))
     .sort((a, b) => b.updated - a.updated);
   const unread = useSeen(chatId, all);
   const triage = async (c: ChatSummary, action: ChatTriage) => {
     // Every list holding it: its project's, and Scratchpad's for a scratch chat.
-    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
-      list?.map((entry) =>
-        entry.id !== c.id
-          ? entry
-          : action.kind === "archive"
-            ? { ...entry, archivedAt: Date.now() }
-            : {
-                ...entry,
-                settledAt: action.kind === "settle" ? Date.now() : undefined,
-                snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
-                snoozedUntil:
-                  action.kind === "snooze" ? action.until : undefined,
-              },
-      ),
-    );
+    const triaged = (entry: ChatSummary): ChatSummary => {
+      switch (action.kind) {
+        case "archive":
+          return { ...entry, archivedAt: Date.now() };
+        case "unread":
+          return { ...entry, markedUnread: true };
+        case "auto-settle":
+          return { ...entry, autoSettleOff: action.enabled ? undefined : true };
+        default:
+          return {
+            ...entry,
+            settledAt: action.kind === "settle" ? Date.now() : undefined,
+            autoSettled: undefined,
+            snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
+            snoozedUntil: action.kind === "snooze" ? action.until : undefined,
+          };
+      }
+    };
+    patchChat(c, triaged);
     try {
       await api.triageProjectChat(c.id, action);
     } finally {
-      void qc.invalidateQueries({
-        queryKey: scratchIds.has(c.projectId)
-          ? ["project-chats"]
-          : ["project-chats", c.projectId],
-      });
+      refreshChats(c);
     }
   };
+  /** Every list holding it: its project's, and Scratchpad's for a scratch chat. */
+  const patchChat = (c: ChatSummary, patch: (c: ChatSummary) => ChatSummary) =>
+    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
+      list?.map((entry) => (entry.id === c.id ? patch(entry) : entry)),
+    );
+  const refreshChats = (c: ChatSummary) =>
+    qc.invalidateQueries({
+      queryKey: scratchIds.has(c.projectId)
+        ? ["project-chats"]
+        : ["project-chats", c.projectId],
+    });
+  const failed = (e: unknown) =>
+    setGroupError(e instanceof Error ? e.message : String(e));
+  const renameThread = async (c: ChatSummary, title: string) => {
+    patchChat(c, (entry) => ({ ...entry, title, renamed: true }));
+    try {
+      await api.renameProjectChat(c.id, title);
+    } catch (e) {
+      failed(e);
+    } finally {
+      void refreshChats(c);
+    }
+  };
+  const regenerateTitle = async (c: ChatSummary) => {
+    setRegenerating((ids) => new Set(ids).add(c.id));
+    setGroupError(undefined);
+    try {
+      const named = await api.regenerateProjectChatTitle(c.id);
+      patchChat(c, (entry) => ({
+        ...entry,
+        title: named.title,
+        renamed: undefined,
+      }));
+    } catch (e) {
+      failed(e);
+    } finally {
+      setRegenerating((ids) => {
+        const next = new Set(ids);
+        next.delete(c.id);
+        return next;
+      });
+      void refreshChats(c);
+    }
+  };
+  /** Forks from the latest answer and opens the fork on that answer's agent. */
+  const fork = async (c: ChatSummary) => {
+    setGroupError(undefined);
+    try {
+      const forked = await api.forkProjectChat(c.id);
+      forkThreadSettings(c.id, forked.id, forked.provider);
+      await refreshChats(c);
+      onChat(forked);
+    } catch (e) {
+      failed(e);
+    }
+  };
+  const threadAction = (c: ChatSummary, action: ThreadMenuAction) => {
+    const p = byId.get(c.projectId);
+    switch (action.kind) {
+      case "new":
+        if (p) onNew(p);
+        return;
+      case "fork":
+        return void fork(c);
+      case "settle":
+        return settle(c);
+      case "rename":
+        return setRenamingThread(c.id);
+      case "regenerate":
+        return void regenerateTitle(c);
+      case "triage":
+        return void triage(c, action.triage).catch(failed);
+    }
+  };
+  /** Right-click on a thread anywhere in the sidebar. */
+  const threadMenu = (c: ChatSummary) => (
+    <ThreadMenu
+      chat={c}
+      projectName={byId.get(c.projectId)?.name}
+      projectPath={byId.get(c.projectId)?.path}
+      now={now}
+      unread={unread(c)}
+      regenerating={regenerating.has(c.id)}
+      autoSettleDays={autoSettleDays}
+      settleKeys={c.id === chatId ? settleKeys : undefined}
+      onAction={(action) => threadAction(c, action)}
+    />
+  );
+  // Inside a card the row's own click and keys would open the thread.
+  const renameInput = (c: ChatSummary, className: string) => (
+    <span
+      className="sb-thread-rename"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <GroupNameInput
+        label="Thread name"
+        initial={c.title}
+        schema={threadTitleSchema}
+        placeholder="Thread name"
+        className={className}
+        onCancel={() => setRenamingThread(undefined)}
+        onSubmit={(title) => {
+          setRenamingThread(undefined);
+          void renameThread(c, title);
+        }}
+      />
+    </span>
+  );
   const sections = chatActivitySections(all, now);
   const attention = sections.active.filter(
     (c) => c.waiting || unread(c),
@@ -807,35 +1031,50 @@ export function ProjectSidebar({
       !c.running &&
       !c.waiting &&
       !unread(c);
+    if (renamingThread === c.id)
+      return (
+        <div key={c.id} className="sb-thread-row">
+          {renameInput(c, "sb-group-input sb-thread-input")}
+        </div>
+      );
     return (
-      <div key={c.id} className={`sb-thread-row ${stale ? "stale" : ""}`}>
-        <button
-          className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
-          title={c.title}
-          onClick={() => open(c)}
+      <ContextMenu.Root key={c.id}>
+        <ContextMenu.Trigger
+          className={`sb-thread-row ${stale ? "stale" : ""}`}
         >
-          <span className="sb-thread-title">{c.title}</span>
-          {withProject && (
-            <small className="sb-thread-project">
-              {byId.get(c.projectId)?.name}
-            </small>
-          )}
-          {c.scope.kind === "pr" && !withProject && (
-            <small className="sb-thread-pr">#{c.scope.ref.number}</small>
-          )}
-          <StatusMark chat={c} unread={unread(c)} now={now} />
-        </button>
-        {!c.running && !c.pending?.length && !c.nextSend && (
           <button
-            className="sb-thread-archive"
-            title="Archive"
-            aria-label={`Archive ${c.title}`}
-            onClick={() => void triage(c, { kind: "archive" })}
+            className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
+            title={c.title}
+            onClick={() => open(c)}
           >
-            <Archive size={13} />
+            <ThreadTitle
+              className="sb-thread-title"
+              title={c.title}
+              regenerating={regenerating.has(c.id)}
+            />
+            {withProject && (
+              <small className="sb-thread-project">
+                {byId.get(c.projectId)?.name}
+              </small>
+            )}
+            {c.scope.kind === "pr" && !withProject && (
+              <small className="sb-thread-pr">#{c.scope.ref.number}</small>
+            )}
+            <StatusMark chat={c} unread={unread(c)} now={now} />
           </button>
-        )}
-      </div>
+          {!c.running && !c.pending?.length && !c.nextSend && (
+            <button
+              className="sb-thread-archive"
+              title="Archive"
+              aria-label={`Archive ${c.title}`}
+              onClick={() => void triage(c, { kind: "archive" })}
+            >
+              <Archive size={13} />
+            </button>
+          )}
+        </ContextMenu.Trigger>
+        {threadMenu(c)}
+      </ContextMenu.Root>
     );
   };
 
@@ -1258,70 +1497,90 @@ export function ProjectSidebar({
     const isUnread = unread(c);
     const selected = chatId === c.id;
     return (
-      <div
-        key={c.id}
-        role="button"
-        tabIndex={0}
-        className={[
-          "sb-card",
-          selected && "selected",
-          isUnread && "unread",
-          // Only the open thread, finished-but-unread ones and open
-          // questions stay bright; everything else, running included, dims.
-          !selected && !isUnread && !c.waiting && "dim",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={() => open(c)}
-        onKeyDown={rowKeys(() => open(c))}
-      >
-        <div className="sb-card-top">
-          <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-          <span className="sb-card-name">
-            <span className="sb-card-project">{p?.name}</span>
-            {shortcut && (
-              <kbd className="sb-card-shortcut" aria-hidden>
-                <span className={mac ? "glyph" : undefined}>
-                  {modifiersLabel(jumpBinding)}
-                </span>
-                {shortcut}
-              </kbd>
-            )}
-          </span>
-          <CardState chat={c} unread={isUnread} now={now} />
-          <div className="sb-card-actions">
-            {!c.waiting && (
-              <SnoozeMenu
+      <ContextMenu.Root key={c.id}>
+        <AwayPeek view={away[c.id]}>
+          <ContextMenu.Trigger
+            role="button"
+            tabIndex={0}
+            className={[
+              "sb-card",
+              selected && "selected",
+              isUnread && "unread",
+              // Only the open thread, finished-but-unread ones and open
+              // questions stay bright; everything else, running included, dims.
+              !selected && !isUnread && !c.waiting && "dim",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={() => open(c)}
+            onKeyDown={rowKeys(() => open(c))}
+          >
+            <div className="sb-card-top">
+              <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+              <span className="sb-card-name">
+                <span className="sb-card-project">{p?.name}</span>
+                {shortcut && (
+                  <kbd className="sb-card-shortcut" aria-hidden>
+                    <span className={mac ? "glyph" : undefined}>
+                      {modifiersLabel(jumpBinding)}
+                    </span>
+                    {shortcut}
+                  </kbd>
+                )}
+              </span>
+              <CardState
+                chat={c}
+                unread={isUnread}
                 now={now}
-                onSnooze={(until) => void triage(c, { kind: "snooze", until })}
+                stopped={awayStopped(away[c.id])}
+              />
+              <div className="sb-card-actions">
+                {!c.waiting && (
+                  <SnoozeMenu
+                    now={now}
+                    onSnooze={(until) =>
+                      void triage(c, { kind: "snooze", until })
+                    }
+                  />
+                )}
+                {!c.running && !c.waiting && (
+                  <button
+                    className="sb-card-action"
+                    title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      settle(c);
+                    }}
+                  >
+                    <Check size={13} />
+                    Settle
+                  </button>
+                )}
+              </div>
+            </div>
+            {renamingThread === c.id ? (
+              renameInput(c, "sb-group-input sb-card-title-input")
+            ) : (
+              <ThreadTitle
+                className="sb-card-title"
+                title={c.title}
+                regenerating={regenerating.has(c.id)}
               />
             )}
-            {!c.running && !c.waiting && (
-              <button
-                className="sb-card-action"
-                title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  settle(c);
-                }}
-              >
-                <Check size={13} />
-                Settle
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="sb-card-title">{c.title}</div>
-        <div className="sb-card-meta">
-          {c.scope.kind === "pr" && (
-            <span className="sb-card-scope">
-              <GitPullRequest size={11} />#{c.scope.ref.number}
-            </span>
-          )}
-          <span className="sb-card-branch">{c.branch}</span>
-          <CardAgents chat={c} />
-        </div>
-      </div>
+            <div className="sb-card-meta">
+              {c.scope.kind === "pr" && (
+                <span className="sb-card-scope">
+                  <GitPullRequest size={11} />#{c.scope.ref.number}
+                </span>
+              )}
+              <span className="sb-card-branch">{c.branch}</span>
+              <AwayWhere view={away[c.id]} />
+              <CardAgents chat={c} />
+            </div>
+          </ContextMenu.Trigger>
+        </AwayPeek>
+        {threadMenu(c)}
+      </ContextMenu.Root>
     );
   };
 
@@ -1338,33 +1597,57 @@ export function ProjectSidebar({
   const compactRow = (c: ChatSummary, kind: "snoozed" | "settled") => {
     const p = byId.get(c.projectId);
     return (
-      <div
-        key={c.id}
-        role="button"
-        tabIndex={0}
-        className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
-        onClick={() => open(c)}
-        onKeyDown={rowKeys(() => open(c))}
-      >
-        <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-        <span className="sb-compact-title">{c.title}</span>
-        <small>
-          {kind === "snoozed"
-            ? wakeLabel(c.snoozedUntil!, new Date(now))
-            : shortAge(c.updated, now)}
-        </small>
-        <button
-          className="sb-card-action icon"
-          title={kind === "snoozed" ? "Wake now" : "Move back to activity"}
-          aria-label={kind === "snoozed" ? "Wake now" : "Unsettle"}
-          onClick={(e) => {
-            e.stopPropagation();
-            void triage(c, { kind: kind === "snoozed" ? "wake" : "unsettle" });
-          }}
+      <ContextMenu.Root key={c.id}>
+        <ContextMenu.Trigger
+          role="button"
+          tabIndex={0}
+          className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
+          onClick={() => open(c)}
+          onKeyDown={rowKeys(() => open(c))}
         >
-          {kind === "snoozed" ? <Sunrise size={13} /> : <RotateCcw size={13} />}
-        </button>
-      </div>
+          <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+          {renamingThread === c.id ? (
+            renameInput(c, "sb-group-input sb-compact-title-input")
+          ) : (
+            <ThreadTitle
+              className="sb-compact-title"
+              title={c.title}
+              regenerating={regenerating.has(c.id)}
+            />
+          )}
+          <small
+            title={
+              c.autoSettled
+                ? c.worktree?.landed
+                  ? "Settled when its PR merged"
+                  : "Settled after days without activity"
+                : undefined
+            }
+          >
+            {kind === "snoozed"
+              ? wakeLabel(c.snoozedUntil!, new Date(now))
+              : shortAge(c.updated, now)}
+          </small>
+          <button
+            className="sb-card-action icon"
+            title={kind === "snoozed" ? "Wake now" : "Move back to activity"}
+            aria-label={kind === "snoozed" ? "Wake now" : "Unsettle"}
+            onClick={(e) => {
+              e.stopPropagation();
+              void triage(c, {
+                kind: kind === "snoozed" ? "wake" : "unsettle",
+              });
+            }}
+          >
+            {kind === "snoozed" ? (
+              <Sunrise size={13} />
+            ) : (
+              <RotateCcw size={13} />
+            )}
+          </button>
+        </ContextMenu.Trigger>
+        {threadMenu(c)}
+      </ContextMenu.Root>
     );
   };
 
@@ -1445,7 +1728,11 @@ export function ProjectSidebar({
   const scratchpad = (
     <section className="sb-scratchpad">
       <div className="sb-section-heading">
-        <h2>Scratchpad</h2>
+        <SectionTitle
+          label="Scratchpad"
+          open={!folded.scratchpad}
+          onToggle={() => fold("scratchpad")}
+        />
         <IconButton
           label={`New chat  ${newScratchKeys}`.trim()}
           onClick={onNewScratch}
@@ -1453,32 +1740,34 @@ export function ProjectSidebar({
           <Plus size={14} />
         </IconButton>
       </div>
-      <div className="sb-thread-list flat">
-        {scratchDraft && (
-          <div className="sb-thread-row">
-            <button className="sb-thread selected" disabled>
-              <span className="sb-thread-title">New chat</span>
+      {!folded.scratchpad && (
+        <div className="sb-thread-list flat">
+          {scratchDraft && (
+            <div className="sb-thread-row">
+              <button className="sb-thread selected" disabled>
+                <span className="sb-thread-title">New chat</span>
+              </button>
+            </div>
+          )}
+          {(moreScratch ? scratch : scratch.slice(0, THREADS_PER_PROJECT)).map(
+            (c) => threadRow(c),
+          )}
+          {!scratch.length && !scratchDraft && (
+            <button className="sb-thread sb-ghost" onClick={onNewScratch}>
+              <span className="sb-thread-title">Ask anything</span>
             </button>
-          </div>
-        )}
-        {(moreScratch ? scratch : scratch.slice(0, THREADS_PER_PROJECT)).map(
-          (c) => threadRow(c),
-        )}
-        {!scratch.length && !scratchDraft && (
-          <button className="sb-thread sb-ghost" onClick={onNewScratch}>
-            <span className="sb-thread-title">Ask anything</span>
-          </button>
-        )}
-        {scratch.length > THREADS_PER_PROJECT && (
-          <ShowMore
-            more={moreScratch}
-            hidden={scratch.length - THREADS_PER_PROJECT}
-            onToggle={() =>
-              setShowAll((s) => ({ ...s, scratchpad: !moreScratch }))
-            }
-          />
-        )}
-      </div>
+          )}
+          {scratch.length > THREADS_PER_PROJECT && (
+            <ShowMore
+              more={moreScratch}
+              hidden={scratch.length - THREADS_PER_PROJECT}
+              onToggle={() =>
+                setShowAll((s) => ({ ...s, scratchpad: !moreScratch }))
+              }
+            />
+          )}
+        </div>
+      )}
     </section>
   );
 
@@ -1503,7 +1792,11 @@ export function ProjectSidebar({
         onDragOver={(e) => dragOver(e, { kind: "folder", path: "" })}
         onDrop={(e) => dropOn(e, { kind: "folder", path: "" })}
       >
-        <h2>Projects</h2>
+        <SectionTitle
+          label="Projects"
+          open={!folded.projects}
+          onToggle={() => fold("projects")}
+        />
         <div className="sb-heading-actions">
           <div className="sb-row-actions">
             <IconButton label="New group" onClick={() => startGroup("")}>
@@ -1516,8 +1809,8 @@ export function ProjectSidebar({
         </div>
       </div>
       {groupError && <p className="sb-note error">{groupError}</p>}
-      {renderFolder(tree)}
-      {!realProjects.length && (
+      {!folded.projects && renderFolder(tree)}
+      {!folded.projects && !realProjects.length && (
         <p className="sb-note">Add a project folder to get started.</p>
       )}
     </div>

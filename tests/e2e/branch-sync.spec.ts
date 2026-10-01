@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
-test("shows ahead/behind next to the branch and syncs with its upstream", async () => {
+test("shows ahead/behind next to the branch, syncs with its upstream and rebases onto it", async () => {
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-branch-sync-")),
     ),
@@ -106,7 +106,7 @@ test("shows ahead/behind next to the branch and syncs with its upstream", async 
     }).toPass({ timeout: 30000 });
     expect(gitIn(bare)("rev-parse", "review")).toBe(git("rev-parse", "HEAD"));
 
-    // Diverged branches are shown but never synced automatically.
+    // Diverged: the button rebases the local commit onto what came in.
     await writeFile(join(other, "other.md"), "x\n");
     otherGit("add", ".");
     otherGit("commit", "-qm", "Another remote change");
@@ -115,11 +115,53 @@ test("shows ahead/behind next to the branch and syncs with its upstream", async 
     await writeFile(join(repo, "local.md"), "y\n");
     git("add", ".");
     git("commit", "-qm", "Another local change");
+    await writeFile(join(repo, "wip.md"), "not committed\n");
     git("fetch", "-q", "upstream");
-    const diverged = page.getByRole("button", {
-      name: "1 ahead, 1 behind upstream/review",
+    const rebase = page.getByRole("button", {
+      name: "Rebase 1 commit onto upstream/review",
     });
-    await expect(diverged).toBeDisabled({ timeout: 15000 });
+    await rebase.click();
+    await expect(
+      page.getByRole("button", { name: "Push 1 commit to upstream/review" }),
+    ).toBeVisible({ timeout: 15000 });
+    expect(git("rev-parse", "HEAD~1")).toBe(otherGit("rev-parse", "HEAD"));
+    expect(git("log", "-1", "--format=%s")).toBe("Another local change");
+    expect(git("status", "--porcelain")).toBe("?? wip.md");
+
+    // A conflict changes nothing and offers a thread to resolve it.
+    await writeFile(join(other, "readme.md"), "theirs\n");
+    otherGit("commit", "-qam", "Their readme");
+    otherGit("push", "-q");
+    await writeFile(join(repo, "readme.md"), "ours\n");
+    git("commit", "-qam", "Our readme");
+    const head = git("rev-parse", "HEAD");
+    git("fetch", "-q", "upstream");
+    await page
+      .getByRole("button", { name: "Rebase 2 commits onto upstream/review" })
+      .click();
+    const card = page.locator(".rebase-conflict-card");
+    await expect(card).toContainText("Couldn’t rebase onto upstream/review");
+    await expect(card.locator(".rebase-conflict-file")).toHaveText([
+      "readme.md",
+    ]);
+    await expect(card).toContainText("Their readme");
+    await screenshot(page, {
+      path: "test-results/screenshots/branch-sync-conflict.png",
+      animations: "disabled",
+    });
+    expect(git("rev-parse", "HEAD")).toBe(head);
+    expect(git("status", "--porcelain")).toBe("?? wip.md");
+    await card.getByRole("button", { name: "Open as draft" }).click();
+    await expect(card).toHaveCount(0);
+    await expect(
+      page.locator('[contenteditable="true"][aria-label="Message project"]'),
+    ).toContainText("Rebase `review` onto `upstream/review`");
+    // The button keeps saying so until either side moves.
+    await expect(
+      page.getByRole("button", {
+        name: "Couldn’t rebase onto upstream/review",
+      }),
+    ).toBeVisible();
   } finally {
     await app?.close().catch(() => {});
     await rm(root, { recursive: true, force: true });

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  autoSettledAt,
   chatActivitySection,
   chatActivitySections,
   chatIsEmpty,
@@ -149,5 +150,61 @@ describe("chat activity", () => {
     expect(at(17)).toMatch(/17/);
     expect(at(17)).not.toMatch(/2026/);
     expect(at(17, 13, 2025)).toMatch(/2025/);
+  });
+});
+
+describe("auto-settle", () => {
+  const day = 86_400_000;
+  const quiet = chat({ updated: 1_000 });
+  it("settles a thread quiet for the set days, dated to its last activity", () => {
+    expect(autoSettledAt(quiet, 1_000 + 3 * day, 3)).toBe(1_000);
+    expect(autoSettledAt(quiet, 1_000 + 3 * day - 1, 3)).toBeUndefined();
+    expect(autoSettledAt(quiet, 1_000 + 90 * day, null)).toBeUndefined();
+  });
+
+  it("settles once its PR merged after the last activity", () => {
+    const merged = (at: number) =>
+      chat({ updated: 1_000, worktree: { landed: { at, by: "pr" } } });
+    expect(autoSettledAt(merged(2_000), 3_000, 3)).toBe(2_000);
+    expect(autoSettledAt(merged(500), 3_000, 3)).toBeUndefined();
+  });
+
+  it("leaves a thread alone while something is going on or about to", () => {
+    const later = 1_000 + 30 * day;
+    for (const patch of [
+      { running: true },
+      { waiting: true },
+      { nextSend: later + day },
+      { autoSettleOff: true as const },
+      { archivedAt: 2_000 },
+      { snoozedAt: 1_000, snoozedUntil: later + day },
+      {
+        pending: [
+          {
+            kind: "task" as const,
+            id: "t",
+            description: "dev server",
+            since: 1_000,
+          },
+        ],
+      },
+    ])
+      expect(
+        autoSettledAt(chat({ updated: 1_000, ...patch }), later, 3),
+      ).toBeUndefined();
+  });
+
+  it("keeps a thread moved back by hand out until newer activity", () => {
+    const later = 1_000 + 30 * day;
+    expect(
+      autoSettledAt(chat({ updated: 1_000, unsettledAt: 5_000 }), later, 3),
+    ).toBeUndefined();
+    expect(
+      autoSettledAt(
+        chat({ updated: 6_000, unsettledAt: 5_000 }),
+        6_000 + 3 * day,
+        3,
+      ),
+    ).toBe(6_000);
   });
 });

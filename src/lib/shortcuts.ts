@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { SETTINGS_PAGE } from "./settings-page";
 import { z } from "zod";
 import {
   accelerator,
@@ -219,8 +220,8 @@ export function isTypingTarget(e: Event) {
   );
 }
 
-/** Modal `<dialog>`s have no role attribute; popovers and menus do. */
-export const POPUPS = 'dialog[open], [role="dialog"], [role="menu"]';
+/** Modal `<dialog>`s have no role attribute; popovers and menus do. Settings is a page over the thread that keeps the keyboard too. */
+export const POPUPS = `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`;
 
 /** A dialog, popover or menu is open, and the keyboard is its. */
 export const popupOpen = () => !!document.querySelector(POPUPS);

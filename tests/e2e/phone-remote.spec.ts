@@ -76,7 +76,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await page.reload();
 
     await page.getByRole("button", { name: "Open settings" }).first().click();
-    const settings = page.getByRole("dialog", {
+    const settings = page.getByRole("region", {
       name: "Settings",
       exact: true,
     });
@@ -133,7 +133,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       path: test.info().outputPath("settings-phone.png"),
     });
     await settings
-      .getByRole("button", { name: "Close dialog", exact: true })
+      .getByRole("button", { name: "Back to app", exact: true })
       .click();
 
     const overview = await phone.call("overview");

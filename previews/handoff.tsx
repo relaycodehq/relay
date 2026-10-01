@@ -167,6 +167,19 @@ const scenes: Record<string, Scene> = {
       online: true,
     },
   },
+  "return-clash": {
+    label: "Strip · came back clashing",
+    view: {
+      sentTo: {
+        ...sentTo,
+        state: "returning",
+        error:
+          "Its work and what was committed here meanwhile both change src/lib/cache.ts. It's kept at refs/relay/handoffs/h1.",
+        conflicts: ["src/lib/cache.ts"],
+      },
+      online: true,
+    },
+  },
   returned: { label: "Strip · on the mini, handed back" },
 };
 

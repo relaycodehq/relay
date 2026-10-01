@@ -14,6 +14,11 @@ import {
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { Spinner } from "./ui";
+import {
+  RebaseConflictCard,
+  resolvePrompt,
+  type RebaseConflict,
+} from "./RebaseConflict";
 import type { BranchAction } from "../../shared/branches";
 import {
   checkoutChanged,
@@ -24,10 +29,13 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   projectId,
   branch,
   disabled,
+  onStartThread,
 }: {
   projectId: string;
   branch?: string | null;
   disabled: boolean;
+  /** Opens a new project-folder thread on `text`, sent or as a draft. */
+  onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -70,6 +78,8 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   });
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string>();
+  const [conflict, setConflict] = useState<RebaseConflict>();
+  const [conflictOpen, setConflictOpen] = useState(false);
   const t = tree.data;
   // Without it the label would say it's loading forever.
   const branchError = branch === undefined ? tree.error : null;
@@ -77,20 +87,38 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
     !t?.upstream || !t.branch || t.operation || (!t.ahead && !t.behind)
       ? null
       : t.ahead && t.behind
-        ? "diverged"
+        ? "rebase"
         : t.behind
           ? "pull"
           : "push";
+  // A conflict stands until either side moves.
+  const clash =
+    sync === "rebase" &&
+    conflict?.tree.head === t?.head &&
+    conflict?.tree.behind === t?.behind
+      ? conflict
+      : undefined;
   async function runSync() {
-    if (!t || syncing || (sync !== "pull" && sync !== "push")) return;
+    if (!t || syncing || !sync || clash) return;
     setSyncing(true);
     setSyncError(undefined);
-    const run = (revision: string) =>
-      api.projectGitAction(projectId, { kind: sync, revision });
+    const run = async (current: WorkingTree) => {
+      if (sync !== "rebase")
+        return api.projectGitAction(projectId, {
+          kind: sync,
+          revision: current.revision,
+        });
+      const result = await api.projectRebase(projectId, current.head);
+      if (!result.rebased) {
+        setConflict(result);
+        setConflictOpen(true);
+      }
+      return result.tree;
+    };
     try {
       let next: WorkingTree;
       try {
-        next = await run(t.revision);
+        next = await run(t);
       } catch (e) {
         // The view can be a poll behind the checkout. Look again, and go on
         // only if it still calls for the very same pull or push.
@@ -103,7 +131,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           fresh.behind !== t.behind
         )
           throw e;
-        next = await run(fresh.revision);
+        next = await run(fresh);
       }
       qc.setQueryData<WorkingTree>(treeKey, next);
       void qc.invalidateQueries(everythingButFetch);
@@ -292,51 +320,89 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           </Popover.Positioner>
         </Popover.Portal>
       </Popover.Root>
+      {t?.operation?.startsWith("rebase") && (
+        <span
+          className="composer-branch-trigger workspace-trigger static composer-branch-rebasing"
+          title="A rebase is in progress in this folder"
+        >
+          Rebasing…
+        </span>
+      )}
       {sync && t && (
-        <button
-          type="button"
-          className="composer-branch-sync"
-          data-state={sync}
-          disabled={
-            syncing || sync === "diverged" || (sync === "pull" && disabled)
-          }
-          aria-label={
-            sync === "pull"
-              ? `Pull ${t.behind} commit${t.behind === 1 ? "" : "s"} from ${t.upstream}`
-              : sync === "push"
-                ? `Push ${t.ahead} commit${t.ahead === 1 ? "" : "s"} to ${t.pushTarget ?? t.upstream}`
-                : `${t.ahead} ahead, ${t.behind} behind ${t.upstream}`
-          }
-          title={
-            sync === "diverged"
-              ? `Diverged from ${t.upstream}: rebase or merge before syncing`
-              : sync === "pull" && disabled
-                ? "Save your edits and wait for the agent before pulling"
+        <Popover.Root
+          open={conflictOpen && !!clash}
+          onOpenChange={(next) => setConflictOpen(next && !!clash)}
+        >
+          <Popover.Trigger
+            className="composer-branch-sync"
+            data-state={clash ? "conflict" : sync}
+            disabled={syncing || (sync !== "push" && disabled)}
+            aria-label={
+              clash
+                ? `Couldn’t rebase onto ${t.upstream}`
+                : sync === "pull"
+                  ? `Pull ${t.behind} commit${t.behind === 1 ? "" : "s"} from ${t.upstream}`
+                  : sync === "push"
+                    ? `Push ${t.ahead} commit${t.ahead === 1 ? "" : "s"} to ${t.pushTarget ?? t.upstream}`
+                    : `Rebase ${t.ahead} commit${t.ahead === 1 ? "" : "s"} onto ${t.upstream}`
+            }
+            title={
+              sync !== "push" && disabled
+                ? `Save your edits and wait for the agent before ${sync === "pull" ? "pulling" : "rebasing"}`
                 : remote.error
                   ? `Couldn’t fetch ${t.upstream}: ${remote.error.message}`
-                  : undefined
-          }
-          onClick={() => void runSync()}
-        >
-          {syncing ? (
-            <Spinner size={12} />
-          ) : (
-            <>
-              {t.behind > 0 && (
-                <span>
-                  <ArrowDown size={12} />
-                  {t.behind}
-                </span>
-              )}
-              {t.ahead > 0 && (
-                <span>
-                  <ArrowUp size={12} />
-                  {t.ahead}
-                </span>
-              )}
-            </>
+                  : sync === "rebase" && !clash
+                    ? `Rebase your ${t.ahead} onto the ${t.behind} new on ${t.upstream}`
+                    : undefined
+            }
+            onClick={() => void runSync()}
+          >
+            {syncing ? (
+              <Spinner size={12} />
+            ) : (
+              <>
+                {t.behind > 0 && (
+                  <span>
+                    <ArrowDown size={12} />
+                    {t.behind}
+                  </span>
+                )}
+                {t.ahead > 0 && (
+                  <span>
+                    <ArrowUp size={12} />
+                    {t.ahead}
+                  </span>
+                )}
+              </>
+            )}
+          </Popover.Trigger>
+          {clash && (
+            <Popover.Portal>
+              <Popover.Positioner
+                className="composer-popup-positioner"
+                side="top"
+                align="end"
+                sideOffset={6}
+              >
+                <Popover.Popup className="composer-select-popup rebase-conflict-card">
+                  <RebaseConflictCard
+                    conflict={clash}
+                    onResolve={
+                      onStartThread &&
+                      ((draft) => {
+                        setConflictOpen(false);
+                        void onStartThread(
+                          resolvePrompt(t.branch, clash),
+                          !draft,
+                        );
+                      })
+                    }
+                  />
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
           )}
-        </button>
+        </Popover.Root>
       )}
       {syncError && (
         <span role="alert" className="composer-branch-error" title={syncError}>

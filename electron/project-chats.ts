@@ -73,11 +73,15 @@ import { threadTerminals } from "./thread-terminals";
 import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
 import { currentBranchOrNull } from "./git";
 import { commitEverything, headOf } from "./handoff/git";
-import type {
-  ChatCameFrom,
-  ChatSentTo,
-  HandoffThread,
+import {
+  remoteRecentCalls,
+  type ChatCameFrom,
+  type ChatSentTo,
+  type HandoffRemoteStatus,
+  type HandoffThread,
 } from "../shared/handoff";
+import { readTurn } from "../shared/agent-trace";
+import { answerImagePaths } from "../shared/answer-images";
 import {
   dropRevert,
   finishTurn,
@@ -87,7 +91,16 @@ import {
   startTurn,
   turnDiff,
 } from "./turn-changes";
-import { cleanTitle, generateThreadTitle, promptTitle } from "./thread-titles";
+import {
+  cleanTitle,
+  generateThreadTitle,
+  promptTitle,
+  regenerateThreadTitle,
+} from "./thread-titles";
+import {
+  autoSettledAt,
+  DEFAULT_AUTO_SETTLE_DAYS,
+} from "../shared/chat-activity";
 import {
   createWorktree,
   moveIntoWorktree,
@@ -221,6 +234,40 @@ interface ActiveChat {
   end: () => void;
 }
 type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
+/** What another computer hears of a handed-over thread's latest turn. */
+type HandoffTurn = Pick<
+  HandoffRemoteStatus,
+  | "latest"
+  | "failed"
+  | "recent"
+  | "calls"
+  | "says"
+  | "provider"
+  | "model"
+  | "question"
+  | "runningFor"
+>;
+/** A turn's own last calls and latest commentary, trimmed to cross the bridge. */
+function turnPeek(m: ChatMessage): HandoffTurn {
+  const { activity } = readTurn(m);
+  const said = [...(m.trace ?? [])]
+    .reverse()
+    .find((e) => e.kind === "commentary" && e.text.trim());
+  const says = said?.kind === "commentary" && said.text.trim().slice(0, 300);
+  return {
+    provider: m.provider,
+    calls: activity.length,
+    recent: activity
+      .slice(-remoteRecentCalls)
+      .map(({ id, kind, label, status }) => ({
+        id,
+        kind,
+        label: label.slice(0, 300),
+        status,
+      })),
+    ...(says ? { says } : {}),
+  };
+}
 /** An answer the app closed on, with what it had written so far. */
 function interrupt(m: ChatMessage) {
   m.status = "failed";
@@ -423,6 +470,10 @@ export class ProjectChats {
       this.store.get().chats?.find((c) => c.id === id)?.projectId;
     if (projectId) this.summariesChanged(projectId);
   }
+  autoSettleDays(): number | null {
+    const days = this.store.get().autoSettleDays;
+    return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
+  }
   list(projectId: string): ChatSummary[] {
     this.projects.get(projectId);
     const chats = (this.store.get().chats ?? []).filter(
@@ -437,6 +488,8 @@ export class ProjectChats {
     }
     // Once for the list: it is read on every change to any of its threads.
     const live = this.pending();
+    const now = Date.now();
+    const autoSettleDays = this.autoSettleDays();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
@@ -461,20 +514,25 @@ export class ProjectChats {
             at: w.at,
           })),
         ];
-        return active || pending.length
-          ? {
-              ...c,
-              ...(active
-                ? {
-                    running: true,
-                    runningSince: active.started,
-                    runningAgents: running,
-                    waiting: active.requests.list().length > 0,
-                  }
-                : {}),
-              ...(pending.length ? { pending } : {}),
-            }
-          : c;
+        const listed: ChatSummary =
+          active || pending.length
+            ? {
+                ...c,
+                ...(active
+                  ? {
+                      running: true,
+                      runningSince: active.started,
+                      runningAgents: running,
+                      waiting: active.requests.list().length > 0,
+                    }
+                  : {}),
+                ...(pending.length ? { pending } : {}),
+              }
+            : c;
+        const settledAt = autoSettledAt(listed, now, autoSettleDays);
+        return settledAt
+          ? { ...listed, settledAt, autoSettled: true as const }
+          : listed;
       });
   }
   /**
@@ -706,6 +764,13 @@ export class ProjectChats {
   async triage(id: string, triage: ChatTriage) {
     const chat = await this.load(id);
     const now = Date.now();
+    if (triage.kind === "unread" || triage.kind === "auto-settle") {
+      if (triage.kind === "unread") chat.markedUnread = true;
+      else if (triage.enabled) delete chat.autoSettleOff;
+      else chat.autoSettleOff = true;
+      await this.persist(chat);
+      return this.summary(chat);
+    }
     if (triage.kind === "archive") {
       if (this.active.has(id) || this.councilBusy(chat))
         throw new Error("Stop the running answer before archiving.");
@@ -739,6 +804,8 @@ export class ProjectChats {
     if (triage.kind === "settle") chat.settledAt = now;
     else if (triage.kind === "unsettle" || triage.kind === "snooze")
       delete chat.settledAt;
+    // Settled by hand or automatically, moving it back keeps it out until something new happens.
+    if (triage.kind === "unsettle") chat.unsettledAt = now;
     if (triage.kind === "snooze") {
       if (triage.until <= now) throw new Error("Choose a future wake time.");
       chat.snoozedAt = now;
@@ -750,8 +817,9 @@ export class ProjectChats {
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
     const chat = await this.load(id);
-    if ((chat.seenAt ?? 0) >= seenAt) return;
-    chat.seenAt = seenAt;
+    if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
+    chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
+    delete chat.markedUnread;
     await this.persist(chat);
   }
   async rename(id: string, candidate: string) {
@@ -799,11 +867,23 @@ export class ProjectChats {
    * included when the answer is in one. The original keeps its turns' changes
    * to review and roll back; the fork starts without them.
    */
-  async fork(id: string, messageId: string) {
+  async fork(id: string, messageId?: string) {
     const source = await this.load(id);
     if (source.scope.kind === "review")
       throw new Error("A deep review can't be forked.");
-    const at = source.messages.find((m) => m.id === messageId);
+    const at = messageId
+      ? source.messages.find((m) => m.id === messageId)
+      : [...source.messages]
+          .reverse()
+          .find(
+            (m) =>
+              m.role === "assistant" &&
+              m.status !== "streaming" &&
+              !m.parentId &&
+              !m.side &&
+              !m.handoff &&
+              !m.compaction,
+          );
     if (at?.role !== "assistant" || at.status === "streaming")
       throw new Error("Fork from an answer that has finished.");
     const upTo = source.messages.slice(0, source.messages.indexOf(at) + 1);
@@ -1063,22 +1143,42 @@ export class ProjectChats {
     };
   }
   /**
-   * How the main conversation's latest turn here went: the start of the
-   * latest answer, or the error it ended in. Only what was written since the
-   * thread arrived, so the computer it came from never sees its own answer.
+   * How the main conversation's latest turn here goes: the start of the
+   * latest answer or the error it ended in, and for the peek its last calls,
+   * what its agent last said, and what it asks while it waits. Only what was
+   * written since the thread arrived, so the computer it came from never
+   * sees its own answer.
    */
-  async latestTurn(id: string): Promise<{ latest?: string; failed?: string }> {
+  async latestTurn(id: string): Promise<HandoffTurn> {
     const chat = await this.load(id);
     const answers = chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
       .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
     const last = answers.at(-1);
+    const active = this.active.get(id);
+    const model = (active?.input ?? chat.lastInput)?.choice.model;
+    const request = active?.requests.list()[0];
+    const peek: HandoffTurn = {
+      ...(last ? turnPeek(last) : {}),
+      ...(model ? { model } : {}),
+      ...(request
+        ? {
+            question: (request.questions?.[0]?.question ?? request.title)
+              .trim()
+              .slice(0, 300),
+          }
+        : {}),
+      ...(active ? { runningFor: Date.now() - active.started } : {}),
+    };
     if (last?.status === "failed")
       return {
         failed: last.error?.trim() || "The agent stopped with an error.",
+        ...peek,
       };
     const answer = answers.reverse().find((m) => m.body.trim());
-    return answer ? { latest: answer.body.trim().slice(0, 300) } : {};
+    return answer
+      ? { latest: answer.body.trim().slice(0, 300), ...peek }
+      : peek;
   }
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
@@ -1356,12 +1456,23 @@ export class ProjectChats {
     const bytes = await readFile(this.imagePath(chatId, image));
     return `data:${image.mimeType};base64,${bytes.toString("base64")}`;
   }
-  /** Only a path the turn itself read, so the renderer can't reach any other file on disk. */
+  /** Only a path the turn itself read or its answer shows, so the renderer can't reach any other file on disk. */
   async turnImagePath(chatId: string, messageId: string, path: string) {
     const chat = await this.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
-    if (!message || !isAbsolute(path) || !turnImages(message).includes(path))
+    if (!message || !isAbsolute(path))
       throw new Error("This turn didn't read that image.");
+    if (turnImages(message).includes(path)) return path;
+    const root = await this.terminalFolder(chat.projectId, chatId).catch(
+      () => null,
+    );
+    if (
+      message.role !== "assistant" ||
+      !message.body ||
+      !root ||
+      !answerImagePaths(message.body, root).includes(path)
+    )
+      throw new Error("This turn didn't read or show that image.");
     return path;
   }
   async readImage(chatId: string, messageId: string, path: string) {
@@ -3070,6 +3181,58 @@ export class ProjectChats {
     chat.title = title;
     await this.persist(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message), title });
+  }
+  /**
+   * Names the thread again from the whole conversation, on demand, even over
+   * a name you typed. Tries the latest answer's agent, then the helper agents.
+   */
+  async regenerateTitle(id: string) {
+    const chat = await this.load(id);
+    if (this.titleJobs.has(id))
+      throw new Error("This thread's title is already being generated.");
+    const answer = [...chat.messages]
+      .reverse()
+      .find(
+        (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
+      );
+    if (!answer)
+      throw new Error("Wait for the first answer to name the thread.");
+    const abort = new AbortController();
+    const job = (async () => {
+      const { choice } = this.sessionInput(chat, answer.provider);
+      for (const provider of [
+        answer.provider,
+        ...helperProviders.filter((p) => p !== answer.provider),
+      ]) {
+        try {
+          const title = await regenerateThreadTitle({
+            previous: chat.title,
+            messages: chat.messages,
+            provider,
+            choice:
+              provider === answer.provider ? choice : { ...choice, model: "" },
+            signal: abort.signal,
+          });
+          if (title || abort.signal.aborted) return title;
+        } catch (error) {
+          if (abort.signal.aborted) return null;
+          console.warn(
+            `Regenerating a thread title via ${provider} failed:`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+      return null;
+    })();
+    this.titleJobs.set(id, { abort, job: job.then(() => {}) });
+    const title = await job.finally(() => this.titleJobs.delete(id));
+    if (abort.signal.aborted) throw new Error("Relay is closing.");
+    if (!title) throw new Error("No agent could name this thread.");
+    const fresh = await this.load(id);
+    fresh.title = title;
+    delete fresh.renamed;
+    await this.persist(fresh);
+    return this.summary(fresh);
   }
   private syncing = new Map<string, Promise<void>>();
   private async updateSummary(chat: ProjectChat) {

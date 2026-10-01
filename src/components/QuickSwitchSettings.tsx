@@ -1,5 +1,4 @@
 import { useState, type KeyboardEvent } from "react";
-import { useDialogContainer } from "../lib/useDialogContainer";
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
 import { agentProviders } from "../../shared/agents";
 import { effortLabels, type ReasoningEffort } from "../../shared/settings";
@@ -37,8 +36,6 @@ export function QuickSwitchSettings() {
   const quickKeys = useQuickKeysLabel();
   const quick = useQuickSwitch();
   const catalogs = useCatalogs();
-  // Popups must render inside the modal <dialog> to sit in its top layer.
-  const [ref, container] = useDialogContainer();
   const save = (next: Partial<QuickSwitch>) =>
     setQuickSwitch({ ...quick, ...next });
   const presets = quick.presets;
@@ -51,7 +48,7 @@ export function QuickSwitchSettings() {
     save({ presets: next });
   };
   return (
-    <div ref={ref} className="quick-settings">
+    <div className="quick-settings">
       <SettingsCard>
         <SettingsRow
           label="Step through presets"
@@ -140,7 +137,6 @@ export function QuickSwitchSettings() {
                   label={`Preset ${i + 1}`}
                   providers={[...agentProviders]}
                   provider={p.provider}
-                  container={container}
                   catalogs={Object.fromEntries(
                     agentProviders.map((a) => [
                       a,
@@ -170,7 +166,6 @@ export function QuickSwitchSettings() {
                     <span className="composer-divider" aria-hidden />
                     <ComposerSelect<ReasoningEffort>
                       label={`Preset ${i + 1} reasoning effort`}
-                      container={container}
                       value={p.reasoningEffort}
                       options={[
                         { value: "", label: "Default effort" },

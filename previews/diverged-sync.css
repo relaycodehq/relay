@@ -1,0 +1,193 @@
+.ds-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.ds-switcher {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 2.2;
+}
+.ds-switcher button {
+  margin-right: 6px;
+}
+.ds-switcher button[aria-pressed="true"] {
+  font-weight: 600;
+}
+.ds-about {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 620px;
+}
+.ds-layout {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+  height: 460px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ds-sidebar {
+  width: 210px;
+  flex: none;
+  padding: 12px 8px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  font-size: 12px;
+}
+.ds-sidebar h4 {
+  margin: 0 6px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.ds-thread {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.ds-thread[data-current] {
+  background: var(--hover);
+  color: var(--text);
+}
+.ds-thread[data-new] {
+  color: var(--text);
+}
+.ds-thread > span:first-child {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ds-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 16px 12px 0;
+  min-width: 0;
+}
+.ds-main .thread-context-controls {
+  justify-content: flex-end;
+  padding: 8px 6px 0;
+}
+.ds-composer textarea {
+  width: 100%;
+  min-height: 60px;
+  border: 0;
+  background: transparent;
+  padding: 14px;
+  resize: none;
+  color: var(--text);
+  font: inherit;
+}
+
+/* The sync button after a rebase that didn't apply. */
+.composer-branch-sync[data-state="conflict"] {
+  color: light-dark(#a86a0a, #e3a23a);
+}
+.composer-branch-sync[data-state="resolving"] {
+  color: var(--accent);
+}
+
+/* A: one-item drop-up, like "Move into its own worktree…". */
+.ds-menu {
+  width: 290px;
+}
+.ds-menu-note {
+  margin: 0;
+  padding: 4px 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.ds-menu-note code,
+.ds-card code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+.composer-select-item.ds-item {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.ds-item > svg {
+  color: var(--muted);
+}
+
+/* B: a card that shows what clashed. */
+.ds-card {
+  width: 340px;
+  padding: 14px;
+  font-size: 12px;
+}
+.ds-card h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ds-card > p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.ds-side {
+  margin: 0 0 10px;
+}
+.ds-side h5 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.ds-side ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ds-side li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  min-width: 0;
+}
+.ds-side li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ds-side li > code {
+  color: var(--muted);
+  flex: none;
+}
+.ds-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.ds-file > svg {
+  flex: none;
+  color: light-dark(#a86a0a, #e3a23a);
+}
+.ds-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* C: the button tracks the resolving thread until it's ready to push. */
+.ds-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ds-main .project-chat {
+  justify-content: flex-end;
+}

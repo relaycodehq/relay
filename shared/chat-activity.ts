@@ -39,6 +39,54 @@ export function chatActivitySection(
   return "active";
 }
 
+export const DEFAULT_AUTO_SETTLE_DAYS = 3;
+
+type AutoSettled = Triaged &
+  Pick<
+    ChatSummary,
+    | "archivedAt"
+    | "unsettledAt"
+    | "autoSettleOff"
+    | "pending"
+    | "nextSend"
+    | "heldWakeups"
+    | "stopped"
+    | "worktree"
+  >;
+
+/**
+ * When a thread settles by itself, like T3 Code's auto-settle: once its PR
+ * merged after the last activity, or after `days` without any; `days` null
+ * turns both off. Undefined while anything is still going on in it or about
+ * to, and after you moved it back by hand, until something newer happens.
+ */
+export function autoSettledAt(
+  chat: AutoSettled,
+  now: number,
+  days: number | null,
+): number | undefined {
+  if (
+    days == null ||
+    chat.archivedAt ||
+    chat.autoSettleOff ||
+    chat.running ||
+    chat.waiting ||
+    chatSettled(chat) ||
+    (chat.unsettledAt ?? 0) >= chat.updated ||
+    chatSnoozed(chat, now) ||
+    chat.pending?.length ||
+    chat.nextSend ||
+    chat.heldWakeups?.length ||
+    chat.stopped
+  )
+    return undefined;
+  const merged = chat.worktree?.landed?.at;
+  if (merged && merged > chat.updated) return merged;
+  // Backdated to the last activity, so the shelf orders by when work stopped.
+  if (now - chat.updated >= days * 86_400_000) return chat.updated;
+  return undefined;
+}
+
 /** Only the latest settled threads stay in Activity; Projects lists them all. */
 const SETTLED_SHELF_SIZE = 15;
 

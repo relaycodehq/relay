@@ -60,3 +60,62 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
+
+/* The peek at a thread on another computer: one run, so no list beside it. */
+.remote-peek-card {
+  width: 400px;
+}
+.remote-peek {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 10px;
+}
+.remote-peek-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.remote-peek-quote {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.remote-peek-quote.failed {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.remote-peek-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/* Holds its rows as calls come in, so the card doesn't grow with them. */
+.remote-peek-calls {
+  flex: none;
+  height: calc(6 * 17px);
+}
+.remote-peek-calls:empty {
+  display: none;
+}
+/* The strip's line is the peek's trigger, still reading as plain text. */
+.waiting-strip button.handoff-strip-peek {
+  display: block;
+  flex: 1;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: default;
+}
+.waiting-strip button.handoff-strip-peek:hover:not(:disabled) {
+  background: transparent;
+  color: inherit;
+}

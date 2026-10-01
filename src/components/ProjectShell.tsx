@@ -73,6 +73,7 @@ import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
+import { sendDraft } from "./draft-send";
 import type { CodeReference } from "../../shared/code-references";
 import {
   matchLink,
@@ -100,6 +101,7 @@ import {
   NavigationLockProvider,
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
+import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
@@ -157,6 +159,7 @@ export default function ProjectShell() {
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
   const [settings, setSettings] = useState(false),
+    [settingsWhere, setSettingsWhere] = useState(""),
     [signin, setSignin] = useState(false),
     [error, setError] = useState<unknown>(),
     [legacy, setLegacy] = useState(
@@ -231,6 +234,11 @@ export default function ProjectShell() {
     setHiddenBesidePane(null);
   }, [autoHide]);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Settings is a page: going anywhere else, a ⌘1 jump say, leaves it.
+  useEffect(() => {
+    setSettings(false);
+    setSettingsCategory(undefined);
+  }, [selected, chatId, legacy]);
   // Resting the pointer along the window's left edge peeks it too. It's
   // watched rather than covered, so the edge still takes clicks and
   // selections; the short dwell keeps a pointer flung past it, or a drag,
@@ -684,6 +692,34 @@ export default function ProjectShell() {
     setChatId(null);
     setDraftScope(scope);
   }
+  /**
+   * A new thread in the project folder on `text`: sent on the agent new
+   * threads start with, or left as a draft to change first.
+   */
+  async function startThread(text: string, send: boolean) {
+    if (!project || lock.blocked()) return;
+    const id = freshNewThread(project.id);
+    clearDraftScope(id);
+    writeDraft(threadDraftKey(id), text);
+    try {
+      const sent =
+        send &&
+        (await sendDraft(qc, {
+          key: threadDraftKey(id),
+          id,
+          project,
+          reply: false,
+        }));
+      if (sent) {
+        await chats.refetch();
+        navigate(project, sent);
+        return;
+      }
+    } catch (e) {
+      setError(e);
+    }
+    navigate(project, undefined, id);
+  }
   async function reviewBranchPr(ref: PullRef) {
     if (!project || lock.blocked()) return;
     await discuss(ref);
@@ -786,7 +822,7 @@ export default function ProjectShell() {
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
-        className={`titlebar project-titlebar ${projectsHidden ? "sidebar-collapsed" : ""}`}
+        className={`titlebar project-titlebar ${projectsHidden && !settings ? "sidebar-collapsed" : ""}`}
       >
         <div className="project-titlebar-brand">
           <span className="traffic-space" />
@@ -799,6 +835,7 @@ export default function ProjectShell() {
               (dot ? ` · ${dot}` : "")
             }
             aria-pressed={!projectsHidden}
+            disabled={settings}
             onClick={toggleProjects}
             onMouseEnter={peekOpen}
             onMouseLeave={peekClose}
@@ -815,7 +852,13 @@ export default function ProjectShell() {
           </button>
           <RelayMark size={38} />
         </div>
-        {legacy ? (
+        {settings ? (
+          <div className="project-window-title">
+            <span>Settings</span>
+            <span className="breadcrumb-slash">/</span>
+            <strong>{settingsWhere}</strong>
+          </div>
+        ) : legacy ? (
           <PullsTitle where={pullsWhere} onNav={goToPulls} />
         ) : (
           <div className="project-window-title">
@@ -858,7 +901,7 @@ export default function ProjectShell() {
           </div>
         )}
         <span className="spacer" />
-        {!legacy && project && (
+        {!settings && !legacy && project && (
           <div className="thread-header-actions">
             <ProjectChecksButton
               quiet
@@ -938,7 +981,7 @@ export default function ProjectShell() {
             </div>
           </div>
         )}
-        {projectsHidden && (
+        {projectsHidden && !settings && (
           <IconButton label="Open settings" onClick={() => setSettings(true)}>
             <Settings2 size={16} />
           </IconButton>
@@ -951,10 +994,11 @@ export default function ProjectShell() {
           aria-label="Projects"
           aria-hidden={projectsHidden && !peek ? true : undefined}
           inert={projectsHidden && !peek ? true : undefined}
+          hidden={settings}
           onMouseEnter={projectsHidden ? peekOpen : undefined}
           onMouseLeave={projectsHidden ? peekClose : undefined}
         >
-          <PaneResizer pane="sidebar" initial={250} min={210} max={360} />
+          <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
           <ProjectSidebar
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
@@ -998,7 +1042,7 @@ export default function ProjectShell() {
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
         {legacy && account ? (
-          <div className="project-legacy">
+          <div className="project-legacy" hidden={settings}>
             <Connected
               account={account}
               initialWorkspace={boot.data.workspace}
@@ -1026,7 +1070,7 @@ export default function ProjectShell() {
             />
           </div>
         ) : !project ? (
-          <main className="project-empty">
+          <main className="project-empty" hidden={settings}>
             <FolderGit2 size={40} />
             <h1>Your project. Your conversation.</h1>
             <p>
@@ -1044,7 +1088,7 @@ export default function ProjectShell() {
             </button>
           </main>
         ) : (
-          <div className="workspace-column">
+          <div className="workspace-column" hidden={settings}>
             <div className="workspace-panes">
               <Pane
                 id="chat"
@@ -1068,6 +1112,7 @@ export default function ProjectShell() {
                     if (chat) void withAccount(() => setShare(chat));
                   }}
                   onDraftWorkspace={setDraftWorkspace}
+                  onStartThread={startThread}
                   onCreated={async (c) => {
                     if (!c.worktree) adoptDraftTerminal(project.id, c.id);
                     await chats.refetch();
@@ -1251,6 +1296,46 @@ export default function ProjectShell() {
             )}
           </div>
         )}
+        {settings && (
+          <Settings
+            account={account ?? null}
+            initialCategory={settingsCategory}
+            onWhere={setSettingsWhere}
+            onClose={() => {
+              setSettings(false);
+              setSettingsCategory(undefined);
+            }}
+            onConnect={() => {
+              setSettings(false);
+              void withAccount();
+            }}
+            onOpenChat={(projectId, chatId) => {
+              const p = projects.data?.find((p) => p.id === projectId);
+              if (!p) return;
+              void qc
+                .fetchQuery({
+                  queryKey: ["project-chats", projectId],
+                  queryFn: () => api.projectChats(projectId),
+                })
+                .then((list) => {
+                  const next = list.find((c) => c.id === chatId);
+                  if (!next) return;
+                  navigate(p, next);
+                  setSettings(false);
+                })
+                .catch(setError);
+            }}
+            onDisconnect={async () => {
+              await api.disconnect();
+              qc.removeQueries({
+                predicate: (q) => q.queryKey[0] !== "bootstrap",
+              });
+              qc.setQueryData(["bootstrap"], { ...boot.data, account: null });
+              setSettings(false);
+              setLegacy(false);
+            }}
+          />
+        )}
       </div>
       {!!error && (
         <div className="toast error">
@@ -1276,43 +1361,6 @@ export default function ProjectShell() {
           }}
           onAdd={() => void add()}
           onClose={() => setPickingProject(false)}
-        />
-      )}
-      {settings && (
-        <Settings
-          account={account ?? null}
-          initialCategory={settingsCategory}
-          onClose={() => {
-            setSettings(false);
-            setSettingsCategory(undefined);
-          }}
-          onConnect={() => {
-            setSettings(false);
-            void withAccount();
-          }}
-          onOpenChat={(projectId, chatId) => {
-            const p = projects.data?.find((p) => p.id === projectId);
-            if (!p) return;
-            void qc
-              .fetchQuery({
-                queryKey: ["project-chats", projectId],
-                queryFn: () => api.projectChats(projectId),
-              })
-              .then((list) => {
-                const next = list.find((c) => c.id === chatId);
-                if (next) navigate(p, next);
-              })
-              .catch(setError);
-          }}
-          onDisconnect={async () => {
-            await api.disconnect();
-            qc.removeQueries({
-              predicate: (q) => q.queryKey[0] !== "bootstrap",
-            });
-            qc.setQueryData(["bootstrap"], { ...boot.data, account: null });
-            setSettings(false);
-            setLegacy(false);
-          }}
         />
       )}
       {signin && (

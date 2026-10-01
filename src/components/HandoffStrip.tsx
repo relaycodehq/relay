@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Popover } from "@base-ui/react/popover";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../shared/projects";
 import type { HandoffView } from "../../shared/handoff";
+import { liveLabel } from "../../shared/activity-labels";
 import { api } from "../lib/api";
+import { readDraft, writeDraft } from "../lib/drafts";
+import { threadDraftKey } from "../lib/thread-storage";
+import { canPeek, remoteCall, RemotePeek } from "./RemotePeek";
 import "./waiting-strip.css";
 import "./handoff.css";
 
@@ -20,6 +25,20 @@ export function awayPlaceholder(chat: ChatSummary) {
     return `This thread continues on ${cameFrom.computer}.`;
 }
 
+/** What the thread is asked to do once it's back with work that didn't land. */
+export function resolveReturnPrompt(chat: ChatSummary) {
+  const { sentTo, worktree } = chat;
+  const ref = `refs/relay/handoffs/${sentTo!.id}`;
+  const branch = worktree?.branch ?? "this branch";
+  return [
+    `Your work from ${sentTo!.computer} came back but couldn't land: \`${branch}\` got new commits here while you were away, and both change ${(sentTo!.conflicts ?? []).map((f) => `\`${f}\``).join(", ")}.`,
+    "",
+    `Your commits are at \`${ref}\`. Apply them onto \`${branch}\` with \`git cherry-pick HEAD..${ref}\` and resolve the conflicts as they come, keeping what both sides meant. If one needs a judgement call, stop and ask me.`,
+    "",
+    `Once they're all in, delete the ref with \`git update-ref -d ${ref}\`. Don't push.`,
+  ].join("\n");
+}
+
 /** What the strip says about a thread on another computer. */
 export function handoffLine(view: HandoffView): {
   title: string;
@@ -28,6 +47,12 @@ export function handoffLine(view: HandoffView): {
 } {
   const { sentTo, online, remote } = view;
   const where = sentTo.computer;
+  if (sentTo.conflicts?.length)
+    return {
+      title: `Its work from ${where} clashes with this worktree`,
+      detail: `both sides changed ${sentTo.conflicts.join(", ")}`,
+      failed: true,
+    };
   if (sentTo.error)
     return {
       title:
@@ -51,7 +76,13 @@ export function handoffLine(view: HandoffView): {
     return { title: `On ${where}`, detail: "can't reach it right now" };
   if (remote.waiting)
     return { title: `On ${where}`, detail: "waiting for an answer there" };
-  if (remote.running) return { title: `Working on ${where}` };
+  if (remote.running) {
+    const call = remoteCall(view);
+    return {
+      title: `Working on ${where}`,
+      ...(call ? { detail: liveLabel(call) } : {}),
+    };
+  }
   if (remote.failed)
     return {
       title: `Stopped on ${where}`,
@@ -117,10 +148,39 @@ export function HandoffStrip({
         ) : (
           <MonitorUp size={15} />
         )}
-        <span className="waiting-strip-text" title={line.detail}>
-          <b>{line.title}</b>
-          {line.detail && <span> · {line.detail}</span>}
-        </span>
+        {canPeek(data) ? (
+          <Popover.Root>
+            <Popover.Trigger
+              openOnHover
+              delay={150}
+              closeDelay={250}
+              className="waiting-strip-text handoff-strip-peek"
+            >
+              <b>{line.title}</b>
+              {line.detail && <span> · {line.detail}</span>}
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Positioner
+                side="top"
+                align="start"
+                sideOffset={10}
+                collisionPadding={12}
+              >
+                <Popover.Popup
+                  className="subagents-card remote-peek-card"
+                  aria-label={`What ${sentTo.computer} is doing`}
+                >
+                  <RemotePeek view={data} />
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
+        ) : (
+          <span className="waiting-strip-text" title={line.detail}>
+            <b>{line.title}</b>
+            {line.detail && <span> · {line.detail}</span>}
+          </span>
+        )}
         {sentTo.state === "sending" && sentTo.error && (
           <>
             <button
@@ -144,7 +204,7 @@ export function HandoffStrip({
           (sentTo.state === "returning" && sentTo.error)) && (
           <button
             type="button"
-            className="primary-action"
+            className={sentTo.conflicts?.length ? undefined : "primary-action"}
             disabled={busy || !data.online}
             title={
               data.online
@@ -154,6 +214,23 @@ export function HandoffStrip({
             onClick={() => act(() => api.bringBackThread(chat.id))}
           >
             {sentTo.error ? "Try again" : "Bring back"}
+          </button>
+        )}
+        {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
+          <button
+            type="button"
+            className="primary-action"
+            disabled={busy || !data.online}
+            title="Bring it back with its work set aside, and ask it to replay that work here"
+            onClick={() => {
+              const key = threadDraftKey(chat.id),
+                draft = readDraft(key).trim();
+              const prompt = resolveReturnPrompt({ ...chat, sentTo });
+              writeDraft(key, draft ? `${prompt}\n\n${draft}` : prompt);
+              act(() => api.bringBackThread(chat.id, true));
+            }}
+          >
+            Bring back to resolve
           </button>
         )}
       </div>

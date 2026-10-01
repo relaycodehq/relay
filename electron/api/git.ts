@@ -20,6 +20,7 @@ import {
   mergeBranch,
   mergePlan,
 } from "../branch-merge";
+import { rebaseOnUpstream } from "../branch-rebase";
 import { branches, changeBranch } from "../branches";
 import { generateCommitMessage } from "../commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../commit-split";
@@ -90,6 +91,11 @@ export function gitHandlers(ctx: ApiContext) {
     projectCatchUp: takes(
       [workspaceIdSchema, branchNameSchema],
       async (where, base) => catchUpBranch(await placeRoot(where), base),
+    ),
+    projectRebase: takes(
+      [workspaceIdSchema, z.string().regex(/^[0-9a-f]{40,64}$/)],
+      async (where, upstream) =>
+        rebaseOnUpstream(await placeRoot(where), upstream),
     ),
     projectDeleteBranch: takes(
       [workspaceIdSchema, branchNameSchema],

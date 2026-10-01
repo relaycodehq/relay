@@ -67,7 +67,12 @@ export function chatHandlers(ctx: ApiContext) {
         chatTriageSchema.parse(args[1]),
       ),
     forkProjectChat: (args) =>
-      projectChats.fork(idSchema.parse(args[0]), idSchema.parse(args[1])),
+      projectChats.fork(
+        idSchema.parse(args[0]),
+        idSchema.optional().parse(args[1] ?? undefined),
+      ),
+    regenerateProjectChatTitle: (args) =>
+      projectChats.regenerateTitle(idSchema.parse(args[0])),
     renameProjectChat: (args) =>
       projectChats.rename(idSchema.parse(args[0]), z.string().parse(args[1])),
     markProjectChatSeen: (args) =>

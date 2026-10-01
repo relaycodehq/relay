@@ -6,6 +6,7 @@
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
+// --images starts one whose answer embeds two screenshots, a missing file and a web image.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
@@ -32,6 +33,7 @@ const arg = (name) => {
 const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
+const images = process.argv.includes("--images");
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
@@ -134,10 +136,19 @@ if (theme) {
 await app.evaluate(({ dialog }, repo) => {
   dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [repo] });
 }, repo);
+if (images) {
+  await mkdir(join(repo, "docs"));
+  await writeFile(join(repo, "docs", "shot.png"), await page.screenshot());
+  // A tall one too, which narrows in the thread instead of running long.
+  await writeFile(
+    join(repo, "docs", "sidebar.png"),
+    await page.screenshot({ clip: { x: 0, y: 0, width: 280, height: 700 } }),
+  );
+}
 const pairing = await page.evaluate(
-  async ({ seed }) => {
+  async ({ seed, images }) => {
     const project = await window.relay.addProject();
-    if (seed) {
+    if (seed || images) {
       const settings = await window.relay.aiSettings();
       const start = async (body) => {
         const chat = await window.relay.createProjectChat(project.id, {
@@ -153,14 +164,23 @@ const pairing = await page.evaluate(
         });
         return chat.id;
       };
-      await start("fixture edit files in the cache");
-      await new Promise((r) => setTimeout(r, 2500));
-      await start("fixture stream long answer about the cache guard");
+      if (images)
+        await start(
+          "fixture echo: Before ![](docs/missing.png) after:\n\n" +
+            "![the welcome screen](docs/shot.png)\n\n" +
+            "![the sidebar](docs/sidebar.png)\n\n" +
+            "And a web one, ![logo](https://example.com/logo.png), stays a link.",
+        );
+      if (seed) {
+        await start("fixture edit files in the cache");
+        await new Promise((r) => setTimeout(r, 2500));
+        await start("fixture stream long answer about the cache guard");
+      }
     }
     await window.relay.setPhoneRemote(true);
     return window.relay.phonePairing();
   },
-  { seed },
+  { seed, images },
 );
 let url = pairing.url;
 if (host) {

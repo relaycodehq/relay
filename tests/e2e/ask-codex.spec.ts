@@ -142,7 +142,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await page.getByRole("button", { name: "Save AI settings" }).click();
   await expect(
     page
-      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByRole("region", { name: "Settings", exact: true })
       .getByRole("status"),
   ).toContainText("Settings saved");
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
@@ -154,7 +154,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
       ),
     });
   }
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
   await page.getByRole("button", { name: /^Hide sidebar/ }).click();
   await page
     .getByRole("button", { name: "Toggle changed files", exact: true })
@@ -203,14 +203,14 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   await expect(
     page.getByRole("button", { name: "Line questions Fast mode", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
   await page.keyboard.press(
     process.platform === "darwin" ? "Meta+," : "Control+,",
   );
   await expect(
-    page.getByRole("dialog", { name: "Settings", exact: true }),
+    page.getByRole("region", { name: "Settings", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
 });
 test("row questions launch safely at the root with old/new revision context and leave review state untouched", async () => {
   test.skip(
@@ -346,10 +346,10 @@ test("line questions can run in a read-only Claude Code session", async () => {
   await page.getByRole("button", { name: "Save AI settings" }).click();
   await expect(
     page
-      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByRole("region", { name: "Settings", exact: true })
       .getByRole("status"),
   ).toContainText("Settings saved");
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
   await page.getByRole("button", { name: "Clear selected lines" }).click();
   await page
     .locator('.diff-wrapper [data-additions] [data-line="13"]')

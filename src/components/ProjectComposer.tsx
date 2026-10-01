@@ -181,6 +181,7 @@ export function ProjectComposer({
   inherit,
   agent,
   ultraplanOffered = false,
+  onStartThread,
 }: {
   handleRef?: Ref<ComposerHandle>;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -220,6 +221,8 @@ export function ProjectComposer({
   /** Sits on top of the input, attached to it. */
   notice?: ReactNode;
   placeholder?: string;
+  /** Opens a new project-folder thread on `text`, sent or as a draft. */
+  onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   const draft = useDraft(draftKey);
   const settings = useAISettings();
@@ -1192,6 +1195,7 @@ export function ProjectComposer({
             projectId={projectId}
             branch={branch}
             disabled={checkoutDisabled || running || busy}
+            onStartThread={onStartThread}
           />
         )}
       </div>
