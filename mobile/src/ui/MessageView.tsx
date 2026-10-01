@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
@@ -8,8 +8,17 @@ import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../remote/compose";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
-import { MessageImages } from "./Images";
-import { Markdown, type OpenLink } from "./Markdown";
+import { localImagePath } from "../../../shared/answer-images";
+import {
+  AnswerImage,
+  MessageImages,
+  imageFailed,
+  keyOf,
+  messageImages,
+  type Source,
+} from "./Images";
+import { Lightbox, type LightboxImage } from "./Lightbox";
+import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { mono, type, useTheme } from "./theme";
 
@@ -18,6 +27,8 @@ export type Rewind = (
   mode: "revert" | "redo",
   force: boolean,
 ) => Promise<{ conflicts: string[] }>;
+
+const hideImage: ShowImage = () => null;
 
 /** A message laid out like the desktop's (src/components/ProjectChat.tsx). */
 export const MessageView = memo(function MessageView({
@@ -63,6 +74,32 @@ export const MessageView = memo(function MessageView({
       return () => router.push(href);
     },
     [root, where, changes, m.id, onOpenFile],
+  );
+  const images = useMemo(() => messageImages(chatId, m, root), [chatId, m, root]);
+  const [viewing, setViewing] = useState<{ images: LightboxImage[]; index: number }>();
+  const openImage = useCallback(
+    (source: Source) => {
+      // The list is fixed while it's open; ones that failed to load are left out.
+      const key = keyOf(source);
+      const shown = images.all.filter(
+        (image) => keyOf(image.source) === key || !imageFailed(image.source),
+      );
+      setViewing({ images: shown, index: shown.findIndex((image) => keyOf(image.source) === key) });
+    },
+    [images],
+  );
+  const showImage = useCallback<ShowImage>(
+    (src, alt) => {
+      const path = root ? localImagePath(src, root) : null;
+      return path ? (
+        <AnswerImage
+          source={{ kind: "read", chatId, messageId: m.id, path }}
+          alt={alt}
+          onOpen={openImage}
+        />
+      ) : undefined;
+    },
+    [chatId, m.id, root, openImage],
   );
   if (m.handoff) return <HandoffRow message={m} />;
   if (m.compaction)
@@ -125,9 +162,21 @@ export const MessageView = memo(function MessageView({
           </View>
         )
       ) : m.body.trim() ? (
-        <Markdown text={m.body} onLink={openLink} />
+        <Markdown
+          text={m.body}
+          onLink={openLink}
+          // The desktop only reads an image once the saved answer names it.
+          image={m.status === "streaming" ? hideImage : showImage}
+        />
       ) : null}
-      <MessageImages chatId={chatId} message={m} />
+      <MessageImages images={images.strip} onOpen={openImage} />
+      {viewing && (
+        <Lightbox
+          images={viewing.images}
+          index={viewing.index}
+          onClose={() => setViewing(undefined)}
+        />
+      )}
       {!!m.changes?.length && m.status !== "streaming" && (
         <ChangedFiles
           files={m.changes}

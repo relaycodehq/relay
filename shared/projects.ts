@@ -5,6 +5,7 @@ import {
   type AgentResponse,
 } from "./agent-modes";
 import { lineQuestionSchema } from "./questions";
+import { isImagePath } from "./answer-images";
 import { z } from "zod";
 import { agentProviderSchema, type AgentProvider } from "./agents";
 import { idSchema } from "./rooms";
@@ -334,8 +335,7 @@ export interface AgentActivity {
 export type AgentTrace =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "activity"; id: string; activity: AgentActivity };
-export const isImagePath = (path: string) =>
-  /\.(?:png|jpe?g|gif|webp)$/i.test(path);
+export { isImagePath } from "./answer-images";
 /** Images the agent looked at during a turn, subagents included, by path in first-read order. */
 export function turnImages(message: ChatMessage): string[] {
   const calls = message.trace

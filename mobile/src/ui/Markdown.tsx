@@ -8,25 +8,31 @@ import { mono, type, useTheme, type Palette } from "./theme";
  * names something the app can open; nothing leaves it as text.
  */
 export type OpenLink = (value: string, inline: boolean) => (() => void) | undefined;
+/** Draws an `![alt](src)` the app can show; undefined leaves nothing, or a link for a web image. */
+export type ShowImage = (src: string, alt: string) => ReactNode | undefined;
 
 /** An agent's answer: the markdown agents actually write, drawn natively. */
 export const Markdown = memo(function Markdown({
   text,
   small,
   onLink,
+  image,
 }: {
   text: string;
   /** The size of an agent's commentary between tool calls. */
   small?: boolean;
   /** Files and folders the answer names; web links open without it. */
   onLink?: OpenLink;
+  image?: ShowImage;
 }) {
   const theme = useTheme();
   const tokens = lexer(text);
   return (
     <View style={styles.root}>
       <Small.Provider value={!!small}>
-        <Links.Provider value={onLink}>{blocks(tokens, theme)}</Links.Provider>
+        <Links.Provider value={onLink}>
+          <Images.Provider value={image}>{blocks(tokens, theme)}</Images.Provider>
+        </Links.Provider>
       </Small.Provider>
     </View>
   );
@@ -34,6 +40,55 @@ export const Markdown = memo(function Markdown({
 
 const Small = createContext(false);
 const Links = createContext<OpenLink | undefined>(undefined);
+const Images = createContext<ShowImage | undefined>(undefined);
+
+/**
+ * A web image stays a link in the text, as on the desktop: loading it would tell
+ * its server the thread was read.
+ */
+const webImage = (token: Tokens.Image) => /^https?:\/\//i.test(token.href);
+
+/** An image as a block of its own, or nothing if the app can't show it. */
+function BlockImage({ token }: { token: Tokens.Image }) {
+  return useContext(Images)?.(token.href, token.text) ?? null;
+}
+
+/**
+ * A paragraph's text stays whole and its images follow it: native text can't hold
+ * a block, and an image that doesn't load then leaves the sentence as it reads.
+ */
+function Paragraph({ tokens, t }: { tokens: Token[]; t: Palette }) {
+  const drawn = (token: Token): token is Tokens.Image =>
+    token.type === "image" && !webImage(token as Tokens.Image);
+  const images = tokens.filter(drawn);
+  if (!images.length) return <Body>{inline(tokens, t)}</Body>;
+  // "Before ![](a.png) after" reads "Before after", not with the image's two spaces.
+  const text: Token[] = [];
+  let gap = false;
+  for (const token of tokens) {
+    if (drawn(token)) {
+      gap = true;
+      continue;
+    }
+    const before = text.at(-1);
+    text.push(
+      gap && token.type === "text" && before?.type === "text" && /\s$/.test(before.raw)
+        ? { ...token, text: (token as Tokens.Text).text.trimStart() }
+        : token,
+    );
+    gap = false;
+  }
+  return (
+    <View style={styles.root}>
+      {text.some((token) => ("raw" in token ? token.raw.trim() : true)) && (
+        <Body>{inline(text, t)}</Body>
+      )}
+      {images.map((image, i) => (
+        <BlockImage key={i} token={image} />
+      ))}
+    </View>
+  );
+}
 
 /** Inline code; a path in the thread's folder opens, in the accent colour. */
 function CodeSpan({ children }: { children: string }) {
@@ -97,9 +152,7 @@ function block(token: Token, t: Palette, key: number): ReactNode {
     case "space":
       return null;
     case "paragraph":
-      return (
-        <Body key={key}>{inline((token as Tokens.Paragraph).tokens, t)}</Body>
-      );
+      return <Paragraph key={key} tokens={(token as Tokens.Paragraph).tokens} t={t} />;
     case "heading": {
       const h = token as Tokens.Heading;
       return (
@@ -183,8 +236,10 @@ function block(token: Token, t: Palette, key: number): ReactNode {
     }
     case "text": {
       const text = token as Tokens.Text;
-      return (
-        <Body key={key}>{text.tokens ? inline(text.tokens, t) : text.text}</Body>
+      return text.tokens ? (
+        <Paragraph key={key} tokens={text.tokens} t={t} />
+      ) : (
+        <Body key={key}>{text.text}</Body>
       );
     }
     default:
@@ -198,11 +253,11 @@ function block(token: Token, t: Palette, key: number): ReactNode {
 function itemBlocks(tokens: Token[], t: Palette) {
   return tokens.map((token, i) =>
     token.type === "text" ? (
-      <Body key={i}>
-        {(token as Tokens.Text).tokens
-          ? inline((token as Tokens.Text).tokens!, t)
-          : (token as Tokens.Text).text}
-      </Body>
+      (token as Tokens.Text).tokens ? (
+        <Paragraph key={i} tokens={(token as Tokens.Text).tokens!} t={t} />
+      ) : (
+        <Body key={i}>{(token as Tokens.Text).text}</Body>
+      )
     ) : (
       block(token, t, i)
     ),
@@ -252,8 +307,17 @@ function inline(tokens: Token[] | undefined, t: Palette): ReactNode[] {
       }
       case "escape":
         return decode((token as Tokens.Escape).text);
-      case "image":
-        return `[${(token as Tokens.Image).text || "image"}]`;
+      // A web image is a link; any other gets here only inside a link or emphasis, where a block can't go.
+      case "image": {
+        const image = token as Tokens.Image;
+        return webImage(image) ? (
+          <Link key={i} href={image.href}>
+            {image.text || image.href}
+          </Link>
+        ) : (
+          image.text
+        );
+      }
       default:
         return "raw" in token ? token.raw : null;
     }

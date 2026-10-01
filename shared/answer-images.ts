@@ -1,4 +1,6 @@
-import { isImagePath } from "./projects";
+/** An image Relay can show, by its name. */
+export const isImagePath = (path: string) =>
+  /\.(?:png|jpe?g|gif|webp)$/i.test(path);
 
 const markdownImage =
   /!\[[^\]\n]*\]\(\s*<?([^\s<>()]+)>?(?:\s+["'][^"'\n]*["'])?\s*\)/g;
