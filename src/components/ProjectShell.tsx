@@ -319,14 +319,28 @@ export default function ProjectShell() {
                   key={chat?.id ?? draftId}
                   ref={composer}
                   project={project}
-                  draftId={draftId}
-                  onCommand={runCommand}
                   projects={realProjects}
                   chat={chat}
+                  draftId={draftId}
                   draftScope={nav.draftScope}
                   viewing={codeOpen ? view.viewing : NO_VIEWING}
                   contextText={view.context}
                   onContextUsed={() => view.setContext(undefined)}
+                  scopes={{
+                    canChoosePR: !!account && !!project.repository,
+                    onRepository: () => nav.newThreadIn({ kind: "project" }),
+                    onChoosePR: () => {
+                      if (!lock.blocked()) setChoosePR(true);
+                    },
+                    onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
+                    onDeepReview: () => nav.newThreadIn({ kind: "review" }),
+                  }}
+                  opens={{
+                    onOpenCode: opens.openCode,
+                    onOpenFile: opens.openChatFile,
+                    onOpenTurnDiff: opens.openTurnDiff,
+                  }}
+                  onCommand={runCommand}
                   onShare={() => {
                     if (chat) void signIn.withAccount(() => setShare(chat));
                   }}
@@ -337,18 +351,8 @@ export default function ProjectShell() {
                     await chats.refetch();
                     nav.setChatId(c.id);
                   }}
-                  onRepository={() => nav.newThreadIn({ kind: "project" })}
-                  onChoosePR={() => {
-                    if (!lock.blocked()) setChoosePR(true);
-                  }}
-                  onSelectPR={(ref) => nav.newThreadIn({ kind: "pr", ref })}
-                  onDeepReview={() => nav.newThreadIn({ kind: "review" })}
                   onSwitchProject={(next) => navigate(next, undefined, true)}
                   onAddProject={() => void starts.addProject()}
-                  canChoosePR={!!account && !!project.repository}
-                  onOpenCode={opens.openCode}
-                  onOpenFile={opens.openChatFile}
-                  onOpenTurnDiff={opens.openTurnDiff}
                 />
                 <RunningTasks
                   key={project.id}

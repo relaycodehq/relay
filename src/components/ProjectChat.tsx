@@ -19,7 +19,6 @@ import type {
 } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { contextAgent } from "../../shared/recipient";
-import type { PullRef } from "../../shared/types";
 import { api } from "../lib/api";
 import { readDraft, writeDraft } from "../lib/drafts";
 import { useNavigationLock } from "../lib/navigation-lock";
@@ -49,10 +48,21 @@ import { SubagentThread } from "./SubagentThread";
 import { ThreadComposer } from "./ThreadComposer";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMessages } from "./ThreadMessages";
-import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
+import {
+  ScopeButtons,
+  ThreadIntroduction,
+  type ScopeChoice,
+} from "./ThreadScope";
 import { ErrorBox } from "./ui";
 import { WorkItemCards } from "./WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
+
+/** What the thread's messages ask the shell's panes to show. */
+export interface ThreadOpens {
+  onOpenCode: (mode: "changes" | "files") => void;
+  onOpenFile: (target: ProjectFileLink) => void;
+  onOpenTurnDiff: (target: TurnDiffTarget) => void;
+}
 
 export function ProjectChat({
   onCommand,
@@ -65,16 +75,10 @@ export function ProjectChat({
   onContextUsed,
   onShare,
   onCreated,
-  onRepository,
-  onChoosePR,
-  onSelectPR,
-  onDeepReview,
+  scopes,
   onSwitchProject,
   onAddProject,
-  canChoosePR,
-  onOpenCode,
-  onOpenFile,
-  onOpenTurnDiff,
+  opens,
   onDraftWorkspace,
   onStartThread,
   viewing,
@@ -96,16 +100,10 @@ export function ProjectChat({
   onContextUsed: () => void;
   onShare: () => void;
   onCreated: (c: ChatSummary) => Promise<void>;
-  onRepository: () => void;
-  onChoosePR: () => void;
-  onSelectPR: (ref: PullRef) => void;
-  onDeepReview: () => void;
+  scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
-  canChoosePR: boolean;
-  onOpenCode: (mode: "changes" | "files") => void;
-  onOpenFile: (target: ProjectFileLink) => void;
-  onOpenTurnDiff: (target: TurnDiffTarget) => void;
+  opens: ThreadOpens;
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
@@ -185,9 +183,7 @@ export function ProjectChat({
     worktree: worktree.status,
     onOpenReply: setRootId,
     onCreated,
-    onOpenCode,
-    onOpenFile,
-    onOpenTurnDiff,
+    ...opens,
   });
   const { openChanges, openFile } = actions;
   // A first message scheduled with Send later still shows, to send or take back.
@@ -242,11 +238,7 @@ export function ProjectChat({
       project={project}
       scope={scope}
       choosing={isEmpty}
-      canChoosePR={canChoosePR}
-      onRepository={onRepository}
-      onChoosePR={onChoosePR}
-      onSelectPR={onSelectPR}
-      onDeepReview={onDeepReview}
+      {...scopes}
       onReviewChanges={openChanges}
     />
   );
@@ -319,7 +311,7 @@ export function ProjectChat({
             context={scopeButtons}
             branch={checkout.data?.branch}
             changes={checkout.data?.changes.length ?? 0}
-            canChoosePR={canChoosePR}
+            canChoosePR={scopes.canChoosePR}
             busy={busy}
             checkoutDisabled={checkoutDisabled}
             onStart={councils.startReview}
@@ -345,7 +337,7 @@ export function ProjectChat({
             onSend={send}
             onStartThread={onStartThread}
             onOpenAgent={setAgentView}
-            onOpenTurnDiff={onOpenTurnDiff}
+            onOpenTurnDiff={opens.onOpenTurnDiff}
           />
         )}
         {isEmpty && scope.kind === "project" && !root && (

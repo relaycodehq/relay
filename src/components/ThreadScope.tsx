@@ -10,6 +10,16 @@ import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ScratchpadWord } from "./ScratchpadWord";
 
+/** Picking what an empty thread is about: the repository, a PR or a deep review. */
+export interface ScopeChoice {
+  canChoosePR: boolean;
+  onRepository: () => void;
+  /** Asks for the Git host first, when PRs can't be chosen yet. */
+  onChoosePR: () => void;
+  onSelectPR: (ref: PullRef) => void;
+  onDeepReview: () => void;
+}
+
 /** What a thread is about, picked beside the composer while it's empty. */
 export function ScopeButtons({
   project,
@@ -21,16 +31,11 @@ export function ScopeButtons({
   onSelectPR,
   onDeepReview,
   onReviewChanges,
-}: {
+}: ScopeChoice & {
   project: Project;
   scope: ChatScope;
   /** A thread's scope is fixed once it starts; another takes a new thread. */
   choosing: boolean;
-  canChoosePR: boolean;
-  onRepository: () => void;
-  onChoosePR: () => void;
-  onSelectPR: (ref: PullRef) => void;
-  onDeepReview: () => void;
   /** A PR thread's way to its diff. */
   onReviewChanges: () => void;
 }) {
