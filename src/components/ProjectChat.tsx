@@ -9,7 +9,6 @@ import {
 import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
-  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -36,7 +35,6 @@ import {
 import { chatSettled, wakeLabel } from "../../shared/chat-activity";
 import {
   replyRoot,
-  type ChatMessage,
   type ChatSummary,
   type Project,
   type ChatScope,
@@ -48,24 +46,17 @@ import {
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { useNavigationLock } from "../lib/navigation-lock";
-import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
   attachedImages,
   imagesAfter,
   nextImageNumber,
 } from "../lib/image-refs";
-import {
-  loadDraftWorkspace,
-  readDraft,
-  saveDraftWorkspace,
-  writeDraft,
-} from "../lib/drafts";
+import { readDraft, saveDraftWorkspace, writeDraft } from "../lib/drafts";
 import { withAttachments } from "../lib/draft-attachments";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import type { ComposedSend } from "../../shared/compose-send";
 import {
-  forkThreadSettings,
   startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
@@ -88,6 +79,7 @@ import { useChatThread } from "../lib/useChatThread";
 import { useChatPresence } from "../lib/useChatPresence";
 import { useBackgroundWork } from "../lib/useBackgroundWork";
 import { useThreadScroll } from "../lib/useThreadScroll";
+import { useMessageActions } from "../lib/useMessageActions";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -110,18 +102,13 @@ import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
 import {
-  CheckoutControl,
-  RemoveWorktreeDialog,
-  WorkspacePicker,
+  WorkspaceControl,
+  WorktreeDialogs,
   WorktreeLanded,
-  WorktreeMenu,
 } from "./WorktreeControls";
-import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import { useThreadWorktree } from "../lib/useThreadWorktree";
 import type { TurnDiffTarget } from "./TurnChanges";
-import {
-  matchLink,
-  type ProjectFileLink,
-} from "../../shared/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import type { PullRef } from "../../shared/types";
 import {
   DeepReviewCouncil,
@@ -272,33 +259,15 @@ export function ProjectChat({
   useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
   useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);
   useEffect(() => threadStorage(id).codeRefs.save(codeRefs), [id, codeRefs]);
-  // Where a new thread will work; a started one keeps its own.
-  const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
-    chat ? "checkout" : loadDraftWorkspace(id),
-  );
-  useEffect(() => {
-    if (chat) return;
-    saveDraftWorkspace(id, workspace);
-    onDraftWorkspace?.(workspace);
-  }, [workspace, !chat]);
-  const worktree = useQuery({
-    queryKey: ["worktree", chat?.id],
-    queryFn: () => api.projectWorktree(chat!.id),
-    enabled: !!chat?.worktree,
-    refetchInterval: 5000,
+  const worktree = useThreadWorktree({
+    chat,
+    draftId: id,
+    project,
+    running,
+    setError,
+    onDraftWorkspace,
   });
-  // Where this thread's files are: links in its answers resolve against it.
-  const folder =
-    worktree.data?.path && !worktree.data.removed
-      ? worktree.data.path
-      : project.path;
-  const [worktreeBusy, setWorktreeBusy] = useState(false);
-  const [removingWorktree, setRemovingWorktree] = useState(false);
-  const [movingToWorktree, setMovingToWorktree] = useState(false);
-  useEffect(() => {
-    // A finished turn leaves new changes to count.
-    if (!running && chat?.worktree) void worktree.refetch();
-  }, [running]);
+  const { workspace, folder } = worktree;
   const { agents, agentBatch, pending, stopped, leftBehind } =
     useBackgroundWork(chat, running);
   const unsettle = async () => {
@@ -634,161 +603,35 @@ export function ProjectChat({
     );
     void queueAction("move", moving, index);
   }
-  // Stable handlers let memoized messages skip re-rendering while typing.
-  const latest = useRef({
+  const {
+    signInToClaude,
+    openReply,
+    forkThread,
+    openChanges,
+    openFile,
+    openTurnDiff,
+    rewindTurn,
+  } = useMessageActions({
+    projectId: project.id,
+    chatId: chat?.id,
     messages,
+    worktree: worktree.status,
+    setError,
+    onOpenReply: setRootId,
+    onCreated,
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
-    onCreated,
-    chatId: chat?.id,
-    worktree: worktree.data,
   });
-  latest.current = {
-    messages,
-    onOpenCode,
-    onOpenFile,
-    onOpenTurnDiff,
-    onCreated,
-    chatId: chat?.id,
-    worktree: worktree.data,
-  };
-  const threadId = chat?.id;
-  const signInToClaude = useCallback(
-    () =>
-      threadId
-        ? prefillClaudeSignIn(project.id, threadId)
-        : Promise.resolve(false),
-    [project.id, threadId],
-  );
-  const openReply = useCallback((m: ChatMessage) => {
-    setRootId(replyRoot(latest.current.messages, m.id).id);
-  }, []);
-  const forkThread = useCallback(async (m: ChatMessage) => {
-    const { chatId, onCreated } = latest.current;
-    if (!chatId) return;
-    setError(undefined);
-    try {
-      const forked = await api.forkProjectChat(chatId, m.id);
-      forkThreadSettings(chatId, forked.id, m.provider);
-      await onCreated(forked);
-    } catch (e) {
-      setError(e);
-    }
-  }, []);
-  const openChanges = useCallback(
-    () => latest.current.onOpenCode("changes"),
-    [],
-  );
-  const openFile = useCallback((target: ProjectFileLink) => {
-    const { chatId, worktree, onOpenFile, onOpenTurnDiff } = latest.current;
-    // A file the worktree changed opens on its worktree diff; the checkout has the old one.
-    const matches = worktree
-      ? matchLink(
-          target,
-          worktree.files.map((f) => f.path),
-        )
-      : [];
-    const changed =
-      target.directory || matches.length === 1 ? matches[0] : undefined;
-    if (chatId && worktree && changed)
-      onOpenTurnDiff({
-        chatId,
-        messageId: "worktree",
-        files: worktree.files,
-        path: changed,
-        label: worktree.branch ?? "Worktree",
-        worktree: true,
-      });
-    else onOpenFile(target);
-  }, []);
-  const openTurnDiff = useCallback((m: ChatMessage, path?: string) => {
-    const { chatId, onOpenTurnDiff } = latest.current;
-    if (!chatId || !m.changes?.length) return;
-    onOpenTurnDiff({
-      chatId,
-      messageId: m.id,
-      files: m.changes,
-      path,
-      label: `${agentName(m.provider)} · ${new Date(
-        m.created,
-      ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-    });
-  }, []);
-  const rewindTurn = useCallback(
-    (
-      m: ChatMessage,
-      paths: string[] | null,
-      mode: "revert" | "redo",
-      force: boolean,
-    ) => {
-      const { chatId } = latest.current;
-      if (!chatId) return Promise.resolve({ conflicts: [] });
-      return api
-        .rewindProjectTurn(chatId, m.id, paths, mode, force)
-        .finally(
-          () => void qc.invalidateQueries({ queryKey: workingTreeKey() }),
-        );
-    },
-    [],
-  );
-  async function worktreeAction(action: (chatId: string) => Promise<void>) {
-    if (!chat || worktreeBusy) return;
-    setWorktreeBusy(true);
-    setError(undefined);
-    try {
-      await action(chat.id);
-    } catch (e) {
-      setError(e);
-    } finally {
-      setWorktreeBusy(false);
-      void worktree.refetch();
-      void qc.invalidateQueries({ queryKey: workingTreeKey() });
-      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    }
-  }
-  const removeWorktree = () =>
-    worktreeAction(async (chatId) => {
-      await api.removeProjectWorktree(chatId);
-      // What ran in it stopped with it.
-      void qc.invalidateQueries({ queryKey: ["project-tasks", project.id] });
-    });
   const workspaceControl =
-    scope.kind !== "project" || project.plain ? undefined : !chat ? (
-      <WorkspacePicker
-        value={workspace}
-        onChange={setWorkspace}
-        disabled={busy}
-      />
-    ) : chat.worktree ? (
-      <WorktreeMenu
-        status={worktree.data}
+    scope.kind !== "project" || project.plain ? undefined : (
+      <WorkspaceControl
+        chat={chat}
+        worktree={worktree}
         running={running}
-        busy={worktreeBusy}
-        onShowChanges={() => {
-          const status = worktree.data;
-          if (status?.files.length)
-            onOpenTurnDiff({
-              chatId: chat.id,
-              messageId: "worktree",
-              files: status.files,
-              label: status.branch ?? "Worktree",
-              worktree: true,
-            });
-        }}
-        onReveal={() => void api.revealProjectWorktree(chat.id).catch(setError)}
-        onRemove={() => {
-          if (worktree.data?.files.length) setRemovingWorktree(true);
-          else void removeWorktree();
-        }}
-      />
-    ) : (
-      <CheckoutControl
-        worktrees={chat.agentWorktrees}
-        onReveal={(path) =>
-          void api.revealAgentWorktree(chat.id, path).catch(setError)
-        }
-        onMove={chat.shared ? undefined : () => setMovingToWorktree(true)}
+        busy={busy}
+        onOpenTurnDiff={onOpenTurnDiff}
+        onError={setError}
       />
     );
   // A first message scheduled with Send later still shows, to send or take back.
@@ -1037,8 +880,8 @@ export function ProjectChat({
                 />
               ),
             )}
-            {!root && worktree.data && (
-              <WorktreeLanded status={worktree.data} />
+            {!root && worktree.status && (
+              <WorktreeLanded status={worktree.status} />
             )}
             {!running &&
               listed.some(
@@ -1364,11 +1207,7 @@ export function ProjectChat({
                 {workspaceControl}
               </>
             }
-            branchLabel={
-              worktree.data?.path && !worktree.data.removed
-                ? worktree.data.branch
-                : undefined
-            }
+            branchLabel={worktree.branch}
             onSend={send}
             notice={
               chat?.sentTo ? (
@@ -1512,23 +1351,7 @@ export function ProjectChat({
           />
         )}
       </div>
-      {movingToWorktree && chat && (
-        <MoveToWorktreeDialog
-          chatId={chat.id}
-          onClose={() => setMovingToWorktree(false)}
-        />
-      )}
-      {removingWorktree && (
-        <RemoveWorktreeDialog
-          files={worktree.data?.files.length ?? 0}
-          from={worktree.data?.from}
-          onCancel={() => setRemovingWorktree(false)}
-          onRemove={() => {
-            setRemovingWorktree(false);
-            void removeWorktree();
-          }}
-        />
-      )}
+      <WorktreeDialogs chat={chat} worktree={worktree} />
       {agentSwitch && (
         <AgentSwitchDialog
           from={agentSwitch.from}

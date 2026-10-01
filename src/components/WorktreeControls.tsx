@@ -2,11 +2,95 @@ import { Menu } from "@base-ui/react/menu";
 import { Check, ChevronDown, Folder, FolderGit2 } from "lucide-react";
 import type {
   AgentWorktree,
+  ChatSummary,
   ChatWorkspace,
   WorktreeStatus,
 } from "../../shared/projects";
+import { api } from "../lib/api";
+import { worktreeDiff, type ThreadWorktree } from "../lib/useThreadWorktree";
+import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import type { TurnDiffTarget } from "./TurnChanges";
 import { Modal } from "./ui";
 import "./worktrees.css";
+
+/** The composer's workspace slot: where an unsent thread will work, then where it does. */
+export function WorkspaceControl({
+  chat,
+  worktree,
+  running,
+  busy,
+  onOpenTurnDiff,
+  onError,
+}: {
+  chat?: ChatSummary;
+  worktree: ThreadWorktree;
+  running: boolean;
+  /** Sending; the picker waits for it. */
+  busy: boolean;
+  onOpenTurnDiff: (target: TurnDiffTarget) => void;
+  onError: (error: unknown) => void;
+}) {
+  if (!chat)
+    return (
+      <WorkspacePicker
+        value={worktree.workspace}
+        onChange={worktree.setWorkspace}
+        disabled={busy}
+      />
+    );
+  if (!chat.worktree)
+    return (
+      <CheckoutControl
+        worktrees={chat.agentWorktrees}
+        onReveal={(path) =>
+          void api.revealAgentWorktree(chat.id, path).catch(onError)
+        }
+        onMove={chat.shared ? undefined : () => worktree.setDialog("move")}
+      />
+    );
+  const { status } = worktree;
+  return (
+    <WorktreeMenu
+      status={status}
+      running={running}
+      busy={worktree.busy}
+      onShowChanges={() => {
+        if (status?.files.length) onOpenTurnDiff(worktreeDiff(chat.id, status));
+      }}
+      onReveal={() => void api.revealProjectWorktree(chat.id).catch(onError)}
+      onRemove={() => {
+        if (status?.files.length) worktree.setDialog("remove");
+        else void worktree.remove();
+      }}
+    />
+  );
+}
+
+/** Kept out of the composer, which remounts with each side conversation: a dialog in it would start over. */
+export function WorktreeDialogs({
+  chat,
+  worktree,
+}: {
+  chat?: ChatSummary;
+  worktree: ThreadWorktree;
+}) {
+  const close = () => worktree.setDialog(undefined);
+  if (worktree.dialog === "move")
+    return chat && <MoveToWorktreeDialog chatId={chat.id} onClose={close} />;
+  if (worktree.dialog === "remove")
+    return (
+      <RemoveWorktreeDialog
+        files={worktree.status?.files.length ?? 0}
+        from={worktree.status?.from}
+        onCancel={close}
+        onRemove={() => {
+          close();
+          void worktree.remove();
+        }}
+      />
+    );
+  return null;
+}
 
 const workspaces: Record<
   ChatWorkspace,
