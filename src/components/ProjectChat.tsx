@@ -13,14 +13,7 @@ import {
   type Ref,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  X,
-  GitPullRequest,
-  FolderGit2,
-  ChevronDown,
-  RotateCcw,
-  ScanSearch,
-} from "lucide-react";
+import { X, RotateCcw } from "lucide-react";
 import { chatSettled } from "../../shared/chat-activity";
 import {
   type ChatSummary,
@@ -58,7 +51,7 @@ import { useQueuedMessages } from "../lib/useQueuedMessages";
 import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter } from "./ContextWindowMeter";
-import { ProjectPullPicker } from "./ProjectPullPicker";
+import { ScopeButtons } from "./ThreadScope";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
@@ -349,53 +342,18 @@ export function ProjectChat({
     opened: !!history.data,
     isEmpty,
   });
-  const contextButtons = (
-    <>
-      {/* A thread's scope is fixed once it starts; another takes a new thread. */}
-      {isEmpty && !project.plain && (
-        <>
-          <button
-            className={`thread-context-button ${scope.kind === "project" ? "selected" : ""}`}
-            onClick={onRepository}
-          >
-            <FolderGit2 size={14} />
-            Repository
-          </button>
-          {canChoosePR ? (
-            <ProjectPullPicker
-              project={project}
-              selected={scope.kind === "pr" ? scope.ref : null}
-              onSelect={onSelectPR}
-              compact
-            />
-          ) : (
-            <button
-              className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
-              onClick={onChoosePR}
-            >
-              <GitPullRequest size={14} />
-              {scope.kind === "pr" ? `PR #${scope.ref.number}` : "Review a PR"}
-              <ChevronDown size={12} />
-            </button>
-          )}
-          <button
-            className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
-            onClick={onDeepReview}
-          >
-            <ScanSearch size={14} />
-            Deep review
-          </button>
-        </>
-      )}
-      {scope.kind === "pr" && (
-        <button
-          className="thread-review-action"
-          onClick={() => onOpenCode("changes")}
-        >
-          Review changes →
-        </button>
-      )}
-    </>
+  const scopeButtons = (
+    <ScopeButtons
+      project={project}
+      scope={scope}
+      choosing={isEmpty}
+      canChoosePR={canChoosePR}
+      onRepository={onRepository}
+      onChoosePR={onChoosePR}
+      onSelectPR={onSelectPR}
+      onDeepReview={onDeepReview}
+      onReviewChanges={openChanges}
+    />
   );
   return (
     <section
@@ -631,7 +589,7 @@ export function ProjectChat({
           <DeepReviewSetup
             project={project}
             settingsKey={id}
-            context={contextButtons}
+            context={scopeButtons}
             branch={checkout.data?.branch}
             changes={checkout.data?.changes.length ?? 0}
             canChoosePR={canChoosePR}
@@ -781,7 +739,7 @@ export function ProjectChat({
                 />
               )
             }
-            context={contextButtons}
+            context={scopeButtons}
             allowEmpty={!root && (!!workItem || !!codeRefs.length)}
             attachment={
               !root && (selection || workItem || codeRefs.length) ? (
