@@ -2,6 +2,11 @@ import { keyedQueue } from "./keyed-queue";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import {
+  AnswerRecorder,
+  settleActivities,
+  streamingAnswer,
+} from "./answer-recorder";
+import {
   claudeAgentRun,
   claudeAgents,
   claudePending,
@@ -48,6 +53,8 @@ import type {
   KnownMessages,
   ProjectChatPatch,
   ChatWorktree,
+  AgentActivity,
+  ContextUsage,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
 import {
@@ -96,22 +103,7 @@ import type {
   ReviewerTask,
 } from "../shared/deep-review";
 import { codexQuestionChoice } from "../shared/settings";
-import { resolveTurnModel, type TurnModel } from "../shared/turn-model";
-/** A fresh assistant message the agent is about to stream into. */
-const streamingAnswer = (
-  provider: AgentProvider,
-  extra: Partial<ChatMessage> = {},
-): ChatMessage => ({
-  id: randomUUID(),
-  role: "assistant",
-  body: "",
-  status: "streaming",
-  provider,
-  created: Date.now(),
-  version: 1,
-  ...extra,
-});
-
+import { resolveTurnModel } from "../shared/turn-model";
 /** A turn that's about to run, with the means to stop it and answer its requests. */
 function newActive(input: ProjectChatSend): ActiveChat {
   const abort = new AbortController();
@@ -222,11 +214,7 @@ function interrupt(m: ChatMessage) {
   m.error =
     "The app closed before this answer finished. Partial output was kept.";
   m.version++;
-  for (const a of m.activity ?? [])
-    if (a.status === "running") a.status = "failed";
-  for (const entry of m.trace ?? [])
-    if (entry.kind === "activity" && entry.activity.status === "running")
-      entry.activity.status = "failed";
+  settleActivities(m, "failed");
   m.ended = Date.now();
 }
 /** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
@@ -2411,64 +2399,12 @@ export class ProjectChats {
     turn: ChatTurn,
   ) {
     const rules = turnRules(turn);
-    let flush: ReturnType<typeof setTimeout> | null = null,
-      checkpoint: ReturnType<typeof setTimeout> | null = null;
-    const publish = () => {
-      flush = null;
-      message.version++;
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
-    };
-    const changed = () => {
-      if (!flush) flush = setTimeout(publish, 40);
-      if (!checkpoint)
-        checkpoint = setTimeout(() => {
-          checkpoint = null;
-          void this.save(chat).catch(() => abort.abort());
-        }, 1000);
-    };
-    const onText = (body: string) => {
-      message.body = body;
-      changed();
-    };
-    let model: TurnModel | undefined;
-    // The agent read a steering message: the rest of the turn continues below
-    // it, so the answer to it doesn't stream into the reply above.
-    const continueBelow = (id: string) => {
-      const steer = chat.messages.find((m) => m.id === id);
-      if (!steer) return;
-      if (steer.unread) {
-        delete steer.unread;
-        steer.version++;
-        this.emit({ chatId: chat.id, message: structuredClone(steer) });
-      }
-      if (flush) clearTimeout(flush);
-      if (
-        message.body.trim() ||
-        message.trace?.length ||
-        message.activity?.length
-      ) {
-        message.status = "complete";
-        message.ended = Date.now();
-        publish();
-        message = {
-          id: randomUUID(),
-          role: "assistant",
-          body: "",
-          status: "streaming",
-          provider: message.provider,
-          created: 0,
-          version: 1,
-          ...(model ? { model } : {}),
-          ...(message.parentId ? { parentId: message.parentId } : {}),
-          ...(chat.shared ? { pending: true } : {}),
-        };
-      } else chat.messages.splice(chat.messages.indexOf(message), 1);
-      // Messages sort by time: this lands right after the steer, above any sent later.
-      message.created = steer.created + 1;
-      chat.messages.splice(chat.messages.indexOf(steer) + 1, 0, message);
-      publish();
-      changed();
-    };
+    const answer = new AnswerRecorder(
+      chat,
+      message,
+      (m) => this.emit({ chatId: chat.id, message: m }),
+      () => void this.save(chat).catch(() => abort.abort()),
+    );
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
@@ -2476,11 +2412,9 @@ export class ProjectChats {
     this.providerSessions.add(sessionKey);
     const provider = message.provider;
     if (rules.showsModel)
-      void this.turnModel(provider, input, root).then((resolved) => {
-        model = resolved;
-        message.model = resolved;
-        changed();
-      });
+      void this.turnModel(provider, input, root).then((model) =>
+        answer.setModel(model),
+      );
     const sessionId = agentSession(chat, provider, input.parentId).thread;
     // A side thread forks the main one whole, its running turn included.
     const main = agentSession(chat, provider).thread;
@@ -2515,14 +2449,11 @@ export class ProjectChats {
           const active = this.active.get(chat.id);
           if (active?.abort === abort) active.steer = control.steer;
         },
-        onSteered: continueBelow,
+        onSteered: (id: string) => answer.continueBelow(id),
         skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
         compact: turn.kind === "compact",
         adopt: turn.kind === "adopt",
-        onContext: (usage: import("../shared/projects").ContextUsage) => {
-          message.context = usage;
-          changed();
-        },
+        onContext: (usage: ContextUsage) => answer.context(usage),
         cwd: root,
         prompt,
         context: async () =>
@@ -2536,64 +2467,31 @@ export class ProjectChats {
           ),
         choice: input.choice,
         signal: abort.signal,
-        onText,
-        onPlan: (body: string) => {
-          message.proposedPlan = true;
-          onText(body);
-        },
+        onText: (body: string) => answer.text(body),
+        onPlan: (body: string) => answer.plan(body),
         images: attached.map((image) => ({
           path: this.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
         onTitle: (title: string) => {
           if (!branch) {
-            const update = this.updateTitle(chat, message, title).catch(
+            const update = this.updateTitle(chat, answer.message, title).catch(
               () => {},
             );
             this.titleUpdates.add(update);
             void update.finally(() => this.titleUpdates.delete(update));
           }
         },
-        onActivity: (activity: import("../shared/projects").AgentActivity) => {
+        onActivity: (activity: AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
             projectTasks.record(root, chat.id, activity.label);
           if (activity.kind === "command")
             commands.set(activity.id, activity.label);
           watchWorktrees(activity);
-          const trace = (message.trace ??= []);
-          const traceIndex = trace.findIndex((a) => a.id === activity.id);
-          const entry = {
-            kind: "activity" as const,
-            id: activity.id,
-            activity,
-          };
-          // A busy subagent mustn't crowd out Claude's own later calls.
-          if (traceIndex < 0 && trace.length >= 100 && !activity.parentId) {
-            const nested = trace.findIndex(
-              (e) => e.kind === "activity" && e.activity.parentId,
-            );
-            if (nested >= 0) trace.splice(nested, 1);
-          }
-          if (traceIndex >= 0) trace[traceIndex] = entry;
-          else if (trace.length < 100) trace.push(entry);
-          changed();
+          answer.activity(activity);
         },
-        onCommentary: (id: string, text: string | null) => {
-          const trace = (message.trace ??= []);
-          const index = trace.findIndex((a) => a.id === id);
-          if (text === null) {
-            if (index >= 0) trace.splice(index, 1);
-          } else if (index >= 0) {
-            trace[index] = {
-              kind: "commentary",
-              id,
-              text: text.slice(0, 12000),
-            };
-          } else if (trace.length < 100) {
-            trace.push({ kind: "commentary", id, text: text.slice(0, 12000) });
-          }
-          changed();
-        },
+        onCommentary: (id: string, text: string | null) =>
+          answer.commentary(id, text),
         onEdit: (paths: string[]) => {
           for (const path of paths) edited.add(path);
         },
@@ -2634,39 +2532,43 @@ export class ProjectChats {
         ? await (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
         : null;
       try {
-        // Awaited first: a steer can move the answer to a new message meanwhile.
         const body = await agentRuntime(provider).run({
           ...options,
           contextWindow: input.contextWindow,
         });
-        message.body = body;
+        answer.message.body = body;
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
-          const files = await finishTurn(root, first, before, message.id, {
-            edited: [...edited],
-            commands: [...commands.values()],
-          });
-          if (files.length) message.changes = files;
+          const files = await finishTurn(
+            root,
+            first,
+            before,
+            answer.message.id,
+            { edited: [...edited], commands: [...commands.values()] },
+          );
+          if (files.length) answer.message.changes = files;
         }
       }
+      const done = answer.message;
       if (turn.kind === "compact") {
         // The summary goes beside the answer: a compaction still says nothing.
-        const summary = message.body.trim();
-        if (summary) message.compactSummary = summary.slice(0, 100000);
-        message.body = "";
+        const summary = done.body.trim();
+        if (summary) done.compactSummary = summary.slice(0, 100000);
+        done.body = "";
       }
-      message.status = abort.signal.aborted ? "cancelled" : "complete";
+      done.status = abort.signal.aborted ? "cancelled" : "complete";
       const { thread } = agentSession(chat, provider, input.parentId);
-      if (message.status === "complete" && point && thread)
-        message.forkPoint = { thread, at: point };
+      if (done.status === "complete" && point && thread)
+        done.forkPoint = { thread, at: point };
     } catch (e) {
-      message.status = abort.signal.aborted ? "cancelled" : "failed";
-      if (abort.signal.aborted) delete message.error;
+      const failed = answer.message;
+      failed.status = abort.signal.aborted ? "cancelled" : "failed";
+      if (abort.signal.aborted) delete failed.error;
       else {
-        message.error = e instanceof Error ? e.message : String(e);
+        failed.error = e instanceof Error ? e.message : String(e);
         if (e instanceof ClaudeSignedOutError) {
-          message.signIn = "claude";
+          failed.signIn = "claude";
           // The running CLI keeps the rejected login; the next turn starts one
           // that reads the new sign-in, resuming the same conversation.
           await agentRuntime(provider).closeSession(sessionKey);
@@ -2679,40 +2581,32 @@ export class ProjectChats {
           if (fork.from) delete fork.from.forkPoint;
         }
       }
-      if (rules.pausesQueue(message)) chat.queuePaused = true;
+      if (rules.pausesQueue(failed)) chat.queuePaused = true;
     } finally {
-      if (message.status !== "failed") {
-        if (rules.advancesSession(message))
-          sessionFor(chat, provider, branch).through = message.id;
+      const ended = answer.message;
+      if (ended.status !== "failed") {
+        if (rules.advancesSession(ended))
+          sessionFor(chat, provider, branch).through = ended.id;
         if (turn.kind === "reply") turn.briefed?.();
       }
-      message.ended = Date.now();
+      ended.ended = Date.now();
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
-      chat.updated = message.ended;
-      for (const a of message.activity ?? [])
-        if (a.status === "running")
-          a.status = message.status === "complete" ? "complete" : "failed";
-      for (const entry of message.trace ?? [])
-        if (entry.kind === "activity" && entry.activity.status === "running")
-          entry.activity.status =
-            message.status === "complete" ? "complete" : "failed";
-      if (flush) clearTimeout(flush);
-      if (checkpoint) clearTimeout(checkpoint);
-      publish();
+      chat.updated = ended.ended;
+      answer.end();
       await this.save(chat);
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (
-        message.status === "complete" &&
+        ended.status === "complete" &&
         rules.titles &&
         !branch &&
         firstUser &&
         firstUser.id === input.id
       )
-        this.generateTitle(chat, message, input.choice);
+        this.generateTitle(chat, ended, input.choice);
     }
     // A steer moves the rest of the answer to a message of its own.
-    return message;
+    return answer.message;
   }
   /** Generated once per thread; the prompt excerpt stays until one lands. */
   private generateTitle(
