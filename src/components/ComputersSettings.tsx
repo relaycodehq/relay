@@ -35,6 +35,7 @@ const stateWord: Record<AwayState, string> = {
   working: "working",
   waiting: "waiting for you",
   finished: "finished",
+  stopped: "stopped with an error",
   returning: "coming back",
   failed: "didn't arrive",
   unknown: "can't check while it's offline",
@@ -50,6 +51,12 @@ function ago(since: number, now: number) {
 
 function threadLine(t: AwayThread, now: number) {
   if (t.state === "failed") return t.error ?? stateWord.failed;
+  if (t.state === "stopped") {
+    // Agent errors run long (a whole stderr); the thread itself has the rest.
+    const why = t.error?.split("\n")[0];
+    if (!why) return stateWord.stopped;
+    return `stopped · ${why.length > 120 ? why.slice(0, 119) + "…" : why}`;
+  }
   if (t.state === "finished") {
     const when = ago(t.since, now);
     return when === "just now" ? "finished just now" : `finished ${when} ago`;
@@ -361,7 +368,8 @@ function ComputerCard({
               )}
               {(t.state === "working" ||
                 t.state === "waiting" ||
-                t.state === "finished") && (
+                t.state === "finished" ||
+                t.state === "stopped") && (
                 <button
                   className="cm-text-button accent"
                   disabled={!online || !!busy}

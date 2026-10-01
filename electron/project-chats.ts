@@ -1026,16 +1026,23 @@ export class ProjectChats {
       since: came.tip,
     };
   }
-  /** The start of the thread's latest answer on its main conversation. */
-  async latestAnswer(id: string) {
+  /**
+   * How the main conversation's latest turn here went: the start of the
+   * latest answer, or the error it ended in. Only what was written since the
+   * thread arrived, so the computer it came from never sees its own answer.
+   */
+  async latestTurn(id: string): Promise<{ latest?: string; failed?: string }> {
     const chat = await this.load(id);
-    const answer = [...chat.messages]
-      .reverse()
-      .find(
-        (m) =>
-          m.role === "assistant" && !m.parentId && !m.handoff && m.body.trim(),
-      );
-    return answer?.body.trim().slice(0, 300);
+    const answers = chat.messages
+      .slice(chat.cameFrom?.carried ?? 0)
+      .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
+    const last = answers.at(-1);
+    if (last?.status === "failed")
+      return {
+        failed: last.error?.trim() || "The agent stopped with an error.",
+      };
+    const answer = answers.reverse().find((m) => m.body.trim());
+    return answer ? { latest: answer.body.trim().slice(0, 300) } : {};
   }
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {

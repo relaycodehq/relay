@@ -52,6 +52,12 @@ export function handoffLine(view: HandoffView): {
   if (remote.waiting)
     return { title: `On ${where}`, detail: "waiting for an answer there" };
   if (remote.running) return { title: `Working on ${where}` };
+  if (remote.failed)
+    return {
+      title: `Stopped on ${where}`,
+      detail: remote.failed.split("\n")[0],
+      failed: true,
+    };
   return {
     title: `${where} finished`,
     ...(remote.latest ? { detail: remote.latest.split("\n")[0] } : {}),

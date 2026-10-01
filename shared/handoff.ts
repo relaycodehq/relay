@@ -104,8 +104,10 @@ export interface HandoffRemoteStatus {
   waiting: boolean;
   settled: boolean;
   updated: number;
-  /** The start of the latest answer, for the strip. */
+  /** The start of the latest answer written there, for the strip. */
   latest?: string;
+  /** The latest turn there ended in this error. */
+  failed?: string;
   returned: boolean;
 }
 
@@ -144,6 +146,7 @@ export type AwayState =
   | "working"
   | "waiting"
   | "finished"
+  | "stopped"
   | "returning"
   | "failed"
   | "unknown";

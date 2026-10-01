@@ -493,13 +493,15 @@ em.waiting {
 .cm-thread-dot.unknown {
   fill: var(--muted);
 }
-.cm-thread-dot.failed {
+.cm-thread-dot.failed,
+.cm-thread-dot.stopped {
   fill: var(--danger);
 }
 .cm-dot.failed {
   background: var(--danger);
 }
-em.failed {
+em.failed,
+em.stopped {
   font-style: normal;
   color: var(--danger);
 }

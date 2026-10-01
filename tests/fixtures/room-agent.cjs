@@ -481,6 +481,15 @@ if (args.includes("--permission-prompt-tool")) {
       awaitingSteer = m.params.input.some(
         (i) => i.type === "text" && i.text.includes("fixture codex steer"),
       );
+      if (
+        m.params.input.some(
+          (i) => i.type === "text" && i.text.includes("fixture codex crash"),
+        )
+      ) {
+        // As a CLI whose runtime can't load: dyld aborts it mid-turn.
+        process.stderr.write("dyld: Library not loaded: libfixture.dylib\n");
+        process.exit(134);
+      }
       send({ id: m.id, result: { turn: { id: "fixture-turn" } } });
       send({
         method: "turn/started",

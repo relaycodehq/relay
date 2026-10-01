@@ -329,6 +329,47 @@ it("hands a worktree thread to the other computer and brings it back", async () 
   expect(resumed).toContain("handed over from another computer");
 }, 60000);
 
+it("tells the computer it came from when a turn there fails", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
+    { timeout: 15000 },
+  );
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+
+  await mini.chats.send(arrived!.id, input("@codex fixture codex crash"));
+  await vi.waitFor(
+    async () =>
+      expect((await mini.chats.get(arrived!.id)).messages.at(-1)?.status).toBe(
+        "failed",
+      ),
+    { timeout: 10000 },
+  );
+  await vi.waitFor(
+    async () => {
+      const view = await sender.view(thread.id);
+      expect(view?.remote).toMatchObject({
+        running: false,
+        failed: expect.any(String),
+      });
+      expect(view?.remote?.latest).toBeUndefined();
+    },
+    { timeout: 8000, interval: 500 },
+  );
+  const [shown] = (await sender.overview()).computers[0]!.threads;
+  expect(shown).toMatchObject({ state: "stopped", error: expect.any(String) });
+}, 60000);
+
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {
   const { laptop, remote, sender, computerId } = await pairedComputers();
   const thread = await laptop.chats.create(laptop.projectId, {

@@ -329,14 +329,13 @@ export class HandoffReceiver {
         result[id] = null;
         continue;
       }
-      const latest = await this.host.chats.latestAnswer(found.id);
       result[id] = {
         title: live.title,
         running: !!live.running,
         waiting: !!live.waiting,
         settled: !!live.settledAt,
         updated: live.updated,
-        ...(latest ? { latest } : {}),
+        ...(await this.host.chats.latestTurn(found.id)),
         returned: !!live.cameFrom?.returnedAt,
       };
     }

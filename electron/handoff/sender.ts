@@ -150,15 +150,22 @@ export class Handoffs {
               ? "waiting"
               : remote.running
                 ? "working"
-                : "finished";
+                : remote.failed
+                  ? "stopped"
+                  : "finished";
       return {
         chatId: chat.id,
         projectId: chat.projectId,
         project: projectName(chat.projectId),
         title: remote?.title ?? chat.title,
         state,
-        since: state === "finished" && remote ? remote.updated : sentTo.at,
-        ...(sentTo.error ? { error: sentTo.error } : {}),
+        since:
+          (state === "finished" || state === "stopped") && remote
+            ? remote.updated
+            : sentTo.at,
+        ...(sentTo.error || remote?.failed
+          ? { error: sentTo.error ?? remote?.failed }
+          : {}),
       };
     };
     return {
