@@ -162,12 +162,6 @@ export function ProjectChat({
     onCommand,
   });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
-  const councils = useCouncils({
-    handle,
-    data: history.data,
-    onCreated,
-    onSent: () => followAnswer(),
-  });
   useLayoutEffect(() => {
     threadStorage(id).reply.save(rootId);
   }, [place]);
@@ -185,32 +179,6 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
-  const newThread = useNewThread(
-    () =>
-      api.createProjectChat(
-        project.id,
-        scope,
-        scope.kind === "project" ? workspace : undefined,
-      ),
-    onCreated,
-  );
-  const { send, resume } = useThreadSend({
-    handle,
-    newThread,
-    root,
-    attachments,
-    viewing: viewing.path,
-    confirmSwitch: agentSwitch.confirm,
-    onSent: () => followAnswer(),
-    onOpen: setRootId,
-  });
-  const queue = useQueuedMessages({
-    handle,
-    messages,
-    queue: history.data?.queue,
-    attachments,
-    onOpen: setRootId,
-  });
   const actions = useMessageActions({
     handle,
     messages,
@@ -237,6 +205,38 @@ export function ProjectChat({
     isEmpty,
   });
   const { scroll, composerDock, scrolledUp, dockHeight, followAnswer } = view;
+  const councils = useCouncils({
+    handle,
+    data: history.data,
+    onCreated,
+    onSent: followAnswer,
+  });
+  const newThread = useNewThread(
+    () =>
+      api.createProjectChat(
+        project.id,
+        scope,
+        scope.kind === "project" ? workspace : undefined,
+      ),
+    onCreated,
+  );
+  const { send, resume } = useThreadSend({
+    handle,
+    newThread,
+    root,
+    attachments,
+    viewing: viewing.path,
+    confirmSwitch: agentSwitch.confirm,
+    onSent: followAnswer,
+    onOpen: setRootId,
+  });
+  const queue = useQueuedMessages({
+    handle,
+    messages,
+    queue: history.data?.queue,
+    attachments,
+    onOpen: setRootId,
+  });
   const scopeButtons = (
     <ScopeButtons
       project={project}
