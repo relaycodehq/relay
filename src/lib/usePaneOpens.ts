@@ -4,6 +4,8 @@ import {
   matchLink,
   type ProjectFileLink,
 } from "../../shared/project-file-links";
+import type { QuestionTarget } from "../../shared/questions";
+import type { Pull } from "../../shared/types";
 import { api } from "./api";
 import { changedTarget, fileTarget, type FileTarget } from "./file-link-target";
 import type { NavigationLock } from "./navigation-lock";
@@ -94,6 +96,11 @@ export function usePaneOpens(
       onError(e);
     }
   }
+  /** Hands `context` to the chat's composer, showing the chat. */
+  function ask(context: Omit<ChatContext, "id">) {
+    view.setContext({ id: crypto.randomUUID(), ...context });
+    panes.show("chat");
+  }
   return {
     fileOpens,
     changeReveals,
@@ -103,10 +110,18 @@ export function usePaneOpens(
     openInEditor,
     revealChange,
     openChatFile,
-    /** Hands `context` to the chat's composer, showing the chat. */
-    ask(context: Omit<ChatContext, "id">) {
-      view.setContext({ id: crypto.randomUUID(), ...context });
-      panes.show("chat");
+    ask,
+    /** Asks the chat about lines of `pr`'s diff. */
+    askAbout(target: QuestionTarget, pr: Pull) {
+      ask({
+        text: `About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
+        selection: {
+          ...target,
+          head: pr.head.sha,
+          base: pr.merge_base,
+          question: "Explain this code.",
+        },
+      });
     },
   };
 }
