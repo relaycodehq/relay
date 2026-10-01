@@ -18,7 +18,7 @@ import {
   composeSend,
   desktopNewThreadSettings,
   newThreadSettings,
-} from "../../mobile/src/remote/compose";
+} from "../../shared/remote-compose";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 const freePort = () =>
@@ -116,9 +116,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     ).toBeVisible();
     await expect(settings.getByText(/^Connected now/)).toBeVisible();
     // Until the phone says, its version is unknown; then Settings shows it.
-    await expect(
-      settings.getByText(/App version unknown/),
-    ).toBeVisible();
+    await expect(settings.getByText(/App version unknown/)).toBeVisible();
     await phone.call("reportApp", {
       version: "0.1.0",
       updated: false,
@@ -154,8 +152,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await expect
       .poll(
         async () =>
-          (await desktopNewThreadSettings(phone!.desktop.bind(phone)))
-            .provider,
+          (await desktopNewThreadSettings(phone!.desktop.bind(phone))).provider,
       )
       .toBe("claude");
     await phone.desktop("saveNewThreadAgent", "codex");

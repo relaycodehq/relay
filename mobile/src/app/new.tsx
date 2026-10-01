@@ -12,7 +12,7 @@ import { randomUUID } from "expo-crypto";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
-import { composeSend, desktopNewThread } from "../remote/compose";
+import { composeSend, desktopNewThread } from "../../../shared/remote-compose";
 import {
   sameModel,
   type NewThreadModels,

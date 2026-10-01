@@ -1,15 +1,15 @@
-import type { AgentProvider } from "../../../shared/agents";
-import type { ProjectChatSend } from "../../../shared/projects";
-import type { RemoteSettings } from "../../../shared/remote";
-import type { RemoteClient } from "../../../shared/remote-client";
-import type { AISettings } from "../../../shared/settings";
-import type { NewThreadModels } from "../../../shared/new-thread-models";
-
-/** Only a leading mention makes an agent answer (shared/agents' agentMentionPattern). */
-const mention = /^@(codex|claude|opencode|cursor)(?=\s|$)/i;
+import { agentMentionPattern, type AgentProvider } from "./agents";
+import { buildSend } from "./compose-send";
+import type { ProjectChatSend } from "./projects";
+import type { RemoteSettings } from "./remote";
+import type { RemoteClient } from "./remote-client";
+import type { AISettings } from "./settings";
+import type { NewThreadModels } from "./new-thread-models";
 
 export const withoutMention = (body: string) =>
-  body.replace(/^@(codex|claude|opencode|cursor)(?=\s|$)\s*/i, "");
+  body.replace(agentMentionPattern, "");
+
+export { implementPlan } from "./compose-send";
 
 /**
  * A new thread's composer, as the desktop starts one: the default agent,
@@ -113,29 +113,17 @@ export function composeSend(
   body: string,
   extras: SendExtras,
 ): ProjectChatSend {
-  const text = body.trim();
+  const { provider, ...rest } = settings;
   return {
     id: extras.id,
-    body: mention.test(text) ? text : `@${settings.provider} ${text}`.trim(),
-    provider: settings.provider,
-    choice: {
-      ...settings.choice,
-      // Fast is Codex's service tier; the others have none.
-      fast: settings.provider === "codex" && settings.choice.fast,
-    },
-    runtimeMode: settings.runtimeMode,
-    interactionMode: settings.interactionMode,
-    ...(settings.provider === "claude" && settings.contextWindow
-      ? { contextWindow: settings.contextWindow }
-      : {}),
-    ...(extras.parentId ? { parentId: extras.parentId } : {}),
-    ...(extras.side ? { side: true } : {}),
-    ...(extras.delivery ? { delivery: extras.delivery } : {}),
-    ...(extras.sendAt ? { sendAt: extras.sendAt } : {}),
-    ...(extras.images?.length ? { images: extras.images } : {}),
+    ...buildSend({ to: provider, ...rest }, body, {
+      parentId: extras.parentId,
+      side: extras.side,
+      sendAt: extras.sendAt,
+      images: extras.images,
+      ...(extras.delivery
+        ? { running: { steer: extras.delivery === "steer" } }
+        : {}),
+    }),
   };
 }
-
-/** What the desktop sends to carry out a proposed plan (ProjectComposer's Implement plan). */
-export const implementPlan = (provider: AgentProvider) =>
-  `@${provider} Implement the plan from your previous response.`;

@@ -14,7 +14,7 @@ import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
 import type { ChatPending } from "../../../shared/projects";
 import { MenuSheet } from "./Sheet";
-import { withoutMention } from "../remote/compose";
+import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
 import { type, useTheme } from "./theme";
 

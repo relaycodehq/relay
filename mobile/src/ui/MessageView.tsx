@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
 import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
-import { withoutMention } from "../remote/compose";
+import { withoutMention } from "../../../shared/remote-compose";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
 import { MessageImages } from "./Images";

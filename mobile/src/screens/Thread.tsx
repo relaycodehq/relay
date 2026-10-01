@@ -36,7 +36,7 @@ import {
   desktopNewThreadSettings,
   implementPlan,
   withoutMention,
-} from "../remote/compose";
+} from "../../../shared/remote-compose";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";

@@ -5,7 +5,7 @@ import {
   newThreadSettings,
   withRememberedModel,
   switchAgent,
-} from "../../mobile/src/remote/compose";
+} from "../../shared/remote-compose";
 import { projectChatSendSchema } from "../../shared/projects";
 import { defaultAISettings } from "../../shared/settings";
 

@@ -20,7 +20,7 @@ import { composerCommands, relayCommand, type RelayCommand } from "../../../shar
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { reasoningEffortSchema, type ModelChoice } from "../../../shared/settings";
-import { switchAgent, withRememberedModel } from "../remote/compose";
+import { switchAgent, withRememberedModel } from "../../../shared/remote-compose";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
 import {
   cancelDictation,
