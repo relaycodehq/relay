@@ -1,6 +1,5 @@
 import { GitActions, type GitActionsHandle } from "./GitActions";
 import { HandoffButton } from "./HandoffButton";
-import { workspaceId } from "../../shared/workspaces";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
@@ -16,7 +15,6 @@ import {
 import type { PaneId } from "../lib/workspace-panes";
 import { useShellNavigation } from "../lib/useShellNavigation";
 import { NO_VIEWING, useThreadView } from "../lib/useThreadView";
-import { workingTreeKey } from "../lib/working-tree-key";
 import type { TurnDiffTarget } from "../lib/turn-diff";
 import {
   ShareConversation,
@@ -24,7 +22,7 @@ import {
   BrowseShared,
 } from "./ProjectSharingDialogs";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useShortcut, useShortcutLabel } from "../lib/shortcuts";
+import { useShortcut } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -35,7 +33,6 @@ import {
   GitPullRequest,
   GitCompareArrows,
   GitGraph,
-  PanelBottom,
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
@@ -75,21 +72,16 @@ import {
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectBadge } from "./ProjectBadge";
 import { NewThreadPicker } from "./NewThreadPicker";
-import { TitlebarBrand } from "./ShellTitlebar";
+import { TerminalToggle, TitlebarBrand } from "./ShellTitlebar";
 import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
 import { RunningTasks } from "./RunningTasks";
 import { TerminalDrawer } from "./TerminalDrawer";
-import {
-  adoptDraftTerminal,
-  setTerminalOpen,
-  terminalFor,
-  terminalKey,
-  useTerminalOpen,
-} from "../lib/thread-terminals";
-import { useProjectChecks } from "../lib/useProjectChecks";
+import { adoptDraftTerminal, terminalFor } from "../lib/thread-terminals";
 import { fitHeader } from "../lib/header-fit";
 import { useSidebarVisibility } from "../lib/useSidebarVisibility";
+import { useThreadFolder } from "../lib/useThreadFolder";
+import { useThreadTerminal } from "../lib/useThreadTerminal";
 import { requestChannel } from "../lib/request-channel";
 import {
   NavigationLockProvider,
@@ -98,10 +90,7 @@ import {
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useSettingsPage } from "../lib/useSettingsPage";
 import { useSignIn } from "../lib/useSignIn";
-import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
-const WORKTREE_PENDING =
-  "The terminal opens in this thread's worktree, which its first message makes";
 const NOWHERE: PullsLocation = { repo: null, pull: null };
 const NO_PROJECTS: Project[] = [];
 
@@ -148,7 +137,6 @@ export default function ProjectShell() {
     setChatId,
     draftId,
     draftScope,
-    scope,
     pull,
     panes,
     navigate,
@@ -187,55 +175,10 @@ export default function ProjectShell() {
     [browseShared, setBrowseShared] = useState(false);
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
-  const shellKey = project ? terminalKey(project.id, chat?.id ?? null) : "";
-  const terminalOpen = useTerminalOpen(shellKey);
-  // A thread's terminal works where its files are: a worktree thread has
-  // none until its first message makes the worktree.
-  const terminalBlocked = chat?.worktree
-    ? chat.worktree.removedAt
-      ? "This thread's worktree was removed. Its next message makes a new one"
-      : !chat.worktree.path
-        ? WORKTREE_PENDING
-        : undefined
-    : !chat && scope.kind === "project" && nav.draftWorkspace === "worktree"
-      ? WORKTREE_PENDING
-      : undefined;
-  const showTerminal = !!project && !legacy && terminalOpen && !terminalBlocked;
-  function toggleTerminal() {
-    if (!project || legacy || terminalBlocked) return;
-    if (!terminalOpen)
-      terminalFor(project.id, chat?.id ?? null).focusOnShow = true;
-    setTerminalOpen(shellKey, !terminalOpen);
-  }
-  useShortcut("terminal", true, toggleTerminal);
-  const terminalKeys = useShortcutLabel("terminal");
+  const terminal = useThreadTerminal(nav);
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
-  // Git and file panes follow the thread: its worktree once it has one.
-  const inWorktree =
-    !!chat?.worktree?.path && !chat.worktree.removedAt ? chat : undefined;
-  const where = project ? workspaceId(project.id, inWorktree?.id) : "";
-  const worktreeDetail = inWorktree && {
-    text: "worktree",
-    title: `${inWorktree.worktree!.branch} · ${inWorktree.worktree!.path}`,
-  };
-  // The one poller for the working tree: panes, pickers and the chat read this
-  // cache. Every polling observer would run its own round of Git commands.
-  const tree = useQuery({
-    queryKey: workingTreeKey(where),
-    queryFn: () => api.projectWorkingTree(where),
-    enabled: !!project && !legacy && !project.plain,
-    refetchInterval: 3000,
-  });
-  // Live checks for the working tree. A PR thread's review runs its own checks
-  // (one session at a time), so the working-tree checks stand aside there.
-  const checks = useProjectChecks(
-    undefined,
-    project && tree.data && !legacy && !pull
-      ? { id: where, head: tree.data.head }
-      : undefined,
-    // An agent rewriting files would trigger a recheck on every save.
-    !!chats.data?.some((c) => c.running || agentsSince(c.pending)),
-  );
+  const folder = useThreadFolder(nav);
+  const { where, checks } = folder;
   useEffect(() => {
     // The page took its link when it opened; coming back mustn't open it again.
     if (!legacy) setIncoming(undefined);
@@ -425,7 +368,7 @@ export default function ProjectShell() {
     try {
       const changes = project!.plain
         ? []
-        : (tree.data ?? (await api.projectWorkingTree(id))).changes.map(
+        : (folder.tree ?? (await api.projectWorkingTree(id))).changes.map(
             (c) => c.path,
           );
       const changed = matchLink(target, changes);
@@ -688,28 +631,12 @@ export default function ProjectShell() {
                             : {
                                 label: "Changes",
                                 icon: <GitCompareArrows size={14} />,
-                                stat: tree.data?.lines,
+                                stat: folder.tree?.lines,
                               }),
                   }))}
                 />
                 <span className="header-strip-sep" aria-hidden="true" />
-                <span
-                  title={
-                    terminalBlocked ??
-                    `${terminalOpen ? "Hide" : "Show"} terminal${terminalKeys && ` (${terminalKeys})`}`
-                  }
-                >
-                  <button
-                    type="button"
-                    className={`pane-toggle ${showTerminal ? "active" : ""}`}
-                    aria-label="Terminal"
-                    aria-pressed={showTerminal}
-                    disabled={!!terminalBlocked}
-                    onClick={toggleTerminal}
-                  >
-                    <PanelBottom size={14} />
-                  </button>
-                </span>
+                <TerminalToggle terminal={terminal} />
               </div>
             </div>
           )}
@@ -880,7 +807,7 @@ export default function ProjectShell() {
                         )
                       }
                       title={pull ? "Review" : "Changes"}
-                      detail={pull ? undefined : worktreeDetail}
+                      detail={pull ? undefined : folder.detail}
                       onSlots={setChangesSlots}
                       onClose={() => togglePane("changes")}
                     />
@@ -978,7 +905,7 @@ export default function ProjectShell() {
                       id="files"
                       icon={<Files size={14} />}
                       title="Files"
-                      detail={worktreeDetail}
+                      detail={folder.detail}
                       closeDisabled={lock.locked}
                       onClose={() => togglePane("files")}
                     />
@@ -1000,7 +927,7 @@ export default function ProjectShell() {
                       id="history"
                       icon={<GitGraph size={14} />}
                       title="History"
-                      detail={worktreeDetail}
+                      detail={folder.detail}
                       onSlots={setHistorySlots}
                       onClose={() => togglePane("history")}
                     />
@@ -1016,11 +943,11 @@ export default function ProjectShell() {
                 )}
               </Pane>
             </div>
-            {showTerminal && (
+            {terminal.shown && (
               <TerminalDrawer
                 terminal={terminalFor(project.id, chat?.id ?? null)}
                 worktree={!!chat?.worktree}
-                onClose={() => setTerminalOpen(shellKey, false)}
+                onClose={() => terminal.close()}
               />
             )}
           </div>

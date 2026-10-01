@@ -1,6 +1,7 @@
-import { PanelLeft } from "lucide-react";
+import { PanelBottom, PanelLeft } from "lucide-react";
 import { useShortcutLabel } from "../lib/shortcuts";
 import type { SidebarVisibility } from "../lib/useSidebarVisibility";
+import type { ThreadTerminalDrawer } from "../lib/useThreadTerminal";
 import { RelayMark } from "./RelayMark";
 
 /** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
@@ -49,5 +50,32 @@ export function TitlebarBrand({
       </button>
       <RelayMark size={38} />
     </div>
+  );
+}
+
+/** Shows or hides the thread's terminal drawer. */
+export function TerminalToggle({
+  terminal: { open, blocked, shown, toggle },
+}: {
+  terminal: ThreadTerminalDrawer;
+}) {
+  const keys = useShortcutLabel("terminal");
+  return (
+    <span
+      title={
+        blocked ?? `${open ? "Hide" : "Show"} terminal${keys && ` (${keys})`}`
+      }
+    >
+      <button
+        type="button"
+        className={`pane-toggle ${shown ? "active" : ""}`}
+        aria-label="Terminal"
+        aria-pressed={shown}
+        disabled={!!blocked}
+        onClick={toggle}
+      >
+        <PanelBottom size={14} />
+      </button>
+    </span>
   );
 }
