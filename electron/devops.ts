@@ -100,6 +100,7 @@ export class DevOps {
             ...saved,
             filter: { ...defaultDevOpsSettings.filter, ...saved.filter },
             sort: savedSort(saved.sort),
+            mine: { ...defaultDevOpsSettings.mine, ...saved.mine },
             team: { ...defaultDevOpsSettings.team, ...saved.team },
           }
         : defaultDevOpsSettings,
@@ -221,8 +222,8 @@ export class DevOps {
   }
 
   /**
-   * Your items or the team's: assigned to you or to its members, through its
-   * filters, in the order Settings gives.
+   * Your items or the team's: assigned to you or to its members, each through
+   * its own filters, in the order Settings gives.
    */
   private async list(
     settings: DevOpsSettings,
@@ -235,7 +236,7 @@ export class DevOps {
       settings.project,
       settings.auth,
       settings.sort,
-      scope === "team" ? settings.team : null,
+      scope === "team" ? settings.team : settings.mine,
     ]);
     const cached = this.items.get(scope);
     if (!refresh && cached?.key === key && Date.now() - cached.at < itemsTtl)
@@ -266,7 +267,9 @@ export class DevOps {
       );
     const bySprint = sortKeys.some((k) => k.field === currentSprintField);
     const filters = [];
-    for (const f of scope === "team" ? settings.team.filters : [])
+    for (const f of scope === "team"
+      ? settings.team.filters
+      : settings.mine.filters)
       filters.push({ ...f, field: await reference(f.field) });
     // A filter on the state picks the states; otherwise closed items stay out.
     const byState = filters.some(

@@ -229,9 +229,13 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await screenshot(page, { path: join(root, "settings-filter.png") });
 
     // The team: who's in it and which of their items, in the same order as yours.
+    // Your items and the team's each have their own filters.
+    await expect(plugin).toContainText("Every open item assigned to you");
     await plugin.getByLabel("Team members").fill("jan@example.com");
     await plugin.getByLabel("Team members").press("Enter");
-    await plugin.getByRole("button", { name: "Add a filter" }).click();
+    await plugin
+      .getByRole("button", { name: "Add a filter to the team's items" })
+      .click();
     // A field Azure DevOps doesn't have isn't saved.
     await plugin.getByLabel("Team filter field 1").fill("Stat");
     await plugin.getByLabel("Team filter field 1").press("Enter");
@@ -245,7 +249,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await plugin.getByLabel("Team filter values 1").fill("Review, Testing");
     await plugin.getByLabel("Team filter values 1").press("Enter");
     await expect(
-      plugin.getByRole("button", { name: "Add a filter" }),
+      plugin.getByRole("button", { name: "Add a filter to the team's items" }),
     ).toBeVisible();
     // No order until one is set: Azure DevOps' own, most recently changed.
     await expect(plugin).toContainText("Most recently changed first");

@@ -447,6 +447,7 @@ it("lists the team's items through their filters", async () => {
   await devops.save(
     {
       ...base,
+      mine: { filters: [{ field: "State", values: ["Active"] }] },
       team: {
         members: ["ann@example.com", "o'brien@example.com"],
         filters: [{ field: "State", values: ["Review", "Testing"] }],
@@ -462,9 +463,11 @@ it("lists the team's items through their filters", async () => {
   expect(queries[0]).toContain("AND [System.State] IN ('Review', 'Testing')");
   // The filter picks the states, so closed ones aren't left out on top.
   expect(queries[0]).not.toContain("NOT IN");
-  // Your own items are a separate list with their own query.
+  // Your own items are a separate list, through their own filters.
   await devops.workItems(project);
   expect(queries[1]).toContain("WHERE [System.AssignedTo] = @Me");
+  expect(queries[1]).toContain("AND [System.State] IN ('Active')");
+  expect(queries[1]).not.toContain("Review");
 });
 
 it("keeps a sprint switch saved before the sprint was a sort key", async () => {

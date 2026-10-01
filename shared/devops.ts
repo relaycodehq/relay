@@ -63,6 +63,8 @@ export const devopsSettingsSchema = z
       .strict(),
     /** One order for your items and the team's; ties keep the most recently changed first. */
     sort: z.object({ fields: z.array(sortKeySchema).max(3) }).strict(),
+    /** Which of your items show. */
+    mine: z.object({ filters: z.array(fieldFilterSchema).max(3) }).strict(),
     /** The team's items: whose, and which of theirs. */
     team: z
       .object({
@@ -83,6 +85,7 @@ export const defaultDevOpsSettings: DevOpsSettings = {
   hiddenProjects: [],
   filter: { enabled: false, model: "jev-latest", threshold: 0.5, keywords: {} },
   sort: { fields: [] },
+  mine: { filters: [] },
   team: { members: [], filters: [] },
 };
 

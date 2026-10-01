@@ -22,7 +22,12 @@ import {
 import { SettingsCard, SettingsRow, Switch } from "../SettingsCard";
 import { CliPathField, withCode } from "../ToolRow";
 import { ErrorBox } from "../ui";
-import { FieldSuggestions, SortSection, TeamSection } from "./DevOpsOrder";
+import {
+  FieldSuggestions,
+  MineSection,
+  SortSection,
+  TeamSection,
+} from "./DevOpsOrder";
 import {
   CommitInput,
   PluginStatus,
@@ -261,9 +266,10 @@ export function DevOpsSettings() {
         <>
           <FieldSuggestions fields={fields.data} />
           <SortSection settings={settings} save={save} fields={fields.data} />
+          <MineSection settings={settings} save={save} fields={fields.data} />
           <TeamSection settings={settings} save={save} fields={fields.data} />
           <div className="plugin-section">
-            <h4 className="settings-card-title">Filter</h4>
+            <h4 className="settings-card-title">Matching to projects</h4>
             <SettingsCard>
               <SettingsRow
                 label="Only the open project's items"

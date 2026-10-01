@@ -238,21 +238,35 @@ export function SortSection({ settings, save, fields }: Props) {
   );
 }
 
-/** Whose items the Team view shows, and which of theirs. */
-export function TeamSection({ settings, save, fields }: Props) {
-  const { team } = settings;
+/**
+ * Up to three "field is one of these values" rows, and the button that adds
+ * one. A new row stays, as typed, until its save goes through.
+ */
+function useFilterRows({
+  filters,
+  saveFilters,
+  name,
+  addLabel,
+  fields,
+}: {
+  filters: FieldFilter[];
+  saveFilters: (filters: FieldFilter[]) => Promise<boolean>;
+  /** Names the inputs, e.g. "Team filter field 1". */
+  name: string;
+  /** Which list the add button adds to, for screen readers. */
+  addLabel: string;
+  fields: WorkItemField[] | undefined;
+}) {
   const [draft, setDraft] = useState<{ field: string; values: string[] }>();
-  const setFilters = (filters: FieldFilter[]) =>
-    void save({ team: { ...team, filters } });
-  // Like a new sort row, a new filter stays as typed until it's saved.
+  const set = (next: FieldFilter[]) => void saveFilters(next);
   const addDraft = (next: { field: string; values: string[] }) => {
     setDraft(next);
     if (next.field && next.values.length)
-      void save({ team: { ...team, filters: [...team.filters, next] } }).then(
+      void saveFilters([...filters, next]).then(
         (ok) => ok && setDraft(undefined),
       );
   };
-  const filterRow = (
+  const row = (
     f: { field: string; values: string[] },
     i: number,
     onField: (field: string) => void,
@@ -261,30 +275,118 @@ export function TeamSection({ settings, save, fields }: Props) {
   ) => (
     <SettingsRow key={i} label="Only where">
       <FieldInput
-        label={`Team filter field ${i + 1}`}
+        label={`${name} field ${i + 1}`}
         value={f.field}
         fields={fields}
         onCommit={onField}
       />
       <CommitInput
         className="plugin-values"
-        aria-label={`Team filter values ${i + 1}`}
+        aria-label={`${name} values ${i + 1}`}
         placeholder="is one of, e.g. Review, Testing"
         value={f.values.join(", ")}
         onCommit={(text) => onValues(list(text))}
       />
-      <IconButton label={`Remove team filter ${i + 1}`} onClick={onRemove}>
+      <IconButton
+        label={`Remove ${name.toLowerCase()} ${i + 1}`}
+        onClick={onRemove}
+      >
         <X size={13} />
       </IconButton>
     </SettingsRow>
   );
+  const rows = (
+    <>
+      {filters.map((f, i) =>
+        row(
+          f,
+          i,
+          (field) =>
+            set(
+              field
+                ? filters.map((o, j) => (j === i ? { ...o, field } : o))
+                : filters.filter((_, j) => j !== i),
+            ),
+          (values) =>
+            set(
+              values.length
+                ? filters.map((o, j) => (j === i ? { ...o, values } : o))
+                : filters.filter((_, j) => j !== i),
+            ),
+          () => set(filters.filter((_, j) => j !== i)),
+        ),
+      )}
+      {draft &&
+        row(
+          draft,
+          filters.length,
+          (field) => addDraft({ ...draft, field }),
+          (values) => addDraft({ ...draft, values }),
+          () => setDraft(undefined),
+        )}
+    </>
+  );
+  const add = !draft && filters.length < 3 && (
+    <button
+      className="text-button"
+      aria-label={addLabel}
+      onClick={() => setDraft({ field: "", values: [] })}
+    >
+      Add a filter
+    </button>
+  );
+  return { rows, add, empty: !filters.length && !draft };
+}
+
+/** Which of your own items show. */
+export function MineSection({ settings, save, fields }: Props) {
+  const { mine } = settings;
+  const filters = useFilterRows({
+    filters: mine.filters,
+    saveFilters: (next) => save({ mine: { ...mine, filters: next } }),
+    name: "Your filter",
+    addLabel: "Add a filter to your items",
+    fields,
+  });
+  return (
+    <div className="plugin-section">
+      <h4 className="settings-card-title">Your items</h4>
+      <SettingsCard>
+        {filters.empty && (
+          <SettingsRow
+            label="Every open item assigned to you"
+            hint="Add a filter to show only some of them."
+          />
+        )}
+        {filters.rows}
+      </SettingsCard>
+      <div className="plugin-section-foot">
+        {filters.add}
+        <p className="plugin-note">
+          Without a filter on State, closed items stay out.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Whose items the Team view shows, and which of theirs. */
+export function TeamSection({ settings, save, fields }: Props) {
+  const { team } = settings;
+  const filters = useFilterRows({
+    filters: team.filters,
+    saveFilters: (next) => save({ team: { ...team, filters: next } }),
+    name: "Team filter",
+    addLabel: "Add a filter to the team's items",
+    fields,
+  });
   return (
     <div className="plugin-section">
       <h4 className="settings-card-title">Team</h4>
       <SettingsCard>
         <SettingsRow
           label="Members"
-          hint="Their emails, separated by commas. With anyone here, your items get a Team view beside them."
+          hint="Their emails, separated by commas. With anyone here, a Team view sits beside your items."
         >
           <CommitInput
             aria-label="Team members"
@@ -296,45 +398,13 @@ export function TeamSection({ settings, save, fields }: Props) {
             }
           />
         </SettingsRow>
-        {team.filters.map((f, i) =>
-          filterRow(
-            f,
-            i,
-            (field) =>
-              setFilters(
-                field
-                  ? team.filters.map((o, j) => (j === i ? { ...o, field } : o))
-                  : team.filters.filter((_, j) => j !== i),
-              ),
-            (values) =>
-              setFilters(
-                values.length
-                  ? team.filters.map((o, j) => (j === i ? { ...o, values } : o))
-                  : team.filters.filter((_, j) => j !== i),
-              ),
-            () => setFilters(team.filters.filter((_, j) => j !== i)),
-          ),
-        )}
-        {draft &&
-          filterRow(
-            draft,
-            team.filters.length,
-            (field) => addDraft({ ...draft, field }),
-            (values) => addDraft({ ...draft, values }),
-            () => setDraft(undefined),
-          )}
+        {filters.rows}
       </SettingsCard>
       <div className="plugin-section-foot">
-        {!draft && team.filters.length < 3 && (
-          <button
-            className="text-button"
-            onClick={() => setDraft({ field: "", values: [] })}
-          >
-            Add a filter
-          </button>
-        )}
+        {filters.add}
         <p className="plugin-note">
-          Without a filter on State, closed items stay out.
+          Its own filters, apart from yours. Without one on State, closed items
+          stay out.
         </p>
       </div>
     </div>
