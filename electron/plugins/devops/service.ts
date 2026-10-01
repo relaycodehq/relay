@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import {
   defaultDevOpsSettings,
@@ -18,16 +16,14 @@ import {
   type WorkItemsResult,
 } from "../../../shared/devops";
 import type { Project } from "../../../shared/projects";
-import { findExecutable } from "../../executables";
 import type { Store } from "../../store";
+import { DevOpsAuth } from "./auth";
 import { DevOpsClient, type Fetch, type IterationNode } from "./client";
+import { DevOpsKeys } from "./keys";
 
-const exec = promisify(execFile);
 type Encrypt = (value: string) => Promise<string | null>;
 type Decrypt = (value: string) => Promise<string>;
 
-/** The Azure DevOps application id, used as the token resource for `az`. */
-const devopsResource = "499b84ac-1321-427f-aa17-267ca6975798";
 const closedStates = ["Closed", "Done", "Removed", "Resolved", "Completed"];
 const fields = [
   "System.Id",
@@ -60,9 +56,8 @@ interface RelevanceCache {
 }
 
 export class DevOps {
-  /** Secrets that could not be encrypted live for this session only. */
-  private session: { pat?: string; openRouterKey?: string } = {};
-  private cliToken?: { value: string; expires: number };
+  private keys: DevOpsKeys;
+  private auth: DevOpsAuth;
   private items = new Map<
     WorkItemScope,
     { key: string; at: number; items: WorkItem[] }
@@ -77,10 +72,13 @@ export class DevOps {
   constructor(
     private store: Store,
     private fetch: Fetch,
-    private encrypt: Encrypt,
-    private decrypt: Decrypt,
+    encrypt: Encrypt,
+    decrypt: Decrypt,
     private cacheFile?: string,
-  ) {}
+  ) {
+    this.keys = new DevOpsKeys(store, encrypt, decrypt);
+    this.auth = new DevOpsAuth(fetch, () => this.keys.get("pat"));
+  }
 
   settings(): DevOpsSettings {
     const saved = this.store.get().devops;
@@ -99,36 +97,24 @@ export class DevOps {
   }
 
   status(): DevOpsStatus {
-    const s = this.store.get();
     return {
       settings: this.settings(),
-      hasPat: !!(s.devopsPat || this.session.pat),
-      hasOpenRouterKey: !!(s.devopsOpenRouterKey || this.session.openRouterKey),
-      persistent: !this.session.pat && !this.session.openRouterKey,
+      hasPat: this.keys.has("pat"),
+      hasOpenRouterKey: this.keys.has("openRouterKey"),
+      persistent: this.keys.persistent(),
     };
   }
 
   async save(settings: DevOpsSettings, secrets: DevOpsSecrets) {
     if (settings.organization) organizationUrl(settings.organization);
-    const seal = async (value: string | null | undefined) =>
-      value == null ? value : await this.encrypt(value);
-    const pat = await seal(secrets.pat),
-      openRouterKey = await seal(secrets.openRouterKey);
-    if (secrets.pat !== undefined) this.session.pat = undefined;
-    if (secrets.openRouterKey !== undefined)
-      this.session.openRouterKey = undefined;
-    if (secrets.pat && !pat) this.session.pat = secrets.pat;
-    if (secrets.openRouterKey && !openRouterKey)
-      this.session.openRouterKey = secrets.openRouterKey;
+    const writeKeys = await this.keys.seal(secrets);
     await this.store.update((s) => {
       s.devops = settings;
-      if (secrets.pat !== undefined) s.devopsPat = pat ?? undefined;
-      if (secrets.openRouterKey !== undefined)
-        s.devopsOpenRouterKey = openRouterKey ?? undefined;
+      writeKeys(s);
     });
     this.items.clear();
     this.fieldList = undefined;
-    this.cliToken = undefined;
+    this.auth.forget();
     return this.status();
   }
 
@@ -184,7 +170,7 @@ export class DevOps {
     return new DevOpsClient(
       this.fetch,
       base,
-      await this.authorization(settings, base),
+      await this.auth.header(settings.auth, base),
     );
   }
 
@@ -224,7 +210,7 @@ export class DevOps {
     const client = new DevOpsClient(
       this.fetch,
       base,
-      await this.authorization(settings, base),
+      await this.auth.header(settings.auth, base),
     );
     // Reference names go as they are; display names are looked up once.
     const reference = async (name: string) => {
@@ -344,85 +330,6 @@ export class DevOps {
     return current;
   }
 
-  private async authorization(settings: DevOpsSettings, base: string) {
-    if (settings.auth === "pat") {
-      const pat = await this.secret("pat");
-      if (!pat)
-        throw new Error(
-          "Add a personal access token for Azure DevOps in Settings.",
-        );
-      return `Basic ${Buffer.from(":" + pat).toString("base64")}`;
-    }
-    if (this.cliToken && this.cliToken.expires - Date.now() > 5 * 60_000)
-      return `Bearer ${this.cliToken.value}`;
-    const az = await findExecutable("az").catch(() => {
-      throw new Error(
-        "The Azure CLI was not found. Install it and run `az login`, or use a personal access token.",
-      );
-    });
-    // `az` signs into its default tenant, which is often not the one that
-    // backs the organization; DevOps then rejects the identity.
-    const tenant = await this.resourceTenant(base);
-    let out: string;
-    try {
-      ({ stdout: out } = await exec(
-        az,
-        [
-          "account",
-          "get-access-token",
-          "--resource",
-          devopsResource,
-          ...(tenant ? ["--tenant", tenant] : []),
-          "--output",
-          "json",
-        ],
-        { timeout: 30_000 },
-      ));
-    } catch {
-      throw new Error(
-        tenant
-          ? `The Azure CLI could not get a token for this organization. Run \`az login --tenant ${tenant}\` in a terminal and try again.`
-          : "The Azure CLI could not get a token. Run `az login` in a terminal and try again.",
-      );
-    }
-    const token = JSON.parse(out) as {
-      accessToken: string;
-      expires_on?: number;
-      expiresOn?: string;
-    };
-    this.cliToken = {
-      value: token.accessToken,
-      expires: token.expires_on
-        ? token.expires_on * 1000
-        : Date.parse(token.expiresOn ?? "") || Date.now() + 30 * 60_000,
-    };
-    return `Bearer ${token.accessToken}`;
-  }
-
-  /** The Entra tenant Azure DevOps reports for an organization, if any. */
-  private async resourceTenant(base: string) {
-    try {
-      const res = await this.fetch(`${base}/_apis/connectionData`, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(10_000),
-      });
-      const tenant = res.headers.get("x-vss-resourcetenant") ?? "";
-      // Organizations backed by Microsoft accounts report an empty GUID.
-      return /^[0-9a-f-]{36}$/i.test(tenant) && !/^[0-]+$/.test(tenant)
-        ? tenant
-        : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async secret(kind: "pat" | "openRouterKey") {
-    if (this.session[kind]) return this.session[kind];
-    const s = this.store.get();
-    const sealed = kind === "pat" ? s.devopsPat : s.devopsOpenRouterKey;
-    return sealed ? await this.decrypt(sealed) : undefined;
-  }
-
   /**
    * Asks the System One model one yes/no question per work item. Answers are
    * keyed on exactly what Jev sees, so comments, state changes and other
@@ -433,7 +340,7 @@ export class DevOps {
     project: Project,
     items: WorkItem[],
   ) {
-    const key = await this.secret("openRouterKey");
+    const key = await this.keys.get("openRouterKey");
     if (!key) throw new Error("Add an OpenRouter API key to use the filter.");
     const keywords = settings.filter.keywords[project.id] ?? "";
     const state = {
