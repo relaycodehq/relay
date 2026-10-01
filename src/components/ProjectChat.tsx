@@ -13,13 +13,11 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type Ref,
 } from "react";
-import { useStoredFlag } from "../lib/useStoredFlag";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LockKeyhole,
@@ -37,7 +35,6 @@ import {
 } from "lucide-react";
 import { chatSettled, wakeLabel } from "../../shared/chat-activity";
 import {
-  applyChatPatch,
   replyRoot,
   type ChatMessage,
   type ChatSummary,
@@ -87,7 +84,10 @@ import {
 import { SelectionQuote } from "./SelectionQuote";
 import { Message } from "./ProjectMessage";
 import { useCouncils } from "../lib/useCouncils";
-import { SideQuestion, type SideThread } from "./SideQuestion";
+import { useChatThread } from "../lib/useChatThread";
+import { useChatPresence } from "../lib/useChatPresence";
+import { useBackgroundWork } from "../lib/useBackgroundWork";
+import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
@@ -108,7 +108,6 @@ import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
-import { outsideBatch, runningBatch } from "../../shared/subagents";
 import {
   CheckoutControl,
   RemoveWorktreeDialog,
@@ -253,50 +252,32 @@ export function ProjectChat({
     scope = chat?.scope ?? draftScope;
   // Checking out another branch would change the file under an unsaved edit.
   const { locked: checkoutDisabled } = useNavigationLock();
-  const history = useQuery({
-    queryKey: ["project-chat", chat?.id],
-    queryFn: async () => {
-      // Long threads would otherwise cross IPC whole on every poll; only
-      // messages whose version moved come back in full.
-      const previous = qc.getQueryData<ProjectChatData>([
-        "project-chat",
-        chat!.id,
-      ]);
-      const known = previous
-        ? Object.fromEntries(previous.messages.map((m) => [m.id, m.version]))
-        : undefined;
-      const patch = await (chat!.shared
-        ? api.syncProjectChat(chat!.id, known)
-        : api.projectChat(chat!.id, known));
-      return applyChatPatch(patch, previous);
-    },
-    enabled: !!chat,
-    // Events for a thread that isn't open are ignored, so a cached copy can
-    // still say "streaming" after the answer ended; the patch is cheap.
-    refetchOnMount: "always",
-    refetchInterval: (query) =>
-      chat?.shared
-        ? 2000
-        : query.state.data?.queue?.length ||
-            query.state.data?.messages.some((m) => m.status === "streaming")
-          ? 1000
-          : false,
-  });
   // Refreshed by the shell's working-tree poll.
   const checkout = useQuery({
     queryKey: workingTreeKey(project.id),
     queryFn: () => api.projectWorkingTree(project.id),
     enabled: !project.plain,
   });
-  const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
   const [rootId, setRootId] = useState<string | null>(() =>
     threadStorage(id).reply.load(),
   );
+  const {
+    history,
+    messages,
+    root,
+    shown,
+    listed,
+    running,
+    replyCounts,
+    sideThreads,
+    leadAnswered,
+  } = useChatThread(chat, rootId);
   const [composerRevision, setComposerRevision] = useState(0);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  const [sharePresence, setSharePresence] = useStoredFlag(
-    "relay-project-presence",
+  const { peers, sharePresence, setSharePresence } = useChatPresence(
+    chat,
+    viewing,
   );
   const [sharingOpen, setSharingOpen] = useState(false);
   const [selection, setSelection] = useState(() =>
@@ -331,96 +312,9 @@ export function ProjectChat({
   const composerDock = useRef<HTMLDivElement>(null);
   const [scrolledUp, setScrolledUp] = useState(false);
   const [dockHeight, setDockHeight] = useState(0);
-  const presence = useQuery({
-    queryKey: ["chat-presence", chat?.id, sharePresence, viewing],
-    queryFn: () =>
-      api.projectChatPresence(chat!.id, sharePresence ? viewing : null),
-    enabled: !!chat?.shared,
-    refetchInterval: 5000,
-    retry: false,
-  });
-  useEffect(
-    () => () => {
-      if (chat?.shared)
-        void api.projectChatPresence(chat.id, null).catch(() => {});
-    },
-    [chat?.id, chat?.shared?.roomId],
-  );
-  // The history itself refetches through lib/chat-events.
-  useEffect(
-    () =>
-      api.onProjectChat((e) => {
-        if (e.chatId === chat?.id)
-          setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-      }),
-    [chat?.id],
-  );
   useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
   useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);
   useEffect(() => threadStorage(id).codeRefs.save(codeRefs), [id, codeRefs]);
-  const messages = useMemo(() => {
-    const byId = new Map((history.data?.messages ?? []).map((m) => [m.id, m]));
-    for (const m of Object.values(updates))
-      if (!byId.has(m.id) || byId.get(m.id)!.version <= m.version)
-        byId.set(m.id, m);
-    return [...byId.values()].sort((a, b) =>
-      a.seq && b.seq
-        ? a.seq - b.seq
-        : a.seq
-          ? -1
-          : b.seq
-            ? 1
-            : a.created - b.created,
-    );
-  }, [history.data, updates]);
-  const root = messages.find((m) => m.id === rootId);
-  const parentIds = useMemo(
-    () =>
-      new Map(
-        messages
-          .filter((m) => m.parentId)
-          .map((m) => {
-            try {
-              return [m.id, replyRoot(messages, m.id).id];
-            } catch {
-              return [m.id, m.parentId];
-            }
-          }),
-      ),
-    [messages],
-  );
-  const replyCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const id of parentIds.values())
-      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-    return counts;
-  }, [parentIds]);
-  // The bar under each side question: how many replies, when the last came.
-  const sideThreads = useMemo(() => {
-    const threads = new Map<string, SideThread>();
-    for (const m of messages)
-      if (m.side)
-        threads.set(m.id, { replies: 0, last: m.created, answering: false });
-    for (const m of messages) {
-      const thread = threads.get(parentIds.get(m.id) ?? "");
-      if (!thread) continue;
-      if (m.status === "streaming") thread.answering = true;
-      else {
-        thread.replies++;
-        thread.last = Math.max(thread.last, m.ended ?? m.created);
-      }
-    }
-    return threads;
-  }, [messages, parentIds]);
-  const shown = useMemo(() => {
-    const ids = new Set(messages.map((m) => m.id));
-    return messages.filter((m) =>
-      root
-        ? m.id === root.id || parentIds.get(m.id) === root.id
-        : !m.parentId || !ids.has(m.parentId),
-    );
-  }, [messages, parentIds, root]);
-  const running = messages.some((m) => m.status === "streaming");
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
     chat ? "checkout" : loadDraftWorkspace(id),
@@ -448,29 +342,8 @@ export function ProjectChat({
     // A finished turn leaves new changes to count.
     if (!running && chat?.worktree) void worktree.refetch();
   }, [running]);
-  // Once Claude picks its work back up, its turn shows that instead.
-  const pending = !running && chat?.pending?.length ? chat.pending : undefined;
-  const stopped = !running && !pending ? chat?.stopped?.items : undefined;
-  // Subagents run on after the turn that started them; ask while any might.
-  const agents = useQuery({
-    queryKey: ["project-chat-agents", chat?.id],
-    queryFn: () => api.projectChatAgents(chat!.id),
-    enabled: !!chat,
-    refetchInterval: (query) =>
-      running ||
-      pending ||
-      query.state.data?.some((a) => a.status === "running")
-        ? 1500
-        : false,
-  });
-  // A turn can send agents off and end between two polls: look again as it
-  // starts and ends, and when the thread's background work changes.
-  useEffect(() => {
-    if (chat) void agents.refetch();
-  }, [running, chat?.pending?.length]);
-  const agentBatch = runningBatch(agents.data ?? []);
-  // The indicator shows those agents, and stops them; the strip keeps the rest.
-  const leftBehind = pending && outsideBatch(pending, agentBatch);
+  const { agents, agentBatch, pending, stopped, leftBehind } =
+    useBackgroundWork(chat, running);
   const unsettle = async () => {
     if (!chat) return;
     qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
@@ -520,11 +393,6 @@ export function ProjectChat({
     onCreated,
     onSent: () => (follow.current = true),
   });
-  // A council's brief shows inside it, not as an answer of its own.
-  const listed = useMemo(() => shown.filter((m) => !m.brief), [shown]);
-  const leadAnswered = messages.some(
-    (m) => m.role === "assistant" && !m.parentId,
-  );
   function compact(instructions?: string) {
     if (!chat) return;
     setError(undefined);
@@ -1068,8 +936,6 @@ export function ProjectChat({
     observer.observe(content);
     return () => observer.disconnect();
   }, [isEmpty]);
-  const peers =
-    presence.data?.filter((p) => p.userId !== chat?.shared?.memberId) ?? [];
   const contextButtons = (
     <>
       {/* A thread's scope is fixed once it starts; another takes a new thread. */}
@@ -1834,7 +1700,7 @@ export function ProjectChat({
       {chat && agentView && (
         <SubagentThread
           chatId={chat.id}
-          runs={agents.data ?? []}
+          runs={agents}
           openId={agentView}
           projectRoot={folder}
           onSelect={setAgentView}
