@@ -1,65 +1,51 @@
-import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
-import { ComposerToolbar } from "./ComposerToolbar";
-import {
-  ComposerPromptInput,
-  type PromptInputHandle,
-} from "./ComposerPromptInput";
-import { useComposerCommands } from "./ComposerCommands";
-import { relayCommand, type RelayCommand } from "../../shared/commands";
-import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import {
   useCallback,
-  useEffect,
   useImperativeHandle,
   useRef,
   useState,
   type ReactNode,
   type Ref,
 } from "react";
-import { ArrowUp, GitBranch, Paperclip } from "lucide-react";
-import type { ResumeSettings } from "../../shared/projects";
-import {
-  buildSend,
-  implementPlan,
-  type ComposedSend,
-} from "../../shared/compose-send";
-import { draftRecipient } from "../../shared/recipient";
-import { useComposerSettings } from "../lib/useComposerSettings";
-import { useModelCatalogs } from "../lib/useModelCatalogs";
-import { useAgentRuns } from "../lib/useAgentRuns";
+import { GitBranch, Paperclip } from "lucide-react";
 import {
   agentMentionPattern,
-  type AgentProvider,
   reportsUsage,
+  type AgentProvider,
 } from "../../shared/agents";
-import { ComposerModelPicker } from "./ComposerModelPicker";
-import { useDoubleEscape } from "../lib/useDoubleEscape";
-import {
-  pressedTwice,
-  useShortcut,
-  useShortcutLabel,
-  useShortcutValue,
-} from "../lib/shortcuts";
-import { UsageRing } from "./UsageRing";
-import { DictationButton } from "./DictationButton";
-import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
+import type { RelayCommand } from "../../shared/commands";
+import type { ComposedSend } from "../../shared/compose-send";
+import type { ResumeSettings } from "../../shared/projects";
+import { draftRecipient } from "../../shared/recipient";
 import { useComposerToolbar } from "../lib/composer-toolbar";
-import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { effortStep, quickStep } from "../lib/effort-shortcut";
 import { quickItems } from "../lib/quick-switch";
+import { sendAction, useSendKey } from "../lib/send-key";
+import { useAgentRuns } from "../lib/useAgentRuns";
+import { useComposerDraft } from "../lib/useComposerDraft";
+import { useComposerSend } from "../lib/useComposerSend";
+import { useComposerSettings } from "../lib/useComposerSettings";
+import { useModelCatalogs } from "../lib/useModelCatalogs";
 import { useQuickSwitchHud } from "../lib/useQuickSwitchHud";
 import { useSettingCommands } from "../lib/useSettingCommands";
-import { QuickSwitchHud } from "./QuickSwitchHud";
+import { useStopKeys } from "../lib/useStopKeys";
+import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
+import { useComposerCommands } from "./ComposerCommands";
 import { EffortControl, offersEffort } from "./ComposerEffortControl";
-import type { DraftImage } from "../lib/draft-images";
-import { numberImages } from "../lib/image-refs";
-import { flattenSketch } from "../lib/sketch";
+import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
+import { ComposerModelPicker } from "./ComposerModelPicker";
+import {
+  ComposerPromptInput,
+  type PromptInputHandle,
+} from "./ComposerPromptInput";
+import { SendButton, StopButton } from "./ComposerSendButtons";
+import { ComposerToolbar } from "./ComposerToolbar";
+import { DictationButton } from "./DictationButton";
 import { SketchEditor } from "./ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
-import { SendLaterMenu } from "./SendLaterMenu";
+import { ProjectBranchPicker } from "./ProjectBranchPicker";
+import { QuickSwitchHud } from "./QuickSwitchHud";
 import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
-import { ComposerAttachmentStrip } from "./ComposerAttachmentStrip";
-import { useComposerDraft } from "../lib/useComposerDraft";
+import { UsageRing } from "./UsageRing";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -141,26 +127,18 @@ export function ProjectComposer({
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
-  const stopKeys = useShortcutLabel("stop");
-  const stopTwice = useShortcutValue(() => pressedTwice("stop"));
-  const stopArmed = useDoubleEscape(
-    running && stopTwice,
-    ".project-composer",
-    onStop,
-  );
-  useShortcut("stop", running, onStop);
-  const [dictationOwner] = useState(() => ({}));
+  const stop = useStopKeys(running, onStop);
   const composerForm = useRef<HTMLFormElement>(null);
   const composer = useComposerSettings(
     { key: settingsKey, inherit },
     shared,
     agent,
   );
-  const { provider, setProvider, saveLastModel } = composer;
+  const { provider } = composer;
   const catalogs = useModelCatalogs(projectId);
   const { codex: codexModels, defaultNames } = catalogs;
   const runs = useAgentRuns(composer, catalogs, dropMention);
-  const { codex: selected, choiceFor, contextFor, sendSettings } = runs;
+  const { codex: selected } = runs;
   const {
     runtimeMode,
     setRuntimeMode,
@@ -195,7 +173,6 @@ export function ProjectComposer({
     editor: promptInput,
     onDraft,
   });
-  const sending = useRef(false);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const recipient = draftRecipient(draft.text, provider);
   const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
@@ -235,98 +212,19 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
-  const sendDisabled =
-    busy ||
-    (!draft.text.trim() && !draft.attached.length && !allowEmpty) ||
-    // A note to the thread has no agent to show a screenshot to.
-    (recipient === "message" && !draft.text.trim()) ||
-    draft.preparing ||
-    !selected;
-  /** `sendAt` holds the message until then (Send later). */
   agentSettings.current = runs.resumeSettings;
-  // Sending mid-dictation waits for the last words to land in the draft.
-  const [sendAfterDictation, setSendAfterDictation] = useState<{
-    steer: boolean;
-    sendAt?: number;
-  } | null>(null);
-  useEffect(() => {
-    if (!sendAfterDictation) return;
-    setSendAfterDictation(null);
-    void send(sendAfterDictation.steer, sendAfterDictation.sendAt);
-  }, [sendAfterDictation]);
-  async function send(steer = false, sendAt?: number) {
-    const dictation = dictationSnapshot();
-    if (dictation.owner === dictationOwner && dictation.phase !== "idle") {
-      void stopDictation().then((finished) => {
-        if (finished) setSendAfterDictation({ steer, sendAt });
-      });
-      return;
-    }
-    // `/btw` goes to the agent picked here, beside whatever the thread runs.
-    const btw = relayCommand(draft.text);
-    if (btw?.name === "btw" && btw.args && recipient !== "message") {
-      if (busy || sending.current) return;
-      sending.current = true;
-      const outgoing = draft.take(false);
-      try {
-        const sent = await onSend(
-          buildSend(sendSettings(recipient)!, `@${recipient} ${btw.args}`, {
-            side: true,
-          }),
-          outgoing.dispatch,
-        );
-        if (!sent) outgoing.restore();
-      } finally {
-        sending.current = false;
-      }
-      return;
-    }
-    if (busy || commands.interceptSend()) return;
-    if (sendDisabled || sending.current) return;
-    const outgoingImages = numberImages(draft.text.trim(), draft.images);
-    const body = outgoingImages.text;
-    sending.current = true;
-    try {
-      let flattened: DraftImage[];
-      try {
-        flattened = await Promise.all(outgoingImages.images.map(flattenSketch));
-      } catch {
-        draft.setError("Could not apply the drawing to the screenshot.");
-        return;
-      }
-      // A council is one question's worth: follow-ups go to the lead, in
-      // Plan. Saved before sending, so a thread it starts opens that way too.
-      if (councilOn) {
-        setUltraplan(false);
-        composer.save({ ultraplan: false });
-      }
-      const outgoing = draft.take(true);
-      const sent = await onSend(
-        buildSend(sendSettings(recipient)!, body, {
-          ...(councilOn ? { council } : {}),
-          ...(running ? { running: { steer } } : {}),
-          sendAt,
-          images: flattened.map(({ name, mimeType, dataUrl }) => ({
-            name,
-            mimeType,
-            dataUrl,
-          })),
-        }),
-        outgoing.dispatch,
-      );
-      if (!sent) {
-        outgoing.restore();
-        if (councilOn) setUltraplan(true);
-      } else if (recipient !== "message")
-        saveLastModel(recipient, {
-          choice: choiceFor(recipient)!,
-          ...contextFor(recipient),
-        });
-      if (sent) await draft.forgetSent();
-    } finally {
-      sending.current = false;
-    }
-  }
+  const { send, ...sending } = useComposerSend({
+    draft,
+    state: composer,
+    runs,
+    to: recipient,
+    councilOn,
+    busy,
+    running,
+    complete: !!allowEmpty,
+    intercept: commands.interceptSend,
+    onSend,
+  });
   return (
     <div className="thread-compose-wrap">
       {planProvider && (
@@ -335,28 +233,7 @@ export function ProjectComposer({
             type="button"
             className="primary"
             disabled={busy || running || !selected}
-            onClick={async () => {
-              if (!selected || sending.current) return;
-              sending.current = true;
-              try {
-                const accepted = await onSend(
-                  buildSend(
-                    {
-                      ...sendSettings(planProvider)!,
-                      interactionMode: "default",
-                    },
-                    implementPlan(planProvider),
-                  ),
-                );
-                if (accepted) {
-                  setProvider(planProvider);
-                  setInteractionMode("default");
-                  setUltraplan(false);
-                }
-              } finally {
-                sending.current = false;
-              }
-            }}
+            onClick={() => sending.implementPlan(planProvider)}
           >
             Implement plan
           </button>
@@ -557,7 +434,7 @@ export function ProjectComposer({
               ),
               mic: (
                 <DictationButton
-                  owner={dictationOwner}
+                  owner={sending.dictation}
                   target={() => promptInput.current?.dictation}
                   composer={composerForm}
                   resetKey={draftKey}
@@ -566,49 +443,15 @@ export function ProjectComposer({
             }}
           />
           {running && (
-            <button
-              type="button"
-              className="composer-stop"
-              data-armed={stopArmed || undefined}
-              aria-label={
-                stopArmed ? "Press Escape again to stop" : "Stop answer"
-              }
-              title={`Stop answer and pause queued messages${stopKeys && ` · ${stopKeys}`}`}
-              onClick={onStop}
-            >
-              {stopArmed ? (
-                <span className="composer-stop-esc">esc</span>
-              ) : (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                </svg>
-              )}
-            </button>
+            <StopButton armed={stop.armed} keys={stop.keys} onStop={onStop} />
           )}
           {(!running || !!draft.text.trim() || !!draft.attached.length) && (
-            <SendLaterMenu
-              disabled={sendDisabled}
-              onPick={(at) => void send(false, at)}
-            >
-              <button
-                className="primary send-message"
-                aria-label="Send message"
-                title={
-                  running
-                    ? `Queue message · ${steerKeyLabel(sendKey)} to steer · right-click to send later`
-                    : "Send message · right-click to send later"
-                }
-                disabled={sendDisabled}
-              >
-                <ArrowUp size={18} />
-              </button>
-            </SendLaterMenu>
+            <SendButton
+              disabled={sending.disabled}
+              running={running}
+              sendKey={sendKey}
+              onSendLater={(at) => void send(false, at)}
+            />
           )}
         </div>
       </form>
