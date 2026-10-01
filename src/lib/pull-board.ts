@@ -68,6 +68,33 @@ export interface PullsLocation {
   repo: { key: string; label: string } | null;
   pull: { number: number; title?: string } | null;
 }
+/**
+ * Where the page is, for the window title: the open PR in its repository,
+ * or a repository's page. A project's name stands in for its repository's.
+ */
+export function pullsLocation(
+  selected: PullRef | null,
+  title: string | undefined,
+  repo: string | null,
+  projectOf: (repo: Repo) => Project | undefined,
+): PullsLocation {
+  const label = (key: string) => {
+    const [owner, name] = key.split("/");
+    return projectOf({ owner, name })?.name ?? key;
+  };
+  return {
+    repo: selected
+      ? {
+          key: repoKey(selected),
+          label:
+            projectOf(selected)?.name ?? `${selected.owner}/${selected.name}`,
+        }
+      : repo
+        ? { key: repo, label: label(repo) }
+        : null,
+    pull: selected ? { number: selected.number, title } : null,
+  };
+}
 export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
 export type PullsPageHandle = {
   /** Leaves the open PR for the board or a project's page. */

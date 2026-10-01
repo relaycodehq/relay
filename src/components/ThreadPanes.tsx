@@ -7,17 +7,12 @@ import {
 } from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
-import type {
-  Account,
-  Pull,
-  PullRef,
-  WorkspaceState,
-} from "../../shared/types";
+import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "../lib/usePaneOpens";
 import type { ThreadFolder } from "../lib/useThreadFolder";
 import type { ThreadView } from "../lib/useThreadView";
-import { Connected } from "../ReviewSurface";
+import { PullReviewPane } from "./PullReviewPane";
 import { ProjectHistory } from "./ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
 import { NO_SLOTS, PaneHeader, type PaneSlots } from "./WorkspacePanes";
@@ -41,11 +36,9 @@ export function ThreadChanges({
   opens: PaneOpens;
   review: {
     account: Account | null;
-    workspace: WorkspaceState;
     /** Asks the PR's thread about lines of its diff. */
     onDiscuss: (target: QuestionTarget, pr: Pull) => void;
     onConnect: () => void;
-    onSettings: () => void;
   };
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
@@ -69,27 +62,20 @@ export function ThreadChanges({
       {pull ? (
         review.account && project.repository ? (
           <div className="project-review">
-            <Connected
+            <PullReviewPane
               key={`${project.id}:${pull.number}`}
-              embedded={{
-                ref: pull,
-                workspace: where,
-                slots,
-                onEditFile: editFile,
-                reveals: opens.changeReveals,
-                onPresence: (next) => {
-                  view.setViewing(next);
-                  if (next.path) localStorage.setItem(reviewFile, next.path);
-                },
-                onDiscuss: review.onDiscuss,
-              }}
+              pull={pull}
+              workspace={where}
               account={review.account}
-              initialWorkspace={{
-                ...review.workspace,
-                pull,
-                file: localStorage.getItem(reviewFile),
+              initialFile={localStorage.getItem(reviewFile)}
+              slots={slots}
+              onEditFile={editFile}
+              reveals={opens.changeReveals}
+              onPresence={(next) => {
+                view.setViewing(next);
+                if (next.path) localStorage.setItem(reviewFile, next.path);
               }}
-              onSettings={review.onSettings}
+              onDiscuss={review.onDiscuss}
             />
           </div>
         ) : (

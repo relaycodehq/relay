@@ -28,7 +28,7 @@ import { useThreadFolder } from "../lib/useThreadFolder";
 import { useThreadTerminal } from "../lib/useThreadTerminal";
 import { NO_VIEWING, useThreadView } from "../lib/useThreadView";
 import { paneFrame, type PaneId } from "../lib/workspace-panes";
-import { Connected } from "../ReviewSurface";
+import { PullsSurface } from "./PullsSurface";
 import { GitActions, type GitActionsHandle } from "./GitActions";
 import { HandoffButton } from "./HandoffButton";
 import { NewThreadPicker } from "./NewThreadPicker";
@@ -277,24 +277,19 @@ export default function ProjectShell() {
         </aside>
         {inbox && account ? (
           <div className="project-legacy" hidden={settings.open}>
-            <Connected
+            <PullsSurface
+              ref={pullsPage.page}
               account={account}
               initialWorkspace={boot.data.workspace}
               incomingLink={links.incoming}
-              pulls={{
-                projects: projects.data ?? NO_PROJECTS,
-                projectOf: (repo) =>
-                  projectFor(
-                    projects.data ?? NO_PROJECTS,
-                    account.server,
-                    repo,
-                  ),
-                onOpenInProject: (p, ref) => void prs.openInProject(p, ref),
-                onOpenProject: (p) => navigate(p),
-                onAddProject: (repo) => void pullsPage.addProject(repo),
-                onLocation: pullsPage.setWhere,
-              }}
-              ref={pullsPage.page}
+              projects={projects.data ?? NO_PROJECTS}
+              projectOf={(repo) =>
+                projectFor(projects.data ?? NO_PROJECTS, account.server, repo)
+              }
+              onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
+              onOpenProject={(p) => navigate(p)}
+              onAddProject={(repo) => void pullsPage.addProject(repo)}
+              onLocation={pullsPage.setWhere}
               onSettings={(category) =>
                 settings.show(category === "rooms" ? category : undefined)
               }
@@ -371,14 +366,12 @@ export default function ProjectShell() {
                     opens={opens}
                     review={{
                       account,
-                      workspace: boot.data.workspace,
                       onDiscuss: (target, pr) =>
                         void prs
                           .open(pr)
                           .then(() => opens.askAbout(target, pr))
                           .catch(setError),
                       onConnect: () => void linkProject(),
-                      onSettings: () => settings.setOpen(true),
                     }}
                   />
                 )}
