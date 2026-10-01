@@ -14,6 +14,14 @@ import { Store } from "../../electron/store";
 import { Projects } from "../../electron/projects";
 import { Gitea } from "../../electron/gitea";
 import { fixtureServer } from "../fixtures/gitea";
+import { projectTitle } from "../../shared/projects";
+
+it("titles a folder name by its words, leaving one with none as it is", () => {
+  expect(projectTitle("relay-releases")).toBe("Relay Releases");
+  expect(projectTitle("my__app  v2")).toBe("My App V2");
+  expect(projectTitle("iOS-sdkTools")).toBe("IOS SdkTools");
+  expect(projectTitle("--")).toBe("--");
+});
 
 it("links through a remote Gitea knows when another remote is gone", async () => {
   const fixture = await fixtureServer();

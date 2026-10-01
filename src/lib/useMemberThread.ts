@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   applyChatPatch,
+  knownOf,
   type ChatMessage,
   type ProjectChat,
 } from "../../shared/projects";
@@ -14,9 +15,7 @@ export function useMemberThread(chatId: string, live: boolean) {
     queryKey: ["project-chat", chatId],
     queryFn: async () => {
       const previous = qc.getQueryData<ProjectChat>(["project-chat", chatId]);
-      const known = previous
-        ? Object.fromEntries(previous.messages.map((m) => [m.id, m.version]))
-        : undefined;
+      const known = knownOf(previous);
       return applyChatPatch(await api.projectChat(chatId, known), previous);
     },
     refetchInterval: (query) =>
