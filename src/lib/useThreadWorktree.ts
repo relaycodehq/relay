@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  ChatWorkspace,
-  Project,
-  WorktreeStatus,
-} from "../../shared/projects";
+import type { ChatWorkspace, Project } from "../../shared/projects";
 import { api } from "./api";
 import { loadDraftWorkspace, saveDraftWorkspace } from "./drafts";
-import type { TurnDiffTarget } from "./turn-diff";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "./working-tree-key";
 
@@ -78,21 +73,5 @@ export function useThreadWorktree({
     dialog,
     setDialog,
     remove,
-  };
-}
-
-/** Everything the worktree has that the branch it came from doesn't, opened at `path`. */
-export function worktreeDiff(
-  chatId: string,
-  status: WorktreeStatus,
-  path?: string,
-): TurnDiffTarget {
-  return {
-    chatId,
-    messageId: "worktree",
-    files: status.files,
-    path,
-    label: status.branch ?? "Worktree",
-    worktree: true,
   };
 }

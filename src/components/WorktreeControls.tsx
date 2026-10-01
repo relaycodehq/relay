@@ -7,8 +7,8 @@ import type {
   WorktreeStatus,
 } from "../../shared/projects";
 import { api } from "../lib/api";
-import type { TurnDiffTarget } from "../lib/turn-diff";
-import { worktreeDiff, type ThreadWorktree } from "../lib/useThreadWorktree";
+import { worktreeDiff, type TurnDiffTarget } from "../lib/turn-diff";
+import type { ThreadWorktree } from "../lib/useThreadWorktree";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
 import { Modal } from "./ui";
 import "./worktrees.css";
@@ -101,7 +101,7 @@ const workspaces: Record<
 };
 
 /** Before a thread's first message: where it will work. */
-export function WorkspacePicker({
+function WorkspacePicker({
   value,
   onChange,
   disabled,
@@ -392,7 +392,7 @@ export function WorktreeLanded({ status }: { status: WorktreeStatus }) {
   );
 }
 
-export function RemoveWorktreeDialog({
+function RemoveWorktreeDialog({
   files,
   from,
   onCancel,

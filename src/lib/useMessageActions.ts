@@ -14,10 +14,9 @@ import {
 import { api } from "./api";
 import { forkThreadSettings } from "./composer-settings";
 import { prefillClaudeSignIn } from "./thread-terminals";
-import type { TurnDiffTarget } from "./turn-diff";
+import { worktreeDiff, type TurnDiffTarget } from "./turn-diff";
 import { useStableCallback } from "./useStableCallback";
 import type { ThreadHandle } from "./useThreadHandle";
-import { worktreeDiff } from "./useThreadWorktree";
 import { workingTreeKey } from "./working-tree-key";
 
 export type ThreadMessageActions = ReturnType<typeof useMessageActions>;

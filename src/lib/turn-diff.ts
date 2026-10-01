@@ -1,4 +1,4 @@
-import type { TurnFileChange } from "../../shared/projects";
+import type { TurnFileChange, WorktreeStatus } from "../../shared/projects";
 
 export type TurnDiffTarget = {
   chatId: string;
@@ -10,3 +10,19 @@ export type TurnDiffTarget = {
   /** Everything the thread's worktree has that the branch it came from doesn't yet. */
   worktree?: boolean;
 };
+
+/** Everything the worktree has that the branch it came from doesn't, opened at `path`. */
+export function worktreeDiff(
+  chatId: string,
+  status: WorktreeStatus,
+  path?: string,
+): TurnDiffTarget {
+  return {
+    chatId,
+    messageId: "worktree",
+    files: status.files,
+    path,
+    label: status.branch ?? "Worktree",
+    worktree: true,
+  };
+}
