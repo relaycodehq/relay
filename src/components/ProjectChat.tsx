@@ -13,7 +13,6 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { chatSettled } from "../../shared/chat-activity";
 import {
   type ChatSummary,
   type Project,
@@ -52,8 +51,8 @@ import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
 import type { CodeReference } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
-import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
-import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
+import { awayPlaceholder } from "./HandoffStrip";
+import { ThreadNotice } from "./ThreadNotice";
 import { SubagentsIndicator } from "./Subagents";
 import { SubagentThread } from "./SubagentThread";
 import { WorkspaceControl, WorktreeDialogs } from "./WorktreeControls";
@@ -166,19 +165,6 @@ export function ProjectChat({
   const { workspace, folder } = worktree;
   const { agents, agentBatch, pending, stopped, leftBehind } =
     useBackgroundWork(chat, running);
-  const unsettle = async () => {
-    if (!chat) return;
-    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
-      list?.map((c) => (c.id === chat.id ? { ...c, settledAt: undefined } : c)),
-    );
-    try {
-      await api.triageProjectChat(chat.id, { kind: "unsettle" });
-    } catch (e) {
-      setError(e);
-    } finally {
-      void qc.invalidateQueries({ queryKey: ["project-chats"] });
-    }
-  };
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
   const { context, compacting, showContext, compact, runCommand } =
@@ -437,47 +423,13 @@ export function ProjectChat({
             branchLabel={worktree.branch}
             onSend={send}
             notice={
-              chat?.sentTo ? (
-                <HandoffStrip chat={chat} onError={setError} />
-              ) : chat?.cameFrom?.returnedAt ? (
-                <ReturnedStrip computer={chat.cameFrom.computer} />
-              ) : stopped?.length ? (
-                <StoppedStrip
-                  items={stopped}
-                  onResolve={async (action) => {
-                    if (!chat) return;
-                    try {
-                      await api.resolveStoppedWork(chat.id, action);
-                    } catch (e) {
-                      setError(e);
-                      throw e;
-                    } finally {
-                      void qc.invalidateQueries({
-                        queryKey: ["project-chats"],
-                      });
-                    }
-                  }}
+              chat && (
+                <ThreadNotice
+                  chat={chat}
+                  stopped={stopped}
+                  leftBehind={leftBehind}
+                  onError={setError}
                 />
-              ) : leftBehind?.length ? (
-                <WaitingStrip
-                  pending={leftBehind}
-                  onStop={async (item) => {
-                    if (!chat) return;
-                    try {
-                      await api.stopProjectChatPending(chat.id, item.id);
-                    } catch (e) {
-                      setError(e);
-                      throw e;
-                    } finally {
-                      void qc.invalidateQueries({
-                        queryKey: ["project-chats"],
-                      });
-                    }
-                  }}
-                />
-              ) : (
-                chat &&
-                chatSettled(chat) && <SettledStrip onUnsettle={unsettle} />
               )
             }
             placeholder={
