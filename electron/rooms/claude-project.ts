@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type {
@@ -10,7 +8,7 @@ import type {
   SDKControlGetUsageResponse,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { findExecutable, installStamp } from "../executables";
+import { findExecutable } from "../executables";
 import { ClaudeSignedOutError } from "./claude-sign-in";
 import type { AgentOptions } from "../agents/types";
 import { claudeActivity, claudeEditedPaths } from "./activity";
@@ -24,15 +22,8 @@ import type {
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
-import { memoByKey, memoWhileStamp } from "../memo";
 import { withTimeout } from "../timeout";
-import type { ClaudeModel } from "../../shared/settings";
-import {
-  claudeDefaultsFrom,
-  settingsEffort,
-  type ClaudeDefaults,
-} from "../../shared/agent-defaults";
-import type { ProviderCommand } from "../../shared/commands";
+import { settingsEffort } from "../../shared/agent-defaults";
 import type {
   FoundSession,
   HostedHandlers,
@@ -41,17 +32,23 @@ import type {
 import type { HookFrame } from "../agent-host/protocol";
 import { AsyncQueue } from "../async-queue";
 import { HostedSessions, inAgentHost } from "../agents/hosted-sessions";
+import {
+  chromeArgs,
+  readSettings,
+  sdk,
+  withProbe,
+  type ClaudeInput,
+  type ClaudeStream,
+  type SDKMessage,
+} from "./claude-project/sdk";
 
-export async function sdk(): Promise<
-  typeof import("@anthropic-ai/claude-agent-sdk")
-> {
-  // Keep the SDK's ESM runtime intact inside Electron's CommonJS main bundle.
-  const specifier =
-    typeof __dirname !== "undefined" && __dirname.endsWith("dist-electron")
-      ? pathToFileURL(join(__dirname, "claude-sdk.mjs")).href
-      : "@anthropic-ai/claude-agent-sdk";
-  return import(specifier);
-}
+export { sdk } from "./claude-project/sdk";
+export {
+  claudeDefaults,
+  listClaudeCommands,
+  listClaudeModels,
+} from "./claude-project/catalog";
+
 function claudePermissionMode(
   options: Pick<AgentOptions, "runtimeMode" | "interactionMode">,
 ): PermissionMode {
@@ -63,19 +60,6 @@ function claudePermissionMode(
     "full-access": "bypassPermissions",
   }[options.runtimeMode ?? "full-access"] as PermissionMode;
 }
-type ClaudeStream = ReturnType<
-  typeof import("@anthropic-ai/claude-agent-sdk").query
->;
-/** The settings the session runs with; `getSettings` is missing from the SDK's types. */
-async function readSettings(stream: ClaudeStream) {
-  const withSettings = stream as ClaudeStream & {
-    getSettings?: () => Promise<unknown>;
-  };
-  return claudeDefaultsFrom(await withSettings.getSettings?.());
-}
-/** What Relay prompts a session with; closing it ends the session's input. */
-type ClaudeInput = AsyncQueue<SDKUserMessage>;
-type SDKMessage = import("@anthropic-ai/claude-agent-sdk").SDKMessage;
 /** Frames read off the stream, waiting for the turn they belong to. */
 class ClaudeFrames extends AsyncQueue<SDKMessage> {
   /** Why the stream ended early, when it failed rather than closed. */
@@ -409,75 +393,6 @@ function settled(done: Promise<void>, signal: AbortSignal) {
     });
   });
 }
-/** Runs `work` on a throwaway Claude session with no prompt and no MCP servers; closed after. */
-async function withProbe<T>(
-  options: Partial<Options>,
-  work: (stream: ClaudeStream) => Promise<T>,
-): Promise<T> {
-  const [{ query }, executable] = await Promise.all([
-    sdk(),
-    findExecutable("claude"),
-  ]);
-  const input: ClaudeInput = new AsyncQueue();
-  const stream = query({
-    prompt: input,
-    options: {
-      pathToClaudeCodeExecutable: executable,
-      strictMcpConfig: true,
-      mcpServers: {},
-      ...options,
-    },
-  });
-  try {
-    return await work(stream);
-  } finally {
-    input.close();
-    stream.close();
-  }
-}
-/**
- * Asks the installed CLI which models this account can use, again once it's
- * updated: a new version brings new models.
- */
-export const listClaudeModels = memoWhileStamp(
-  () => findExecutable("claude").then(installStamp),
-  (): Promise<ClaudeModel[]> =>
-    withProbe({ settingSources: ["user"] }, async (stream) => {
-      const models = await withTimeout(
-        // Signed out, the CLI still lists the models built into it. Kept,
-        // that list would outlast signing in; failing lets the picker ask again.
-        // A CLI that reports no account isn't known to be signed out.
-        stream.accountInfo().then((account) => {
-          if (account?.tokenSource === "none" && !account.apiKeySource)
-            throw new Error("Sign in to Claude to list its models.");
-          return stream.supportedModels();
-        }),
-        20000,
-        "Claude did not list models.",
-      );
-      return (models ?? [])
-        .filter((m) => m.value !== "default")
-        .map((m) => {
-          // The CLI names aliases briefly ("Opus"); its description leads with
-          // the full name ("Opus 5.5 · Best for…"), so show that instead.
-          const [lead, ...rest] = (m.description ?? "").split(" · ");
-          const full = lead && m.displayName && lead.startsWith(m.displayName);
-          return {
-            id: m.value,
-            name: full ? lead : m.displayName || m.value,
-            description: full ? rest.join(" · ") : m.description,
-            ...(m.resolvedModel ? { resolved: m.resolvedModel } : {}),
-            efforts:
-              m.supportsEffort === false ? [] : (m.supportedEffortLevels ?? []),
-            // The CLI doesn't report context sizes; every current model but
-            // Haiku accepts the `[1m]` suffix.
-            longContext:
-              m.value.endsWith("[1m]") ||
-              !/haiku/i.test(m.resolvedModel ?? m.value),
-          };
-        });
-    }),
-);
 /**
  * The data behind Claude Code's /usage, fetched by the CLI with its own
  * sign-in; Relay never handles the token. Null when the CLI is signed out.
@@ -509,92 +424,6 @@ async function usageFrom(stream: ClaudeStream, ms: number) {
   };
   return withTimeout(ask(), ms, "Claude did not report usage.");
 }
-// Relay owns these (model, effort, threads, context), or they need the
-// terminal, a long-lived loop, or account setup that the app doesn't offer.
-const hiddenCommands = new Set([
-  "advisor",
-  "agents",
-  "auto-mode-setup",
-  "autocompact",
-  // Relay asks side questions itself, in a thread of their own.
-  "btw",
-  "clear",
-  "color",
-  "compact",
-  "config",
-  "context",
-  "design-consent",
-  "design-revoke",
-  "doctor",
-  "effort",
-  "extra-usage",
-  "fast",
-  "goal",
-  "heapdump",
-  "import",
-  "list-agents",
-  "loop",
-  "mcp",
-  "model",
-  "output-style",
-  "reload-plugins",
-  "reload-skills",
-  "rename",
-  "schedule",
-  "skill-doctor",
-  "team-onboarding",
-  "ultrareview",
-  "usage",
-  "usage-credits",
-  "workflow-launch-exec",
-]);
-// SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
-const chromeArgs = { chrome: null };
-type ClaudeProbe = { commands: ProviderCommand[]; defaults?: ClaudeDefaults };
-/** Claude's commands and skills for this checkout, as the SDK resolves them. */
-export const listClaudeCommands = (root: string) =>
-  probeClaude(root).then((probe) => probe.commands);
-/** What threads in this checkout run on Default; null when Claude can't say. */
-export const claudeDefaults = (root: string) =>
-  probeClaude(root).then((probe) => probe.defaults ?? null);
-const probeClaude = memoByKey<ClaudeProbe>((root) =>
-  withProbe(
-    {
-      cwd: root,
-      settingSources: ["user", "project", "local"],
-      extraArgs: chromeArgs,
-    },
-    async (stream) => {
-      const [commands, defaults] = await withTimeout(
-        Promise.all([
-          stream.supportedCommands(),
-          readSettings(stream).catch(() => undefined),
-        ]),
-        20000,
-        "Claude did not list commands.",
-      );
-      const listed = (commands ?? [])
-        .filter(
-          (c) =>
-            /^[a-zA-Z0-9_.:-]+$/.test(c.name) &&
-            !c.name.startsWith("_") &&
-            !hiddenCommands.has(c.name) &&
-            !c.description.startsWith("(removed)") &&
-            !c.description.startsWith("Renamed to"),
-        )
-        .slice(0, 500)
-        .map((c) => ({
-          name: c.name,
-          source: "claude" as const,
-          description: c.description.slice(0, 300),
-          ...(c.argumentHint
-            ? { argumentHint: c.argumentHint.slice(0, 80) }
-            : {}),
-        }));
-      return { commands: listed, defaults };
-    },
-  ),
-);
 export function closeClaudeSession(key: string) {
   const session = sessions.get(key);
   sessions.delete(key);
