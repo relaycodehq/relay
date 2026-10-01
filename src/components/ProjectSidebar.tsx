@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNow } from "../lib/useNow";
 import { useQuery } from "@tanstack/react-query";
 import type { SidebarView } from "../../shared/types";
@@ -6,13 +6,13 @@ import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { ThreadMenu } from "./ThreadMenu";
+import { NameInput } from "./NameInput";
+import { CardAgents, CardState, StatusMark } from "./ThreadStatus";
 import {
   Archive,
   Bell,
   Check,
   ChevronRight,
-  CalendarClock,
-  CircleAlert,
   Copy,
   Ellipsis,
   Folder,
@@ -35,7 +35,6 @@ import {
   projectNameSchema,
   threadTitleSchema,
   type Project,
-  type ChatPending,
   type ChatSummary,
 } from "../../shared/projects";
 import {
@@ -60,8 +59,6 @@ import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
 import type { SettingsCategory } from "./Settings";
 import { ClockifyTimer } from "./plugins/ClockifyTimer";
-import { ProviderIcon } from "./ComposerModelPicker";
-import { agentName } from "../../shared/agents";
 import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
 import { DraftCard } from "./DraftCard";
 import {
@@ -71,7 +68,6 @@ import {
 } from "../lib/drafts";
 import {
   parentGroup,
-  projectGroupNameSchema,
   type ProjectFolderNode,
 } from "../../shared/project-folders";
 import { useProjectGroups } from "../lib/useProjectGroups";
@@ -161,232 +157,6 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
   const icon = useProjectIcon(id);
   if (icon) return <img className="sb-project-icon" src={icon} alt="" />;
   return open ? <FolderOpen size={15} /> : <Folder size={15} />;
-}
-
-/** Past this many agents, the last slot counts the rest. */
-const CARD_AGENT_ICONS = 3;
-/** Who's answering while it runs, otherwise who answered last. */
-function CardAgents({ chat }: { chat: ChatSummary }) {
-  const agents = chat.runningAgents?.length
-    ? chat.runningAgents
-    : chat.provider
-      ? [chat.provider]
-      : [];
-  if (!agents.length) return null;
-  const more = agents.length - CARD_AGENT_ICONS;
-  return (
-    <span className="sb-card-provider" title={agents.map(agentName).join(", ")}>
-      {agents.slice(0, more > 0 ? CARD_AGENT_ICONS - 1 : undefined).map((p) => (
-        <ProviderIcon key={p} provider={p} />
-      ))}
-      {more > 0 && <span className="sb-card-provider-more">+{more + 1}</span>}
-    </span>
-  );
-}
-
-function StatusMark({
-  chat,
-  unread,
-  now,
-}: {
-  chat: ChatSummary;
-  unread: boolean;
-  now: number;
-}) {
-  if (chat.waiting)
-    return (
-      <span className="sb-status waiting" title="Needs your input">
-        <i />
-      </span>
-    );
-  if (chat.running || agentsSince(chat.pending))
-    return (
-      <span
-        className="sb-status running"
-        title={chat.running ? "Working" : pendingTitle(chat.pending!)}
-      >
-        <Spinner size={11} steady />
-      </span>
-    );
-  if (unread)
-    return (
-      <span className="sb-status unread" title="New activity">
-        <i />
-      </span>
-    );
-  if (chat.pending?.length)
-    return (
-      <span
-        className="sb-status pending"
-        title="Claude will continue on its own"
-      >
-        <i />
-      </span>
-    );
-  if (chat.nextSend)
-    return (
-      <span className="sb-status scheduled" title={sendsTitle(chat.nextSend)}>
-        <CalendarClock size={12} />
-      </span>
-    );
-  return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
-}
-
-const sendsTitle = (at: number) =>
-  `Sends a scheduled message ${wakeLabel(at, new Date())}`;
-
-const pendingTitle = (pending: ChatPending[]) =>
-  `Claude will continue on its own after:\n${pending
-    .map((p) => (p.kind === "task" ? p.description : p.prompt || "a wake-up"))
-    .join("\n")}`;
-
-/** Right side of a card's top row: live state, else the age. */
-function CardState({
-  chat,
-  unread,
-  now,
-  stopped,
-}: {
-  chat: ChatSummary;
-  unread: boolean;
-  now: number;
-  /** Its turn on another computer ended in an error. */
-  stopped?: boolean;
-}) {
-  if (chat.waiting)
-    return (
-      <span className="sb-card-state waiting">
-        <i />
-        Needs input
-      </span>
-    );
-  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
-  if (chat.running || since)
-    return (
-      <span
-        className="sb-card-state running"
-        title={chat.running ? undefined : pendingTitle(chat.pending!)}
-      >
-        <Spinner size={11} steady />
-        Working
-        {since && <Elapsed since={since} />}
-      </span>
-    );
-  if (stopped)
-    return (
-      <span className="sb-card-state stopped">
-        <CircleAlert size={12} />
-        Stopped
-      </span>
-    );
-  if (chat.snoozedUntil && chat.snoozedUntil <= now)
-    return <span className="sb-card-state unread">Woke up</span>;
-  if (chat.pending?.length)
-    return (
-      <span
-        className={`sb-card-state pending ${unread ? "unread" : ""}`}
-        title={pendingTitle(chat.pending)}
-      >
-        <i />
-        Waiting
-      </span>
-    );
-  if (chat.nextSend && !unread)
-    return (
-      <span
-        className="sb-card-state scheduled"
-        title={sendsTitle(chat.nextSend)}
-      >
-        <CalendarClock size={12} />
-        Sends {wakeLabel(chat.nextSend, new Date(now))}
-      </span>
-    );
-  return (
-    <time className={`sb-card-state ${unread ? "unread" : ""}`}>
-      {unread && <i />}
-      {shortAge(chat.updated, now)}
-    </time>
-  );
-}
-
-/** "26s", "4m 12s", "1h 3m" — ticks on its own so only this label re-renders. */
-function Elapsed({ since }: { since: number }) {
-  const now = useNow(1000);
-  const seconds = Math.max(0, Math.floor((now - since) / 1000));
-  const text =
-    seconds < 60
-      ? `${seconds}s`
-      : seconds < 3600
-        ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-        : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m`;
-  return <span className="sb-elapsed">{text}</span>;
-}
-
-/** Inline name field for naming a group, or renaming a project, in place. */
-function GroupNameInput({
-  label,
-  initial = "",
-  schema = projectGroupNameSchema,
-  placeholder = "Group name",
-  className = "sb-group-input",
-  onSubmit,
-  onCancel,
-}: {
-  label: string;
-  initial?: string;
-  schema?:
-    | typeof projectGroupNameSchema
-    | typeof projectNameSchema
-    | typeof threadTitleSchema;
-  placeholder?: string;
-  className?: string;
-  onSubmit: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState(initial);
-  const done = useRef(false);
-  const parsed = schema.safeParse(value);
-  const invalid = !!value.trim() && !parsed.success;
-  const finish = (commit: boolean) => {
-    if (done.current) return;
-    if (commit && parsed.success && parsed.data !== initial) {
-      done.current = true;
-      onSubmit(parsed.data);
-    } else if (!commit || !invalid) {
-      done.current = true;
-      onCancel();
-    }
-  };
-  return (
-    <div className={className}>
-      <input
-        autoFocus
-        aria-label={label}
-        placeholder={placeholder}
-        maxLength={
-          schema === threadTitleSchema
-            ? 120
-            : schema === projectNameSchema
-              ? 80
-              : 60
-        }
-        value={value}
-        aria-invalid={invalid}
-        title={invalid ? parsed.error?.issues[0].message : undefined}
-        onFocus={(e) => e.currentTarget.select()}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") finish(true);
-          if (e.key === "Escape") finish(false);
-        }}
-        onBlur={() => {
-          if (!invalid) return finish(true);
-          done.current = true;
-          onCancel();
-        }}
-      />
-    </div>
-  );
 }
 
 export function ProjectSidebar({
@@ -510,7 +280,7 @@ export function ProjectSidebar({
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <GroupNameInput
+      <NameInput
         label="Thread name"
         initial={c.title}
         schema={threadTitleSchema}
@@ -619,7 +389,7 @@ export function ProjectSidebar({
             <span className="sb-project-expand">
               <ProjectFolderIcon id={p.id} open={isOpen} />
             </span>
-            <GroupNameInput
+            <NameInput
               label="Project name"
               initial={p.name}
               schema={projectNameSchema}
@@ -826,7 +596,7 @@ export function ProjectSidebar({
     return (
       <>
         {groups.adding?.parent === node.path && (
-          <GroupNameInput
+          <NameInput
             label="New group name"
             onCancel={() => groups.setAdding(undefined)}
             onSubmit={(name) => {
@@ -877,7 +647,7 @@ export function ProjectSidebar({
               }
             >
               {groups.renaming === folder.path ? (
-                <GroupNameInput
+                <NameInput
                   label="Group name"
                   initial={folder.name}
                   onCancel={() => groups.setRenaming(undefined)}
