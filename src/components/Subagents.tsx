@@ -22,7 +22,8 @@ import { doneLabel, liveLabel, plural } from "../../shared/activity-labels";
 import { modelName, type SubagentRun } from "../../shared/subagents";
 import "./subagents.css";
 
-const icons = {
+/** A call's icon by its kind. */
+export const activityIcons = {
   command: Terminal,
   read: FileText,
   file: FilePen,
@@ -32,7 +33,8 @@ const icons = {
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
 
-function took(ms: number) {
+/** "26s", "4m 05s", "1h 03m". */
+export function took(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -196,7 +198,7 @@ function Peek({
         <p className="subagents-now">{nowLine(run, display)}</p>
         <div className="subagents-calls">
           {run.recent.map((call) => {
-            const Icon = icons[call.kind];
+            const Icon = activityIcons[call.kind];
             const live = call.status === "running";
             return (
               <span

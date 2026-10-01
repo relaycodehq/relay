@@ -256,6 +256,7 @@ const methods = [
   "handOffThread",
   "retryHandoff",
   "handoffView",
+  "handoffViews",
   "bringBackThread",
   "keepThreadHere",
   "updateComputer",

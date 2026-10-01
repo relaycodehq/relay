@@ -370,6 +370,71 @@ it("tells the computer it came from when a turn there fails", async () => {
   expect(shown).toMatchObject({ state: "stopped", error: expect.any(String) });
 }, 60000);
 
+it("lets the computer it came from peek at what the turn there is doing", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
+    { timeout: 15000 },
+  );
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await finished(mini.chats, arrived!.id);
+  // The turn the mini ran on arrival: its calls and what its agent said.
+  const command = {
+    kind: "command",
+    label: "git diff --stat",
+    status: "complete",
+  };
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.remote).toMatchObject({
+        running: false,
+        provider: "codex",
+        model: "fixture-model",
+        says: "I'll inspect the cache guard first.",
+        recent: expect.arrayContaining([expect.objectContaining(command)]),
+      }),
+    { timeout: 8000, interval: 500 },
+  );
+
+  // One that keeps going: running since about now, by this computer's clock.
+  const sent = Date.now();
+  await mini.chats.send(arrived!.id, input("@codex fixture codex steer"));
+  await vi.waitFor(
+    async () => {
+      const remote = (await sender.view(thread.id))?.remote;
+      expect(remote).toMatchObject({
+        running: true,
+        waiting: false,
+        recent: expect.arrayContaining([expect.objectContaining(command)]),
+      });
+      expect(remote!.runningSince).toBeGreaterThanOrEqual(sent - 1000);
+      expect(remote!.runningSince).toBeLessThanOrEqual(Date.now());
+    },
+    { timeout: 10000, interval: 500 },
+  );
+  // The sidebar asks for every away thread at once.
+  expect((await sender.views())[thread.id]).toMatchObject({
+    sentTo: { state: "away" },
+    online: true,
+    remote: { running: true },
+  });
+
+  await mini.chats.send(arrived!.id, {
+    ...input("@codex Use the blue one"),
+    delivery: "steer",
+  });
+  await finished(mini.chats, arrived!.id);
+}, 60000);
+
 it("refuses threads that work in the checkout, and takes nothing from a phone", async () => {
   const { laptop, remote, sender, computerId } = await pairedComputers();
   const thread = await laptop.chats.create(laptop.projectId, {

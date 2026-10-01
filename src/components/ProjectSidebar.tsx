@@ -15,6 +15,7 @@ import {
   Check,
   ChevronRight,
   CalendarClock,
+  CircleAlert,
   Copy,
   Ellipsis,
   Folder,
@@ -86,6 +87,13 @@ import {
   type ProjectFolderNode,
 } from "../../shared/project-folders";
 import "./sidebar.css";
+import {
+  awayStopped,
+  AwayPeek,
+  AwayWhere,
+  useAwayViews,
+  withAway,
+} from "./AwayCard";
 
 const THREADS_PER_PROJECT = 5;
 const SEARCH_RESULTS = 50;
@@ -262,10 +270,13 @@ function CardState({
   chat,
   unread,
   now,
+  stopped,
 }: {
   chat: ChatSummary;
   unread: boolean;
   now: number;
+  /** Its turn on another computer ended in an error. */
+  stopped?: boolean;
 }) {
   if (chat.waiting)
     return (
@@ -284,6 +295,13 @@ function CardState({
         <Spinner size={11} steady />
         Working
         {since && <Elapsed since={since} />}
+      </span>
+    );
+  if (stopped)
+    return (
+      <span className="sb-card-state stopped">
+        <CircleAlert size={12} />
+        Stopped
       </span>
     );
   if (chat.snoozedUntil && chat.snoozedUntil <= now)
@@ -743,9 +761,11 @@ export function ProjectSidebar({
     };
   }, []);
   const byId = new Map(projects.map((p) => [p.id, p]));
+  const away = useAwayViews(lists.flatMap((q) => q.data ?? []));
   const all = lists
     .flatMap((q) => q.data ?? [])
     .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
+    .map((c) => withAway(c, away[c.id]))
     .sort((a, b) => b.updated - a.updated);
   const unread = useSeen(chatId, all);
   const triage = async (c: ChatSummary, action: ChatTriage) => {
@@ -1301,71 +1321,80 @@ export function ProjectSidebar({
     const isUnread = unread(c);
     const selected = chatId === c.id;
     return (
-      <div
-        key={c.id}
-        role="button"
-        tabIndex={0}
-        aria-disabled={dirty}
-        className={[
-          "sb-card",
-          selected && "selected",
-          isUnread && "unread",
-          // Only the open thread, finished-but-unread ones and open
-          // questions stay bright; everything else, running included, dims.
-          !selected && !isUnread && !c.waiting && "dim",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={() => open(c)}
-        onKeyDown={rowKeys(() => open(c))}
-      >
-        <div className="sb-card-top">
-          <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-          <span className="sb-card-name">
-            <span className="sb-card-project">{p?.name}</span>
-            {shortcut && (
-              <kbd className="sb-card-shortcut" aria-hidden>
-                <span className={mac ? "glyph" : undefined}>
-                  {modifiersLabel(jumpBinding)}
-                </span>
-                {shortcut}
-              </kbd>
+      <AwayPeek key={c.id} view={away[c.id]}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-disabled={dirty}
+          className={[
+            "sb-card",
+            selected && "selected",
+            isUnread && "unread",
+            // Only the open thread, finished-but-unread ones and open
+            // questions stay bright; everything else, running included, dims.
+            !selected && !isUnread && !c.waiting && "dim",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onClick={() => open(c)}
+          onKeyDown={rowKeys(() => open(c))}
+        >
+          <div className="sb-card-top">
+            <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+            <span className="sb-card-name">
+              <span className="sb-card-project">{p?.name}</span>
+              {shortcut && (
+                <kbd className="sb-card-shortcut" aria-hidden>
+                  <span className={mac ? "glyph" : undefined}>
+                    {modifiersLabel(jumpBinding)}
+                  </span>
+                  {shortcut}
+                </kbd>
+              )}
+            </span>
+            <CardState
+              chat={c}
+              unread={isUnread}
+              now={now}
+              stopped={awayStopped(away[c.id])}
+            />
+            <div className="sb-card-actions">
+              {!c.waiting && (
+                <SnoozeMenu
+                  now={now}
+                  onSnooze={(until) =>
+                    void triage(c, { kind: "snooze", until })
+                  }
+                />
+              )}
+              {!c.running && !c.waiting && (
+                <button
+                  className="sb-card-action"
+                  title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    settle(c);
+                  }}
+                >
+                  <Check size={13} />
+                  Settle
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="sb-card-title">{c.title}</div>
+          <div className="sb-card-meta">
+            {c.scope.kind === "pr" && (
+              <span className="sb-card-scope">
+                <GitPullRequest size={11} />#{c.scope.ref.number}
+              </span>
             )}
-          </span>
-          <CardState chat={c} unread={isUnread} now={now} />
-          <div className="sb-card-actions">
-            {!c.waiting && (
-              <SnoozeMenu
-                now={now}
-                onSnooze={(until) => void triage(c, { kind: "snooze", until })}
-              />
-            )}
-            {!c.running && !c.waiting && (
-              <button
-                className="sb-card-action"
-                title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  settle(c);
-                }}
-              >
-                <Check size={13} />
-                Settle
-              </button>
-            )}
+            <span className="sb-card-branch">{c.branch}</span>
+            <AwayWhere view={away[c.id]} />
+            <CardAgents chat={c} />
           </div>
         </div>
-        <div className="sb-card-title">{c.title}</div>
-        <div className="sb-card-meta">
-          {c.scope.kind === "pr" && (
-            <span className="sb-card-scope">
-              <GitPullRequest size={11} />#{c.scope.ref.number}
-            </span>
-          )}
-          <span className="sb-card-branch">{c.branch}</span>
-          <CardAgents chat={c} />
-        </div>
-      </div>
+      </AwayPeek>
     );
   };
 

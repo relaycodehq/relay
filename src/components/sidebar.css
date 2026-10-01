@@ -1234,3 +1234,20 @@
     transform: scale(0.4);
   }
 }
+/* A thread on another computer: which one, before who's answering there. */
+.sb-card-where {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.sb-card-where + .sb-card-provider {
+  margin-left: 0;
+}
+.sb-card-where.offline {
+  opacity: 0.7;
+}
+.sb-card-state.stopped {
+  color: var(--muted);
+}

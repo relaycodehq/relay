@@ -61,11 +61,14 @@ import { threadTerminals } from "./thread-terminals";
 import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
 import { currentBranchOrNull } from "./git";
 import { commitEverything, headOf } from "./handoff/git";
-import type {
-  ChatCameFrom,
-  ChatSentTo,
-  HandoffThread,
+import {
+  remoteRecentCalls,
+  type ChatCameFrom,
+  type ChatSentTo,
+  type HandoffRemoteStatus,
+  type HandoffThread,
 } from "../shared/handoff";
+import { readTurn } from "../shared/agent-trace";
 import {
   dropRevert,
   finishTurn,
@@ -227,6 +230,40 @@ interface ActiveChat {
   steer?: AgentControl["steer"];
 }
 type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
+/** What another computer hears of a handed-over thread's latest turn. */
+type HandoffTurn = Pick<
+  HandoffRemoteStatus,
+  | "latest"
+  | "failed"
+  | "recent"
+  | "calls"
+  | "says"
+  | "provider"
+  | "model"
+  | "question"
+  | "runningFor"
+>;
+/** A turn's own last calls and latest commentary, trimmed to cross the bridge. */
+function turnPeek(m: ChatMessage): HandoffTurn {
+  const { activity } = readTurn(m);
+  const said = [...(m.trace ?? [])]
+    .reverse()
+    .find((e) => e.kind === "commentary" && e.text.trim());
+  const says = said?.kind === "commentary" && said.text.trim().slice(0, 300);
+  return {
+    provider: m.provider,
+    calls: activity.length,
+    recent: activity
+      .slice(-remoteRecentCalls)
+      .map(({ id, kind, label, status }) => ({
+        id,
+        kind,
+        label: label.slice(0, 300),
+        status,
+      })),
+    ...(says ? { says } : {}),
+  };
+}
 /** An answer the app closed on, with what it had written so far. */
 function interrupt(m: ChatMessage) {
   m.status = "failed";
@@ -1027,22 +1064,42 @@ export class ProjectChats {
     };
   }
   /**
-   * How the main conversation's latest turn here went: the start of the
-   * latest answer, or the error it ended in. Only what was written since the
-   * thread arrived, so the computer it came from never sees its own answer.
+   * How the main conversation's latest turn here goes: the start of the
+   * latest answer or the error it ended in, and for the peek its last calls,
+   * what its agent last said, and what it asks while it waits. Only what was
+   * written since the thread arrived, so the computer it came from never
+   * sees its own answer.
    */
-  async latestTurn(id: string): Promise<{ latest?: string; failed?: string }> {
+  async latestTurn(id: string): Promise<HandoffTurn> {
     const chat = await this.load(id);
     const answers = chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
       .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
     const last = answers.at(-1);
+    const active = this.active.get(id);
+    const model = (active?.input ?? chat.lastInput)?.choice.model;
+    const request = active?.requests.list()[0];
+    const peek: HandoffTurn = {
+      ...(last ? turnPeek(last) : {}),
+      ...(model ? { model } : {}),
+      ...(request
+        ? {
+            question: (request.questions?.[0]?.question ?? request.title)
+              .trim()
+              .slice(0, 300),
+          }
+        : {}),
+      ...(active ? { runningFor: Date.now() - active.started } : {}),
+    };
     if (last?.status === "failed")
       return {
         failed: last.error?.trim() || "The agent stopped with an error.",
+        ...peek,
       };
     const answer = answers.reverse().find((m) => m.body.trim());
-    return answer ? { latest: answer.body.trim().slice(0, 300) } : {};
+    return answer
+      ? { latest: answer.body.trim().slice(0, 300), ...peek }
+      : peek;
   }
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {

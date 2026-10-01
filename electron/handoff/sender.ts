@@ -100,12 +100,16 @@ export class Handoffs {
       }),
     );
   }
-  /** Each paired computer with the threads this one handed it, statuses fresh within seconds. */
-  async overview(): Promise<ComputersOverview> {
+  /**
+   * Asks each online computer about the threads it has from here, unless
+   * they were asked about within seconds; `withInfo` asks its version too.
+   * Returns the threads that are away.
+   */
+  private async refresh(withInfo: boolean) {
     const away = (this.store.get().chats ?? []).filter((c) => c.sentTo);
-    const computers = this.computers.list();
     await Promise.all(
-      computers
+      this.computers
+        .list()
         .filter((c) => c.status === "online")
         .map(async (c) => {
           const ids = away
@@ -115,21 +119,48 @@ export class Handoffs {
           const stale = ids.some(
             (id) => Date.now() - (this.statuses.get(id)?.at ?? 0) > 4000,
           );
+          if (!stale && !withInfo) return;
           try {
             const client = await this.computers.connected(c.id);
-            await this.info(c.id, client);
+            if (withInfo) await this.info(c.id, client);
             if (!stale) return;
             const found = await client.call("handoffStatus", ids);
-            for (const id of ids)
-              this.statuses.set(id, {
-                at: Date.now(),
-                status: found[id] ?? null,
-              });
+            for (const id of ids) this.remember(id, found[id] ?? null);
           } catch {
             // Offline after all; the last known states stand.
           }
         }),
     );
+    return away;
+  }
+  /** The other computer's clock stays there: how long its turn ran becomes since when, here. */
+  private remember(id: string, status: HandoffRemoteStatus | null) {
+    const at = Date.now();
+    this.statuses.set(id, {
+      at,
+      status:
+        status?.runningFor === undefined
+          ? status
+          : { ...status, runningSince: at - status.runningFor },
+    });
+    return this.statuses.get(id)!.status;
+  }
+  /** Every thread that's away, as its strip shows it, for the sidebar's cards. */
+  async views(): Promise<Record<string, HandoffView>> {
+    const away = await this.refresh(false);
+    return Object.fromEntries(
+      away.map((chat) => {
+        const sentTo = chat.sentTo!;
+        const remote = this.statuses.get(sentTo.id)?.status;
+        const online = this.computers.status(sentTo.computerId) === "online";
+        return [chat.id, { sentTo, online, ...(remote ? { remote } : {}) }];
+      }),
+    );
+  }
+  /** Each paired computer with the threads this one handed it, statuses fresh within seconds. */
+  async overview(): Promise<ComputersOverview> {
+    const away = await this.refresh(true);
+    const computers = this.computers.list();
     const projectName = (id: string) => {
       try {
         return this.projects.get(id).name;
@@ -284,10 +315,10 @@ export class Handoffs {
     const cached = this.statuses.get(sentTo.id);
     if (!fresh && cached && Date.now() - cached.at < 4000) return cached.status;
     const client = await this.computers.connected(sentTo.computerId);
-    const status =
-      (await client.call("handoffStatus", [sentTo.id]))[sentTo.id] ?? null;
-    this.statuses.set(sentTo.id, { at: Date.now(), status });
-    return status;
+    return this.remember(
+      sentTo.id,
+      (await client.call("handoffStatus", [sentTo.id]))[sentTo.id] ?? null,
+    );
   }
   private run(chatId: string, job: () => Promise<void>) {
     const running = job()
