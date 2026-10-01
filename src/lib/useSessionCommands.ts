@@ -6,6 +6,8 @@ import { latestContext } from "../components/ContextWindowMeter";
 import { api } from "./api";
 import type { ThreadWrites } from "./useThreadWrites";
 
+export type SessionCommands = ReturnType<typeof useSessionCommands>;
+
 /**
  * The agent session behind the open conversation: how full its context is,
  * compacting it, and the slash commands about it. Commands for the rest of

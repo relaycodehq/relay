@@ -4,6 +4,8 @@ import type { ChatSummary } from "../../shared/projects";
 import { outsideBatch, runningBatch } from "../../shared/subagents";
 import { api } from "./api";
 
+export type BackgroundWork = ReturnType<typeof useBackgroundWork>;
+
 /** What the thread's agent has going outside its turn: subagents, and the
  * background work Claude waits on or left stopped. */
 export function useBackgroundWork(

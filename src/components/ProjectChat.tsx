@@ -1,7 +1,3 @@
-import { AgentRequestCard } from "./AgentRequestCard";
-import type { RelayCommand } from "../../shared/commands";
-import { contextAgent, threadContextAgent } from "../../shared/recipient";
-import type { LineQuestion } from "../../shared/questions";
 import {
   useEffect,
   useImperativeHandle,
@@ -11,57 +7,52 @@ import {
   type CSSProperties,
   type Ref,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
-import {
-  type ChatSummary,
-  type Project,
-  type ChatScope,
-  type ChatWorkspace,
-} from "../../shared/projects";
-import { api } from "../lib/api";
-import { workingTreeKey } from "../lib/working-tree-key";
-import { useNavigationLock } from "../lib/navigation-lock";
-import { readDraft, writeDraft } from "../lib/drafts";
-import { threadDraftKey, threadStorage } from "../lib/thread-storage";
-import { ErrorBox, IconButton } from "./ui";
-import { ThreadHeader } from "./ThreadHeader";
-import {
-  ProjectComposer,
-  type ComposerControls,
-  type ComposerHandle,
-} from "./ProjectComposer";
-import { AgentSwitchDialog } from "./AgentSwitchDialog";
-import { SelectionQuote } from "./SelectionQuote";
-import { useCouncils } from "../lib/useCouncils";
-import { useChatThread } from "../lib/useChatThread";
-import { useChatPresence } from "../lib/useChatPresence";
-import { useBackgroundWork } from "../lib/useBackgroundWork";
-import { useThreadScroll } from "../lib/useThreadScroll";
-import { useMessageActions } from "../lib/useMessageActions";
-import { useThreadWrites } from "../lib/useThreadWrites";
-import { useComposerAttachments } from "../lib/useComposerAttachments";
-import { useAgentSwitch } from "../lib/useAgentSwitch";
-import { useSessionCommands } from "../lib/useSessionCommands";
-import { useThreadSend } from "../lib/useThreadSend";
-import { useQueuedMessages } from "../lib/useQueuedMessages";
-import { ThreadMessages } from "./ThreadMessages";
-import { ContextWindowMeter } from "./ContextWindowMeter";
-import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
-import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
+import { useQuery } from "@tanstack/react-query";
 import type { CodeReference } from "../../shared/code-references";
-import { CodeReferenceList } from "./CodeReferenceChip";
-import { awayPlaceholder } from "./HandoffStrip";
-import { ThreadNotice } from "./ThreadNotice";
-import { SubagentsIndicator } from "./Subagents";
-import { SubagentThread } from "./SubagentThread";
-import { WorkspaceControl, WorktreeDialogs } from "./WorktreeControls";
-import { useThreadWorktree } from "../lib/useThreadWorktree";
-import type { TurnDiffTarget } from "./TurnChanges";
+import type { RelayCommand } from "../../shared/commands";
 import type { ProjectFileLink } from "../../shared/project-file-links";
+import type {
+  ChatScope,
+  ChatSummary,
+  ChatWorkspace,
+  Project,
+} from "../../shared/projects";
+import type { LineQuestion } from "../../shared/questions";
+import { contextAgent } from "../../shared/recipient";
 import type { PullRef } from "../../shared/types";
+import { api } from "../lib/api";
+import { readDraft, writeDraft } from "../lib/drafts";
+import { useNavigationLock } from "../lib/navigation-lock";
+import { threadDraftKey, threadStorage } from "../lib/thread-storage";
+import { useAgentSwitch } from "../lib/useAgentSwitch";
+import { useBackgroundWork } from "../lib/useBackgroundWork";
+import { useChatPresence } from "../lib/useChatPresence";
+import { useChatThread } from "../lib/useChatThread";
+import { useComposerAttachments } from "../lib/useComposerAttachments";
+import { useCouncils } from "../lib/useCouncils";
+import { useMessageActions } from "../lib/useMessageActions";
+import { useQueuedMessages } from "../lib/useQueuedMessages";
+import { useSessionCommands } from "../lib/useSessionCommands";
+import { useThreadScroll } from "../lib/useThreadScroll";
+import { useThreadSend } from "../lib/useThreadSend";
+import { useThreadWorktree } from "../lib/useThreadWorktree";
+import { useThreadWrites } from "../lib/useThreadWrites";
+import { workingTreeKey } from "../lib/working-tree-key";
+import { AgentRequestCard } from "./AgentRequestCard";
+import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { DeepReviewSetup } from "./DeepReview";
-import { agentName } from "../../shared/agents";
+import type { ComposerControls, ComposerHandle } from "./ProjectComposer";
+import { SelectionQuote } from "./SelectionQuote";
+import { SubagentThread } from "./SubagentThread";
+import { ThreadComposer } from "./ThreadComposer";
+import { ThreadHeader } from "./ThreadHeader";
+import { ThreadMessages } from "./ThreadMessages";
+import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
+import type { TurnDiffTarget } from "./TurnChanges";
+import { ErrorBox } from "./ui";
+import { WorkItemCards } from "./WorkItemCards";
+import { WorktreeDialogs } from "./WorktreeControls";
+
 export function ProjectChat({
   onCommand,
   project,
@@ -122,8 +113,7 @@ export function ProjectChat({
   /** The thread's composer, while it shows one. */
   ref?: Ref<ComposerControls>;
 }) {
-  const qc = useQueryClient(),
-    id = chat?.id ?? draftId,
+  const id = chat?.id ?? draftId,
     scope = chat?.scope ?? draftScope;
   // Checking out another branch would change the file under an unsaved edit.
   const { locked: checkoutDisabled } = useNavigationLock();
@@ -142,8 +132,7 @@ export function ProjectChat({
     { busy, error, setError } = writes;
   const presence = useChatPresence(chat, viewing);
   const attachments = useComposerAttachments(id),
-    { selection, setSelection, workItem, setWorkItem, codeRefs, setCodeRefs } =
-      attachments;
+    { setSelection, workItem, setWorkItem } = attachments;
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
   useImperativeHandle(
@@ -163,20 +152,18 @@ export function ProjectChat({
     onDraftWorkspace,
   });
   const { workspace, folder } = worktree;
-  const { agents, agentBatch, pending, stopped, leftBehind } =
-    useBackgroundWork(chat, running);
+  const background = useBackgroundWork(chat, running);
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
-  const { context, compacting, showContext, compact, runCommand } =
-    useSessionCommands({
-      chat,
-      shown,
-      root: root?.id ?? null,
-      running,
-      writes,
-      refetch: history.refetch,
-      onCommand,
-    });
+  const session = useSessionCommands({
+    chat,
+    shown,
+    root: root?.id ?? null,
+    running,
+    writes,
+    refetch: history.refetch,
+    onCommand,
+  });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
   const councils = useCouncils({
     chat,
@@ -187,9 +174,6 @@ export function ProjectChat({
     onCreated,
     onSent: () => followAnswer(),
   });
-  const { reviewing, planning, startReview } = councils;
-  const draftKey = threadDraftKey(id, root?.id);
-  const onDraft = (v: string) => writeDraft(draftKey, v);
   useLayoutEffect(() => {
     threadStorage(id).reply.save(rootId);
   }, [place]);
@@ -251,17 +235,6 @@ export function ProjectChat({
     onOpenTurnDiff,
   });
   const { openChanges, openFile } = actions;
-  const workspaceControl =
-    scope.kind !== "project" || project.plain ? undefined : (
-      <WorkspaceControl
-        chat={chat}
-        worktree={worktree}
-        running={running}
-        busy={busy}
-        onOpenTurnDiff={onOpenTurnDiff}
-        onError={setError}
-      />
-    );
   // A first message scheduled with Send later still shows, to send or take back.
   const isEmpty =
     !messages.length &&
@@ -363,160 +336,30 @@ export function ProjectChat({
             canChoosePR={canChoosePR}
             busy={busy}
             checkoutDisabled={checkoutDisabled}
-            onStart={startReview}
+            onStart={councils.startReview}
           />
         ) : (
-          <ProjectComposer
+          <ThreadComposer
             key={`${id}:${root?.id ?? "main"}:${queue.restored}`}
+            chat={chat}
+            threadId={id}
+            project={project}
+            scope={scope}
             handleRef={composer}
-            onCommand={runCommand}
-            // A side conversation keeps its own agent and opens on the one that wrote its message.
-            settingsKey={root ? `${id}:${root.id}` : id}
-            inherit={
-              root
-                ? {
-                    settingsKey: id,
-                    provider:
-                      root.role === "assistant" || root.side
-                        ? root.provider
-                        : undefined,
-                  }
-                : undefined
-            }
-            agent={chat && threadContextAgent(chat)}
-            draftKey={draftKey}
-            onDraft={onDraft}
-            shared={!!chat?.shared}
-            // A side thread doesn't wait for the main answer, nor queue behind it.
-            running={root?.side ? false : running || reviewing || planning}
-            busy={busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt}
+            thread={thread}
+            writes={writes}
+            councils={councils}
+            background={background}
+            session={session}
+            attachments={attachments}
+            worktree={worktree}
             branch={checkout.data?.branch}
-            plain={project.plain}
-            projectId={project.id}
             checkoutDisabled={checkoutDisabled}
-            onStartThread={onStartThread}
-            workspace={
-              <>
-                {agentBatch.length > 0 && (
-                  <SubagentsIndicator
-                    batch={agentBatch}
-                    projectRoot={folder}
-                    onOpen={setAgentView}
-                    onStop={async (id) => {
-                      if (!chat) return;
-                      try {
-                        await api.stopProjectChatAgent(chat.id, id);
-                      } catch (e) {
-                        setError(e);
-                        throw e;
-                      } finally {
-                        void qc.invalidateQueries({
-                          queryKey: ["project-chat-agents", chat.id],
-                        });
-                      }
-                    }}
-                  />
-                )}
-                {workspaceControl}
-              </>
-            }
-            branchLabel={worktree.branch}
+            scopeButtons={scopeButtons}
             onSend={send}
-            notice={
-              chat && (
-                <ThreadNotice
-                  chat={chat}
-                  stopped={stopped}
-                  leftBehind={leftBehind}
-                  onError={setError}
-                />
-              )
-            }
-            placeholder={
-              (chat && awayPlaceholder(chat)) ??
-              (root?.side
-                ? `Ask ${agentName(root.provider)} a follow-up on the side…`
-                : reviewing
-                  ? "Reviewers are at work. Messages wait for the lead…"
-                  : planning
-                    ? "The council is thinking. Messages wait for the lead's plan…"
-                    : pending?.some((p) => p.kind === "task")
-                      ? "Message Claude, its background work keeps going…"
-                      : pending
-                        ? "Message Claude now, or wait for it to check back…"
-                        : project.scratch
-                          ? "Ask anything…"
-                          : undefined)
-            }
-            ultraplanOffered={!root && !chat?.shared && scope.kind !== "review"}
-            planProvider={
-              !running &&
-              shown.at(-1)?.status === "complete" &&
-              shown.at(-1)?.proposedPlan
-                ? shown.at(-1)?.provider
-                : undefined
-            }
-            onStop={() => {
-              if (chat) void api.cancelProjectChat(chat.id).catch(setError);
-            }}
-            contextMeter={
-              chat &&
-              context && (
-                <ContextWindowMeter
-                  chatId={chat.id}
-                  usage={context.usage}
-                  provider={context.provider}
-                  compacting={compacting}
-                  compactDisabled={running || busy}
-                  openSignal={showContext}
-                  onCompact={() => compact()}
-                />
-              )
-            }
-            context={scopeButtons}
-            allowEmpty={!root && (!!workItem || !!codeRefs.length)}
-            attachment={
-              !root && (selection || workItem || codeRefs.length) ? (
-                <>
-                  {!!codeRefs.length && (
-                    <CodeReferenceList
-                      references={codeRefs}
-                      onRemove={(index) =>
-                        setCodeRefs((refs) =>
-                          refs.filter((_, i) => i !== index),
-                        )
-                      }
-                    />
-                  )}
-                  {workItem && (
-                    <WorkItemChip
-                      item={workItem}
-                      onRemove={() => setWorkItem(undefined)}
-                    />
-                  )}
-                  {selection && (
-                    <div className="composer-reply">
-                      <span>
-                        {selection.side === "deletions"
-                          ? "Before PR"
-                          : "PR head"}{" "}
-                        · {selection.path}:{selection.start} ·{" "}
-                        {(selection.side === "deletions"
-                          ? selection.base
-                          : selection.head
-                        ).slice(0, 8)}
-                      </span>
-                      <IconButton
-                        label="Remove selected code"
-                        onClick={() => setSelection(undefined)}
-                      >
-                        <X size={13} />
-                      </IconButton>
-                    </div>
-                  )}
-                </>
-              ) : undefined
-            }
+            onStartThread={onStartThread}
+            onOpenAgent={setAgentView}
+            onOpenTurnDiff={onOpenTurnDiff}
           />
         )}
         {isEmpty && scope.kind === "project" && !root && (
@@ -541,7 +384,7 @@ export function ProjectChat({
       {chat && agentView && (
         <SubagentThread
           chatId={chat.id}
-          runs={agents}
+          runs={background.agents}
           openId={agentView}
           projectRoot={folder}
           onSelect={setAgentView}
