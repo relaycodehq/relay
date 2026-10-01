@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet } from "react-native";
-import { answerImagePaths, isImagePath } from "../../../shared/answer-images";
+import { answerImagePaths } from "../../../shared/answer-images";
 import type { ChatMessage } from "../../../shared/projects";
+import { turnImages } from "../../../shared/projects/messages";
 import { useRemote } from "../remote/RemoteProvider";
 import type { LightboxImage } from "./Lightbox";
 import { useTheme } from "./theme";
@@ -39,20 +40,6 @@ export function useImage(source: Source) {
       });
   }, [key, uri, error, remote.status]);
   return { uri, failed: error };
-}
-
-/** Images the agent looked at during a turn, by path (shared/projects' turnImages). */
-function turnImages(message: ChatMessage): string[] {
-  const calls = message.trace
-    ? message.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
-    : (message.activity ?? []);
-  return [
-    ...new Set(
-      calls
-        .filter((a) => a.kind === "read" && a.status === "complete" && isImagePath(a.label))
-        .map((a) => a.label),
-    ),
-  ];
 }
 
 const fileName = (path: string) => path.split("/").at(-1) || path;
