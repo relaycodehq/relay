@@ -978,7 +978,7 @@ it("previews only the images a turn read, and only when they really are images",
     "isn't an image",
   );
   await expect(chats.readImage(chat.id, turn, unread)).rejects.toThrow(
-    "didn't read that image",
+    "didn't read or show that image",
   );
   await expect(chats.readImage(chat.id, randomUUID(), shot)).rejects.toThrow(
     "didn't read that image",
