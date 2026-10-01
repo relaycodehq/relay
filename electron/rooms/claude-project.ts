@@ -1,29 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import type {
-  ModelUsage,
-  SDKControlGetUsageResponse,
-} from "@anthropic-ai/claude-agent-sdk";
+import type { ModelUsage } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../executables";
 import { ClaudeSignedOutError } from "./claude-sign-in";
 import type { AgentOptions } from "../agents/types";
 import { claudeActivity, claudeEditedPaths } from "./activity";
-import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 import { answeredFindings, reportedFindings } from "../../shared/deep-review";
 import type {
   AgentActivity,
-  ChatPending,
   ContextUsage,
   PromptCache,
 } from "../../shared/projects";
-import { withTimeout } from "../timeout";
-import { AsyncQueue } from "../async-queue";
-import {
-  sdk,
-  withProbe,
-  type ClaudeInput,
-  type ClaudeStream,
-} from "./claude-project/sdk";
 import {
   closeSession,
   newSession,
@@ -53,137 +40,20 @@ export {
   reattachClaudeSessions,
 } from "./claude-project/session";
 export {
+  claudeAgentRun,
+  claudeAgents,
+  claudePending,
+  stopClaudeAgent,
+  stopClaudeTask,
+} from "./claude-project/live";
+export { readClaudeUsage } from "./claude-project/usage";
+export { askClaudeSide, type SideExchange } from "./claude-project/side";
+export {
   claudeDefaults,
   listClaudeCommands,
   listClaudeModels,
 } from "./claude-project/catalog";
 
-/** What Claude left running that will start its next turn, while its session lives. */
-export function claudePending(key: string): ChatPending[] {
-  const session = sessions.get(key);
-  if (!session || session.frames.ended) return [];
-  return session.work.list();
-}
-/** Stops a background task; Claude hears it stopped and usually says so. */
-export async function stopClaudeTask(key: string, taskId: string) {
-  const session = sessions.get(key);
-  if (!session?.work.has(taskId) || session.frames.ended)
-    throw new Error("That work has already finished.");
-  await session.stream.stopTask(taskId);
-}
-/** The subagents a thread's live session started, running or back. */
-export function claudeAgents(key: string): SubagentRun[] {
-  return sessions.get(key)?.agents.list() ?? [];
-}
-export function claudeAgentRun(
-  key: string,
-  id: string,
-): SubagentDetail | undefined {
-  return sessions.get(key)?.agents.detail(id);
-}
-/** Stops one agent, foreground or background; Claude hears it was stopped. */
-export async function stopClaudeAgent(key: string, id: string) {
-  const session = sessions.get(key);
-  const taskId = session?.agents.taskId(id);
-  if (!session || !taskId || session.frames.ended)
-    throw new Error("That agent has already finished.");
-  await session.stream.stopTask(taskId);
-}
-/**
- * The data behind Claude Code's /usage, fetched by the CLI with its own
- * sign-in; Relay never handles the token. Null when the CLI is signed out.
- * A running session answers without starting another process.
- */
-export async function readClaudeUsage(): Promise<SDKControlGetUsageResponse | null> {
-  const live = [...sessions.values()].at(-1);
-  if (live) {
-    try {
-      const usage = await usageFrom(live.stream, 5000);
-      // Sessions left running for hours stop reporting the plan's limits.
-      if (!usage || usage.rate_limits_available) return usage;
-    } catch {
-      // Closing or stuck behind its turn; a fresh probe still answers.
-    }
-  }
-  return withProbe({ settingSources: ["user"] }, (stream) =>
-    usageFrom(stream, 20000),
-  );
-}
-async function usageFrom(stream: ClaudeStream, ms: number) {
-  const ask = async () => {
-    const account = await stream.accountInfo();
-    if (account?.tokenSource === "none" && !account.apiKeySource) return null;
-    // Experimental in the SDK; when it's renamed, this stops type-checking.
-    return stream.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
-      skipBehaviors: true,
-    });
-  };
-  return withTimeout(ask(), ms, "Claude did not report usage.");
-}
-/** An earlier question in a side thread, and what Claude said to it. */
-export type SideExchange = { question: string; response: string };
-type SideAsking = ClaudeStream & {
-  askSideQuestion(
-    question: string,
-    options?: { history?: SideExchange[]; signal?: AbortSignal },
-  ): Promise<{ response: string } | null>;
-};
-/**
- * Claude Code's `/btw`: one answer from the session's context, with no tools,
- * that never enters its transcript. A live session answers even mid-turn;
- * otherwise the saved one is resumed just for this. `history` is the side
- * thread so far; the SDK doesn't type `askSideQuestion` yet.
- */
-export async function askClaudeSide(options: {
-  key: string;
-  thread: string;
-  cwd: string;
-  model: string;
-  question: string;
-  history: SideExchange[];
-  signal: AbortSignal;
-}): Promise<string> {
-  const ask = async (stream: ClaudeStream) => {
-    const answer = await (stream as SideAsking).askSideQuestion(
-      options.question,
-      { history: options.history, signal: options.signal },
-    );
-    if (!answer?.response.trim())
-      throw new Error("Claude had no answer. Try again.");
-    return answer.response;
-  };
-  const live = sessions.get(options.key);
-  if (live && !live.frames.ended) return ask(live.stream);
-  const [{ query }, executable] = await Promise.all([
-    sdk(),
-    findExecutable("claude"),
-  ]);
-  options.signal.throwIfAborted();
-  // No prompt ever goes in: the session only loads to answer beside it.
-  const input: ClaudeInput = new AsyncQueue();
-  const stream = query({
-    prompt: input,
-    options: {
-      cwd: options.cwd,
-      pathToClaudeCodeExecutable: executable,
-      resume: options.thread,
-      persistSession: false,
-      settingSources: ["user", "project", "local"],
-      strictMcpConfig: true,
-      mcpServers: {},
-      ...(options.model ? { model: options.model } : {}),
-    },
-  });
-  void (async () => {
-    for await (const _ of stream);
-  })().catch(() => {});
-  try {
-    return await ask(stream);
-  } finally {
-    input.close();
-    stream.close();
-  }
-}
 export async function runClaudeProject(
   options: ClaudeRunOptions,
 ): Promise<string> {
