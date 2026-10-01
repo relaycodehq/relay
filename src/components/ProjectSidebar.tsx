@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNow } from "../lib/useNow";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { SidebarView } from "../../shared/types";
 import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { ThreadMenu, type ThreadMenuAction } from "./ThreadMenu";
-import { forkThreadSettings } from "../lib/composer-settings";
+import { ThreadMenu } from "./ThreadMenu";
 import {
   Archive,
   Bell,
@@ -38,7 +37,6 @@ import {
   type Project,
   type ChatPending,
   type ChatSummary,
-  type ChatTriage,
 } from "../../shared/projects";
 import {
   chatActivitySections,
@@ -51,14 +49,10 @@ import { SnoozeMenu } from "./SnoozeMenu";
 import { api } from "../lib/api";
 import { mac } from "../lib/mod-key";
 import {
-  digitOf,
-  holdsModifiersOf,
   modifiersLabel,
   useBindings,
-  useShortcut,
   useShortcutLabel,
 } from "../lib/shortcuts";
-import { modifierCode } from "../../shared/shortcuts";
 import { groupKey, useSidebarFolds } from "../lib/useSidebarFolds";
 import { SHELF_PAGE, useShelves } from "../lib/useShelves";
 import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
@@ -88,10 +82,12 @@ import { awayStopped } from "../lib/useAwayViews";
 import { useSidebarThreads } from "../lib/useSidebarThreads";
 import { useUnread } from "../lib/useUnread";
 import { useThreadSearch } from "../lib/useThreadSearch";
+import { useThreadActions } from "../lib/useThreadActions";
+import { useActivityKeys } from "../lib/useActivityKeys";
+import { useAttention } from "../lib/useAttention";
 
 const THREADS_PER_PROJECT = 5;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
-const CMD_HINT_DELAY_MS = 500;
 
 /** A thread's name, dimmed while it's being generated again. */
 function ThreadTitle({
@@ -441,7 +437,6 @@ export function ProjectSidebar({
   /** Strongest status mark among active threads, for the collapsed titlebar. */
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
-  const qc = useQueryClient();
   const now = useNow(30_000);
   // Follows drafts as they gain or lose text; each card follows its own.
   const draftKeys = useDraftKeys();
@@ -457,180 +452,43 @@ export function ProjectSidebar({
   } = useSidebarView(initialView);
   const folds = useSidebarFolds();
   const shelves = useShelves();
-  const [groupError, setGroupError] = useState<string>();
-  const groups = useProjectGroups(realProjects, folds.setOpen, setGroupError);
+  const [error, setError] = useState<string>();
+  const groups = useProjectGroups(realProjects, folds.setOpen, setError);
   const drag = useProjectDrag(groups, folds.setOpen);
-  const [renamingThread, setRenamingThread] = useState<string>();
-  /** Threads whose title is being generated again. */
-  const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
   const autoSettleDays = useQuery({
     queryKey: ["auto-settle-days"],
     queryFn: () => api.autoSettleDays(),
   }).data;
-  /**
-   * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
-   * first nine cards (or whichever modifiers open them). ⌘ used as part of
-   * another shortcut or a ⌘-click never shows them.
-   */
-  const [cmdHeld, setCmdHeld] = useState(false);
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const { all, away } = useSidebarThreads(realProjects, chatId);
+  const unread = useUnread(chatId, all);
+  const search = useThreadSearch(all, byId);
+  const sections = chatActivitySections(all, now);
+  const actions = useThreadActions({
+    chatId,
+    active: sections.active,
+    projects: byId,
+    scratch: scratchIds,
+    open: onChat,
+    onNew,
+    setError,
+  });
+  const { triage, settle, regenerating } = actions;
+  const open = actions.open;
+  const shortcuts = view === "activity" && !search.query;
+  const cmdHeld = useActivityKeys({
+    active: sections.active,
+    chatId,
+    jumping: shortcuts,
+    open,
+    settle,
+  });
+  const attention = useAttention(sections.active, unread, onAttention);
   const jumpBinding = useBindings("jump-thread")[0];
   const settleKeys = useShortcutLabel("settle");
   const newThreadKeys = useShortcutLabel("new-thread");
   const newScratchKeys = useShortcutLabel("new-scratch");
   const activityKeys = useShortcutLabel("activity");
-  const jumpTo = useRef<(index: number) => boolean>(() => false);
-  const settleOpen = useRef<() => boolean>(() => false);
-  useShortcut("settle", true, () => settleOpen.current());
-  useEffect(() => {
-    let reveal: number | undefined;
-    const cancel = () => {
-      clearTimeout(reveal);
-      reveal = undefined;
-    };
-    const release = () => {
-      cancel();
-      setCmdHeld(false);
-    };
-    const down = (e: KeyboardEvent) => {
-      // Ctrl keys typed in a terminal belong to its shell.
-      if (
-        !mac &&
-        e.ctrlKey &&
-        (e.target as Element | null)?.closest?.(".xterm")
-      )
-        return release();
-      if (!holdsModifiersOf("jump-thread", e)) release();
-      else if (!modifierCode.test(e.code)) cancel();
-      else if (reveal === undefined)
-        reveal = window.setTimeout(() => setCmdHeld(true), CMD_HINT_DELAY_MS);
-      const digit = digitOf("jump-thread", e);
-      if (digit && jumpTo.current(digit - 1)) e.preventDefault();
-    };
-    const up = (e: KeyboardEvent) => {
-      if (!holdsModifiersOf("jump-thread", e)) release();
-    };
-    const click = (e: PointerEvent) => {
-      if (holdsModifiersOf("jump-thread", e)) cancel();
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("pointerdown", click);
-    window.addEventListener("blur", release);
-    return () => {
-      cancel();
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("pointerdown", click);
-      window.removeEventListener("blur", release);
-    };
-  }, []);
-  const byId = new Map(projects.map((p) => [p.id, p]));
-  const { all, away } = useSidebarThreads(realProjects, chatId);
-  const unread = useUnread(chatId, all);
-  const search = useThreadSearch(all, byId);
-  const triage = async (c: ChatSummary, action: ChatTriage) => {
-    // Every list holding it: its project's, and Scratchpad's for a scratch chat.
-    const triaged = (entry: ChatSummary): ChatSummary => {
-      switch (action.kind) {
-        case "archive":
-          return { ...entry, archivedAt: Date.now() };
-        case "unread":
-          return { ...entry, markedUnread: true };
-        case "auto-settle":
-          return { ...entry, autoSettleOff: action.enabled ? undefined : true };
-        default:
-          return {
-            ...entry,
-            settledAt: action.kind === "settle" ? Date.now() : undefined,
-            autoSettled: undefined,
-            snoozedAt: action.kind === "snooze" ? Date.now() : undefined,
-            snoozedUntil: action.kind === "snooze" ? action.until : undefined,
-          };
-      }
-    };
-    patchChat(c, triaged);
-    try {
-      await api.triageProjectChat(c.id, action);
-    } finally {
-      refreshChats(c);
-    }
-  };
-  /** Every list holding it: its project's, and Scratchpad's for a scratch chat. */
-  const patchChat = (c: ChatSummary, patch: (c: ChatSummary) => ChatSummary) =>
-    qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
-      list?.map((entry) => (entry.id === c.id ? patch(entry) : entry)),
-    );
-  const refreshChats = (c: ChatSummary) =>
-    qc.invalidateQueries({
-      queryKey: scratchIds.has(c.projectId)
-        ? ["project-chats"]
-        : ["project-chats", c.projectId],
-    });
-  const failed = (e: unknown) =>
-    setGroupError(e instanceof Error ? e.message : String(e));
-  const renameThread = async (c: ChatSummary, title: string) => {
-    patchChat(c, (entry) => ({ ...entry, title, renamed: true }));
-    try {
-      await api.renameProjectChat(c.id, title);
-    } catch (e) {
-      failed(e);
-    } finally {
-      void refreshChats(c);
-    }
-  };
-  const regenerateTitle = async (c: ChatSummary) => {
-    setRegenerating((ids) => new Set(ids).add(c.id));
-    setGroupError(undefined);
-    try {
-      const named = await api.regenerateProjectChatTitle(c.id);
-      patchChat(c, (entry) => ({
-        ...entry,
-        title: named.title,
-        renamed: undefined,
-      }));
-    } catch (e) {
-      failed(e);
-    } finally {
-      setRegenerating((ids) => {
-        const next = new Set(ids);
-        next.delete(c.id);
-        return next;
-      });
-      void refreshChats(c);
-    }
-  };
-  /** Forks from the latest answer and opens the fork on that answer's agent. */
-  const fork = async (c: ChatSummary) => {
-    setGroupError(undefined);
-    try {
-      const forked = await api.forkProjectChat(c.id);
-      forkThreadSettings(c.id, forked.id, forked.provider);
-      await refreshChats(c);
-      onChat(forked);
-    } catch (e) {
-      failed(e);
-    }
-  };
-  const threadAction = (c: ChatSummary, action: ThreadMenuAction) => {
-    const p = byId.get(c.projectId);
-    switch (action.kind) {
-      case "new":
-        if (p) onNew(p);
-        return;
-      case "fork":
-        return void fork(c);
-      case "settle":
-        return settle(c);
-      case "rename":
-        return setRenamingThread(c.id);
-      case "regenerate":
-        return void regenerateTitle(c);
-      case "triage":
-        return void triage(c, action.triage).catch(failed);
-    }
-  };
   /** Right-click on a thread anywhere in the sidebar. */
   const threadMenu = (c: ChatSummary) => (
     <ThreadMenu
@@ -642,7 +500,7 @@ export function ProjectSidebar({
       regenerating={regenerating.has(c.id)}
       autoSettleDays={autoSettleDays}
       settleKeys={c.id === chatId ? settleKeys : undefined}
-      onAction={(action) => threadAction(c, action)}
+      onAction={(action) => actions.act(c, action)}
     />
   );
   // Inside a card the row's own click and keys would open the thread.
@@ -658,44 +516,14 @@ export function ProjectSidebar({
         schema={threadTitleSchema}
         placeholder="Thread name"
         className={className}
-        onCancel={() => setRenamingThread(undefined)}
+        onCancel={() => actions.setRenaming(undefined)}
         onSubmit={(title) => {
-          setRenamingThread(undefined);
-          void renameThread(c, title);
+          actions.setRenaming(undefined);
+          void actions.rename(c, title);
         }}
       />
     </span>
   );
-  const sections = chatActivitySections(all, now);
-  const attention = sections.active.filter(
-    (c) => c.waiting || unread(c),
-  ).length;
-  const mark = sections.active.some((c) => c.waiting)
-    ? "waiting"
-    : attention > 0
-      ? "unread"
-      : undefined;
-  useEffect(() => onAttention?.(mark), [mark]);
-  useEffect(() => {
-    // A plain browser preview has no desktop bridge.
-    void api?.setBadge?.(attention)?.catch(() => {});
-  }, [attention]);
-  const open = (c: ChatSummary) => {
-    onChat(c);
-  };
-  /** Settling the open thread moves on to its neighbour in activity, or a new thread. */
-  const settle = (c: ChatSummary) => {
-    if (c.id === chatId) {
-      const index = sections.active.findIndex((a) => a.id === c.id);
-      const rest = sections.active.filter((a) => a.id !== c.id);
-      const next = rest[Math.min(Math.max(index, 0), rest.length - 1)];
-      const p = byId.get(c.projectId);
-      if (next) onChat(next);
-      else if (p) onNew(p);
-    }
-    void triage(c, { kind: "settle" });
-  };
-  const shortcuts = view === "activity" && !search.query;
   const drafts =
     view === "activity"
       ? activityDrafts(
@@ -705,19 +533,6 @@ export function ProjectSidebar({
           chatId,
         )
       : [];
-  settleOpen.current = () => {
-    const c = sections.active.find((a) => a.id === chatId);
-    if (!c || c.running || c.waiting) return false;
-    settle(c);
-    return true;
-  };
-  jumpTo.current = (index) => {
-    const c = sections.active[index];
-    if (!shortcuts || !c) return false;
-    open(c);
-    return true;
-  };
-
   const threadRow = (c: ChatSummary, withProject = false) => {
     const stale =
       now - c.updated > STALE_AFTER &&
@@ -725,7 +540,7 @@ export function ProjectSidebar({
       !c.running &&
       !c.waiting &&
       !unread(c);
-    if (renamingThread === c.id)
+    if (actions.renaming === c.id)
       return (
         <div key={c.id} className="sb-thread-row">
           {renameInput(c, "sb-group-input sb-thread-input")}
@@ -1209,7 +1024,7 @@ export function ProjectSidebar({
                 )}
               </div>
             </div>
-            {renamingThread === c.id ? (
+            {actions.renaming === c.id ? (
               renameInput(c, "sb-group-input sb-card-title-input")
             ) : (
               <ThreadTitle
@@ -1257,7 +1072,7 @@ export function ProjectSidebar({
           onKeyDown={rowKeys(() => open(c))}
         >
           <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-          {renamingThread === c.id ? (
+          {actions.renaming === c.id ? (
             renameInput(c, "sb-group-input sb-compact-title-input")
           ) : (
             <ThreadTitle
@@ -1457,7 +1272,7 @@ export function ProjectSidebar({
           </IconButton>
         </div>
       </div>
-      {groupError && <p className="sb-note error">{groupError}</p>}
+      {error && <p className="sb-note error">{error}</p>}
       {!folds.folded.projects && renderFolder(groups.tree)}
       {!folds.folded.projects && !realProjects.length && (
         <p className="sb-note">Add a project folder to get started.</p>
