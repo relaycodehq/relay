@@ -100,6 +100,60 @@ export function projectFolderTree(
   sort(root);
   return root;
 }
+/** Every group in the tree, in the order it shows them. */
+export function groupPaths(tree: ProjectFolderNode): string[] {
+  const paths: string[] = [];
+  (function collect(node: ProjectFolderNode) {
+    for (const folder of node.folders) {
+      paths.push(folder.path);
+      collect(folder);
+    }
+  })(tree);
+  return paths;
+}
+/** Where a moved project lands: in a group, or beside another project. */
+export type ProjectPlace =
+  | { kind: "project"; id: string; where: "before" | "after" }
+  | { kind: "folder"; path: string };
+/**
+ * The group a project moved to `place` goes in, and the project it goes
+ * before; null puts it after the group's last. Beside another project it
+ * joins that project's group. Undefined when that project isn't listed.
+ */
+export function projectPlacement(
+  list: Pick<Project, "id" | "folder">[],
+  id: string,
+  place: ProjectPlace,
+): { folder: string; before: string | null } | undefined {
+  if (place.kind === "folder") return { folder: place.path, before: null };
+  const others = list.filter((p) => p.id !== id);
+  const index = others.findIndex((p) => p.id === place.id);
+  if (index < 0) return undefined;
+  const folder = others[index].folder ?? "";
+  const before =
+    place.where === "before"
+      ? place.id
+      : (others.slice(index + 1).find((p) => (p.folder ?? "") === folder)?.id ??
+        null);
+  return { folder, before };
+}
+/**
+ * The sibling group `path` goes before when it's dropped beside `target`,
+ * by `paths`' order; null puts it after its last sibling.
+ */
+export function groupBefore(
+  paths: string[],
+  path: string,
+  target: { path: string; where: "before" | "after" },
+): string | null {
+  if (target.where === "before") return target.path;
+  const parent = parentGroup(path);
+  return (
+    paths
+      .slice(paths.indexOf(target.path) + 1)
+      .find((p) => p !== path && parentGroup(p) === parent) ?? null
+  );
+}
 /**
  * Moves a project into `folder`, placed before `before` or, without one,
  * after the folder's last project. Other projects keep their relative order.
