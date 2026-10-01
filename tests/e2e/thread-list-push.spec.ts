@@ -81,6 +81,9 @@ test("keeps thread lists current without asking for them", async () => {
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 1400, height: 900 });
     await expect(page.getByText("Thread 0.3")).toBeVisible();
+    // Launch reads every list once, 3s in, to drop stored drafts of threads
+    // that are gone (lib/thread-storage-sweep); that's not polling.
+    await page.waitForTimeout(4_000);
     // Counts what the window asks the desktop for, by method.
     await app.evaluate(({ ipcMain }) => {
       const handlers = (
