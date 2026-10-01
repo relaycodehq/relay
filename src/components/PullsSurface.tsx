@@ -29,7 +29,9 @@ import { usePullSelection } from "../lib/usePullSelection";
 import { usePullsRepo } from "../lib/usePullsRepo";
 import { useSavedWorkspace } from "../lib/useSavedWorkspace";
 import { useStoredFlag } from "../lib/useStoredFlag";
-// In the order stylesheets were loaded before this was split, which the cascade follows.
+// In the order ReviewSurface imported them, so their stylesheets keep their place in the
+// cascade. Its tea-signin.css now comes later, through ProjectShell's SignIn; nothing it
+// overlaps with sits in between.
 import { RoomPanel } from "./RoomPanel";
 import { RoomInvitationDialog } from "./RoomInvitationDialog";
 import { Loading, Modal } from "./ui";
