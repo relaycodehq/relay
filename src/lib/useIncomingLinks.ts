@@ -4,7 +4,7 @@ import type { Bootstrap } from "../../shared/types";
 import { api } from "./api";
 import type { NavigationLock } from "./navigation-lock";
 import type { ShellNavigation } from "./useShellNavigation";
-import type { SignIn } from "./useSignIn";
+import type { SignInFlow } from "./useSignIn";
 
 /**
  * Links Relay is asked to open, at launch or later: an invitation to a
@@ -14,7 +14,7 @@ import type { SignIn } from "./useSignIn";
 export function useIncomingLinks(
   boot: Bootstrap | undefined,
   { inbox, setInbox }: ShellNavigation,
-  signIn: SignIn,
+  signIn: SignInFlow,
   lock: NavigationLock,
   setError: (error: unknown) => void,
 ) {

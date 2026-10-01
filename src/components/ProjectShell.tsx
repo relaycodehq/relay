@@ -124,7 +124,7 @@ export default function ProjectShell() {
     else return false;
     return true;
   }
-  async function linked() {
+  async function linkProject() {
     if (!project) return;
     const id = project.id;
     await signIn.withAccount(async () => {
@@ -377,7 +377,7 @@ export default function ProjectShell() {
                           .open(pr)
                           .then(() => opens.askAbout(target, pr))
                           .catch(setError),
-                      onConnect: () => void linked(),
+                      onConnect: () => void linkProject(),
                       onSettings: () => settings.setOpen(true),
                     }}
                   />
@@ -453,7 +453,7 @@ export default function ProjectShell() {
           <p>
             Connect Gitea to match this folder’s Git remote and choose a PR.
           </p>
-          <button onClick={() => void linked()}>Connect Gitea</button>
+          <button onClick={() => void linkProject()}>Connect Gitea</button>
         </Modal>
       )}
       {starts.picking && (

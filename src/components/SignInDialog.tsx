@@ -1,6 +1,6 @@
 import type { Bootstrap } from "../../shared/types";
 import { api } from "../lib/api";
-import type { SignIn as SignInFlow } from "../lib/useSignIn";
+import type { SignInFlow } from "../lib/useSignIn";
 import { SignIn } from "../ReviewSurface";
 import { Modal } from "./ui";
 

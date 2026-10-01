@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Account, Bootstrap } from "../../shared/types";
 import { api } from "./api";
 
-export type SignIn = ReturnType<typeof useSignIn>;
+export type SignInFlow = ReturnType<typeof useSignIn>;
 
 /** Signing in to Gitea, through tea's login or the sign-in form, and out again. */
 export function useSignIn(boot: Bootstrap | undefined) {
