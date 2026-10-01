@@ -1143,7 +1143,7 @@ export async function runClaudeProject(
         },
       });
     }
-    if (!options.compact && !options.adopt)
+    if (!options.compact)
       options.onControl?.({
         steer: async (text, id, steerImages) => {
           if (!steerable || options.signal.aborted)

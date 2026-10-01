@@ -297,7 +297,22 @@ if (args.includes("--permission-prompt-tool")) {
       } else if (text.includes("fixture background task")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.
-        setTimeout(() => finish("The background task finished."), 300);
+        setTimeout(
+          () =>
+            text.includes("fixture background task to steer")
+              ? emit({
+                  type: "stream_event",
+                  uuid: "fixture-event",
+                  session_id: "fixture-claude",
+                  event: {
+                    type: "content_block_delta",
+                    index: 0,
+                    delta: { type: "text_delta", text: "Looking into it." },
+                  },
+                })
+              : finish("The background task finished."),
+          300,
+        );
       } else if (text.includes("fixture signed out")) {
         // As Claude Code ends a turn whose OAuth refresh failed.
         emit({

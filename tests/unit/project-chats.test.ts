@@ -541,6 +541,54 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     ["assistant", false, "Claude found the same cache guard."],
   ]);
 }, 15000);
+it("steers a turn Claude started by itself", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(
+    chat.id,
+    claude("@claude Start the fixture background task to steer"),
+  );
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await chats.get(chat.id)).messages.find((m) => m.unprompted)?.body,
+      ).toBe("Looking into it."),
+    { timeout: 8000 },
+  );
+  await chats.send(chat.id, {
+    ...claude("@claude Use the blue one"),
+    delivery: "steer",
+  });
+  await vi.waitFor(
+    async () => {
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+      expect((await chats.get(chat.id)).messages).toHaveLength(5);
+    },
+    { timeout: 8000 },
+  );
+  expect(
+    (await chats.get(chat.id)).messages.map((m) => [
+      m.role,
+      m.body,
+      !!m.unprompted,
+      !!m.steered,
+    ]),
+  ).toEqual([
+    [
+      "user",
+      "@claude Start the fixture background task to steer",
+      false,
+      false,
+    ],
+    ["assistant", "Started the background task.", false, false],
+    ["assistant", "Looking into it.", true, false],
+    ["user", "@claude Use the blue one", false, true],
+    ["assistant", "Noted: Use the blue one", false, false],
+  ]);
+}, 15000);
 it.each([
   ["reads it mid-turn", "fixture wait for steer", "Looking into it."],
   ["reads it after finishing", "fixture late steer", "Done before your note."],
