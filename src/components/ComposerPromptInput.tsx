@@ -1,10 +1,8 @@
-import { type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { Slice } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { TextSelection } from "@tiptap/pm/state";
 import {
   useEffect,
   useImperativeHandle,
@@ -16,16 +14,8 @@ import {
 } from "react";
 import { pastesAfter } from "../../shared/pasted-texts";
 import { promptContent } from "../lib/prompt-content";
-import {
-  deleteImagePills,
-  lastPaste,
-  pasteAt,
-  pasteIndex,
-  pasteNodes,
-  quotesIn,
-  spacedTags,
-} from "../lib/prompt-pills";
-import { positionAt, promptText, serialize } from "../lib/prompt-text";
+import { pasteIndex, quotesIn } from "../lib/prompt-pills";
+import { promptText, serialize } from "../lib/prompt-text";
 import { ImagePeek, PEEK_DELAY } from "./ImagePeek";
 import type { DictationTarget } from "../lib/dictation/session";
 import { draftChips } from "../lib/thread-storage";
@@ -34,15 +24,20 @@ import {
   endDictation,
   updateDictation,
 } from "./composer-prompt/dictation";
+import {
+  inlinePaste,
+  insertPaste,
+  insertQuote,
+  insertSkill,
+  insertTags,
+  removeImage,
+  removePaste,
+  replaceText,
+  type SkillPick,
+} from "./composer-prompt/edits";
 import { promptExtensions } from "./composer-prompt/extensions";
 import type { ImageChip } from "./composer-prompt/image-pill";
-export type { ImageChip };
-export interface SkillPick {
-  token: string;
-  label: string;
-  start: number;
-  end: number;
-}
+export type { ImageChip, SkillPick };
 export interface PromptInputHandle {
   insertSkill: (skill: SkillPick) => void;
   /** Replaces a range of the draft with plain text, or removes it, and puts the caret after it. */
@@ -63,25 +58,6 @@ export interface PromptInputHandle {
   inlinePaste: (index: number) => void;
   /** Where dictated words go: live at the caret, greyed while they may still change. */
   dictation: DictationTarget;
-}
-/** Puts tags in where the pointer is, or at the caret without one. */
-function insertTags(
-  editor: Editor,
-  tags: JSONContent[],
-  point?: { left: number; top: number },
-) {
-  const { doc } = editor.state;
-  const hit = point && editor.view.posAtCoords(point)?.pos;
-  // The pointer can land between blocks; the tags go in the nearest one.
-  const at =
-    hit === undefined
-      ? editor.state.selection.from
-      : TextSelection.near(doc.resolve(hit)).from;
-  const $at = doc.resolve(at);
-  const nodes = spacedTags(tags, $at.nodeBefore, $at.nodeAfter);
-  editor.view.dispatch(closeHistory(editor.state.tr));
-  editor.chain().focus().insertContentAt(at, nodes).run();
-  editor.view.dispatch(closeHistory(editor.state.tr));
 }
 /** The full passage shown while a quote pill is hovered. */
 interface QuoteTip {
@@ -344,34 +320,10 @@ export function ComposerPromptInput({
         if (!editor) return;
         labels.current[pick.token] = pick.label;
         chips.skills.save(labels.current);
-        const from = positionAt(editor.state.doc, pick.start),
-          to = positionAt(editor.state.doc, pick.end);
-        editor.view.dispatch(closeHistory(editor.state.tr));
-        editor
-          .chain()
-          .focus()
-          .insertContentAt({ from, to }, [
-            {
-              type: "relaySkill",
-              attrs: { token: pick.token, label: pick.label },
-            },
-            { type: "text", text: " " },
-          ])
-          .run();
-        editor.view.dispatch(closeHistory(editor.state.tr));
+        insertSkill(editor, pick);
       },
-      insertText({ start, end, text }) {
-        if (!editor) return;
-        const range = {
-          from: positionAt(editor.state.doc, start),
-          to: positionAt(editor.state.doc, end),
-        };
-        const chain = editor.chain().focus();
-        // ProseMirror has no empty text nodes; removing is a delete.
-        (text
-          ? chain.insertContentAt(range, { type: "text", text })
-          : chain.deleteRange(range)
-        ).run();
+      insertText(range) {
+        if (editor) replaceText(editor, range);
       },
       insertFiles(paths, point) {
         if (!editor || !paths.length) return;
@@ -392,69 +344,20 @@ export function ComposerPromptInput({
         );
       },
       removeImage(n) {
-        if (!editor) return;
-        const tr = deleteImagePills(editor.state.tr, n);
-        if (tr.docChanged) editor.view.dispatch(closeHistory(tr));
+        if (editor) removeImage(editor, n);
       },
       insertQuote(quote) {
         if (!editor || !quote) return;
         quotes.current = [...new Set([...quotesIn(editor.state.doc), quote])];
         chips.quotes.save(quotes.current);
-        // After any selection rather than over it: the quote came from the thread.
-        editor.view.dispatch(closeHistory(editor.state.tr));
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(editor.state.selection.to, {
-            type: "relayQuote",
-            attrs: { text: quote },
-          })
-          .run();
-        editor.view.dispatch(closeHistory(editor.state.tr));
+        insertQuote(editor, quote);
       },
-      insertPaste(pasted) {
-        if (!editor) return false;
-        const n = lastPaste(editor.state.doc);
-        const before = editor.state.doc;
-        editor.view.dispatch(closeHistory(editor.state.tr));
-        editor
-          .chain()
-          .focus()
-          .insertContent({
-            type: "relayPaste",
-            attrs: { n: n + 1, text: pasted },
-          })
-          .run();
-        editor.view.dispatch(closeHistory(editor.state.tr));
-        // The length limit rejects the transaction rather than truncating it.
-        return editor.state.doc !== before;
-      },
+      insertPaste: (pasted) => !!editor && insertPaste(editor, pasted),
       removePaste(index) {
-        const found = editor && pasteAt(editor.state.doc, index);
-        if (!found) return;
-        editor.view.dispatch(
-          closeHistory(
-            editor.state.tr.delete(found.pos, found.pos + found.node.nodeSize),
-          ),
-        );
+        if (editor) removePaste(editor, index);
       },
       inlinePaste(index) {
-        const found = editor && pasteAt(editor.state.doc, index);
-        if (!found) return;
-        const nodes = pasteNodes(
-          editor.state.schema,
-          String(found.node.attrs.text),
-        );
-        editor.view.dispatch(
-          closeHistory(
-            editor.state.tr.replaceWith(
-              found.pos,
-              found.pos + found.node.nodeSize,
-              nodes,
-            ),
-          ),
-        );
-        editor.commands.focus();
+        if (editor) inlinePaste(editor, index);
       },
       dictation: {
         begin: () => editor?.isDestroyed === false && beginDictation(editor),
