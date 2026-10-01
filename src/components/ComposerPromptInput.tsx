@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import StarterKit from "@tiptap/starter-kit";
-import { Slice, type Node as PMNode } from "@tiptap/pm/model";
+import { Slice } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -31,6 +31,15 @@ import {
 } from "../lib/image-refs";
 import { formatSize } from "../lib/file-tree";
 import { promptContent } from "../lib/prompt-content";
+import {
+  deleteImagePills,
+  lastPaste,
+  pasteAt,
+  pasteIndex,
+  pasteNodes,
+  quotesIn,
+  spacedTags,
+} from "../lib/prompt-pills";
 import {
   fileMarkdown,
   positionAt,
@@ -330,17 +339,6 @@ export const ImageTag = Node.create<object, ImageStorage>({
     };
   },
 });
-/** The nth paste pill and where it sits. */
-export function pasteAt(doc: PMNode, index: number) {
-  let found: { node: PMNode; pos: number } | undefined,
-    seen = 0;
-  doc.descendants((node, pos) => {
-    if (found) return false;
-    if (node.type.name === "relayPaste" && seen++ === index)
-      found = { node, pos };
-  });
-  return found;
-}
 /** Puts tags in where the pointer is, or at the caret without one. */
 function insertTags(
   editor: Editor,
@@ -355,16 +353,7 @@ function insertTags(
       ? editor.state.selection.from
       : TextSelection.near(doc.resolve(hit)).from;
   const $at = doc.resolve(at);
-  // Tags keep a space on each side: two paths touching would read as one.
-  const before = $at.nodeBefore,
-    after = $at.nodeAfter;
-  const space = { type: "text", text: " " };
-  const nodes: JSONContent[] = tags.flatMap((tag, i) => [
-    ...(i ? [space] : []),
-    tag,
-  ]);
-  if (before && !/\s$/.test(before.text ?? "")) nodes.unshift(space);
-  if (!/^\s/.test(after?.text ?? "")) nodes.push(space);
+  const nodes = spacedTags(tags, $at.nodeBefore, $at.nodeAfter);
   editor.view.dispatch(closeHistory(editor.state.tr));
   editor.chain().focus().insertContentAt(at, nodes).run();
   editor.view.dispatch(closeHistory(editor.state.tr));
@@ -505,11 +494,7 @@ export function ComposerPromptInput({
             event.target.closest(".composer-quote-remove")
           )
         ) {
-          let index = 0;
-          view.state.doc.descendants((other, pos) => {
-            if (other.type.name === "relayPaste" && pos < nodePos) index++;
-          });
-          callbacks.current.onOpenPaste?.(index);
+          callbacks.current.onOpenPaste?.(pasteIndex(view.state.doc, nodePos));
           return true;
         }
         if (
@@ -719,27 +704,12 @@ export function ComposerPromptInput({
       },
       removeImage(n) {
         if (!editor) return;
-        const { doc, tr } = editor.state;
-        doc.descendants((node, pos) => {
-          if (node.type.name !== "relayImage" || node.attrs.n !== n) return;
-          // The space put in beside the pill goes with it.
-          const end = pos + node.nodeSize,
-            $pos = doc.resolve(pos);
-          const before = doc.textBetween($pos.start(), pos, "\n", "x");
-          const spare =
-            doc.textBetween(end, Math.min(end + 1, $pos.end())) === " " &&
-            /(^|\s)$/.test(before);
-          tr.delete(tr.mapping.map(pos), tr.mapping.map(end + (spare ? 1 : 0)));
-        });
+        const tr = deleteImagePills(editor.state.tr, n);
         if (tr.docChanged) editor.view.dispatch(closeHistory(tr));
       },
       insertQuote(quote) {
         if (!editor || !quote) return;
-        const present: string[] = [];
-        editor.state.doc.descendants((node) => {
-          if (node.type.name === "relayQuote") present.push(node.attrs.text);
-        });
-        quotes.current = [...new Set([...present, quote])];
+        quotes.current = [...new Set([...quotesIn(editor.state.doc), quote])];
         chips.quotes.save(quotes.current);
         // After any selection rather than over it: the quote came from the thread.
         editor.view.dispatch(closeHistory(editor.state.tr));
@@ -755,10 +725,7 @@ export function ComposerPromptInput({
       },
       insertPaste(pasted) {
         if (!editor) return false;
-        let n = 0;
-        editor.state.doc.descendants((node) => {
-          if (node.type.name === "relayPaste") n = Math.max(n, node.attrs.n);
-        });
+        const n = lastPaste(editor.state.doc);
         const before = editor.state.doc;
         editor.view.dispatch(closeHistory(editor.state.tr));
         editor
@@ -785,13 +752,10 @@ export function ComposerPromptInput({
       inlinePaste(index) {
         const found = editor && pasteAt(editor.state.doc, index);
         if (!found) return;
-        const { schema } = editor.state;
-        const nodes = String(found.node.attrs.text)
-          .split("\n")
-          .flatMap((line, i) => [
-            ...(i ? [schema.nodes.hardBreak.create()] : []),
-            ...(line ? [schema.text(line)] : []),
-          ]);
+        const nodes = pasteNodes(
+          editor.state.schema,
+          String(found.node.attrs.text),
+        );
         editor.view.dispatch(
           closeHistory(
             editor.state.tr.replaceWith(

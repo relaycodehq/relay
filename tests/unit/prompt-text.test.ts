@@ -7,9 +7,9 @@ import {
   Paste,
   Quote,
   Skill,
-  pasteAt,
 } from "../../src/components/ComposerPromptInput";
 import { promptContent } from "../../src/lib/prompt-content";
+import { pasteAt } from "../../src/lib/prompt-pills";
 import { positionAt, promptText, serialize } from "../../src/lib/prompt-text";
 import { pasteMarkdown } from "../../shared/pasted-texts";
 
