@@ -18,17 +18,13 @@ import type { ChangedFile, Progress } from "../../shared/types";
 import type { ChangeGroup, TriageResult } from "../../shared/triage";
 import { Modal } from "./ui";
 import { agentName } from "../../shared/agents";
+import type { FileSelection } from "../lib/usePullSelection";
 
 type Row =
   | { type: "file"; file: ChangedFile; grouped: boolean }
   | { type: "group"; group: ChangeGroup }
   | { type: "label"; text: string }
   | { type: "fold"; count: number };
-export interface FileSelection {
-  path: string | null;
-  /** Explicit navigation reveals the file; bulk review keeps the list in place. */
-  reveal: boolean;
-}
 interface Props {
   checks?: ProjectCheckState | null;
   files: ChangedFile[];

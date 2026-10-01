@@ -1,7 +1,7 @@
 import type { Bootstrap } from "../../shared/types";
 import { api } from "../lib/api";
 import type { SignInFlow } from "../lib/useSignIn";
-import { SignIn } from "../ReviewSurface";
+import { SignIn } from "./SignIn";
 import { Modal } from "./ui";
 
 /** The Gitea sign-in form, which also waits out the Keychain's saved login. */

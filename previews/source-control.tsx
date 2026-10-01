@@ -8,7 +8,7 @@ import "../src/styles.css";
 import "../src/components/projects.css";
 import { initAppearance } from "../src/lib/appearance";
 import { Settings } from "../src/components/Settings";
-import { SignIn } from "../src/ReviewSurface";
+import { SignIn } from "../src/components/SignIn";
 import { Modal } from "../src/components/ui";
 import {
   defaultDevOpsSettings,

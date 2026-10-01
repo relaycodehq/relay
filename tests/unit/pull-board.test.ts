@@ -3,6 +3,7 @@ import {
   buildBoard,
   needsYou,
   projectFor,
+  pullsLocation,
   verdictOf,
   type BoardInput,
 } from "../../src/lib/pull-board";
@@ -202,4 +203,34 @@ it("asks for you on requests and assignments, and on your own PRs only once revi
   expect(needsYou(mine, null)).toBe(false);
   expect(needsYou(mine, "changes")).toBe(true);
   expect(needsYou(draft, "approved")).toBe(false);
+});
+
+it("names the page's place after the project a repository is cloned to", () => {
+  const projectOf = (r: { owner: string; name: string }) =>
+    r.owner === "web" && r.name === "portal"
+      ? project("Portal", "web", "portal")
+      : undefined;
+  const ref = { owner: "web", name: "portal", number: 7 };
+  expect(pullsLocation(ref, "Fix it", "other/repo", projectOf)).toEqual({
+    repo: { key: "web/portal", label: "Portal" },
+    pull: { number: 7, title: "Fix it" },
+  });
+  expect(
+    pullsLocation({ ...ref, owner: "Ops" }, undefined, null, projectOf),
+  ).toEqual({
+    repo: { key: "ops/portal", label: "Ops/portal" },
+    pull: { number: 7, title: undefined },
+  });
+  expect(pullsLocation(null, undefined, "web/portal", projectOf).repo).toEqual({
+    key: "web/portal",
+    label: "Portal",
+  });
+  expect(pullsLocation(null, undefined, "ops/tools", projectOf)).toEqual({
+    repo: { key: "ops/tools", label: "ops/tools" },
+    pull: null,
+  });
+  expect(pullsLocation(null, undefined, null, projectOf)).toEqual({
+    repo: null,
+    pull: null,
+  });
 });
