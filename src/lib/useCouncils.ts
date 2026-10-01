@@ -13,6 +13,7 @@ import { councilWorking } from "../../shared/ultraplan";
 import { findingCode } from "../components/DeepReview";
 import { api } from "./api";
 import { saveSentSettings } from "./composer-settings";
+import type { ThreadWrites } from "./useThreadWrites";
 
 /** A thread's deep review and ultraplans: their state, and what the thread can do with them. */
 export function useCouncils({
@@ -20,9 +21,7 @@ export function useCouncils({
   projectId,
   data,
   refetch,
-  busy,
-  setBusy,
-  setError,
+  writes: { busy, run, setError },
   onCreated,
   onSent,
 }: {
@@ -30,9 +29,7 @@ export function useCouncils({
   projectId: string;
   data?: ProjectChatData;
   refetch: () => Promise<unknown>;
-  busy: boolean;
-  setBusy: (busy: boolean) => void;
-  setError: (error: unknown) => void;
+  writes: ThreadWrites;
   onCreated: (c: ChatSummary) => Promise<void>;
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
@@ -58,9 +55,7 @@ export function useCouncils({
   const reviewThread = useRef<ChatSummary | undefined>(undefined);
   async function startReview(config: DeepReviewStart) {
     if (busy) return false;
-    setBusy(true);
-    setError(undefined);
-    try {
+    return run(async () => {
       const target =
         reviewThread.current ??
         (await api.createProjectChat(projectId, { kind: "review" }));
@@ -76,20 +71,12 @@ export function useCouncils({
       onSent();
       await onCreated(target);
       await qc.invalidateQueries({ queryKey: ["project-chats", projectId] });
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   // Straight to the lead; whatever the composer holds stays there.
   async function fixFindings(findings: Finding[]) {
     if (!chat || !review || !findings.length || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
+    await run(async () => {
       await api.sendProjectChat(chat.id, {
         id: crypto.randomUUID(),
         body: fixRequest(review.lead.provider, findings),
@@ -102,11 +89,7 @@ export function useCouncils({
       });
       onSent();
       await refetch();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   function setFindingStatus(id: string, status: "open" | "dismissed") {
     if (!chat) return;
@@ -117,12 +100,10 @@ export function useCouncils({
   }
   function resume(start: (chatId: string) => Promise<unknown>) {
     if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    void start(chat.id)
-      .then(() => refetch())
-      .catch(setError)
-      .finally(() => setBusy(false));
+    void run(async () => {
+      await start(chat.id);
+      await refetch();
+    });
   }
   return {
     review,

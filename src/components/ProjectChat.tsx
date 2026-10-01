@@ -80,6 +80,7 @@ import { useChatPresence } from "../lib/useChatPresence";
 import { useBackgroundWork } from "../lib/useBackgroundWork";
 import { useThreadScroll } from "../lib/useThreadScroll";
 import { useMessageActions } from "../lib/useMessageActions";
+import { useThreadWrites } from "../lib/useThreadWrites";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -229,8 +230,8 @@ export function ProjectChat({
     leadAnswered,
   } = useChatThread(chat, rootId);
   const [composerRevision, setComposerRevision] = useState(0);
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState<unknown>();
+  const writes = useThreadWrites(),
+    { busy, error, setError, run } = writes;
   const { peers, sharePresence, setSharePresence } = useChatPresence(
     chat,
     viewing,
@@ -313,9 +314,7 @@ export function ProjectChat({
     projectId: project.id,
     data: history.data,
     refetch: history.refetch,
-    busy,
-    setBusy,
-    setError,
+    writes,
     onCreated,
     onSent: () => followAnswer(),
   });
@@ -392,16 +391,10 @@ export function ProjectChat({
     if (!chat || busy) return;
     const settings = composer.current?.agentSettings();
     if (!(await confirmSwitch(settings?.provider))) return;
-    setBusy(true);
-    setError(undefined);
-    try {
+    await run(async () => {
       await api.resumeProjectChat(chat.id, settings);
       await history.refetch();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   async function send(
     value: ComposedSend,
@@ -411,9 +404,7 @@ export function ProjectChat({
     if (value.side) return askAside(value, dispatch);
     if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
     dispatch?.();
-    setBusy(true);
-    setError(undefined);
-    try {
+    return run(async () => {
       const target =
         chat ??
         created.current ??
@@ -445,13 +436,7 @@ export function ProjectChat({
         await onCreated(target);
       } else await history.refetch();
       await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   /** `/btw`: its thread opens, and the main thread's draft and attachments wait. */
   async function askAside(value: ComposedSend, dispatch?: () => void) {
@@ -462,9 +447,7 @@ export function ProjectChat({
       return false;
     }
     dispatch?.();
-    setBusy(true);
-    setError(undefined);
-    try {
+    return run(async () => {
       const question = crypto.randomUUID();
       await api.sendProjectChat(chat.id, {
         ...value,
@@ -473,19 +456,11 @@ export function ProjectChat({
       });
       await history.refetch();
       setRootId(question);
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   async function returnToComposer(input: ProjectChatSend) {
     if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
+    await run(async () => {
       const parent = input.parentId
         ? replyRoot(messages, input.parentId).id
         : null;
@@ -544,11 +519,7 @@ export function ProjectChat({
       await api.projectChatQueueAction(chat.id, "remove", input.id);
       await history.refetch();
       void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   async function queueAction(
     action: "remove" | "steer" | "move",
@@ -556,17 +527,11 @@ export function ProjectChat({
     index?: number,
   ) {
     if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
+    await run(async () => {
       await api.projectChatQueueAction(chat.id, action, messageId, index);
       await history.refetch();
       void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
   const [draggingQueued, setDraggingQueued] = useState<string | null>(null);
   const [queueDrop, setQueueDrop] = useState<{
