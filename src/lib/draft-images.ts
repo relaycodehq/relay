@@ -31,6 +31,23 @@ export async function loadDraftImages(key: string): Promise<DraftImage[]> {
   }
 }
 
+/** Every draft key with screenshots saved. */
+export async function draftImageKeys(): Promise<string[]> {
+  const db = await database();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = db
+        .transaction("drafts")
+        .objectStore("drafts")
+        .getAllKeys();
+      request.onsuccess = () => resolve(request.result.map(String));
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function saveDraftImages(
   key: string,
   images: DraftImage[],

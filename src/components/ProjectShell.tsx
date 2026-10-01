@@ -56,6 +56,7 @@ import {
   writeDraft,
 } from "../lib/drafts";
 import { openThread, threadDraftKey } from "../lib/thread-storage";
+import { sweepThreadStorage } from "../lib/thread-storage-sweep";
 import {
   loadComposerSettings,
   saveComposerSettings,
@@ -127,6 +128,15 @@ export default function ProjectShell() {
     refetchInterval: 5000,
     enabled: !!boot.data,
   });
+  // Off the startup path; it asks for every thread list itself.
+  useEffect(() => {
+    if (!projects.data) return;
+    const sweep = setTimeout(
+      () => void sweepThreadStorage(api).catch(() => {}),
+      3000,
+    );
+    return () => clearTimeout(sweep);
+  }, [!!projects.data]);
   const [selected, setSelected] = useState(() =>
       localStorage.getItem("relay-project-id"),
     ),
