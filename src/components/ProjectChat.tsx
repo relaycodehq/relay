@@ -157,7 +157,7 @@ export function ProjectChat({
   const session = useSessionCommands({
     handle,
     shown,
-    root: root?.id ?? null,
+    root,
     running,
     onCommand,
   });
@@ -328,13 +328,11 @@ export function ProjectChat({
         ) : (
           <ThreadComposer
             key={`${id}:${root?.id ?? "main"}:${queue.restored}`}
-            chat={chat}
-            threadId={id}
+            handle={handle}
             project={project}
             scope={scope}
-            handleRef={composer}
+            composerRef={composer}
             thread={thread}
-            handle={handle}
             councils={councils}
             background={background}
             session={session}

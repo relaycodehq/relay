@@ -7,7 +7,7 @@ import type {
 } from "../../shared/projects";
 import type { ChatThread } from "../lib/useChatThread";
 import type { Councils } from "../lib/useCouncils";
-import type { MessageActions } from "../lib/useMessageActions";
+import type { ThreadMessageActions } from "../lib/useMessageActions";
 import type { QueuedMessageActions } from "../lib/useQueuedMessages";
 import type { ThreadScroll } from "../lib/useThreadScroll";
 import type { ThreadWorktree } from "../lib/useThreadWorktree";
@@ -90,7 +90,7 @@ export function ThreadMessages({
   /** Where the view's refs and scroll handler land. */
   view: ThreadScroll;
   councils: Councils;
-  actions: MessageActions;
+  actions: ThreadMessageActions;
   queue: QueuedMessageActions;
   worktree: ThreadWorktree;
   busy: boolean;

@@ -23,8 +23,8 @@ export function useSessionCommands({
   handle: ThreadHandle;
   /** The open conversation's messages. */
   shown: ChatMessage[];
-  /** The side conversation open, if any; it compacts its own session. */
-  root: string | null;
+  /** The side conversation's first message, while one is open; it compacts its own session. */
+  root?: ChatMessage;
   running: boolean;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
@@ -38,7 +38,7 @@ export function useSessionCommands({
     if (!chat) return;
     setError(undefined);
     void api
-      .compactProjectChat(chat.id, root, instructions)
+      .compactProjectChat(chat.id, root?.id ?? null, instructions)
       .then(() => refetch())
       .catch(setError);
   }

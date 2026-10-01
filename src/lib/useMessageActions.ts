@@ -20,7 +20,7 @@ import type { ThreadHandle } from "./useThreadHandle";
 import { worktreeDiff } from "./useThreadWorktree";
 import { workingTreeKey } from "./working-tree-key";
 
-export type MessageActions = ReturnType<typeof useMessageActions>;
+export type ThreadMessageActions = ReturnType<typeof useMessageActions>;
 
 /**
  * What a thread's messages can do. Stable handlers let memoized messages skip

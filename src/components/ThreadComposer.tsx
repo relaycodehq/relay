@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { agentName } from "../../shared/agents";
 import type { ComposedSend } from "../../shared/compose-send";
-import type { ChatScope, ChatSummary, Project } from "../../shared/projects";
+import type { ChatScope, Project } from "../../shared/projects";
 import { threadContextAgent } from "../../shared/recipient";
 import { api } from "../lib/api";
 import { writeDraft } from "../lib/drafts";
@@ -80,13 +80,11 @@ function AttachedContext({
  * agent's session holds.
  */
 export function ThreadComposer({
-  chat,
-  threadId,
+  handle: { chat, id, busy, setError },
   project,
   scope,
-  handleRef,
+  composerRef,
   thread: { root, shown, running },
-  handle: { busy, setError },
   councils: { reviewing, planning },
   background: { agentBatch, pending, stopped, leftBehind },
   session: { runCommand, context, compacting, showContext, compact },
@@ -100,14 +98,11 @@ export function ThreadComposer({
   onOpenAgent,
   onOpenTurnDiff,
 }: {
-  chat?: ChatSummary;
-  /** The thread's id, or its draft's before the first message. */
-  threadId: string;
+  handle: ThreadHandle;
   project: Project;
   scope: ChatScope;
-  handleRef: Ref<ComposerHandle>;
+  composerRef: Ref<ComposerHandle>;
   thread: ChatThread;
-  handle: ThreadHandle;
   councils: Councils;
   background: BackgroundWork;
   session: SessionCommands;
@@ -125,7 +120,7 @@ export function ThreadComposer({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
 }) {
   const qc = useQueryClient();
-  const draftKey = threadDraftKey(threadId, root?.id);
+  const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
   const placeholder =
     (chat && awayPlaceholder(chat)) ??
@@ -144,14 +139,14 @@ export function ThreadComposer({
                 : undefined);
   return (
     <ProjectComposer
-      handleRef={handleRef}
+      handleRef={composerRef}
       onCommand={runCommand}
       // A side conversation keeps its own agent and opens on the one that wrote its message.
-      settingsKey={root ? `${threadId}:${root.id}` : threadId}
+      settingsKey={root ? `${id}:${root.id}` : id}
       inherit={
         root
           ? {
-              settingsKey: threadId,
+              settingsKey: id,
               provider:
                 root.role === "assistant" || root.side
                   ? root.provider
