@@ -2,7 +2,7 @@
 // the state and agents on an Activity card.
 import { CalendarClock, CircleAlert } from "lucide-react";
 import { agentName } from "../../shared/agents";
-import { shortAge, wakeLabel } from "../../shared/chat-activity";
+import { elapsedLabel, shortAge, wakeLabel } from "../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../shared/projects";
 import { agentsSince } from "../../shared/waiting";
 import { useNow } from "../lib/useNow";
@@ -155,15 +155,8 @@ export function CardState({
   );
 }
 
-/** "26s", "4m 12s", "1h 3m" — ticks on its own so only this label re-renders. */
+/** Ticks on its own so only this label re-renders. */
 function Elapsed({ since }: { since: number }) {
   const now = useNow(1000);
-  const seconds = Math.max(0, Math.floor((now - since) / 1000));
-  const text =
-    seconds < 60
-      ? `${seconds}s`
-      : seconds < 3600
-        ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-        : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m`;
-  return <span className="sb-elapsed">{text}</span>;
+  return <span className="sb-elapsed">{elapsedLabel(since, now)}</span>;
 }

@@ -19,6 +19,7 @@ import {
 } from "lucide-react-native";
 import {
   chatActivitySections,
+  elapsedLabel,
   shortAge,
   snoozePresets,
   wakeLabel,
@@ -376,17 +377,8 @@ function CardState({
 
 /** " 26s", " 4m 12s", " 1h 3m"; ticks by itself so only this label redraws. */
 function Elapsed({ since }: { since: number }) {
-  const seconds = Math.max(0, Math.floor((useNow(1000) - since) / 1000));
-  return (
-    <Text>
-      {" "}
-      {seconds < 60
-        ? `${seconds}s`
-        : seconds < 3600
-          ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-          : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m`}
-    </Text>
-  );
+  const now = useNow(1000);
+  return <Text> {elapsedLabel(since, now)}</Text>;
 }
 
 const styles = StyleSheet.create({

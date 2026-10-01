@@ -215,6 +215,14 @@ export function sentLabel(sent: number, now: Date): string {
   return `${date}, ${time}`;
 }
 
+/** How long a running turn has gone, by the second: "26s", "4m 12s", "1h 3m". */
+export function elapsedLabel(since: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m`;
+}
+
 /** Compact age for sidebar rows: "now", "4m", "3h", "2d", "5w". */
 export function shortAge(then: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now - then) / 60_000));
