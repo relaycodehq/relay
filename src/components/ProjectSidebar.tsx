@@ -43,6 +43,7 @@ import {
 import {
   chatActivitySections,
   chatIsEmpty,
+  movedSinceSeen,
   shortAge,
   wakeLabel,
 } from "../../shared/chat-activity";
@@ -151,7 +152,7 @@ function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
   }, [focused, current?.id, current?.updated]);
   return (c: ChatSummary) =>
     (c.id !== chatId || (!focused && !c.running)) &&
-    c.updated > Math.max(since, seen[c.id] ?? 0, c.seenAt ?? 0);
+    movedSinceSeen(c, since, seen);
 }
 
 /** The row that expands or collapses a long thread list. */

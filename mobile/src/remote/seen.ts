@@ -2,6 +2,7 @@
 // keeps it per device: a thread is unread once it updates after its last visit.
 import { useEffect, useSyncExternalStore } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { movedSinceSeen } from "../../../shared/chat-activity";
 import type { RemoteChatSummary } from "../../../shared/remote";
 
 const seenKey = "relay-thread-seen";
@@ -36,8 +37,7 @@ export function markSeen(id: string, updated: number) {
   void AsyncStorage.setItem(seenKey, JSON.stringify(seen));
 }
 
-const unread = (c: Pick<RemoteChatSummary, "id" | "updated" | "seenAt">) =>
-  c.updated > Math.max(since, seen[c.id] ?? 0, c.seenAt ?? 0);
+const unread = (c: Pick<RemoteChatSummary, "id" | "updated" | "seenAt">) => movedSinceSeen(c, since, seen);
 
 /** Whether a thread has news for this phone; re-renders when that changes. */
 export function useUnread() {

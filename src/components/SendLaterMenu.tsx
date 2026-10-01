@@ -2,27 +2,9 @@ import { ContextMenu } from "@base-ui/react/context-menu";
 import { Popover } from "@base-ui/react/popover";
 import { CalendarClock } from "lucide-react";
 import { useRef, useState, type ReactElement } from "react";
-import { atHour, wakeLabel } from "../../shared/chat-activity";
+import { sendLaterPresets, wakeLabel } from "../../shared/chat-activity";
 import { PickTime } from "./PickTime";
 import "./send-later.css";
-
-interface Preset {
-  label: string;
-  at: number;
-}
-
-export function sendLaterPresets(now: Date): Preset[] {
-  const presets: Preset[] = [
-    { label: "In 30 minutes", at: now.getTime() + 1_800_000 },
-    { label: "In 1 hour", at: now.getTime() + 3_600_000 },
-    { label: "In 3 hours", at: now.getTime() + 10_800_000 },
-  ];
-  // Only offer "this evening" while it is still meaningfully ahead.
-  if (now.getHours() < 17)
-    presets.push({ label: "This evening", at: atHour(now, 0, 18) });
-  presets.push({ label: "Tomorrow morning", at: atHour(now, 1, 9) });
-  return presets;
-}
 
 // Its own component so the times are worked out when the menu opens, not on
 // every keystroke in the composer that holds the closed menu.

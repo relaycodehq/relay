@@ -106,6 +106,29 @@ export function snoozePresets(now: Date): SnoozePreset[] {
   return presets;
 }
 
+/**
+ * Whether a thread moved since it was read: on this device (`seen`, by id),
+ * anywhere (`seenAt`), or before this device first looked (`since`).
+ */
+export const movedSinceSeen = (
+  chat: Pick<ChatSummary, "id" | "updated" | "seenAt">,
+  since: number,
+  seen: Record<string, number>,
+) => chat.updated > Math.max(since, seen[chat.id] ?? 0, chat.seenAt ?? 0);
+
+/** Send later's quick choices, on the desktop and the phone. */
+export function sendLaterPresets(now: Date): { label: string; at: number }[] {
+  const presets = [
+    { label: "In 30 minutes", at: now.getTime() + 1_800_000 },
+    { label: "In 1 hour", at: now.getTime() + 3_600_000 },
+    { label: "In 3 hours", at: now.getTime() + 10_800_000 },
+  ];
+  if (now.getHours() < 17)
+    presets.push({ label: "This evening", at: atHour(now, 0, 18) });
+  presets.push({ label: "Tomorrow morning", at: atHour(now, 1, 9) });
+  return presets;
+}
+
 /** "17:30", "tomorrow 9:00", "Mon 9:00", "Oct 3, 9:00". */
 export function wakeLabel(until: number, now: Date): string {
   const wake = new Date(until);
