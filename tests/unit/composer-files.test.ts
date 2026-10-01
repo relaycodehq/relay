@@ -1,11 +1,9 @@
 import { expect, it } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import {
-  FileTag,
-  promptContent,
-  promptText,
-} from "../../src/components/ComposerPromptInput";
+import { FileTag } from "../../src/components/ComposerPromptInput";
+import { promptContent } from "../../src/lib/prompt-content";
+import { promptText } from "../../src/lib/prompt-text";
 
 const schema = getSchema([StarterKit, FileTag]);
 

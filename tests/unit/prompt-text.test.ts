@@ -8,11 +8,9 @@ import {
   Quote,
   Skill,
   pasteAt,
-  position,
-  promptContent,
-  promptText,
-  serialize,
 } from "../../src/components/ComposerPromptInput";
+import { promptContent } from "../../src/lib/prompt-content";
+import { positionAt, promptText, serialize } from "../../src/lib/prompt-text";
 import { pasteMarkdown } from "../../shared/pasted-texts";
 
 const schema = getSchema([StarterKit, Skill, Quote, Paste, FileTag, ImageTag]);
@@ -66,9 +64,9 @@ describe("promptText", () => {
   });
 });
 
-describe("position", () => {
+describe("positionAt", () => {
   it("maps text offsets to document positions, past a pill once inside it", () => {
-    const at = (offsets: number[]) => offsets.map((o) => position(mixed, o));
+    const at = (offsets: number[]) => offsets.map((o) => positionAt(mixed, o));
     expect(at([0, 1, 2])).toEqual([1, 2, 3]);
     // Inside or at the end of "$fix" lands after the skill.
     expect(at([3, 5, 6])).toEqual([4, 4, 4]);
@@ -83,11 +81,11 @@ describe("position", () => {
       { type: "relayQuote", attrs: { text: "x" } },
       text("cd"),
     );
-    expect([3, 8, 9].map((o) => position(quoted, o))).toEqual([4, 4, 5]);
+    expect([3, 8, 9].map((o) => positionAt(quoted, o))).toEqual([4, 4, 5]);
   });
 
   it("puts the caret at the start of an empty draft", () => {
-    expect(position(schema.nodeFromJSON(promptContent("", {})), 4)).toBe(1);
+    expect(positionAt(schema.nodeFromJSON(promptContent("", {})), 4)).toBe(1);
   });
 });
 

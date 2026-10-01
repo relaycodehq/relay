@@ -7,11 +7,9 @@ import {
   quoteLabel,
   unquote,
 } from "../../src/lib/composer-quotes";
-import {
-  Quote,
-  promptContent,
-  promptText,
-} from "../../src/components/ComposerPromptInput";
+import { Quote } from "../../src/components/ComposerPromptInput";
+import { promptContent } from "../../src/lib/prompt-content";
+import { promptText } from "../../src/lib/prompt-text";
 
 const schema = getSchema([
   StarterKit.configure({

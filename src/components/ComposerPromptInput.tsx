@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import StarterKit from "@tiptap/starter-kit";
-import { Slice, type Fragment, type Node as PMNode } from "@tiptap/pm/model";
+import { Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -17,14 +17,8 @@ import {
   type RefObject,
   type HTMLAttributes,
 } from "react";
+import { quoteLabel, quoteMarkdown } from "../lib/composer-quotes";
 import {
-  quoteBlock,
-  quoteLabel,
-  quoteMarkdown,
-  unquote,
-} from "../lib/composer-quotes";
-import {
-  pasteBlock,
   pastedLines,
   pasteMarkdown,
   pastesAfter,
@@ -36,6 +30,13 @@ import {
   shortImageName,
 } from "../lib/image-refs";
 import { formatSize } from "../lib/file-tree";
+import { promptContent } from "../lib/prompt-content";
+import {
+  fileMarkdown,
+  positionAt,
+  promptText,
+  serialize,
+} from "../lib/prompt-text";
 import { ImagePeek, PEEK_DELAY } from "./ImagePeek";
 import type { DictationTarget } from "../lib/dictation/session";
 import { draftChips } from "../lib/thread-storage";
@@ -217,7 +218,6 @@ export const FileTag = Node.create({
     return fileMarkdown(node.attrs.path);
   },
 });
-const fileMarkdown = (path: string) => "`" + path + "`";
 /** What an image pill shows; the screenshot itself stays with the composer. */
 export interface ImageChip {
   n: number;
@@ -330,124 +330,6 @@ export const ImageTag = Node.create<object, ImageStorage>({
     };
   },
 });
-const leaf = (node: PMNode) =>
-  node.type.name === "relaySkill"
-    ? node.attrs.token
-    : node.type.name === "relayImage"
-      ? imageToken(node.attrs.n)
-      : node.type.name === "relayFile"
-        ? fileMarkdown(node.attrs.path)
-        : node.type.name === "relayQuote"
-          ? quoteMarkdown(node.attrs.text)
-          : node.type.name === "relayPaste"
-            ? pasteMarkdown(node.attrs as PastedText)
-            : node.type.name === "hardBreak"
-              ? "\n"
-              : "";
-// A quote is a Markdown blockquote, so one that follows text on the same line
-// starts a line of its own; promptContent drops that break again.
-export function serialize(content: Fragment, end = content.size) {
-  let out = "",
-    first = true;
-  content.nodesBetween(0, end, (node, pos) => {
-    if (node.isTextblock) {
-      if (!first) out += "\n";
-      first = false;
-    } else if (node.isText) out += node.text!.slice(0, end - pos);
-    else if (node.isLeaf) {
-      if (node.type.name === "relayQuote" && out && !out.endsWith("\n"))
-        out += "\n";
-      out += leaf(node);
-    }
-  });
-  return out;
-}
-export const promptText = (doc: PMNode, end = doc.content.size) =>
-  serialize(doc.content, end);
-const text = promptText;
-export function position(doc: PMNode, offset: number) {
-  let result = 1,
-    found = false;
-  doc.descendants((node, pos) => {
-    if (found || !node.isLeaf) return;
-    const start = text(doc, pos).length,
-      value = node.isText ? node.text! : leaf(node);
-    if (offset >= start && offset <= start + value.length) {
-      result =
-        pos +
-        (node.isText ? offset - start : offset === start ? 0 : node.nodeSize);
-      found = true;
-    } else if (offset > start) result = pos + node.nodeSize;
-  });
-  return result;
-}
-/**
- * Rebuilds the editor document from the draft text. Skill tokens, blockquotes
- * and file paths only become pills when this draft registered them, so text
- * the user typed by hand stays text. Fenced pastes and `[Image #n]` always do:
- * nobody types those, and an agent would read the token as a screenshot anyway.
- */
-export function promptContent(
-  value: string,
-  labels: Record<string, string>,
-  quotes: string[] = [],
-  files: string[] = [],
-): JSONContent {
-  const nodes: JSONContent[] = [];
-  const plain = (chunk: string) => {
-    const pattern =
-      /(\n|\[Image #\d+\]|`(?:\/|[A-Za-z]:\\)[^`\n]*`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
-    let last = 0;
-    for (const m of chunk.matchAll(pattern)) {
-      if (m.index! > last)
-        nodes.push({ type: "text", text: chunk.slice(last, m.index) });
-      if (m[0] === "\n") nodes.push({ type: "hardBreak" });
-      else if (m[0].startsWith("[Image #"))
-        nodes.push({
-          type: "relayImage",
-          attrs: { n: Number(m[0].slice(8, -1)) },
-        });
-      else if (m[0].startsWith("`") && files.includes(m[0].slice(1, -1)))
-        nodes.push({ type: "relayFile", attrs: { path: m[0].slice(1, -1) } });
-      else if (
-        labels[m[0]] &&
-        (m.index === 0 || /\s/.test(chunk[m.index! - 1]))
-      )
-        nodes.push({
-          type: "relaySkill",
-          attrs: { token: m[0], label: labels[m[0]] },
-        });
-      else nodes.push({ type: "text", text: m[0] });
-      last = m.index! + m[0].length;
-    }
-    if (last < chunk.length)
-      nodes.push({ type: "text", text: chunk.slice(last) });
-  };
-  const quoted = (chunk: string) => {
-    let last = 0;
-    for (const m of chunk.matchAll(quoteBlock)) {
-      const quote = unquote(m[0]);
-      if (!quotes.includes(quote)) continue;
-      // The break promptText puts before a quote that follows text.
-      const joined = m.index! > 1 && chunk[m.index! - 2] !== "\n";
-      plain(chunk.slice(last, m.index! - (joined ? 1 : 0)));
-      nodes.push({ type: "relayQuote", attrs: { text: quote } });
-      last = m.index! + m[0].length;
-    }
-    plain(chunk.slice(last));
-  };
-  let last = 0;
-  for (const m of value.matchAll(pasteBlock)) {
-    quoted(value.slice(last, m.index));
-    nodes.push({
-      type: "relayPaste",
-      attrs: { n: Number(m[1]), text: m[3] },
-    });
-    last = m.index! + m[0].length;
-  }
-  quoted(value.slice(last));
-  return { type: "doc", content: [{ type: "paragraph", content: nodes }] };
-}
 /** The nth paste pill and where it sits. */
 export function pasteAt(doc: PMNode, index: number) {
   let found: { node: PMNode; pos: number } | undefined,
@@ -459,7 +341,6 @@ export function pasteAt(doc: PMNode, index: number) {
   });
   return found;
 }
-const content = promptContent;
 /** Puts tags in where the pointer is, or at the caret without one. */
 function insertTags(
   editor: Editor,
@@ -543,7 +424,7 @@ export function ComposerPromptInput({
         addProseMirrorPlugins() {
           return [
             new Plugin({
-              filterTransaction: (tr) => text(tr.doc).length <= 32000,
+              filterTransaction: (tr) => promptText(tr.doc).length <= 32000,
             }),
           ];
         },
@@ -574,7 +455,12 @@ export function ComposerPromptInput({
       ImageTag,
       ComposerDictation,
     ],
-    content: content(value, labels.current, quotes.current, files.current),
+    content: promptContent(
+      value,
+      labels.current,
+      quotes.current,
+      files.current,
+    ),
     // The composer remounts per thread, so opening one lands in its input.
     autofocus: "end",
     editorProps: {
@@ -591,8 +477,8 @@ export function ComposerPromptInput({
         if (plain === undefined) return false;
         // A pill copied within the draft, or from another, gets a new number.
         const fragment = view.state.schema.nodeFromJSON(
-          content(
-            pastesAfter(text(view.state.doc), plain),
+          promptContent(
+            pastesAfter(promptText(view.state.doc), plain),
             labels.current,
             quotes.current,
             files.current,
@@ -643,13 +529,13 @@ export function ComposerPromptInput({
     onUpdate({ editor }) {
       setTip(null);
       callbacks.current.onCursor(
-        text(editor.state.doc, editor.state.selection.from).length,
+        promptText(editor.state.doc, editor.state.selection.from).length,
       );
-      callbacks.current.onChange(text(editor.state.doc));
+      callbacks.current.onChange(promptText(editor.state.doc));
     },
     onSelectionUpdate({ editor }) {
       callbacks.current.onCursor(
-        text(editor.state.doc, editor.state.selection.from).length,
+        promptText(editor.state.doc, editor.state.selection.from).length,
       );
     },
   });
@@ -748,9 +634,9 @@ export function ComposerPromptInput({
     };
   }, [editor]);
   useEffect(() => {
-    if (editor && text(editor.state.doc) !== value)
+    if (editor && promptText(editor.state.doc) !== value)
       editor.commands.setContent(
-        content(value, labels.current, quotes.current, files.current),
+        promptContent(value, labels.current, quotes.current, files.current),
         { emitUpdate: false },
       );
   }, [value, editor]);
@@ -784,8 +670,8 @@ export function ComposerPromptInput({
         if (!editor) return;
         labels.current[pick.token] = pick.label;
         chips.skills.save(labels.current);
-        const from = position(editor.state.doc, pick.start),
-          to = position(editor.state.doc, pick.end);
+        const from = positionAt(editor.state.doc, pick.start),
+          to = positionAt(editor.state.doc, pick.end);
         editor.view.dispatch(closeHistory(editor.state.tr));
         editor
           .chain()
@@ -803,8 +689,8 @@ export function ComposerPromptInput({
       insertText({ start, end, text }) {
         if (!editor) return;
         const range = {
-          from: position(editor.state.doc, start),
-          to: position(editor.state.doc, end),
+          from: positionAt(editor.state.doc, start),
+          to: positionAt(editor.state.doc, end),
         };
         const chain = editor.chain().focus();
         // ProseMirror has no empty text nodes; removing is a delete.
