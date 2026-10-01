@@ -6,7 +6,6 @@ import type { ThinkerTask } from "../ultraplan";
 import { refSchema } from "../validation";
 import type { AgentWorktree, ChatWorktree } from "./worktrees";
 
-/** A project's sidebar name, typed in place. */
 export const threadTitleSchema = z
   .string()
   .trim()

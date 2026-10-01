@@ -23,6 +23,7 @@ export const projectTitle = (folder: string) =>
     .filter(Boolean)
     .map((word) => word[0]!.toUpperCase() + word.slice(1))
     .join(" ") || folder;
+/** A project's sidebar name, typed in place. */
 export const projectNameSchema = z
   .string()
   .trim()

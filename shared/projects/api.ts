@@ -310,7 +310,6 @@ export interface ProjectApi {
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
-  /** Recent commits on the checked-out branch, newest first. */
   onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
   /** A project's thread list, pushed whenever any of its threads reads differently. */
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
