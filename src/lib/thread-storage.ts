@@ -28,7 +28,7 @@ const REPLY = "chat-reply:",
 const SKILL_CHIPS = "skill-chips:",
   QUOTE_CHIPS = "quote-chips:",
   FILE_CHIPS = "file-chips:",
-  // Earlier versions kept pastes beside the draft; see ProjectComposer.
+  // Earlier versions kept pastes beside the draft; see useComposerDraft.
   PASTED_TEXTS = "pasted-texts:";
 // Per project: the thread it shows, and the unsent one it last showed.
 const OPEN_THREAD = "relay-project-chat:",
