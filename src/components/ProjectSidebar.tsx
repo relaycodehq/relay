@@ -27,51 +27,52 @@ import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
 import "./sidebar.css";
 
-export function ProjectSidebar({
-  initialView,
-  projects,
-  projectId,
-  chatId,
-  draftId,
-  account,
-  onChat,
-  onNew,
-  onPickNew,
-  onNewScratch,
-  onDraft,
-  onSendDraft,
-  onAdd,
-  onShared,
-  onSettings,
-  onAccount,
-  onInbox,
-  inbox,
-  onAttention,
-}: {
-  initialView?: SidebarView;
-  projects: Project[];
+/** What the main pane shows, so the sidebar marks it. */
+export interface SidebarShowing {
   projectId?: string;
   chatId?: string;
   /** The unsent thread that's open, when no thread is. */
   draftId?: string;
+  /** The Pull requests page. */
+  inbox?: boolean;
+}
+
+export function ProjectSidebar({
+  initialView,
+  projects,
+  showing: { projectId, chatId, draftId, inbox },
+  account,
+  onOpen,
+  onPickNew,
+  onNewScratch,
+  onSendDraft,
+  onAdd,
+  onShared,
+  onInbox,
+  onSettings,
+  onAccount,
+  onAttention,
+}: {
+  initialView?: SidebarView;
+  projects: Project[];
+  showing: SidebarShowing;
   account?: string;
-  onChat: (c: ChatSummary) => void;
-  onNew: (p: Project) => void;
+  /**
+   * Opens `chat` in `p`, or with `fresh` one of its unsent threads: a new
+   * one, or with a draft's id that draft.
+   */
+  onOpen: (p: Project, chat?: ChatSummary, fresh?: true | string) => void;
   /** New thread in a project still to be chosen. */
   onPickNew: () => void;
   onNewScratch: () => void;
-  /** Back to one of a project's unsent threads. */
-  onDraft: (p: Project, id: string) => void;
   /** Sends the open unsent thread's draft from its composer. */
   onSendDraft: () => void;
   onAdd: () => void;
   onShared: (p: Project) => void;
+  onInbox: () => void;
   /** Opens Settings, at `category` when given. */
   onSettings: (category?: SettingsCategory) => void;
   onAccount: () => void;
-  onInbox: () => void;
-  /** The Pull requests page is showing. */
-  inbox?: boolean;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
@@ -96,6 +97,11 @@ export function ProjectSidebar({
     queryFn: () => api.autoSettleDays(),
   }).data;
   const byId = new Map(projects.map((p) => [p.id, p]));
+  const openChat = (c: ChatSummary) => {
+    const p = byId.get(c.projectId);
+    if (p) onOpen(p, c);
+  };
+  const onNew = (p: Project) => onOpen(p, undefined, true);
   const { all, away } = useSidebarThreads(realProjects, chatId);
   const unread = useUnread(chatId, all);
   const search = useThreadSearch(all, byId);
@@ -105,7 +111,7 @@ export function ProjectSidebar({
     active: sections.active,
     projects: byId,
     scratch: scratchIds,
-    open: onChat,
+    open: openChat,
     onNew,
     setError,
   });
@@ -174,7 +180,7 @@ export function ProjectSidebar({
             hints={cmdHeld}
             shelves={shelves}
             draftId={draftId}
-            onDraft={onDraft}
+            onDraft={(p, id) => onOpen(p, undefined, id)}
             onSendDraft={onSendDraft}
           />
         ) : (
