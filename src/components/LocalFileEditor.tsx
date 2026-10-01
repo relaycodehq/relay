@@ -36,6 +36,7 @@ import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { useFileDiff } from "../lib/useFileDiff";
 import { useHoldNavigation } from "../lib/navigation-lock";
+import { indentedNewline } from "../lib/newline-indent";
 
 const keymap: EditorKeymap = [
   {
@@ -591,41 +592,13 @@ export default function LocalFileEditor({
               const { start, end } = selections[0];
               if (start.line !== end.line || start.character !== end.character)
                 return;
-              const lines = editor.getText().split(/\r?\n/);
-              const current = lines[start.line] ?? "";
-              const indent = current.match(/^[\t ]*/)?.[0] ?? "";
-              const unit = lines.some((v) => v.startsWith("\t"))
-                ? "\t"
-                : " ".repeat(
-                    lines.reduce(
-                      (width, value) =>
-                        Math.min(
-                          width,
-                          value.match(/^( +)\S/)?.[1].length ?? width,
-                        ),
-                      4,
-                    ),
-                  );
-              const before = current.slice(0, start.character);
-              const after = current.slice(start.character);
-              const extra = /[\{\[(]\s*$/.test(before) ? unit : "";
-              const eol = editor.getText().includes("\r\n") ? "\r\n" : "\n";
+              const { text: newText, caret } = indentedNewline(
+                editor.getText(),
+                start,
+              );
               event.preventDefault();
               event.stopPropagation();
-              editor.applyEdits([
-                {
-                  range: { start, end },
-                  newText:
-                    eol +
-                    indent +
-                    extra +
-                    (extra && /^\s*[}\])]/.test(after) ? eol + indent : ""),
-                },
-              ]);
-              const caret = {
-                line: start.line + 1,
-                character: (indent + extra).length,
-              };
+              editor.applyEdits([{ range: { start, end }, newText }]);
               editor.setSelections([
                 { start: caret, end: caret, direction: "none" },
               ]);
