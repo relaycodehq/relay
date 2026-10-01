@@ -119,7 +119,7 @@ export async function sendDraft(
     (await api.createProjectChat(
       project.id,
       scope,
-      scope.kind === "project" ? loadDraftWorkspace(id) : undefined,
+      scope.kind === "project" ? loadDraftWorkspace(id, project) : undefined,
     ));
   started.set(id, target);
   await api.sendProjectChat(target.id, {

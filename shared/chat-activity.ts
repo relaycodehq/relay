@@ -40,6 +40,12 @@ export function chatActivitySection(
 }
 
 export const DEFAULT_AUTO_SETTLE_DAYS = 3;
+/**
+ * How long a thread stays quiet after its agent committed before it settles.
+ * In Relay's own threads a shorter wait settled most of the ones you came
+ * back to with "still broken" a few minutes later.
+ */
+export const COMMIT_QUIET_MS = 15 * 60_000;
 
 type AutoSettled = Triaged &
   Pick<
@@ -52,21 +58,25 @@ type AutoSettled = Triaged &
     | "heldWakeups"
     | "stopped"
     | "worktree"
+    | "committedAt"
   >;
 
 /**
  * When a thread settles by itself, like T3 Code's auto-settle: once its PR
  * merged after the last activity, or after `days` without any; `days` null
- * turns both off. Undefined while anything is still going on in it or about
- * to, and after you moved it back by hand, until something newer happens.
+ * turns both off. `onCommit` also settles it once its latest turn committed
+ * and it stayed quiet for `COMMIT_QUIET_MS`.
+ * Undefined while anything is still going on in it or about to, and after
+ * you moved it back by hand, until something newer happens.
  */
 export function autoSettledAt(
   chat: AutoSettled,
   now: number,
   days: number | null,
+  onCommit = false,
 ): number | undefined {
   if (
-    days == null ||
+    (days == null && !onCommit) ||
     chat.archivedAt ||
     chat.autoSettleOff ||
     chat.running ||
@@ -80,6 +90,15 @@ export function autoSettledAt(
     chat.stopped
   )
     return undefined;
+  // The answer that committed is the latest activity; anything after it isn't.
+  if (
+    onCommit &&
+    chat.committedAt &&
+    chat.committedAt >= chat.updated &&
+    now - chat.committedAt >= COMMIT_QUIET_MS
+  )
+    return chat.committedAt;
+  if (days == null) return undefined;
   const merged = chat.worktree?.landed?.at;
   if (merged && merged > chat.updated) return merged;
   // Backdated to the last activity, so the shelf orders by when work stopped.

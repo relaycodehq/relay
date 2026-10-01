@@ -159,6 +159,7 @@ export default function ProjectShell() {
   const chatComposer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
+  const [settingsProject, setSettingsProject] = useState<string>();
   const [settings, setSettings] = useState(false),
     [settingsWhere, setSettingsWhere] = useState(""),
     [signin, setSignin] = useState(false),
@@ -1032,8 +1033,9 @@ export default function ProjectShell() {
               if (navigate(p)) setBrowseShared(true);
             }}
             onAttention={setAttention}
-            onSettings={(category) => {
+            onSettings={(category, projectId) => {
               setSettingsCategory(category);
+              setSettingsProject(projectId);
               setSettings(true);
             }}
             onAccount={() => {
@@ -1311,6 +1313,7 @@ export default function ProjectShell() {
           <Settings
             account={account ?? null}
             initialCategory={settingsCategory}
+            initialProject={settingsProject ?? project?.id}
             onWhere={setSettingsWhere}
             onClose={() => {
               setSettings(false);

@@ -3,7 +3,11 @@ import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
 import { ApiError, type Gitea } from "./gitea";
-import { projectTitle, type Project } from "../shared/projects";
+import {
+  projectTitle,
+  type Project,
+  type ProjectSettings,
+} from "../shared/projects";
 import {
   moveGroupInList,
   moveProjectInList,
@@ -79,6 +83,16 @@ export class Projects {
       project.automaticName = null;
     });
     return this.get(id);
+  }
+  /** Replaces what the project does its own way; an empty set follows the app again. */
+  async saveSettings(id: string, settings: ProjectSettings) {
+    this.get(id);
+    await this.store.update((s) => {
+      const project = s.projects!.find((p) => p.id === id)!;
+      if (Object.keys(settings).length) project.settings = settings;
+      else delete project.settings;
+    });
+    return withKind(this.get(id));
   }
   /** Group paths in sidebar order; alphabetical until one is dragged. */
   groups() {

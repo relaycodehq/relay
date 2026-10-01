@@ -69,6 +69,8 @@ import {
   loadDraftWorkspace,
   readDraft,
   saveDraftWorkspace,
+  clearDraftWorkspace,
+  projectWorkspace,
   writeDraft,
 } from "../lib/drafts";
 import { withAttachments } from "../lib/draft-attachments";
@@ -828,11 +830,16 @@ export function ProjectChat({
   const running = messages.some((m) => m.status === "streaming");
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
-    chat ? "checkout" : loadDraftWorkspace(id),
+    chat ? "checkout" : loadDraftWorkspace(id, project),
   );
+  // Until one is picked here, it follows the project's setting as that changes.
+  const projectDefault = projectWorkspace(project);
+  useEffect(() => {
+    if (!chat) setWorkspace(loadDraftWorkspace(id, project));
+  }, [projectDefault]);
   useEffect(() => {
     if (chat) return;
-    saveDraftWorkspace(id, workspace);
+    saveDraftWorkspace(id, workspace, project);
     onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
   const worktree = useQuery({
@@ -1180,7 +1187,7 @@ export function ProjectChat({
       }
       follow.current = true;
       if (!chat) {
-        saveDraftWorkspace(id, "checkout");
+        clearDraftWorkspace(id);
         startThreadSettings(id, target.id, recipient(value));
         await onCreated(target);
       } else await history.refetch();

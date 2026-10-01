@@ -72,6 +72,7 @@ import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
 import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
 import { currentBranchOrNull } from "./git";
+import { commitWatch } from "./turn-commit";
 import { commitEverything, headOf } from "./handoff/git";
 import {
   remoteRecentCalls,
@@ -477,7 +478,7 @@ export class ProjectChats {
     return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
   }
   list(projectId: string): ChatSummary[] {
-    this.projects.get(projectId);
+    const { settings } = this.projects.get(projectId);
     const chats = (this.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
@@ -491,7 +492,10 @@ export class ProjectChats {
     // Once for the list: it is read on every change to any of its threads.
     const live = this.pending();
     const now = Date.now();
-    const autoSettleDays = this.autoSettleDays();
+    const autoSettleDays =
+      settings?.autoSettleDays !== undefined
+        ? settings.autoSettleDays
+        : this.autoSettleDays();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
@@ -531,7 +535,12 @@ export class ProjectChats {
                 ...(pending.length ? { pending } : {}),
               }
             : c;
-        const settledAt = autoSettledAt(listed, now, autoSettleDays);
+        const settledAt = autoSettledAt(
+          listed,
+          now,
+          autoSettleDays,
+          settings?.settleOnCommit,
+        );
         return settledAt
           ? { ...listed, settledAt, autoSettled: true as const }
           : listed;
@@ -2588,6 +2597,7 @@ export class ProjectChats {
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
+    let commits: Awaited<ReturnType<typeof commitWatch>> | undefined;
     const watchWorktrees = watchAgentWorktrees(
       root,
       join(dirname(this.dir), "worktrees"),
@@ -2598,7 +2608,8 @@ export class ProjectChats {
         await this.persist(chat);
       },
     );
-    let point: string | undefined;
+    let point: string | undefined,
+      committed = false;
     try {
       const options = {
         onControl: (control: AgentControl) => {
@@ -2641,8 +2652,10 @@ export class ProjectChats {
         onActivity: (activity: AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
             projectTasks.record(root, chat.id, activity.label);
-          if (activity.kind === "command")
+          if (activity.kind === "command") {
             commands.set(activity.id, activity.label);
+            commits?.command(activity.label);
+          } else if (activity.kind === "file") commits?.edited();
           watchWorktrees(activity);
           answer.activity(activity);
         },
@@ -2687,6 +2700,14 @@ export class ProjectChats {
       const before = rules.records
         ? await (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
         : null;
+      if (before && !branch) {
+        const checkout = chat.worktree
+          ? await this.projects.root(chat.projectId)
+          : root;
+        commits = await commitWatch(
+          checkout === root ? [root] : [root, checkout],
+        );
+      }
       try {
         const body = await agentRuntime(provider).run({
           ...options,
@@ -2704,6 +2725,7 @@ export class ProjectChats {
             { edited: [...edited], commands: [...commands.values()] },
           );
           if (files.length) answer.message.changes = files;
+          committed = !!(await commits?.ended());
         }
       }
       const done = answer.message;
@@ -2751,6 +2773,7 @@ export class ProjectChats {
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
       chat.updated = ended.ended;
+      if (committed) chat.committedAt = ended.ended;
       answer.end();
       await this.save(chat);
       if (chat.shared) await this.deliver(chat).catch(() => {});

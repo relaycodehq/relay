@@ -106,14 +106,24 @@ export const saveDraftScope = (id: string, scope: ChatScope) =>
 export function clearDraftScope(id: string) {
   const { scope, workspace } = threadStorage(id);
   scope.clear();
-  workspace.save("checkout");
+  workspace.clear();
 }
 
-/** Where an unsent thread will work; the project folder by default. */
-export const loadDraftWorkspace = (id: string): ChatWorkspace =>
-  threadStorage(id).workspace.load();
-export const saveDraftWorkspace = (id: string, workspace: ChatWorkspace) =>
-  threadStorage(id).workspace.save(workspace);
+/** Where a project's new threads start unless one picks otherwise. */
+export const projectWorkspace = (project: Pick<Project, "settings">) =>
+  project.settings?.workspace ?? "checkout";
+/** Where an unsent thread will work; where its project says by default. */
+export const loadDraftWorkspace = (
+  id: string,
+  project: Pick<Project, "settings">,
+): ChatWorkspace => threadStorage(id).workspace.load(projectWorkspace(project));
+export const saveDraftWorkspace = (
+  id: string,
+  workspace: ChatWorkspace,
+  project: Pick<Project, "settings">,
+) => threadStorage(id).workspace.save(workspace, projectWorkspace(project));
+export const clearDraftWorkspace = (id: string) =>
+  threadStorage(id).workspace.clear();
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */
 export function forgetNewThread(id: string) {

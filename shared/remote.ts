@@ -120,6 +120,8 @@ export interface RemoteProject {
   folder?: string;
   scratch?: boolean;
   plain?: boolean;
+  /** Where its new threads start, when not the checkout. */
+  workspace?: import("./projects").ChatWorkspace;
 }
 
 /**

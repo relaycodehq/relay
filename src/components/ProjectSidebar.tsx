@@ -514,7 +514,7 @@ export function ProjectSidebar({
   onAdd: () => void;
   onShared: (p: Project) => void;
   /** Opens Settings, at `category` when given. */
-  onSettings: (category?: SettingsCategory) => void;
+  onSettings: (category?: SettingsCategory, projectId?: string) => void;
   onAccount: () => void;
   onInbox: () => void;
   /** The Pull requests page is showing. */
@@ -933,19 +933,27 @@ export function ProjectSidebar({
     }
   };
   /** Right-click on a thread anywhere in the sidebar. */
-  const threadMenu = (c: ChatSummary) => (
-    <ThreadMenu
-      chat={c}
-      projectName={byId.get(c.projectId)?.name}
-      projectPath={byId.get(c.projectId)?.path}
-      now={now}
-      unread={unread(c)}
-      regenerating={regenerating.has(c.id)}
-      autoSettleDays={autoSettleDays}
-      settleKeys={c.id === chatId ? settleKeys : undefined}
-      onAction={(action) => threadAction(c, action)}
-    />
-  );
+  const threadMenu = (c: ChatSummary) => {
+    const own = byId.get(c.projectId)?.settings;
+    return (
+      <ThreadMenu
+        chat={c}
+        projectName={byId.get(c.projectId)?.name}
+        projectPath={byId.get(c.projectId)?.path}
+        now={now}
+        unread={unread(c)}
+        regenerating={regenerating.has(c.id)}
+        autoSettleDays={
+          own?.autoSettleDays === undefined
+            ? autoSettleDays
+            : own.autoSettleDays
+        }
+        settleOnCommit={own?.settleOnCommit}
+        settleKeys={c.id === chatId ? settleKeys : undefined}
+        onAction={(action) => threadAction(c, action)}
+      />
+    );
+  };
   // Inside a card the row's own click and keys would open the thread.
   const renameInput = (c: ChatSummary, className: string) => (
     <span
@@ -1254,6 +1262,12 @@ export function ProjectSidebar({
         onClick={() => void api.writeClipboard(p.path)}
       >
         Copy path
+      </MenuAction>
+      <MenuAction
+        icon={<Settings2 size={13} />}
+        onClick={() => onSettings("projects", p.id)}
+      >
+        Project settings
       </MenuAction>
       <Menu.Separator className="sb-menu-separator" />
       <Menu.SubmenuRoot>

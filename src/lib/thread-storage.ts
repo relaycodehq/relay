@@ -93,16 +93,16 @@ export function threadStorage(id: string) {
       (saved) => chatScopeSchema.safeParse(saved).data ?? { kind: "project" },
       () => false,
     ),
-    /** Where an unsent thread will work; the project folder by default. */
+    /** Where an unsent thread will work, when picked for it rather than left to its project. */
     workspace: {
-      load: (): ChatWorkspace =>
+      load: (fallback: ChatWorkspace): ChatWorkspace =>
         chatWorkspaceSchema.safeParse(localStorage.getItem(WORKSPACE + unsent))
-          .data ?? "checkout",
-      save(workspace: ChatWorkspace) {
-        if (workspace === "checkout")
-          localStorage.removeItem(WORKSPACE + unsent);
+          .data ?? fallback,
+      save(workspace: ChatWorkspace, fallback: ChatWorkspace) {
+        if (workspace === fallback) localStorage.removeItem(WORKSPACE + unsent);
         else localStorage.setItem(WORKSPACE + unsent, workspace);
       },
+      clear: () => localStorage.removeItem(WORKSPACE + unsent),
     },
   };
 }

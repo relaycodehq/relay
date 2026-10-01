@@ -55,7 +55,16 @@ export default function NewThread() {
       );
   }, [picked, scratchId, remote]);
   const projectId = picked === "scratch" ? scratchId : picked;
-  const [workspace, setWorkspace] = useState<ChatWorkspace>("checkout");
+  const chosen = real.find((p) => p.id === picked);
+  // Each project starts where its settings say; a pick here holds for it.
+  const [workspaces, setWorkspaces] = useState<Record<string, ChatWorkspace>>(
+    {},
+  );
+  const workspace =
+    (picked && workspaces[picked]) || chosen?.workspace || "checkout";
+  const setWorkspace = (next: ChatWorkspace) => {
+    if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
+  };
   const [settings, setSettings] = useState<RemoteSettings>();
   const [models, setModels] = useState<NewThreadModels>({});
   const { desktop } = remote;
@@ -71,7 +80,6 @@ export default function NewThread() {
       live = false;
     };
   }, [desktop, settings]);
-  const chosen = real.find((p) => p.id === picked);
   const start = async ({ body, settings: using, images }: Outgoing) => {
     if (!projectId) throw new Error(scratchError ?? "Pick a project first.");
     const chat = await remote.desktop(

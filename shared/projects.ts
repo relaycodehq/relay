@@ -47,6 +47,7 @@ export interface Project {
   plain?: true;
   /** A Scratchpad chat's own folder in Relay's data, listed under Scratchpad instead of Projects. */
   scratch?: true;
+  settings?: ProjectSettings;
 }
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>
@@ -78,6 +79,18 @@ export type ChatScope = z.infer<typeof chatScopeSchema>;
 /** Where a new thread works: the project's own checkout, or a worktree of its own. */
 export const chatWorkspaceSchema = z.enum(["checkout", "worktree"]);
 export type ChatWorkspace = z.infer<typeof chatWorkspaceSchema>;
+/** What a project does its own way; anything unset follows the app's settings. */
+export const projectSettingsSchema = z
+  .object({
+    /** Where its new threads start. */
+    workspace: chatWorkspaceSchema.optional(),
+    /** Quiet days before its threads settle; null never. */
+    autoSettleDays: z.number().int().min(1).max(90).nullable().optional(),
+    /** Its threads settle once a turn ends with the agent's own commit. */
+    settleOnCommit: z.literal(true).optional(),
+  })
+  .strict();
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 /** A thread that works in its own git worktree, leaving the checkout alone. */
 export interface ChatWorktree {
   /** Unset until the first message makes the worktree. */
@@ -142,8 +155,10 @@ export interface ChatSummary {
   unsettledAt?: number;
   /** Never settled automatically; only the thread's menu turns it back on. */
   autoSettleOff?: true;
-  /** Live: settled by inactivity or a merged PR, not by hand; never persisted. */
+  /** Live: settled by inactivity, a merged PR or a commit, not by hand; never persisted. */
   autoSettled?: true;
+  /** When the latest turn that committed ended; see `settleOnCommit`. */
+  committedAt?: number;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** The `updated` this thread was last read up to, on the desktop or a phone. */
@@ -565,6 +580,7 @@ export interface ProjectApi {
   moveProjectGroup(path: string, before: string | null): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
   renameProject(id: string, name: string): Promise<Project>;
+  saveProjectSettings(id: string, settings: ProjectSettings): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;

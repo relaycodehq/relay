@@ -6,7 +6,10 @@ import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import { projectFolderSchema } from "../../shared/project-folders";
-import { projectNameSchema } from "../../shared/projects";
+import {
+  projectNameSchema,
+  projectSettingsSchema,
+} from "../../shared/projects";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { idSchema } from "../../shared/rooms";
 import { isSourceControlOn } from "../../shared/source-control";
@@ -78,6 +81,14 @@ export function projectHandlers(ctx: ApiContext) {
     ),
     renameProject: takes([idSchema, projectNameSchema], (id, name) =>
       projects.rename(id, name),
+    ),
+    saveProjectSettings: takes(
+      [idSchema, projectSettingsSchema],
+      async (id, settings) => {
+        const saved = await projects.saveSettings(id, settings);
+        projectChats.summariesChanged(id);
+        return saved;
+      },
     ),
     revealProject: takes([idSchema], (id) => openPath(projects.root(id))),
     projects: () => projects.list(ctx.login.client),

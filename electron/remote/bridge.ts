@@ -137,6 +137,7 @@ export class RemoteBridge {
           ...(p.folder ? { folder: p.folder } : {}),
           ...(p.scratch ? { scratch: true } : {}),
           ...(p.plain ? { plain: true } : {}),
+          ...(p.settings?.workspace ? { workspace: p.settings.workspace } : {}),
         })),
         chats: this.summaries(),
       };
