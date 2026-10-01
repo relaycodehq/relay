@@ -1,4 +1,4 @@
-// The desktop's usage ring and context meter (UsageRing, UsageMeters,
+// The desktop's usage meters and context meter (UsageMeters,
 // ContextWindowMeter), drawn from the same shared/provider-usage logic.
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -8,7 +8,6 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle, G } from "react-native-svg";
 import {
   paceGap,
   presentWindow,
@@ -68,56 +67,6 @@ function meters(usage: ProviderUsage | undefined): UsageMeter[] {
     usage?.windows.map((w) =>
       presentWindow(w, Date.now(), usage.activeHours),
     ) ?? []
-  );
-}
-
-/** Two rings, weekly outside and session inside, full while the limit is untouched. */
-export function UsageRing({
-  usage,
-  size = 20,
-}: {
-  usage?: ProviderUsage;
-  size?: number;
-}) {
-  const t = useTheme();
-  const list = meters(usage);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 20 20">
-      {(["weekly", "session"] as const).map((kind) => {
-        const radius = kind === "weekly" ? 8 : 5;
-        const circumference = 2 * Math.PI * radius;
-        const meter = list.find((m) => m.kind === kind);
-        const left = meter?.leftPercent ?? 0;
-        return (
-          <G key={kind}>
-            <Circle
-              cx={10}
-              cy={10}
-              r={radius}
-              fill="none"
-              strokeWidth={2}
-              stroke={t.border}
-            />
-            <Circle
-              cx={10}
-              cy={10}
-              r={radius}
-              fill="none"
-              strokeWidth={2}
-              stroke={paceColor(
-                meter?.pace ?? "ok",
-                kind === "session" ? t.accent : t.muted,
-              )}
-              strokeDasharray={`${circumference}`}
-              strokeDashoffset={circumference * (1 - left / 100)}
-              strokeLinecap="round"
-              rotation={-90}
-              origin="10, 10"
-            />
-          </G>
-        );
-      })}
-    </Svg>
   );
 }
 

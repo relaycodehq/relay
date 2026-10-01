@@ -370,16 +370,6 @@ export function comboWords(c: KeyCombo) {
     .join(" ");
 }
 
-/** `text` with its shortcut after `separator`, or alone when it has none. */
-export function useTitleWithShortcut(
-  id: ShortcutId,
-  text: string,
-  separator = " · ",
-) {
-  const label = useShortcutLabel(id);
-  return label ? text + separator + label : text;
-}
-
 /** For `aria-keyshortcuts`: "Meta+L". */
 export function ariaShortcut(id: ShortcutId) {
   return bindings(id)

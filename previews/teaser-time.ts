@@ -18,9 +18,7 @@ export const useTime = () => useSyncExternalStore(subscribe, () => now);
 
 // Components that tick on their own (elapsed labels, thinking words) read the
 // scene's time, not the machine's.
-const realNow = Date.now.bind(Date);
 Date.now = () => EPOCH + now;
-export { realNow };
 
 function publish(t: number) {
   now = t;

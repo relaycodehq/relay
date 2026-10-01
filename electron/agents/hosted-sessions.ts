@@ -10,7 +10,6 @@ let hosts: AgentHosts | undefined;
 export function hostAgents(agentHosts: AgentHosts | undefined) {
   hosts = agentHosts;
 }
-export const agentHosts = () => hosts;
 
 /**
  * Runs `open` in the agent host. Undefined when there is none or it fails,
