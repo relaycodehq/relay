@@ -247,11 +247,23 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(
       plugin.getByRole("button", { name: "Add a filter" }),
     ).toBeVisible();
-    // The default order reads by display name once the fields load.
+    // No order until one is set: Azure DevOps' own, most recently changed.
+    await expect(plugin).toContainText("Most recently changed first");
+    // The current sprint is a sort key like any field, first or last.
+    await plugin.getByRole("button", { name: "Add a field" }).click();
+    await plugin
+      .getByLabel("Sort field 1", { exact: true })
+      .fill("Current sprint");
+    await plugin.getByLabel("Sort field 1", { exact: true }).press("Enter");
+    await expect(plugin.getByLabel("Sort direction 1")).toHaveValue("desc");
     await expect(
-      plugin.getByLabel("Sort field 1", { exact: true }),
-    ).toHaveValue("Priority");
-    await plugin.getByText("This sprint first").scrollIntoViewIfNeeded();
+      plugin.getByLabel("Sort direction 1").locator("option:checked"),
+    ).toHaveText("First");
+    await plugin.getByRole("button", { name: "Add a field" }).click();
+    await plugin.getByLabel("Sort field 2", { exact: true }).fill("Priority");
+    await plugin.getByLabel("Sort field 2", { exact: true }).press("Enter");
+    await expect(plugin.getByLabel("Sort direction 2")).toHaveValue("asc");
+    await plugin.getByText("Sort by", { exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, { path: join(root, "settings-team.png") });
     await settings.getByRole("button", { name: "Close dialog" }).click();
 

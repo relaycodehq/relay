@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { X } from "lucide-react";
-import type {
-  DevOpsSettings,
-  FieldFilter,
-  SortKey,
-  WorkItemField,
+import {
+  currentSprintField,
+  type DevOpsSettings,
+  type FieldFilter,
+  type SortKey,
+  type WorkItemField,
 } from "../../../shared/devops";
-import { SettingsCard, SettingsRow, Switch } from "../SettingsCard";
+import { SettingsCard, SettingsRow } from "../SettingsCard";
 import { IconButton } from "../ui";
 import { CommitInput } from "./plugin-ui";
 
@@ -20,6 +21,7 @@ interface Props {
 }
 
 const fieldsList = "devops-fields";
+const currentSprint = "Current sprint";
 const list = (text: string) => [
   ...new Set(
     text
@@ -33,6 +35,7 @@ const list = (text: string) => [
 export function FieldSuggestions({ fields }: { fields?: WorkItemField[] }) {
   return (
     <datalist id={fieldsList}>
+      <option value={currentSprint}>In an iteration running today</option>
       {fields?.map((f) => (
         <option key={f.referenceName} value={f.name}>
           {f.referenceName}
@@ -50,18 +53,24 @@ function FieldInput({
   label,
   value,
   fields,
+  sprint,
   onCommit,
 }: {
   label: string;
   value: string;
   fields: WorkItemField[] | undefined;
+  /** Whether the current sprint counts, as it does for sorting. */
+  sprint?: boolean;
   onCommit: (field: string) => void;
 }) {
   const [unknown, setUnknown] = useState<string>();
   const lower = value.toLowerCase();
   // A saved reference name reads as its display name once the fields load.
   const shown =
-    fields?.find((f) => f.referenceName.toLowerCase() === lower)?.name ?? value;
+    value === currentSprintField
+      ? currentSprint
+      : (fields?.find((f) => f.referenceName.toLowerCase() === lower)?.name ??
+        value);
   return (
     <>
       {unknown && (
@@ -79,6 +88,14 @@ function FieldInput({
         value={shown}
         onCommit={(field) => {
           const lower = field.toLowerCase();
+          if (
+            sprint &&
+            (lower === currentSprint.toLowerCase() ||
+              lower === currentSprintField.toLowerCase())
+          ) {
+            setUnknown(undefined);
+            return onCommit(currentSprintField);
+          }
           const known =
             !field ||
             !fields ||
@@ -95,40 +112,53 @@ function FieldInput({
   );
 }
 
-/** The order your items and the team's come in: this sprint, then up to three fields. */
+/**
+ * The order your items and the team's come in: up to three fields, the
+ * current sprint among them if the team works in sprints.
+ */
 export function SortSection({ settings, save, fields }: Props) {
   const { sort } = settings;
-  const [adding, setAdding] = useState(false);
+  // The new row's field; it stays, typed in, until its save goes through.
+  const [adding, setAdding] = useState<string>();
   const setFields = (next: SortKey[]) =>
     void save({ sort: { ...sort, fields: next } });
-  const label = (i: number) =>
-    i || sort.currentSprint ? "Then by" : "Sort by";
+  const label = (i: number) => (i ? "Then by" : "Sort by");
+  // The sprint's items lead or trail; descending puts them first.
+  const directions = (field: string) =>
+    field === currentSprintField
+      ? { desc: "First", asc: "Last" }
+      : { asc: "Ascending", desc: "Descending" };
   return (
     <div className="plugin-section">
-      <h5>Order</h5>
+      <h4 className="settings-card-title">Order</h4>
       <SettingsCard>
-        <SettingsRow
-          label="This sprint first"
-          hint="Items in an iteration running today lead."
-        >
-          <Switch
-            label="This sprint's items first"
-            checked={sort.currentSprint}
-            onChange={(currentSprint) =>
-              void save({ sort: { ...sort, currentSprint } })
-            }
+        {!sort.fields.length && adding === undefined && (
+          <SettingsRow
+            label="Most recently changed first"
+            hint="Add a field, or the current sprint, to sort by it instead."
           />
-        </SettingsRow>
+        )}
         {sort.fields.map((k, i) => (
           <SettingsRow key={`${i}:${k.field}`} label={label(i)}>
             <FieldInput
               label={`Sort field ${i + 1}`}
               value={k.field}
               fields={fields}
+              sprint
               onCommit={(field) =>
                 setFields(
                   field
-                    ? sort.fields.map((o, j) => (j === i ? { ...o, field } : o))
+                    ? sort.fields.map((o, j) =>
+                        j === i
+                          ? {
+                              field,
+                              direction:
+                                field === currentSprintField
+                                  ? "desc"
+                                  : o.direction,
+                            }
+                          : o,
+                      )
                     : sort.fields.filter((_, j) => j !== i),
                 )
               }
@@ -150,8 +180,11 @@ export function SortSection({ settings, save, fields }: Props) {
                 )
               }
             >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
+              {Object.entries(directions(k.field)).map(([value, name]) => (
+                <option key={value} value={value}>
+                  {name}
+                </option>
+              ))}
             </select>
             <IconButton
               label={`Remove sort field ${i + 1}`}
@@ -161,30 +194,44 @@ export function SortSection({ settings, save, fields }: Props) {
             </IconButton>
           </SettingsRow>
         ))}
-        {adding && (
+        {adding !== undefined && (
           <SettingsRow label={label(sort.fields.length)}>
             <FieldInput
               label={`Sort field ${sort.fields.length + 1}`}
-              value=""
+              value={adding}
               fields={fields}
+              sprint
               onCommit={(field) => {
-                setAdding(false);
-                if (field)
-                  setFields([...sort.fields, { field, direction: "asc" }]);
+                setAdding(field);
+                if (!field) return;
+                const direction = field === currentSprintField ? "desc" : "asc";
+                void save({
+                  sort: {
+                    ...sort,
+                    fields: [...sort.fields, { field, direction }],
+                  },
+                }).then((ok) => ok && setAdding(undefined));
               }}
             />
+            <IconButton
+              label={`Remove sort field ${sort.fields.length + 1}`}
+              onClick={() => setAdding(undefined)}
+            >
+              <X size={13} />
+            </IconButton>
           </SettingsRow>
         )}
       </SettingsCard>
       <div className="plugin-section-foot">
-        {!adding && sort.fields.length < 3 && (
-          <button className="text-button" onClick={() => setAdding(true)}>
+        {adding === undefined && sort.fields.length < 3 && (
+          <button className="text-button" onClick={() => setAdding("")}>
             Add a field
           </button>
         )}
         <p className="plugin-note">
-          Items without the field go last. Ties keep the most recently changed
-          first. The team's items use the same order.
+          “Current sprint” is in the list too. Items without a field go last;
+          ties keep the most recently changed first. The team's items use the
+          same order.
         </p>
       </div>
     </div>
@@ -197,11 +244,13 @@ export function TeamSection({ settings, save, fields }: Props) {
   const [draft, setDraft] = useState<{ field: string; values: string[] }>();
   const setFilters = (filters: FieldFilter[]) =>
     void save({ team: { ...team, filters } });
+  // Like a new sort row, a new filter stays as typed until it's saved.
   const addDraft = (next: { field: string; values: string[] }) => {
-    if (next.field && next.values.length) {
-      setDraft(undefined);
-      setFilters([...team.filters, next]);
-    } else setDraft(next);
+    setDraft(next);
+    if (next.field && next.values.length)
+      void save({ team: { ...team, filters: [...team.filters, next] } }).then(
+        (ok) => ok && setDraft(undefined),
+      );
   };
   const filterRow = (
     f: { field: string; values: string[] },
@@ -231,7 +280,7 @@ export function TeamSection({ settings, save, fields }: Props) {
   );
   return (
     <div className="plugin-section">
-      <h5>Team</h5>
+      <h4 className="settings-card-title">Team</h4>
       <SettingsCard>
         <SettingsRow
           label="Members"

@@ -13,8 +13,17 @@ const fieldName = z
     "Enter a field name, like Priority or System.State.",
   );
 
+/**
+ * The sort key for "in an iteration running today", WIQL's own name for the
+ * current sprint. Descending puts those items first.
+ */
+export const currentSprintField = "@CurrentIteration";
+
 export const sortKeySchema = z
-  .object({ field: fieldName, direction: z.enum(["asc", "desc"]) })
+  .object({
+    field: z.union([z.literal(currentSprintField), fieldName]),
+    direction: z.enum(["asc", "desc"]),
+  })
   .strict();
 export type SortKey = z.infer<typeof sortKeySchema>;
 
@@ -53,13 +62,7 @@ export const devopsSettingsSchema = z
       })
       .strict(),
     /** One order for your items and the team's; ties keep the most recently changed first. */
-    sort: z
-      .object({
-        /** Items in an iteration running today lead. */
-        currentSprint: z.boolean(),
-        fields: z.array(sortKeySchema).max(3),
-      })
-      .strict(),
+    sort: z.object({ fields: z.array(sortKeySchema).max(3) }).strict(),
     /** The team's items: whose, and which of theirs. */
     team: z
       .object({
@@ -79,10 +82,7 @@ export const defaultDevOpsSettings: DevOpsSettings = {
   auth: "pat",
   hiddenProjects: [],
   filter: { enabled: false, model: "jev-latest", threshold: 0.5, keywords: {} },
-  sort: {
-    currentSprint: true,
-    fields: [{ field: "Microsoft.VSTS.Common.Priority", direction: "asc" }],
-  },
+  sort: { fields: [] },
   team: { members: [], filters: [] },
 };
 

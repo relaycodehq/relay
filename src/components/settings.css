@@ -193,10 +193,14 @@
 .setting-text {
   min-width: 0;
 }
-.setting-text h4 {
+/* A setting's title, and any title over a card of settings, like a plugin's
+   sections: one look everywhere in Settings. */
+.setting-text h4,
+.settings-card-title {
   margin: 0;
   font-size: 13px;
   font-weight: 500;
+  color: var(--text);
 }
 .setting-text h4 mark {
   color: inherit;

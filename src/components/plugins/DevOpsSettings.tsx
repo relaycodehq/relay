@@ -163,7 +163,7 @@ export function DevOpsSettings() {
   return (
     <>
       <div className="plugin-section">
-        <h5>Connection</h5>
+        <h4 className="settings-card-title">Connection</h4>
         <SettingsCard>
           <SettingsRow
             label="Organization"
@@ -263,7 +263,7 @@ export function DevOpsSettings() {
           <SortSection settings={settings} save={save} fields={fields.data} />
           <TeamSection settings={settings} save={save} fields={fields.data} />
           <div className="plugin-section">
-            <h5>Filter</h5>
+            <h4 className="settings-card-title">Filter</h4>
             <SettingsCard>
               <SettingsRow
                 label="Only the open project's items"
@@ -328,7 +328,7 @@ export function DevOpsSettings() {
             )}
           </div>
           <div className="plugin-section">
-            <h5>Projects</h5>
+            <h4 className="settings-card-title">Projects</h4>
             {!projects.data ? (
               <p className="setting-muted">Loading…</p>
             ) : !projects.data.length ? (

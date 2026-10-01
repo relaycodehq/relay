@@ -18,6 +18,9 @@
   border-bottom: 0;
 }
 .plugin-card {
+  /* The settings row is a flex row; folded, a card would shrink to its title. */
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: color-mix(in srgb, var(--toolbar) 35%, transparent);
@@ -117,13 +120,12 @@
   line-height: 1.5;
   color: var(--muted);
 }
-.plugin-section h5 {
-  margin: 16px 0 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
+.plugin-section {
+  margin-top: 24px;
+}
+/* The same gap as a block setting's title over its card. */
+.plugin-section > .settings-card-title {
+  margin-bottom: 12px;
 }
 
 /* Project mapping: tracked first with the Clockify project's colour. */

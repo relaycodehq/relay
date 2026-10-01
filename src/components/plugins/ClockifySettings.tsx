@@ -133,7 +133,7 @@ export function ClockifySettings() {
   return (
     <>
       <div className="plugin-section">
-        <h5>Connection</h5>
+        <h4 className="settings-card-title">Connection</h4>
         <SettingsCard>
           <SettingsRow label="API key" hint={keyHint}>
             {!connected || replacing ? (
@@ -230,7 +230,7 @@ export function ClockifySettings() {
         </SettingsCard>
       </div>
       <div className="plugin-section">
-        <h5>Your day</h5>
+        <h4 className="settings-card-title">Your day</h4>
         <SettingsCard>
           <SettingsRow
             label="Quiet minutes"
@@ -261,7 +261,7 @@ export function ClockifySettings() {
       </div>
       {connected && settings.workspaceId && (
         <div className="plugin-section">
-          <h5>Projects</h5>
+          <h4 className="settings-card-title">Projects</h4>
           {clockifyProjects.error ? (
             <ErrorBox
               error={clockifyProjects.error}

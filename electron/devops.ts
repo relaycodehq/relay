@@ -10,6 +10,7 @@ import {
   type DevOpsSecrets,
   type DevOpsSettings,
   type DevOpsStatus,
+  currentSprintField,
   type SortKey,
   type WorkItem,
   type WorkItemField,
@@ -98,7 +99,7 @@ export class DevOps {
             ...defaultDevOpsSettings,
             ...saved,
             filter: { ...defaultDevOpsSettings.filter, ...saved.filter },
-            sort: { ...defaultDevOpsSettings.sort, ...saved.sort },
+            sort: savedSort(saved.sort),
             team: { ...defaultDevOpsSettings.team, ...saved.team },
           }
         : defaultDevOpsSettings,
@@ -258,7 +259,12 @@ export class DevOps {
     };
     const sortKeys: SortKey[] = [];
     for (const k of settings.sort.fields)
-      sortKeys.push({ ...k, field: await reference(k.field) });
+      sortKeys.push(
+        k.field === currentSprintField
+          ? k
+          : { ...k, field: await reference(k.field) },
+      );
+    const bySprint = sortKeys.some((k) => k.field === currentSprintField);
     const filters = [];
     for (const f of scope === "team" ? settings.team.filters : [])
       filters.push({ ...f, field: await reference(f.field) });
@@ -296,11 +302,18 @@ export class DevOps {
         value: { id: number; fields: Record<string, unknown> }[];
       }>(`${base}/_apis/wit/workitemsbatch?api-version=7.1`, auth, {
         ids,
-        fields: [...new Set([...fields, ...sortKeys.map((k) => k.field)])],
+        fields: [
+          ...new Set([
+            ...fields,
+            ...sortKeys
+              .map((k) => k.field)
+              .filter((f) => f !== currentSprintField),
+          ]),
+        ],
         errorPolicy: "omit",
       });
       const found = batch.value.filter(Boolean);
-      const sprints = settings.sort.currentSprint
+      const sprints = bySprint
         ? await this.currentSprints(base, auth, [
             ...new Set(
               found.map((w) => String(w.fields["System.TeamProject"])),
@@ -310,22 +323,20 @@ export class DevOps {
       const order = new Map(ids.map((id, i) => [id, i]));
       const inSprint = (w: (typeof found)[number]) =>
         Number(sprints.has(w.fields["System.IterationId"] as number));
+      const value = (w: (typeof found)[number], field: string) =>
+        field === currentSprintField
+          ? inSprint(w)
+          : fieldValue(w.fields, field);
       // Ties keep the WIQL's order: most recently changed first.
       items = found
         .sort(
           (a, b) =>
-            inSprint(b) - inSprint(a) ||
             sortKeys.reduce(
               (by, k) =>
                 by ||
-                compareField(
-                  fieldValue(a.fields, k.field),
-                  fieldValue(b.fields, k.field),
-                  k.direction,
-                ),
+                compareField(value(a, k.field), value(b, k.field), k.direction),
               0,
-            ) ||
-            order.get(a.id)! - order.get(b.id)!,
+            ) || order.get(a.id)! - order.get(b.id)!,
         )
         .map((w) => toWorkItem(base, w.id, w.fields, sprints));
     }
@@ -692,6 +703,26 @@ function toWorkItem(
       text("System.Description") || text("Microsoft.VSTS.TCM.ReproSteps"),
     ).slice(0, 2000),
     url: `${base}/${encodeURIComponent(project)}/_workitems/edit/${id}`,
+  };
+}
+
+/**
+ * The saved order. Before the current sprint was a sort key of its own, a
+ * switch put it ahead of the fields.
+ */
+function savedSort(sort: unknown): DevOpsSettings["sort"] {
+  const saved = (sort ?? {}) as {
+    currentSprint?: boolean;
+    fields?: SortKey[];
+  };
+  const fields = saved.fields ?? defaultDevOpsSettings.sort.fields;
+  return {
+    fields: saved.currentSprint
+      ? [
+          { field: currentSprintField, direction: "desc" as const },
+          ...fields,
+        ].slice(0, 3)
+      : fields,
   };
 }
 

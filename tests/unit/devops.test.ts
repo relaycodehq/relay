@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DevOps, DevOpsUnreachable, plainText } from "../../electron/devops";
 import { Store } from "../../electron/store";
 import {
+  currentSprintField,
   defaultDevOpsSettings,
   organizationUrl,
   type DevOpsSettings,
@@ -18,11 +19,18 @@ const project: Project = {
   repository: null,
   added: 1,
 };
+// Set up as a team that works in sprints would: the sprint, then priority.
 const settings: DevOpsSettings = {
   ...defaultDevOpsSettings,
   enabled: true,
   organization: "contoso",
   project: "Software",
+  sort: {
+    fields: [
+      { field: currentSprintField, direction: "desc" },
+      { field: "Microsoft.VSTS.Common.Priority", direction: "asc" },
+    ],
+  },
   filter: {
     ...defaultDevOpsSettings.filter,
     enabled: true,
@@ -373,7 +381,6 @@ it("sorts by the fields Settings names, looking up display names", async () => {
       ...settings,
       filter: { ...settings.filter, enabled: false },
       sort: {
-        currentSprint: false,
         fields: [
           { field: "severity", direction: "asc" },
           { field: "System.State", direction: "desc" },
@@ -393,7 +400,6 @@ it("sorts by the fields Settings names, looking up display names", async () => {
     {
       ...devops.settings(),
       sort: {
-        currentSprint: false,
         fields: [{ field: "Effort", direction: "asc" }],
       },
     },
@@ -459,6 +465,28 @@ it("lists the team's items through their filters", async () => {
   // Your own items are a separate list with their own query.
   await devops.workItems(project);
   expect(queries[1]).toContain("WHERE [System.AssignedTo] = @Me");
+});
+
+it("keeps a sprint switch saved before the sprint was a sort key", async () => {
+  const { store, devops } = await setup(async () => json({}));
+  // Nothing set: Azure DevOps' own order, most recently changed first.
+  await store.update((s) => {
+    s.devops = { ...settings, sort: defaultDevOpsSettings.sort };
+  });
+  expect(devops.settings().sort.fields).toEqual([]);
+  await store.update((s) => {
+    s.devops = {
+      ...settings,
+      sort: {
+        currentSprint: true,
+        fields: [{ field: "Microsoft.VSTS.Common.Priority", direction: "asc" }],
+      },
+    } as unknown as DevOpsSettings;
+  });
+  expect(devops.settings().sort.fields).toEqual([
+    { field: currentSprintField, direction: "desc" },
+    { field: "Microsoft.VSTS.Common.Priority", direction: "asc" },
+  ]);
 });
 
 it("still lists items when their sprints can't be read", async () => {
