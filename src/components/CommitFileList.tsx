@@ -2,7 +2,8 @@ import { FolderTree, List } from "lucide-react";
 import type { WorkingChange } from "../../shared/working-tree";
 import { parentOf } from "../lib/file-tree";
 import { useStoredFlag } from "../lib/useStoredFlag";
-import { byFolder, changeKind, changeLabels } from "../lib/working-changes";
+import { changeKind } from "../../shared/working-tree";
+import { byFolder, changeLabels } from "../lib/working-changes";
 import { FileEntryIcon, IconButton } from "./ui";
 
 /**

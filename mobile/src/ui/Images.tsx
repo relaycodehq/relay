@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet } from "react-native";
 import { answerImagePaths } from "../../../shared/answer-images";
-import type { ChatMessage } from "../../../shared/projects";
-import { turnImages } from "../../../shared/projects/messages";
+import { turnImages, type ChatMessage } from "../../../shared/projects";
 import { useRemote } from "../remote/RemoteProvider";
 import type { LightboxImage } from "./Lightbox";
 import { useTheme } from "./theme";

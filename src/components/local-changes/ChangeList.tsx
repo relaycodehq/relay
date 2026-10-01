@@ -1,13 +1,13 @@
 import type { RefObject } from "react";
 import { ChevronRight } from "lucide-react";
-import type {
-  ChangeArea,
-  GitAction,
-  WorkingChange,
+import {
+  changeKind,
+  type ChangeArea,
+  type GitAction,
+  type WorkingChange,
 } from "../../../shared/working-tree";
 import {
   byFolder,
-  changeKind,
   changeLabels,
   type ChangeSection,
   type SelectedChange,

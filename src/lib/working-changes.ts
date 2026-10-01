@@ -4,12 +4,11 @@ import {
   isStaged,
   isUnstaged,
   type ChangeArea,
+  type ChangeKind,
   type WorkingChange,
   type WorkingTree,
 } from "../../shared/working-tree";
 import { parentOf } from "./file-tree";
-
-export type ChangeKind = "added" | "deleted" | "modified" | "conflict";
 
 export const changeLabels: Record<ChangeKind, string> = {
   added: "Added",
@@ -17,14 +16,6 @@ export const changeLabels: Record<ChangeKind, string> = {
   modified: "Modified",
   conflict: "Conflict",
 };
-
-/** Porcelain status letter → how the file name is coloured. */
-export function changeKind(code: string, conflict = false): ChangeKind {
-  if (conflict) return "conflict";
-  if (code === "A" || code === "?") return "added";
-  if (code === "D") return "deleted";
-  return "modified";
-}
 
 /** Files under their folder, in the order the folders first appear. */
 export function byFolder(files: WorkingChange[]) {

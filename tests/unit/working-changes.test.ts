@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
+import { changeKind } from "../../shared/working-tree";
 import {
   byFolder,
-  changeKind,
   changeSections,
   otherArea,
   parseSavedChanges,

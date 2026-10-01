@@ -21,6 +21,14 @@ export const isStaged = (c: WorkingChange) =>
 /** Has a diff between the index and the file on disk, or is in conflict. */
 export const isUnstaged = (c: WorkingChange) =>
   c.worktree !== " " || c.conflict;
+export type ChangeKind = "added" | "deleted" | "modified" | "conflict";
+/** Porcelain status letter → how the file name is coloured. */
+export function changeKind(code: string, conflict = false): ChangeKind {
+  if (conflict) return "conflict";
+  if (code === "A" || code === "?") return "added";
+  if (code === "D") return "deleted";
+  return "modified";
+}
 export interface WorkingTree {
   head: string;
   branch: string;

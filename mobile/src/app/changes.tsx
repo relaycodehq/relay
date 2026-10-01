@@ -12,11 +12,14 @@ import {
 } from "react-native";
 import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Minus, Plus, Sparkles } from "lucide-react-native";
-import type {
-  ChangeArea,
-  GitAction,
-  WorkingChange,
-  WorkingTree,
+import {
+  changeKind,
+  isStaged,
+  isUnstaged,
+  type ChangeArea,
+  type GitAction,
+  type WorkingChange,
+  type WorkingTree,
 } from "../../../shared/working-tree";
 import { useRemote } from "../remote/RemoteProvider";
 import { diffHref } from "../remote/links";
@@ -30,14 +33,6 @@ import { mono, type, useTheme } from "../ui/theme";
 const maxCommitFiles = 1000;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/** Porcelain status letter → how the path is coloured (LocalChanges' changeKind). */
-function kindOf(code: string, conflict: boolean) {
-  if (conflict) return "conflict";
-  if (code === "A" || code === "?") return "added";
-  if (code === "D") return "deleted";
-  return "modified";
-}
 
 /** What Commit & push takes: every changed file, staged or not, as the desktop's commit sheet picks by default. */
 function everyPath(tree: WorkingTree) {
@@ -161,8 +156,8 @@ export default function ChangesScreen() {
       setBusy(undefined);
     }
   };
-  const staged = tree.changes.filter((c) => c.index !== " " && c.index !== "?");
-  const working = tree.changes.filter((c) => c.worktree !== " " || c.conflict);
+  const staged = tree.changes.filter(isStaged);
+  const working = tree.changes.filter(isUnstaged);
   const allPaths = everyPath(tree);
   const stop = blocker(tree);
   // Committing while a message is on its way would go without it, unless you've typed your own.
@@ -197,7 +192,7 @@ export default function ChangesScreen() {
         </View>
         {files.map((f) => {
           const code = area === "staged" ? f.index : f.worktree;
-          const kind = kindOf(code, f.conflict);
+          const kind = changeKind(code, f.conflict);
           const slash = f.path.lastIndexOf("/");
           return (
             <View key={`${area}:${f.path}`} style={styles.file}>

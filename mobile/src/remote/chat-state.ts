@@ -1,9 +1,7 @@
-import type { ChatMessage } from "../../../shared/projects";
-import { threadOrder } from "../../../shared/projects/messages";
-import { applyChatPatch } from "../../../shared/projects/sync";
+import { applyChatPatch, threadOrder, type ChatMessage } from "../../../shared/projects";
 import type { RemoteChat } from "../../../shared/remote";
 
-export { knownOf, MissingMessage } from "../../../shared/projects/sync";
+export { knownOf, MissingMessage } from "../../../shared/projects";
 
 /** A thread as the phone holds it: every message in full. */
 export interface Thread extends Omit<RemoteChat, "messages"> {
