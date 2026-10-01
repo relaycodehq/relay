@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { useDialogContainer } from "../lib/useDialogContainer";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronDown, Search } from "lucide-react";
@@ -37,8 +36,6 @@ export function FontPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [ref, container] = useDialogContainer();
   const fonts = useQuery({
     queryKey: ["installed-fonts"],
     queryFn: installedFonts,
@@ -72,7 +69,7 @@ export function FontPicker({
   };
 
   return (
-    <div ref={ref} className="composer-tools model-field font-picker">
+    <div className="composer-tools model-field font-picker">
       <Popover.Root
         open={open}
         onOpenChange={(next) => {
@@ -86,13 +83,12 @@ export function FontPicker({
           </span>
           <ChevronDown size={12} />
         </Popover.Trigger>
-        <Popover.Portal container={container}>
+        <Popover.Portal>
           <Popover.Positioner
             className="headline-project-positioner"
             align="end"
             sideOffset={6}
             collisionPadding={12}
-            positionMethod={container ? "fixed" : "absolute"}
           >
             <Popover.Popup
               className="headline-project-popup font-picker-popup"

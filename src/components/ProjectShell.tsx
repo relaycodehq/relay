@@ -93,6 +93,7 @@ import {
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { SETTINGS_PAGE, SIDEBAR_WIDTH } from "../lib/settings-page";
 import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
@@ -140,6 +141,7 @@ export default function ProjectShell() {
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
   const [settings, setSettings] = useState(false),
+    [settingsWhere, setSettingsWhere] = useState(""),
     [signin, setSignin] = useState(false),
     [error, setError] = useState<unknown>(),
     [legacy, setLegacy] = useState(
@@ -213,6 +215,11 @@ export default function ProjectShell() {
     setHiddenBesidePane(null);
   }, [autoHide]);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  // Settings is a page: going anywhere else, a ⌘1 jump say, leaves it.
+  useEffect(() => {
+    setSettings(false);
+    setSettingsCategory(undefined);
+  }, [selected, chatId, legacy]);
   // Resting the pointer along the window's left edge peeks it too. It's
   // watched rather than covered, so the edge still takes clicks and
   // selections; the short dwell keeps a pointer flung past it, or a drag,
@@ -232,7 +239,12 @@ export default function ProjectShell() {
       if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
         return cancel();
       timer ??= window.setTimeout(() => {
-        if (document.querySelector('dialog[open], [role="dialog"]')) return;
+        if (
+          document.querySelector(
+            `dialog[open], [role="dialog"], ${SETTINGS_PAGE}`,
+          )
+        )
+          return;
         peekFromEdge.current = true;
         setPeek(true);
       }, 150);
@@ -417,7 +429,9 @@ export default function ProjectShell() {
       if (
         matches("sidebar", e) &&
         !e.repeat &&
-        !document.querySelector('dialog[open], [role="dialog"]')
+        !document.querySelector(
+          `dialog[open], [role="dialog"], ${SETTINGS_PAGE}`,
+        )
       ) {
         e.preventDefault();
         toggleProjectsRef.current();
@@ -434,7 +448,9 @@ export default function ProjectShell() {
         !dirty &&
         !error &&
         // Modal <dialog>s have no role attribute; popovers do.
-        !document.querySelector('dialog[open], [role="dialog"]')
+        !document.querySelector(
+          `dialog[open], [role="dialog"], ${SETTINGS_PAGE}`,
+        )
       ) {
         e.preventDefault();
         pickNewThread();
@@ -443,7 +459,9 @@ export default function ProjectShell() {
         matches("new-scratch", e) &&
         !e.isComposing &&
         !dirty &&
-        !document.querySelector('dialog[open], [role="dialog"]')
+        !document.querySelector(
+          `dialog[open], [role="dialog"], ${SETTINGS_PAGE}`,
+        )
       ) {
         e.preventDefault();
         void newScratch();
@@ -832,7 +850,7 @@ export default function ProjectShell() {
   return (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
-        className={`titlebar project-titlebar ${projectsHidden ? "sidebar-collapsed" : ""}`}
+        className={`titlebar project-titlebar ${projectsHidden && !settings ? "sidebar-collapsed" : ""}`}
       >
         <div className="project-titlebar-brand">
           <span className="traffic-space" />
@@ -845,6 +863,7 @@ export default function ProjectShell() {
               (dot ? ` · ${dot}` : "")
             }
             aria-pressed={!projectsHidden}
+            disabled={settings}
             onClick={toggleProjects}
             onMouseEnter={peekOpen}
             onMouseLeave={peekClose}
@@ -861,7 +880,13 @@ export default function ProjectShell() {
           </button>
           <RelayMark size={38} />
         </div>
-        {legacy ? (
+        {settings ? (
+          <div className="project-window-title">
+            <span>Settings</span>
+            <span className="breadcrumb-slash">/</span>
+            <strong>{settingsWhere}</strong>
+          </div>
+        ) : legacy ? (
           <PullsTitle where={pullsWhere} disabled={dirty} onNav={goToPulls} />
         ) : (
           <div className="project-window-title">
@@ -904,7 +929,7 @@ export default function ProjectShell() {
           </div>
         )}
         <span className="spacer" />
-        {!legacy && project && (
+        {!settings && !legacy && project && (
           <div className="thread-header-actions">
             <ProjectChecksButton
               quiet
@@ -984,7 +1009,7 @@ export default function ProjectShell() {
             </div>
           </div>
         )}
-        {projectsHidden && (
+        {projectsHidden && !settings && (
           <IconButton label="Open settings" onClick={() => setSettings(true)}>
             <Settings2 size={16} />
           </IconButton>
@@ -997,10 +1022,11 @@ export default function ProjectShell() {
           aria-label="Projects"
           aria-hidden={projectsHidden && !peek ? true : undefined}
           inert={projectsHidden && !peek ? true : undefined}
+          hidden={settings}
           onMouseEnter={projectsHidden ? peekOpen : undefined}
           onMouseLeave={projectsHidden ? peekClose : undefined}
         >
-          <PaneResizer pane="sidebar" initial={250} min={210} max={360} />
+          <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
           <ProjectSidebar
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
@@ -1044,7 +1070,7 @@ export default function ProjectShell() {
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
         {legacy && account ? (
-          <div className="project-legacy">
+          <div className="project-legacy" hidden={settings}>
             <Connected
               onDirtyChange={setDirty}
               account={account}
@@ -1073,7 +1099,7 @@ export default function ProjectShell() {
             />
           </div>
         ) : !project ? (
-          <main className="project-empty">
+          <main className="project-empty" hidden={settings}>
             <FolderGit2 size={40} />
             <h1>Your project. Your conversation.</h1>
             <p>
@@ -1091,7 +1117,7 @@ export default function ProjectShell() {
             </button>
           </main>
         ) : (
-          <div className="workspace-column">
+          <div className="workspace-column" hidden={settings}>
             <div className="workspace-panes">
               <Pane
                 id="chat"
@@ -1308,6 +1334,46 @@ export default function ProjectShell() {
             )}
           </div>
         )}
+        {settings && (
+          <Settings
+            account={account ?? null}
+            initialCategory={settingsCategory}
+            onWhere={setSettingsWhere}
+            onClose={() => {
+              setSettings(false);
+              setSettingsCategory(undefined);
+            }}
+            onConnect={() => {
+              setSettings(false);
+              void withAccount();
+            }}
+            onOpenChat={(projectId, chatId) => {
+              const p = projects.data?.find((p) => p.id === projectId);
+              if (!p) return;
+              void qc
+                .fetchQuery({
+                  queryKey: ["project-chats", projectId],
+                  queryFn: () => api.projectChats(projectId),
+                })
+                .then((list) => {
+                  const next = list.find((c) => c.id === chatId);
+                  if (!next) return;
+                  navigate(p, next);
+                  setSettings(false);
+                })
+                .catch(setError);
+            }}
+            onDisconnect={async () => {
+              await api.disconnect();
+              qc.removeQueries({
+                predicate: (q) => q.queryKey[0] !== "bootstrap",
+              });
+              qc.setQueryData(["bootstrap"], { ...boot.data, account: null });
+              setSettings(false);
+              setLegacy(false);
+            }}
+          />
+        )}
       </div>
       {!!error && (
         <div className="toast error">
@@ -1333,43 +1399,6 @@ export default function ProjectShell() {
           }}
           onAdd={() => void add()}
           onClose={() => setPickingProject(false)}
-        />
-      )}
-      {settings && (
-        <Settings
-          account={account ?? null}
-          initialCategory={settingsCategory}
-          onClose={() => {
-            setSettings(false);
-            setSettingsCategory(undefined);
-          }}
-          onConnect={() => {
-            setSettings(false);
-            void withAccount();
-          }}
-          onOpenChat={(projectId, chatId) => {
-            const p = projects.data?.find((p) => p.id === projectId);
-            if (!p) return;
-            void qc
-              .fetchQuery({
-                queryKey: ["project-chats", projectId],
-                queryFn: () => api.projectChats(projectId),
-              })
-              .then((list) => {
-                const next = list.find((c) => c.id === chatId);
-                if (next) navigate(p, next);
-              })
-              .catch(setError);
-          }}
-          onDisconnect={async () => {
-            await api.disconnect();
-            qc.removeQueries({
-              predicate: (q) => q.queryKey[0] !== "bootstrap",
-            });
-            qc.setQueryData(["bootstrap"], { ...boot.data, account: null });
-            setSettings(false);
-            setLegacy(false);
-          }}
         />
       )}
       {signin && (

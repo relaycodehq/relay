@@ -50,6 +50,7 @@ import { agentsSince } from "../../shared/waiting";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { SnoozeMenu } from "./SnoozeMenu";
 import { api } from "../lib/api";
+import { SETTINGS_PAGE } from "../lib/settings-page";
 import { mac } from "../lib/mod-key";
 import {
   digitOf,
@@ -716,7 +717,9 @@ export function ProjectSidebar({
         pressed("settle", e) &&
         !e.repeat &&
         !e.isComposing &&
-        !document.querySelector('dialog[open], [role="dialog"]') &&
+        !document.querySelector(
+          `dialog[open], [role="dialog"], ${SETTINGS_PAGE}`,
+        ) &&
         settleOpen.current()
       )
         e.preventDefault();

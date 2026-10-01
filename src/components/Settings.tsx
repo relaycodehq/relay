@@ -6,9 +6,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useDialogContainer } from "../lib/useDialogContainer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Check,
   Info,
   Keyboard,
@@ -30,6 +30,8 @@ import {
   MonitorUp,
   X,
 } from "lucide-react";
+import { PaneResizer } from "./PaneResizer";
+import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import type { Account } from "../../shared/types";
 import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -45,12 +47,7 @@ import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettings } from "../lib/useAISettings";
 import { useUpdates } from "../lib/updates";
-import {
-  setLiveScope,
-  setMode,
-  setThemeChoice,
-  useAppearance,
-} from "../lib/appearance";
+import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
 import {
   ComposerToolbarReset,
@@ -81,7 +78,7 @@ import {
   type ThemeKind,
 } from "../lib/themes";
 import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
-import { Avatar, ErrorBox, IconButton } from "./ui";
+import { Avatar, ErrorBox } from "./ui";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
@@ -322,13 +319,10 @@ function ThemeSelect({
   look: ResolvedAppearance;
   onChange: (theme: string) => void;
 }) {
-  // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [ref, container] = useDialogContainer();
   return (
-    <div ref={ref} className="composer-tools model-field theme-select">
+    <div className="composer-tools model-field theme-select">
       <ComposerSelect
         label={`${kindLabels[kind]} theme`}
-        container={container}
         value={look.theme.id}
         icon={<ThemeDot palette={look.palette} accent={look.accent} />}
         options={themesFor(kind).map((theme) => ({
@@ -349,13 +343,10 @@ function AgentSelect({
   value: AgentProvider;
   onChange: (provider: AgentProvider) => void;
 }) {
-  // Popups must render inside a modal <dialog> to sit in its top layer.
-  const [ref, container] = useDialogContainer();
   return (
-    <div ref={ref} className="composer-tools model-field">
+    <div className="composer-tools model-field">
       <ComposerSelect<AgentProvider>
         label="Default agent"
-        container={container}
         value={value}
         icon={<ProviderIcon provider={value} />}
         options={agentProviders.map((provider) => ({
@@ -426,9 +417,6 @@ function ThemeChoiceCard({
   const { theme, palette, accent } = look;
   const base = resolvePalette(kind, { theme: theme.id });
   const change = (patch: Partial<ThemeChoice>) => setThemeChoice(kind, patch);
-  // Wells and the slider fire on every pointer move.
-  const drag = (patch: Partial<ThemeChoice>) =>
-    setThemeChoice(kind, patch, true);
   const label = kindLabels[kind];
   const contrast = choice.contrast ?? DEFAULT_CONTRAST;
   return (
@@ -466,7 +454,7 @@ function ThemeChoiceCard({
               type="color"
               aria-label={`${label} custom accent`}
               value={accent}
-              onChange={(e) => drag({ accent: e.target.value })}
+              onChange={(e) => change({ accent: e.target.value })}
             />
           </label>
         </div>
@@ -476,7 +464,7 @@ function ThemeChoiceCard({
           label={`${label} background`}
           value={palette.surface}
           onChange={(color) =>
-            drag({ background: color === base.surface ? undefined : color })
+            change({ background: color === base.surface ? undefined : color })
           }
         />
       </SettingsRow>
@@ -485,7 +473,7 @@ function ThemeChoiceCard({
           label={`${label} foreground`}
           value={palette.text}
           onChange={(color) =>
-            drag({ foreground: color === base.text ? undefined : color })
+            change({ foreground: color === base.text ? undefined : color })
           }
         />
       </SettingsRow>
@@ -501,7 +489,7 @@ function ThemeChoiceCard({
           value={contrast}
           onChange={(e) => {
             const value = Number(e.target.value);
-            drag({
+            change({
               contrast: value === DEFAULT_CONTRAST ? undefined : value,
             });
           }}
@@ -528,8 +516,11 @@ export function Settings({
   onConnect,
   onOpenChat,
   initialCategory = "appearance",
+  onWhere,
 }: {
   initialCategory?: SettingsCategory;
+  /** Where Settings is, for the window title: a category or the search. */
+  onWhere?: (label: string) => void;
   account: Account | null;
   onClose: () => void;
   onDisconnect: () => Promise<void>;
@@ -537,18 +528,33 @@ export function Settings({
   /** Opens a thread, e.g. one listed under Computers. */
   onOpenChat?: (projectId: string, chatId: string) => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const headingId = useId();
-  useEffect(() => {
-    dialog.current?.showModal();
-    searchInput.current?.focus();
-    // Dragged colours restyle this dialog first; the page follows later.
-    setLiveScope(dialog.current);
-    return () => setLiveScope(null);
-  }, []);
+  useEffect(() => searchInput.current?.focus(), []);
   const [category, setCategory] = useState<CategoryId>(initialCategory);
   const [query, setQuery] = useState("");
+  // Escape clears the search, then leaves. Popups and fields that handle it
+  // themselves keep it; popups close during the event, so decide first.
+  const leave = useRef(() => {});
+  leave.current = () => (query ? setQuery("") : onClose());
+  useEffect(() => {
+    let counts = false;
+    const capture = (e: KeyboardEvent) => {
+      counts =
+        e.key === "Escape" &&
+        !e.isComposing &&
+        !document.querySelector('dialog[open], [role="dialog"], [role="menu"]');
+    };
+    const bubble = (e: KeyboardEvent) => {
+      if (counts && !e.defaultPrevented) leave.current();
+    };
+    window.addEventListener("keydown", capture, true);
+    window.addEventListener("keydown", bubble);
+    return () => {
+      window.removeEventListener("keydown", capture, true);
+      window.removeEventListener("keydown", bubble);
+    };
+  }, []);
   const [error, setError] = useState<unknown>();
 
   // AI settings keep their explicit save: a model run is expensive to change
@@ -1225,6 +1231,8 @@ export function Settings({
     );
   const results = words.length ? entries.filter(matches) : [];
   const current = categories.find((c) => c.id === category)!;
+  const where = words.length ? "Search results" : current.label;
+  useEffect(() => onWhere?.(where), [where]);
 
   const row = (entry: Entry) => {
     if (entry.card)
@@ -1265,20 +1273,13 @@ export function Settings({
   };
 
   return (
-    <dialog
-      ref={dialog}
-      className="settings-screen"
-      aria-labelledby={headingId}
-      onCancel={(e) => {
-        e.preventDefault();
-        if (query) setQuery("");
-        else onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <aside className="settings-nav">
+    <section className="settings-screen" aria-labelledby={headingId}>
+      <aside className="projects-sidebar settings-nav">
+        <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
+        <button type="button" className="settings-back" onClick={onClose}>
+          <ArrowLeft size={15} />
+          <span>Back to app</span>
+        </button>
         <h2 id={headingId}>Settings</h2>
         <div className="settings-search">
           <Search size={14} />
@@ -1321,17 +1322,12 @@ export function Settings({
       </aside>
       <main className="settings-pane">
         <header>
-          <div>
-            <h3>{words.length ? "Search results" : current.label}</h3>
-            <p>
-              {words.length
-                ? `${results.length} ${results.length === 1 ? "setting" : "settings"} matching “${query.trim()}”`
-                : current.description}
-            </p>
-          </div>
-          <IconButton label="Close dialog" onClick={onClose}>
-            <X size={17} />
-          </IconButton>
+          <h3>{where}</h3>
+          <p>
+            {words.length
+              ? `${results.length} ${results.length === 1 ? "setting" : "settings"} matching “${query.trim()}”`
+              : current.description}
+          </p>
         </header>
         <div className="settings-content">
           {words.length ? (
@@ -1363,6 +1359,6 @@ export function Settings({
           {!!error && <ErrorBox error={error} />}
         </div>
       </main>
-    </dialog>
+    </section>
   );
 }

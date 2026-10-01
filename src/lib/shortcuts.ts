@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { SETTINGS_PAGE } from "./settings-page";
 import { z } from "zod";
 import {
   accelerator,
@@ -222,7 +223,9 @@ export function useShortcut(
       if (e.defaultPrevented || e.repeat || e.isComposing) return;
       if (!matches(id, e)) return;
       if (
-        document.querySelector('dialog[open], [role="dialog"], [role="menu"]')
+        document.querySelector(
+          `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`,
+        )
       )
         return;
       e.preventDefault();

@@ -8,6 +8,7 @@ import type { SettingsCategory } from "./components/Settings";
 import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
 import { useViewedCarryOver } from "./lib/useViewedCarryOver";
+import { SETTINGS_PAGE } from "./lib/settings-page";
 import { shouldResumeReview } from "./lib/resumeReview";
 import {
   GroupedFileList,
@@ -668,7 +669,11 @@ export function Connected({
   }, [pendingUrl, incomingLink]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
+      if (
+        e.defaultPrevented ||
+        document.querySelector(`dialog[open], ${SETTINGS_PAGE}`)
+      )
+        return;
       // A thread's review stays on its own PR.
       if (!embedded && matches("pr-open", e)) {
         e.preventDefault();

@@ -45,6 +45,7 @@ import type {
 } from "../../shared/types";
 import { revisionOf } from "../../shared/types";
 import { api } from "../lib/api";
+import { SETTINGS_PAGE } from "../lib/settings-page";
 import {
   Avatar,
   ErrorBox,
@@ -232,7 +233,7 @@ export function ReviewWorkspace({
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement ||
         (target instanceof HTMLElement && target.isContentEditable) ||
-        document.querySelector("dialog[open]")
+        document.querySelector(`dialog[open], ${SETTINGS_PAGE}`)
       )
         return;
       if (matches("review-read", e)) {

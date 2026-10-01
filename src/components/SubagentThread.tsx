@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bot } from "lucide-react";
 import { api } from "../lib/api";
+import { SETTINGS_PAGE } from "../lib/settings-page";
 import type { ChatMessage } from "../../shared/projects";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { plural } from "../../shared/activity-labels";
@@ -19,7 +20,7 @@ import { RichText } from "./ui";
 import { SubagentStatus, agentKind } from "./Subagents";
 
 // Escape here belongs to a popup open over the run, like an image preview.
-const POPUP = 'dialog[open], [role="dialog"], [role="menu"]';
+const POPUP = `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`;
 
 export function SubagentThread({
   chatId,

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { SETTINGS_PAGE } from "./settings-page";
 
 /** How long the first Escape stays armed, waiting for the second. */
 const DOUBLE_ESCAPE_MS = 1500;
 
 // Escape pressed here belongs to them: open popups and dialogs close, and
 // other fields (search, rename, terminal, editor) cancel their own thing.
-const POPUP = 'dialog[open], [role="dialog"], [role="menu"]';
+const POPUP = `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`;
 const FIELD = 'input, textarea, select, [contenteditable="true"]';
 
 function inside(event: KeyboardEvent, selector: string) {

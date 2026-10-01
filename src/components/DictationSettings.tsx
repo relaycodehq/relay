@@ -1,5 +1,4 @@
 import { Download, Pause, Trash2 } from "lucide-react";
-import { useDialogContainer } from "../lib/useDialogContainer";
 import { dictationModel, dictationModelSize } from "../../shared/dictation";
 import { api } from "../lib/api";
 import {
@@ -65,12 +64,10 @@ export function DictationModelSetting() {
 export function DictationMicrophoneSetting() {
   const options = useMicrophones();
   const chosen = useDictationMicrophone();
-  const [ref, container] = useDialogContainer();
   return (
-    <div ref={ref} className="composer-tools model-field">
+    <div className="composer-tools model-field">
       <ComposerSelect
         label="Microphone"
-        container={container}
         value={options.some((o) => o.value === chosen) ? chosen : ""}
         options={options}
         onChange={setDictationMicrophone}

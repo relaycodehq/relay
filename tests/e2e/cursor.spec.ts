@@ -164,7 +164,7 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
 
     // Settings lists the SDK Relay downloaded and who is signed in.
     await page.getByRole("button", { name: "Open settings" }).click();
-    const settings = page.getByRole("dialog", {
+    const settings = page.getByRole("region", {
       name: "Settings",
       exact: true,
     });

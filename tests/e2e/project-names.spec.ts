@@ -54,7 +54,7 @@ test("smart project names update immediately and stay off across restart", async
       .getByRole("button", { name: "Open settings", exact: true })
       .first()
       .click();
-    const dialog = page.getByRole("dialog", { name: "Settings", exact: true });
+    const dialog = page.getByRole("region", { name: "Settings", exact: true });
     await dialog.getByRole("textbox").first().fill("smart project names");
     const toggle = dialog.getByRole("switch", {
       name: "Smart project names",
@@ -81,7 +81,7 @@ test("smart project names update immediately and stay off across restart", async
       .getByRole("button", { name: "Open settings", exact: true })
       .first()
       .click();
-    const restoredDialog = page.getByRole("dialog", {
+    const restoredDialog = page.getByRole("region", {
       name: "Settings",
       exact: true,
     });

@@ -196,7 +196,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
-  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Current file" })
     .selectOption("src/mixed.ts");

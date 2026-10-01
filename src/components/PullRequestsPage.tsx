@@ -16,6 +16,7 @@ import {
 import type { Project } from "../../shared/projects";
 import type { Account, Repo } from "../../shared/types";
 import { api } from "../lib/api";
+import { SETTINGS_PAGE } from "../lib/settings-page";
 import {
   boardPull,
   needsYou,
@@ -143,7 +144,11 @@ export function PullRequestsPage({
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
+      if (
+        e.defaultPrevented ||
+        document.querySelector(`dialog[open], ${SETTINGS_PAGE}`)
+      )
+        return;
       if (matches("pr-search", e)) {
         e.preventDefault();
         searchRef.current?.focus();

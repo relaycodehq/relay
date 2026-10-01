@@ -31,7 +31,7 @@ test("a changed shortcut moves its command, the app menu's included", async () =
     );
   try {
     const page = await app.firstWindow();
-    const settings = page.locator("dialog.settings-screen");
+    const settings = page.locator("section.settings-screen");
     const row = (title: string) =>
       settings.locator(`section.setting[aria-label="${title}"]`);
     await expect(

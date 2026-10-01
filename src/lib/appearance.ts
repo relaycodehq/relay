@@ -23,39 +23,14 @@ let resolved: ResolvedAppearance;
 const listeners = new Set<() => void>();
 const media = matchMedia("(prefers-color-scheme: dark)");
 let nativeTimer: ReturnType<typeof setTimeout> | undefined;
-let commitTimer: ReturnType<typeof setTimeout> | undefined;
-let liveScope: HTMLElement | null = null;
 
 // Every token is an inherited custom property, so writing them on the root
-// restyles the whole document: ~1.7 ms per thousand elements, per change. A
-// colour picker fires far faster than a long thread can restyle. While one is
-// dragged the tokens go to the open dialog alone, and the rest of the page
-// follows once the drag pauses.
-const LIVE_SETTLE_MS = 200;
-
-/** Where dragged colours show at once: the dialog editing them. */
-export function setLiveScope(element: HTMLElement | null) {
-  if (element === liveScope) return;
-  if (!element) commit();
-  liveScope = element;
-}
-
-function commit() {
-  clearTimeout(commitTimer);
-  applyToDocument(resolved);
-  if (liveScope)
-    for (const name of Object.keys(tokens(resolved)))
-      liveScope.style.removeProperty(name);
-}
-
-function apply(live = false) {
+// restyles the whole document, ~1.7 ms per thousand elements. Colour pickers
+// only drag inside Settings, which hides the workspace while it's open, and
+// hidden elements aren't restyled.
+function apply() {
   resolved = resolveAppearance(value, media.matches);
-  if (live && liveScope) {
-    for (const [name, token] of Object.entries(tokens(resolved)))
-      liveScope.style.setProperty(name, token);
-    clearTimeout(commitTimer);
-    commitTimer = setTimeout(commit, LIVE_SETTLE_MS);
-  } else commit();
+  applyToDocument(resolved);
   for (const listener of listeners) listener();
   // Colour pickers fire continuously; only the settled colour reaches the
   // window background and dock icon.
@@ -115,29 +90,22 @@ export function initAppearance() {
   });
 }
 
-function update(next: Appearance, live = false) {
+function update(next: Appearance) {
   value = next;
   saveAppearance(value);
-  apply(live);
+  apply();
 }
 
 export function setMode(mode: AppearanceMode) {
   update({ ...value, mode });
 }
 
-/**
- * Patches one mode's theme; an undefined field goes back to the theme's.
- * `live` is for controls that fire continuously (see `setLiveScope`).
- */
-export function setThemeChoice(
-  kind: ThemeKind,
-  patch: Partial<ThemeChoice>,
-  live = false,
-) {
+/** Patches one mode's theme; an undefined field goes back to the theme's. */
+export function setThemeChoice(kind: ThemeKind, patch: Partial<ThemeChoice>) {
   const choice = { ...value[kind], ...patch };
   for (const key of Object.keys(patch) as (keyof ThemeChoice)[])
     if (choice[key] === undefined) delete choice[key];
-  update({ ...value, [kind]: choice }, live);
+  update({ ...value, [kind]: choice });
 }
 
 function subscribe(listener: () => void) {

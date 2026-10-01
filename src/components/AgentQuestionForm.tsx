@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { AgentQuestion, AgentResponse } from "../../shared/agent-modes";
+import { SETTINGS_PAGE } from "../lib/settings-page";
 
 export function AgentQuestionForm({
   questions,
@@ -48,7 +49,8 @@ export function AgentQuestionForm({
         event.ctrlKey ||
         event.altKey ||
         (event.target instanceof HTMLElement &&
-          event.target.closest('input,textarea,[contenteditable="true"]'))
+          event.target.closest('input,textarea,[contenteditable="true"]')) ||
+        document.querySelector(SETTINGS_PAGE)
       )
         return;
       const option = question.options?.[Number(event.key) - 1];
