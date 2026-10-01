@@ -1,18 +1,10 @@
 // Deep review in a project thread: its setup, the reviewers at work, and the
 // lead's findings. See shared/deep-review.ts for how a review runs.
 import { clock } from "../../shared/waiting";
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
-  ChevronDown,
   ChevronRight,
   CircleCheck,
   FileDiff,
@@ -20,19 +12,13 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
   Plus,
-  RotateCcw,
   ScanSearch,
   Telescope,
   Undo2,
   Wrench,
   X,
 } from "lucide-react";
-import {
-  applyChatPatch,
-  type ChatMessage,
-  type Project,
-  type ProjectChat as ProjectChatData,
-} from "../../shared/projects";
+import type { ChatMessage, Project } from "../../shared/projects";
 import {
   deepReviewStartSchema,
   MAX_REVIEWERS,
@@ -45,7 +31,6 @@ import {
   type ReviewAgent,
   type ReviewTarget,
 } from "../../shared/deep-review";
-import { effortLabels, findClaudeModel } from "../../shared/settings";
 import type { PullRef } from "../../shared/types";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { api } from "../lib/api";
@@ -53,21 +38,15 @@ import { loadComposerSettings } from "../lib/composer-settings";
 import { readJson } from "../lib/persisted-store";
 import { useClaudeModels } from "../lib/useClaudeModels";
 import { sendsMessage, useSendKey } from "../lib/send-key";
-import { FileEntryIcon, RichText } from "./ui";
-import { AgentTurn } from "./AgentTurn";
-import { formatTokens } from "./ContextWindowMeter";
+import { effortName, useAgentName } from "../lib/useAgentName";
+import { useCouncilFold } from "../lib/useCouncilFold";
+import { FileEntryIcon } from "./ui";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
 import { ProviderIcon } from "./ComposerModelPicker";
-import {
-  agentMentionPattern,
-  agentName,
-  agentProviders,
-  agents,
-  reviewerProviders,
-  type AgentProvider,
-} from "../../shared/agents";
-import { useCodexModels } from "../lib/useCodexModels";
+import { agentProviders, reviewerProviders } from "../../shared/agents";
+import { CouncilHalted, CouncilToggle } from "./Council";
+import { CouncilMember } from "./CouncilMember";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import { ReviewPromptLine } from "./ReviewPromptLine";
@@ -79,24 +58,6 @@ import {
   type ReviewSetupChoice,
 } from "../lib/review-setups";
 import "./deep-review.css";
-
-/** Names an agent by its model, as the pickers do. */
-export function useAgentName() {
-  const claude = useClaudeModels().models;
-  const codex = useCodexModels().models;
-  return (agent: { provider: AgentProvider; choice: ReviewAgent["choice"] }) =>
-    agent.provider === "codex"
-      ? (codex.find((m) => m.id === agent.choice.model)?.name ??
-        (agent.choice.model || "Codex default"))
-      : agent.provider === "claude"
-        ? (findClaudeModel(claude, agent.choice.model)?.name ??
-          (agent.choice.model || "Claude default"))
-        : agent.choice.model || agents[agent.provider].defaultModel;
-}
-const effortName = (agent: ReviewAgent | LeadAgent) =>
-  agent.choice.reasoningEffort
-    ? effortLabels[agent.choice.reasoningEffort]
-    : "Default";
 
 // ——— Setup ———
 
@@ -553,7 +514,13 @@ export function DeepReviewSetup({
 
 // ——— In the thread ———
 
-function AgentChip({ agent, name }: { agent: ReviewAgent | LeadAgent; name: string }) {
+function AgentChip({
+  agent,
+  name,
+}: {
+  agent: ReviewAgent | LeadAgent;
+  name: string;
+}) {
   return (
     <span className="deep-review-agent">
       <ProviderIcon provider={agent.provider} />
@@ -581,9 +548,7 @@ export function DeepReviewRequest({
     >
       <header>
         <strong>{message.author ?? "You"}</strong>
-        <time>
-          {clock(message.created)}
-        </time>
+        <time>{clock(message.created)}</time>
       </header>
       <div className="markdown">
         <div className="deep-review-request">
@@ -615,184 +580,6 @@ export function DeepReviewRequest({
   );
 }
 
-/** A reviewer's thread, kept fresh like the main one. */
-function useReviewerThread(chatId: string, live: boolean) {
-  const qc = useQueryClient();
-  const history = useQuery({
-    queryKey: ["project-chat", chatId],
-    queryFn: async () => {
-      const previous = qc.getQueryData<ProjectChatData>([
-        "project-chat",
-        chatId,
-      ]);
-      const known = previous
-        ? Object.fromEntries(previous.messages.map((m) => [m.id, m.version]))
-        : undefined;
-      return applyChatPatch(await api.projectChat(chatId, known), previous);
-    },
-    refetchInterval: (query) =>
-      live &&
-      (!query.state.data?.messages.some((m) => m.role === "assistant") ||
-        query.state.data.messages.some((m) => m.status === "streaming"))
-        ? 1000
-        : false,
-  });
-  const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
-  // The history itself refetches through lib/chat-events.
-  useEffect(
-    () =>
-      api.onProjectChat((e) => {
-        if (e.chatId === chatId)
-          setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-      }),
-    [chatId],
-  );
-  return useMemo(() => {
-    const byId = new Map((history.data?.messages ?? []).map((m) => [m.id, m]));
-    for (const m of Object.values(updates))
-      if (!byId.has(m.id) || byId.get(m.id)!.version <= m.version)
-        byId.set(m.id, m);
-    return [...byId.values()].sort((a, b) => a.created - b.created);
-  }, [history.data, updates]);
-}
-
-/** One agent of a council in its hidden thread: a reviewer, or an Ultraplan thinker. */
-export function ReviewerPane({
-  number,
-  agent,
-  chatId,
-  live,
-  projectRoot,
-  onOpenFile,
-  role = "Reviewer",
-  title,
-  via = "Deep review",
-  prompt,
-}: {
-  number: number;
-  agent: ReviewAgent;
-  chatId: string;
-  live: boolean;
-  projectRoot: string;
-  onOpenFile: (target: ProjectFileLink) => void;
-  role?: string;
-  /** Leads the header, like a thinker's job. */
-  title?: ReactNode;
-  via?: string;
-  /** Shown in place of a request too long to read in a pane. */
-  prompt?: string;
-}) {
-  const name = useAgentName();
-  const messages = useReviewerThread(chatId, live);
-  const answer = [...messages].reverse().find((m) => m.role === "assistant");
-  const tokens = answer?.context
-    ? (answer.context.totalTokens ?? answer.context.usedTokens)
-    : 0;
-  const scroll = useRef<HTMLDivElement>(null);
-  const column = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  // Like the main thread: stay at the end unless you scrolled up to read.
-  useLayoutEffect(() => {
-    const observer = new ResizeObserver(() => {
-      if (follow.current && scroll.current)
-        scroll.current.scrollTop = scroll.current.scrollHeight;
-    });
-    observer.observe(column.current!);
-    return () => observer.disconnect();
-  }, []);
-  return (
-    <section
-      className="deep-review-pane"
-      aria-label={`${role} ${number}: ${name(agent)}`}
-    >
-      <header>
-        {title}
-        <ProviderIcon provider={agent.provider} />
-        <strong>{name(agent)}</strong>
-        <span className="muted">{effortName(agent)}</span>
-        <span className="spacer" />
-        {tokens > 0 && (
-          <span
-            className="deep-review-pane-tokens"
-            title={`${tokens.toLocaleString()} tokens processed, cache reads included`}
-          >
-            {formatTokens(tokens)} tokens
-          </span>
-        )}
-        {answer?.status === "complete" && (
-          <span className="deep-review-pane-status done">
-            <CircleCheck size={13} /> Done
-          </span>
-        )}
-        {(answer?.status === "failed" || answer?.status === "cancelled") && (
-          <span className="deep-review-pane-status">
-            {answer.status === "cancelled" ? "Stopped" : "Didn't finish"}
-          </span>
-        )}
-      </header>
-      <div
-        className="deep-review-pane-thread"
-        ref={scroll}
-        onScroll={() => {
-          const e = scroll.current!;
-          follow.current = e.scrollHeight - e.scrollTop - e.clientHeight < 40;
-        }}
-      >
-        <div ref={column}>
-          {messages.map((m) =>
-            m.role === "user" ? (
-              <article className="project-message user" key={m.id}>
-                <header>
-                  <strong>You</strong>
-                  <span className="muted">via {via}</span>
-                </header>
-                <div className="markdown deep-review-pane-prompt">
-                  <p>{prompt ?? m.body.replace(agentMentionPattern, "")}</p>
-                </div>
-              </article>
-            ) : (
-              <article className="project-message assistant" key={m.id}>
-                <header>
-                  <strong>
-                    <ProviderIcon provider={m.provider} />
-                    {agentName(m.provider)}
-                  </strong>
-                  <time>
-                    {clock(m.created)}
-                  </time>
-                </header>
-                <AgentTurn
-                  message={m}
-                  projectRoot={projectRoot}
-                  onOpenFile={onOpenFile}
-                  onChanges={() => {}}
-                />
-                {m.body.trim() && (
-                  <RichText
-                    text={m.body}
-                    projectRoot={projectRoot}
-                    onOpenFile={onOpenFile}
-                  />
-                )}
-                {m.status === "cancelled" && (
-                  <p className="muted" role="status">
-                    Stopped · partial output kept
-                  </p>
-                )}
-                {m.error && m.status !== "cancelled" && (
-                  <p role="status" className="chat-message-error">
-                    {m.error}
-                  </p>
-                )}
-              </article>
-            ),
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 /** The reviewers side by side, folded away once the lead has reported. */
 export function DeepReviewCouncil({
   state,
@@ -811,21 +598,12 @@ export function DeepReviewCouncil({
   onResume: () => void;
 }) {
   const name = useAgentName();
-  const settled = state.status === "done";
-  const [open, setOpen] = useState(!settled);
-  useEffect(() => {
-    if (settled) setOpen(false);
-  }, [settled]);
+  const { open, toggle } = useCouncilFold(state.status === "done");
   const count = state.reviewers.length;
   const kept = state.report?.findings.length;
   return (
     <section className="deep-review-council" aria-label="Reviewers">
-      <button
-        type="button"
-        className="deep-review-council-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
+      <CouncilToggle open={open} onToggle={toggle} members={state.reviewers}>
         <Telescope size={14} />
         <strong>Council</strong>
         <span>
@@ -836,17 +614,11 @@ export function DeepReviewCouncil({
               ? ` · ${kept} ${kept === 1 ? "finding" : "findings"} kept`
               : ""}
         </span>
-        <span className="deep-review-council-glyphs">
-          {state.reviewers.map((r) => (
-            <ProviderIcon key={r.chatId} provider={r.provider} />
-          ))}
-        </span>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-      </button>
+      </CouncilToggle>
       {open && (
         <div className="deep-review-grid" data-count={count}>
           {state.reviewers.map((r, i) => (
-            <ReviewerPane
+            <CouncilMember
               key={r.chatId}
               number={i + 1}
               agent={r}
@@ -860,22 +632,16 @@ export function DeepReviewCouncil({
       )}
       {!hasLead &&
         (state.status === "stopped" || state.status === "failed") && (
-          <div className="deep-review-stopped" role="status">
-            <span>
-              {state.status === "stopped"
+          <CouncilHalted
+            text={
+              state.status === "stopped"
                 ? "Review stopped."
-                : "No reviewer finished, so the lead has nothing to check."}
-            </span>
-            <button
-              type="button"
-              className="resume-answer"
-              disabled={busy}
-              onClick={onResume}
-            >
-              <RotateCcw size={13} />
-              {state.status === "stopped" ? "Resume review" : "Try again"}
-            </button>
-          </div>
+                : "No reviewer finished, so the lead has nothing to check."
+            }
+            action={state.status === "stopped" ? "Resume review" : "Try again"}
+            busy={busy}
+            onResume={onResume}
+          />
         )}
       {state.status === "leading" && !hasLead && (
         <p className="muted deep-review-handover">

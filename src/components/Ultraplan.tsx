@@ -1,16 +1,13 @@
 // Ultraplan in the composer and the thread: the council it will ask, the ring
 // that marks the mode, and the council at work on a request. See
 // shared/ultraplan.ts for how a council runs.
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
   CircleCheck,
   Compass,
   FileText,
   Layers,
   Orbit,
-  RotateCcw,
   Route,
   ShieldAlert,
   Split,
@@ -24,9 +21,13 @@ import {
   type UltraplanState,
 } from "../../shared/ultraplan";
 import type { ProjectFileLink } from "../../shared/project-file-links";
+import { useAgentName } from "../lib/useAgentName";
+import { useCouncilFold } from "../lib/useCouncilFold";
 import { ProviderIcon } from "./ComposerModelPicker";
-import { ReviewerPane, useAgentName } from "./DeepReview";
+import { CouncilHalted, CouncilToggle } from "./Council";
+import { CouncilMember } from "./CouncilMember";
 import { RichText } from "./ui";
+import "./deep-review.css";
 import "./ultraplan.css";
 
 const kinds: Record<
@@ -130,11 +131,7 @@ export function UltraplanCouncil({
   onResume: () => void;
 }) {
   const name = useAgentName();
-  const done = state.status === "done";
-  const [open, setOpen] = useState(!done);
-  useEffect(() => {
-    if (done) setOpen(false);
-  }, [done]);
+  const { open, toggle } = useCouncilFold(state.status === "done");
   const count = state.thinkers.length || council(state.kind).length;
   const thinkers = `${count} ${count === 1 ? "thinker" : "thinkers"}`;
   const lead = name(state.lead);
@@ -161,12 +158,7 @@ export function UltraplanCouncil({
       className="deep-review-council ultraplan-council"
       aria-label="Ultraplan"
     >
-      <button
-        type="button"
-        className="deep-review-council-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
+      <CouncilToggle open={open} onToggle={toggle} members={state.thinkers}>
         <Orbit size={14} />
         <strong className="ultraplan-text">Ultraplan</strong>
         <span className="ultraplan-kind">
@@ -174,13 +166,7 @@ export function UltraplanCouncil({
           {kinds[state.kind].label}
         </span>
         <span>{status}</span>
-        <span className="deep-review-council-glyphs">
-          {state.thinkers.map((t) => (
-            <ProviderIcon key={t.chatId} provider={t.provider} />
-          ))}
-        </span>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-      </button>
+      </CouncilToggle>
       {open && (
         <>
           <ol className="ultraplan-stages" aria-label="Stages">
@@ -227,7 +213,7 @@ export function UltraplanCouncil({
               data-count={state.thinkers.length}
             >
               {state.thinkers.map((t, i) => (
-                <ReviewerPane
+                <CouncilMember
                   key={t.chatId}
                   number={i + 1}
                   agent={t}
@@ -257,22 +243,16 @@ export function UltraplanCouncil({
         </>
       )}
       {halted && (
-        <div className="deep-review-stopped" role="status">
-          <span>
-            {state.status === "stopped"
+        <CouncilHalted
+          text={
+            state.status === "stopped"
               ? "Ultraplan stopped before the plan."
-              : "The council didn't get as far as a plan."}
-          </span>
-          <button
-            type="button"
-            className="resume-answer"
-            disabled={busy}
-            onClick={onResume}
-          >
-            <RotateCcw size={13} />
-            {state.status === "stopped" ? "Resume" : "Try again"}
-          </button>
-        </div>
+              : "The council didn't get as far as a plan."
+          }
+          action={state.status === "stopped" ? "Resume" : "Try again"}
+          busy={busy}
+          onResume={onResume}
+        />
       )}
     </section>
   );
