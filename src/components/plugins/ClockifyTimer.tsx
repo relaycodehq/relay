@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Pause, Play, Square } from "lucide-react";
+import { Popover } from "@base-ui/react/popover";
+import {
+  Check,
+  ChevronRight,
+  Clock,
+  Minus,
+  Pause,
+  Play,
+  Square,
+  X,
+} from "lucide-react";
 import {
   dayElapsed,
   formatDuration,
+  type ClockifyDay as Day,
   type ClockifyTimerAction,
 } from "../../../shared/clockify";
 import { api } from "../../lib/api";
@@ -19,9 +30,12 @@ import { useNow } from "../../lib/useNow";
 import { IconButton } from "../ui";
 import { ClockifyReview } from "./ClockifyReview";
 import { clock, elapsed } from "./clockify-format";
+import "../composer-model-picker.css";
 import "./clockify.css";
 
 const TOUCH_EVERY = 60_000;
+// Solid shapes read at badge size; Check, X and Minus are only strokes.
+const SOLID = new Set([Play, Pause, Square]);
 
 /**
  * Tells the timer which project is open, now and every minute while Relay
@@ -45,9 +59,26 @@ function useTouches(active: boolean, projectId?: string, chatId?: string) {
   }, [active, projectId, chatId]);
 }
 
+/** The day's total; mounted only while the panel is open, so it ticks only then. */
+function DayClock({
+  day,
+  paused,
+}: {
+  day: Pick<Day, "start" | "pauses">;
+  paused: boolean;
+}) {
+  const now = useNow(paused ? 600_000 : 15_000);
+  return (
+    <span className="clockify-clock" aria-label="Tracked today">
+      {elapsed(dayElapsed(day, now))}
+    </span>
+  );
+}
+
 /**
- * The day's timer at the bottom of the sidebar, while the Clockify plugin is
- * on: what you're on now, in its Clockify colour, and how long the day is.
+ * The day's timer while the Clockify plugin is on: a quiet icon in the
+ * sidebar footer, with a small glyph on it saying whether it runs.
+ * Hovering opens what you're on, the day's total and the controls.
  */
 export function ClockifyTimer({
   projectId,
@@ -70,11 +101,15 @@ export function ClockifyTimer({
   const [error, setError] = useState<string>();
   const day = status.data?.day ?? null;
   const pause = day?.pauses.find((p) => p.end === undefined);
-  const now = useNow(day && !pause ? 15_000 : 600_000);
   useTouches(on && !!day && !pause, projectId, chatId);
   if (!on || !status.data) return null;
   const { review, hasToken, settings } = status.data;
   const ready = hasToken && Object.keys(settings.projects).length > 0;
+  const mapped = projectId ? settings.projects[projectId] : undefined;
+  const color = mapped ? projectColor(projects.data, mapped) : undefined;
+  const reviewOpen = !!review?.blocks.some(
+    (b) => b.clockifyProjectId && !b.submittedId,
+  );
 
   async function act(action: ClockifyTimerAction) {
     setBusy(true);
@@ -89,9 +124,24 @@ export function ClockifyTimer({
     }
   }
 
+  // The badge is all that shows without hovering, so it states what the
+  // timer is doing and stays muted: nothing here is asking to be clicked.
+  const [Badge, label] = error
+    ? [X, "Clockify: something went wrong"]
+    : day
+      ? pause
+        ? [Pause, "Clockify: paused"]
+        : projectId && !mapped
+          ? [Minus, "Clockify: this project isn't tracked"]
+          : [Play, "Clockify: tracking"]
+      : reviewOpen
+        ? [Square, "Clockify: your day is ready to review"]
+        : review
+          ? [Check, "Clockify: your day is in Clockify"]
+          : [undefined, "Clockify"];
+
   let content;
   if (day) {
-    const mapped = projectId ? settings.projects[projectId] : undefined;
     const mappedName = projects.data?.find((p) => p.id === mapped)?.name;
     const since = `since ${clock(day.start)}`;
     const [title, detail] = pause
@@ -111,20 +161,14 @@ export function ClockifyTimer({
         className="clockify-now"
         data-paused={pause ? true : undefined}
         data-untracked={!pause && projectId && !mapped ? true : undefined}
-        style={{
-          ["--c" as string]: mapped
-            ? projectColor(projects.data, mapped)
-            : "var(--muted)",
-        }}
+        style={{ ["--c" as string]: color ?? "var(--muted)" }}
       >
         <i className="clockify-dot" aria-hidden />
         <span className="clockify-now-text">
           <b>{title}</b>
           <small>{detail}</small>
         </span>
-        <span className="clockify-clock" aria-label="Tracked today">
-          {elapsed(dayElapsed(day, now))}
-        </span>
+        <DayClock day={day} paused={!!pause} />
         {pause ? (
           <IconButton
             label="Resume the timer"
@@ -146,19 +190,18 @@ export function ClockifyTimer({
       </div>
     );
   } else if (review) {
-    const open = review.blocks.some(
-      (b) => b.clockifyProjectId && !b.submittedId,
-    );
     const total = review.blocks
       .filter((b) => b.clockifyProjectId)
       .reduce((s, b) => s + b.end - b.start, 0);
     content = (
       <button
         className="clockify-action"
-        data-ready={open || undefined}
+        data-ready={reviewOpen || undefined}
         onClick={() => setReviewing(true)}
       >
-        <span>{open ? "Review your day" : "Your day is in Clockify"}</span>
+        <span>
+          {reviewOpen ? "Review your day" : "Your day is in Clockify"}
+        </span>
         <small>{formatDuration(total)}</small>
         <ChevronRight size={14} aria-hidden />
       </button>
@@ -182,22 +225,59 @@ export function ClockifyTimer({
     );
 
   return (
-    <div className="clockify-timer" aria-busy={busy || undefined}>
-      {content}
-      {day && review && (
-        <button className="clockify-pending" onClick={() => setReviewing(true)}>
-          An earlier day still needs sending
-          <ChevronRight size={13} aria-hidden />
-        </button>
-      )}
-      {error && (
-        <p className="clockify-error" role="alert">
-          {error}
-        </p>
-      )}
+    <>
+      <Popover.Root>
+        <Popover.Trigger
+          openOnHover
+          delay={150}
+          closeDelay={200}
+          type="button"
+          className="icon-button clockify-trigger"
+          aria-label={label}
+        >
+          <Clock size={15} />
+          {Badge && (
+            <span className="clockify-badge" aria-hidden>
+              <Badge
+                size={7}
+                strokeWidth={3}
+                fill={SOLID.has(Badge) ? "currentColor" : "none"}
+              />
+            </span>
+          )}
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner
+            className="composer-popup-positioner"
+            side="top"
+            align="center"
+            sideOffset={8}
+          >
+            <Popover.Popup
+              className="composer-select-popup clockify-panel"
+              aria-busy={busy || undefined}
+            >
+              {content}
+              {day && review && (
+                <button
+                  className="clockify-pending"
+                  onClick={() => setReviewing(true)}
+                >
+                  An earlier day still needs sending
+                  <ChevronRight size={13} aria-hidden />
+                </button>
+              )}
+              {error && (
+                <p className="clockify-error" role="alert">
+                  {error}
+                </p>
+              )}
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
       {reviewing &&
         review &&
-        // Out of the sidebar, whose flat button styles would reach into the sheet.
         createPortal(
           <ClockifyReview
             review={review}
@@ -205,6 +285,6 @@ export function ClockifyTimer({
           />,
           document.body,
         )}
-    </div>
+    </>
   );
 }

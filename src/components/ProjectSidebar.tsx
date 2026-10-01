@@ -1688,12 +1688,6 @@ export function ProjectSidebar({
       </div>
       {query ? searching : view === "activity" ? activity : threads}
       {viewError && <ErrorBox error={viewError} />}
-      <ClockifyTimer
-        projectId={projectId}
-        projectName={projects.find((p) => p.id === projectId)?.name}
-        chatId={chatId}
-        onSetUp={() => onSettings("plugins")}
-      />
       <div className="sb-footer">
         <button
           className={`sb-account ${account ? "signed-in" : ""}`}
@@ -1706,6 +1700,12 @@ export function ProjectSidebar({
           </span>
           {!account && <span>Connect Gitea</span>}
         </button>
+        <ClockifyTimer
+          projectId={projectId}
+          projectName={projects.find((p) => p.id === projectId)?.name}
+          chatId={chatId}
+          onSetUp={() => onSettings("plugins")}
+        />
         <UpdateButton />
         <CheckUpdatesButton />
         <AgentUpdateButton onDetails={() => onSettings("models")} />

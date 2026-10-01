@@ -10,6 +10,8 @@ import "../src/components/sidebar.css";
 import "../src/components/settings.css";
 import { initAppearance } from "../src/lib/appearance";
 import { initTypography } from "../src/lib/typography";
+import { RefreshCw, Settings2 } from "lucide-react";
+import { IconButton } from "../src/components/ui";
 import { ClockifyTimer } from "../src/components/plugins/ClockifyTimer";
 import { ClockifySettings } from "../src/components/plugins/ClockifySettings";
 import {
@@ -232,13 +234,21 @@ function Preview() {
               ))}
             </select>
           </p>
-          <ClockifyTimer
-            projectId={thread}
-            projectName={projects.find((p) => p.id === thread)?.name}
-            onSetUp={() => {}}
-          />
           <div className="sb-footer">
-            <span className="muted">Footer</span>
+            <span className="sb-avatar" style={{ marginRight: "auto" }}>
+              SP
+            </span>
+            <ClockifyTimer
+              projectId={thread}
+              projectName={projects.find((p) => p.id === thread)?.name}
+              onSetUp={() => {}}
+            />
+            <IconButton label="Check for updates">
+              <RefreshCw size={15} />
+            </IconButton>
+            <IconButton label="Open settings">
+              <Settings2 size={15} />
+            </IconButton>
           </div>
         </div>
       </aside>

@@ -1,11 +1,33 @@
-/* ---- The day's timer, above the sidebar footer ---- */
+/* ---- The day's timer: a footer icon, and its panel on hover ---- */
 
-.clockify-timer {
-  padding: 6px 6px 2px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+.sb .clockify-trigger {
+  position: relative;
 }
-.clockify-timer + .sb-footer {
-  border-top: 0;
+/* Bottom right, where a status sits, not top right where a count would. */
+.clockify-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 18%, var(--sidebar));
+  box-shadow: 0 0 0 1.5px var(--sidebar);
+}
+.clockify-trigger:hover .clockify-badge {
+  color: var(--text);
+}
+.clockify-panel {
+  width: 290px;
+  display: grid;
+  gap: 2px;
+}
+.clockify-panel button:not(.icon-button) {
+  border: 0;
+  background: transparent;
 }
 .clockify-now {
   display: grid;
@@ -20,7 +42,6 @@
   width: 24px;
   height: 24px;
 }
-/* A still dot, not a pulse: it sits on screen all day. */
 .clockify-dot {
   width: 8px;
   height: 8px;
@@ -65,8 +86,8 @@
 .clockify-now[data-paused] .clockify-clock {
   color: var(--muted);
 }
-.sb .clockify-action,
-.sb .clockify-pending {
+.clockify-panel .clockify-action,
+.clockify-panel .clockify-pending {
   display: flex;
   width: 100%;
   justify-content: flex-start;
@@ -77,28 +98,28 @@
   color: var(--muted);
   font-size: 12px;
 }
-.sb .clockify-action span {
+.clockify-panel .clockify-action span {
   flex: 1;
   text-align: left;
 }
-.sb .clockify-action small {
+.clockify-panel .clockify-action small {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
 }
-.sb .clockify-action:hover,
-.sb .clockify-pending:hover {
+.clockify-panel .clockify-action:hover,
+.clockify-panel .clockify-pending:hover {
   background: var(--hover);
   color: var(--text);
 }
-.sb .clockify-action[data-ready] {
+.clockify-panel .clockify-action[data-ready] {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.sb .clockify-action[data-ready] span {
+.clockify-panel .clockify-action[data-ready] span {
   font-weight: 600;
 }
-.sb .clockify-pending {
+.clockify-panel .clockify-pending {
   height: 26px;
   font-size: 11px;
 }
