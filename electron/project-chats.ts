@@ -231,6 +231,8 @@ interface ActiveChat {
   steer?: AgentControl["steer"];
   /** Settles once the turn gives the thread back; see `release`. */
   ended: Promise<void>;
+  /** The answer is written; the turn only saves before giving the thread back. */
+  finishing?: boolean;
   end: () => void;
 }
 type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
@@ -2737,6 +2739,8 @@ export class ProjectChats {
       }
       if (rules.pausesQueue(failed)) chat.queuePaused = true;
     } finally {
+      const owner = this.active.get(chat.id);
+      if (owner?.abort === abort) owner.finishing = true;
       const ended = answer.message;
       if (ended.status !== "failed") {
         if (rules.advancesSession(ended))
@@ -2862,7 +2866,17 @@ export class ProjectChats {
     await this.save(chat);
     await this.updateSummary(chat);
   }
-  private assertIdle(id: string) {
+  /**
+   * A turn whose answer shows as finished still saves before it gives the
+   * thread back; whatever the user does next waits for that, not refuses.
+   */
+  private async finished(id: string) {
+    const active = this.active.get(id);
+    if (active?.finishing)
+      await withTimeout(active.ended, 10_000, "").catch(() => {});
+  }
+  private async assertIdle(id: string) {
+    await this.finished(id);
     if (this.active.has(id))
       throw new Error("Wait for the answer to finish first.");
   }
@@ -2876,7 +2890,7 @@ export class ProjectChats {
   removeWorktree(id: string) {
     return this.control(id, async () => {
       const { chat, worktree } = await this.worktreeOf(id);
-      this.assertIdle(id);
+      await this.assertIdle(id);
       if (worktree.path) {
         threadTerminals.closeWithin(worktree.path);
         await projectTasks.stopWithin(worktree.path);
@@ -2898,6 +2912,7 @@ export class ProjectChats {
     if (chat.shared) return "Shared conversations stay in the project folder.";
     if ((await this.projects.inspect(chat.projectId)).plain)
       return "Worktrees need a Git repository.";
+    await this.finished(chat.id);
     if (this.active.has(chat.id) || this.councilBusy(chat))
       return "Wait for the answer to finish first.";
     if (this.pending(chat.id).length || chat.heldWakeups?.length)
