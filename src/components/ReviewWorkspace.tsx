@@ -63,7 +63,7 @@ import {
 } from "../lib/conversation-timeline";
 import { useTypography } from "../lib/typography";
 import { persistedStore } from "../lib/persisted-store";
-import { matches } from "../lib/shortcuts";
+import { isTypingTarget, matches } from "../lib/shortcuts";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
 
@@ -223,15 +223,10 @@ export function ReviewWorkspace({
   };
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // The code editor types inside a shadow root, where `e.target` is only its host.
-      const target = e.composedPath()[0];
       if (
         tab !== "files" ||
         e.defaultPrevented ||
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        (target instanceof HTMLElement && target.isContentEditable) ||
+        isTypingTarget(e) ||
         document.querySelector("dialog[open]")
       )
         return;

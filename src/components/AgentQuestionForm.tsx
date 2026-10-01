@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { AgentQuestion, AgentResponse } from "../../shared/agent-modes";
+import { isTypingTarget } from "../lib/shortcuts";
 
 export function AgentQuestionForm({
   questions,
@@ -40,6 +41,8 @@ export function AgentQuestionForm({
     if (!question.multiple)
       timer.current = setTimeout(() => advance(next), 200);
   };
+  const pick = useRef(select);
+  pick.current = select;
   useEffect(() => {
     if (!question || busy || collapsed) return;
     const keydown = (event: KeyboardEvent) => {
@@ -47,19 +50,18 @@ export function AgentQuestionForm({
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest('input,textarea,[contenteditable="true"]'))
+        isTypingTarget(event)
       )
         return;
       const option = question.options?.[Number(event.key) - 1];
       if (/^[1-9]$/.test(event.key) && option) {
         event.preventDefault();
-        select(option.label);
+        pick.current(option.label);
       }
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  });
+  }, [question, busy, collapsed]);
   if (!question) return null;
   return (
     <form
