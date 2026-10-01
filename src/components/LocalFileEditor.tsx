@@ -4,7 +4,6 @@ import { useLineBlame } from "./LineBlame";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { useContentHash } from "../lib/diagnostics";
 import { DiagnosticMessage } from "./ProjectChecks";
-import { diagnosticSummary, diagnosticSeverity } from "../../shared/checks";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   EditProvider,
@@ -15,7 +14,6 @@ import {
   Editor,
   type EditorFactory,
   type EditorKeymap,
-  type Marker,
 } from "@pierre/diffs/edit";
 import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
 import {
@@ -37,6 +35,8 @@ import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { useFileDiff } from "../lib/useFileDiff";
 import { useHoldNavigation } from "../lib/navigation-lock";
 import { indentedNewline } from "../lib/newline-indent";
+import { checkStatus } from "../lib/editor-checks";
+import { useBufferChecks } from "../lib/useBufferChecks";
 
 const keymap: EditorKeymap = [
   {
@@ -154,12 +154,6 @@ export default function LocalFileEditor({
     compare ? "split" : "unified",
   );
   const checkState = checks.state;
-  const checked =
-    checkState?.status === "ready" &&
-    bufferHash &&
-    checkState.files[path]?.hash === bufferHash
-      ? checkState.files[path]
-      : undefined;
   const history = (size: number) => (
     <>
       <IconButton
@@ -185,33 +179,12 @@ export default function LocalFileEditor({
     checkState,
     "editing",
   );
-  const fileProblems = useMemo(
-    () =>
-      checked && checkState
-        ? checkState.diagnostics.filter((d) => d.path === path)
-        : [],
-    [checked, checkState, path],
-  );
-  const markers = useMemo<Marker[]>(
-    () =>
-      fileProblems
-        .filter((d) => d.line && d.column)
-        .sort(
-          (a, b) =>
-            ({ info: 0, warning: 1, error: 2 })[a.severity] -
-            { info: 0, warning: 1, error: 2 }[b.severity],
-        )
-        .map((d) => ({
-          start: { line: d.line! - 1, character: d.column! - 1 },
-          end: {
-            line: (d.endLine ?? d.line!) - 1,
-            character: Math.max((d.endColumn ?? d.column! + 1) - 1, 0),
-          },
-          severity: d.severity,
-          message: d.message,
-          source: d.code,
-        })),
-    [fileProblems],
+  const { problems: fileProblems, markers } = useBufferChecks(
+    checks,
+    path,
+    bufferText,
+    bufferHash,
+    setError,
   );
   const markersRef = useRef(markers);
   markersRef.current = markers;
@@ -226,19 +199,6 @@ export default function LocalFileEditor({
   useEffect(() => {
     viewer.current?.getEditor(path)?.setMarkers(markers);
   }, [markers, path, diff]);
-  useEffect(() => {
-    if (bufferText === undefined || !checks.enabled || !checkState?.id) return;
-    const timer = setTimeout(() => {
-      void checks.buffer(path, bufferText).catch(setError);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [bufferText, path, checks.enabled, checkState?.id]);
-  useEffect(
-    () => () => {
-      void checks.buffer(path, null).catch(() => {});
-    },
-    [path, checks.buffer],
-  );
   const editorOptions = useMemo<
     CodeViewProps<undefined, undefined>["editorOptions"]
   >(
@@ -511,18 +471,7 @@ export default function LocalFileEditor({
         <>
           {checks.enabled && checks.info?.targets.length ? (
             <div className="editor-checks">
-              <span>
-                {checkState?.status === "failed"
-                  ? checkState.message
-                  : checked && diagnosticSeverity(checked)
-                    ? diagnosticSummary(checked)
-                    : checkState?.status === "ready" && !checkState.files[path]
-                      ? "This file is outside the selected compiler configuration"
-                      : checkState?.status === "ready" &&
-                          checkState.files[path]?.hash === bufferHash
-                        ? "No compiler errors in this file"
-                        : "Checking live buffer…"}
-              </span>
+              <span>{checkStatus(checkState, path, bufferHash)}</span>
               {fileProblems.length > 0 && (
                 <details>
                   <summary>Problems in this file</summary>
