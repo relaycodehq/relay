@@ -15,6 +15,12 @@ export interface WorkingChange {
   worktree: string;
   conflict: boolean;
 }
+/** Has a diff between HEAD and the index; untracked files don't. */
+export const isStaged = (c: WorkingChange) =>
+  c.index !== " " && c.index !== "?";
+/** Has a diff between the index and the file on disk, or is in conflict. */
+export const isUnstaged = (c: WorkingChange) =>
+  c.worktree !== " " || c.conflict;
 export interface WorkingTree {
   head: string;
   branch: string;

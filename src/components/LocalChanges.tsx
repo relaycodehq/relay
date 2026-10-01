@@ -13,14 +13,17 @@ import {
   SquarePen,
 } from "lucide-react";
 import type { Pull } from "../../shared/types";
-import type {
-  ChangeArea,
-  GitAction,
-  WorkingChange,
+import {
+  isStaged,
+  isUnstaged,
+  type ChangeArea,
+  type GitAction,
+  type WorkingChange,
 } from "../../shared/working-tree";
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { byFolder, changeKind, changeLabels } from "../lib/working-changes";
 import { useRequests, type RequestChannel } from "../lib/request-channel";
 import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
@@ -194,13 +197,13 @@ export function LocalChanges({
         {
           area: "staged" as const,
           title: "Staged changes",
-          files: tree.changes.filter((c) => c.index !== " " && c.index !== "?"),
+          files: tree.changes.filter(isStaged),
           kind: "unstage" as const,
         },
         {
           area: "unstaged" as const,
           title: "Working changes",
-          files: tree.changes.filter((c) => c.worktree !== " " || c.conflict),
+          files: tree.changes.filter(isUnstaged),
           kind: "stage" as const,
         },
       ]
@@ -663,33 +666,6 @@ export function LocalChanges({
       )}
     </section>
   );
-}
-
-type ChangeKind = "added" | "deleted" | "modified" | "conflict";
-
-const changeLabels: Record<ChangeKind, string> = {
-  added: "Added",
-  deleted: "Deleted",
-  modified: "Modified",
-  conflict: "Conflict",
-};
-
-/** Porcelain status letter → how the file name is coloured. */
-function changeKind(code: string, conflict: boolean): ChangeKind {
-  if (conflict) return "conflict";
-  if (code === "A" || code === "?") return "added";
-  if (code === "D") return "deleted";
-  return "modified";
-}
-
-/** Files under their folder, in the order the folders first appear. */
-function byFolder(files: WorkingChange[]) {
-  const folders = new Map<string, WorkingChange[]>();
-  for (const c of files) {
-    const folder = c.path.slice(0, Math.max(0, c.path.lastIndexOf("/")));
-    folders.set(folder, [...(folders.get(folder) ?? []), c]);
-  }
-  return folders;
 }
 
 function sideLabels(area: ChangeArea) {

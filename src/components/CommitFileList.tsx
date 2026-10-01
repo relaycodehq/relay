@@ -1,24 +1,9 @@
 import { FolderTree, List } from "lucide-react";
 import type { WorkingChange } from "../../shared/working-tree";
+import { parentOf } from "../lib/file-tree";
 import { useStoredFlag } from "../lib/useStoredFlag";
+import { byFolder, changeKind, changeLabels } from "../lib/working-changes";
 import { FileEntryIcon, IconButton } from "./ui";
-
-type Kind = "added" | "modified" | "deleted";
-const kindLabels: Record<Kind, string> = {
-  added: "Added",
-  modified: "Modified",
-  deleted: "Deleted",
-};
-
-function changeKind(c: WorkingChange): Kind {
-  const code = c.index !== " " ? c.index : c.worktree;
-  if (code === "A" || code === "?") return "added";
-  if (code === "D") return "deleted";
-  return "modified";
-}
-
-const folderOf = (path: string) =>
-  path.slice(0, Math.max(0, path.lastIndexOf("/")));
 
 /**
  * The Commit sheet's files, each with a box to leave it out. Grouped under
@@ -40,12 +25,6 @@ export function CommitFileList({
 }) {
   const [flat, setFlat] = useStoredFlag("relay-commit-files-flat");
   const selected = files.length - excluded.size;
-  const folders = new Map<string, WorkingChange[]>();
-  if (!flat)
-    for (const c of files) {
-      const folder = folderOf(c.path);
-      folders.set(folder, [...(folders.get(folder) ?? []), c]);
-    }
   const box = (paths: string[], label: string) => (
     <GroupBox
       paths={paths}
@@ -98,7 +77,7 @@ export function CommitFileList({
                 withFolder
               />
             ))
-          : [...folders].map(([folder, group]) => (
+          : [...byFolder(files)].map(([folder, group]) => (
               <div
                 key={folder}
                 role="group"
@@ -164,13 +143,15 @@ function FileRow({
   withFolder?: boolean;
 }) {
   const { path, previousPath } = change;
-  const kind = changeKind(change);
-  const folder = folderOf(path);
+  const kind = changeKind(
+    change.index !== " " ? change.index : change.worktree,
+  );
+  const folder = parentOf(path);
   const out = excluded.has(path);
   return (
     <label
       className={`commit-file ${withFolder ? "" : "nested"} ${out ? "excluded" : ""}`}
-      title={`${kindLabels[kind]}: ${previousPath ? `${previousPath} → ` : ""}${path}`}
+      title={`${changeLabels[kind]}: ${previousPath ? `${previousPath} → ` : ""}${path}`}
     >
       <input type="checkbox" checked={!out} onChange={() => onToggle([path])} />
       <FileEntryIcon path={path} directory={false} />
