@@ -199,7 +199,7 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();
-  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Current file" })
     .selectOption("src/hooks/useReview.ts");

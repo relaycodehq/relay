@@ -179,9 +179,7 @@ test("two desktops join by invitation; ordinary messages and replies never launc
   await expect(
     alice.getByText(`Invitations you create use ${serverUrl}.`),
   ).toBeVisible();
-  await alice
-    .getByRole("button", { name: "Close dialog", exact: true })
-    .click();
+  await alice.getByRole("button", { name: "Back to app", exact: true }).click();
   await alice
     .getByRole("button", { name: "Invite colleague", exact: true })
     .click();

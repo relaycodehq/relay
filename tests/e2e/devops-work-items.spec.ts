@@ -181,7 +181,10 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     ).toHaveCount(0);
 
     await page.keyboard.press("ControlOrMeta+Comma");
-    const settings = page.getByRole("dialog");
+    const settings = page.getByRole("region", {
+      name: "Settings",
+      exact: true,
+    });
     // Integrations keeps only the pull request and CI hosts.
     await settings.getByRole("button", { name: "Integrations" }).click();
     await expect(
@@ -269,7 +272,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(plugin.getByLabel("Sort direction 2")).toHaveValue("asc");
     await plugin.getByText("Sort by", { exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, { path: join(root, "settings-team.png") });
-    await settings.getByRole("button", { name: "Close dialog" }).click();
+    await page.getByRole("button", { name: "Back to app" }).click();
 
     const cards = page.getByRole("region", { name: "Your work items" });
     await expect(cards.locator(".work-item-card")).toHaveCount(1);
