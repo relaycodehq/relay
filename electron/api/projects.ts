@@ -10,7 +10,7 @@ import { projectNameSchema } from "../../shared/projects";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { idSchema } from "../../shared/rooms";
 import { isSourceControlOn } from "../../shared/source-control";
-import type { Pull } from "../../shared/types";
+import type { Api, Pull } from "../../shared/types";
 import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { imageMime } from "../../shared/project-files";
@@ -218,7 +218,7 @@ export function projectHandlers(ctx: ApiContext) {
     projectBranchPulls: pullRequests,
     projectPreparePull: pullRequests,
     projectCreatePull: pullRequests,
-    projectPulls: async (args) => {
+    projectPulls: async (args): ReturnType<Api["projectPulls"]> => {
       const client = requireClient();
       const repo = await projects.linked(idSchema.parse(args[0]), client);
       const page = await client.page<Pull>(

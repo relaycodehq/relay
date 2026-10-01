@@ -100,6 +100,13 @@ export interface Pull extends PullRef {
   deletions: number;
   changed_files: number;
   updated_at: string;
+  labels: Issue["labels"];
+  comments: number;
+}
+/** A project's pull request as its list shows it: the pull, with the fields an issue search carries. */
+export interface ProjectPull extends Pull {
+  repository: Issue["repository"];
+  pull_request: { merged: boolean };
 }
 export interface ChangedFile {
   filename: string;

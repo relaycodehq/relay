@@ -12,7 +12,7 @@ import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
 import type { TurnModel } from "./turn-model";
 import type { DirListing, FileInfo } from "./project-files";
-import type { FilePair, LocalFile, Page, Issue, Repo } from "./types";
+import type { FilePair, LocalFile, Page, ProjectPull, Repo } from "./types";
 import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
 import type {
   DeepReviewStart,
@@ -726,7 +726,11 @@ export interface ProjectApi {
     mode: "revert" | "redo",
     force: boolean,
   ): Promise<{ conflicts: string[] }>;
-  projectPulls(id: string, state: string, page: number): Promise<Page<Issue>>;
+  projectPulls(
+    id: string,
+    state: string,
+    page: number,
+  ): Promise<Page<ProjectPull>>;
   projectChats(id: string): Promise<ChatSummary[]>;
   createProjectChat(
     id: string,
