@@ -11,19 +11,29 @@ export const knownMessagesSchema = z
 export interface ProjectChatPatch extends Omit<ProjectChat, "messages"> {
   messages: (ChatMessage | string)[];
 }
+/** What a caller holding `chat` sends as `known`. */
+export const knownOf = (
+  chat: { messages: ChatMessage[] } | undefined,
+): KnownMessages | undefined =>
+  chat && Object.fromEntries(chat.messages.map((m) => [m.id, m.version]));
+export class MissingMessage extends Error {
+  constructor() {
+    super("Conversation update is missing a message.");
+  }
+}
 /** Rebuilds a patched chat, reusing the previous message objects it only named. */
-export function applyChatPatch(
-  patch: ProjectChatPatch,
-  previous: ProjectChat | undefined,
-): ProjectChat {
+export function applyChatPatch<T extends { messages: ChatMessage[] }>(
+  patch: Omit<T, "messages"> & { messages: (ChatMessage | string)[] },
+  previous: T | undefined,
+): T {
   const held = new Map(previous?.messages.map((m) => [m.id, m]));
   return {
     ...patch,
     messages: patch.messages.map((m) => {
       if (typeof m !== "string") return m;
       const kept = held.get(m);
-      if (!kept) throw new Error("Conversation update is missing a message.");
+      if (!kept) throw new MissingMessage();
       return kept;
     }),
-  };
+  } as T;
 }

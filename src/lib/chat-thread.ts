@@ -1,4 +1,8 @@
-import { replyRoot, type ChatMessage } from "../../shared/projects";
+import {
+  replyRoot,
+  threadOrder,
+  type ChatMessage,
+} from "../../shared/projects";
 
 /** What a side question's thread holds, for the bar under it. */
 export interface SideThread {
@@ -16,15 +20,7 @@ export function withUpdates(
   for (const m of Object.values(updates))
     if (!byId.has(m.id) || byId.get(m.id)!.version <= m.version)
       byId.set(m.id, m);
-  return [...byId.values()].sort((a, b) =>
-    a.seq && b.seq
-      ? a.seq - b.seq
-      : a.seq
-        ? -1
-        : b.seq
-          ? 1
-          : a.created - b.created,
-  );
+  return [...byId.values()].sort(threadOrder);
 }
 
 /** Each reply's side conversation, by the message it starts from. A broken

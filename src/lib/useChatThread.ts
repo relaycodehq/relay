@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   applyChatPatch,
+  knownOf,
   type ChatMessage,
   type ChatSummary,
   type ProjectChat as ProjectChatData,
@@ -33,9 +34,7 @@ export function useChatThread(
         "project-chat",
         chat!.id,
       ]);
-      const known = previous
-        ? Object.fromEntries(previous.messages.map((m) => [m.id, m.version]))
-        : undefined;
+      const known = knownOf(previous);
       const patch = await (chat!.shared
         ? api.syncProjectChat(chat!.id, known)
         : api.projectChat(chat!.id, known));

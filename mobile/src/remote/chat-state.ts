@@ -1,33 +1,22 @@
-import type { ChatMessage, KnownMessages } from "../../../shared/projects";
+import type { ChatMessage } from "../../../shared/projects";
+import { threadOrder } from "../../../shared/projects/messages";
+import { applyChatPatch } from "../../../shared/projects/sync";
 import type { RemoteChat } from "../../../shared/remote";
+
+export { knownOf, MissingMessage } from "../../../shared/projects/sync";
 
 /** A thread as the phone holds it: every message in full. */
 export interface Thread extends Omit<RemoteChat, "messages"> {
   messages: ChatMessage[];
 }
 
-export const knownOf = (thread: Thread | undefined): KnownMessages | undefined =>
-  thread && Object.fromEntries(thread.messages.map((m) => [m.id, m.version]));
-
 /**
  * Fills in the messages the desktop only named, from what the phone already
  * holds. A name the phone doesn't hold means its copy is gone: fetch again
  * without `known`.
  */
-export function applyPatch(previous: Thread | undefined, patch: RemoteChat): Thread {
-  const held = new Map(previous?.messages.map((m) => [m.id, m]));
-  return {
-    ...patch,
-    messages: patch.messages.map((m) => {
-      if (typeof m !== "string") return m;
-      const kept = held.get(m);
-      if (!kept) throw new MissingMessage();
-      return kept;
-    }),
-  };
-}
-
-export class MissingMessage extends Error {}
+export const applyPatch = (previous: Thread | undefined, patch: RemoteChat): Thread =>
+  applyChatPatch(patch, previous);
 
 /** A streamed update; an older version than the phone holds is dropped. */
 export function applyMessage(thread: Thread, message: ChatMessage): Thread {
@@ -36,7 +25,7 @@ export function applyMessage(thread: Thread, message: ChatMessage): Thread {
   const messages =
     at >= 0
       ? thread.messages.map((m, i) => (i === at ? message : m))
-      : [...thread.messages, message].sort(order);
+      : [...thread.messages, message].sort(threadOrder);
   return { ...thread, messages };
 }
 
@@ -53,20 +42,15 @@ export function keepNewer(fetched: Thread, held: Thread | undefined): Thread {
   };
 }
 
-const order = (a: ChatMessage, b: ChatMessage) =>
-  a.seq && b.seq
-    ? a.seq - b.seq
-    : a.seq
-      ? -1
-      : b.seq
-        ? 1
-        : a.created - b.created;
-
 /** The main conversation: every message but replies, with `/btw` questions in line. */
 export const mainMessages = (messages: ChatMessage[]) =>
   messages.filter((m) => !m.parentId);
 
-/** The message a reply chain starts from; replying to a reply joins its root (shared/projects' replyRoot). */
+/**
+ * The message a reply chain starts from; replying to a reply joins its root.
+ * Unlike shared/projects' replyRoot, a missing parent or a loop ends the
+ * chain where it breaks instead of throwing.
+ */
 export function rootOf(messages: ChatMessage[], message: ChatMessage): ChatMessage {
   const byId = new Map(messages.map((m) => [m.id, m]));
   const seen = new Set<string>();

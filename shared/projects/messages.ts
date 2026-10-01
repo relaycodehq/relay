@@ -124,6 +124,15 @@ export function turnImages(message: ChatMessage): string[] {
     ),
   ];
 }
+/** Sequenced messages in the thread's order, then ones not yet sequenced by when they were made. */
+export const threadOrder = (a: ChatMessage, b: ChatMessage) =>
+  a.seq && b.seq
+    ? a.seq - b.seq
+    : a.seq
+      ? -1
+      : b.seq
+        ? 1
+        : a.created - b.created;
 export function replyRoot(messages: ChatMessage[], id: string): ChatMessage {
   const seen = new Set<string>();
   let current = messages.find((m) => m.id === id);
