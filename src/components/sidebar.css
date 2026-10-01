@@ -190,6 +190,17 @@
   font-weight: 500;
   color: var(--muted);
 }
+.sb .sb-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+.sb .sb-section-toggle:hover {
+  color: var(--text);
+}
 .sb-view-heading small {
   color: var(--muted);
   font-size: 11px;
@@ -413,6 +424,7 @@
   color: var(--text);
 }
 .sb .sb-project-name:hover > .sb-project-chevron,
+.sb .sb-section-toggle:hover > .sb-project-chevron,
 .sb .sb-project-chevron:not([data-open]) {
   opacity: 1;
 }
