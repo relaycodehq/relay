@@ -8,6 +8,7 @@ import { useProjectChecks } from "./lib/useProjectChecks";
 import { useReviewProgress } from "./lib/useReviewProgress";
 import { useViewedCarryOver } from "./lib/useViewedCarryOver";
 import { shouldResumeReview } from "./lib/resumeReview";
+import { setGroupViewed } from "./lib/review-progress";
 import {
   GroupedFileList,
   type FileSelection,
@@ -633,22 +634,19 @@ export function Connected({
                         throw new Error(
                           "The selected review changed. Open the group again.",
                         );
-                      const next = progressController.update((p) => {
-                        const protectedPaths = new Set([
-                          ...notedPaths(p, revision),
-                          ...commentPaths,
-                        ]);
-                        const read = { ...p.read };
-                        for (const path of paths)
-                          if (
-                            group.paths.includes(path) &&
-                            !protectedPaths.has(path)
-                          ) {
-                            if (viewed) read[path] = revision;
-                            else if (read[path] === revision) delete read[path];
-                          }
-                        return { ...p, read };
-                      });
+                      const next = progressController.update((p) =>
+                        setGroupViewed(
+                          p,
+                          paths,
+                          group.paths,
+                          viewed,
+                          revision,
+                          new Set([
+                            ...notedPaths(p, revision),
+                            ...commentPaths,
+                          ]),
+                        ),
+                      );
                       if (viewed && file && paths.includes(file))
                         await advanceUnread(file, next, false);
                     }}
