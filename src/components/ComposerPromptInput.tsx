@@ -1,13 +1,10 @@
-// Inline atomic skill nodes follow T3 Code's ComposerSkillExtension (MIT).
-import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
+import { type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import StarterKit from "@tiptap/starter-kit";
 import { Slice } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { Plugin, TextSelection } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { TextSelection } from "@tiptap/pm/state";
 import {
   useEffect,
   useImperativeHandle,
@@ -17,19 +14,7 @@ import {
   type RefObject,
   type HTMLAttributes,
 } from "react";
-import { quoteLabel, quoteMarkdown } from "../lib/composer-quotes";
-import {
-  pastedLines,
-  pasteMarkdown,
-  pastesAfter,
-  type PastedText,
-} from "../../shared/pasted-texts";
-import {
-  imageToken,
-  isPastedImageName,
-  shortImageName,
-} from "../lib/image-refs";
-import { formatSize } from "../lib/file-tree";
+import { pastesAfter } from "../../shared/pasted-texts";
 import { promptContent } from "../lib/prompt-content";
 import {
   deleteImagePills,
@@ -40,21 +25,18 @@ import {
   quotesIn,
   spacedTags,
 } from "../lib/prompt-pills";
-import {
-  fileMarkdown,
-  positionAt,
-  promptText,
-  serialize,
-} from "../lib/prompt-text";
+import { positionAt, promptText, serialize } from "../lib/prompt-text";
 import { ImagePeek, PEEK_DELAY } from "./ImagePeek";
 import type { DictationTarget } from "../lib/dictation/session";
 import { draftChips } from "../lib/thread-storage";
 import {
   beginDictation,
-  ComposerDictation,
   endDictation,
   updateDictation,
-} from "./composer-dictation";
+} from "./composer-prompt/dictation";
+import { promptExtensions } from "./composer-prompt/extensions";
+import type { ImageChip } from "./composer-prompt/image-pill";
+export type { ImageChip };
 export interface SkillPick {
   token: string;
   label: string;
@@ -82,263 +64,6 @@ export interface PromptInputHandle {
   /** Where dictated words go: live at the caret, greyed while they may still change. */
   dictation: DictationTarget;
 }
-export const Skill = Node.create({
-  name: "relaySkill",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes() {
-    return { token: { default: "" }, label: { default: "" } };
-  },
-  parseHTML() {
-    return [{ tag: "span[data-relay-skill]" }];
-  },
-  renderHTML({ node }) {
-    return [
-      "span",
-      {
-        "data-relay-skill": "",
-        class: "composer-skill-chip",
-        title: node.attrs.token,
-        contenteditable: "false",
-      },
-      ["span", { "aria-hidden": "true", class: "composer-skill-icon" }, "◇"],
-      ["span", {}, node.attrs.label],
-    ];
-  },
-  renderText({ node }) {
-    return node.attrs.token;
-  },
-});
-// A quoted passage from the conversation; sent as a Markdown blockquote.
-export const Quote = Node.create({
-  name: "relayQuote",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes() {
-    return { text: { default: "" } };
-  },
-  parseHTML() {
-    return [{ tag: "span[data-relay-quote]" }];
-  },
-  renderHTML({ node }) {
-    return [
-      "span",
-      {
-        "data-relay-quote": "",
-        "data-quote": node.attrs.text,
-        class: "composer-quote-chip",
-        contenteditable: "false",
-      },
-      [
-        "span",
-        {
-          class: "composer-quote-remove",
-          role: "button",
-          "aria-label": "Remove quote",
-        },
-      ],
-      [
-        "span",
-        { class: "composer-quote-text" },
-        `"${quoteLabel(node.attrs.text, 40)}"`,
-      ],
-    ];
-  },
-  renderText({ node }) {
-    return quoteMarkdown(node.attrs.text);
-  },
-});
-// A long paste, kept where it was pasted; sent as its fenced text.
-export const Paste = Node.create({
-  name: "relayPaste",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes() {
-    return { n: { default: 1 }, text: { default: "" } };
-  },
-  parseHTML() {
-    return [{ tag: "span[data-relay-paste]" }];
-  },
-  renderHTML({ node }) {
-    const lines = pastedLines(node.attrs.text);
-    return [
-      "span",
-      {
-        "data-relay-paste": "",
-        class: "paste-pill",
-        title: "Show pasted text",
-        contenteditable: "false",
-      },
-      [
-        "span",
-        {
-          class: "composer-quote-remove",
-          role: "button",
-          "aria-label": `Remove Pasted text #${node.attrs.n}`,
-        },
-      ],
-      ["span", { class: "paste-pill-icon", "aria-hidden": "true" }],
-      ["span", {}, `Pasted text #${node.attrs.n}`],
-      [
-        "span",
-        { class: "paste-pill-lines" },
-        `${lines} ${lines === 1 ? "line" : "lines"}`,
-      ],
-    ];
-  },
-  renderText({ node }) {
-    return pasteMarkdown(node.attrs as PastedText);
-  },
-});
-// A file on this computer, by path; sent as the path in backticks for the agent to read.
-export const FileTag = Node.create({
-  name: "relayFile",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes() {
-    return { path: { default: "" } };
-  },
-  parseHTML() {
-    return [{ tag: "span[data-relay-file]" }];
-  },
-  renderHTML({ node }) {
-    const path: string = node.attrs.path;
-    return [
-      "span",
-      {
-        "data-relay-file": "",
-        class: "composer-skill-chip composer-file-chip",
-        title: path,
-        contenteditable: "false",
-      },
-      ["span", { "aria-hidden": "true", class: "composer-file-icon" }],
-      ["span", {}, path.split(/[\\/]/).filter(Boolean).pop() ?? path],
-    ];
-  },
-  renderText({ node }) {
-    return fileMarkdown(node.attrs.path);
-  },
-});
-/** What an image pill shows; the screenshot itself stays with the composer. */
-export interface ImageChip {
-  n: number;
-  name: string;
-  src: string;
-  bytes: number;
-}
-interface ImageStorage {
-  images: Map<number, ImageChip>;
-  /** Live pills, redrawn when the screenshots behind them load or change. */
-  views: Set<() => void>;
-}
-declare module "@tiptap/core" {
-  interface Storage {
-    relayImage: ImageStorage;
-  }
-}
-// A screenshot's place in the message; sent as `[Image #n]`, the image itself rides along.
-export const ImageTag = Node.create<object, ImageStorage>({
-  name: "relayImage",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes() {
-    return { n: { default: 1 } };
-  },
-  addStorage() {
-    return { images: new Map(), views: new Set() };
-  },
-  parseHTML() {
-    return [{ tag: "span[data-relay-image]" }];
-  },
-  renderHTML({ node }) {
-    return ["span", { "data-relay-image": "" }, imageToken(node.attrs.n)];
-  },
-  renderText({ node }) {
-    return imageToken(node.attrs.n);
-  },
-  // A text selection across a pill outlines it; painting its insides blotches.
-  addProseMirrorPlugins() {
-    const name = this.name;
-    return [
-      new Plugin({
-        props: {
-          decorations({ doc, selection }) {
-            if (selection.empty) return null;
-            const marked: Decoration[] = [];
-            doc.nodesBetween(selection.from, selection.to, (node, pos) => {
-              if (node.type.name === name)
-                marked.push(
-                  Decoration.node(pos, pos + node.nodeSize, {
-                    class: "in-selection",
-                  }),
-                );
-            });
-            return DecorationSet.create(doc, marked);
-          },
-        },
-      }),
-    ];
-  },
-  addNodeView() {
-    const storage = this.storage;
-    return ({ node }) => {
-      const n: number = node.attrs.n;
-      const dom = document.createElement("span");
-      dom.className =
-        "composer-skill-chip composer-file-chip composer-image-chip";
-      dom.contentEditable = "false";
-      dom.dataset.relayImage = "";
-      dom.dataset.n = String(n);
-      const draw = () => {
-        const image = storage.images.get(n);
-        // A paste's name says nothing, so its pill is just the picture.
-        const pasted = !!image && isPastedImageName(image.name);
-        dom.classList.toggle("missing", !image);
-        dom.classList.toggle("pasted", pasted);
-        dom.title = image
-          ? `${image.name} · ${formatSize(image.bytes)}, sent as ${imageToken(n)}. Click to draw on it.`
-          : "This screenshot is no longer in the draft";
-        dom.replaceChildren();
-        if (image) {
-          const thumb = document.createElement("img");
-          thumb.className = "composer-image-chip-thumb";
-          thumb.src = image.src;
-          thumb.alt = pasted ? `Image #${n}` : "";
-          dom.append(thumb);
-        } else {
-          const thumb = document.createElement("span");
-          thumb.className = "composer-image-chip-thumb";
-          thumb.setAttribute("aria-hidden", "true");
-          dom.append(thumb);
-        }
-        if (!pasted) {
-          const label = document.createElement("span");
-          label.textContent = image
-            ? shortImageName(image.name)
-            : `Image #${n}`;
-          dom.append(label);
-        }
-      };
-      draw();
-      storage.views.add(draw);
-      return {
-        dom,
-        update: (next) => next.type === node.type && next.attrs.n === n,
-        destroy: () => storage.views.delete(draw),
-      };
-    };
-  },
-});
 /** Puts tags in where the pointer is, or at the caret without one. */
 function insertTags(
   editor: Editor,
@@ -407,43 +132,7 @@ export function ComposerPromptInput({
   const quotes = useRef(chips.quotes.load());
   const files = useRef(chips.files.load());
   const editor = useEditor({
-    extensions: [
-      Extension.create({
-        name: "promptLimit",
-        addProseMirrorPlugins() {
-          return [
-            new Plugin({
-              filterTransaction: (tr) => promptText(tr.doc).length <= 32000,
-            }),
-          ];
-        },
-      }),
-      StarterKit.configure({
-        heading: false,
-        blockquote: false,
-        bulletList: false,
-        orderedList: false,
-        listItem: false,
-        listKeymap: false,
-        codeBlock: false,
-        horizontalRule: false,
-        bold: false,
-        italic: false,
-        strike: false,
-        code: false,
-        link: false,
-        underline: false,
-        dropcursor: false,
-        gapcursor: false,
-        trailingNode: false,
-      }),
-      Skill,
-      Quote,
-      Paste,
-      FileTag,
-      ImageTag,
-      ComposerDictation,
-    ],
+    extensions: promptExtensions(),
     content: promptContent(
       value,
       labels.current,

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getSchema, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
+import { ImageTag } from "../../src/components/composer-prompt/image-pill";
 import {
   FileTag,
-  ImageTag,
   Paste,
   Quote,
   Skill,
-} from "../../src/components/ComposerPromptInput";
+} from "../../src/components/composer-prompt/pills";
 import { promptContent } from "../../src/lib/prompt-content";
 import { pasteAt } from "../../src/lib/prompt-pills";
 import { positionAt, promptText, serialize } from "../../src/lib/prompt-text";

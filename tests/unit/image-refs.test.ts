@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { ImageTag } from "../../src/components/ComposerPromptInput";
+import { ImageTag } from "../../src/components/composer-prompt/image-pill";
 import { promptContent } from "../../src/lib/prompt-content";
 import { promptText } from "../../src/lib/prompt-text";
 import {

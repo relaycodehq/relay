@@ -2,12 +2,12 @@ import { expect, it } from "vitest";
 import { getSchema, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorState } from "@tiptap/pm/state";
+import { ImageTag } from "../../src/components/composer-prompt/image-pill";
 import {
   FileTag,
-  ImageTag,
   Paste,
   Quote,
-} from "../../src/components/ComposerPromptInput";
+} from "../../src/components/composer-prompt/pills";
 import { promptContent } from "../../src/lib/prompt-content";
 import {
   deleteImagePills,

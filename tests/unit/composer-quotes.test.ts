@@ -7,7 +7,7 @@ import {
   quoteLabel,
   unquote,
 } from "../../src/lib/composer-quotes";
-import { Quote } from "../../src/components/ComposerPromptInput";
+import { Quote } from "../../src/components/composer-prompt/pills";
 import { promptContent } from "../../src/lib/prompt-content";
 import { promptText } from "../../src/lib/prompt-text";
 

@@ -7,7 +7,7 @@ import {
   type EditorState,
 } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { fitCase } from "../../shared/dictation";
+import { fitCase } from "../../../shared/dictation";
 
 /**
  * The words being dictated: `from`–`to` in the draft, tentative from
