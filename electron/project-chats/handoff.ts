@@ -20,7 +20,7 @@ import { worktreeExists } from "../worktrees";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
 import type { ChatSchedule } from "./schedule";
-import { agentSession } from "./sessions";
+import { agentSession, sessionInput } from "./sessions";
 import { chatSummary } from "./storage";
 
 /** Where a thread stands between computers, or nothing when it's simply here. */
@@ -91,8 +91,6 @@ function turnPeek(m: ChatMessage): HandoffTurn {
 
 export interface HandoffHost {
   send(id: string, input: ProjectChatSend): Promise<void>;
-  /** A hidden turn on an existing session. */
-  sessionInput(chat: ProjectChat, provider: AgentProvider): ProjectChatSend;
   /** The thread's agent writes its note for the computer the thread goes to. */
   note(
     chat: ProjectChat,
@@ -203,7 +201,7 @@ export class ComputerHandoff {
         const provider = outgoing.provider;
         const active = this.core.active.claim(
           id,
-          this.host.sessionInput(chat, provider),
+          sessionInput(chat, provider, this.core.store),
         );
         try {
           await this.host.note(chat, root, provider, active, computer);

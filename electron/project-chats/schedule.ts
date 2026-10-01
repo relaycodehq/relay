@@ -1,5 +1,4 @@
 import type {
-  AgentProvider,
   HeldWakeup,
   ProjectChat,
   ProjectChatSend,
@@ -9,16 +8,11 @@ import type {
 import { replyRoot } from "../../shared/projects";
 import { stopClaudeTask } from "../rooms/claude-project";
 import type { ChatCore } from "./core";
+import { sessionInput } from "./sessions";
 import { nextSend } from "./storage";
 
 export interface ScheduleHost {
   send(id: string, input: ProjectChatSend, fromRelay?: boolean): Promise<void>;
-  /** A hidden turn on an existing session. */
-  sessionInput(
-    chat: ProjectChat,
-    provider: AgentProvider,
-    parentId?: string,
-  ): ProjectChatSend;
 }
 
 /**
@@ -175,7 +169,7 @@ export class ChatSchedule {
     await this.host.send(
       chatId,
       {
-        ...this.host.sessionInput(chat, "claude", wakeup.parentId),
+        ...sessionInput(chat, "claude", this.core.store, wakeup.parentId),
         body: `@claude Relay restarted before your scheduled wake-up, so it's sending it for you:\n\n${wakeup.prompt}`,
       },
       true,
@@ -199,7 +193,7 @@ export class ChatSchedule {
     return this.host.send(
       id,
       {
-        ...this.host.sessionInput(chat, "claude", work.parentId),
+        ...sessionInput(chat, "claude", this.core.store, work.parentId),
         body: `@claude Cancel the wake-up you scheduled (${pendingId}) with CronDelete, and don't do anything else.`,
       },
       true,
@@ -258,7 +252,7 @@ export class ChatSchedule {
       await this.host.send(
         id,
         {
-          ...this.host.sessionInput(chat, "claude", parentId),
+          ...sessionInput(chat, "claude", this.core.store, parentId),
           body: `@claude Relay closed while you were waiting on these, so they stopped:\n${lines.join("\n")}\n\nCheck where they got to and pick the work back up.`,
         },
         true,

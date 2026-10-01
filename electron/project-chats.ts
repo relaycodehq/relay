@@ -107,13 +107,8 @@ export class ProjectChats {
     });
     this.schedule = new ChatSchedule(core, {
       send: (id, input, fromRelay) => this.send(id, input, fromRelay),
-      sessionInput: (chat, provider, parentId) =>
-        this.turns.sessionInput(chat, provider, parentId),
     });
-    this.titles = new ThreadTitles(core, {
-      choice: (chat, provider) =>
-        this.turns.sessionInput(chat, provider).choice,
-    });
+    this.titles = new ThreadTitles(core);
     this.sharing = new ChatSharing(core, sharing, {
       sync: (id) => this.sync(id),
     });
@@ -125,7 +120,6 @@ export class ProjectChats {
     this.files = new TurnFiles(core, this.worktrees);
     this.handoffs = new ComputerHandoff(core, this.schedule, {
       send: (id, input) => this.send(id, input),
-      sessionInput: (chat, provider) => this.turns.sessionInput(chat, provider),
       note: (chat, root, provider, active, computer) =>
         this.turns.handoff(
           chat,

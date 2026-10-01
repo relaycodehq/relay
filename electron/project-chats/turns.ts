@@ -10,7 +10,6 @@ import { replyRoot } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agents, helperProviders } from "../../shared/agents";
-import { codexQuestionChoice } from "../../shared/settings";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "../answer-recorder";
 import type { ChatTurn } from "../chat-turn";
@@ -24,7 +23,7 @@ import type { Councils } from "./councils";
 import { assertHere } from "./handoff";
 import type { ChatQueue } from "./queue";
 import { interrupt } from "./revive";
-import { agentSession, parseSessionKey } from "./sessions";
+import { agentSession, parseSessionKey, sessionInput } from "./sessions";
 import type { ChatSharing } from "./sharing";
 import { forkFor, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
@@ -380,30 +379,6 @@ export class ChatTurns {
       );
     void active.job.catch(() => {});
   }
-  /** A hidden turn on an existing session, with the settings that session last ran under. */
-  sessionInput(
-    chat: ProjectChat,
-    provider: AgentProvider,
-    parentId?: string,
-  ): ProjectChatSend {
-    const previous = chat.lastInput;
-    const same = previous && sentAgent(previous) === provider;
-    return {
-      id: randomUUID(),
-      body: `@${provider}`,
-      to: provider,
-      provider,
-      // Matching the last turn's settings keeps the live session instead of reopening it.
-      // Another provider's model id would not resolve here.
-      choice: same ? previous.choice : this.defaultChoice(provider),
-      ...(same && previous.contextWindow
-        ? { contextWindow: previous.contextWindow }
-        : {}),
-      runtimeMode: previous?.runtimeMode ?? "full-access",
-      interactionMode: previous?.interactionMode ?? "default",
-      ...(parentId ? { parentId } : {}),
-    };
-  }
   /**
    * Asks the agent that answered last to brief the one taking over. Best effort:
    * a failed or slow note leaves a marker and the switch proceeds without it.
@@ -417,7 +392,7 @@ export class ChatTurns {
     active: ActiveChat,
     computer?: string,
   ): Promise<ChatMessage> {
-    const input = this.sessionInput(chat, from, parentId);
+    const input = sessionInput(chat, from, this.core.store, parentId);
     const message = streamingAnswer(from, {
       handoff: { from, to, ...(computer ? { computer } : {}) },
       ...(parentId ? { parentId } : {}),
@@ -459,7 +434,7 @@ export class ChatTurns {
     resumed?: ChatMessage,
   ) {
     if (this.core.closing()) throw new Error("Relay is closing.");
-    const input = this.sessionInput(chat, provider, parentId);
+    const input = sessionInput(chat, provider, this.core.store, parentId);
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
     const idle = !this.core.active.has(chat.id);
@@ -637,7 +612,7 @@ export class ChatTurns {
         throw new Error(
           `${agentName(provider)} compacts without custom instructions.`,
         );
-      const input = this.sessionInput(chat, provider, parentId);
+      const input = sessionInput(chat, provider, this.core.store, parentId);
       const active = this.core.active.claim(id, input);
       const { abort } = active;
       const message = streamingAnswer(provider, {
@@ -659,14 +634,5 @@ export class ChatTurns {
         .finally(() => this.endRun(chat, active));
       void active.job.catch(() => {});
     });
-  }
-  /**
-   * The model a hidden turn runs on when the session's last turn was another
-   * agent's: Codex's saved question model, the others' defaults.
-   */
-  private defaultChoice(provider: AgentProvider) {
-    return provider === "codex"
-      ? codexQuestionChoice(this.core.store.aiSettings())
-      : { model: "", reasoningEffort: "" as const, fast: false };
   }
 }

@@ -1,5 +1,4 @@
 import type {
-  AgentProvider,
   ChatMessage,
   ProjectChat,
   ProjectChatSend,
@@ -12,12 +11,8 @@ import {
   regenerateThreadTitle,
 } from "../thread-titles";
 import type { ChatCore } from "./core";
+import { sessionInput } from "./sessions";
 import { chatSummary } from "./storage";
-
-export interface TitlesHost {
-  /** What a hidden turn on the agent's session would run on. */
-  choice(chat: ProjectChat, provider: AgentProvider): ProjectChatSend["choice"];
-}
 
 /** A thread's name: the prompt's excerpt, then one an agent writes, or yours. */
 export class ThreadTitles {
@@ -28,10 +23,7 @@ export class ThreadTitles {
   private updates = new Set<Promise<void>>();
   /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
   private asked = new Set<string>();
-  constructor(
-    private core: ChatCore,
-    private host: TitlesHost,
-  ) {}
+  constructor(private core: ChatCore) {}
 
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
@@ -110,7 +102,11 @@ export class ThreadTitles {
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
     );
     if (!firstUser || !answer) return;
-    this.generate(chat, answer, this.host.choice(chat, answer.provider));
+    this.generate(
+      chat,
+      answer,
+      sessionInput(chat, answer.provider, this.core.store).choice,
+    );
   }
 
   private async update(
@@ -154,7 +150,11 @@ export class ThreadTitles {
       throw new Error("Wait for the first answer to name the thread.");
     const abort = new AbortController();
     const job = (async () => {
-      const choice = this.host.choice(chat, answer.provider);
+      const choice = sessionInput(
+        chat,
+        answer.provider,
+        this.core.store,
+      ).choice;
       for (const provider of [
         answer.provider,
         ...helperProviders.filter((p) => p !== answer.provider),
