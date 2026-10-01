@@ -13,6 +13,7 @@ import {
 } from "./project-chats/sessions";
 import { interrupt } from "./project-chats/revive";
 import { ChatSchedule } from "./project-chats/schedule";
+import { ThreadTitles } from "./project-chats/titles";
 import { imageFileData } from "./project-chats/images";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
@@ -74,12 +75,7 @@ import {
   startTurn,
   turnDiff,
 } from "./turn-changes";
-import {
-  cleanTitle,
-  generateThreadTitle,
-  promptTitle,
-  regenerateThreadTitle,
-} from "./thread-titles";
+import { promptTitle } from "./thread-titles";
 import {
   autoSettledAt,
   DEFAULT_AUTO_SETTLE_DAYS,
@@ -182,6 +178,7 @@ export class ProjectChats {
   private sessions: ProviderSessions;
   private active: ActiveTurns;
   private schedule: ChatSchedule;
+  private titles: ThreadTitles;
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -196,13 +193,6 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
-  private titleJobs = new Map<
-    string,
-    { abort: AbortController; job: Promise<void> }
-  >();
-  private titleUpdates = new Set<Promise<void>>();
-  /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
-  private titlesAsked = new Set<string>();
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
   private reviewSteps = new Set<Promise<void>>();
   /**
@@ -302,6 +292,12 @@ export class ProjectChats {
       send: (id, input, fromRelay) => this.send(id, input, fromRelay),
       sessionInput: (chat, provider, parentId) =>
         this.sessionInput(chat, provider, parentId),
+      closing: () => this.disposing,
+    });
+    this.titles = new ThreadTitles(this.storage, {
+      emit: (event) => this.emit(event),
+      busy: (id) => this.active.has(id),
+      choice: (chat, provider) => this.sessionInput(chat, provider).choice,
       closing: () => this.disposing,
     });
   }
@@ -475,14 +471,8 @@ export class ProjectChats {
     delete chat.markedUnread;
     await this.storage.persist(chat);
   }
-  async rename(id: string, candidate: string) {
-    const title = cleanTitle(candidate);
-    if (!title) throw new Error("Enter a thread name up to 120 characters.");
-    const chat = await this.storage.load(id);
-    chat.title = title;
-    chat.renamed = true;
-    await this.storage.persist(chat);
-    return chatSummary(chat);
+  rename(id: string, candidate: string) {
+    return this.titles.rename(id, candidate);
   }
   async create(
     projectId: string,
@@ -1996,13 +1986,7 @@ export class ProjectChats {
           mimeType: image.mimeType,
         })),
         onTitle: (title: string) => {
-          if (!branch) {
-            const update = this.updateTitle(chat, answer.message, title).catch(
-              () => {},
-            );
-            this.titleUpdates.add(update);
-            void update.finally(() => this.titleUpdates.delete(update));
-          }
+          if (!branch) this.titles.heard(chat, answer.message, title);
         },
         onActivity: (activity: AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
@@ -2127,60 +2111,10 @@ export class ProjectChats {
         firstUser &&
         firstUser.id === input.id
       )
-        this.generateTitle(chat, ended, input.choice);
+        this.titles.generate(chat, ended, input.choice);
     }
     // A steer moves the rest of the answer to a message of its own.
     return answer.message;
-  }
-  /** Generated once per thread; the prompt excerpt stays until one lands. */
-  private generateTitle(
-    chat: ProjectChat,
-    answer: ChatMessage,
-    choice: ProjectChatSend["choice"],
-  ) {
-    const firstUser = chat.messages.find((m) => m.role === "user");
-    if (
-      this.disposing ||
-      !firstUser ||
-      !answer.provider ||
-      chat.renamed ||
-      chat.title !== promptTitle(firstUser.body) ||
-      this.titlesAsked.has(chat.id)
-    )
-      return;
-    // A title can come back as the excerpt; asking again would never end.
-    this.titlesAsked.add(chat.id);
-    const titleAbort = new AbortController();
-    const job = (async () => {
-      // One exhausted or unavailable CLI must not leave every thread named
-      // after its prompt, so try the helper agents next.
-      const providers = [
-        answer.provider,
-        ...helperProviders.filter((p) => p !== answer.provider),
-      ];
-      for (const provider of providers) {
-        try {
-          const title = await generateThreadTitle({
-            user: firstUser.body,
-            answer: answer.body,
-            provider,
-            // The other provider cannot use this provider's model id.
-            choice:
-              provider === answer.provider ? choice : { ...choice, model: "" },
-            signal: titleAbort.signal,
-          });
-          if (titleAbort.signal.aborted) return;
-          if (title) return await this.updateTitle(chat, answer, title);
-        } catch (error) {
-          if (titleAbort.signal.aborted) return;
-          console.warn(
-            `Thread title via ${provider} failed:`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-    })().finally(() => this.titleJobs.delete(chat.id));
-    this.titleJobs.set(chat.id, { abort: titleAbort, job });
   }
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
   private async chatRoot(chat: ProjectChat, prompt?: string): Promise<string> {
@@ -2506,15 +2440,7 @@ export class ProjectChats {
   }
   /** Retries titles for threads whose first title run failed earlier. */
   ensureTitle(id: string) {
-    const chat = this.storage.cached(id);
-    if (!chat || this.active.has(id) || chat.shared) return;
-    const firstUser = chat.messages.find((m) => m.role === "user");
-    const answer = chat.messages.find(
-      (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
-    );
-    if (!firstUser || !answer) return;
-    const { choice } = this.sessionInput(chat, answer.provider);
-    this.generateTitle(chat, answer, choice);
+    this.titles.ensure(id);
   }
   /**
    * The model a hidden turn runs on when the session's last turn was another
@@ -2525,76 +2451,12 @@ export class ProjectChats {
       ? codexQuestionChoice(this.store.aiSettings())
       : { model: "", reasoningEffort: "" as const, fast: false };
   }
-  private async updateTitle(
-    chat: ProjectChat,
-    message: ChatMessage,
-    candidate: string,
-  ) {
-    const title = cleanTitle(candidate);
-    const firstUser = chat.messages.find((m) => m.role === "user");
-    if (
-      !title ||
-      !firstUser ||
-      chat.renamed ||
-      chat.title !== promptTitle(firstUser.body) ||
-      title === chat.title
-    )
-      return;
-    chat.title = title;
-    await this.storage.persist(chat);
-    this.emit({ chatId: chat.id, message: structuredClone(message), title });
-  }
   /**
    * Names the thread again from the whole conversation, on demand, even over
-   * a name you typed. Tries the latest answer's agent, then the helper agents.
+   * a name you typed.
    */
-  async regenerateTitle(id: string) {
-    const chat = await this.storage.load(id);
-    if (this.titleJobs.has(id))
-      throw new Error("This thread's title is already being generated.");
-    const answer = [...chat.messages]
-      .reverse()
-      .find(
-        (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
-      );
-    if (!answer)
-      throw new Error("Wait for the first answer to name the thread.");
-    const abort = new AbortController();
-    const job = (async () => {
-      const { choice } = this.sessionInput(chat, answer.provider);
-      for (const provider of [
-        answer.provider,
-        ...helperProviders.filter((p) => p !== answer.provider),
-      ]) {
-        try {
-          const title = await regenerateThreadTitle({
-            previous: chat.title,
-            messages: chat.messages,
-            provider,
-            choice:
-              provider === answer.provider ? choice : { ...choice, model: "" },
-            signal: abort.signal,
-          });
-          if (title || abort.signal.aborted) return title;
-        } catch (error) {
-          if (abort.signal.aborted) return null;
-          console.warn(
-            `Regenerating a thread title via ${provider} failed:`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-      return null;
-    })();
-    this.titleJobs.set(id, { abort, job: job.then(() => {}) });
-    const title = await job.finally(() => this.titleJobs.delete(id));
-    if (abort.signal.aborted) throw new Error("Relay is closing.");
-    if (!title) throw new Error("No agent could name this thread.");
-    const fresh = await this.storage.load(id);
-    fresh.title = title;
-    delete fresh.renamed;
-    await this.storage.persist(fresh);
-    return chatSummary(fresh);
+  regenerateTitle(id: string) {
+    return this.titles.regenerate(id);
   }
   private syncing = new Map<string, Promise<void>>();
   private async deliver(chat: ProjectChat) {
@@ -2782,13 +2644,12 @@ export class ProjectChats {
       this.disposing = true;
       this.schedule.stop();
       for (const a of this.active.allSides()) a.abort.abort();
-      for (const a of this.titleJobs.values()) a.abort.abort();
+      this.titles.abort();
       // What was stopped writes its last state before the store goes to disk.
-      await Promise.allSettled(
-        [...this.active.allSides(), ...this.titleJobs.values()].map(
-          (a) => a.job,
-        ),
-      );
+      await Promise.allSettled([
+        ...[...this.active.allSides()].map((a) => a.job),
+        ...this.titles.running(),
+      ]);
       await Promise.allSettled(
         [...this.active.ids()].map((id) => {
           const chat = this.storage.cached(id);
@@ -2809,11 +2670,11 @@ export class ProjectChats {
     this.disposing = true;
     for (const a of this.active.all()) a.abort.abort();
     for (const a of this.active.allSides()) a.abort.abort();
-    for (const a of this.titleJobs.values()) a.abort.abort();
+    this.titles.abort();
     await Promise.allSettled([...this.active.allSides()].map((a) => a.job));
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
-    await Promise.allSettled([...this.titleJobs.values()].map((a) => a.job));
-    await Promise.allSettled([...this.titleUpdates]);
+    await Promise.allSettled(this.titles.running());
+    await Promise.allSettled(this.titles.writing());
     await Promise.allSettled([...this.controls.values()]);
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
