@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -32,6 +25,13 @@ import {
 } from "lucide-react";
 import { PaneResizer } from "./PaneResizer";
 import { SIDEBAR_WIDTH, type SettingsCategory } from "../lib/settings-page";
+import {
+  highlight,
+  matches,
+  searchWords,
+  sections,
+  type SettingEntry,
+} from "../lib/settings-search";
 import type { Account } from "../../shared/types";
 import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -206,43 +206,14 @@ const categories: {
   },
 ];
 
-interface Entry {
-  id: string;
-  category: CategoryId;
-  /** A heading within the category, shared by the entries that follow. */
-  section?: string;
-  title: string;
-  description?: string;
-  keywords?: string;
-  /** Block entries put their control under the text instead of beside it. */
-  block?: boolean;
-  /** A small control beside the title, for block entries. */
-  accessory?: () => ReactNode;
-  /** Entries that draw their whole card, given their (highlighted) title. */
-  card?: (title: ReactNode) => ReactNode;
-  render?: () => ReactNode;
-}
-
-/** Runs of entries under the same heading, in order. */
-function sections(entries: Entry[]) {
-  const runs: { section?: string; list: Entry[] }[] = [];
-  for (const entry of entries) {
-    const last = runs.at(-1);
-    if (last && last.section === entry.section) last.list.push(entry);
-    else runs.push({ section: entry.section, list: [entry] });
-  }
-  return runs;
-}
-
 function Highlight({ text, query }: { text: string; query: string }) {
-  const word = query.trim().split(/\s+/)[0];
-  const at = word ? text.toLowerCase().indexOf(word.toLowerCase()) : -1;
-  if (at < 0) return <>{text}</>;
+  const parts = highlight(text, query);
+  if (!parts) return <>{text}</>;
   return (
     <>
-      {text.slice(0, at)}
-      <mark>{text.slice(at, at + word.length)}</mark>
-      {text.slice(at + word.length)}
+      {parts[0]}
+      <mark>{parts[1]}</mark>
+      {parts[2]}
     </>
   );
 }
@@ -618,7 +589,7 @@ export function Settings({
   const previewKind =
     editing && kinds.includes(editing) ? editing : appearance.palette.kind;
 
-  const sendKeyEntry: Entry = {
+  const sendKeyEntry: SettingEntry = {
     id: "send-key",
     category: "shortcuts",
     section: "Composer",
@@ -653,7 +624,7 @@ export function Settings({
       </div>
     ),
   };
-  const entries: Entry[] = [
+  const entries: SettingEntry[] = [
     {
       id: "theme",
       category: "appearance",
@@ -1087,7 +1058,7 @@ export function Settings({
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings onConnect={onConnect} />,
     },
-    ...pluginIds.map((id): Entry => ({
+    ...pluginIds.map((id): SettingEntry => ({
       id: `plugin-${id}`,
       category: "plugins",
       title: plugins[id].title,
@@ -1179,7 +1150,7 @@ export function Settings({
       keywords: "keyboard shortcut hotkey keybinding rebind customize reset",
       render: () => <ShortcutsResetAll />,
     },
-    ...shortcutGroups.flatMap((group): Entry[] => [
+    ...shortcutGroups.flatMap((group): SettingEntry[] => [
       ...(group === "Composer" ? [sendKeyEntry] : []),
       ...shortcutIds
         .filter((id) => command(id).group === group)
@@ -1236,22 +1207,17 @@ export function Settings({
     },
   ];
 
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchWords(query);
   const labelOf = (id: CategoryId) =>
     categories.find((c) => c.id === id)!.label;
-  const matches = (entry: Entry) =>
-    words.every((word) =>
-      [entry.title, entry.description, entry.keywords, labelOf(entry.category)]
-        .join(" ")
-        .toLowerCase()
-        .includes(word),
-    );
-  const results = words.length ? entries.filter(matches) : [];
+  const results = words.length
+    ? entries.filter((e) => matches(e, words, labelOf(e.category)))
+    : [];
   const current = categories.find((c) => c.id === category)!;
   const where = words.length ? "Search results" : current.label;
   useEffect(() => onWhere?.(where), [where]);
 
-  const row = (entry: Entry) => {
+  const row = (entry: SettingEntry) => {
     if (entry.card)
       return (
         <section
