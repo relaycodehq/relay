@@ -1,8 +1,8 @@
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Settings2 } from "lucide-react-native";
-import { useRemote } from "../remote/RemoteProvider";
 import { Browser } from "../screens/Browser";
+import { ComputerSwitch } from "./ComputerSwitch";
 import { SidebarToggle, openInPane } from "./panes";
 import { useTheme } from "./theme";
 
@@ -22,7 +22,6 @@ export function Sidebar({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const remote = useRemote();
   return (
     <View
       style={[
@@ -43,9 +42,9 @@ export function Sidebar({
         ]}
       >
         <SidebarToggle hidden={false} onPress={onHide} />
-        <Text numberOfLines={1} style={[styles.name, { color: t.text }]}>
-          {remote.name}
-        </Text>
+        <View style={styles.name}>
+          <ComputerSwitch />
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Settings"
@@ -71,5 +70,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: toolbar / 2 - 12,
   },
-  name: { flex: 1, fontSize: 16, fontWeight: "600", marginRight: 12 },
+  name: { flex: 1, flexDirection: "row", marginRight: 12 },
 });

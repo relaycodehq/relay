@@ -84,6 +84,7 @@ async function desktop(
   tailnet: { current: PhoneTailnet } = {
     current: { status: "connected", addresses: ["127.0.0.1"] },
   },
+  extra: Partial<Omit<RemoteHost, "name">> = {},
 ) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-")));
   const store = new Store(join(dir, "state"));
@@ -93,7 +94,7 @@ async function desktop(
     store,
     async (v) => "sealed:" + v,
     async (v) => v.slice(7),
-    fake.host,
+    { ...fake.host, ...extra },
     0,
     async () => tailnet.current,
   );
@@ -297,6 +298,35 @@ it("only answers the allowlisted calls, and only after pairing", async () => {
     t: "denied",
     reason: "Pair this phone first.",
   });
+});
+
+it("lets a phone see the desktop's version and update it, but not take threads", async () => {
+  const asked: string[] = [];
+  const { remote } = await desktop(undefined, undefined, {
+    version: () => "0.3.1",
+    handoffs: {
+      handle: async (method) => {
+        asked.push(method);
+        return method === "computerInfo"
+          ? {
+              version: "0.3.1",
+              bridge: 11,
+              update: { status: "idle", current: "0.3.1" },
+            }
+          : { status: "checking", current: "0.3.1" };
+      },
+    },
+  });
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  expect((await p.client.call("overview")).version).toBe("0.3.1");
+  expect((await p.client.call("computerInfo")).version).toBe("0.3.1");
+  expect((await p.client.call("updateNow")).status).toBe("checking");
+  await expect(p.client.call("computerProjects")).rejects.toThrow(
+    "Only a paired computer can do that.",
+  );
+  expect(asked).toEqual(["computerInfo", "updateNow"]);
 });
 
 it("waits longer for calls that push or write, and not for the rest", async () => {

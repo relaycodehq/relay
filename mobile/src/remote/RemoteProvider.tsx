@@ -13,17 +13,34 @@ import { RemoteClient, type RemoteStatus } from "../../../shared/remote-client";
 import {
   remoteBridgeVersion,
   type PairingLink,
+  type RemoteCredentials,
   type RemoteEvent,
   type RemoteOverview,
 } from "../../../shared/remote";
+import { newerVersion } from "../../../shared/phone-app";
 import {
   clearCredentials,
-  loadCredentials,
+  loadPaired,
+  savePaired,
   saveCredentials,
 } from "./credentials";
-import { forgetOffline, loadOverview, saveOverview } from "./offline";
+import { cameBack } from "./computer-update";
+import {
+  dropLooseCopy,
+  forgetOffline,
+  loadOverview,
+  saveOverview,
+  setOfflineComputer,
+} from "./offline";
+import { runningVersion } from "./self-update";
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
+
+/** A paired computer, by its bridge's public key. */
+export interface PairedComputer {
+  id: string;
+  name: string;
+}
 
 interface Remote {
   /** Saved credentials have been read. */
@@ -38,10 +55,19 @@ interface Remote {
   call: RemoteClient["call"];
   /** The desktop's own calls on the phone's allowlist. */
   desktop: RemoteClient["desktop"];
-  /** The desktop runs an older bridge than this app needs; a restart of Relay updates it. */
+  /** The desktop runs an older bridge than this app needs. */
   outdated: boolean;
+  /** The desktop runs an older Relay than this app. */
+  behind: boolean;
+  /** Every paired computer, in pairing order; the phone talks to one at a time. */
+  computers: PairedComputer[];
+  /** The one it talks to. */
+  active?: string;
+  switchTo(id: string): Promise<void>;
+  /** Pairs another computer, or the same one again, and switches to it. */
   pair(link: PairingLink): Promise<void>;
-  forget(): Promise<void>;
+  /** Forgets one computer, the active one by default, and moves on to the next. */
+  forget(id?: string): Promise<void>;
   onMessage(chatId: string, listener: (e: MessageEvent) => void): () => void;
 }
 
@@ -76,6 +102,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const [detail, setDetail] = useState<string>();
   const [name, setName] = useState("Relay");
   const [overview, setOverview] = useState<RemoteOverview>();
+  const [saved, setSaved] = useState<RemoteCredentials[]>([]);
+  // Set before anything of the next computer arrives, so nothing of it is
+  // saved as the last one's.
+  const active = useRef<string>(undefined);
+  const [activeId, setActiveId] = useState<string>();
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
   const pairing = useRef<{
     resolve: () => void;
@@ -106,7 +137,14 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             pairing.current = undefined;
           }
         },
-        onPaired: (credentials) => void saveCredentials(credentials),
+        onPaired: (credentials) => {
+          if (!current()) return;
+          void saveCredentials(credentials);
+          setSaved((list) => [
+            ...list.filter((c) => c.key !== credentials.key),
+            credentials,
+          ]);
+        },
         onEvent: (event) => {
           if (!current()) return;
           if (event.kind === "chats")
@@ -129,21 +167,48 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  useEffect(() => {
-    void loadCredentials().then((saved) => {
-      if (saved) {
-        // Last seen lists to read while it connects, or can't; never a wait.
-        void loadOverview().then(
-          (cached) => cached && setOverview((live) => live ?? cached),
-        );
-        connect(saved);
-      }
-      setReady(true);
-    });
-  }, [connect]);
+  /** Talks to this computer from now on, showing its last seen lists while it connects. */
+  const attach = useCallback(
+    async (
+      id: string,
+      start: ConstructorParameters<typeof RemoteClient>[0]["start"],
+    ) => {
+      // Last seen lists to read while it connects, or can't; never a wait.
+      const cached = await loadOverview(id);
+      active.current = id;
+      setActiveId(id);
+      setOfflineComputer(id);
+      setOverview(cached);
+      connect(start);
+    },
+    [connect],
+  );
 
   useEffect(() => {
-    if (overview) saveOverview(overview);
+    void loadPaired().then(async ({ paired, computers }) => {
+      dropLooseCopy();
+      setSaved(computers);
+      const start = computers.find((c) => c.key === paired.active);
+      if (start) await attach(start.key, start);
+      setReady(true);
+    });
+  }, [attach]);
+
+  // Kept to the list and the active one as they change, once read.
+  useEffect(() => {
+    if (!ready) return;
+    const current = saved.find((c) => c.key === activeId);
+    void savePaired(
+      { ids: saved.map((c) => c.key), active: current?.key },
+      current,
+    );
+  }, [ready, saved, activeId]);
+
+  useEffect(() => {
+    if (overview && active.current) {
+      saveOverview(active.current, overview);
+      cameBack(active.current, overview.version);
+    }
   }, [overview]);
 
   // The client this one replaced is closed in connect(); this is for leaving.
@@ -167,7 +232,9 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!client || client.status !== "online") return;
-    setOverview(await client.call("overview"));
+    const fresh = await client.call("overview");
+    // Switched away while it came.
+    if (live.relayClient === client) setOverview(fresh);
   }, [client]);
 
   // Stable for a connection, so screens fetch again on reconnects rather than
@@ -202,6 +269,14 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const switchTo = useCallback(
+    async (id: string) => {
+      const credentials = saved.find((c) => c.key === id);
+      if (credentials && id !== active.current) await attach(id, credentials);
+    },
+    [saved, attach],
+  );
+
   const value = useMemo<Remote>(
     () => ({
       ready,
@@ -214,6 +289,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       call,
       desktop,
       outdated: !!overview && (overview.bridge ?? 1) < remoteBridgeVersion,
+      behind:
+        !!overview?.version && newerVersion(runningVersion, overview.version),
+      computers: saved.map((c) => ({ id: c.key, name: c.name })),
+      active: activeId,
+      switchTo,
       pair: (link) =>
         new Promise<void>((resolve, reject) => {
           // An unreachable computer never answers; the client would retry forever.
@@ -230,26 +310,39 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             resolve: () => (clearTimeout(timer), resolve()),
             reject: (e) => (clearTimeout(timer), reject(e)),
           };
-          setOverview(undefined);
-          connect({ link, device: deviceName() });
+          void attach(link.key, { link, device: deviceName() });
         }).catch(async (e) => {
           // A failed pairing leaves the phone as it was.
-          const saved = await loadCredentials();
-          if (saved) connect(saved);
+          const before = saved.find((c) => c.key === activeId);
+          if (before) await attach(before.key, before);
           else {
+            active.current = undefined;
+            setActiveId(undefined);
+            setOverview(undefined);
             live.relayClient?.close();
             live.relayClient = undefined;
             setClient(undefined);
           }
           throw e;
         }),
-      forget: async () => {
-        client?.close();
-        setClient(undefined);
-        setOverview(undefined);
-        setStatus("offline");
-        forgetOffline();
-        await clearCredentials();
+      forget: async (id = activeId) => {
+        if (!id) return;
+        const rest = saved.filter((c) => c.key !== id);
+        setSaved(rest);
+        if (id === activeId) {
+          const next = rest[0];
+          if (next) await attach(next.key, next);
+          else {
+            active.current = undefined;
+            setActiveId(undefined);
+            client?.close();
+            setClient(undefined);
+            setOverview(undefined);
+            setStatus("offline");
+          }
+        }
+        forgetOffline(id);
+        await clearCredentials(id);
       },
       onMessage,
     }),
@@ -261,7 +354,10 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       name,
       overview,
       refresh,
-      connect,
+      saved,
+      activeId,
+      attach,
+      switchTo,
       call,
       desktop,
       onMessage,

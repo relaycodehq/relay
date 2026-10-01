@@ -3,6 +3,7 @@ import { Redirect, Stack, router } from "expo-router";
 import { Settings2 } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
 import { Browser } from "../screens/Browser";
+import { ComputerSwitch } from "../ui/ComputerSwitch";
 import { rowStyles } from "../ui/Rows";
 import { useWide } from "../ui/panes";
 import { useTheme } from "../ui/theme";
@@ -32,6 +33,7 @@ export default function Home() {
         options={{
           headerShown: true,
           title: remote.name,
+          headerTitle: () => <ComputerSwitch />,
           headerRight: () => (
             <Pressable
               accessibilityRole="button"

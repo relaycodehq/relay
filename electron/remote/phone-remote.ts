@@ -10,6 +10,7 @@ import {
   type PhoneAppearance,
   type PhonePairing,
   type PhoneRemoteState,
+  updateMethods,
 } from "../../shared/remote";
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
@@ -116,7 +117,8 @@ export class PhoneRemote {
         const device = this.devices.list().find((d) => d.id === deviceId);
         const computer = device?.kind === "computer";
         if ((computerMethods as readonly string[]).includes(method)) {
-          if (!computer || !device || !host.handoffs)
+          const either = (updateMethods as readonly string[]).includes(method);
+          if (!(computer || either) || !device || !host.handoffs)
             throw new Error("Only a paired computer can do that.");
           return host.handoffs.handle(
             method as (typeof computerMethods)[number],

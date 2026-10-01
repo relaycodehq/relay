@@ -19,7 +19,8 @@ import { useProjectIconSync } from "../remote/project-icons";
 import { ActivityList } from "../ui/ActivityList";
 import { Button } from "../ui/Button";
 import { ConnectionLine } from "../ui/ConnectionLine";
-import { OutdatedBanner, UpdateBanner } from "../ui/OutdatedBanner";
+import { ComputerUpdateBanner } from "../ui/ComputerUpdate";
+import { UpdateBanner } from "../ui/UpdateBanner";
 import { ProjectIcon } from "../ui/ProjectIcon";
 import { Row, Segmented, rowStyles } from "../ui/Rows";
 import { ThreadRow, ago } from "../ui/ThreadRow";
@@ -197,7 +198,7 @@ export function Browser({
   return (
     <View style={styles.screen}>
       <ConnectionLine />
-      <OutdatedBanner />
+      <ComputerUpdateBanner />
       <UpdateBanner />
       {remote.status === "denied" ? (
         <View style={styles.empty}>

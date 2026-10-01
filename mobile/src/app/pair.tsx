@@ -67,7 +67,11 @@ export default function Pair() {
   return (
     <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
       <Text style={[styles.lead, { color: t.text }]}>
-        {linked ? `Pair this phone with ${linked.name}?` : "Pair with your computer"}
+        {linked
+          ? `Pair this phone with ${linked.name}?`
+          : remote.computers.length
+            ? "Pair another computer"
+            : "Pair with your computer"}
       </Text>
       <Text style={[styles.hint, { color: t.muted }]}>
         Relay reaches your computer only over Tailscale, a private network between your own

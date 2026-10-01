@@ -9,9 +9,18 @@ import type { Thread } from "./chat-state";
 const keep = 20;
 const pause = 5_000;
 
-const folder = () => new Directory(Paths.cache, "relay-offline");
-const overviewFile = () => new File(folder(), "overview.json");
+const root = () => new Directory(Paths.cache, "relay-offline");
+/** Each paired computer keeps its own copy; threads go to the one in use. */
+let current = "";
+const folder = (computer = current) => new Directory(root(), computer);
+const overviewFile = (computer?: string) =>
+  new File(folder(computer), "overview.json");
 const threadFile = (id: string) => new File(folder(), `thread-${id}.json`);
+
+/** Which computer's copy threads are read from and written to from now on. */
+export function setOfflineComputer(computer: string) {
+  current = computer;
+}
 
 async function read<T>(file: File): Promise<T | undefined> {
   try {
@@ -23,7 +32,7 @@ async function read<T>(file: File): Promise<T | undefined> {
 
 function write(file: File, value: unknown) {
   try {
-    folder().create({ idempotent: true, intermediates: true });
+    file.parentDirectory.create({ idempotent: true, intermediates: true });
     file.write(JSON.stringify(value));
   } catch {
     // A full disk costs the offline copy, nothing else.
@@ -51,24 +60,29 @@ function later(key: string, save: () => void) {
   waiting.set(key, entry);
 }
 
-export const loadOverview = () => read<RemoteOverview>(overviewFile());
+export const loadOverview = (computer: string) =>
+  read<RemoteOverview>(overviewFile(computer));
 
-export function saveOverview(overview: RemoteOverview) {
-  later("overview", () => write(overviewFile(), overview));
+// The file is picked now: a switch to another computer before the write
+// mustn't land this one's copy in that one's folder.
+export function saveOverview(computer: string, overview: RemoteOverview) {
+  const file = overviewFile(computer);
+  later(file.uri, () => write(file, overview));
 }
 
 export const loadThread = (id: string) => read<Thread>(threadFile(id));
 
 export function saveThread(id: string, thread: Thread) {
-  later(`thread-${id}`, () => {
-    write(threadFile(id), thread);
-    prune();
+  const file = threadFile(id);
+  later(file.uri, () => {
+    write(file, thread);
+    prune(file.parentDirectory);
   });
 }
 
-function prune() {
+function prune(dir: Directory) {
   try {
-    const threads = folder()
+    const threads = dir
       .list()
       .filter(
         (f): f is File => f instanceof File && f.name.startsWith("thread-"),
@@ -79,11 +93,21 @@ function prune() {
 }
 
 /** Unpairing leaves nothing of the computer behind on the phone. */
-export function forgetOffline() {
-  for (const { timer } of waiting.values()) clearTimeout(timer);
-  waiting.clear();
+export function forgetOffline(computer: string) {
+  const dir = folder(computer);
+  for (const [key, { timer }] of waiting)
+    if (key.startsWith(dir.uri)) {
+      clearTimeout(timer);
+      waiting.delete(key);
+    }
   try {
-    const dir = folder();
     if (dir.exists) dir.delete();
+  } catch {}
+}
+
+/** The single computer's copy from before there could be several, loose in the root. */
+export function dropLooseCopy() {
+  try {
+    for (const item of root().list()) if (item instanceof File) item.delete();
   } catch {}
 }

@@ -130,8 +130,8 @@ export interface RemoteProject {
 export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
-/** Bumped when the bridge gains calls; a phone asks for a restart of an older desktop. */
-export const remoteBridgeVersion = 10;
+/** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
+export const remoteBridgeVersion = 11;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -178,6 +178,8 @@ export interface RemoteOverview {
   name: string;
   /** Missing before version 2. */
   bridge?: number;
+  /** The desktop's Relay version; missing before version 11. */
+  version?: string;
   /** Unknown until the desktop's window has applied its theme once. */
   appearance?: PhoneAppearance;
   /** Missing before version 7, and in builds made without the phone app. */
@@ -405,7 +407,7 @@ export const remoteMethods = [
   "computerInfo",
   "updateNow",
 ] as const satisfies readonly RemoteMethod[];
-/** What a paired computer may call, and nothing a phone may. */
+/** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
   "computerProjects",
   "handoffUpload",
@@ -418,6 +420,13 @@ export const computerMethods = [
   "updateNow",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
+/** The bridge from which phones may call `updateMethods` too. */
+export const phoneUpdatesBridge = 11;
+/** About this Relay itself, so a phone may ask too, from `phoneUpdatesBridge`. */
+export const updateMethods = [
+  "computerInfo",
+  "updateNow",
+] as const satisfies readonly ComputerMethod[];
 /**
  * Calls that stop an agent, wait for its note or move a repository's worth
  * of Git; a dead link still fails them within a minute, as its ticks stop.

@@ -317,6 +317,7 @@ app
         projectPath: (id) => projects.get(id).path,
         chats: (id) => chats.list(id),
         chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
+        version: () => app.getVersion(),
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
         phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),

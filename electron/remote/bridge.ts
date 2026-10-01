@@ -40,6 +40,8 @@ export interface RemoteHost {
   /** The desktop's own dispatch, which validates every call's arguments. */
   dispatch(method: ApiMethod, args: unknown[]): Promise<unknown>;
   name(): string;
+  /** This Relay's version, which the phone compares with its own. */
+  version?(): string;
   appearance?(): PhoneAppearance | undefined;
   /** The phone app's code this build carries, if any; see ./phone-app. */
   phoneApp?: {
@@ -121,6 +123,7 @@ export class RemoteBridge {
       return {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
+        ...(this.host.version ? { version: this.host.version() } : {}),
         ...(phoneApp ? { phoneApp } : {}),
         ...(this.host.dictation
           ? { dictation: this.host.dictation.status() }

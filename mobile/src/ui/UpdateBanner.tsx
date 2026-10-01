@@ -4,18 +4,6 @@ import { useRemote } from "../remote/RemoteProvider";
 import { restartIntoUpdate, useSelfUpdate } from "../remote/self-update";
 import { type, useTheme } from "./theme";
 
-/** This app needs calls an older desktop doesn't have yet; restarting Relay brings them. */
-export function OutdatedBanner() {
-  const t = useTheme();
-  const { outdated, name } = useRemote();
-  if (!outdated) return null;
-  return (
-    <Text style={[styles.banner, { color: t.text, backgroundColor: t.accentSoft }]}>
-      Restart Relay on {name} to use everything on this phone.
-    </Text>
-  );
-}
-
 /** The desktop's newer version of this app: arriving, ready to restart into, or needing a new APK. */
 export function UpdateBanner() {
   const t = useTheme();

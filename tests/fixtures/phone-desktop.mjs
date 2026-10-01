@@ -7,6 +7,8 @@
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
+// --name <name> and --version <x.y.z> stand in for the computer's own, so two
+// of these can pass for two computers, one of them behind the phone.
 // RELAY_DICTATION_MODEL=<folder with the files in shared/dictation.ts> lets
 // the phone dictate.
 import { _electron as electron } from "@playwright/test";
@@ -31,6 +33,8 @@ const host = arg("--host");
 const port = arg("--port") ?? "47900";
 const seed = process.argv.includes("--seed");
 const theme = arg("--theme");
+const name = arg("--name");
+const version = arg("--version");
 
 const root = await realpath(
   await mkdtemp(join(tmpdir(), "relay-phone-desktop-")),
@@ -105,6 +109,14 @@ const stop = async () => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
+if (name || version)
+  await app.evaluate(
+    ({ app }, { name, version }) => {
+      if (version) app.getVersion = () => version;
+      if (name) process.mainModule.require("node:os").hostname = () => name;
+    },
+    { name, version },
+  );
 const page = await app.firstWindow();
 if (theme) {
   await page.evaluate((theme) => {

@@ -23,6 +23,8 @@ const extensions: Record<string, string> = {
 let icons: Record<string, Entry> = {};
 let loading: Promise<void> | undefined;
 let checked = 0;
+/** Whose icons were last checked: another computer's are due at once. */
+let checkedWith: RemoteClient["call"] | undefined;
 let syncing = false;
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((l) => l());
@@ -57,8 +59,10 @@ async function sync(
 ): Promise<void> {
   await load();
   const missing = projectIds.some((id) => !(id in icons));
+  if (call !== checkedWith) checked = 0;
   if (syncing || Date.now() - checked < (missing ? retry : fresh)) return;
   syncing = true;
+  checkedWith = call;
   try {
     const known = Object.fromEntries(
       projectIds.filter((id) => id in icons).map((id) => [id, icons[id]!.hash]),

@@ -16,6 +16,7 @@ import {
   useOrientationPolicy,
   useSidebarHidden,
 } from "../ui/panes";
+import { ComputerSheet } from "../ui/ComputerSwitch";
 import { NeedsYou } from "../ui/NeedsYou";
 import { Sidebar } from "../ui/Sidebar";
 import { ThemeProvider } from "../ui/ThemeProvider";
@@ -130,6 +131,7 @@ function Screens() {
               pane={panes}
             />
           </View>
+          {remote.paired && <ComputerSheet />}
         </View>
       </HeaderHeightContext.Provider>
     </FullWidthContext.Provider>
