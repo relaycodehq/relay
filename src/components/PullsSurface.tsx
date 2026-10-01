@@ -55,7 +55,6 @@ export function PullsSurface({
   onAddProject,
   onLocation,
   onSettings,
-  pendingUrl,
   initialWorkspace,
   incomingLink,
 }: {
@@ -70,7 +69,6 @@ export function PullsSurface({
   /** Where the page is, for the window title. */
   onLocation: (where: PullsLocation) => void;
   onSettings: (category?: SettingsCategory) => void;
-  pendingUrl?: string;
   initialWorkspace: WorkspaceState;
   incomingLink?: { url: string };
 }) {
@@ -79,7 +77,7 @@ export function PullsSurface({
   const selection = usePullSelection(
     initialWorkspace.pull,
     initialWorkspace.file,
-    !!initialWorkspace.pull && !pendingUrl,
+    !!initialWorkspace.pull,
   );
   const { selected, file, restoring, select, deselect, selectFile } = selection;
   const room = usePullRoom(selected);
@@ -135,9 +133,8 @@ export function PullsSurface({
     }
   };
   useEffect(() => {
-    const url = incomingLink?.url ?? pendingUrl;
-    if (url) void openUrl(url);
-  }, [pendingUrl, incomingLink]);
+    if (incomingLink?.url) void openUrl(incomingLink.url);
+  }, [incomingLink]);
   useShortcut("pr-open", true, () => setUrlOpen((v) => !v));
   useShortcut("review-files", true, () => setFilesHidden((v) => !v));
   const localProject = selected ? projectOf(selected) : undefined;
