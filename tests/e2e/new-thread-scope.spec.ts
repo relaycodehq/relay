@@ -81,11 +81,16 @@ test("new threads start on the repository, and not behind an open dialog", async
       button: "right",
     });
     await page.getByRole("menuitem", { name: "Pick a time…" }).click();
-    await expect(page.getByLabel("Send at")).toBeVisible();
+    const picker = page.getByRole("dialog", { name: "Send later" });
+    // Focus is on the picked day, not back on Send, where Enter sends now.
+    await expect(
+      picker.getByRole("grid", { name: "Day" }).locator("[aria-selected=true]"),
+    ).toBeFocused();
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
     await expect(changes).toHaveAttribute("aria-pressed", "true");
   } finally {
     await app.close();

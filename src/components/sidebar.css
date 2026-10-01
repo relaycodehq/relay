@@ -780,7 +780,8 @@
 .sb-card:hover .sb-card-actions,
 .sb-card:focus-visible .sb-card-actions,
 .sb-card:has(:focus-visible) .sb-card-actions,
-.sb-card-actions:has([data-popup-open]) {
+.sb-card-actions:has([data-popup-open]),
+.sb-card-actions:has([data-popup-shown]) {
   display: flex;
 }
 .sb .sb-card-action {
@@ -849,7 +850,8 @@
 .sb-card:hover .sb-card-state,
 .sb-card:focus-visible .sb-card-state,
 .sb-card:has(:focus-visible) .sb-card-state,
-.sb-card:has(.sb-card-actions [data-popup-open]) .sb-card-state {
+.sb-card:has(.sb-card-actions [data-popup-open]) .sb-card-state,
+.sb-card:has(.sb-card-actions [data-popup-shown]) .sb-card-state {
   display: none;
 }
 .sb-cards.shortcuts .sb-card .sb-card-state {
@@ -1119,6 +1121,23 @@
   height: 1px;
   margin: 4px 2px;
   background: var(--border);
+}
+/* The snooze popover's presets are plain buttons, not menu items. */
+.sb-snooze-presets {
+  display: grid;
+  min-width: 200px;
+}
+.sb-snooze-presets button.sb-menu-item {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+}
+.sb-snooze-presets button.sb-menu-item:hover,
+.sb-snooze-presets button.sb-menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
 }
 
 /* Footer. */

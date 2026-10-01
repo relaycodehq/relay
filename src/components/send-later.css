@@ -3,18 +3,3 @@
   margin: 4px 2px;
   background: var(--border);
 }
-.send-later-dialog {
-  width: 360px;
-}
-.send-later-dialog label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-}
-.send-later-dialog input {
-  color-scheme: light dark;
-}
-.send-later-dialog .field-note {
-  margin-top: 8px;
-}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNow } from "../lib/useNow";
 import {
   useMutation,
@@ -15,7 +15,6 @@ import {
   Check,
   ChevronRight,
   CalendarClock,
-  Clock,
   Copy,
   Ellipsis,
   Folder,
@@ -45,11 +44,11 @@ import {
   chatActivitySections,
   chatIsEmpty,
   shortAge,
-  snoozePresets,
   wakeLabel,
 } from "../../shared/chat-activity";
 import { agentsSince } from "../../shared/waiting";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
+import { SnoozeMenu } from "./SnoozeMenu";
 import { api } from "../lib/api";
 import { mac } from "../lib/mod-key";
 import {
@@ -247,44 +246,6 @@ function StatusMark({
       </span>
     );
   return <time className="sb-age">{shortAge(chat.updated, now)}</time>;
-}
-
-function SnoozeMenu({
-  onSnooze,
-  now,
-}: {
-  onSnooze: (until: number) => void;
-  now: number;
-}) {
-  const presets = useMemo(() => snoozePresets(new Date(now)), [now]);
-  return (
-    <Menu.Root>
-      <Menu.Trigger
-        className="sb-card-action icon"
-        aria-label="Snooze"
-        title="Snooze"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Clock size={14} />
-      </Menu.Trigger>
-      <MenuPopup side="bottom" align="end" sideOffset={6}>
-        <div className="sb-menu-heading">Snooze until…</div>
-        {presets.map((preset) => (
-          <Menu.Item
-            key={preset.id}
-            className="sb-menu-item"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSnooze(preset.until);
-            }}
-          >
-            <span>{preset.label}</span>
-            <small>{wakeLabel(preset.until, new Date(now))}</small>
-          </Menu.Item>
-        ))}
-      </MenuPopup>
-    </Menu.Root>
-  );
 }
 
 const sendsTitle = (at: number) =>

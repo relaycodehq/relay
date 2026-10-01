@@ -1,0 +1,371 @@
+/* Preview stage: a sidebar to snooze from, and room to the right. */
+.sp-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.sp-sidebar {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+.sp-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.sp-main {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.sp-main strong {
+  color: var(--text);
+  font-weight: 550;
+}
+/* Popover triggers say they're open with aria-expanded, not data-popup-open. */
+.sp-sidebar .sb-card-actions:has([aria-expanded="true"]) {
+  display: flex;
+}
+.sp-sidebar .sb-card:has([aria-expanded="true"]) .sb-card-state {
+  display: none;
+}
+.sp-bar-button {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+/* The popup: the snooze menu, grown into a picker. */
+.sp-pop {
+  overflow: hidden;
+}
+.sp-pop button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.sp-pop button:active {
+  filter: none;
+}
+.sp-pop .sb-menu-item {
+  width: 100%;
+  padding: 7px 9px;
+  justify-content: space-between;
+  text-align: left;
+}
+.sp-pop .sb-menu-item:hover,
+.sp-pop .sb-menu-item:focus-visible,
+.sp-pop .sb-menu-item[data-active] {
+  background: var(--hover);
+  outline: none;
+}
+.sp-menu {
+  width: 212px;
+}
+.sp-chevron {
+  color: var(--muted);
+  margin-right: -3px;
+}
+.sp-view {
+  animation: sp-in 0.16s ease-out;
+}
+@keyframes sp-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+.sp-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 1px 6px;
+}
+.sp-month,
+.sp-head-title {
+  flex: 1;
+  padding-left: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sp-pop .sp-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.sp-pop .sp-icon:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.sp-pop .sp-icon:disabled {
+  opacity: 0.3;
+}
+.sp-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px -9px -5px;
+  padding: 9px 10px 9px 14px;
+  border-top: 1px solid var(--border);
+}
+.sp-foot-when {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.sp-foot-when strong {
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-foot-when small,
+.sp-foot-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.sp-foot-hint {
+  flex: 1;
+}
+.sp-pop .sp-go {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sp-pop .sp-go:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
+/* A · Type it. */
+.sp-type {
+  width: 272px;
+}
+.sp-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  margin: -5px -5px 5px;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  cursor: text;
+}
+.sp-field input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text);
+}
+.sp-field input:focus-visible {
+  outline: none;
+}
+.sp-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-enter {
+  margin-right: -2px;
+  opacity: 0;
+}
+[data-active] > .sp-note .sp-enter {
+  opacity: 0.7;
+}
+.sp-typed .sb-menu-label {
+  font-weight: 550;
+}
+.sp-typed .sb-menu-label > svg {
+  color: var(--accent);
+}
+.sp-miss {
+  margin: 0;
+  padding: 7px 9px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.sp-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 9px;
+  margin: 5px -5px -5px;
+  padding: 8px 14px 9px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.sp-pop .sp-hint button {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--text) 75%, var(--muted));
+}
+.sp-pop .sp-hint button:hover {
+  color: var(--accent);
+}
+
+/* C · Timeline. */
+.sp-tl {
+  width: 304px;
+  padding: 4px 4px 0;
+}
+.sp-readout {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 2px 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.sp-readout-day {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.sp-readout-time {
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.sp-readout-rel {
+  font-size: 11px;
+  color: var(--muted);
+}
+.sp-days {
+  display: flex;
+  gap: 2px;
+  margin: 0 -4px;
+  padding: 0 4px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sp-pop .sp-dayc {
+  flex: none;
+  width: 40px;
+  height: 42px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1px;
+  border-radius: 8px;
+}
+.sp-dayc span {
+  font-size: 9.5px;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sp-dayc b {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.sp-pop .sp-dayc:hover {
+  background: var(--hover);
+}
+.sp-dayc[aria-pressed="true"] span,
+.sp-dayc[aria-pressed="true"] b {
+  color: var(--accent);
+}
+.sp-ruler {
+  position: relative;
+  height: 50px;
+  margin: 0 -9px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  border-top: 1px solid var(--border);
+  outline: none;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+}
+.sp-ruler:active {
+  cursor: grabbing;
+}
+.sp-ruler:focus-visible .sp-needle {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.sp-tick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 5px;
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+.sp-tick.half {
+  height: 9px;
+}
+.sp-tick.hour {
+  height: 14px;
+  background: var(--muted);
+}
+.sp-tick.day {
+  height: 20px;
+  background: var(--text);
+}
+.sp-tick.past {
+  opacity: 0.25;
+}
+.sp-tick-label {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.sp-tick.day .sp-tick-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.sp-needle {
+  position: absolute;
+  top: 0;
+  bottom: 6px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 0 0 2px 2px;
+  background: var(--accent);
+}

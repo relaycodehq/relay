@@ -1,9 +1,9 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
+import { Popover } from "@base-ui/react/popover";
 import { CalendarClock } from "lucide-react";
-import { useState, type ReactElement } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState, type ReactElement } from "react";
 import { atHour, wakeLabel } from "../../shared/chat-activity";
-import { Modal } from "./ui";
+import { PickTime } from "./PickTime";
 import "./send-later.css";
 
 interface Preset {
@@ -22,66 +22,6 @@ export function sendLaterPresets(now: Date): Preset[] {
     presets.push({ label: "This evening", at: atHour(now, 0, 18) });
   presets.push({ label: "Tomorrow morning", at: atHour(now, 1, 9) });
   return presets;
-}
-
-/** The value a datetime-local input takes, in local time. */
-function localInput(at: number) {
-  const d = new Date(at - new Date(at).getTimezoneOffset() * 60_000);
-  return d.toISOString().slice(0, 16);
-}
-
-function SendLaterDialog({
-  onPick,
-  onClose,
-}: {
-  onPick: (at: number) => void;
-  onClose: () => void;
-}) {
-  // An hour ahead, on the next five minutes.
-  const [value, setValue] = useState(() =>
-    localInput(Math.ceil((Date.now() + 3_600_000) / 300_000) * 300_000),
-  );
-  const at = value ? new Date(value).getTime() : NaN;
-  const valid = at > Date.now();
-  return (
-    <Modal title="Send later" onClose={onClose} className="send-later-dialog">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          // React bubbles it through the portal to the composer's own form.
-          e.stopPropagation();
-          if (!valid) return;
-          onClose();
-          onPick(at);
-        }}
-      >
-        <label>
-          Send at
-          <input
-            type="datetime-local"
-            aria-label="Send at"
-            value={value}
-            min={localInput(Date.now())}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-          />
-        </label>
-        <p className="field-note">
-          {valid
-            ? `Sends ${wakeLabel(at, new Date())}. Relay has to be open then; if it's closed, the message goes out when Relay starts.`
-            : "Choose a time in the future."}
-        </p>
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={!valid}>
-            Schedule
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
 }
 
 // Its own component so the times are worked out when the menu opens, not on
@@ -112,10 +52,11 @@ export function SendLaterMenu({
   children: ReactElement;
 }) {
   const [picking, setPicking] = useState(false);
+  const button = useRef<HTMLDivElement>(null);
   return (
     <>
       <ContextMenu.Root disabled={disabled}>
-        <ContextMenu.Trigger render={children} />
+        <ContextMenu.Trigger ref={button} render={children} />
         <ContextMenu.Portal>
           <ContextMenu.Positioner className="sb-menu-positioner">
             <ContextMenu.Popup className="sb-menu send-later-menu">
@@ -135,12 +76,30 @@ export function SendLaterMenu({
           </ContextMenu.Positioner>
         </ContextMenu.Portal>
       </ContextMenu.Root>
-      {/* Outside the composer's form, which a nested form would submit. */}
-      {picking &&
-        createPortal(
-          <SendLaterDialog onPick={onPick} onClose={() => setPicking(false)} />,
-          document.body,
-        )}
+      {/* A menu can't hold a calendar, so the picker opens on its own by Send. */}
+      <Popover.Root open={picking} onOpenChange={setPicking}>
+        <Popover.Portal>
+          <Popover.Positioner
+            anchor={button}
+            side="top"
+            align="end"
+            sideOffset={8}
+            collisionPadding={12}
+            className="sb-menu-positioner"
+          >
+            <Popover.Popup className="sb-menu" aria-label="Send later">
+              <PickTime
+                action="Schedule"
+                hint="Relay has to be open then; if it's closed, the message goes out when Relay starts."
+                onPick={(at) => {
+                  setPicking(false);
+                  onPick(at);
+                }}
+              />
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
     </>
   );
 }

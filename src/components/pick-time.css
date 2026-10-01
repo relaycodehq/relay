@@ -1,0 +1,191 @@
+/* "Pick a time…": a month and a drum of half-hours, inside a menu's popup. */
+.pick-time {
+  width: 330px;
+  padding: 4px 4px 0;
+  animation: pick-time-in 0.16s ease-out;
+}
+@keyframes pick-time-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+/* The popup sits in <body>, outside the sidebar's and composer's resets. */
+.pick-time button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.pick-time button:active {
+  filter: none;
+}
+.pick-time-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 1px 6px;
+}
+.pick-time-month {
+  flex: 1;
+  padding-left: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pick-time .pick-time-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.pick-time .pick-time-icon:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.pick-time .pick-time-icon:disabled {
+  opacity: 0.3;
+}
+.pick-time-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+}
+.pick-time-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 31px);
+  grid-template-rows: 22px repeat(6, 28px);
+  gap: 2px;
+}
+.pick-time-weekday {
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.pick-time .pick-time-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pick-time .pick-time-day:hover:not(:disabled) {
+  background: var(--hover);
+}
+.pick-time .pick-time-day[data-today] {
+  color: var(--accent);
+  font-weight: 650;
+}
+.pick-time-day[data-today]::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pick-time .pick-time-day[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--accent);
+  font-weight: 650;
+}
+.pick-time .pick-time-day:disabled {
+  opacity: 1;
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.pick-time-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px -9px -5px;
+  padding: 9px 10px 9px 14px;
+  border-top: 1px solid var(--border);
+}
+.pick-time-when {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.pick-time-when strong {
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pick-time-when small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.pick-time .pick-time-go {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pick-time .pick-time-go:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
+/* The time drum: rows on a cylinder whose axis sits 100px behind the band,
+   16° apart so neighbours land one row height apart and five rows each side
+   fill the column. */
+.time-drum {
+  --row: 28px;
+  position: relative;
+  height: 202px;
+  overflow: hidden;
+  perspective: 600px;
+  border-left: 1px solid var(--border);
+  outline: none;
+  user-select: none;
+}
+.time-drum-band {
+  position: absolute;
+  inset: 50% 2px auto 9px;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  transition: box-shadow 0.12s;
+}
+.time-drum:focus-visible .time-drum-band {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.time-drum-row {
+  position: absolute;
+  inset: 50% 2px auto 9px;
+  height: var(--row);
+  margin-top: calc(var(--row) / -2);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  opacity: calc(1 - var(--ad) * 0.17);
+  transform-origin: 50% 50% -100px;
+  transform: rotateX(calc(var(--d) * -16deg));
+  backface-visibility: hidden;
+  transition:
+    transform 380ms cubic-bezier(0.2, 0.9, 0.25, 1),
+    opacity 280ms ease,
+    color 120ms;
+}
+.time-drum-row[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 650;
+}
+.time-drum-row[aria-disabled] {
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+  cursor: default;
+}
