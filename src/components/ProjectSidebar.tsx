@@ -5,11 +5,18 @@ import type { SidebarView } from "../../shared/types";
 import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { ThreadMenu } from "./ThreadMenu";
 import { NameInput } from "./NameInput";
-import { CardAgents, CardState, StatusMark } from "./ThreadStatus";
 import {
-  Archive,
+  firstThreads,
+  ShowMore,
+  ThreadRename,
+  ThreadRow,
+  ThreadRowMenu,
+  ThreadTitle,
+  type SidebarRows,
+} from "./SidebarThread";
+import { CardAgents, CardState } from "./ThreadStatus";
+import {
   Bell,
   Check,
   ChevronRight,
@@ -33,7 +40,6 @@ import {
 } from "lucide-react";
 import {
   projectNameSchema,
-  threadTitleSchema,
   type Project,
   type ChatSummary,
 } from "../../shared/projects";
@@ -81,48 +87,6 @@ import { useThreadSearch } from "../lib/useThreadSearch";
 import { useThreadActions } from "../lib/useThreadActions";
 import { useActivityKeys } from "../lib/useActivityKeys";
 import { useAttention } from "../lib/useAttention";
-
-const THREADS_PER_PROJECT = 5;
-const STALE_AFTER = 24 * 60 * 60 * 1000;
-
-/** A thread's name, dimmed while it's being generated again. */
-function ThreadTitle({
-  className,
-  title,
-  regenerating,
-}: {
-  className: string;
-  title: string;
-  regenerating: boolean;
-}) {
-  return (
-    <span
-      className={`${className} ${regenerating ? "sb-title-regenerating" : ""}`}
-      aria-busy={regenerating || undefined}
-    >
-      {title}
-    </span>
-  );
-}
-
-/** The row that expands or collapses a long thread list. */
-function ShowMore({
-  more,
-  hidden,
-  onToggle,
-}: {
-  more: boolean;
-  hidden: number;
-  onToggle: () => void;
-}) {
-  return (
-    <button className="sb-thread sb-ghost" onClick={onToggle}>
-      <span className="sb-thread-title">
-        {more ? "Show less" : `Show ${hidden} more`}
-      </span>
-    </button>
-  );
-}
 
 /** A section's heading; the label folds the list beneath it. */
 function SectionTitle({
@@ -256,44 +220,18 @@ export function ProjectSidebar({
   const attention = useAttention(sections.active, unread, onAttention);
   const jumpBinding = useBindings("jump-thread")[0];
   const settleKeys = useShortcutLabel("settle");
+  const rows: SidebarRows = {
+    chatId,
+    now,
+    unread,
+    projects: byId,
+    actions,
+    autoSettleDays,
+    settleKeys,
+  };
   const newThreadKeys = useShortcutLabel("new-thread");
   const newScratchKeys = useShortcutLabel("new-scratch");
   const activityKeys = useShortcutLabel("activity");
-  /** Right-click on a thread anywhere in the sidebar. */
-  const threadMenu = (c: ChatSummary) => (
-    <ThreadMenu
-      chat={c}
-      projectName={byId.get(c.projectId)?.name}
-      projectPath={byId.get(c.projectId)?.path}
-      now={now}
-      unread={unread(c)}
-      regenerating={regenerating.has(c.id)}
-      autoSettleDays={autoSettleDays}
-      settleKeys={c.id === chatId ? settleKeys : undefined}
-      onAction={(action) => actions.act(c, action)}
-    />
-  );
-  // Inside a card the row's own click and keys would open the thread.
-  const renameInput = (c: ChatSummary, className: string) => (
-    <span
-      className="sb-thread-rename"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <NameInput
-        label="Thread name"
-        initial={c.title}
-        schema={threadTitleSchema}
-        placeholder="Thread name"
-        className={className}
-        onCancel={() => actions.setRenaming(undefined)}
-        onSubmit={(title) => {
-          actions.setRenaming(undefined);
-          void actions.rename(c, title);
-        }}
-      />
-    </span>
-  );
   const drafts =
     view === "activity"
       ? activityDrafts(
@@ -303,65 +241,10 @@ export function ProjectSidebar({
           chatId,
         )
       : [];
-  const threadRow = (c: ChatSummary, withProject = false) => {
-    const stale =
-      now - c.updated > STALE_AFTER &&
-      chatId !== c.id &&
-      !c.running &&
-      !c.waiting &&
-      !unread(c);
-    if (actions.renaming === c.id)
-      return (
-        <div key={c.id} className="sb-thread-row">
-          {renameInput(c, "sb-group-input sb-thread-input")}
-        </div>
-      );
-    return (
-      <ContextMenu.Root key={c.id}>
-        <ContextMenu.Trigger
-          className={`sb-thread-row ${stale ? "stale" : ""}`}
-        >
-          <button
-            className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
-            title={c.title}
-            onClick={() => open(c)}
-          >
-            <ThreadTitle
-              className="sb-thread-title"
-              title={c.title}
-              regenerating={regenerating.has(c.id)}
-            />
-            {withProject && (
-              <small className="sb-thread-project">
-                {byId.get(c.projectId)?.name}
-              </small>
-            )}
-            {c.scope.kind === "pr" && !withProject && (
-              <small className="sb-thread-pr">#{c.scope.ref.number}</small>
-            )}
-            <StatusMark chat={c} unread={unread(c)} now={now} />
-          </button>
-          {!c.running && !c.pending?.length && !c.nextSend && (
-            <button
-              className="sb-thread-archive"
-              title="Archive"
-              aria-label={`Archive ${c.title}`}
-              onClick={() => void triage(c, { kind: "archive" })}
-            >
-              <Archive size={13} />
-            </button>
-          )}
-        </ContextMenu.Trigger>
-        {threadMenu(c)}
-      </ContextMenu.Root>
-    );
-  };
-
   const renderProject = (p: Project) => {
     const chats = all.filter((c) => c.projectId === p.id);
     const isOpen = folds.isOpen(p.id, p.id === projectId);
     const more = folds.showsAll(p.id);
-    const visible = more ? chats : chats.slice(0, THREADS_PER_PROJECT);
     const busy = chats.some((c) => c.running || agentsSince(c.pending));
     return (
       <section
@@ -468,19 +351,19 @@ export function ProjectSidebar({
         )}
         {isOpen && (
           <div className="sb-thread-list">
-            {visible.map((c) => threadRow(c))}
+            {firstThreads(chats, more).map((c) => (
+              <ThreadRow key={c.id} chat={c} rows={rows} />
+            ))}
             {!chats.length && (
               <button className="sb-thread sb-ghost" onClick={() => onNew(p)}>
                 <span className="sb-thread-title">Start a thread</span>
               </button>
             )}
-            {chats.length > THREADS_PER_PROJECT && (
-              <ShowMore
-                more={more}
-                hidden={chats.length - THREADS_PER_PROJECT}
-                onToggle={() => folds.setShowsAll(p.id, !more)}
-              />
-            )}
+            <ShowMore
+              total={chats.length}
+              more={more}
+              onToggle={() => folds.setShowsAll(p.id, !more)}
+            />
           </div>
         )}
       </section>
@@ -795,7 +678,11 @@ export function ProjectSidebar({
               </div>
             </div>
             {actions.renaming === c.id ? (
-              renameInput(c, "sb-group-input sb-card-title-input")
+              <ThreadRename
+                chat={c}
+                actions={actions}
+                className="sb-group-input sb-card-title-input"
+              />
             ) : (
               <ThreadTitle
                 className="sb-card-title"
@@ -815,7 +702,7 @@ export function ProjectSidebar({
             </div>
           </ContextMenu.Trigger>
         </AwayPeek>
-        {threadMenu(c)}
+        <ThreadRowMenu chat={c} rows={rows} />
       </ContextMenu.Root>
     );
   };
@@ -843,7 +730,11 @@ export function ProjectSidebar({
         >
           <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
           {actions.renaming === c.id ? (
-            renameInput(c, "sb-group-input sb-compact-title-input")
+            <ThreadRename
+              chat={c}
+              actions={actions}
+              className="sb-group-input sb-compact-title-input"
+            />
           ) : (
             <ThreadTitle
               className="sb-compact-title"
@@ -882,7 +773,7 @@ export function ProjectSidebar({
             )}
           </button>
         </ContextMenu.Trigger>
-        {threadMenu(c)}
+        <ThreadRowMenu chat={c} rows={rows} />
       </ContextMenu.Root>
     );
   };
@@ -983,21 +874,19 @@ export function ProjectSidebar({
               </button>
             </div>
           )}
-          {(moreScratch ? scratch : scratch.slice(0, THREADS_PER_PROJECT)).map(
-            (c) => threadRow(c),
-          )}
+          {firstThreads(scratch, moreScratch).map((c) => (
+            <ThreadRow key={c.id} chat={c} rows={rows} />
+          ))}
           {!scratch.length && !scratchDraft && (
             <button className="sb-thread sb-ghost" onClick={onNewScratch}>
               <span className="sb-thread-title">Ask anything</span>
             </button>
           )}
-          {scratch.length > THREADS_PER_PROJECT && (
-            <ShowMore
-              more={moreScratch}
-              hidden={scratch.length - THREADS_PER_PROJECT}
-              onToggle={() => folds.setShowsAll("scratchpad", !moreScratch)}
-            />
-          )}
+          <ShowMore
+            total={scratch.length}
+            more={moreScratch}
+            onToggle={() => folds.setShowsAll("scratchpad", !moreScratch)}
+          />
         </div>
       )}
     </section>
@@ -1058,7 +947,9 @@ export function ProjectSidebar({
         <small>{results.length}</small>
       </div>
       <div className="sb-thread-list flat">
-        {listed.map((c) => threadRow(c, true))}
+        {listed.map((c) => (
+          <ThreadRow key={c.id} chat={c} rows={rows} withProject />
+        ))}
         {listed.length < results.length && (
           <button className="sb-thread sb-ghost" onClick={search.listAll}>
             <span className="sb-thread-title">
