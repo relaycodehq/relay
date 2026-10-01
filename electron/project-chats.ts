@@ -27,7 +27,7 @@ import type {
 } from "../shared/projects";
 import { replyRoot } from "../shared/projects";
 import type { LineQuestion } from "../shared/questions";
-import { agentAsked, sentAgent } from "../shared/recipient";
+import { sentAgent } from "../shared/recipient";
 import { agentRuntimes } from "./agents";
 import type { PullInfo } from "./deep-review";
 import type { Projects } from "./projects";
@@ -504,14 +504,7 @@ export class ProjectChats {
         !this.councils.busy(await this.storage.load(id))
       ) {
         await this.turns.sendNow(id, input);
-        // Asking an agent again picks a stopped queue back up after this
-        // answer. Drain waits behind this control, so it sees the change.
-        const chat = this.storage.cached(id);
-        if (chat?.queuePaused && agentAsked(input) && !fromRelay) {
-          delete chat.queuePaused;
-          await this.storage.save(chat);
-        }
-        return;
+        return this.queue.sentNow(id, input, fromRelay);
       }
       return this.queue.add(id, input);
     });

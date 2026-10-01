@@ -83,6 +83,19 @@ export class ChatQueue {
     if (input.delivery === "steer") await this.steer(chat, input.id);
   }
 
+  /**
+   * A message went out without queueing. Asking an agent again picks a
+   * stopped queue back up after this answer; Relay's own messages leave it
+   * stopped. Drain waits behind the sender's control, so it sees the change.
+   */
+  sentNow(id: string, input: ProjectChatSend, fromRelay: boolean) {
+    const chat = this.core.storage.cached(id);
+    if (chat?.queuePaused && agentAsked(input) && !fromRelay) {
+      delete chat.queuePaused;
+      return this.core.storage.save(chat);
+    }
+  }
+
   /** Sends the next queued message, unless the thread is busy or its queue stopped. */
   async drain(id: string) {
     if (this.core.closing() || this.core.active.has(id)) return;
