@@ -4,7 +4,7 @@ import { ArrowUp, SquarePen } from "lucide-react";
 import { loadDraftScope, useDraft, type ActivityDraft } from "../lib/drafts";
 import { ProjectBadge } from "./ProjectBadge";
 import { rowKeys } from "./ui";
-import { sendDraft } from "./draft-send";
+import { sendDraft } from "../lib/draft-send";
 
 export function DraftCard({
   draft,

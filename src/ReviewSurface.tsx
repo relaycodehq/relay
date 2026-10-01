@@ -60,14 +60,14 @@ import { ErrorBox, IconButton, Loading, Modal } from "./components/ui";
 import { PaneResizer } from "./components/PaneResizer";
 import { PaneControls } from "./components/PaneControls";
 import { ReviewWorkspace } from "./components/ReviewWorkspace";
-import {
-  PullRequestsPage,
-  type PullsLocation,
-  type PullsPageHandle,
-} from "./components/PullRequestsPage";
+import { PullRequestsPage } from "./components/PullRequestsPage";
 import { useRequests, type RequestChannel } from "./lib/request-channel";
 import { PULL_BOARD } from "./lib/usePullBoard";
-import { repoKey } from "./lib/pull-board";
+import {
+  repoKey,
+  type PullsLocation,
+  type PullsPageHandle,
+} from "./lib/pull-board";
 import type { Project } from "../shared/projects";
 const LocalFileEditor = lazy(() => import("./components/LocalFileEditor"));
 export function SignIn({

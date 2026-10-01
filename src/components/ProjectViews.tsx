@@ -8,6 +8,7 @@ import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import type { TurnDiffTarget } from "../lib/turn-diff";
+import type { FileTarget } from "../lib/file-link-target";
 import { useNavigationLock } from "../lib/navigation-lock";
 import { useRequests, type RequestChannel } from "../lib/request-channel";
 import type { ChecksController } from "../lib/useProjectChecks";
@@ -24,10 +25,6 @@ import type { PaneSlots } from "./WorkspacePanes";
 const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
 
 type Viewing = { path: string | null; viewed: number; total: number };
-export type FileTarget = ProjectFileLink & {
-  /** Lists the files matching this instead of opening one. */
-  search?: string;
-};
 
 /**
  * Uncommitted work in the folder the thread works in (the checkout, or its

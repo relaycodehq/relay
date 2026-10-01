@@ -3,8 +3,8 @@ import type { ChatSummary } from "../../shared/projects";
 import { draftRecipient, threadContextAgent } from "../../shared/recipient";
 import { buildSend } from "../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../shared/settings";
-import { agentSwitchNoticeHidden } from "../lib/agent-switch-notice";
-import { api } from "../lib/api";
+import { agentSwitchNoticeHidden } from "./agent-switch-notice";
+import { api } from "./api";
 import {
   composerProvider,
   isPickAgent,
@@ -14,13 +14,13 @@ import {
   messageContext,
   saveComposerSettings,
   startThreadSettings,
-} from "../lib/composer-settings";
+} from "./composer-settings";
 import {
   clearDraftAttachments,
   loadDraftAttachments,
   withAttachments,
-} from "../lib/draft-attachments";
-import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
+} from "./draft-attachments";
+import { loadDraftImages, saveDraftImages } from "./draft-images";
 import {
   forgetNewThread,
   loadDraftScope,
@@ -28,13 +28,13 @@ import {
   readDraft,
   writeDraft,
   type ActivityDraft,
-} from "../lib/drafts";
-import { numberImages } from "../lib/image-refs";
-import { flattenSketch } from "../lib/sketch";
-import { aiSettingsQuery } from "../lib/useAISettings";
-import { agentModelsQuery } from "../lib/useAgentPicks";
-import { codexModels } from "../lib/useCodexModels";
-import { newThreadAgentQuery } from "../lib/useNewThreadAgent";
+} from "./drafts";
+import { numberImages } from "./image-refs";
+import { flattenSketch } from "./sketch";
+import { aiSettingsQuery } from "./useAISettings";
+import { agentModelsQuery } from "./useAgentPicks";
+import { codexModels } from "./useCodexModels";
+import { newThreadAgentQuery } from "./useNewThreadAgent";
 
 // A thread made for a draft whose message then failed takes the next try.
 const started = new Map<string, ChatSummary>();

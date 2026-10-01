@@ -63,6 +63,17 @@ const itemRef = (item: Issue): PullRef => ({
   number: item.number,
 });
 
+/** Where the page is: a project's page, an open PR, both or neither. */
+export interface PullsLocation {
+  repo: { key: string; label: string } | null;
+  pull: { number: number; title?: string } | null;
+}
+export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
+export type PullsPageHandle = {
+  /** Leaves the open PR for the board or a project's page. */
+  go: (target: PullsTarget) => void;
+};
+
 /** Projects whose clone is of a repository on this Gitea server. */
 export function linkedProjects(projects: Project[], server: string) {
   const seen = new Set<string>();

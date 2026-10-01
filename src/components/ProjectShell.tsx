@@ -3,7 +3,8 @@ import { HandoffButton } from "./HandoffButton";
 import { workspaceId } from "../../shared/workspaces";
 import { CiStatusIcon } from "./CiStatus";
 import type { RelayCommand } from "../../shared/commands";
-import { ProjectChanges, ProjectFiles, type FileTarget } from "./ProjectViews";
+import { ProjectChanges, ProjectFiles } from "./ProjectViews";
+import type { FileTarget } from "../lib/file-link-target";
 import { ProjectHistory } from "./ProjectHistory";
 import {
   NO_SLOTS,
@@ -62,18 +63,19 @@ import {
   saveComposerSettings,
 } from "../lib/composer-settings";
 import { Connected, SignIn } from "../ReviewSurface";
+import { PullsTitle } from "./PullRequestsPage";
 import {
-  PullsTitle,
+  projectFor,
+  repoKey,
   type PullsLocation,
   type PullsPageHandle,
   type PullsTarget,
-} from "./PullRequestsPage";
-import { projectFor, repoKey } from "../lib/pull-board";
+} from "../lib/pull-board";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
-import { sendDraft } from "./draft-send";
+import { sendDraft } from "../lib/draft-send";
 import type { CodeReference } from "../../shared/code-references";
 import {
   matchLink,

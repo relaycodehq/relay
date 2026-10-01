@@ -26,6 +26,8 @@ import {
   type Board,
   type BoardPull,
   type ListedPull,
+  type PullsLocation,
+  type PullsTarget,
   type Relation,
 } from "../lib/pull-board";
 import {
@@ -44,17 +46,6 @@ import {
 } from "./PullRows";
 import { ErrorBox, Loading } from "./ui";
 import "./pull-requests.css";
-
-/** Where the page is: a project's page, an open PR, both or neither. */
-export interface PullsLocation {
-  repo: { key: string; label: string } | null;
-  pull: { number: number; title?: string } | null;
-}
-export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
-export type PullsPageHandle = {
-  /** Leaves the open PR for the board or a project's page. */
-  go: (target: PullsTarget) => void;
-};
 
 /** The window title's trail back from a PR or a project's page. */
 export function PullsTitle({
