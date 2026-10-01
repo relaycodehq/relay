@@ -60,6 +60,11 @@ import { useNavigationLock } from "../lib/navigation-lock";
 import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
+  attachedImages,
+  imagesAfter,
+  nextImageNumber,
+} from "../lib/image-refs";
+import {
   loadDraftWorkspace,
   readDraft,
   saveDraftWorkspace,
@@ -1235,22 +1240,22 @@ export function ProjectChat({
       const restoredCode = parent
         ? { refs: [], body: input.body }
         : parseCodeReferences(input.body);
-      const restoredText = pastesAfter(old, restoredCode.body);
-      const body = [old.trim(), restoredText.trim()]
-        .filter(Boolean)
-        .join("\n\n");
+      const existing = await loadDraftImages(key);
+      // The message's tokens count on from the draft's own.
+      const back = imagesAfter(
+        pastesAfter(old, restoredCode.body),
+        (input.images ?? []).map((image) => ({
+          ...image,
+          id: crypto.randomUUID(),
+        })),
+        nextImageNumber(old, existing) - 1,
+      );
+      const body = [old.trim(), back.text.trim()].filter(Boolean).join("\n\n");
       if (body.length > 32000)
         throw new Error(
           "Send or shorten the current draft before restoring this message.",
         );
-      const existing = await loadDraftImages(key);
-      const restored = [
-        ...existing,
-        ...(input.images ?? []).map((image) => ({
-          ...image,
-          id: crypto.randomUUID(),
-        })),
-      ];
+      const restored = [...attachedImages(old, existing), ...back.images];
       if (restored.length > 3)
         throw new Error(
           "Remove draft screenshots before restoring this message; a message can hold three.",

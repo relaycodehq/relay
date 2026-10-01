@@ -28,6 +28,7 @@ import {
   writeDraft,
   type ActivityDraft,
 } from "../lib/drafts";
+import { numberImages } from "../lib/image-refs";
 import { flattenSketch } from "../lib/sketch";
 import { aiSettingsQuery } from "../lib/useAISettings";
 import { agentModelsQuery } from "../lib/useAgentPicks";
@@ -91,9 +92,8 @@ export async function sendDraft(
     recipient !== "message" &&
     !chat?.shared &&
     scope.kind !== "review";
-  const images = await Promise.all(
-    (await loadDraftImages(key)).map(flattenSketch),
-  );
+  const outgoing = numberImages(text, await loadDraftImages(key));
+  const images = await Promise.all(outgoing.images.map(flattenSketch));
   const value = buildSend(
     {
       to: recipient,
@@ -102,7 +102,7 @@ export async function sendDraft(
       runtimeMode: settings.runtimeMode,
       interactionMode: settings.interactionMode,
     },
-    text,
+    outgoing.text,
     {
       ...(council ? { council: settings.council } : {}),
       ...(chat?.running ? { running: { steer: false } } : {}),

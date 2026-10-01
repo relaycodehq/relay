@@ -1,5 +1,5 @@
 // Inline atomic skill nodes follow T3 Code's ComposerSkillExtension (MIT).
-import { Extension, Node, type JSONContent } from "@tiptap/core";
+import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import StarterKit from "@tiptap/starter-kit";
@@ -28,6 +28,8 @@ import {
   pastesAfter,
   type PastedText,
 } from "../../shared/pasted-texts";
+import { imageToken, shortImageName } from "../lib/image-refs";
+import { formatSize } from "../lib/file-tree";
 import type { DictationTarget } from "../lib/dictation/session";
 import { draftChips } from "../lib/thread-storage";
 import {
@@ -48,6 +50,10 @@ export interface PromptInputHandle {
   insertText: (range: { start: number; end: number; text: string }) => void;
   /** Puts files in as tags where the pointer is, or at the caret without one. */
   insertFiles: (paths: string[], point?: { left: number; top: number }) => void;
+  /** Puts screenshot pills in, like files. */
+  insertImages: (ns: number[], point?: { left: number; top: number }) => void;
+  /** Drops every pill for screenshot n. */
+  removeImage: (n: number) => void;
   /** Puts a quoted passage at the caret as a pill. */
   insertQuote: (text: string) => void;
   /** Puts a long paste at the caret as a pill; false when the message cannot hold it. */
@@ -205,18 +211,100 @@ export const FileTag = Node.create({
   },
 });
 const fileMarkdown = (path: string) => "`" + path + "`";
+/** What an image pill shows; the screenshot itself stays with the composer. */
+export interface ImageChip {
+  n: number;
+  name: string;
+  src: string;
+  bytes: number;
+}
+interface ImageStorage {
+  images: Map<number, ImageChip>;
+  /** Live pills, redrawn when the screenshots behind them load or change. */
+  views: Set<() => void>;
+}
+declare module "@tiptap/core" {
+  interface Storage {
+    relayImage: ImageStorage;
+  }
+}
+// A screenshot's place in the message; sent as `[Image #n]`, the image itself rides along.
+export const ImageTag = Node.create<object, ImageStorage>({
+  name: "relayImage",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return { n: { default: 1 } };
+  },
+  addStorage() {
+    return { images: new Map(), views: new Set() };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-relay-image]" }];
+  },
+  renderHTML({ node }) {
+    return ["span", { "data-relay-image": "" }, imageToken(node.attrs.n)];
+  },
+  renderText({ node }) {
+    return imageToken(node.attrs.n);
+  },
+  addNodeView() {
+    const storage = this.storage;
+    return ({ node }) => {
+      const n: number = node.attrs.n;
+      const dom = document.createElement("span");
+      dom.className =
+        "composer-skill-chip composer-file-chip composer-image-chip";
+      dom.contentEditable = "false";
+      dom.dataset.relayImage = "";
+      dom.dataset.n = String(n);
+      const draw = () => {
+        const image = storage.images.get(n);
+        dom.classList.toggle("missing", !image);
+        dom.title = image
+          ? `${image.name}, sent as ${imageToken(n)}. Click to draw on it.`
+          : "This screenshot is no longer in the draft";
+        dom.replaceChildren();
+        const thumb = document.createElement(image ? "img" : "span");
+        thumb.className = "composer-image-chip-thumb";
+        thumb.setAttribute("aria-hidden", "true");
+        if (image) (thumb as HTMLImageElement).src = image.src;
+        const label = document.createElement("span");
+        label.textContent = image ? shortImageName(image.name) : `Image #${n}`;
+        dom.append(thumb, label);
+        if (image) {
+          const size = document.createElement("span");
+          size.className = "composer-image-chip-size";
+          size.textContent = formatSize(image.bytes);
+          dom.append(size);
+        }
+      };
+      draw();
+      storage.views.add(draw);
+      return {
+        dom,
+        update: (next) => next.type === node.type && next.attrs.n === n,
+        destroy: () => storage.views.delete(draw),
+      };
+    };
+  },
+});
 const leaf = (node: PMNode) =>
   node.type.name === "relaySkill"
     ? node.attrs.token
-    : node.type.name === "relayFile"
-      ? fileMarkdown(node.attrs.path)
-      : node.type.name === "relayQuote"
-        ? quoteMarkdown(node.attrs.text)
-        : node.type.name === "relayPaste"
-          ? pasteMarkdown(node.attrs as PastedText)
-          : node.type.name === "hardBreak"
-            ? "\n"
-            : "";
+    : node.type.name === "relayImage"
+      ? imageToken(node.attrs.n)
+      : node.type.name === "relayFile"
+        ? fileMarkdown(node.attrs.path)
+        : node.type.name === "relayQuote"
+          ? quoteMarkdown(node.attrs.text)
+          : node.type.name === "relayPaste"
+            ? pasteMarkdown(node.attrs as PastedText)
+            : node.type.name === "hardBreak"
+              ? "\n"
+              : "";
 // A quote is a Markdown blockquote, so one that follows text on the same line
 // starts a line of its own; promptContent drops that break again.
 function serialize(content: Fragment, end = content.size) {
@@ -257,7 +345,8 @@ function position(doc: PMNode, offset: number) {
 /**
  * Rebuilds the editor document from the draft text. Skill tokens, blockquotes
  * and file paths only become pills when this draft registered them, so text
- * the user typed by hand stays text. Fenced pastes always do; nobody types those.
+ * the user typed by hand stays text. Fenced pastes and `[Image #n]` always do:
+ * nobody types those, and an agent would read the token as a screenshot anyway.
  */
 export function promptContent(
   value: string,
@@ -268,12 +357,17 @@ export function promptContent(
   const nodes: JSONContent[] = [];
   const plain = (chunk: string) => {
     const pattern =
-      /(\n|`(?:\/|[A-Za-z]:\\)[^`\n]*`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
+      /(\n|\[Image #\d+\]|`(?:\/|[A-Za-z]:\\)[^`\n]*`|(?:\$|\/skill:)[A-Za-z_][A-Za-z0-9_.:-]*)/g;
     let last = 0;
     for (const m of chunk.matchAll(pattern)) {
       if (m.index! > last)
         nodes.push({ type: "text", text: chunk.slice(last, m.index) });
       if (m[0] === "\n") nodes.push({ type: "hardBreak" });
+      else if (m[0].startsWith("[Image #"))
+        nodes.push({
+          type: "relayImage",
+          attrs: { n: Number(m[0].slice(8, -1)) },
+        });
       else if (m[0].startsWith("`") && files.includes(m[0].slice(1, -1)))
         nodes.push({ type: "relayFile", attrs: { path: m[0].slice(1, -1) } });
       else if (
@@ -327,6 +421,34 @@ function pasteAt(doc: PMNode, index: number) {
   return found;
 }
 const content = promptContent;
+/** Puts tags in where the pointer is, or at the caret without one. */
+function insertTags(
+  editor: Editor,
+  tags: JSONContent[],
+  point?: { left: number; top: number },
+) {
+  const { doc } = editor.state;
+  const hit = point && editor.view.posAtCoords(point)?.pos;
+  // The pointer can land between blocks; the tags go in the nearest one.
+  const at =
+    hit === undefined
+      ? editor.state.selection.from
+      : TextSelection.near(doc.resolve(hit)).from;
+  const $at = doc.resolve(at);
+  // Tags keep a space on each side: two paths touching would read as one.
+  const before = $at.nodeBefore,
+    after = $at.nodeAfter;
+  const space = { type: "text", text: " " };
+  const nodes: JSONContent[] = tags.flatMap((tag, i) => [
+    ...(i ? [space] : []),
+    tag,
+  ]);
+  if (before && !/\s$/.test(before.text ?? "")) nodes.unshift(space);
+  if (!/^\s/.test(after?.text ?? "")) nodes.push(space);
+  editor.view.dispatch(closeHistory(editor.state.tr));
+  editor.chain().focus().insertContentAt(at, nodes).run();
+  editor.view.dispatch(closeHistory(editor.state.tr));
+}
 /** The full passage shown while a quote pill is hovered. */
 interface QuoteTip {
   text: string;
@@ -339,6 +461,8 @@ export function ComposerPromptInput({
   onChange,
   onCursor,
   onOpenPaste,
+  onOpenImage,
+  images,
   placeholder,
   inputRef,
   handleRef,
@@ -355,13 +479,16 @@ export function ComposerPromptInput({
   onCursor: (pos: number) => void;
   /** Opens the nth paste pill's text. */
   onOpenPaste?: (index: number) => void;
+  /** Opens screenshot n, from its pill. */
+  onOpenImage?: (n: number) => void;
+  images?: ImageChip[];
   placeholder: string;
   inputRef: RefObject<HTMLElement | null>;
   handleRef: Ref<PromptInputHandle>;
   draftKey: string;
 } & Omit<HTMLAttributes<HTMLDivElement>, "onChange">) {
-  const callbacks = useRef({ onChange, onCursor, onOpenPaste });
-  callbacks.current = { onChange, onCursor, onOpenPaste };
+  const callbacks = useRef({ onChange, onCursor, onOpenPaste, onOpenImage });
+  callbacks.current = { onChange, onCursor, onOpenPaste, onOpenImage };
   const [tip, setTip] = useState<QuoteTip | null>(null);
   const chips = draftChips(draftKey);
   const labels = useRef(chips.skills.load());
@@ -402,6 +529,7 @@ export function ComposerPromptInput({
       Quote,
       Paste,
       FileTag,
+      ImageTag,
       ComposerDictation,
     ],
     content: content(value, labels.current, quotes.current, files.current),
@@ -438,6 +566,10 @@ export function ComposerPromptInput({
       clipboardTextSerializer: (slice) => serialize(slice.content),
       // The × inside a quote or paste pill removes it; the pill itself stays an atom.
       handleClickOn(view, _pos, node, nodePos, event) {
+        if (node.type.name === "relayImage") {
+          callbacks.current.onOpenImage?.(node.attrs.n);
+          return true;
+        }
         if (
           node.type.name === "relayPaste" &&
           !(
@@ -540,6 +672,12 @@ export function ComposerPromptInput({
       );
   }, [value, editor]);
   useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage.relayImage;
+    storage.images = new Map(images?.map((image) => [image.n, image]));
+    for (const draw of storage.views) draw();
+  }, [images, editor]);
+  useEffect(() => {
     editor?.view.dom.setAttribute("data-placeholder", placeholder);
   }, [placeholder, editor]);
   useEffect(() => {
@@ -596,27 +734,35 @@ export function ComposerPromptInput({
         if (!editor || !paths.length) return;
         files.current = [...new Set([...files.current, ...paths])];
         chips.files.save(files.current);
-        const { doc } = editor.state;
-        const hit = point && editor.view.posAtCoords(point)?.pos;
-        // The pointer can land between blocks; the tags go in the nearest one.
-        const at =
-          hit === undefined
-            ? editor.state.selection.from
-            : TextSelection.near(doc.resolve(hit)).from;
-        const $at = doc.resolve(at);
-        // Tags keep a space on each side: two paths touching would read as one.
-        const before = $at.nodeBefore,
-          after = $at.nodeAfter;
-        const space = { type: "text", text: " " };
-        const nodes: JSONContent[] = paths.flatMap((path, i) => [
-          ...(i ? [space] : []),
-          { type: "relayFile", attrs: { path } },
-        ]);
-        if (before && !/\s$/.test(before.text ?? "")) nodes.unshift(space);
-        if (!/^\s/.test(after?.text ?? "")) nodes.push(space);
-        editor.view.dispatch(closeHistory(editor.state.tr));
-        editor.chain().focus().insertContentAt(at, nodes).run();
-        editor.view.dispatch(closeHistory(editor.state.tr));
+        insertTags(
+          editor,
+          paths.map((path) => ({ type: "relayFile", attrs: { path } })),
+          point,
+        );
+      },
+      insertImages(ns, point) {
+        if (!editor || !ns.length) return;
+        insertTags(
+          editor,
+          ns.map((n) => ({ type: "relayImage", attrs: { n } })),
+          point,
+        );
+      },
+      removeImage(n) {
+        if (!editor) return;
+        const { doc, tr } = editor.state;
+        doc.descendants((node, pos) => {
+          if (node.type.name !== "relayImage" || node.attrs.n !== n) return;
+          // The space put in beside the pill goes with it.
+          const end = pos + node.nodeSize,
+            $pos = doc.resolve(pos);
+          const before = doc.textBetween($pos.start(), pos, "\n", "x");
+          const spare =
+            doc.textBetween(end, Math.min(end + 1, $pos.end())) === " " &&
+            /(^|\s)$/.test(before);
+          tr.delete(tr.mapping.map(pos), tr.mapping.map(end + (spare ? 1 : 0)));
+        });
+        if (tr.docChanged) editor.view.dispatch(closeHistory(tr));
       },
       insertQuote(quote) {
         if (!editor || !quote) return;
