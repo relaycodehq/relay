@@ -1,12 +1,10 @@
-import { keyedQueue } from "./keyed-queue";
+import { ChatStorage, chatSummary, nextSend } from "./project-chats/storage";
+import { interrupt } from "./project-chats/revive";
+import { imageFileData } from "./project-chats/images";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import { withTimeout } from "./timeout";
-import {
-  AnswerRecorder,
-  settleActivities,
-  streamingAnswer,
-} from "./answer-recorder";
+import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
 import {
   claudeAgentRun,
   claudeAgents,
@@ -17,18 +15,10 @@ import {
 } from "./rooms/claude-project";
 import { agentRuntime, agentRuntimes } from "./agents";
 import { AgentRequests } from "./agent-requests";
-import { savedRuntimeMode, type AgentResponse } from "../shared/agent-modes";
+import type { AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
 import type { LineQuestion } from "../shared/questions";
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
@@ -49,7 +39,6 @@ import type {
   ResumeSettings,
   ScheduledChatMessage,
   StoppedWork,
-  ChatImage,
   AgentProvider,
   AgentSession,
   KnownMessages,
@@ -59,18 +48,14 @@ import type {
   ContextUsage,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
-import { agentAsked, contextAgent, sentAgent } from "../shared/recipient";
-import {
-  migrateAgentSessions,
-  replyRoot,
-  turnImages,
-} from "../shared/projects";
+import { agentAsked, sentAgent } from "../shared/recipient";
+import { replyRoot, turnImages } from "../shared/projects";
 import { agentName, agents, helperProviders } from "../shared/agents";
 import type { ProjectSharing } from "./project-sharing";
 import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
 import { threadTerminals } from "./thread-terminals";
-import { ownAgentWorktrees, watchAgentWorktrees } from "./agent-worktrees";
+import { watchAgentWorktrees } from "./agent-worktrees";
 import { currentBranchOrNull } from "./git";
 import { commitEverything, headOf } from "./handoff/git";
 import {
@@ -207,21 +192,6 @@ export function portableMessages(
       version: 1,
     }));
 }
-/** The image type the bytes start with, whatever the file is called. */
-function imageMimeType(bytes: Buffer) {
-  if (
-    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  )
-    return "image/png";
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
-    return "image/jpeg";
-  if (
-    bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  )
-    return "image/webp";
-  if (/^GIF8[79]a/.test(bytes.toString("ascii", 0, 6))) return "image/gif";
-}
 interface ActiveChat {
   started: number;
   requests: AgentRequests;
@@ -270,26 +240,16 @@ function turnPeek(m: ChatMessage): HandoffTurn {
     ...(says ? { says } : {}),
   };
 }
-/** An answer the app closed on, with what it had written so far. */
-function interrupt(m: ChatMessage) {
-  m.status = "failed";
-  m.error =
-    "The app closed before this answer finished. Partial output was kept.";
-  m.version++;
-  settleActivities(m, "failed");
-  m.ended = Date.now();
-}
 /** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
 function parseSessionKey(key: string) {
   const [, chatId, branch] = JSON.parse(key) as string[];
   return { chatId, branch: branch === "main" ? undefined : branch };
 }
 export class ProjectChats {
+  private storage: ChatStorage;
   private providerSessions = new Set<string>();
   /** Sessions still in the turn a restart cut off; their answers stay streaming. */
   private resuming = new Set<string>();
-  /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
-  private reattached: Promise<void> = Promise.resolve();
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -304,17 +264,13 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
-  private summaryListeners = new Set<(projectId: string) => void>();
   /** Claude's background work and wake-ups show in its threads' summaries. */
   private unhearPending = onClaudePending(() => {
     for (const key of this.providerSessions)
-      this.chatChanged(parseSessionKey(key).chatId);
+      this.storage.chatChanged(parseSessionKey(key).chatId);
   });
   /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
   private timers = new Map<string, NodeJS.Timeout>();
-  private cache = new Map<string, ProjectChat>();
-  private loading = new Map<string, Promise<void>>();
-  private writes = keyedQueue();
   private active = new Map<string, ActiveChat>();
   /** Side questions being answered, by `chatId:rootId`; they run beside `active`. */
   private sides = new Map<
@@ -348,18 +304,18 @@ export class ProjectChats {
       m.version++;
       this.emit({ chatId: chat.id, message: structuredClone(m) });
     }
-    if (unread.length) void this.save(chat).catch(() => {});
+    if (unread.length) void this.storage.save(chat).catch(() => {});
     if (turn) this.reviewStep(chat.id, turn);
-    void this.updateSummary(chat).catch(() => {});
+    void this.storage.updateSummary(chat).catch(() => {});
     void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
   }
   /** Claims the thread's one running turn. */
   private claim(id: string, input: ProjectChatSend) {
     if (this.active.has(id))
       throw new Error("This chat already has a running answer.");
-    const active = newActive(input, () => this.chatChanged(id));
+    const active = newActive(input, () => this.storage.chatChanged(id));
     this.active.set(id, active);
-    this.chatChanged(id);
+    this.storage.chatChanged(id);
     return active;
   }
   /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
@@ -367,7 +323,7 @@ export class ProjectChats {
     active.requests.close();
     if (this.active.get(id) === active) this.active.delete(id);
     active.end();
-    this.chatChanged(id);
+    this.storage.chatChanged(id);
   }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
@@ -396,19 +352,19 @@ export class ProjectChats {
         this.providerSessions.delete(key);
         for (const runtime of Object.values(agentRuntimes))
           void runtime.closeSession(key).catch(() => {});
-        this.chatChanged(id);
+        this.storage.chatChanged(id);
       }
   }
   /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */
   private async touch(chat: ProjectChat, messageId: string) {
     const message = chat.messages.find((m) => m.id === messageId);
     if (message) message.version++;
-    await this.save(chat);
+    await this.storage.save(chat);
     if (message)
       this.emit({ chatId: chat.id, message: structuredClone(message) });
   }
   private reviews = new DeepReviews({
-    load: (id) => this.load(id),
+    load: (id) => this.storage.load(id),
     project: (id) => this.projects.get(id),
     root: (projectId) => this.projects.root(projectId),
     createReviewer: (parent, task) => this.createReviewer(parent, task),
@@ -418,10 +374,10 @@ export class ProjectChats {
     stop: (id) => this.active.get(id)?.abort.abort(),
     close: (id) => this.closeSessions(id),
     touch: (chat, messageId) => this.touch(chat, messageId),
-    summary: (chat) => this.updateSummary(chat),
+    summary: (chat) => this.storage.updateSummary(chat),
   });
   private ultraplans = new Ultraplans({
-    load: (id) => this.load(id),
+    load: (id) => this.storage.load(id),
     createThinker: (parent, task) => this.createThinker(parent, task),
     send: (id, input) => this.send(id, input),
     lead: (chat, input, prompt) => this.lead(chat, input, prompt),
@@ -448,29 +404,22 @@ export class ProjectChats {
       chat: ProjectChat,
       selection: LineQuestion,
     ) => Promise<unknown>,
-  ) {}
+  ) {
+    this.storage = new ChatStorage(store, dir, (chatId, branch) =>
+      this.resuming.has(this.sessionKey(chatId, branch)),
+    );
+  }
   /**
    * Hears which project's thread list may read differently: a summary saved,
    * a turn claimed or released, a request asked or answered, or Claude's
    * background work moving. Returns the way to stop listening.
    */
   onSummaries(listener: (projectId: string) => void) {
-    this.summaryListeners.add(listener);
-    return () => void this.summaryListeners.delete(listener);
+    return this.storage.onSummaries(listener);
   }
   /** Says a project's list may read differently; every project's, given none. */
   summariesChanged(projectId?: string) {
-    const ids = projectId
-      ? [projectId]
-      : new Set((this.store.get().chats ?? []).map((c) => c.projectId));
-    for (const id of ids)
-      for (const listener of this.summaryListeners) listener(id);
-  }
-  private chatChanged(id: string) {
-    const projectId =
-      this.cache.get(id)?.projectId ??
-      this.store.get().chats?.find((c) => c.id === id)?.projectId;
-    if (projectId) this.summariesChanged(projectId);
+    this.storage.summariesChanged(projectId);
   }
   autoSettleDays(): number | null {
     const days = this.store.get().autoSettleDays;
@@ -542,7 +491,7 @@ export class ProjectChats {
    * scheduled. The SDK can't delete wake-ups, so Claude is asked to, in the open.
    */
   async stopPending(id: string, pendingId: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     // Its timer finds it gone and sends nothing.
     if (chat.heldWakeups?.some((w) => w.id === pendingId))
       return this.dropWakeup(chat, pendingId);
@@ -620,21 +569,16 @@ export class ProjectChats {
   private armSend(chatId: string, at: number | undefined) {
     this.armTimer("send:" + chatId, at, () => this.sendScheduled(chatId));
   }
-  /** The earliest scheduled message still waiting to go out on its own. */
-  private nextSend(scheduled: ScheduledChatMessage[] = []) {
-    const times = scheduled.filter((s) => !s.error).map((s) => s.at);
-    return times.length ? Math.min(...times) : undefined;
-  }
   private async saveScheduled(chat: ProjectChat) {
     if (!chat.scheduled?.length) delete chat.scheduled;
-    await this.persist(chat);
-    this.armSend(chat.id, this.nextSend(chat.scheduled));
+    await this.storage.persist(chat);
+    this.armSend(chat.id, nextSend(chat.scheduled));
   }
   /** Sends the scheduled messages that are due, oldest first. */
   private async sendScheduled(chatId: string) {
     if (this.disposing) return;
     const due = await this.control(chatId, async () => {
-      const chat = await this.load(chatId);
+      const chat = await this.storage.load(chatId);
       const now = Date.now();
       const due = (chat.scheduled ?? [])
         .filter((s) => !s.error && s.at <= now)
@@ -651,7 +595,7 @@ export class ProjectChats {
       await this.send(chatId, item.input);
     } catch (e) {
       await this.control(chatId, async () => {
-        const chat = await this.load(chatId);
+        const chat = await this.storage.load(chatId);
         (chat.scheduled ??= []).push({
           ...item,
           error: e instanceof Error ? e.message : String(e),
@@ -671,11 +615,11 @@ export class ProjectChats {
   private async dropWakeup(chat: ProjectChat, id: string) {
     chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
     if (!chat.heldWakeups?.length) delete chat.heldWakeups;
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   private async fireWakeup(chatId: string, id: string) {
     if (this.disposing) return;
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     const wakeup = chat.heldWakeups?.find((w) => w.id === id);
     if (!wakeup) return;
     await this.dropWakeup(chat, id);
@@ -697,7 +641,7 @@ export class ProjectChats {
     const now = Date.now();
     const left = this.pending();
     for (const chatId of new Set(left.map((p) => p.chatId))) {
-      const chat = await this.load(chatId).catch(() => undefined);
+      const chat = await this.storage.load(chatId).catch(() => undefined);
       if (!chat) continue;
       const stopped: StoppedWork[] = [];
       const work = left.filter((p) => p.chatId === chatId);
@@ -717,15 +661,15 @@ export class ProjectChats {
           at: now,
           items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
         };
-      await this.persist(chat);
+      await this.storage.persist(chat);
     }
   }
   async resolveStoppedWork(id: string, action: "resume" | "dismiss") {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     const stopped = chat.stopped;
     if (!stopped) return;
     delete chat.stopped;
-    await this.persist(chat);
+    await this.storage.persist(chat);
     if (action === "dismiss") return;
     // Each conversation's Claude hears about the work it started.
     for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {
@@ -764,21 +708,21 @@ export class ProjectChats {
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     const now = Date.now();
     if (triage.kind === "unread" || triage.kind === "auto-settle") {
       if (triage.kind === "unread") chat.markedUnread = true;
       else if (triage.enabled) delete chat.autoSettleOff;
       else chat.autoSettleOff = true;
-      await this.persist(chat);
-      return this.summary(chat);
+      await this.storage.persist(chat);
+      return chatSummary(chat);
     }
     if (triage.kind === "archive") {
       if (this.active.has(id) || this.councilBusy(chat))
         throw new Error("Stop the running answer before archiving.");
       // Nothing reopens an archived thread to cancel what would still run in it.
       if (
-        this.nextSend(chat.scheduled) ||
+        nextSend(chat.scheduled) ||
         chat.heldWakeups?.length ||
         this.pending(id).length
       )
@@ -798,8 +742,8 @@ export class ProjectChats {
           chat.worktree.removedAt = now;
         }
       }
-      await this.persist(chat);
-      return this.summary(chat);
+      await this.storage.persist(chat);
+      return chatSummary(chat);
     }
     delete chat.snoozedAt;
     delete chat.snoozedUntil;
@@ -813,25 +757,25 @@ export class ProjectChats {
       chat.snoozedAt = now;
       chat.snoozedUntil = triage.until;
     }
-    await this.persist(chat);
-    return this.summary(chat);
+    await this.storage.persist(chat);
+    return chatSummary(chat);
   }
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
     chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
     delete chat.markedUnread;
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     chat.title = title;
     chat.renamed = true;
-    await this.persist(chat);
-    return this.summary(chat);
+    await this.storage.persist(chat);
+    return chatSummary(chat);
   }
   async create(
     projectId: string,
@@ -859,10 +803,8 @@ export class ProjectChats {
       updated: Date.now(),
       messages: [],
     };
-    await this.save(chat);
-    await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
-    return this.summary(chat);
+    await this.storage.add(chat);
+    return chatSummary(chat);
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation
@@ -870,7 +812,7 @@ export class ProjectChats {
    * to review and roll back; the fork starts without them.
    */
   async fork(id: string, messageId?: string) {
-    const source = await this.load(id);
+    const source = await this.storage.load(id);
     if (source.scope.kind === "review")
       throw new Error("A deep review can't be forked.");
     const at = messageId
@@ -915,22 +857,9 @@ export class ProjectChats {
       })),
     };
     chat.forkedAt = chat.messages.at(-1)!.id;
-    const images = kept.flatMap((m) => m.images ?? []);
-    if (images.length) {
-      await mkdir(join(this.dir, "images", chat.id), {
-        recursive: true,
-        mode: 0o700,
-      });
-      for (const image of images)
-        await copyFile(
-          this.imagePath(source.id, image),
-          this.imagePath(chat.id, image),
-        );
-    }
-    await this.save(chat);
-    await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
-    return this.summary(chat);
+    await this.storage.copyImages(source.id, chat.id, kept);
+    await this.storage.add(chat);
+    return chatSummary(chat);
   }
   /**
    * Marks a thread as leaving for another computer, after checking it can:
@@ -939,7 +868,7 @@ export class ProjectChats {
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       assertHere(chat);
       if (chat.cameFrom)
         throw new Error(
@@ -966,7 +895,7 @@ export class ProjectChats {
       if (this.councilBusy(chat))
         throw new Error("Wait for the council or review to finish first.");
       chat.sentTo = { ...sentTo, state: "sending" };
-      await this.persist(chat);
+      await this.storage.persist(chat);
     });
   }
   /** Updates a thread's handoff while it's still `handoffId`; null ends it, keeping the thread here. */
@@ -975,13 +904,13 @@ export class ProjectChats {
     handoffId: string,
     change: Partial<ChatSentTo> | null,
   ) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (chat.sentTo?.id !== handoffId) return;
     if (change) {
       chat.sentTo = { ...chat.sentTo, ...change };
       if ("error" in change && !change.error) delete chat.sentTo.error;
     } else delete chat.sentTo;
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   /**
    * The thread leaves for `computer`: its agent stops and is waited for,
@@ -991,7 +920,7 @@ export class ProjectChats {
    */
   leave(id: string, computer: string, since = 0) {
     return this.control(id, async () => {
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       if (!chat.worktree || !(await worktreeExists(chat.worktree)))
         throw new Error("The thread's worktree is gone.");
       await this.halt(id);
@@ -1036,7 +965,7 @@ export class ProjectChats {
         }
       }
       await commitEverything(root, `Hand off to ${computer}`);
-      await this.persist(chat);
+      await this.storage.persist(chat);
       return {
         chat: structuredClone(chat),
         root,
@@ -1110,9 +1039,7 @@ export class ProjectChats {
           : {}),
       },
     };
-    await this.save(chat);
-    await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
+    await this.storage.add(chat);
     const { provider, ...settings } = thread.settings;
     void this.send(chat.id, {
       ...settings,
@@ -1121,7 +1048,7 @@ export class ProjectChats {
       to: provider,
       provider,
     }).catch((e) => console.warn("A handed-over thread couldn't start:", e));
-    return this.summary(chat);
+    return chatSummary(chat);
   }
   /** What a thread that came here wrote since, for its trip back. */
   async handBack(id: string, deviceId: string) {
@@ -1130,7 +1057,7 @@ export class ProjectChats {
     if (!came || came.deviceId !== deviceId)
       throw new Error("This thread didn't come from that computer.");
     const { chat, root, tip } = came.returnedAt
-      ? await this.load(id).then(async (chat) => ({
+      ? await this.storage.load(id).then(async (chat) => ({
           chat,
           root: chat.worktree!.path!,
           tip: await headOf(chat.worktree!.path!),
@@ -1152,7 +1079,7 @@ export class ProjectChats {
    * sees its own answer.
    */
   async latestTurn(id: string): Promise<HandoffTurn> {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     const answers = chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
       .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
@@ -1184,11 +1111,11 @@ export class ProjectChats {
   }
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!chat.cameFrom || chat.cameFrom.returnedAt) return;
     chat.cameFrom.returnedAt = Date.now();
     this.closeSessions(id);
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   /**
    * A thread back from another computer: what was written there joins the
@@ -1196,7 +1123,7 @@ export class ProjectChats {
    */
   returned(id: string, handoffId: string, messages: ChatMessage[]) {
     return this.control(id, async () => {
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       const sentTo = chat.sentTo;
       if (sentTo?.id !== handoffId) throw new Error("This thread isn't away.");
       const known = new Set(chat.messages.map((m) => m.id));
@@ -1219,7 +1146,7 @@ export class ProjectChats {
       };
       delete chat.sentTo;
       chat.updated = Date.now();
-      await this.persist(chat);
+      await this.storage.persist(chat);
       for (const m of arrived)
         this.emit({ chatId: id, message: structuredClone(m) });
     });
@@ -1227,7 +1154,9 @@ export class ProjectChats {
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      this.projects.assertCheckoutAvailable((await this.load(id)).projectId);
+      this.projects.assertCheckoutAvailable(
+        (await this.storage.load(id)).projectId,
+      );
       await this.reviews.start(id, config, pull);
     });
   }
@@ -1266,9 +1195,7 @@ export class ProjectChats {
       updated: Date.now(),
       messages: [],
     };
-    await this.save(chat);
-    await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
+    await this.storage.add(chat);
     return chat;
   }
   /** A reviewer's own thread, shown only inside its review. */
@@ -1285,50 +1212,16 @@ export class ProjectChats {
       updated: Date.now(),
       messages: [],
     };
-    await this.save(chat);
-    await this.addSummary(chat);
-    this.cache.set(chat.id, chat);
+    await this.storage.add(chat);
     return chat;
   }
-  private summary({
-    messages,
-    requests,
-    queue,
-    queuePaused,
-    scheduled,
-    lastInput,
-    sessions,
-    forkedAt,
-    sharedCursor,
-    replySessions,
-    checkoutNotes,
-    scopeHeard,
-    movedIn,
-    deepReview,
-    ultraplans,
-    handover,
-    ...summary
-  }: ProjectChat): ChatSummary {
-    const provider = [...messages]
-      .reverse()
-      .find((m) => m.role === "assistant")?.provider;
-    const holder = contextAgent(messages.filter((m) => !m.parentId));
-    const nextSend = this.nextSend(scheduled);
-    return {
-      ...summary,
-      ...(provider ? { provider } : {}),
-      ...(holder ? { contextAgent: holder } : {}),
-      ...(nextSend ? { nextSend } : {}),
-      empty: !messages.length && !scheduled?.length,
-    };
-  }
   async get(id: string): Promise<ProjectChat> {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     return { ...structuredClone(chat), requests: this.requests(id) };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
-    const { messages, ...chat } = await this.load(id);
+    const { messages, ...chat } = await this.storage.load(id);
     return {
       ...structuredClone(chat),
       messages: messages.map((m) =>
@@ -1340,127 +1233,17 @@ export class ProjectChats {
   private requests(id: string) {
     return this.active.get(id)?.requests.list() ?? [];
   }
-  /** The cached chat itself, read from disk the first time; never hand it out. */
-  private async load(id: string): Promise<ProjectChat> {
-    await this.reattached;
-    if (!this.store.get().chats?.some((c) => c.id === id))
-      throw new Error("Chat not found.");
-    if (!this.cache.has(id)) {
-      let pending = this.loading.get(id);
-      if (!pending) {
-        pending = (async () => {
-          const chat = JSON.parse(
-            await readFile(join(this.dir, id + ".json"), "utf8"),
-          ) as ProjectChat;
-          if (chat.id !== id)
-            throw new Error("Saved chat identity does not match.");
-          let interrupted = migrateAgentSessions(chat);
-          for (const input of [
-            chat.lastInput,
-            ...(chat.queue ?? []).map((q) => q.input),
-          ]) {
-            if (input && !input.runtimeMode) {
-              const old = input as typeof input & { mode?: string };
-              input.runtimeMode = savedRuntimeMode(old.mode);
-              input.interactionMode = "default";
-              delete old.mode;
-              interrupted = true;
-            }
-          }
-          if (chat.queue?.length) chat.queuePaused = true;
-          let summaryChanged = false;
-          if (chat.agentWorktrees) {
-            const own = ownAgentWorktrees(chat);
-            if (own.length !== chat.agentWorktrees.length) {
-              if (own.length) chat.agentWorktrees = own;
-              else delete chat.agentWorktrees;
-              interrupted = summaryChanged = true;
-            }
-          }
-          // A review whose agents ran in an earlier session can only be resumed,
-          // and a fix that was running then left its findings open.
-          const review = chat.deepReview;
-          if (review?.status === "reviewing" || review?.status === "leading") {
-            review.status =
-              review.status === "reviewing" ? "stopped" : "failed";
-            interrupted = true;
-          }
-          // A council cut off before the lead's plan waits for Resume; a plan
-          // cut off resumes like any answer.
-          for (const plan of Object.values(chat.ultraplans ?? {}))
-            if (
-              plan.status === "briefing" ||
-              plan.status === "thinking" ||
-              plan.status === "leading"
-            ) {
-              plan.status =
-                plan.status === "leading" && plan.answer ? "done" : "stopped";
-              interrupted = true;
-            }
-          if (review?.fixing) {
-            for (const id of Object.values(review.fixing).flat())
-              if (review.statuses?.[id] === "fixing") {
-                review.statuses[id] = "open";
-                interrupted = true;
-              }
-            delete review.fixing;
-          }
-          for (const m of chat.messages) {
-            // Older saves kept every tool call twice; the trace alone is shown.
-            if (m.trace) delete m.activity;
-            // Some saves also listed files the agent didn't change; only its own are shown.
-            const changes = m.changes?.filter(
-              (f) => !(f as { unclaimed?: true }).unclaimed,
-            );
-            if (changes?.length) m.changes = changes;
-            else delete m.changes;
-            if (
-              m.status === "streaming" &&
-              !this.resuming.has(
-                this.sessionKey(chat.id, m.parentId ?? undefined),
-              )
-            ) {
-              interrupt(m);
-              interrupted = true;
-            }
-          }
-          if (interrupted) await this.save(chat);
-          if (summaryChanged) await this.updateSummary(chat);
-          this.cache.set(id, chat);
-        })();
-        this.loading.set(id, pending);
-      }
-      try {
-        await pending;
-      } finally {
-        if (this.loading.get(id) === pending) this.loading.delete(id);
-      }
-    }
-    return this.cache.get(id)!;
-  }
-  private imagePath(chatId: string, image: ChatImage) {
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        image.id,
-      )
-    )
-      throw new Error("Invalid saved screenshot identity.");
-    const ext =
-      image.mimeType === "image/jpeg" ? "jpg" : image.mimeType.split("/")[1];
-    return join(this.dir, "images", chatId, `${image.id}.${ext}`);
-  }
   async image(chatId: string, imageId: string): Promise<string> {
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     const image = chat.messages
       .flatMap((message) => message.images ?? [])
       .find((item) => item.id === imageId);
     if (!image) throw new Error("Screenshot not found in this conversation.");
-    const bytes = await readFile(this.imagePath(chatId, image));
-    return `data:${image.mimeType};base64,${bytes.toString("base64")}`;
+    return this.storage.image(chatId, image);
   }
   /** Only a path the turn itself read or its answer shows, so the renderer can't reach any other file on disk. */
   async turnImagePath(chatId: string, messageId: string, path: string) {
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message || !isAbsolute(path))
       throw new Error("This turn didn't read that image.");
@@ -1479,59 +1262,7 @@ export class ProjectChats {
   }
   async readImage(chatId: string, messageId: string, path: string) {
     await this.turnImagePath(chatId, messageId, path);
-    const { size } = await stat(path).catch((e: NodeJS.ErrnoException) => {
-      throw e.code === "ENOENT"
-        ? new Error("That image is no longer on disk.")
-        : e;
-    });
-    if (size > 30_000_000)
-      throw new Error("That image is too large to preview.");
-    const bytes = await readFile(path);
-    const mimeType = imageMimeType(bytes);
-    if (!mimeType) throw new Error("That file isn't an image Relay can show.");
-    return `data:${mimeType};base64,${bytes.toString("base64")}`;
-  }
-  private async saveImages(
-    chatId: string,
-    images: NonNullable<ProjectChatSend["images"]>,
-  ) {
-    const checked = images.map(({ name, mimeType, dataUrl }) => {
-      const bytes = Buffer.from(
-        dataUrl.slice(dataUrl.indexOf(",") + 1),
-        "base64",
-      );
-      if (imageMimeType(bytes) !== mimeType || bytes.length > 800_000)
-        throw new Error("Screenshot is invalid or exceeds the 800 KB limit.");
-      return {
-        meta: {
-          id: randomUUID(),
-          name,
-          mimeType,
-          sizeBytes: bytes.length,
-        } as ChatImage,
-        bytes,
-      };
-    });
-    await mkdir(join(this.dir, "images", chatId), {
-      recursive: true,
-      mode: 0o700,
-    });
-    for (const { meta, bytes } of checked)
-      await writeFile(this.imagePath(chatId, meta), bytes, {
-        flag: "wx",
-        mode: 0o600,
-      });
-    return checked.map(({ meta }) => meta);
-  }
-  private async save(chat: ProjectChat) {
-    const value = JSON.stringify(chat),
-      path = join(this.dir, chat.id + ".json");
-    await this.writes(chat.id, async () => {
-      await mkdir(this.dir, { recursive: true, mode: 0o700 });
-      const tmp = path + "." + randomUUID() + ".tmp";
-      await writeFile(tmp, value, { mode: 0o600 });
-      await rename(tmp, path);
-    });
+    return imageFileData(path);
   }
   /** The worktrees a project's threads work in, for its process list. */
   worktreeFolders(projectId: string) {
@@ -1557,25 +1288,28 @@ export class ProjectChats {
   send(id: string, input: ProjectChatSend, fromRelay = false) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      assertHere(await this.load(id));
+      assertHere(await this.storage.load(id));
       if (input.side || input.parentId) {
-        const chat = await this.load(id);
+        const chat = await this.storage.load(id);
         if (input.side || replyRoot(chat.messages, input.parentId!).side)
           return this.askAside(chat, input);
       }
       if (input.sendAt) return this.schedule(id, input);
-      if (!this.active.has(id) && !this.councilBusy(await this.load(id))) {
+      if (
+        !this.active.has(id) &&
+        !this.councilBusy(await this.storage.load(id))
+      ) {
         await this.sendNow(id, input);
         // Asking an agent again picks a stopped queue back up after this
         // answer. Drain waits behind this control, so it sees the change.
-        const chat = this.cache.get(id);
+        const chat = this.storage.cached(id);
         if (chat?.queuePaused && agentAsked(input) && !fromRelay) {
           delete chat.queuePaused;
-          await this.save(chat);
+          await this.storage.save(chat);
         }
         return;
       }
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       if (
         chat.messages.some((m) => m.id === input.id) ||
         chat.queue?.some((q) => q.input.id === input.id)
@@ -1598,7 +1332,7 @@ export class ProjectChats {
           : undefined,
       };
       (chat.queue ??= []).push({ input, created: Date.now() });
-      await this.save(chat);
+      await this.storage.save(chat);
       if (input.delivery === "steer") await this.steerQueued(chat, input.id);
     });
   }
@@ -1611,7 +1345,7 @@ export class ProjectChats {
     if (at <= Date.now()) throw new Error("Choose a time in the future.");
     if (at > Date.now() + 366 * 86_400_000)
       throw new Error("Schedule a message at most a year ahead.");
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (
       chat.messages.some((m) => m.id === input.id) ||
       chat.scheduled?.some((s) => s.input.id === input.id)
@@ -1641,19 +1375,19 @@ export class ProjectChats {
   }
   private async drain(id: string) {
     if (this.disposing || this.active.has(id)) return;
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (this.councilBusy(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {
       await this.sendNow(id, next.input);
       chat.queue = chat.queue!.filter((q) => q.input.id !== next.input.id);
-      await this.save(chat);
+      await this.storage.save(chat);
       if (!this.active.has(id)) await this.drain(id);
     } catch (e) {
       next.error = e instanceof Error ? e.message : String(e);
       chat.queuePaused = true;
-      await this.save(chat);
+      await this.storage.save(chat);
     }
   }
   /**
@@ -1669,7 +1403,7 @@ export class ProjectChats {
     chat.queue = [next, ...chat.queue!.filter((q) => q !== next)];
     chat.queuePaused = false;
     if (!active) {
-      await this.save(chat);
+      await this.storage.save(chat);
       return this.drain(chat.id);
     }
     const asked = agentAsked(next.input),
@@ -1690,9 +1424,9 @@ export class ProjectChats {
       /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
       /^\s*\//.test(asked.question)
     )
-      return this.save(chat);
+      return this.storage.save(chat);
     const images = next.input.images?.length
-      ? await this.saveImages(chat.id, next.input.images)
+      ? await this.storage.saveImages(chat.id, next.input.images)
       : [];
     const message: ChatMessage = {
       id: next.input.id,
@@ -1720,7 +1454,7 @@ export class ProjectChats {
             : ""),
         next.input.id,
         images.map((image) => ({
-          path: this.imagePath(chat.id, image),
+          path: this.storage.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
       );
@@ -1729,13 +1463,13 @@ export class ProjectChats {
       // Sent later as its own turn, which saves its images again.
       await Promise.all(
         images.map((image) =>
-          rm(this.imagePath(chat.id, image), { force: true }),
+          rm(this.storage.imagePath(chat.id, image), { force: true }),
         ),
       );
-      return this.save(chat);
+      return this.storage.save(chat);
     }
     chat.queue = chat.queue!.filter((q) => q !== next);
-    await this.save(chat);
+    await this.storage.save(chat);
     this.emit({ chatId: chat.id, message });
     if (chat.shared) await this.deliver(chat).catch(() => {});
   }
@@ -1747,7 +1481,7 @@ export class ProjectChats {
   ) {
     const sendNow = await this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       const scheduled = chat.scheduled?.find((s) => s.input.id === messageId);
       if (scheduled && action !== "move") {
         chat.scheduled = chat.scheduled!.filter((s) => s !== scheduled);
@@ -1767,7 +1501,7 @@ export class ProjectChats {
         rest.splice(Math.min(index, rest.length), 0, moving);
         chat.queue = rest;
       }
-      await this.save(chat);
+      await this.storage.save(chat);
       await this.drain(id);
     });
     // Outside the control above, since send takes its own turn.
@@ -1777,7 +1511,7 @@ export class ProjectChats {
   resume(id: string, settings?: ResumeSettings) {
     return this.control(id, async () => {
       if (this.disposing) throw new Error("Relay is closing.");
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       assertHere(chat);
       if (this.active.has(id))
         throw new Error("This thread is already running.");
@@ -1805,7 +1539,7 @@ export class ProjectChats {
   private async sendNow(id: string, input: ProjectChatSend) {
     const active = this.claim(id, input);
     try {
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       assertHere(chat);
       if (!chat.worktree && !chat.thinker)
         this.projects.assertCheckoutAvailable(chat.projectId);
@@ -1886,7 +1620,7 @@ export class ProjectChats {
         provider: asked?.provider ?? input.provider,
         version: 1,
         ...(input.images?.length
-          ? { images: await this.saveImages(id, input.images) }
+          ? { images: await this.storage.saveImages(id, input.images) }
           : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...(chat.shared ? { pending: true } : {}),
@@ -1897,8 +1631,8 @@ export class ProjectChats {
       chat.branch = (await currentBranchOrNull(root)) ?? chat.branch;
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
-      this.cache.set(id, chat);
-      await this.persist(chat);
+      this.storage.keep(chat);
+      await this.storage.persist(chat);
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!asked) {
@@ -1999,7 +1733,7 @@ export class ProjectChats {
       chat.messages.push(answer);
       if (input.ultraplan)
         this.ultraplans.begin(chat, input, asked.provider, answer.id);
-      await this.save(chat);
+      await this.storage.save(chat);
       this.emit({ chatId: id, message: answer });
       const { prompt, caughtUp, briefed } = turnPrompt({
         chat,
@@ -2039,7 +1773,7 @@ export class ProjectChats {
       };
       chat.messages.push(failed);
       if (chat.queue?.length) chat.queuePaused = true;
-      await this.save(chat).catch(() => {});
+      await this.storage.save(chat).catch(() => {});
       this.emit({ chatId: id, message: failed });
     }
   }
@@ -2152,7 +1886,7 @@ export class ProjectChats {
       ...(parentId ? { parentId } : {}),
     });
     chat.messages.push(message);
-    await this.save(chat);
+    await this.storage.save(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message) });
     const abort = new AbortController();
     const stop = () => abort.abort();
@@ -2192,11 +1926,11 @@ export class ProjectChats {
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
     const idle = !this.active.has(chat.id);
-    const active = newActive(input, () => this.chatChanged(chat.id));
+    const active = newActive(input, () => this.storage.chatChanged(chat.id));
     const { abort } = active;
     if (idle) {
       this.active.set(chat.id, active);
-      this.chatChanged(chat.id);
+      this.storage.chatChanged(chat.id);
     }
     const message: ChatMessage =
       resumed ??
@@ -2208,7 +1942,7 @@ export class ProjectChats {
     try {
       if (!resumed) {
         chat.messages.push(message);
-        await this.save(chat);
+        await this.storage.save(chat);
       }
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       await this.answer(chat, message, root, "", input, abort, {
@@ -2244,9 +1978,11 @@ export class ProjectChats {
       }
       return sessions;
     });
-    this.reattached = back.then(
-      () => {},
-      (e) => console.warn("Could not take back the running agents:", e),
+    this.storage.waitFor(
+      back.then(
+        () => {},
+        (e) => console.warn("Could not take back the running agents:", e),
+      ),
     );
     return back.then(
       (sessions) =>
@@ -2276,7 +2012,7 @@ export class ProjectChats {
   }
   private async unpromptedFor(key: string) {
     const { chatId, branch } = parseSessionKey(key);
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     return this.unprompted(chat, await this.chatRoot(chat), "claude", branch);
   }
   /** Shows the rest of a turn a restart cut off, in the answer it was writing. */
@@ -2284,7 +2020,7 @@ export class ProjectChats {
     const { chatId, branch } = parseSessionKey(key);
     let chat: ProjectChat | undefined;
     try {
-      chat = await this.load(chatId);
+      chat = await this.storage.load(chatId);
       this.resuming.delete(key);
       const message = [...chat.messages]
         .reverse()
@@ -2308,7 +2044,7 @@ export class ProjectChats {
     } catch (e) {
       this.resuming.delete(key);
       this.providerSessions.delete(key);
-      this.chatChanged(chatId);
+      this.storage.chatChanged(chatId);
       await agentRuntime(provider)
         .closeSession(key)
         .catch(() => {});
@@ -2323,7 +2059,7 @@ export class ProjectChats {
             interrupt(m);
             failed = true;
           }
-        if (failed) await this.save(chat).catch(() => {});
+        if (failed) await this.storage.save(chat).catch(() => {});
       }
       console.warn("Could not pick a turn back up:", e);
     }
@@ -2345,7 +2081,7 @@ export class ProjectChats {
       // Resume and later sends pick the lead's agent and settings up from here.
       chat.lastInput = input;
       chat.messages.push(message);
-      await this.persist(chat);
+      await this.storage.persist(chat);
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
@@ -2395,7 +2131,7 @@ export class ProjectChats {
       provider,
       version: 1,
       ...(input.images?.length
-        ? { images: await this.saveImages(chat.id, input.images) }
+        ? { images: await this.storage.saveImages(chat.id, input.images) }
         : {}),
       ...(root ? { parentId: root.id } : { side: true }),
     };
@@ -2404,7 +2140,7 @@ export class ProjectChats {
       (m) => m.id === rootId || m.parentId === rootId,
     );
     chat.messages.push(user, answer);
-    await this.save(chat);
+    await this.storage.save(chat);
     this.emit({ chatId: chat.id, message: user });
     this.emit({ chatId: chat.id, message: answer });
     const abort = new AbortController();
@@ -2415,7 +2151,7 @@ export class ProjectChats {
     ).finally(() => {
       this.sides.delete(key);
       // The side answer moved `updated`, as any finished answer does.
-      void this.updateSummary(chat).catch(() => {});
+      void this.storage.updateSummary(chat).catch(() => {});
     });
     this.sides.set(key, { abort, job });
     void job.catch(() => {});
@@ -2466,7 +2202,7 @@ export class ProjectChats {
       chat.updated = answer.ended;
       answer.version++;
       this.emit({ chatId: chat.id, message: structuredClone(answer) });
-      await this.save(chat);
+      await this.storage.save(chat);
     }
   }
   private async forkAside(
@@ -2498,7 +2234,7 @@ export class ProjectChats {
       if (this.disposing) throw new Error("Relay is closing.");
       if (this.active.has(id))
         throw new Error("Wait for the current answer before compacting.");
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       assertHere(chat);
       if (parentId && chat.messages.find((m) => m.id === parentId)?.side)
         throw new Error(
@@ -2527,7 +2263,7 @@ export class ProjectChats {
       });
       chat.messages.push(message);
       try {
-        await this.save(chat);
+        await this.storage.save(chat);
       } catch (e) {
         this.release(id, active);
         throw e;
@@ -2559,7 +2295,7 @@ export class ProjectChats {
       chat,
       message,
       (m) => this.emit({ chatId: chat.id, message: m }),
-      () => void this.save(chat).catch(() => abort.abort()),
+      () => void this.storage.save(chat).catch(() => abort.abort()),
     );
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
@@ -2595,7 +2331,7 @@ export class ProjectChats {
       async (worktrees) => {
         if (worktrees.length) chat.agentWorktrees = worktrees;
         else delete chat.agentWorktrees;
-        await this.persist(chat);
+        await this.storage.persist(chat);
       },
     );
     let point: string | undefined;
@@ -2626,7 +2362,7 @@ export class ProjectChats {
         onText: (body: string) => answer.text(body),
         onPlan: (body: string) => answer.plan(body),
         images: attached.map((image) => ({
-          path: this.imagePath(chat.id, image),
+          path: this.storage.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
         onTitle: (title: string) => {
@@ -2676,7 +2412,7 @@ export class ProjectChats {
           },
           onId: async (id: string) => {
             sessionFor(chat, provider, branch).thread = id;
-            await this.save(chat);
+            await this.storage.save(chat);
           },
           onUnprompted: () => this.unprompted(chat, root, provider, branch),
         },
@@ -2752,7 +2488,7 @@ export class ProjectChats {
       // a snoozed or settled one.
       chat.updated = ended.ended;
       answer.end();
-      await this.save(chat);
+      await this.storage.save(chat);
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&
@@ -2820,7 +2556,7 @@ export class ProjectChats {
   private async chatRoot(chat: ProjectChat, prompt?: string): Promise<string> {
     // A thinker reads whatever its thread works in, worktree included.
     if (chat.thinker)
-      return this.chatRoot(await this.load(chat.thinker.parent));
+      return this.chatRoot(await this.storage.load(chat.thinker.parent));
     const root = await this.projects.root(chat.projectId);
     const worktree = chat.worktree;
     if (!worktree) return root;
@@ -2831,11 +2567,11 @@ export class ProjectChats {
       promptTitle(prompt ?? chat.title),
       worktree,
     );
-    await this.persist(chat);
+    await this.storage.persist(chat);
     return chat.worktree.path!;
   }
   private async worktreeOf(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!chat.worktree)
       throw new Error("This thread works in the project's checkout.");
     return { chat, worktree: chat.worktree };
@@ -2860,11 +2596,6 @@ export class ProjectChats {
       ...(worktree.pr ? { pr: worktree.pr } : {}),
       removed: !!worktree.path && !exists,
     };
-  }
-  /** Saves the thread and refreshes its sidebar summary. */
-  private async persist(chat: ProjectChat) {
-    await this.save(chat);
-    await this.updateSummary(chat);
   }
   /**
    * A turn whose answer shows as finished still saves before it gives the
@@ -2901,7 +2632,7 @@ export class ProjectChats {
         worktree,
       );
       worktree.removedAt = Date.now();
-      await this.persist(chat);
+      await this.storage.persist(chat);
     });
   }
   /** Why a checkout thread can't move into a worktree now, if it can't. */
@@ -2933,7 +2664,7 @@ export class ProjectChats {
    * whose turns changed it.
    */
   async worktreeMovePreview(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     const blocked = await this.moveBlocked(chat);
     if (blocked) return { blocked, files: [] };
     const { files } = await uncommitted(
@@ -2950,7 +2681,7 @@ export class ProjectChats {
     );
     for (const other of others) {
       const paths = new Set(
-        (await this.load(other.id)).messages.flatMap(
+        (await this.storage.load(other.id)).messages.flatMap(
           (m) => m.changes?.map((f) => f.path) ?? [],
         ),
       );
@@ -2971,7 +2702,7 @@ export class ProjectChats {
    */
   moveToWorktree(id: string) {
     return this.control(id, async () => {
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       const blocked = await this.moveBlocked(chat);
       if (blocked) throw new Error(blocked);
       this.projects.assertCheckoutAvailable(chat.projectId);
@@ -2989,13 +2720,13 @@ export class ProjectChats {
       };
       // Live sessions started in the project folder; resumed, they start in the worktree.
       this.closeSessions(id);
-      await this.persist(chat);
-      return this.summary(chat);
+      await this.storage.persist(chat);
+      return chatSummary(chat);
     });
   }
   /** Where the thread's terminal opens: its worktree, or the project's checkout. */
   async terminalFolder(projectId: string, id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
     const worktree = chat.worktree;
@@ -3010,19 +2741,19 @@ export class ProjectChats {
     return worktree.path;
   }
   async worksInCheckout(projectId: string, id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     return chat.projectId === projectId && !chat.worktree;
   }
   /** Only paths Relay saw the thread's agent make, so the renderer can't open any folder. */
   async agentWorktreePath(id: string, path: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     const worktree = chat.agentWorktrees?.find((w) => w.path === path);
     if (!worktree) throw new Error("This thread didn't make that worktree.");
     return worktree.path;
   }
   /** A thread's worktree folder, for a workspace id; only while it exists. */
   async worktreeRoot(projectId: string, id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
     return this.worktreePath(id);
@@ -3036,17 +2767,17 @@ export class ProjectChats {
   async recordPull(id: string, pr: { number: number; url: string }) {
     const { chat, worktree } = await this.worktreeOf(id);
     worktree.pr = pr;
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   /** The worktree's PR was merged on the Git host, though the checkout may still need a pull. */
   async pullMerged(id: string) {
     const { chat, worktree } = await this.worktreeOf(id);
     if (worktree.landed?.by === "pr") return;
     worktree.landed = { at: Date.now(), by: "pr" };
-    await this.persist(chat);
+    await this.storage.persist(chat);
   }
   async turnDiff(chatId: string, messageId: string, path: string) {
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
       throw new Error("This turn didn't change that file.");
@@ -3054,7 +2785,7 @@ export class ProjectChats {
   }
   /** Where a file one turn changed sits on disk (`messageId` null: any file of the thread's worktree). */
   async turnFilePath(chatId: string, messageId: string | null, path: string) {
-    const chat = await this.load(chatId);
+    const chat = await this.storage.load(chatId);
     if (messageId === null) return join(await this.worktreePath(chatId), path);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
@@ -3072,14 +2803,14 @@ export class ProjectChats {
     force: boolean,
   ): Promise<{ conflicts: string[] }> {
     return this.control(chatId, async () => {
-      await this.load(chatId);
-      const chat = this.cache.get(chatId)!;
+      await this.storage.load(chatId);
+      const chat = this.storage.cached(chatId)!;
       if (!chat.worktree) this.projects.assertCheckoutAvailable(chat.projectId);
       if (chat.worktree && !(await worktreeExists(chat.worktree)))
         throw new Error("This thread's worktree was removed.");
       // An agent editing the same folder would race the rollback.
       for (const id of this.active.keys()) {
-        const other = this.cache.get(id);
+        const other = this.storage.cached(id);
         if (
           other?.projectId === chat.projectId &&
           other.worktree?.path === chat.worktree?.path
@@ -3152,14 +2883,14 @@ export class ProjectChats {
           : `I restored your edits to ${listed}${more} from your turn at ${when} after an earlier rollback.`,
       ].slice(-10);
       message.version++;
-      await this.save(chat);
+      await this.storage.save(chat);
       this.emit({ chatId, message: structuredClone(message) });
       return { conflicts: [] };
     });
   }
   /** Retries titles for threads whose first title run failed earlier. */
   ensureTitle(id: string) {
-    const chat = this.cache.get(id);
+    const chat = this.storage.cached(id);
     if (!chat || this.active.has(id) || chat.shared) return;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const answer = chat.messages.find(
@@ -3194,7 +2925,7 @@ export class ProjectChats {
     )
       return;
     chat.title = title;
-    await this.persist(chat);
+    await this.storage.persist(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message), title });
   }
   /**
@@ -3202,7 +2933,7 @@ export class ProjectChats {
    * a name you typed. Tries the latest answer's agent, then the helper agents.
    */
   async regenerateTitle(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (this.titleJobs.has(id))
       throw new Error("This thread's title is already being generated.");
     const answer = [...chat.messages]
@@ -3243,27 +2974,13 @@ export class ProjectChats {
     const title = await job.finally(() => this.titleJobs.delete(id));
     if (abort.signal.aborted) throw new Error("Relay is closing.");
     if (!title) throw new Error("No agent could name this thread.");
-    const fresh = await this.load(id);
+    const fresh = await this.storage.load(id);
     fresh.title = title;
     delete fresh.renamed;
-    await this.persist(fresh);
-    return this.summary(fresh);
+    await this.storage.persist(fresh);
+    return chatSummary(fresh);
   }
   private syncing = new Map<string, Promise<void>>();
-  private async updateSummary(chat: ProjectChat) {
-    await this.store.update((s) => {
-      const index = s.chats!.findIndex((c) => c.id === chat.id);
-      if (index >= 0) s.chats![index] = this.summary(chat);
-      else s.chats!.push(this.summary(chat));
-    });
-    this.summariesChanged(chat.projectId);
-  }
-  private async addSummary(chat: ProjectChat) {
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
-    this.summariesChanged(chat.projectId);
-  }
   private async deliver(chat: ProjectChat) {
     const pending = chat.messages.filter(
       (m) => m.pending && m.status !== "streaming",
@@ -3283,10 +3000,10 @@ export class ProjectChats {
         this.emit({ chatId: chat.id, message: structuredClone(local) });
       }
     }
-    await this.save(chat);
+    await this.storage.save(chat);
   }
   async shareInfo(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!this.sharing) throw new Error("Sharing is unavailable.");
     return {
       ...(await this.sharing.info(chat.projectId)),
@@ -3298,20 +3015,20 @@ export class ProjectChats {
       throw new Error(
         "Stop or finish the current answer before sharing this conversation.",
       );
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (chat.messages.some((message) => message.images?.length))
       throw new Error(
         "This conversation contains private screenshots and cannot be shared yet.",
       );
     if (chat.scope.kind === "review")
       throw new Error("Deep reviews can't be shared yet.");
-    if (chat.shared) return this.summary(chat);
+    if (chat.shared) return chatSummary(chat);
     if (!this.sharing) throw new Error("Sharing is unavailable.");
     await this.sharing.allow(chat.projectId);
     chat.shared = await this.sharing.share(chat);
-    await this.persist(chat);
+    await this.storage.persist(chat);
     await this.sync(id);
-    return this.summary(chat);
+    return chatSummary(chat);
   }
   async sync(id: string) {
     await this.pull(id);
@@ -3326,7 +3043,7 @@ export class ProjectChats {
     const existing = this.syncing.get(id);
     if (existing) return existing;
     const job = (async () => {
-      const chat = await this.load(id);
+      const chat = await this.storage.load(id);
       if (!chat.shared) return;
       if (!this.sharing) throw new Error("Sharing is unavailable.");
       await this.deliver(chat);
@@ -3363,7 +3080,7 @@ export class ProjectChats {
           ]),
         );
         chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
-        await this.persist(chat);
+        await this.storage.persist(chat);
       }
     })();
     this.syncing.set(id, job);
@@ -3377,18 +3094,18 @@ export class ProjectChats {
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,
   ) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!chat.shared || !this.sharing) return [];
     return this.sharing.presence(chat, value);
   }
   async workspace(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!chat.shared || !this.sharing)
       throw new Error("Share the conversation before enabling live sync.");
     return this.sharing.workspace(chat);
   }
   async invite(id: string) {
-    const chat = await this.load(id);
+    const chat = await this.storage.load(id);
     if (!chat.shared || !this.sharing)
       throw new Error("Share this conversation before inviting someone.");
     return this.sharing.invite(chat);
@@ -3404,19 +3121,19 @@ export class ProjectChats {
     if (!metadata)
       throw new Error("Shared conversation not found in this project.");
     if (this.store.get().chats?.some((c) => c.id === roomId)) {
-      const existing = await this.load(roomId);
+      const existing = await this.storage.load(roomId);
       if (existing.projectId !== projectId)
         throw new Error(
           "This conversation is linked to another local project.",
         );
-      return this.summary(existing);
+      return chatSummary(existing);
     }
     const chat: ProjectChat = { ...metadata, messages: [] };
-    this.cache.set(chat.id, chat);
-    await this.save(chat);
-    await this.addSummary(chat);
+    this.storage.keep(chat);
+    await this.storage.save(chat);
+    await this.storage.addSummary(chat);
     await this.sync(chat.id);
-    return this.summary(chat);
+    return chatSummary(chat);
   }
   async join(projectId: string, url: string) {
     if (!this.sharing) throw new Error("Sharing is unavailable.");
@@ -3431,12 +3148,12 @@ export class ProjectChats {
       return this.cancel(id);
   }
   async cancel(id: string) {
-    const chat = this.cache.get(id);
+    const chat = this.storage.cached(id);
     if (chat) chat.queuePaused = true;
     this.active.get(id)?.abort.abort();
     if (chat) await this.reviews.stop(chat);
     if (chat) await this.ultraplans.stop(chat);
-    return chat ? this.save(chat) : undefined;
+    return chat ? this.storage.save(chat) : undefined;
   }
   /**
    * Relay is closing. `detach`: it's restarting, and the agent host keeps
@@ -3456,11 +3173,11 @@ export class ProjectChats {
       );
       await Promise.allSettled(
         [...this.active.keys()].map((id) => {
-          const chat = this.cache.get(id);
-          return chat && this.save(chat);
+          const chat = this.storage.cached(id);
+          return chat && this.storage.save(chat);
         }),
       );
-      await Promise.allSettled(this.writes.pending());
+      await Promise.allSettled(this.storage.busy().writes);
       await this.store.flush();
       for (const runtime of Object.values(agentRuntimes)) runtime.detach?.();
       return;
@@ -3483,9 +3200,9 @@ export class ProjectChats {
     await Promise.allSettled([...this.reviewSteps]);
     await Promise.allSettled([
       ...this.syncing.values(),
-      ...this.loading.values(),
+      ...this.storage.busy().loads,
     ]);
-    await Promise.all(this.writes.pending());
+    await Promise.all(this.storage.busy().writes);
     // A finished answer refreshes its sidebar summary without waiting for it.
     await this.store.flush();
     await Promise.all(
