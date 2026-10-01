@@ -13,12 +13,14 @@ import {
   memo,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 import { useStoredFlag } from "../lib/useStoredFlag";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,7 +81,11 @@ import {
 } from "./ImagePreview";
 import { ImageViewer } from "./ImageViewer";
 import { LiveSyncControls } from "./LiveSyncControls";
-import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
+import {
+  ProjectComposer,
+  type ComposerControls,
+  type ComposerHandle,
+} from "./ProjectComposer";
 import {
   AgentSwitchDialog,
   agentSwitchNoticeHidden,
@@ -578,6 +584,7 @@ export function ProjectChat({
   onOpenTurnDiff,
   onDraftWorkspace,
   viewing,
+  ref,
 }: {
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   project: Project;
@@ -608,6 +615,8 @@ export function ProjectChat({
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   viewing: { path: string | null; viewed: number; total: number };
+  /** The thread's composer, while it shows one. */
+  ref?: Ref<ComposerControls>;
 }) {
   const qc = useQueryClient(),
     id = chat?.id ?? draftId,
@@ -681,6 +690,14 @@ export function ProjectChat({
     oldest = useRef<string | undefined>(undefined);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => composer.current?.focus(),
+      submit: () => composer.current?.submit(),
+    }),
+    [],
+  );
   const composerDock = useRef<HTMLDivElement>(null);
   const [scrolledUp, setScrolledUp] = useState(false);
   const [dockHeight, setDockHeight] = useState(0);
@@ -2224,11 +2241,7 @@ export function ProjectChat({
             selected={workItem?.id}
             onPick={(item) => {
               setWorkItem(workItem?.id === item.id ? undefined : item);
-              requestAnimationFrame(() =>
-                document
-                  .querySelector<HTMLElement>(".thread-start .ProseMirror")
-                  ?.focus(),
-              );
+              requestAnimationFrame(() => composer.current?.focus());
             }}
           />
         )}

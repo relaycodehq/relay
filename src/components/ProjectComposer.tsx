@@ -148,7 +148,12 @@ export interface ComposerHandle {
   insertQuote: (text: string) => void;
   /** The agent picked here and its settings; none while it only messages people. */
   agentSettings: () => ResumeSettings | undefined;
+  focus: () => void;
+  /** Sends the draft, exactly as the send button does. */
+  submit: () => void;
 }
+/** What the rest of the window may do with the open thread's composer. */
+export type ComposerControls = Pick<ComposerHandle, "focus" | "submit">;
 export function ProjectComposer({
   handleRef,
   onCommand,
@@ -358,6 +363,8 @@ export function ProjectComposer({
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
       agentSettings: () => agentSettings.current(),
+      focus: () => input.current?.focus(),
+      submit: () => composerForm.current?.requestSubmit(),
     }),
     [],
   );

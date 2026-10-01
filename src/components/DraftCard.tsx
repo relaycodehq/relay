@@ -10,11 +10,14 @@ export function DraftCard({
   draft,
   selected,
   onOpen,
+  onSendOpen,
 }: {
   draft: ActivityDraft;
   /** Its thread is the one open. */
   selected: boolean;
   onOpen: () => void;
+  /** Sends it from the open thread's composer. */
+  onSendOpen: () => void;
 }) {
   const qc = useQueryClient();
   const text = useDraft(draft.key).replace(/\s+/g, " ").trim();
@@ -29,14 +32,7 @@ export function DraftCard({
   };
   async function send() {
     // The open draft goes through its composer, exactly as if sent there.
-    if (selected) {
-      document
-        .querySelector<HTMLFormElement>(
-          ".project-chat-pane form.project-composer:not(.deep-review-composer)",
-        )
-        ?.requestSubmit();
-      return;
-    }
+    if (selected) return onSendOpen();
     setSending(true);
     setError(undefined);
     try {

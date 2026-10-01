@@ -112,6 +112,7 @@ function Preview() {
             onPickNew={() => {}}
             onNewScratch={() => {}}
             onDraft={() => {}}
+            onSendDraft={() => {}}
             onAdd={() => {}}
             onShared={() => {}}
             onSettings={() => {}}

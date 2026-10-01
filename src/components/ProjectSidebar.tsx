@@ -395,6 +395,7 @@ export function ProjectSidebar({
   onPickNew,
   onNewScratch,
   onDraft,
+  onSendDraft,
   onAdd,
   onShared,
   onSettings,
@@ -417,6 +418,8 @@ export function ProjectSidebar({
   onNewScratch: () => void;
   /** Back to one of a project's unsent threads. */
   onDraft: (p: Project, id: string) => void;
+  /** Sends the open unsent thread's draft from its composer. */
+  onSendDraft: () => void;
   onAdd: () => void;
   onShared: (p: Project) => void;
   /** Opens Settings, at `category` when given. */
@@ -1342,6 +1345,7 @@ export function ProjectSidebar({
       draft={d}
       selected={d.id === draftId}
       onOpen={() => (d.chat ? onChat(d.chat) : onDraft(d.project, d.id))}
+      onSendOpen={onSendDraft}
     />
   );
 

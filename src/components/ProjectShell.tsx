@@ -72,6 +72,7 @@ import { projectFor, repoKey } from "../lib/pull-board";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
+import type { ComposerControls } from "./ProjectComposer";
 import type { CodeReference } from "../../shared/code-references";
 import {
   matchLink,
@@ -152,6 +153,7 @@ export default function ProjectShell() {
   const [draftWorkspace, setDraftWorkspace] =
     useState<ChatWorkspace>("checkout");
   const gitActions = useRef<GitActionsHandle>(null);
+  const chatComposer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
   const [settings, setSettings] = useState(false),
@@ -710,14 +712,9 @@ export default function ProjectShell() {
   }
   function openNewThread(p: Project) {
     if (!navigate(p, undefined, true)) return;
+    // After the new thread's composer mounts and a closing picker hands focus back.
     requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        document
-          .querySelector<HTMLElement>(
-            '.project-chat-pane [contenteditable="true"][aria-label="Message project"]',
-          )
-          ?.focus(),
-      ),
+      requestAnimationFrame(() => chatComposer.current?.focus()),
     );
   }
   /** A thread keeps the scope it started with; another one takes a new thread. */
@@ -1016,6 +1013,7 @@ export default function ProjectShell() {
             onNewScratch={() => void newScratch()}
             draftId={legacy || chat ? undefined : draftId}
             onDraft={(p, id) => navigate(p, undefined, id)}
+            onSendDraft={() => chatComposer.current?.submit()}
             onAdd={() => void add()}
             onShared={(p) => {
               if (navigate(p)) setBrowseShared(true);
@@ -1098,6 +1096,7 @@ export default function ProjectShell() {
               >
                 <ProjectChat
                   key={chat?.id ?? draftId}
+                  ref={chatComposer}
                   project={project}
                   draftId={draftId}
                   onCommand={runCommand}
