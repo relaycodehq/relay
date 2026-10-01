@@ -21,8 +21,9 @@ export function useThreadHandle(
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  /** Resolves to whether `work` went through. Callers check `busy` first. */
+  /** Resolves to whether `work` went through; while another is out it doesn't start. */
   async function run(work: () => Promise<unknown>) {
+    if (busy) return false;
     setBusy(true);
     setError(undefined);
     try {

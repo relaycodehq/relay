@@ -47,6 +47,7 @@ export function useThreadSend({
     value: ComposedSend,
     dispatch?: () => void,
   ): Promise<boolean> {
+    // Before run, which would refuse too: nothing is asked or cleared meanwhile.
     if (busy) return false;
     if (value.side) return askAside(value, dispatch);
     if (!(await confirmSwitch(agentAsked(value)?.provider))) return false;
@@ -97,6 +98,7 @@ export function useThreadSend({
   }
   /** Carries on the stopped answer with whichever agent the composer has picked. */
   async function resume(settings: () => ResumeSettings | undefined) {
+    // Before run, so the switch isn't asked about meanwhile.
     if (!chat || busy) return;
     const picked = settings();
     if (!(await confirmSwitch(picked?.provider))) return;

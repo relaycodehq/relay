@@ -17,7 +17,7 @@ export type Councils = ReturnType<typeof useCouncils>;
 
 /** A thread's deep review and ultraplans: their state, and what the thread can do with them. */
 export function useCouncils({
-  handle: { chat, projectId, busy, run, setError, refetch, listChanged },
+  handle: { chat, projectId, run, setError, refetch, listChanged },
   data,
   onCreated,
   onSent,
@@ -41,7 +41,6 @@ export function useCouncils({
     onCreated,
   );
   async function startReview(config: DeepReviewStart) {
-    if (busy) return false;
     return run(async () => {
       await reviewThread(async (thread) => {
         // Messages in the thread go to the lead, with the lead's settings.
@@ -59,7 +58,7 @@ export function useCouncils({
   }
   // Straight to the lead; whatever the composer holds stays there.
   async function fixFindings(findings: Finding[]) {
-    if (!chat || !review || !findings.length || busy) return;
+    if (!chat || !review || !findings.length) return;
     await run(async () => {
       await api.sendProjectChat(chat.id, {
         id: crypto.randomUUID(),
@@ -83,7 +82,7 @@ export function useCouncils({
       .catch(setError);
   }
   function resume(start: (chatId: string) => Promise<unknown>) {
-    if (!chat || busy) return;
+    if (!chat) return;
     void run(async () => {
       await start(chat.id);
       await refetch();

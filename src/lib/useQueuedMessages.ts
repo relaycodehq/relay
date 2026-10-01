@@ -20,7 +20,7 @@ export type QueuedMessageActions = ReturnType<typeof useQueuedMessages>;
 
 /** What can be done with a queued or scheduled message: send it now, move it, or take it back into the composer. */
 export function useQueuedMessages({
-  handle: { chat, id, busy, run, refetch, listChanged },
+  handle: { chat, id, run, refetch, listChanged },
   messages,
   queue,
   attachments,
@@ -41,7 +41,7 @@ export function useQueuedMessages({
     messageId: string,
     index?: number,
   ) {
-    if (!chat || busy) return;
+    if (!chat) return;
     await run(async () => {
       await api.projectChatQueueAction(chat.id, action, messageId, index);
       await refetch();
@@ -59,7 +59,7 @@ export function useQueuedMessages({
     void queueAction("move", moving, moved.index);
   }
   async function returnToComposer(input: ProjectChatSend) {
-    if (!chat || busy) return;
+    if (!chat) return;
     await run(async () => {
       const parent = input.parentId
         ? replyRoot(messages, input.parentId).id
