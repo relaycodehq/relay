@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "../lib/useNow";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SidebarView } from "../../shared/types";
 import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
@@ -42,8 +42,6 @@ import {
 } from "../../shared/projects";
 import {
   chatActivitySections,
-  chatIsEmpty,
-  movedSinceSeen,
   shortAge,
   wakeLabel,
 } from "../../shared/chat-activity";
@@ -51,7 +49,6 @@ import { agentsSince } from "../../shared/waiting";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { SnoozeMenu } from "./SnoozeMenu";
 import { api } from "../lib/api";
-import { SCRATCH_CHATS } from "../lib/chat-events";
 import { mac } from "../lib/mod-key";
 import {
   digitOf,
@@ -62,8 +59,6 @@ import {
   useShortcutLabel,
 } from "../lib/shortcuts";
 import { modifierCode } from "../../shared/shortcuts";
-import { useWindowFocused } from "../lib/window-focus";
-import { readJson, writeJson } from "../lib/persisted-store";
 import { groupKey, useSidebarFolds } from "../lib/useSidebarFolds";
 import { SHELF_PAGE, useShelves } from "../lib/useShelves";
 import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
@@ -89,65 +84,14 @@ import { useProjectGroups } from "../lib/useProjectGroups";
 import { dropSide, useProjectDrag } from "../lib/useProjectDrag";
 import "./sidebar.css";
 import { AwayPeek, AwayWhere } from "./AwayCard";
-import { awayStopped, useAwayViews, withAway } from "../lib/useAwayViews";
+import { awayStopped } from "../lib/useAwayViews";
+import { useSidebarThreads } from "../lib/useSidebarThreads";
+import { useUnread } from "../lib/useUnread";
+import { useThreadSearch } from "../lib/useThreadSearch";
 
 const THREADS_PER_PROJECT = 5;
-const SEARCH_RESULTS = 50;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
 const CMD_HINT_DELAY_MS = 500;
-
-function readObject<T>(key: string, fallback: T): T {
-  const value = readJson(key);
-  return value && typeof value === "object" ? (value as T) : fallback;
-}
-
-/**
- * Last time each thread was open here; drives the unread dot. The open thread
- * only counts as seen while Relay is in front: an answer that lands while
- * you're in another app stays unread until you come back.
- */
-function useSeen(chatId: string | undefined, chats: ChatSummary[]) {
-  const focused = useWindowFocused();
-  const [since] = useState(() => {
-    const saved = Number(localStorage.getItem("relay-thread-seen-since"));
-    if (saved > 0) return saved;
-    const now = Date.now();
-    localStorage.setItem("relay-thread-seen-since", String(now));
-    return now;
-  });
-  const [seen, setSeen] = useState<Record<string, number>>(() =>
-    readObject("relay-thread-seen", {}),
-  );
-  const current = chats.find((c) => c.id === chatId);
-  /** The thread last read here; marking it unread while it's open holds until it's opened again. */
-  const opened = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!current) {
-      opened.current = undefined;
-      return;
-    }
-    if (!focused) return;
-    const reopened = opened.current !== current.id;
-    opened.current = current.id;
-    if (
-      !(current.markedUnread && reopened) &&
-      (seen[current.id] ?? 0) >= current.updated
-    )
-      return;
-    setSeen((s) => {
-      const next = { ...s, [current.id]: current.updated };
-      writeJson("relay-thread-seen", next);
-      return next;
-    });
-    // Phones read it from the desktop, so their marks clear too.
-    void window.relay
-      ?.markProjectChatSeen?.(current.id, current.updated)
-      .catch(() => {});
-  }, [focused, current?.id, current?.updated]);
-  return (c: ChatSummary) =>
-    ((c.id !== chatId || (!focused && !c.running)) && !!c.markedUnread) ||
-    movedSinceSeen(c, since, seen);
-}
 
 /** A thread's name, dimmed while it's being generated again. */
 function ThreadTitle({
@@ -506,9 +450,6 @@ export function ProjectSidebar({
   const scratchIds = new Set(
     projects.filter((p) => p.scratch).map((p) => p.id),
   );
-  const [search, setSearch] = useState("");
-  /** The query whose results are listed past the first SEARCH_RESULTS. */
-  const [allResultsFor, setAllResultsFor] = useState<string>();
   const {
     view,
     toggle: toggleView,
@@ -528,20 +469,6 @@ export function ProjectSidebar({
     queryKey: ["auto-settle-days"],
     queryFn: () => api.autoSettleDays(),
   }).data;
-  // Kept current by the desktop's pushes; see lib/chat-events.
-  const lists = useQueries({
-    queries: [
-      ...realProjects.map((p) => ({
-        queryKey: ["project-chats", p.id],
-        queryFn: () => api.projectChats(p.id),
-      })),
-      // One list for every Scratchpad folder: there's one per chat.
-      {
-        queryKey: SCRATCH_CHATS,
-        queryFn: () => api.scratchChats(),
-      },
-    ],
-  });
   /**
    * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
    * first nine cards (or whichever modifiers open them). ⌘ used as part of
@@ -600,13 +527,9 @@ export function ProjectSidebar({
     };
   }, []);
   const byId = new Map(projects.map((p) => [p.id, p]));
-  const away = useAwayViews(lists.flatMap((q) => q.data ?? []));
-  const all = lists
-    .flatMap((q) => q.data ?? [])
-    .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
-    .map((c) => withAway(c, away[c.id]))
-    .sort((a, b) => b.updated - a.updated);
-  const unread = useSeen(chatId, all);
+  const { all, away } = useSidebarThreads(realProjects, chatId);
+  const unread = useUnread(chatId, all);
+  const search = useThreadSearch(all, byId);
   const triage = async (c: ChatSummary, action: ChatTriage) => {
     // Every list holding it: its project's, and Scratchpad's for a scratch chat.
     const triaged = (entry: ChatSummary): ChatSummary => {
@@ -757,11 +680,6 @@ export function ProjectSidebar({
     // A plain browser preview has no desktop bridge.
     void api?.setBadge?.(attention)?.catch(() => {});
   }, [attention]);
-  const query = search.trim().toLowerCase();
-  const matches = (c: ChatSummary) =>
-    `${c.title} ${byId.get(c.projectId)?.name ?? ""}`
-      .toLowerCase()
-      .includes(query);
   const open = (c: ChatSummary) => {
     onChat(c);
   };
@@ -777,7 +695,7 @@ export function ProjectSidebar({
     }
     void triage(c, { kind: "settle" });
   };
-  const shortcuts = view === "activity" && !query;
+  const shortcuts = view === "activity" && !search.query;
   const drafts =
     view === "activity"
       ? activityDrafts(
@@ -1547,9 +1465,7 @@ export function ProjectSidebar({
     </div>
   );
 
-  const results = all.filter(matches);
-  const listed =
-    allResultsFor === query ? results : results.slice(0, SEARCH_RESULTS);
+  const { results, listed } = search;
   const searching = (
     <div className="sb-scroll">
       <div className="sb-view-heading">
@@ -1559,10 +1475,7 @@ export function ProjectSidebar({
       <div className="sb-thread-list flat">
         {listed.map((c) => threadRow(c, true))}
         {listed.length < results.length && (
-          <button
-            className="sb-thread sb-ghost"
-            onClick={() => setAllResultsFor(query)}
-          >
+          <button className="sb-thread sb-ghost" onClick={search.listAll}>
             <span className="sb-thread-title">
               Show {results.length - listed.length} more
             </span>
@@ -1581,17 +1494,17 @@ export function ProjectSidebar({
           <input
             aria-label="Search threads"
             placeholder="Search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={search.text}
+            onChange={(e) => search.setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setSearch("");
+              if (e.key === "Escape") search.setText("");
             }}
           />
-          {search && (
+          {search.text && (
             <button
               className="sb-search-clear"
               aria-label="Clear search"
-              onClick={() => setSearch("")}
+              onClick={() => search.setText("")}
             >
               <X size={12} />
             </button>
@@ -1611,7 +1524,7 @@ export function ProjectSidebar({
           aria-label="View activity"
           title={`View activity  ${activityKeys}`.trim()}
           onClick={() => {
-            setSearch("");
+            search.setText("");
             toggleView();
           }}
         >
@@ -1623,7 +1536,7 @@ export function ProjectSidebar({
           )}
         </button>
       </div>
-      {query ? searching : view === "activity" ? activity : threads}
+      {search.query ? searching : view === "activity" ? activity : threads}
       {viewError && <ErrorBox error={viewError} />}
       <div className="sb-footer">
         <button
