@@ -1,4 +1,4 @@
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type UseEditorOptions } from "@tiptap/react";
 import { createPortal } from "react-dom";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { Slice } from "@tiptap/pm/model";
@@ -6,6 +6,7 @@ import { closeHistory } from "@tiptap/pm/history";
 import {
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type Ref,
@@ -103,11 +104,16 @@ export function ComposerPromptInput({
   const [peek, setPeek] = useState<{ anchor: Element; src: string } | null>(
     null,
   );
-  const chips = draftChips(draftKey);
-  const labels = useRef(chips.skills.load());
-  const quotes = useRef(chips.quotes.load());
-  const files = useRef(chips.files.load());
-  const editor = useEditor({
+  const chips = useMemo(() => draftChips(draftKey), [draftKey]);
+  const labels = useRef<Record<string, string>>(null!);
+  const quotes = useRef<string[]>(null!);
+  const files = useRef<string[]>(null!);
+  labels.current ??= chips.skills.load();
+  quotes.current ??= chips.quotes.load();
+  files.current ??= chips.files.load();
+  // Built once: the editor only reads these when it is made, and options that
+  // differ on a render make useEditor reset the view's props on every keystroke.
+  const [options] = useState<UseEditorOptions>(() => ({
     extensions: promptExtensions(),
     content: promptContent(
       value,
@@ -188,7 +194,8 @@ export function ComposerPromptInput({
         promptText(editor.state.doc, editor.state.selection.from).length,
       );
     },
-  });
+  }));
+  const editor = useEditor(options);
   useEffect(() => {
     if (!editor) return;
     inputRef.current = editor.view.dom;
