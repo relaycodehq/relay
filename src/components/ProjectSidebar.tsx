@@ -92,13 +92,8 @@ import {
   type ProjectFolderNode,
 } from "../../shared/project-folders";
 import "./sidebar.css";
-import {
-  awayStopped,
-  AwayPeek,
-  AwayWhere,
-  useAwayViews,
-  withAway,
-} from "./AwayCard";
+import { AwayPeek, AwayWhere } from "./AwayCard";
+import { awayStopped, useAwayViews, withAway } from "../lib/useAwayViews";
 
 const THREADS_PER_PROJECT = 5;
 const SEARCH_RESULTS = 50;
