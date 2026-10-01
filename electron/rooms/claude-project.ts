@@ -41,8 +41,10 @@ import {
   type ClaudeStream,
   type SDKMessage,
 } from "./claude-project/sdk";
+import { ClaudeWork, pendingChanged } from "./claude-project/pending";
 
 export { sdk } from "./claude-project/sdk";
+export { onClaudePending, wakeupTime } from "./claude-project/pending";
 export {
   claudeDefaults,
   listClaudeCommands,
@@ -127,10 +129,8 @@ type ClaudeSession = {
   /** The cache lifetime Claude last reported writing with. */
   cacheTtl?: number;
   busy: boolean;
-  /** Background work that starts Claude's next turn when it ends, by task id. */
-  tasks: Map<string, Extract<ChatPending, { kind: "task" }>>;
-  /** Wake-ups Claude scheduled for itself, as of the end of its last turn. */
-  wakeups: Extract<ChatPending, { kind: "wakeup" }>[];
+  /** Background work and wake-ups that start Claude's next turn. */
+  work: ClaudeWork;
   /** The subagents it started, followed between turns too. */
   agents: SubagentTracker;
 };
@@ -140,15 +140,6 @@ const sessions = new HostedSessions<ClaudeSession>({
   kind: "claude",
   close: closeSession,
 });
-const pendingListeners = new Set<() => void>();
-/** Hears when any session's background work or wake-ups may have changed. */
-export function onClaudePending(listener: () => void) {
-  pendingListeners.add(listener);
-  return () => void pendingListeners.delete(listener);
-}
-const pendingChanged = () => {
-  for (const listener of pendingListeners) listener();
-};
 function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();
@@ -235,12 +226,12 @@ async function pump(
 function restore(session: ClaudeSession, message: SDKMessage) {
   const hook = message as unknown as HookFrame;
   if (hook.type === "relay_hook") {
-    if (hook.event === "Stop") scheduled(session, hook.input);
+    if (hook.event === "Stop") session.work.schedule(hook.input);
   } else if (
     message.type === "system" &&
     message.subtype === "background_tasks_changed"
   )
-    trackTasks(session, message.tasks);
+    session.work.track(message.tasks);
 }
 function receive(session: ClaudeSession, message: SDKMessage) {
   // The host logs the end-of-turn hook as a frame of its own.
@@ -250,7 +241,7 @@ function receive(session: ClaudeSession, message: SDKMessage) {
     message.type === "system" &&
     message.subtype === "background_tasks_changed"
   )
-    trackTasks(session, message.tasks);
+    session.work.track(message.tasks);
   if (session.turn) return session.frames.push(message);
   // Between turns, only Claude's own output matters. Init, status and late
   // results have nothing to show, and subagents report through their parent.
@@ -282,78 +273,16 @@ function receive(session: ClaudeSession, message: SDKMessage) {
     });
   session.unprompted = done;
 }
-/** Replaces the live task set; the SDK sends all of it on every change. */
-function trackTasks(
-  session: ClaudeSession,
-  tasks: {
-    task_id: string;
-    task_type?: string;
-    description: string;
-    ambient?: boolean;
-  }[],
-) {
-  const previous = session.tasks;
-  session.tasks = new Map();
-  for (const task of tasks)
-    // Watchers and housekeeping never wake Claude.
-    if (!task.ambient)
-      session.tasks.set(task.task_id, {
-        kind: "task",
-        id: task.task_id,
-        description: task.description.slice(0, 300),
-        // The SDK sends no start time; the first sighting is close enough.
-        since: previous.get(task.task_id)?.since ?? Date.now(),
-        ...(agentTask(task.task_type) && { agent: true }),
-      });
-  pendingChanged();
-}
-const agentTask = (type?: string) =>
-  type === "local_agent" || type === "local_workflow";
-/** The wake-ups Claude listed as its turn ended. */
-function scheduled(session: ClaudeSession, input: unknown) {
-  const crons =
-    input && typeof input === "object" && "session_crons" in input
-      ? ((input.session_crons as
-          | {
-              id: string;
-              prompt: string;
-              recurring: boolean;
-              schedule: string;
-            }[]
-          | undefined) ?? [])
-      : [];
-  session.wakeups = crons.slice(0, 20).map((cron) => ({
-    kind: "wakeup" as const,
-    id: cron.id,
-    prompt: cron.prompt.slice(0, 1000),
-    recurring: cron.recurring,
-    ...(cron.recurring ? {} : { at: wakeupTime(cron.schedule) }),
-  }));
-  pendingChanged();
-}
-/** When a one-shot wake-up fires: its cron pins minute, hour, day and month, in local time. */
-export function wakeupTime(schedule: string, now = Date.now()) {
-  const fields = schedule.trim().split(/\s+/);
-  if (fields.length !== 5) return undefined;
-  const [minute, hour, day, month] = fields.slice(0, 4).map(Number);
-  if (![minute, hour, day, month].every(Number.isInteger)) return undefined;
-  const year = new Date(now).getFullYear();
-  const at = new Date(year, month - 1, day, hour, minute).getTime();
-  // A date already behind us by more than a day is next year's.
-  return at < now - 86_400_000
-    ? new Date(year + 1, month - 1, day, hour, minute).getTime()
-    : at;
-}
 /** What Claude left running that will start its next turn, while its session lives. */
 export function claudePending(key: string): ChatPending[] {
   const session = sessions.get(key);
   if (!session || session.frames.ended) return [];
-  return [...session.tasks.values(), ...session.wakeups];
+  return session.work.list();
 }
 /** Stops a background task; Claude hears it stopped and usually says so. */
 export async function stopClaudeTask(key: string, taskId: string) {
   const session = sessions.get(key);
-  if (!session?.tasks.has(taskId) || session.frames.ended)
+  if (!session?.work.has(taskId) || session.frames.ended)
     throw new Error("That work has already finished.");
   await session.stream.stopTask(taskId);
 }
@@ -651,7 +580,7 @@ async function startSession(
             {
               hooks: [
                 async (input) => {
-                  scheduled(holder, input);
+                  holder.work.schedule(input);
                   return {};
                 },
               ],
@@ -759,8 +688,7 @@ function restoreSession(
     controller: new AbortController(),
     plan: "",
     busy: false,
-    tasks: new Map(),
-    wakeups: [] as ClaudeSession["wakeups"],
+    work: new ClaudeWork(),
     agents: new SubagentTracker(),
     threadId: info.threadId,
     ready: { promise, resolve },
@@ -812,8 +740,7 @@ export async function runClaudeProject(
       throw new Error("This Claude session is already running a turn.");
     // New settings mean a new session, unless Claude still has work running
     // in this one that a restart would end.
-    const working =
-      !!session && (session.tasks.size > 0 || session.wakeups.length > 0);
+    const working = !!session && session.work.any;
     if (
       session &&
       !session.frames.ended &&
@@ -874,8 +801,7 @@ export async function runClaudeProject(
         controller,
         plan: "",
         busy: true,
-        tasks: new Map(),
-        wakeups: [] as ClaudeSession["wakeups"],
+        work: new ClaudeWork(),
         agents: new SubagentTracker(),
         // Set as the session starts.
         stream: undefined as unknown as ClaudeStream,
