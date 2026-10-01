@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SendRoom } from "../../shared/rooms";
 
-export interface RoomDraft {
+interface RoomDraft {
   text: string;
   parentId: string | null;
   context?: SendRoom["context"];

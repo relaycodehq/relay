@@ -3,7 +3,7 @@ import { codexQuestionChoice, defaultAISettings } from "../../shared/settings";
 import { api } from "./api";
 import { useStoredState } from "./persisted-store";
 
-export interface ClaudeChoice {
+interface ClaudeChoice {
   model: string;
   effort: "" | "low" | "medium" | "high" | "xhigh" | "max";
 }
