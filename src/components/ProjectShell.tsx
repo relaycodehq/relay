@@ -71,6 +71,7 @@ import { projectFor, repoKey } from "../lib/pull-board";
 import { Settings, type SettingsCategory } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
+import { sendDraft } from "./draft-send";
 import type { CodeReference } from "../../shared/code-references";
 import {
   matchLink,
@@ -745,6 +746,33 @@ export default function ProjectShell() {
     setChatId(null);
     setDraftScope(scope);
   }
+  /**
+   * A new thread in the project folder on `text`: sent on the agent new
+   * threads start with, or left as a draft to change first.
+   */
+  async function startThread(text: string, send: boolean) {
+    if (!project || dirty) return;
+    const id = freshNewThread(project.id);
+    clearDraftScope(id);
+    writeDraft(DRAFT_PREFIX + id, text);
+    try {
+      const sent =
+        send &&
+        (await sendDraft(qc, {
+          key: DRAFT_PREFIX + id,
+          id,
+          project,
+          reply: false,
+        }));
+      if (sent) {
+        await chats.refetch();
+        return navigate(project, sent);
+      }
+    } catch (e) {
+      setError(e);
+    }
+    navigate(project, undefined, id);
+  }
   async function reviewBranchPr(ref: PullRef) {
     if (!project || dirty) return;
     await discuss(ref);
@@ -1140,6 +1168,7 @@ export default function ProjectShell() {
                     if (chat) void withAccount(() => setShare(chat));
                   }}
                   onDraftWorkspace={setDraftWorkspace}
+                  onStartThread={startThread}
                   onCreated={async (c) => {
                     if (!c.worktree) adoptDraftTerminal(project.id, c.id);
                     await chats.refetch();

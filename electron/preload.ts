@@ -88,6 +88,7 @@ const methods = [
   "projectMergeBranch",
   "projectDeleteBranch",
   "projectCatchUp",
+  "projectRebase",
   "projectPulls",
   "projectChats",
   "createProjectChat",

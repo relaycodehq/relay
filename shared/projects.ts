@@ -13,7 +13,12 @@ import { refSchema, filePathSchema } from "./validation";
 import type { TurnModel } from "./turn-model";
 import type { DirListing, FileInfo } from "./project-files";
 import type { FilePair, LocalFile, Page, Issue, Repo } from "./types";
-import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
+import type {
+  GitAction,
+  WorkingTree,
+  ChangeArea,
+  RebaseResult,
+} from "./working-tree";
 import type {
   DeepReviewStart,
   DeepReviewState,
@@ -712,6 +717,8 @@ export interface ProjectApi {
   projectDeleteBranch(where: string, name: string): Promise<void>;
   /** Merges `base` into the current branch; conflicts stay marked in its folder. */
   projectCatchUp(where: string, base: string): Promise<{ conflicts: string[] }>;
+  /** Rebases the checkout's commits onto its upstream, if `head` is still where they end. */
+  projectRebase(where: string, head: string): Promise<RebaseResult>;
   projectHistory(
     where: string,
     scope: import("./history").HistoryScope,

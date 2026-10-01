@@ -77,6 +77,24 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("fetch") }).strict(),
 ]);
 export type GitAction = z.infer<typeof gitActionSchema>;
+export interface Commit {
+  sha: string;
+  subject: string;
+}
+/**
+ * Rebasing a diverged branch onto its upstream. A conflict changes nothing:
+ * it says what came in, what's ours, and which files the first clash stopped on.
+ */
+export type RebaseResult =
+  | { rebased: true; tree: WorkingTree }
+  | {
+      rebased: false;
+      tree: WorkingTree;
+      upstream: string;
+      incoming: Commit[];
+      outgoing: Commit[];
+      conflicts: string[];
+    };
 /** Starts the refusal of an action made on a view of the checkout that's since moved on. */
 export const checkoutChanged = "Your checkout changed.";
 /** Starts every failure that means Relay has no Git to run. */

@@ -577,6 +577,7 @@ export function ProjectChat({
   onOpenFile,
   onOpenTurnDiff,
   onDraftWorkspace,
+  onStartThread,
   viewing,
 }: {
   onCommand: (command: RelayCommand, args: string) => boolean | string;
@@ -608,6 +609,8 @@ export function ProjectChat({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   /** Where the unsent thread will work, as the picker changes. */
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
+  /** Opens a new project-folder thread on `text`, sent or as a draft. */
+  onStartThread?: (text: string, send: boolean) => Promise<void>;
   viewing: { path: string | null; viewed: number; total: number };
 }) {
   const qc = useQueryClient(),
@@ -2121,6 +2124,7 @@ export function ProjectChat({
             plain={project.plain}
             projectId={project.id}
             checkoutDisabled={dirty}
+            onStartThread={onStartThread}
             workspace={
               <>
                 {agentBatch.length > 0 && (

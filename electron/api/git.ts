@@ -19,6 +19,7 @@ import {
   mergeBranch,
   mergePlan,
 } from "../branch-merge";
+import { rebaseOnUpstream } from "../branch-rebase";
 import { branches, changeBranch } from "../branches";
 import { generateCommitMessage } from "../commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../commit-split";
@@ -85,6 +86,11 @@ export function gitHandlers(ctx: ApiContext) {
       catchUpBranch(
         await placeRoot(args[0]),
         z.string().min(1).max(250).parse(args[1]),
+      ),
+    projectRebase: async (args) =>
+      rebaseOnUpstream(
+        await placeRoot(args[0]),
+        z.string().regex(/^[0-9a-f]{40,64}$/).parse(args[1]),
       ),
     projectDeleteBranch: async (args) =>
       deleteMergedBranch(

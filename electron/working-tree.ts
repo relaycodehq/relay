@@ -122,7 +122,7 @@ export async function pushDestination(root: string, branch: string) {
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref: merge, label: `${remote}/${merge.slice(11)}` };
 }
-async function fetchUpstream(root: string, branch: string) {
+export async function fetchUpstream(root: string, branch: string) {
   // Detached or local-only branches have nothing to fetch.
   const remote = branch
     ? (
