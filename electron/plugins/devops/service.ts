@@ -20,9 +20,9 @@ import {
 import type { Project } from "../../../shared/projects";
 import { findExecutable } from "../../executables";
 import type { Store } from "../../store";
+import { DevOpsClient, type Fetch, type IterationNode } from "./client";
 
 const exec = promisify(execFile);
-type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 type Encrypt = (value: string) => Promise<string | null>;
 type Decrypt = (value: string) => Promise<string>;
 
@@ -54,19 +54,10 @@ const relevanceTtl = 30 * 24 * 60 * 60_000;
 const sha = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
-interface IterationNode {
-  id: number;
-  attributes?: { startDate?: string; finishDate?: string };
-  children?: IterationNode[];
-}
-
 interface RelevanceCache {
   /** Filter cache key → last use and question hash → yes-probability. */
   [key: string]: { at: number; answers: Record<string, number> };
 }
-
-/** The network failed, as opposed to Azure DevOps turning the sign-in down. */
-export class DevOpsUnreachable extends Error {}
 
 export class DevOps {
   /** Secrets that could not be encrypted live for this session only. */
@@ -151,18 +142,7 @@ export class DevOps {
    * really accepts. Throws `DevOpsUnreachable` when it can't be asked.
    */
   async whoAmI(): Promise<string | undefined> {
-    const settings = this.settings();
-    const base = organizationUrl(settings.organization);
-    const { authenticatedUser: user } = await this.request<{
-      authenticatedUser?: {
-        providerDisplayName?: string;
-        properties?: { Account?: { $value?: string } };
-      };
-    }>(
-      `${base}/_apis/connectionData`,
-      await this.authorization(settings, base),
-    );
-    return user?.providerDisplayName || user?.properties?.Account?.$value;
+    return (await this.client(this.settings())).whoAmI();
   }
 
   async workItems(
@@ -195,28 +175,27 @@ export class DevOps {
   /** The fields the organization's work items have, by display name. */
   async fields(): Promise<WorkItemField[]> {
     const settings = this.settings();
+    return this.fieldsAt(settings, await this.client(settings));
+  }
+
+  /** Throws for a missing or malformed organization before any sign-in. */
+  private async client(settings: DevOpsSettings) {
     const base = organizationUrl(settings.organization);
-    return this.fieldsAt(
-      settings,
+    return new DevOpsClient(
+      this.fetch,
       base,
       await this.authorization(settings, base),
     );
   }
 
-  private async fieldsAt(settings: DevOpsSettings, base: string, auth: string) {
-    const key = `${base}|${settings.project}`;
+  private async fieldsAt(settings: DevOpsSettings, client: DevOpsClient) {
+    const key = `${client.base}|${settings.project}`;
     if (
       this.fieldList?.key === key &&
       Date.now() - this.fieldList.at < fieldsTtl
     )
       return this.fieldList.fields;
-    const { value } = await this.request<{ value: WorkItemField[] }>(
-      `${base}${projectPath(settings)}/_apis/wit/fields?api-version=7.1`,
-      auth,
-    );
-    const fields = value
-      .map(({ name, referenceName }) => ({ name, referenceName }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const fields = await client.fields(settings.project);
     this.fieldList = { key, at: Date.now(), fields };
     return fields;
   }
@@ -242,12 +221,16 @@ export class DevOps {
     if (!refresh && cached?.key === key && Date.now() - cached.at < itemsTtl)
       return cached.items;
     if (scope === "team" && !settings.team.members.length) return [];
-    const auth = await this.authorization(settings, base);
+    const client = new DevOpsClient(
+      this.fetch,
+      base,
+      await this.authorization(settings, base),
+    );
     // Reference names go as they are; display names are looked up once.
     const reference = async (name: string) => {
       if (name.includes(".")) return name;
       const lower = name.toLowerCase();
-      const found = (await this.fieldsAt(settings, base, auth)).find(
+      const found = (await this.fieldsAt(settings, client)).find(
         (f) =>
           f.name.toLowerCase() === lower ||
           f.referenceName.toLowerCase() === lower,
@@ -275,49 +258,37 @@ export class DevOps {
     const byState = filters.some(
       (f) => f.field.toLowerCase() === "system.state",
     );
-    const wiql = await this.request<{ workItems: { id: number }[] }>(
-      `${base}${projectPath(settings)}/_apis/wit/wiql?api-version=7.1&$top=200`,
-      auth,
-      {
-        query: [
-          "SELECT [System.Id] FROM WorkItems",
-          scope === "mine"
-            ? "WHERE [System.AssignedTo] = @Me"
-            : `WHERE [System.AssignedTo] IN (${settings.team.members.map(wiqlString).join(", ")})`,
-          byState
-            ? ""
-            : `AND [System.State] NOT IN (${closedStates.map(wiqlString).join(", ")})`,
-          ...filters.map(
-            (f) =>
-              `AND [${f.field}] IN (${f.values.map(wiqlString).join(", ")})`,
-          ),
-          settings.project ? "AND [System.TeamProject] = @project" : "",
-          "ORDER BY [System.ChangedDate] DESC",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      },
+    const ids = await client.wiql(
+      settings.project,
+      [
+        "SELECT [System.Id] FROM WorkItems",
+        scope === "mine"
+          ? "WHERE [System.AssignedTo] = @Me"
+          : `WHERE [System.AssignedTo] IN (${settings.team.members.map(wiqlString).join(", ")})`,
+        byState
+          ? ""
+          : `AND [System.State] NOT IN (${closedStates.map(wiqlString).join(", ")})`,
+        ...filters.map(
+          (f) => `AND [${f.field}] IN (${f.values.map(wiqlString).join(", ")})`,
+        ),
+        settings.project ? "AND [System.TeamProject] = @project" : "",
+        "ORDER BY [System.ChangedDate] DESC",
+      ]
+        .filter(Boolean)
+        .join(" "),
     );
-    const ids = wiql.workItems.map((w) => w.id).slice(0, 200);
     let items: WorkItem[] = [];
     if (ids.length) {
-      const batch = await this.request<{
-        value: { id: number; fields: Record<string, unknown> }[];
-      }>(`${base}/_apis/wit/workitemsbatch?api-version=7.1`, auth, {
-        ids,
-        fields: [
-          ...new Set([
-            ...fields,
-            ...sortKeys
-              .map((k) => k.field)
-              .filter((f) => f !== currentSprintField),
-          ]),
-        ],
-        errorPolicy: "omit",
-      });
-      const found = batch.value.filter(Boolean);
+      const found = await client.workItems(ids, [
+        ...new Set([
+          ...fields,
+          ...sortKeys
+            .map((k) => k.field)
+            .filter((f) => f !== currentSprintField),
+        ]),
+      ]);
       const sprints = bySprint
-        ? await this.currentSprints(base, auth, [
+        ? await this.currentSprints(client, [
             ...new Set(
               found.map((w) => String(w.fields["System.TeamProject"])),
             ),
@@ -351,7 +322,7 @@ export class DevOps {
    * The iterations running today in these projects, whichever team plans
    * them: a sprint is current while its dates hold today.
    */
-  private async currentSprints(base: string, auth: string, projects: string[]) {
+  private async currentSprints(client: DevOpsClient, projects: string[]) {
     const now = Date.now(),
       current = new Set<number>();
     const visit = (node: IterationNode) => {
@@ -364,12 +335,7 @@ export class DevOps {
     await Promise.all(
       projects.map(async (project) => {
         try {
-          visit(
-            await this.request<IterationNode>(
-              `${base}/${encodeURIComponent(project)}/_apis/wit/classificationnodes/Iterations?$depth=10&api-version=7.1`,
-              auth,
-            ),
-          );
+          visit(await client.iterations(project));
         } catch {
           // Without sprint dates the items still sort by priority.
         }
@@ -455,43 +421,6 @@ export class DevOps {
     const s = this.store.get();
     const sealed = kind === "pat" ? s.devopsPat : s.devopsOpenRouterKey;
     return sealed ? await this.decrypt(sealed) : undefined;
-  }
-
-  /** POSTs `body` as JSON, or GETs when there is none. */
-  private async request<T>(url: string, auth: string, body?: unknown) {
-    let res: Response;
-    try {
-      res = await this.fetch(url, {
-        method: body === undefined ? "GET" : "POST",
-        headers: {
-          Authorization: auth,
-          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-          Accept: "application/json",
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch {
-      throw new DevOpsUnreachable("Azure DevOps could not be reached.");
-    }
-    // An invalid PAT gets a 203 sign-in page instead of a 401.
-    const json = res.headers.get("content-type")?.includes("json");
-    if (res.status === 401 || res.status === 203 || (res.ok && !json))
-      throw new Error(
-        "Azure DevOps rejected the credentials. Check the token and its Work Items (Read) scope.",
-      );
-    if (!res.ok) {
-      const detail = json
-        ? ((await res.json().catch(() => null)) as { message?: string } | null)
-            ?.message
-        : undefined;
-      throw new Error(
-        res.status === 404
-          ? "Azure DevOps organization or project not found."
-          : (detail ?? `Azure DevOps returned ${res.status}.`),
-      );
-    }
-    return (await res.json()) as T;
   }
 
   /**
@@ -728,9 +657,6 @@ function savedSort(sort: unknown): DevOpsSettings["sort"] {
       : fields,
   };
 }
-
-const projectPath = (settings: DevOpsSettings) =>
-  settings.project ? `/${encodeURIComponent(settings.project)}` : "";
 
 const wiqlString = (value: string) => `'${value.replace(/'/g, "''")}'`;
 

@@ -2,11 +2,8 @@ import { it, expect, vi } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  DevOps,
-  DevOpsUnreachable,
-  plainText,
-} from "../../electron/plugins/devops/service";
+import { DevOpsUnreachable } from "../../electron/plugins/devops/client";
+import { DevOps, plainText } from "../../electron/plugins/devops/service";
 import { Store } from "../../electron/store";
 import {
   currentSprintField,
