@@ -1910,11 +1910,14 @@ it("shows Claude planning questions and captures ExitPlanMode as a proposal with
     kind: "question",
     answers: { "0": ["Small change"] },
   });
+  // "complete" shows a moment before the turn gives the thread back.
   await vi.waitFor(
-    async () =>
+    async () => {
       expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
         "complete",
-      ),
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
     { timeout: 6000 },
   );
   await chats.send(chat.id, {
@@ -2278,8 +2281,10 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   );
   const settled = (status: string) =>
     vi.waitFor(
-      async () =>
-        expect((await chats.get(id)).messages.at(-1)?.status).toBe(status),
+      async () => {
+        expect((await chats.get(id)).messages.at(-1)?.status).toBe(status);
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
       { timeout: 8000 },
     );
   await settled("failed");
