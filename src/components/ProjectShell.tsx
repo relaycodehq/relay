@@ -405,6 +405,7 @@ export default function ProjectShell() {
           <Settings
             account={account ?? null}
             initialCategory={settings.category}
+            initialProject={settings.project ?? project?.id}
             onWhere={settings.setWhere}
             onClose={settings.close}
             onConnect={() => {

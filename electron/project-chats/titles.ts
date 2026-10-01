@@ -3,10 +3,11 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { helperProviders } from "../../shared/agents";
+import { helperFallbacks, helperProviders } from "../../shared/agents";
 import {
   cleanTitle,
   generateThreadTitle,
+  namesItself,
   promptTitle,
   regenerateThreadTitle,
 } from "../thread-titles";
@@ -42,17 +43,23 @@ export class ThreadTitles {
     void update.finally(() => this.updates.delete(update));
   }
 
-  /** Generated once per thread; the prompt excerpt stays until one lands. */
+  /**
+   * Generated once per thread, from the first message as soon as it's sent;
+   * a message of only screenshots waits for the first answer. The prompt
+   * excerpt stays until a title lands.
+   */
   generate(
     chat: ProjectChat,
-    answer: ChatMessage,
     choice: ProjectChatSend["choice"],
+    answer?: ChatMessage,
   ) {
     const firstUser = chat.messages.find((m) => m.role === "user");
+    const provider = answer?.provider ?? firstUser?.provider;
     if (
       this.core.closing() ||
       !firstUser ||
-      !answer.provider ||
+      !provider ||
+      (!answer && !namesItself(firstUser.body)) ||
       chat.renamed ||
       chat.title !== promptTitle(firstUser.body) ||
       this.asked.has(chat.id)
@@ -64,27 +71,22 @@ export class ThreadTitles {
     const job = (async () => {
       // One exhausted or unavailable CLI must not leave every thread named
       // after its prompt, so try the helper agents next.
-      const providers = [
-        answer.provider,
-        ...helperProviders.filter((p) => p !== answer.provider),
-      ];
-      for (const provider of providers) {
+      for (const by of helperFallbacks(provider)) {
         try {
           const title = await generateThreadTitle({
             user: firstUser.body,
-            answer: answer.body,
-            provider,
+            answer: answer?.body,
+            provider: by,
             // The other provider cannot use this provider's model id.
-            choice:
-              provider === answer.provider ? choice : { ...choice, model: "" },
+            choice: by === provider ? choice : { ...choice, model: "" },
             signal: titleAbort.signal,
           });
           if (titleAbort.signal.aborted) return;
-          if (title) return await this.update(chat, answer, title);
+          if (title) return await this.update(chat, answer ?? firstUser, title);
         } catch (error) {
           if (titleAbort.signal.aborted) return;
           console.warn(
-            `Thread title via ${provider} failed:`,
+            `Thread title via ${by} failed:`,
             error instanceof Error ? error.message : error,
           );
         }
@@ -96,16 +98,17 @@ export class ThreadTitles {
   /** Retries titles for threads whose first title run failed earlier. */
   ensure(id: string) {
     const chat = this.core.storage.cached(id);
-    if (!chat || this.core.active.has(id) || chat.shared) return;
+    if (!chat || chat.shared) return;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const answer = chat.messages.find(
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
     );
-    if (!firstUser || !answer) return;
+    const provider = answer?.provider ?? firstUser?.provider;
+    if (!provider) return;
     this.generate(
       chat,
+      sessionInput(chat, provider, this.core.store).choice,
       answer,
-      sessionInput(chat, answer.provider, this.core.store).choice,
     );
   }
 

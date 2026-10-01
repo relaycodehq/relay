@@ -44,8 +44,10 @@ export interface ChatSummary {
   unsettledAt?: number;
   /** Never settled automatically; only the thread's menu turns it back on. */
   autoSettleOff?: true;
-  /** Live: settled by inactivity or a merged PR, not by hand; never persisted. */
+  /** Live: settled by inactivity, a merged PR or a commit, not by hand; never persisted. */
   autoSettled?: true;
+  /** When the latest turn that committed ended; see `settleOnCommit`. */
+  committedAt?: number;
   snoozedAt?: number;
   snoozedUntil?: number;
   /** The `updated` this thread was last read up to, on the desktop or a phone. */

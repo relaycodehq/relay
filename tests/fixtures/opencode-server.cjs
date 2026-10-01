@@ -124,6 +124,7 @@ async function turn(sessionID, text) {
       messageID: first.id,
       sessionID,
       type: "step-finish",
+      cost: 0.012,
       tokens: {
         total: 1200,
         input: 1000,
@@ -164,21 +165,25 @@ async function turn(sessionID, text) {
       delta,
     });
   }
+  const finish = {
+    id: id("prt"),
+    messageID: second.id,
+    sessionID,
+    type: "step-finish",
+    cost: 0.02,
+    tokens: {
+      total: 1500,
+      input: 1300,
+      output: 200,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+  };
+  emit("message.part.updated", { sessionID, part: finish });
+  // The same step again, repriced, as a part can be updated after it lands.
   emit("message.part.updated", {
     sessionID,
-    part: {
-      id: id("prt"),
-      messageID: second.id,
-      sessionID,
-      type: "step-finish",
-      tokens: {
-        total: 1500,
-        input: 1300,
-        output: 200,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
-    },
+    part: { ...finish, cost: 0.025 },
   });
   second.time.completed = Date.now();
   busy.delete(sessionID);

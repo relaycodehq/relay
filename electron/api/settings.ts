@@ -18,6 +18,7 @@ import { signInCursor, signOutCursor } from "../agents/cursor/account";
 import { runExecutable, setLinkedAgents } from "../executables";
 import { gitInfo, gitVersion, setGitPath } from "../git";
 import { readProviderUsage } from "../provider-usage";
+import { readOpenRouterCredit } from "../openrouter-credit";
 import {
   linkCli,
   resolveCliPath,
@@ -126,6 +127,9 @@ export function settingsHandlers(ctx: ApiContext) {
     providerUsage: takes(
       [usageProviderSchema, z.boolean().optional()],
       (provider, force) => readProviderUsage(provider, force),
+    ),
+    openRouterCredit: takes([z.boolean().optional()], (force) =>
+      readOpenRouterCredit(force),
     ),
     devopsStatus: () => devops.status(),
     devopsConnection: () => azureDevOps(devops),

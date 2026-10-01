@@ -14,6 +14,7 @@ import {
   FolderPlus,
   Pencil,
   Plus,
+  Settings2,
   SquarePen,
   Users,
 } from "lucide-react";
@@ -54,6 +55,8 @@ export interface ProjectTree {
   current: string | undefined;
   onNew: (p: Project) => void;
   onShared: (p: Project) => void;
+  /** Opens the project's page in Settings. */
+  onProjectSettings: (p: Project) => void;
 }
 
 /** A group's insides: a new group's name field, its groups, then its projects. */
@@ -247,7 +250,17 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
 
 function ProjectSection({
   project: p,
-  tree: { groups, drag, folds, rows, threads, current, onNew, onShared },
+  tree: {
+    groups,
+    drag,
+    folds,
+    rows,
+    threads,
+    current,
+    onNew,
+    onShared,
+    onProjectSettings,
+  },
 }: {
   project: Project;
   tree: ProjectTree;
@@ -337,7 +350,12 @@ function ProjectSection({
                 >
                   <Ellipsis size={13} />
                 </Menu.Trigger>
-                <ProjectMenu project={p} groups={groups} onNew={onNew} />
+                <ProjectMenu
+                  project={p}
+                  groups={groups}
+                  onNew={onNew}
+                  onSettings={onProjectSettings}
+                />
               </Menu.Root>
               <IconButton
                 label={`Shared conversations in ${p.name}`}
@@ -353,7 +371,12 @@ function ProjectSection({
               </IconButton>
             </div>
           </ContextMenu.Trigger>
-          <ProjectMenu project={p} groups={groups} onNew={onNew} />
+          <ProjectMenu
+            project={p}
+            groups={groups}
+            onNew={onNew}
+            onSettings={onProjectSettings}
+          />
         </ContextMenu.Root>
       )}
       {isOpen && (
@@ -381,10 +404,12 @@ function ProjectMenu({
   project: p,
   groups,
   onNew,
+  onSettings,
 }: {
   project: Project;
   groups: ProjectGroups;
   onNew: (p: Project) => void;
+  onSettings: (p: Project) => void;
 }) {
   return (
     <MenuPopup side="bottom" align="end">
@@ -409,6 +434,9 @@ function ProjectMenu({
         onClick={() => void api.writeClipboard(p.path)}
       >
         Copy path
+      </MenuAction>
+      <MenuAction icon={<Settings2 size={13} />} onClick={() => onSettings(p)}>
+        Project settings
       </MenuAction>
       <Menu.Separator className="sb-menu-separator" />
       <Menu.SubmenuRoot>

@@ -1,4 +1,5 @@
 import {
+  FolderGit2,
   Info,
   Keyboard,
   ListTodo,
@@ -24,6 +25,13 @@ export const categories: {
     label: "Appearance",
     description: "Theme, typography, colour mode, accent and app icon.",
     icon: Palette,
+  },
+  {
+    id: "projects",
+    label: "Projects",
+    description:
+      "What one project does its own way. Anything left alone follows the rest of Settings.",
+    icon: FolderGit2,
   },
   {
     id: "account",

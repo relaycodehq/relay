@@ -186,7 +186,7 @@ export function useAppearanceEntries(): SettingEntry[] {
       category: "appearance",
       title: "Auto-settle quiet threads",
       description:
-        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. Turn it off for one thread from its right-click menu.",
+        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. A project can set its own under Projects, and one thread can opt out from its right-click menu.",
       keywords:
         "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
       render: () => <AutoSettleSelect />,

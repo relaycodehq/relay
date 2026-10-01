@@ -25,6 +25,18 @@ import { api } from "../lib/api";
 import type { ThreadMenuAction } from "../lib/useThreadActions";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 
+/** "After 3 quiet days, a merged PR or a commit". */
+function autoSettleLabel(days: number | null | undefined, onCommit?: boolean) {
+  const reasons = [
+    ...(days === null
+      ? []
+      : [`${days ?? "…"} quiet day${days === 1 ? "" : "s"}`, "a merged PR"]),
+    ...(onCommit ? ["a commit"] : []),
+  ];
+  const last = reasons.pop();
+  return `After ${reasons.length ? `${reasons.join(", ")} or ${last}` : last}`;
+}
+
 /**
  * A thread's right-click menu, after T3 Code's: triage, naming, auto-settle
  * and copying, plus Fork from its latest answer on that answer's agent.
@@ -37,6 +49,7 @@ export function ThreadMenu({
   unread,
   regenerating,
   autoSettleDays,
+  settleOnCommit,
   settleKeys,
   onAction,
 }: {
@@ -46,8 +59,10 @@ export function ThreadMenu({
   now: number;
   unread: boolean;
   regenerating: boolean;
-  /** The Settings value; null turns auto-settle off everywhere. */
+  /** The project's value, else the app's; null settles nothing by time. */
   autoSettleDays: number | null | undefined;
+  /** The project also settles a thread after its agent committed. */
+  settleOnCommit?: boolean;
   settleKeys?: string;
   onAction: (action: ThreadMenuAction) => void;
 }) {
@@ -155,20 +170,15 @@ export function ThreadMenu({
           <ChevronRight size={12} />
         </Menu.SubmenuTrigger>
         <MenuPopup side="right" align="start">
-          {autoSettleDays === null ? (
-            <div className="sb-menu-heading">
-              Off for every thread in Settings
-            </div>
+          {autoSettleDays === null && !settleOnCommit ? (
+            <div className="sb-menu-heading">Off in Settings</div>
           ) : (
             <>
               <Menu.Item
                 className="sb-menu-item"
                 onClick={() => triage({ kind: "auto-settle", enabled: true })}
               >
-                <span>
-                  After {autoSettleDays ?? "…"} quiet day
-                  {autoSettleDays === 1 ? "" : "s"} or a merged PR
-                </span>
+                <span>{autoSettleLabel(autoSettleDays, settleOnCommit)}</span>
                 {!chat.autoSettleOff && <Check size={13} />}
               </Menu.Item>
               <Menu.Item

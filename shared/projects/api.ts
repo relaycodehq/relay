@@ -41,7 +41,7 @@ import type {
   RebaseResult,
   WorkingTree,
 } from "../working-tree";
-import type { Project } from "./project";
+import type { Project, ProjectSettings } from "./project";
 import type { ResumeSettings, ProjectChatSend } from "./send";
 import type { KnownMessages, ProjectChatPatch } from "./sync";
 import type {
@@ -85,6 +85,7 @@ export interface ProjectListApi {
   moveProjectGroup(path: string, before: string | null): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
   renameProject(id: string, name: string): Promise<Project>;
+  saveProjectSettings(id: string, settings: ProjectSettings): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;
 }

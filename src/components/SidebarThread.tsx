@@ -23,7 +23,7 @@ export interface SidebarRows {
   unread: (c: ChatSummary) => boolean;
   projects: Map<string, Project>;
   actions: ThreadActions;
-  /** The Settings value the thread menu's auto-settle offers. */
+  /** The app's Settings value; a project's own setting goes first. */
   autoSettleDays: number | null | undefined;
   /** The settle shortcut, shown on the open thread. */
   settleKeys: string;
@@ -81,6 +81,7 @@ export function ThreadRowMenu({
   chat: ChatSummary;
   rows: SidebarRows;
 }) {
+  const own = projects.get(c.projectId)?.settings;
   return (
     <ThreadMenu
       chat={c}
@@ -89,7 +90,10 @@ export function ThreadRowMenu({
       now={now}
       unread={unread(c)}
       regenerating={actions.regenerating.has(c.id)}
-      autoSettleDays={autoSettleDays}
+      autoSettleDays={
+        own?.autoSettleDays === undefined ? autoSettleDays : own.autoSettleDays
+      }
+      settleOnCommit={own?.settleOnCommit}
       settleKeys={c.id === chatId ? settleKeys : undefined}
       onAction={(action) => actions.act(c, action)}
     />

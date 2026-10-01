@@ -156,6 +156,7 @@ export class ProjectChats {
       this.worktrees,
       this.sharing,
       this.runner,
+      this.titles,
       this.councils,
       this.queue,
       evidence,
@@ -179,7 +180,7 @@ export class ProjectChats {
     return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
   }
   list(projectId: string): ChatSummary[] {
-    this.projects.get(projectId);
+    const { settings } = this.projects.get(projectId);
     const chats = (this.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
@@ -193,7 +194,10 @@ export class ProjectChats {
     // Once for the list: it is read on every change to any of its threads.
     const live = this.sessions.pending();
     const now = Date.now();
-    const autoSettleDays = this.autoSettleDays();
+    const autoSettleDays =
+      settings?.autoSettleDays !== undefined
+        ? settings.autoSettleDays
+        : this.autoSettleDays();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
@@ -233,7 +237,12 @@ export class ProjectChats {
                 ...(pending.length ? { pending } : {}),
               }
             : c;
-        const settledAt = autoSettledAt(listed, now, autoSettleDays);
+        const settledAt = autoSettledAt(
+          listed,
+          now,
+          autoSettleDays,
+          settings?.settleOnCommit,
+        );
         return settledAt
           ? { ...listed, settledAt, autoSettled: true as const }
           : listed;

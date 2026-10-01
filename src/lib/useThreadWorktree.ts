@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatWorkspace, Project } from "../../shared/projects";
 import { api } from "./api";
-import { loadDraftWorkspace, saveDraftWorkspace } from "./drafts";
+import {
+  loadDraftWorkspace,
+  projectWorkspace,
+  saveDraftWorkspace,
+} from "./drafts";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "./working-tree-key";
 
@@ -23,11 +27,16 @@ export function useThreadWorktree({
   const qc = useQueryClient();
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
-    chat ? "checkout" : loadDraftWorkspace(id),
+    chat ? "checkout" : loadDraftWorkspace(id, project),
   );
+  // Until one is picked here, it follows the project's setting as that changes.
+  const projectDefault = projectWorkspace(project);
+  useEffect(() => {
+    if (!chat) setWorkspace(loadDraftWorkspace(id, project));
+  }, [projectDefault]);
   useEffect(() => {
     if (chat) return;
-    saveDraftWorkspace(id, workspace);
+    saveDraftWorkspace(id, workspace, project);
     onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
   const query = useQuery({

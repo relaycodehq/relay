@@ -9,6 +9,7 @@ import { categories, categoryOf } from "./settings/categories";
 import { Setting } from "./settings/Setting";
 import { SettingsNav } from "./settings/SettingsNav";
 import { useAppearanceEntries } from "./settings/appearance";
+import { useProjectEntries } from "./settings/projects";
 import { accountEntries } from "./settings/account";
 import { useModelEntries } from "./settings/models";
 import { integrationEntries } from "./settings/integrations";
@@ -30,9 +31,12 @@ export function Settings({
   onConnect,
   onOpenChat,
   initialCategory = "appearance",
+  initialProject,
   onWhere,
 }: {
   initialCategory?: SettingsCategory;
+  /** The project Projects opens on; the first one otherwise. */
+  initialProject?: string;
   /** Where Settings is, for the window title: a category or the search. */
   onWhere?: (label: string) => void;
   account: Account | null;
@@ -51,12 +55,14 @@ export function Settings({
   useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
   const [error, setError] = useState<unknown>();
   const appearance = useAppearanceEntries(),
+    projects = useProjectEntries(account?.id, initialProject),
     models = useModelEntries(setError),
     dictation = useDictationEntries(),
     shortcuts = useShortcutEntries(),
     about = useAboutEntries();
   const entries = [
     ...appearance,
+    ...projects,
     ...accountEntries({ account, onConnect, onDisconnect, setError }),
     ...models,
     ...integrationEntries(onConnect),

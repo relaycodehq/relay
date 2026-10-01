@@ -9,7 +9,7 @@ import { agentAsked, recipient } from "../../shared/recipient";
 import { api } from "./api";
 import { startThreadSettings } from "./composer-settings";
 import { withAttachments } from "./draft-attachments";
-import { saveDraftWorkspace } from "./drafts";
+import { clearDraftWorkspace } from "./drafts";
 import type { ComposerAttachments } from "./useComposerAttachments";
 import type { NewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
@@ -70,7 +70,7 @@ export function useThreadSend({
       } else
         await newThread(async (thread) => {
           await post(thread);
-          saveDraftWorkspace(id, "checkout");
+          clearDraftWorkspace(id);
           startThreadSettings(id, thread.id, recipient(value));
         });
       await listChanged();

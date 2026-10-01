@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   autoSettledAt,
+  COMMIT_QUIET_MS,
   chatActivitySection,
   chatActivitySections,
   chatIsEmpty,
@@ -175,6 +176,31 @@ describe("auto-settle", () => {
       chat({ updated: 1_000, worktree: { landed: { at, by: "pr" } } });
     expect(autoSettledAt(merged(2_000), 3_000, 3)).toBe(2_000);
     expect(autoSettledAt(merged(500), 3_000, 3)).toBeUndefined();
+  });
+
+  it("settles on a commit only when asked and only while it's the latest turn", () => {
+    const committed = chat({ updated: 2_000, committedAt: 2_000 });
+    const quiet = 2_000 + COMMIT_QUIET_MS;
+    expect(autoSettledAt(committed, quiet, 3)).toBeUndefined();
+    expect(autoSettledAt(committed, quiet - 1, 3, true)).toBeUndefined();
+    expect(autoSettledAt(committed, quiet, 3, true)).toBe(2_000);
+    // Turning time off leaves the commit rule on its own.
+    expect(autoSettledAt(committed, quiet, null, true)).toBe(2_000);
+    // You wrote again after it committed.
+    expect(
+      autoSettledAt(
+        chat({ updated: 2_500, committedAt: 2_000 }),
+        quiet,
+        3,
+        true,
+      ),
+    ).toBeUndefined();
+    expect(
+      autoSettledAt({ ...committed, running: true }, quiet, 3, true),
+    ).toBeUndefined();
+    expect(
+      autoSettledAt({ ...committed, unsettledAt: 2_100 }, quiet, 3, true),
+    ).toBeUndefined();
   });
 
   it("leaves a thread alone while something is going on or about to", () => {

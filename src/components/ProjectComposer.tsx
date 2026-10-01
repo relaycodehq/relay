@@ -40,6 +40,7 @@ import { SketchEditor } from "./ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
+import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
@@ -75,6 +76,7 @@ export function ProjectComposer({
   context,
   notice,
   meter,
+  threadCost,
   attachment,
   placeholder,
   onSend,
@@ -92,6 +94,8 @@ export function ProjectComposer({
   notice?: ReactNode;
   /** The context window's meter, among the controls. */
   meter?: ReactNode;
+  /** Dollars this thread's answers cost, where their agent priced them. */
+  threadCost?: number;
   /** What goes with the message besides its text; `complete` when that alone is a message. */
   attachment?: { view: ReactNode; complete: boolean };
   placeholder?: string;
@@ -149,6 +153,14 @@ export function ProjectComposer({
     composer.setUltraplan(on);
     if (on) setSpark((n) => n + 1);
   }, []);
+  // OpenRouter bills per token, so its spend shows instead of a usage ring.
+  const runsOnOpenRouter =
+    to === "opencode" &&
+    (
+      runs.pickOf("opencode").model ||
+      catalogs.defaults.of("opencode")?.model ||
+      ""
+    ).startsWith("openrouter/");
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const quick = useQuickSwitchHud(runs, to);
@@ -365,7 +377,13 @@ export function ProjectComposer({
                   <Paperclip size={15} />
                 </button>
               ),
-              usage: reportsUsage(to) && <UsageRing provider={to} />,
+              usage: reportsUsage(to) ? (
+                <UsageRing provider={to} />
+              ) : (
+                runsOnOpenRouter && (
+                  <OpenRouterCreditButton threadCost={threadCost} />
+                )
+              ),
               mic: (
                 <DictationButton
                   owner={sending.dictation}

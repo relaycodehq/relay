@@ -77,6 +77,11 @@ export class AnswerRecorder {
     this.message.context = usage;
     this.changed();
   }
+  /** Adds to this answer's cost, so a steer's answer below carries on from zero. */
+  cost(usd: number) {
+    this.message.cost = (this.message.cost ?? 0) + usd;
+    this.changed();
+  }
   setModel(model: TurnModel) {
     this.model = model;
     this.message.model = model;

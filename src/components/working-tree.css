@@ -82,17 +82,6 @@
   padding: 6px 8px;
   font-size: 12px;
 }
-.working-select span:first-child {
-  width: 10px;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-}
-.working-select span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Local changes: a checkbox stages a file, its name is coloured by status. */
 .local-changes .working-file-list section > header {
   justify-content: flex-start;

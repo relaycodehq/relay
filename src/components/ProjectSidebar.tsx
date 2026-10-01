@@ -70,8 +70,8 @@ export function ProjectSidebar({
   onAdd: () => void;
   onShared: (p: Project) => void;
   onInbox: () => void;
-  /** Opens Settings, at `category` when given. */
-  onSettings: (category?: SettingsCategory) => void;
+  /** Opens Settings, at `category` when given, on `projectId` under Projects. */
+  onSettings: (category?: SettingsCategory, projectId?: string) => void;
   onAccount: () => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
@@ -210,6 +210,7 @@ export function ProjectSidebar({
                 current: projectId,
                 onNew: newThread,
                 onShared,
+                onProjectSettings: (p) => onSettings("projects", p.id),
               }}
               error={error}
               empty={!realProjects.length}

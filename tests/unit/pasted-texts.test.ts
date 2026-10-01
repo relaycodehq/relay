@@ -12,7 +12,7 @@ import {
   codeReferenceMessage,
   parseCodeReferences,
 } from "../../shared/code-references";
-import { promptTitle } from "../../electron/thread-titles";
+import { namesItself, promptTitle } from "../../electron/thread-titles";
 
 const log = Array.from(
   { length: 14 },
@@ -105,5 +105,10 @@ describe("pasted texts", () => {
     expect(promptTitle(`@claude ${message("", ...pastes)}`)).toBe(
       "TypeError: boom",
     );
+  });
+  it("names a thread at send unless only screenshots were sent", () => {
+    expect(namesItself("@claude Fix [Image #1] please")).toBe(true);
+    expect(namesItself(message("@claude", ...pastes))).toBe(true);
+    expect(namesItself("@claude [Image #1] [Image #2]")).toBe(false);
   });
 });

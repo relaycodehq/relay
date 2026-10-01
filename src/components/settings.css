@@ -220,6 +220,17 @@
 .setting.block .setting-control {
   display: block;
 }
+.settings-project-name {
+  width: 240px;
+}
+.settings-project-path {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
 .setting-muted {
   color: var(--muted);
   font-size: 12px;

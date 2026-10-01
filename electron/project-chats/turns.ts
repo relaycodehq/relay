@@ -25,6 +25,7 @@ import type { ChatQueue } from "./queue";
 import { interrupt } from "./revive";
 import { agentSession, parseSessionKey, sessionInput } from "./sessions";
 import type { ChatSharing } from "./sharing";
+import type { ThreadTitles } from "./titles";
 import { forkFor, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
 
@@ -54,6 +55,7 @@ export class ChatTurns {
     private worktrees: ThreadWorktrees,
     private sharing: ChatSharing,
     private runner: TurnRunner,
+    private titles: ThreadTitles,
     private councils: Councils,
     private queue: ChatQueue,
     private evidence:
@@ -213,6 +215,7 @@ export class ChatTurns {
       this.core.storage.keep(chat);
       await this.core.storage.persist(chat);
       this.core.emit({ chatId: id, message: user });
+      if (chat.messages.length === 1) this.titles.generate(chat, input.choice);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (!asked) {
         this.core.active.release(id, active);

@@ -15,6 +15,7 @@ import { turnRules, type ChatTurn } from "../chat-turn";
 import { ClaudeSignedOutError } from "../rooms/claude-sign-in";
 import { projectTasks } from "../tasks";
 import { finishTurn, resumeTurn, startTurn } from "../turn-changes";
+import { commitWatch } from "../turn-commit";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
@@ -123,6 +124,7 @@ export class TurnRunner {
     // What the agent itself touched, so the turn's card leaves out edits made meanwhile by anyone else.
     const edited = new Set<string>(),
       commands = new Map<string, string>();
+    let commits: Awaited<ReturnType<typeof commitWatch>> | undefined;
     const watchWorktrees = watchAgentWorktrees(
       root,
       this.worktreesFolder,
@@ -133,7 +135,8 @@ export class TurnRunner {
         await this.core.storage.persist(chat);
       },
     );
-    let point: string | undefined;
+    let point: string | undefined,
+      committed = false;
     try {
       const options = {
         onControl: (control: AgentControl) => {
@@ -145,6 +148,7 @@ export class TurnRunner {
         compact: turn.kind === "compact",
         adopt: turn.kind === "adopt",
         onContext: (usage: ContextUsage) => answer.context(usage),
+        onCost: (usd: number) => answer.cost(usd),
         cwd: root,
         prompt,
         context: async () =>
@@ -170,8 +174,10 @@ export class TurnRunner {
         onActivity: (activity: AgentActivity) => {
           if (activity.kind === "command" && activity.status === "running")
             projectTasks.record(root, chat.id, activity.label);
-          if (activity.kind === "command")
+          if (activity.kind === "command") {
             commands.set(activity.id, activity.label);
+            commits?.command(activity.label);
+          } else if (activity.kind === "file") commits?.edited();
           watchWorktrees(activity);
           answer.activity(activity);
         },
@@ -216,6 +222,14 @@ export class TurnRunner {
       const before = rules.records
         ? await (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
         : null;
+      if (before && !branch) {
+        const checkout = chat.worktree
+          ? await this.core.projects.root(chat.projectId)
+          : root;
+        commits = await commitWatch(
+          checkout === root ? [root] : [root, checkout],
+        );
+      }
       try {
         const body = await agentRuntime(provider).run({
           ...options,
@@ -233,6 +247,7 @@ export class TurnRunner {
             { edited: [...edited], commands: [...commands.values()] },
           );
           if (files.length) answer.message.changes = files;
+          committed = !!(await commits?.ended());
         }
       }
       const done = answer.message;
@@ -280,6 +295,7 @@ export class TurnRunner {
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
       chat.updated = ended.ended;
+      if (committed) chat.committedAt = ended.ended;
       answer.end();
       await this.core.storage.save(chat);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
@@ -290,7 +306,7 @@ export class TurnRunner {
         firstUser &&
         firstUser.id === input.id
       )
-        this.titles.generate(chat, ended, input.choice);
+        this.titles.generate(chat, input.choice, ended);
     }
     // A steer moves the rest of the answer to a message of its own.
     return answer.message;

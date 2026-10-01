@@ -276,6 +276,7 @@ export function ThreadComposer({
           />
         )
       }
+      threadCost={shown.reduce((sum, m) => sum + (m.cost ?? 0), 0)}
       attachment={
         !root && (selection || workItem || codeRefs.length)
           ? {

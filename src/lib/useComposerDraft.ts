@@ -24,7 +24,12 @@ import {
   type DraftImage,
 } from "./draft-images";
 import { readDraft, useDraft, writeDraft } from "./drafts";
-import { attachedImages, dataUrlBytes, nextImageNumber } from "./image-refs";
+import {
+  attachedImages,
+  dataUrlBytes,
+  nextImageNumber,
+  onlyImageTokens,
+} from "./image-refs";
 import { useImagePills } from "./image-pills";
 import type { Sketch, SketchHistory } from "./sketch";
 import { takeLegacyPastes } from "./thread-storage";
@@ -129,9 +134,12 @@ export function useComposerDraft(
       if (kept.length + files.length > 3)
         throw new Error("Attach up to three screenshots per message.");
       const first = nextImageNumber(text, existing);
-      // Without pills a screenshot has no number, so it always goes along.
+      // A pill only means something next to words; pasted into a draft with
+      // none, the screenshot just sits in the strip. Without a pill it has no
+      // number, so it always goes along.
+      const inText = imagePills && !onlyImageTokens(text);
       const prepared = (await Promise.all(files.map(prepareScreenshot))).map(
-        (image, i) => (imagePills ? { ...image, n: first + i } : image),
+        (image, i) => (inText ? { ...image, n: first + i } : image),
       );
       // Screenshots whose pills were deleted make room here, not on undo.
       const next = [...kept, ...prepared];
