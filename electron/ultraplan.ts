@@ -1,8 +1,15 @@
 // Runs an Ultraplan: the lead's brief as a turn in the thread, each thinker in
 // a hidden read-only thread of its own, then the lead's plan in Plan mode.
-import { agentMentionPattern, agentName } from "../shared/agents";
+import { agentMentionPattern } from "../shared/agents";
 import { randomUUID } from "node:crypto";
-import { councilTurn, lastAnswer, startSlots } from "./council";
+import {
+  councilTurn,
+  halted,
+  lastAnswer,
+  memberLabel,
+  startSlots,
+  unfinishedSlots,
+} from "./council";
 import type {
   ChatMessage,
   ProjectChat,
@@ -93,10 +100,7 @@ export class Ultraplans {
       );
     // A brief that never finished leaves the thinkers my request alone.
     if (!state.thinkers.length) return this.convene(chat, request, state);
-    const unfinished: number[] = [];
-    for (const [slot, t] of state.thinkers.entries())
-      if ((await this.lastAnswer(t.chatId))?.status !== "complete")
-        unfinished.push(slot);
+    const unfinished = await unfinishedSlots(this.host, state.thinkers);
     state.status = "thinking";
     await this.host.touch(chat, request);
     if (unfinished.length) await this.sendThinkers(chat, request, unfinished);
@@ -185,10 +189,6 @@ export class Ultraplans {
     );
   }
 
-  private lastAnswer(chatId: string) {
-    return lastAnswer(this.host, chatId);
-  }
-
   private async thinkerDone(parentId: string, request: string) {
     const chat = await this.host.load(parentId).catch(() => undefined);
     const state = chat?.ultraplans?.[request];
@@ -200,13 +200,12 @@ export class Ultraplans {
       state.thinkers.map(async (thinker, i) => ({
         number: i + 1,
         thinker,
-        answer: await this.lastAnswer(thinker.chatId),
+        answer: await lastAnswer(this.host, thinker.chatId),
       })),
     );
-    // A thinker stopped along the way, say by Relay closing: wait for Resume.
-    const stopped = notes.some((n) => n.answer?.status === "cancelled");
-    if (stopped || !notes.some((n) => n.answer?.status === "complete")) {
-      state.status = stopped ? "stopped" : "failed";
+    const halt = halted(notes.map((n) => n.answer));
+    if (halt) {
+      state.status = halt;
       await this.host.touch(chat, request);
       return;
     }
@@ -298,14 +297,6 @@ export function thinkerPrompt(
   ].join("\n\n");
 }
 
-/** How a thinker reads to the lead. */
-function thinkerLabel(thinker: Thinker) {
-  const name = agentName(thinker.provider);
-  const model = thinker.choice.model || "default model";
-  const effort = thinker.choice.reasoningEffort || "default effort";
-  return `${name} (${model}, ${effort})`;
-}
-
 export function leadPrompt(
   state: UltraplanState,
   notes: { number: number; thinker: Thinker; answer?: ChatMessage }[],
@@ -328,7 +319,7 @@ export function leadPrompt(
       notes.map((n) => ({
         thinker: n.number,
         ...(n.thinker.job ? { job: thinkerJobs[n.thinker.job].label } : {}),
-        agent: thinkerLabel(n.thinker),
+        agent: memberLabel(n.thinker),
         status:
           n.answer?.status === "complete"
             ? "finished"

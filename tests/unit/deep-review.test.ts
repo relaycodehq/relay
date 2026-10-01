@@ -23,7 +23,7 @@ import {
   answeredFindings,
   type DeepReviewStart,
 } from "../../shared/deep-review";
-import { leadPrompt, reviewerTask } from "../../electron/deep-review";
+import { leadPrompt, reviewerTask } from "../../electron/deep-review/prompts";
 import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
@@ -623,7 +623,7 @@ describe("what a review covers", () => {
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
   it("covers a branch's own commits against its base", async () => {
-    const { resolveScope } = await import("../../electron/deep-review");
+    const { resolveScope } = await import("../../electron/deep-review/scope");
     git(work, "checkout", "--quiet", "-b", "feature");
     await expect(
       resolveScope(work, { kind: "branch", base: "main" }, project),
@@ -646,7 +646,7 @@ describe("what a review covers", () => {
   });
 
   it("diffs uncommitted changes with new files, leaving the index alone", async () => {
-    const { resolveScope } = await import("../../electron/deep-review");
+    const { resolveScope } = await import("../../electron/deep-review/scope");
     const { reviewDiff } = await import("../../electron/review-diff");
     await writeFile(join(work, "a.ts"), "one\nstaged\n");
     git(work, "add", "a.ts");
@@ -661,7 +661,7 @@ describe("what a review covers", () => {
   });
 
   it("cuts a diff too long to hand over, listing every file", async () => {
-    const { resolveScope } = await import("../../electron/deep-review");
+    const { resolveScope } = await import("../../electron/deep-review/scope");
     const { reviewDiff, MAX_DIFF } = await import("../../electron/review-diff");
     const line = "x".repeat(99) + "\n";
     await writeFile(join(work, "big.ts"), line.repeat(MAX_DIFF / 50));
@@ -673,7 +673,7 @@ describe("what a review covers", () => {
   });
 
   it("covers one commit, by its full id", async () => {
-    const { resolveScope } = await import("../../electron/deep-review");
+    const { resolveScope } = await import("../../electron/deep-review/scope");
     const head = await commit("b.ts", "new\n", "Add b");
     const scope = await resolveScope(
       work,
@@ -689,7 +689,7 @@ describe("what a review covers", () => {
   });
 
   it("fetches a pull request from the project's remote without checking it out", async () => {
-    const { resolveScope } = await import("../../electron/deep-review");
+    const { resolveScope } = await import("../../electron/deep-review/scope");
     const forge = join(dir, "forge.git");
     execFileSync("git", ["init", "--quiet", "--bare", forge]);
     git(

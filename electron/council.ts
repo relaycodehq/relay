@@ -1,4 +1,6 @@
-import type { ProjectChat } from "../shared/projects";
+import { agentName, type AgentProvider } from "../shared/agents";
+import type { ChatMessage, ProjectChat } from "../shared/projects";
+import type { ModelChoice } from "../shared/settings";
 
 /** Council members read and reason but never change files, and none of them stops to ask. */
 export const councilTurn = {
@@ -15,6 +17,37 @@ export async function lastAnswer(
   return (
     chat && [...chat.messages].reverse().find((m) => m.role === "assistant")
   );
+}
+
+/** The slots whose member didn't finish its answer, to run again. */
+export async function unfinishedSlots(
+  host: { load(id: string): Promise<ProjectChat> },
+  members: { chatId: string }[],
+) {
+  const slots: number[] = [];
+  for (const [slot, m] of members.entries())
+    if ((await lastAnswer(host, m.chatId))?.status !== "complete")
+      slots.push(slot);
+  return slots;
+}
+
+/**
+ * Why the members' answers can't go to the lead: one stopped along the way,
+ * say by Relay closing, so it waits for Resume; or none finished.
+ */
+export function halted(answers: (ChatMessage | undefined)[]) {
+  if (answers.some((a) => a?.status === "cancelled")) return "stopped";
+  if (!answers.some((a) => a?.status === "complete")) return "failed";
+}
+
+/** How a member reads to the lead. */
+export function memberLabel(member: {
+  provider: AgentProvider;
+  choice: ModelChoice;
+}) {
+  const model = member.choice.model || "default model";
+  const effort = member.choice.reasoningEffort || "default effort";
+  return `${agentName(member.provider)} (${model}, ${effort})`;
 }
 
 /**
