@@ -12,8 +12,6 @@ import {
 
 const NOWHERE: PullsLocation = { repo: null, pull: null };
 
-export type PullsPage = ReturnType<typeof usePullsPage>;
-
 /**
  * The Pull requests page reports where it is for the title; the title and
  * the sidebar send it back to the board.

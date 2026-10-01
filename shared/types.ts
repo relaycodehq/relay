@@ -74,7 +74,7 @@ export interface Issue {
   comments: number;
   pull_request?: { merged: boolean };
 }
-export interface Branch {
+interface Branch {
   ref: string;
   sha: string;
   repo: {

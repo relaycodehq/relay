@@ -19,7 +19,7 @@ export const isSourceControlOn = (
   kind: SourceControlKind,
 ) => !settings?.off?.includes(kind);
 
-export type SourceControlSignIn = "signed-in" | "signed-out" | "unknown";
+type SourceControlSignIn = "signed-in" | "signed-out" | "unknown";
 
 /** One host as Relay last found it. */
 export interface SourceControlProvider {

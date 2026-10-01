@@ -52,7 +52,7 @@ export interface Services {
 }
 
 /** What a method's promise resolves to in the page. */
-export type Reply<M extends ApiMethod> = Awaited<ReturnType<Api[M]>>;
+type Reply<M extends ApiMethod> = Awaited<ReturnType<Api[M]>>;
 
 declare const argTypes: unique symbol;
 /**

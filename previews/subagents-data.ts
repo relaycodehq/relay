@@ -211,7 +211,7 @@ export const scripts: AgentScript[] = [
   },
 ];
 
-export type AgentStatus = "waiting" | "running" | "done" | "stopped";
+type AgentStatus = "waiting" | "running" | "done" | "stopped";
 
 export interface AgentState {
   script: AgentScript;

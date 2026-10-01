@@ -8,7 +8,7 @@ import {
 } from "./drafts";
 import { DRAFT_PREFIX, keyOwner } from "./thread-storage";
 
-export interface KnownThreads {
+interface KnownThreads {
   projects: Set<string>;
   /** Archived threads included: a PR's thread or a saved place can reopen one. */
   threads: Set<string>;

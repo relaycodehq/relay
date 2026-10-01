@@ -1,7 +1,7 @@
 // Sample pull requests for the PR overview preview. Nothing here is real.
 import type { ChatSummary, Project } from "../shared/projects";
 
-export type Relation = "review" | "assigned" | "mine" | "other";
+type Relation = "review" | "assigned" | "mine" | "other";
 export type Checks = "passing" | "failing" | "running" | "none";
 export type ReviewState = "approved" | "changes" | "waiting" | "commented";
 

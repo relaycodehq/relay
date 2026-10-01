@@ -3,7 +3,7 @@
 
 /** [x, y, half-width, twist°]. The centreline passes through (x, y). At ±90°
  * the ribbon is edge-on, which is how folds and tapered ends are drawn. */
-export type RibbonPoint = readonly [number, number, number, number];
+type RibbonPoint = readonly [number, number, number, number];
 
 /** Between two points: the ribbon creases there and doubles back, tucking
  * the rest of itself behind, like the R where its bowl turns into the leg. */

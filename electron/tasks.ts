@@ -20,7 +20,7 @@ interface Proc {
   line: string;
 }
 /** A thread's worktree, whose processes list with the project's. */
-export interface Worktree {
+interface Worktree {
   path: string;
   chatId: string;
 }

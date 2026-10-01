@@ -16,7 +16,7 @@ export interface SpeechService {
 }
 
 /** Electron's MessagePortMain, as far as phones need it. */
-export interface SpeechPort {
+interface SpeechPort {
   postMessage(message: DictationRequest): void;
   on(
     event: "message",

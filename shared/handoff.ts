@@ -62,7 +62,7 @@ export interface ChatHandover {
 }
 
 /** The settings the next turn goes out with, as the last one did. */
-export type HandoffSettings = Pick<
+type HandoffSettings = Pick<
   ProjectChatSend,
   "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
 >;
@@ -80,7 +80,7 @@ export interface HandoffThread {
   git: HandoffGit;
 }
 
-export interface HandoffGit {
+interface HandoffGit {
   /** The branch as it's named on the sending side, `refs/heads/…` in the bundle. */
   branch: string;
   /** The commit the work stands at, handoff commit included. */

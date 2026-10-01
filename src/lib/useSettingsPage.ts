@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SettingsCategory } from "./settings-page";
 
-export type SettingsPage = ReturnType<typeof useSettingsPage>;
-
 /**
  * Settings is a page over the workspace: going anywhere else, a ⌘1 jump
  * say, leaves it. `projectId`, `chatId` and `inbox` are where the shell is.
