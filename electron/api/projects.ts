@@ -13,6 +13,7 @@ import { isSourceControlOn } from "../../shared/source-control";
 import type { Pull } from "../../shared/types";
 import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
+import { workspaceIdSchema } from "../../shared/workspaces";
 import { imageMime } from "../../shared/project-files";
 import { agentRuntime } from "../agents";
 import {
@@ -25,7 +26,7 @@ import {
 } from "../project-files";
 import { projectIcon } from "../project-icon";
 import { branchPulls } from "../pull-request-create";
-import { pageSchema, type ApiContext, type Handlers } from "./context";
+import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
@@ -40,7 +41,7 @@ export function projectHandlers(ctx: ApiContext) {
     requireClient,
     place,
   } = ctx;
-  async function pullRequestPlace(where: unknown) {
+  async function pullRequestPlace(where: string) {
     // A worktree thread's PR opens from its own branch.
     const { root, projectId, chatId } = await place(where);
     const client = requireClient();
@@ -48,40 +49,37 @@ export function projectHandlers(ctx: ApiContext) {
     return { root, chatId, client, repo };
   }
   return {
-    projectIcon: async (args) =>
-      projectIcon(await projects.root(idSchema.parse(args[0])), (path) => {
+    projectIcon: takes([idSchema], async (id) =>
+      projectIcon(await projects.root(id), (path) => {
         const image = nativeImage.createFromPath(path);
         return image.isEmpty()
           ? null
           : image.resize({ width: 128, quality: "best" }).toDataURL();
       }),
+    ),
     projectGroups: () => projects.groups(),
-    createProjectGroup: (args) =>
-      projects.createGroup(projectFolderSchema.parse(args[0])),
-    renameProjectGroup: (args) =>
-      projects.renameGroup(
-        projectFolderSchema.parse(args[0]),
-        projectFolderSchema.parse(args[1]),
-      ),
-    removeProjectGroup: (args) =>
-      projects.removeGroup(projectFolderSchema.parse(args[0])),
-    moveProjectGroup: (args) =>
-      projects.moveGroup(
-        projectFolderSchema.parse(args[0]),
-        projectFolderSchema.nullable().parse(args[1]),
-      ),
-    moveProject: (args) =>
-      projects.move(
-        idSchema.parse(args[0]),
-        projectFolderSchema.parse(args[1]),
-        idSchema.nullable().parse(args[2]),
-      ),
-    renameProject: (args) =>
-      projects.rename(
-        idSchema.parse(args[0]),
-        projectNameSchema.parse(args[1]),
-      ),
-    revealProject: (args) => openPath(projects.root(idSchema.parse(args[0]))),
+    createProjectGroup: takes([projectFolderSchema], (path) =>
+      projects.createGroup(path),
+    ),
+    renameProjectGroup: takes(
+      [projectFolderSchema, projectFolderSchema],
+      (from, to) => projects.renameGroup(from, to),
+    ),
+    removeProjectGroup: takes([projectFolderSchema], (path) =>
+      projects.removeGroup(path),
+    ),
+    moveProjectGroup: takes(
+      [projectFolderSchema, projectFolderSchema.nullable()],
+      (path, before) => projects.moveGroup(path, before),
+    ),
+    moveProject: takes(
+      [idSchema, projectFolderSchema, idSchema.nullable()],
+      (id, folder, before) => projects.move(id, folder, before),
+    ),
+    renameProject: takes([idSchema, projectNameSchema], (id, name) =>
+      projects.rename(id, name),
+    ),
+    revealProject: takes([idSchema], (id) => openPath(projects.root(id))),
     projects: () => projects.list(ctx.login.client),
     addProject: async () => {
       const result = await dialog.showOpenDialog(ctx.window.win!, {
@@ -101,145 +99,164 @@ export function projectHandlers(ctx: ApiContext) {
         .scratchIds()
         .flatMap((id) => projectChats.list(id))
         .sort((a, b) => b.updated - a.updated),
-    linkProject: (args) =>
-      projects.link(idSchema.parse(args[0]), requireClient()),
-    projectCommands: async (args) => {
-      const root = await projects.root(idSchema.parse(args[0]));
-      return agentRuntime(agentProviderSchema.parse(args[1])).commands(root);
-    },
-    agentModels: (args) =>
-      agentRuntime(agentProviderSchema.parse(args[0])).models(),
-    agentDefaults: async (args) =>
-      agentRuntime(agentProviderSchema.parse(args[1])).defaults(
-        await projects.root(idSchema.parse(args[0])),
-      ),
-    projectFiles: async (args) => projects.files(await place(args[0])),
-    projectDirectory: async (args) => {
-      const { root, plain } = await place(args[0]);
-      return listDirectory(root, folderPathSchema.parse(args[1]), plain);
-    },
-    projectFileInfo: async (args) =>
-      fileInfo((await place(args[0])).root, workingPathSchema.parse(args[1])),
-    projectImage: async (args) =>
-      readImage((await place(args[0])).root, workingPathSchema.parse(args[1])),
-    projectThumbnail: async (args) => {
-      const { root } = await place(args[0]);
-      const path = workingPathSchema.parse(args[1]);
-      const image = imageMime(path)
-        ? nativeImage.createFromPath(await entryPath(root, path))
-        : null;
-      // What the system can't decode (SVG, say) goes as it is.
-      if (!image || image.isEmpty()) return readImage(root, path);
-      return image.getSize().width <= 320
-        ? readImage(root, path)
-        : image.resize({ width: 320, quality: "good" }).toDataURL();
-    },
-    revealProjectPath: async (args) => {
-      const path = folderPathSchema.parse(args[1]);
-      const full = await entryPath((await place(args[0])).root, path);
-      // A folder opens in Finder to show what's inside; a file is selected in its folder.
-      if (await lstat(full).then((s) => s.isDirectory())) {
-        await openPath(full);
-      } else shell.showItemInFolder(full);
-    },
-    projectAbsolutePath: async (args) =>
-      join((await place(args[0])).root, workingPathSchema.parse(args[1])),
-    openProjectPath: async (args) =>
-      openPath(
-        entryPath(
-          (await place(args[0])).root,
-          workingPathSchema.parse(args[1]),
-        ),
-      ),
-    createProjectEntry: async (args) =>
-      createEntry(
-        (await place(args[0])).root,
-        workingPathSchema.parse(args[1]),
-        z.enum(["file", "dir"]).parse(args[2]),
-      ),
-    renameProjectEntry: async (args) =>
-      renameEntry(
-        (await place(args[0])).root,
-        workingPathSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      ),
-    trashProjectEntry: async (args) =>
-      shell.trashItem(
-        await entryPath(
-          (await place(args[0])).root,
-          workingPathSchema.parse(args[1]),
-        ),
-      ),
-    projectFile: async (args) =>
-      projects.file(await place(args[0]), workingPathSchema.parse(args[1])),
-    saveProjectFile: async (args) =>
-      projects.save(
-        await place(args[0]),
-        workingPathSchema.parse(args[1]),
+    linkProject: takes([idSchema], (id) => projects.link(id, requireClient())),
+    projectCommands: takes(
+      [idSchema, agentProviderSchema],
+      async (id, provider) =>
+        agentRuntime(provider).commands(await projects.root(id)),
+    ),
+    agentModels: takes([agentProviderSchema], (provider) =>
+      agentRuntime(provider).models(),
+    ),
+    agentDefaults: takes(
+      [idSchema, agentProviderSchema],
+      async (id, provider) =>
+        agentRuntime(provider).defaults(await projects.root(id)),
+    ),
+    projectFiles: takes([workspaceIdSchema], async (where) =>
+      projects.files(await place(where)),
+    ),
+    projectDirectory: takes(
+      [workspaceIdSchema, folderPathSchema],
+      async (where, dir) => {
+        const { root, plain } = await place(where);
+        return listDirectory(root, dir, plain);
+      },
+    ),
+    projectFileInfo: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => fileInfo((await place(where)).root, path),
+    ),
+    projectImage: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => readImage((await place(where)).root, path),
+    ),
+    projectThumbnail: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => {
+        const { root } = await place(where);
+        const image = imageMime(path)
+          ? nativeImage.createFromPath(await entryPath(root, path))
+          : null;
+        // What the system can't decode (SVG, say) goes as it is.
+        if (!image || image.isEmpty()) return readImage(root, path);
+        return image.getSize().width <= 320
+          ? readImage(root, path)
+          : image.resize({ width: 320, quality: "good" }).toDataURL();
+      },
+    ),
+    revealProjectPath: takes(
+      [workspaceIdSchema, folderPathSchema],
+      async (where, path) => {
+        const full = await entryPath((await place(where)).root, path);
+        // A folder opens in Finder to show what's inside; a file is selected in its folder.
+        if (await lstat(full).then((s) => s.isDirectory())) {
+          await openPath(full);
+        } else shell.showItemInFolder(full);
+      },
+    ),
+    projectAbsolutePath: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => join((await place(where)).root, path),
+    ),
+    openProjectPath: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) =>
+        openPath(entryPath((await place(where)).root, path)),
+    ),
+    createProjectEntry: takes(
+      [workspaceIdSchema, workingPathSchema, z.enum(["file", "dir"])],
+      async (where, path, kind) =>
+        createEntry((await place(where)).root, path, kind),
+    ),
+    renameProjectEntry: takes(
+      [workspaceIdSchema, workingPathSchema, workingPathSchema],
+      async (where, from, to) =>
+        renameEntry((await place(where)).root, from, to),
+    ),
+    trashProjectEntry: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) =>
+        shell.trashItem(await entryPath((await place(where)).root, path)),
+    ),
+    projectFile: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => projects.file(await place(where), path),
+    ),
+    saveProjectFile: takes(
+      [
+        workspaceIdSchema,
+        workingPathSchema,
         // A plain folder has no HEAD.
-        shaSchema.or(z.literal("")).parse(args[2]),
-        digestSchema.parse(args[3]),
-        textSchema.parse(args[4]),
-      ),
-    projectCiStatus: async (args) => {
-      const id = idSchema.parse(args[0]);
-      const chatId = idSchema.optional().parse(args[1] ?? undefined);
-      const chat = chatId ? await projectChats.get(chatId) : null;
-      if (chat && chat.projectId !== id)
-        throw new Error("That thread belongs to another project.");
-      // A worktree thread reports its own branch; a removed one, the checkout's.
-      const root =
-        chat?.worktree?.path && !chat.worktree.removedAt
-          ? await projectChats
-              .worktreePath(chatId!)
-              .catch(() => projects.root(id))
-          : await projects.root(id);
-      const settings = store.get().sourceControl;
-      return ci.status(root, ctx.login.client, (kind) =>
-        isSourceControlOn(settings, kind),
-      );
-    },
-    projectBranchPulls: async (args) => {
-      const { root, client, repo } = await pullRequestPlace(args[0]);
+        shaSchema.or(z.literal("")),
+        digestSchema,
+        textSchema,
+      ],
+      async (where, path, head, version, contents) =>
+        projects.save(await place(where), path, head, version, contents),
+    ),
+    projectCiStatus: takes(
+      [idSchema, idSchema.nullish()],
+      async (id, chatId) => {
+        const chat = chatId ? await projectChats.get(chatId) : null;
+        if (chat && chat.projectId !== id)
+          throw new Error("That thread belongs to another project.");
+        // A worktree thread reports its own branch; a removed one, the checkout's.
+        const root =
+          chat?.worktree?.path && !chat.worktree.removedAt
+            ? await projectChats
+                .worktreePath(chatId!)
+                .catch(() => projects.root(id))
+            : await projects.root(id);
+        const settings = store.get().sourceControl;
+        return ci.status(root, ctx.login.client, (kind) =>
+          isSourceControlOn(settings, kind),
+        );
+      },
+    ),
+    projectBranchPulls: takes([workspaceIdSchema], async (where) => {
+      const { root, client, repo } = await pullRequestPlace(where);
       return branchPulls(root, client, repo);
-    },
-    projectPreparePull: async (args) => {
-      const { root, client, repo } = await pullRequestPlace(args[0]);
+    }),
+    projectPreparePull: takes([workspaceIdSchema], async (where) => {
+      const { root, client, repo } = await pullRequestPlace(where);
       return pullRequestCreation.prepare(root, client, repo);
-    },
-    projectCreatePull: async (args) => {
-      const { root, chatId, client } = await pullRequestPlace(args[0]);
-      const created = await pullRequestCreation.create(
-        root,
-        client,
-        createPullRequestSchema.parse(args[1]),
-      );
-      if (chatId)
-        await projectChats.recordPull(chatId, {
-          number: created.pull.ref.number,
-          url: created.pull.url,
-        });
-      return created;
-    },
-    projectPulls: async (args) => {
-      const client = requireClient();
-      const repo = await projects.linked(idSchema.parse(args[0]), client);
-      const page = await client.page<Pull>(
-        `${client.repo(repo)}/pulls?state=${z.enum(["open", "closed", "all"]).parse(args[1])}`,
-        pageSchema.parse(args[2]),
-      );
-      return {
-        ...page,
-        items: page.items.map((p) => ({
-          ...p,
-          repository: {
-            name: repo.name,
-            full_name: `${repo.owner}/${repo.name}`,
-            owner: repo.owner,
-          },
-          pull_request: { merged: p.merged },
-        })),
-      };
-    },
+    }),
+    projectCreatePull: takes(
+      [workspaceIdSchema, createPullRequestSchema],
+      async (where, input) => {
+        const { root, chatId, client } = await pullRequestPlace(where);
+        const created = await pullRequestCreation.create(root, client, input);
+        if (chatId)
+          await projectChats.recordPull(chatId, {
+            number: created.pull.ref.number,
+            url: created.pull.url,
+          });
+        return created;
+      },
+    ),
+    projectPulls: takes(
+      [idSchema, z.enum(["open", "closed", "all"]), pageSchema],
+      async (id, state, page) => {
+        const client = requireClient();
+        const repo = await projects.linked(id, client);
+        const pulls = await client.page<Pull>(
+          `${client.repo(repo)}/pulls?state=${state}`,
+          page,
+        );
+        return {
+          ...pulls,
+          items: pulls.items.map((p) => ({
+            ...p,
+            repository: {
+              name: repo.name,
+              full_name: `${repo.owner}/${repo.name}`,
+              owner: repo.owner,
+            },
+            pull_request: { merged: p.merged },
+          })),
+        };
+      },
+    ),
   } satisfies Handlers;
 }

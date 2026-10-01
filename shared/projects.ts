@@ -562,7 +562,7 @@ export interface ProjectApi {
   /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */
   projectCiStatus(
     id: string,
-    chatId?: string,
+    chatId?: string | null,
   ): Promise<import("./ci").CiStatus | null>;
   /** `where` is a workspace id: a thread's worktree opens its PR from its own branch. */
   projectPreparePull(
@@ -741,7 +741,7 @@ export interface ProjectApi {
   ): Promise<{ conflicts: string[] }>;
   projectPulls(
     id: string,
-    state: string,
+    state: "open" | "closed" | "all",
     page: number,
   ): Promise<Page<ProjectPull>>;
   projectChats(id: string): Promise<ChatSummary[]>;
