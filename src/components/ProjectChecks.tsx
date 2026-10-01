@@ -59,11 +59,17 @@ export function ProjectChecksButton({
   checks,
   onOpenFile,
   quiet,
+  compact,
 }: {
   checks: ChecksController;
   onOpenFile: (path: string, line?: number) => void;
   /** Hide the button entirely when this project has nothing to check. */
   quiet?: boolean;
+  /**
+   * Show only what needs fixing: error and warning counts, or a check mark.
+   * The full summary stays in the tooltip and the accessible name.
+   */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [filter, setFilter] = useState(""),
@@ -99,25 +105,42 @@ export function ProjectChecksButton({
                   : "Live checks";
   if (quiet && !checks.error && !checks.info?.targets.length && !open)
     return null;
+  const ready = s?.status === "ready" && checks.enabled && !checks.error;
+  const hint = paused
+    ? "Live checks resume once the agent finishes and the window is visible"
+    : "Live diagnostics for the linked local project";
   return (
     <>
       <button
-        className={`checks-button ${s?.errors && s.status === "ready" ? "has-errors" : ""}`}
-        title={
-          paused
-            ? "Live checks resume once the agent finishes and the window is visible"
-            : "Live diagnostics for the linked local project"
-        }
+        className={`checks-button ${compact ? "compact" : ""} ${s?.errors && s.status === "ready" ? "has-errors" : ""}`}
+        title={compact ? `${title}\n${hint}` : hint}
         onClick={() => setOpen(true)}
       >
-        {s?.status === "ready" && checks.enabled && !checks.error ? (
+        {compact && ready && (s.errors || s.warnings) ? (
+          <>
+            {!!s.errors && (
+              <span className="checks-count error" aria-hidden="true">
+                <AlertCircle size={14} />
+                {s.errors}
+              </span>
+            )}
+            {!!s.warnings && (
+              <span className="checks-count warning" aria-hidden="true">
+                <AlertTriangle size={14} />
+                {s.warnings}
+              </span>
+            )}
+          </>
+        ) : compact && ready ? (
+          <DiagnosticIcon />
+        ) : ready ? (
           <DiagnosticIcon severity={diagnosticSeverity(s)} />
         ) : paused ? (
           <PauseCircle size={15} />
         ) : (
           <Activity size={15} />
         )}
-        <span>{title}</span>
+        <span className={compact ? "sr-only" : undefined}>{title}</span>
       </button>
       {open && (
         <Modal

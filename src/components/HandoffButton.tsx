@@ -57,18 +57,16 @@ export function HandoffButton({
   const label = "Hand off to another computer";
   if (!paired.length)
     return (
-      <div className="pane-toggles">
-        <button
-          type="button"
-          className="pane-toggle"
-          aria-label={label}
-          title={`${label}: pair one in Settings first`}
-          disabled={!computers.data}
-          onClick={onSettings}
-        >
-          <MonitorUp size={14} />
-        </button>
-      </div>
+      <button
+        type="button"
+        className="pane-toggle"
+        aria-label={label}
+        title={`${label}: pair one in Settings first`}
+        disabled={!computers.data}
+        onClick={onSettings}
+      >
+        <MonitorUp size={14} />
+      </button>
     );
   const handOff = async (target: HandoffTarget) => {
     try {
@@ -81,7 +79,7 @@ export function HandoffButton({
     }
   };
   return (
-    <div className="pane-toggles">
+    <>
       <Menu.Root open={open} onOpenChange={setOpen}>
         <Menu.Trigger className="pane-toggle" aria-label={label} title={label}>
           <MonitorUp size={14} />
@@ -151,7 +149,7 @@ export function HandoffButton({
           onClose={() => setMoving(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 

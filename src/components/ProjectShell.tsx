@@ -95,6 +95,7 @@ import {
   useTerminalOpen,
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
+import { fitHeader } from "../lib/header-fit";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
 import { requestChannel } from "../lib/request-channel";
 import {
@@ -852,140 +853,150 @@ export default function ProjectShell() {
           </button>
           <RelayMark size={38} />
         </div>
-        {settings ? (
-          <div className="project-window-title">
-            <span>Settings</span>
-            <span className="breadcrumb-slash">/</span>
-            <strong>{settingsWhere}</strong>
-          </div>
-        ) : legacy ? (
-          <PullsTitle where={pullsWhere} onNav={goToPulls} />
-        ) : (
-          <div className="project-window-title">
-            {project?.plain ? (
-              <span className="ci-plain">
-                <ProjectBadge id={project.id} name={project.name} />
-              </span>
-            ) : project ? (
-              <CiStatusIcon projectId={project.id} chatId={chat?.id}>
-                <ProjectBadge id={project.id} name={project.name} />
-              </CiStatusIcon>
-            ) : (
-              <FolderGit2 size={14} />
-            )}
-            <span>{project?.name ?? "Workspace"}</span>
-            <span className="breadcrumb-slash">/</span>
-            {chat ? (
-              <ThreadTitle
-                key={chat.id}
-                title={chat.title}
-                onRename={async (title) => {
-                  const key = ["project-chats", chat.projectId];
-                  qc.setQueryData<ChatSummary[]>(key, (list) =>
-                    list?.map((c) =>
-                      c.id === chat.id ? { ...c, title, renamed: true } : c,
-                    ),
-                  );
-                  try {
-                    await api.renameProjectChat(chat.id, title);
-                  } catch (e) {
-                    setError(e);
-                  } finally {
-                    void qc.invalidateQueries({ queryKey: key });
-                  }
-                }}
-              />
-            ) : (
-              <strong>{project?.scratch ? "New chat" : "New thread"}</strong>
-            )}
-          </div>
-        )}
-        <span className="spacer" />
-        {!settings && !legacy && project && (
-          <div className="thread-header-actions">
-            <ProjectChecksButton
-              quiet
-              checks={checks}
-              onOpenFile={(path, line) =>
-                openInEditor({ path, line, directory: false })
-              }
-            />
-            {!project.plain && (
-              <GitActions
-                key={where}
-                project={project}
-                where={where}
-                connected={!!account}
-                disabled={lock.locked}
-                ref={gitActions}
-                onConnect={() => void withAccount()}
-                onReview={(ref) => void reviewBranchPr(ref)}
-                onChanges={() => openCode("changes")}
-                onError={setError}
-              />
-            )}
-            {chat && !project.plain && !project.scratch && (
-              <HandoffButton
-                chat={chat}
-                onError={setError}
-                onSettings={() => {
-                  setSettingsCategory("computers");
-                  setSettings(true);
-                }}
-              />
-            )}
-            <PaneToggles
-              onToggle={togglePane}
-              onMove={panes.move}
-              panes={paneOrder.map((id) => ({
-                id,
-                open: panes.layout.open[id],
-                disabled:
-                  (id === "files" && lock.locked && panes.layout.open.files) ||
-                  (panes.layout.open[id] && panes.visible.length === 1),
-                ...(id === "chat"
-                  ? { label: "Chat", icon: <MessageSquare size={14} /> }
-                  : id === "files"
-                    ? { label: "Files", icon: <Files size={14} /> }
-                    : id === "history"
-                      ? { label: "History", icon: <GitGraph size={14} /> }
-                      : pull
-                        ? {
-                            label: `PR #${pull.number}`,
-                            icon: <GitPullRequest size={14} />,
-                          }
-                        : {
-                            label: "Changes",
-                            icon: <GitCompareArrows size={14} />,
-                            stat: tree.data?.lines,
-                          }),
-              }))}
-            />
-            <div
-              className="pane-toggles"
-              title={
-                terminalBlocked ??
-                `${terminalOpen ? "Hide" : "Show"} terminal${terminalKeys && ` (${terminalKeys})`}`
-              }
-            >
-              <button
-                type="button"
-                className={`pane-toggle ${showTerminal ? "active" : ""}`}
-                aria-label="Terminal"
-                aria-pressed={showTerminal}
-                disabled={!!terminalBlocked}
-                onClick={toggleTerminal}
-              >
-                <PanelBottom size={14} />
-              </button>
+        <div className="project-titlebar-main" ref={fitHeader}>
+          {settings ? (
+            <div className="project-window-title">
+              <span>Settings</span>
+              <span className="breadcrumb-slash">/</span>
+              <strong>{settingsWhere}</strong>
             </div>
-          </div>
-        )}
-        {projectsHidden && !settings && (
-          <IconButton label="Open settings" onClick={() => setSettings(true)}>
-            <Settings2 size={16} />
-          </IconButton>
-        )}
+          ) : legacy ? (
+            <PullsTitle where={pullsWhere} onNav={goToPulls} />
+          ) : (
+            <div className="project-window-title">
+              {project?.plain ? (
+                <span className="ci-plain">
+                  <ProjectBadge id={project.id} name={project.name} />
+                </span>
+              ) : project ? (
+                <CiStatusIcon projectId={project.id} chatId={chat?.id}>
+                  <ProjectBadge id={project.id} name={project.name} />
+                </CiStatusIcon>
+              ) : (
+                <FolderGit2 size={14} />
+              )}
+              <span>{project?.name ?? "Workspace"}</span>
+              <span className="breadcrumb-slash">/</span>
+              {chat ? (
+                <ThreadTitle
+                  key={chat.id}
+                  title={chat.title}
+                  onRename={async (title) => {
+                    const key = ["project-chats", chat.projectId];
+                    qc.setQueryData<ChatSummary[]>(key, (list) =>
+                      list?.map((c) =>
+                        c.id === chat.id ? { ...c, title, renamed: true } : c,
+                      ),
+                    );
+                    try {
+                      await api.renameProjectChat(chat.id, title);
+                    } catch (e) {
+                      setError(e);
+                    } finally {
+                      void qc.invalidateQueries({ queryKey: key });
+                    }
+                  }}
+                />
+              ) : (
+                <strong>{project?.scratch ? "New chat" : "New thread"}</strong>
+              )}
+            </div>
+          )}
+          <span className="spacer" />
+          {!settings && !legacy && project && (
+            <div className="thread-header-actions">
+              <ProjectChecksButton
+                quiet
+                compact
+                checks={checks}
+                onOpenFile={(path, line) =>
+                  openInEditor({ path, line, directory: false })
+                }
+              />
+              {!project.plain && (
+                <GitActions
+                  key={where}
+                  project={project}
+                  where={where}
+                  connected={!!account}
+                  disabled={lock.locked}
+                  ref={gitActions}
+                  onConnect={() => void withAccount()}
+                  onReview={(ref) => void reviewBranchPr(ref)}
+                  onChanges={() => openCode("changes")}
+                  onError={setError}
+                />
+              )}
+              <div className="header-strip">
+                {chat && !project.plain && !project.scratch && (
+                  <>
+                    <HandoffButton
+                      chat={chat}
+                      onError={setError}
+                      onSettings={() => {
+                        setSettingsCategory("computers");
+                        setSettings(true);
+                      }}
+                    />
+                    <span className="header-strip-sep" aria-hidden="true" />
+                  </>
+                )}
+                <PaneToggles
+                  onToggle={togglePane}
+                  onMove={panes.move}
+                  panes={paneOrder.map((id) => ({
+                    id,
+                    open: panes.layout.open[id],
+                    disabled:
+                      (id === "files" &&
+                        lock.locked &&
+                        panes.layout.open.files) ||
+                      (panes.layout.open[id] && panes.visible.length === 1),
+                    ...(id === "chat"
+                      ? { label: "Chat", icon: <MessageSquare size={14} /> }
+                      : id === "files"
+                        ? { label: "Files", icon: <Files size={14} /> }
+                        : id === "history"
+                          ? { label: "History", icon: <GitGraph size={14} /> }
+                          : pull
+                            ? {
+                                label: `PR #${pull.number}`,
+                                icon: <GitPullRequest size={14} />,
+                              }
+                            : {
+                                label: "Changes",
+                                icon: <GitCompareArrows size={14} />,
+                                stat: tree.data?.lines,
+                              }),
+                  }))}
+                />
+                <span className="header-strip-sep" aria-hidden="true" />
+                <span
+                  title={
+                    terminalBlocked ??
+                    `${terminalOpen ? "Hide" : "Show"} terminal${terminalKeys && ` (${terminalKeys})`}`
+                  }
+                >
+                  <button
+                    type="button"
+                    className={`pane-toggle ${showTerminal ? "active" : ""}`}
+                    aria-label="Terminal"
+                    aria-pressed={showTerminal}
+                    disabled={!!terminalBlocked}
+                    onClick={toggleTerminal}
+                  >
+                    <PanelBottom size={14} />
+                  </button>
+                </span>
+              </div>
+            </div>
+          )}
+          {projectsHidden && !settings && (
+            <IconButton label="Open settings" onClick={() => setSettings(true)}>
+              <Settings2 size={16} />
+            </IconButton>
+          )}
+        </div>
       </header>
       <div className="project-layout" ref={layoutRef}>
         <aside

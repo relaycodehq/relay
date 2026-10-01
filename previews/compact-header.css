@@ -1,0 +1,176 @@
+.ch-stage {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.ch-about {
+  margin: 0;
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ch-label {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 550;
+}
+.ch-measure {
+  color: var(--muted);
+  font-weight: 400;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.ch-window {
+  --sidebar-width: 250px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.ch-body {
+  height: 60px;
+  background: var(--surface);
+}
+.ch-window .titlebar {
+  height: var(--ch-height);
+  min-height: var(--ch-height);
+}
+
+/* Stand-in traffic lights so the bar height reads honestly. */
+.ch-traffic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+}
+.ch-traffic i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+.ch-traffic i:nth-child(2) {
+  background: #febc2e;
+}
+.ch-traffic i:nth-child(3) {
+  background: #28c840;
+}
+
+/* Tight variants: one strip, hairline separators. */
+.ch-header:not(.ch-now) .thread-header-actions {
+  gap: 6px;
+}
+.ch-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border);
+}
+.ch-c .pane-toggle,
+.ch-b .pane-toggle:not(.active) {
+  padding: 5px 7px;
+}
+.ch-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ch-ok {
+  color: light-dark(#1a7f45, #4cc38a);
+}
+.ch-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.ch-count.error {
+  color: var(--danger);
+}
+.ch-count.warning {
+  color: #c39236;
+}
+.ch-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.ch-icon:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.ch-caret {
+  opacity: 0.7;
+}
+.ch-ahead {
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Title and controls share what's left of the bar; A's labels give way in
+   steps as it narrows instead of the strip running off the edge. */
+.ch-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  container: ch-main / inline-size;
+}
+.ch-push-label {
+  margin-right: 2px;
+}
+@container ch-main (max-width: 820px) {
+  .ch-a .pane-toggle:not(.active) .ch-pane-label {
+    display: none;
+  }
+  .ch-a .pane-toggle:not(.active) {
+    padding: 5px 7px;
+  }
+}
+@container ch-main (max-width: 700px) {
+  .ch-a .ch-pane-label {
+    display: none;
+  }
+  .ch-a .pane-toggle {
+    padding: 5px 7px;
+  }
+}
+@container ch-main (max-width: 600px) {
+  .ch-a .ch-push-label {
+    display: none;
+  }
+  .ch-a .git-actions-main {
+    gap: 3px;
+  }
+}
+/* Nothing in A's controls shrinks any more, so the title clips first. */
+.ch-header:not(.ch-now) .thread-header-actions {
+  flex-shrink: 0;
+}

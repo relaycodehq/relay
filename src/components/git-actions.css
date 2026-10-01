@@ -64,3 +64,16 @@
   display: flex;
   gap: 8px;
 }
+.git-actions-ahead {
+  margin-left: 2px;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Nothing to commit, push or merge: just the menu, with a Git glyph. */
+.git-actions-more.idle {
+  display: inline-flex;
+  gap: 3px;
+  border-left: 0 !important;
+  border-radius: 6px !important;
+}

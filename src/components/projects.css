@@ -726,34 +726,91 @@
 .breadcrumb-slash {
   opacity: 0.5;
 }
-/* When the header runs out of room, the checks summary gives way first and
-   the title clips instead of sliding under the buttons. */
+/* Title and controls share what the brand column leaves. The controls never
+   shrink, so the title clips first, and their labels give way in steps
+   (data-fit, below) before it gets too short to read. */
+.project-titlebar-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .thread-header-actions {
   display: flex;
-  gap: 7px;
-  min-width: 0;
+  gap: 6px;
+  flex-shrink: 0;
   align-items: center;
 }
 .thread-header-actions > * {
   flex-shrink: 0;
 }
-.thread-header-actions > .checks-button {
-  flex-shrink: 1;
-  /* Icon, gap, padding and border: the label shrinks to nothing, not a sliver. */
-  min-width: 42px;
-}
-.thread-header-actions > .checks-button > svg {
-  flex-shrink: 0;
-}
-.thread-header-actions > .checks-button > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .thread-header-actions > button {
   font-size: 11px;
   background: transparent;
   padding: 6px 9px;
+}
+.checks-button.compact {
+  height: 28px;
+  padding: 0 8px;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.checks-button.compact .diagnostic-icon.clean {
+  color: var(--ci-pass);
+}
+.checks-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.checks-count.error {
+  color: var(--ci-fail);
+}
+.checks-count.warning {
+  color: var(--ci-run);
+}
+/* Hand-off, the pane toggles and the terminal as one strip. */
+.header-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--toolbar);
+}
+.header-strip > .pane-toggles {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.header-strip-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border);
+}
+/* Set by useHeaderFit as the title runs out of room. Hidden labels stay
+   readable to screen readers. */
+.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
+  .pane-toggle:not(.active),
+.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle {
+  padding: 5px 7px;
+}
+.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
+  .pane-toggle:not(.active)
+  .pane-toggle-label,
+.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle-label,
+.project-titlebar-main[data-fit="3"] .git-actions-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .project-chat-pane {
   flex: 1;
@@ -1439,9 +1496,6 @@ details.agent-step > .agent-step-heading:hover {
   }
   .thread-header-actions > button {
     padding: 5px;
-  }
-  .thread-header-actions > .checks-button {
-    min-width: 34px;
   }
 }
 

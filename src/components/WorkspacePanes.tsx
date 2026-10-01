@@ -110,7 +110,7 @@ function PaneToggle({
       {...drop.handlers}
     >
       {pane.icon}
-      <span>{pane.label}</span>
+      <span className="pane-toggle-label">{pane.label}</span>
       {!!(pane.stat?.additions || pane.stat?.deletions) && (
         <span
           className="pane-toggle-stat"

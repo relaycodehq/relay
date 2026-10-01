@@ -4,6 +4,7 @@ import { Menu } from "@base-ui/react/menu";
 import {
   ChevronDown,
   CloudUpload,
+  GitBranch,
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
@@ -176,25 +177,34 @@ export function GitActions({
     ...(plan.data ? ["merge" as const] : []),
     ...(hasPr ? ["pr" as const] : []),
   ];
+  // With nothing to do, a greyed-out label is just furniture: the menu alone.
+  const idle = !enabled[primary] && !pushing;
   return (
     <>
       <div className="git-actions" role="group" aria-label="Git actions">
-        <button
-          className="git-actions-main"
-          onClick={() => run(primary)}
-          disabled={disabled || !enabled[primary]}
-          title={hint}
-        >
-          {icons[primary]}
-          {labels[primary]}
-        </button>
+        {!idle && (
+          <button
+            className="git-actions-main"
+            onClick={() => run(primary)}
+            disabled={disabled || !enabled[primary]}
+            title={hint}
+          >
+            {icons[primary]}
+            <span className="git-actions-label">{labels[primary]}</span>
+            {primary === "push" && t.ahead > 0 && (
+              <span className="git-actions-ahead">{t.ahead}</span>
+            )}
+          </button>
+        )}
         <Menu.Root>
           <Menu.Trigger
-            className="git-actions-more"
-            aria-label="More Git actions"
+            className={`git-actions-more ${idle ? "idle" : ""}`}
+            aria-label={idle ? "Git actions" : "More Git actions"}
+            title={idle ? "Git actions" : undefined}
             disabled={disabled}
           >
-            <ChevronDown size={13} />
+            {idle && <GitBranch size={14} />}
+            <ChevronDown size={idle ? 11 : 13} />
           </Menu.Trigger>
           <Menu.Portal>
             <Menu.Positioner

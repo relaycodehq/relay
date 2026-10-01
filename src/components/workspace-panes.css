@@ -369,12 +369,6 @@
   flex: 1;
 }
 
-@media (max-width: 1100px) {
-  .pane-toggle > span {
-    display: none;
-  }
-}
-
 /* Each pane adapts to its own width, not the window's. */
 @container (max-width: 640px) {
   .editor-bar .symbol-actions button {
