@@ -86,6 +86,7 @@ import {
 } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { Message } from "./ProjectMessage";
+import { useCouncils } from "../lib/useCouncils";
 import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -123,19 +124,12 @@ import {
 } from "../../shared/project-file-links";
 import type { PullRef } from "../../shared/types";
 import {
-  fixRequest,
-  type DeepReviewStart,
-  type Finding,
-} from "../../shared/deep-review";
-import {
   DeepReviewCouncil,
   DeepReviewReport,
   DeepReviewRequest,
   DeepReviewSetup,
-  findingCode,
 } from "./DeepReview";
 import { UltraplanCouncil } from "./Ultraplan";
-import { councilWorking } from "../../shared/ultraplan";
 import {
   agentMentionPattern,
   agentName,
@@ -504,108 +498,33 @@ export function ProjectChat({
     resolve: (proceed: boolean) => void;
   }>();
   const activeAgent = contextAgent(shown, root?.id);
-  const review = history.data?.deepReview;
-  // Reviewers work in threads of their own; this one waits for the lead.
-  const reviewing = review?.status === "reviewing";
-  const plans = history.data?.ultraplans;
-  // Thinkers work in threads of their own; messages wait for the lead's plan.
-  const planning = councilWorking(Object.values(plans ?? {}));
+  const {
+    review,
+    reviewing,
+    plans,
+    planning,
+    reviewCode,
+    startReview,
+    fixFindings,
+    setFindingStatus,
+    resumeReview,
+    resumeUltraplan,
+  } = useCouncils({
+    chat,
+    projectId: project.id,
+    data: history.data,
+    refetch: history.refetch,
+    busy,
+    setBusy,
+    setError,
+    onCreated,
+    onSent: () => (follow.current = true),
+  });
   // A council's brief shows inside it, not as an answer of its own.
   const listed = useMemo(() => shown.filter((m) => !m.brief), [shown]);
   const leadAnswered = messages.some(
     (m) => m.role === "assistant" && !m.parentId,
   );
-  // Keyed on the report alone: a new renderer redraws the whole summary, and
-  // the review changes with every finding dismissed or fixed.
-  const reviewCode = useMemo(
-    () =>
-      chat && review?.report
-        ? findingCode(chat.id, review.report.findings)
-        : undefined,
-    [chat?.id, review?.report],
-  );
-  // A start that failed leaves its thread for the next try. Kept apart from
-  // `created`, so a message sent from this draft instead gets a thread of its own.
-  const reviewThread = useRef<ChatSummary | undefined>(undefined);
-  async function startReview(config: DeepReviewStart) {
-    if (busy) return false;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const target =
-        reviewThread.current ??
-        (await api.createProjectChat(project.id, { kind: "review" }));
-      reviewThread.current = target;
-      // Messages in the thread go to the lead, with the lead's settings.
-      const { lead } = config;
-      saveSentSettings(target.id, lead.provider, {
-        ...lead,
-        runtimeMode: config.runtimeMode,
-        interactionMode: "default",
-      });
-      await api.startDeepReview(target.id, config);
-      follow.current = true;
-      await onCreated(target);
-      await qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-  // Straight to the lead; whatever the composer holds stays there.
-  async function fixFindings(findings: Finding[]) {
-    if (!chat || !review || !findings.length || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      await api.sendProjectChat(chat.id, {
-        id: crypto.randomUUID(),
-        body: fixRequest(review.lead.provider, findings),
-        to: review.lead.provider,
-        provider: review.lead.provider,
-        choice: review.lead.choice,
-        runtimeMode: review.runtimeMode,
-        interactionMode: "default",
-        fixes: findings.map((f) => f.id),
-      });
-      follow.current = true;
-      await history.refetch();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  function setFindingStatus(id: string, status: "open" | "dismissed") {
-    if (!chat) return;
-    void api
-      .setDeepReviewFinding(chat.id, id, status)
-      .then(() => history.refetch())
-      .catch(setError);
-  }
-  function resumeReview() {
-    if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    void api
-      .resumeDeepReview(chat.id)
-      .then(() => history.refetch())
-      .catch(setError)
-      .finally(() => setBusy(false));
-  }
-  function resumeUltraplan(request: string) {
-    if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    void api
-      .resumeUltraplan(chat.id, request)
-      .then(() => history.refetch())
-      .catch(setError)
-      .finally(() => setBusy(false));
-  }
   function compact(instructions?: string) {
     if (!chat) return;
     setError(undefined);
