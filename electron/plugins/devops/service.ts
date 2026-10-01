@@ -2,14 +2,10 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { createHash } from "node:crypto";
 import {
-  defaultDevOpsSettings,
-  devopsSettingsSchema,
   organizationUrl,
   type DevOpsSecrets,
   type DevOpsSettings,
   type DevOpsStatus,
-  currentSprintField,
-  type SortKey,
   type WorkItem,
   type WorkItemField,
   type WorkItemScope,
@@ -18,28 +14,14 @@ import {
 import type { Project } from "../../../shared/projects";
 import type { Store } from "../../store";
 import { DevOpsAuth } from "./auth";
-import { DevOpsClient, type Fetch, type IterationNode } from "./client";
+import { DevOpsClient, type Fetch } from "./client";
 import { DevOpsKeys } from "./keys";
+import { readSettings } from "./settings";
+import { loadWorkItems } from "./work-items";
 
 type Encrypt = (value: string) => Promise<string | null>;
 type Decrypt = (value: string) => Promise<string>;
 
-const closedStates = ["Closed", "Done", "Removed", "Resolved", "Completed"];
-const fields = [
-  "System.Id",
-  "System.Title",
-  "System.WorkItemType",
-  "System.State",
-  "System.AreaPath",
-  "System.TeamProject",
-  "System.Tags",
-  "System.ChangedDate",
-  "System.AssignedTo",
-  "System.IterationId",
-  "Microsoft.VSTS.Common.Priority",
-  "System.Description",
-  "Microsoft.VSTS.TCM.ReproSteps",
-];
 const itemsTtl = 2 * 60_000;
 const fieldsTtl = 60 * 60_000;
 /** Keeps each Jev request well inside its 64k-token budget. */
@@ -81,19 +63,7 @@ export class DevOps {
   }
 
   settings(): DevOpsSettings {
-    const saved = this.store.get().devops;
-    return devopsSettingsSchema.parse(
-      saved
-        ? {
-            ...defaultDevOpsSettings,
-            ...saved,
-            filter: { ...defaultDevOpsSettings.filter, ...saved.filter },
-            sort: savedSort(saved.sort),
-            mine: { ...defaultDevOpsSettings.mine, ...saved.mine },
-            team: { ...defaultDevOpsSettings.team, ...saved.team },
-          }
-        : defaultDevOpsSettings,
-    );
+    return readSettings(this.store.get().devops);
   }
 
   status(): DevOpsStatus {
@@ -186,10 +156,7 @@ export class DevOps {
     return fields;
   }
 
-  /**
-   * Your items or the team's: assigned to you or to its members, each through
-   * its own filters, in the order Settings gives.
-   */
+  /** Each scope's list is kept a while, until a refresh or new settings. */
   private async list(
     settings: DevOpsSettings,
     refresh: boolean,
@@ -207,127 +174,12 @@ export class DevOps {
     if (!refresh && cached?.key === key && Date.now() - cached.at < itemsTtl)
       return cached.items;
     if (scope === "team" && !settings.team.members.length) return [];
-    const client = new DevOpsClient(
-      this.fetch,
-      base,
-      await this.auth.header(settings.auth, base),
+    const client = await this.client(settings);
+    const items = await loadWorkItems(client, settings, scope, () =>
+      this.fieldsAt(settings, client),
     );
-    // Reference names go as they are; display names are looked up once.
-    const reference = async (name: string) => {
-      if (name.includes(".")) return name;
-      const lower = name.toLowerCase();
-      const found = (await this.fieldsAt(settings, client)).find(
-        (f) =>
-          f.name.toLowerCase() === lower ||
-          f.referenceName.toLowerCase() === lower,
-      );
-      if (!found)
-        throw new Error(
-          `Azure DevOps has no work item field called “${name}”.`,
-        );
-      return found.referenceName;
-    };
-    const sortKeys: SortKey[] = [];
-    for (const k of settings.sort.fields)
-      sortKeys.push(
-        k.field === currentSprintField
-          ? k
-          : { ...k, field: await reference(k.field) },
-      );
-    const bySprint = sortKeys.some((k) => k.field === currentSprintField);
-    const filters = [];
-    for (const f of scope === "team"
-      ? settings.team.filters
-      : settings.mine.filters)
-      filters.push({ ...f, field: await reference(f.field) });
-    // A filter on the state picks the states; otherwise closed items stay out.
-    const byState = filters.some(
-      (f) => f.field.toLowerCase() === "system.state",
-    );
-    const ids = await client.wiql(
-      settings.project,
-      [
-        "SELECT [System.Id] FROM WorkItems",
-        scope === "mine"
-          ? "WHERE [System.AssignedTo] = @Me"
-          : `WHERE [System.AssignedTo] IN (${settings.team.members.map(wiqlString).join(", ")})`,
-        byState
-          ? ""
-          : `AND [System.State] NOT IN (${closedStates.map(wiqlString).join(", ")})`,
-        ...filters.map(
-          (f) => `AND [${f.field}] IN (${f.values.map(wiqlString).join(", ")})`,
-        ),
-        settings.project ? "AND [System.TeamProject] = @project" : "",
-        "ORDER BY [System.ChangedDate] DESC",
-      ]
-        .filter(Boolean)
-        .join(" "),
-    );
-    let items: WorkItem[] = [];
-    if (ids.length) {
-      const found = await client.workItems(ids, [
-        ...new Set([
-          ...fields,
-          ...sortKeys
-            .map((k) => k.field)
-            .filter((f) => f !== currentSprintField),
-        ]),
-      ]);
-      const sprints = bySprint
-        ? await this.currentSprints(client, [
-            ...new Set(
-              found.map((w) => String(w.fields["System.TeamProject"])),
-            ),
-          ])
-        : new Set<number>();
-      const order = new Map(ids.map((id, i) => [id, i]));
-      const inSprint = (w: (typeof found)[number]) =>
-        Number(sprints.has(w.fields["System.IterationId"] as number));
-      const value = (w: (typeof found)[number], field: string) =>
-        field === currentSprintField
-          ? inSprint(w)
-          : fieldValue(w.fields, field);
-      // Ties keep the WIQL's order: most recently changed first.
-      items = found
-        .sort(
-          (a, b) =>
-            sortKeys.reduce(
-              (by, k) =>
-                by ||
-                compareField(value(a, k.field), value(b, k.field), k.direction),
-              0,
-            ) || order.get(a.id)! - order.get(b.id)!,
-        )
-        .map((w) => toWorkItem(base, w.id, w.fields, sprints));
-    }
     this.items.set(scope, { key, at: Date.now(), items });
     return items;
-  }
-
-  /**
-   * The iterations running today in these projects, whichever team plans
-   * them: a sprint is current while its dates hold today.
-   */
-  private async currentSprints(client: DevOpsClient, projects: string[]) {
-    const now = Date.now(),
-      current = new Set<number>();
-    const visit = (node: IterationNode) => {
-      const start = Date.parse(node.attributes?.startDate ?? ""),
-        finish = Date.parse(node.attributes?.finishDate ?? "");
-      // The finish date is the sprint's last day, so it runs through it.
-      if (start <= now && now < finish + 24 * 60 * 60_000) current.add(node.id);
-      node.children?.forEach(visit);
-    };
-    await Promise.all(
-      projects.map(async (project) => {
-        try {
-          visit(await client.iterations(project));
-        } catch {
-          // Without sprint dates the items still sort by priority.
-        }
-      }),
-    );
-    return current;
   }
 
   /**
@@ -507,122 +359,4 @@ export class DevOps {
         .map(([k, a]) => [k, a.noul!]),
     );
   }
-}
-
-function toWorkItem(
-  base: string,
-  id: number,
-  f: Record<string, unknown>,
-  sprints: Set<number>,
-): WorkItem {
-  const text = (k: string) =>
-    typeof f[k] === "string" ? (f[k] as string) : "";
-  const project = text("System.TeamProject");
-  const assignee = f["System.AssignedTo"];
-  return {
-    id,
-    title: text("System.Title"),
-    type: text("System.WorkItemType"),
-    state: text("System.State"),
-    areaPath: text("System.AreaPath"),
-    project,
-    tags: text("System.Tags")
-      .split(";")
-      .map((t) => t.trim())
-      .filter(Boolean),
-    changed: text("System.ChangedDate"),
-    priority:
-      typeof f["Microsoft.VSTS.Common.Priority"] === "number"
-        ? f["Microsoft.VSTS.Common.Priority"]
-        : null,
-    currentSprint: sprints.has(f["System.IterationId"] as number),
-    assignedTo:
-      typeof assignee === "string" ? assignee : (identityName(assignee) ?? ""),
-    description: plainText(
-      text("System.Description") || text("Microsoft.VSTS.TCM.ReproSteps"),
-    ).slice(0, 2000),
-    url: `${base}/${encodeURIComponent(project)}/_workitems/edit/${id}`,
-  };
-}
-
-/**
- * The saved order. Before the current sprint was a sort key of its own, a
- * switch put it ahead of the fields.
- */
-function savedSort(sort: unknown): DevOpsSettings["sort"] {
-  const saved = (sort ?? {}) as {
-    currentSprint?: boolean;
-    fields?: SortKey[];
-  };
-  const fields = saved.fields ?? defaultDevOpsSettings.sort.fields;
-  return {
-    fields: saved.currentSprint
-      ? [
-          { field: currentSprintField, direction: "desc" as const },
-          ...fields,
-        ].slice(0, 3)
-      : fields,
-  };
-}
-
-const wiqlString = (value: string) => `'${value.replace(/'/g, "''")}'`;
-
-const identityName = (value: unknown) =>
-  value && typeof value === "object" && "displayName" in value
-    ? String(value.displayName)
-    : undefined;
-
-/** A field from a batch answer; a hand-typed reference name may differ in case. */
-function fieldValue(fields: Record<string, unknown>, reference: string) {
-  if (reference in fields) return fields[reference];
-  const lower = reference.toLowerCase();
-  return Object.entries(fields).find(([k]) => k.toLowerCase() === lower)?.[1];
-}
-
-/** One sort key's verdict; an item without the field sorts last either way. */
-function compareField(a: unknown, b: unknown, direction: SortKey["direction"]) {
-  const value = (v: unknown) =>
-    typeof v === "number"
-      ? v
-      : typeof v === "boolean"
-        ? Number(v)
-        : typeof v === "string"
-          ? v || undefined
-          : identityName(v);
-  const x = value(a),
-    y = value(b);
-  if (x === undefined || y === undefined)
-    return x === y ? 0 : x === undefined ? 1 : -1;
-  const by =
-    typeof x === "number" && typeof y === "number"
-      ? x - y
-      : String(x).localeCompare(String(y), undefined, { numeric: true });
-  return direction === "asc" ? by : -by;
-}
-
-const entities: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
-export function plainText(html: string) {
-  return html
-    .replace(/<(br|\/p|\/div|\/li|\/h\d)[^>]*>/gi, "\n")
-    .replace(/<li[^>]*>/gi, "- ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&(#\d+|#x[\da-f]+|\w+);/gi, (m, e: string) => {
-      if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
-      const code =
-        e[1] === "x" || e[1] === "X"
-          ? parseInt(e.slice(2), 16)
-          : parseInt(e.slice(1), 10);
-      // fromCodePoint throws on values past U+10FFFF.
-      return code <= 0x10ffff ? String.fromCodePoint(code) : m;
-    })
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s*\n\s*/g, "\n\n")
-    .trim();
 }

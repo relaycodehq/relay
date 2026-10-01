@@ -3,7 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DevOpsUnreachable } from "../../electron/plugins/devops/client";
-import { DevOps, plainText } from "../../electron/plugins/devops/service";
+import { plainText } from "../../electron/plugins/devops/parse";
+import { DevOps } from "../../electron/plugins/devops/service";
 import { Store } from "../../electron/store";
 import {
   currentSprintField,
