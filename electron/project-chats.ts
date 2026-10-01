@@ -1,20 +1,23 @@
 import { ChatStorage, chatSummary, nextSend } from "./project-chats/storage";
+import {
+  ActiveTurns,
+  type ActiveChat,
+  type AgentControl,
+} from "./project-chats/active";
+import {
+  agentSession,
+  dropSession,
+  parseSessionKey,
+  ProviderSessions,
+  sessionFor,
+} from "./project-chats/sessions";
 import { interrupt } from "./project-chats/revive";
 import { imageFileData } from "./project-chats/images";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
-import { withTimeout } from "./timeout";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
-import {
-  claudeAgentRun,
-  claudeAgents,
-  claudePending,
-  onClaudePending,
-  stopClaudeAgent,
-  stopClaudeTask,
-} from "./rooms/claude-project";
+import { stopClaudeTask } from "./rooms/claude-project";
 import { agentRuntime, agentRuntimes } from "./agents";
-import { AgentRequests } from "./agent-requests";
 import type { AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
 import type { LineQuestion } from "../shared/questions";
@@ -22,7 +25,6 @@ import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
-import type { AgentOptions } from "./agents/types";
 import type { Projects } from "./projects";
 import type {
   ProjectChat,
@@ -40,7 +42,6 @@ import type {
   ScheduledChatMessage,
   StoppedWork,
   AgentProvider,
-  AgentSession,
   KnownMessages,
   ProjectChatPatch,
   ChatWorktree,
@@ -105,53 +106,6 @@ import type {
 } from "../shared/deep-review";
 import { codexQuestionChoice } from "../shared/settings";
 import { resolveTurnModel } from "../shared/turn-model";
-/** A turn that's about to run, with the means to stop it and answer its requests. */
-function newActive(
-  input: ProjectChatSend,
-  requestsChanged: () => void,
-): ActiveChat {
-  const abort = new AbortController();
-  let end!: () => void;
-  const ended = new Promise<void>((resolve) => (end = resolve));
-  return {
-    started: Date.now(),
-    abort,
-    input,
-    requests: new AgentRequests(abort.signal, requestsChanged),
-    ended,
-    end,
-  };
-}
-
-/** An agent's session and the last message it heard, on the main conversation or a side one. */
-function agentSession(
-  chat: ProjectChat,
-  provider: AgentProvider,
-  parentId?: string | null,
-): AgentSession {
-  const sessions = parentId ? chat.replySessions?.[parentId] : chat.sessions;
-  return sessions?.[provider] ?? {};
-}
-/** The same, to write to. */
-function sessionFor(
-  chat: ProjectChat,
-  provider: AgentProvider,
-  parentId?: string | null,
-): AgentSession {
-  const sessions = parentId
-    ? ((chat.replySessions ??= {})[parentId] ??= {})
-    : (chat.sessions ??= {});
-  return (sessions[provider] ??= {});
-}
-/** Forgets an agent's session, e.g. a fork that broke. */
-function dropSession(
-  chat: ProjectChat,
-  provider: AgentProvider,
-  parentId?: string | null,
-) {
-  const sessions = parentId ? chat.replySessions?.[parentId] : chat.sessions;
-  if (sessions) delete sessions[provider];
-}
 /** The outgoing agent gets this long to write its note before the switch goes ahead without one. */
 const HANDOFF_TIMEOUT = 120000;
 /** Asked of the agent whose session ends here, in that session, so it can draw on everything it did. */
@@ -192,20 +146,6 @@ export function portableMessages(
       version: 1,
     }));
 }
-interface ActiveChat {
-  started: number;
-  requests: AgentRequests;
-  abort: AbortController;
-  job?: Promise<unknown>;
-  input?: ProjectChatSend;
-  steer?: AgentControl["steer"];
-  /** Settles once the turn gives the thread back; see `release`. */
-  ended: Promise<void>;
-  /** The answer is written; the turn only saves before giving the thread back. */
-  finishing?: boolean;
-  end: () => void;
-}
-type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
 /** What another computer hears of a handed-over thread's latest turn. */
 type HandoffTurn = Pick<
   HandoffRemoteStatus,
@@ -240,16 +180,10 @@ function turnPeek(m: ChatMessage): HandoffTurn {
     ...(says ? { says } : {}),
   };
 }
-/** A key from `ProjectChats.sessionKey`; `branch` is undefined on the main thread. */
-function parseSessionKey(key: string) {
-  const [, chatId, branch] = JSON.parse(key) as string[];
-  return { chatId, branch: branch === "main" ? undefined : branch };
-}
 export class ProjectChats {
   private storage: ChatStorage;
-  private providerSessions = new Set<string>();
-  /** Sessions still in the turn a restart cut off; their answers stay streaming. */
-  private resuming = new Set<string>();
+  private sessions: ProviderSessions;
+  private active: ActiveTurns;
   private controls = new Map<string, Promise<unknown>>();
   private control<T>(id: string, action: () => Promise<T>): Promise<T> {
     const job = (this.controls.get(id) ?? Promise.resolve())
@@ -264,19 +198,8 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
-  /** Claude's background work and wake-ups show in its threads' summaries. */
-  private unhearPending = onClaudePending(() => {
-    for (const key of this.providerSessions)
-      this.storage.chatChanged(parseSessionKey(key).chatId);
-  });
   /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
   private timers = new Map<string, NodeJS.Timeout>();
-  private active = new Map<string, ActiveChat>();
-  /** Side questions being answered, by `chatId:rootId`; they run beside `active`. */
-  private sides = new Map<
-    string,
-    { abort: AbortController; job: Promise<unknown> }
-  >();
   private titleJobs = new Map<
     string,
     { abort: AbortController; job: Promise<void> }
@@ -296,7 +219,7 @@ export class ProjectChats {
     active: ActiveChat,
     turn?: { request?: string; answer?: string },
   ) {
-    this.release(chat.id, active);
+    this.active.release(chat.id, active);
     // A steer the agent never confirmed reading still went to it; stop waiting.
     const unread = chat.messages.filter((m) => m.unread);
     for (const m of unread) {
@@ -309,22 +232,6 @@ export class ProjectChats {
     void this.storage.updateSummary(chat).catch(() => {});
     void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
   }
-  /** Claims the thread's one running turn. */
-  private claim(id: string, input: ProjectChatSend) {
-    if (this.active.has(id))
-      throw new Error("This chat already has a running answer.");
-    const active = newActive(input, () => this.storage.chatChanged(id));
-    this.active.set(id, active);
-    this.storage.chatChanged(id);
-    return active;
-  }
-  /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
-  private release(id: string, active: ActiveChat) {
-    active.requests.close();
-    if (this.active.get(id) === active) this.active.delete(id);
-    active.end();
-    this.storage.chatChanged(id);
-  }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
       this.reviews
@@ -336,24 +243,6 @@ export class ProjectChats {
     ]).then(() => {});
     this.reviewSteps.add(step);
     void step.finally(() => this.reviewSteps.delete(step));
-  }
-  /**
-   * A provider session's key: Relay's data folder, the chat, and its branch
-   * ("main", or the root message of a side thread). Runtimes key live
-   * sessions by it, so the format stays.
-   */
-  private sessionKey(chatId: string, branch?: string) {
-    return JSON.stringify([this.dir, chatId, branch ?? "main"]);
-  }
-  /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
-  private closeSessions(id: string) {
-    for (const key of this.providerSessions)
-      if (parseSessionKey(key).chatId === id) {
-        this.providerSessions.delete(key);
-        for (const runtime of Object.values(agentRuntimes))
-          void runtime.closeSession(key).catch(() => {});
-        this.storage.chatChanged(id);
-      }
   }
   /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */
   private async touch(chat: ProjectChat, messageId: string) {
@@ -372,7 +261,7 @@ export class ProjectChats {
     lead: (chat, input, prompt) => this.lead(chat, input, prompt),
     active: (id) => this.active.has(id),
     stop: (id) => this.active.get(id)?.abort.abort(),
-    close: (id) => this.closeSessions(id),
+    close: (id) => this.sessions.close(id),
     touch: (chat, messageId) => this.touch(chat, messageId),
     summary: (chat) => this.storage.updateSummary(chat),
   });
@@ -383,7 +272,7 @@ export class ProjectChats {
     lead: (chat, input, prompt) => this.lead(chat, input, prompt),
     active: (id) => this.active.has(id),
     stop: (id) => this.active.get(id)?.abort.abort(),
-    close: (id) => this.closeSessions(id),
+    close: (id) => this.sessions.close(id),
     touch: (chat, messageId) => this.touch(chat, messageId),
   });
   /** Deep review reviewers and Ultraplan thinkers hold new messages back. */
@@ -406,8 +295,12 @@ export class ProjectChats {
     ) => Promise<unknown>,
   ) {
     this.storage = new ChatStorage(store, dir, (chatId, branch) =>
-      this.resuming.has(this.sessionKey(chatId, branch)),
+      this.sessions.isResuming(chatId, branch),
     );
+    this.sessions = new ProviderSessions(dir, (id) =>
+      this.storage.chatChanged(id),
+    );
+    this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
   }
   /**
    * Hears which project's thread list may read differently: a summary saved,
@@ -438,7 +331,7 @@ export class ProjectChats {
       if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
     }
     // Once for the list: it is read on every change to any of its threads.
-    const live = this.pending();
+    const live = this.sessions.pending();
     const now = Date.now();
     const autoSettleDays = this.autoSettleDays();
     return chats
@@ -495,7 +388,7 @@ export class ProjectChats {
     // Its timer finds it gone and sends nothing.
     if (chat.heldWakeups?.some((w) => w.id === pendingId))
       return this.dropWakeup(chat, pendingId);
-    const work = this.pending(id).find((p) => p.item.id === pendingId);
+    const work = this.sessions.pending(id).find((p) => p.item.id === pendingId);
     if (!work) throw new Error("That work has already finished.");
     if (work.item.kind === "task") return stopClaudeTask(work.key, pendingId);
     return this.send(
@@ -509,28 +402,18 @@ export class ProjectChats {
   }
   /** The subagents Claude started in a thread, its side conversations' too. */
   agents(id: string) {
-    return this.sessionKeys(id).flatMap((key) => claudeAgents(key));
+    return this.sessions.subagents(id);
   }
   agentRun(id: string, agentId: string) {
-    for (const key of this.sessionKeys(id)) {
-      const run = claudeAgentRun(key, agentId);
-      if (run) return run;
-    }
-    return null;
+    return this.sessions.subagentRun(id, agentId);
   }
-  async stopAgent(id: string, agentId: string) {
-    const key = this.sessionKeys(id).find((k) => claudeAgentRun(k, agentId));
-    if (!key) throw new Error("That agent has already finished.");
-    await stopClaudeAgent(key, agentId);
-  }
-  private sessionKeys(chatId: string) {
-    return [...this.providerSessions].filter(
-      (key) => parseSessionKey(key).chatId === chatId,
-    );
+  stopAgent(id: string, agentId: string) {
+    return this.sessions.stopSubagent(id, agentId);
   }
   /** Background commands and agents still running, across every thread. */
   runningTasks() {
-    return this.pending()
+    return this.sessions
+      .pending()
       .map((p) => p.item)
       .filter((item) => item.kind === "task");
   }
@@ -639,7 +522,7 @@ export class ProjectChats {
    */
   private async keepPending() {
     const now = Date.now();
-    const left = this.pending();
+    const left = this.sessions.pending();
     for (const chatId of new Set(left.map((p) => p.chatId))) {
       const chat = await this.storage.load(chatId).catch(() => undefined);
       if (!chat) continue;
@@ -690,22 +573,6 @@ export class ProjectChats {
       );
     }
   }
-  /**
-   * Background work and wake-ups in the live Claude sessions of a thread, or
-   * of every thread, with the side conversation each session belongs to.
-   */
-  private pending(chatId?: string) {
-    return [...this.providerSessions].flatMap((key) => {
-      const { chatId: id, branch: parentId } = parseSessionKey(key);
-      if (chatId && id !== chatId) return [];
-      return claudePending(key).map((item) => ({
-        key,
-        chatId: id,
-        parentId,
-        item,
-      }));
-    });
-  }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
     const chat = await this.storage.load(id);
@@ -724,7 +591,7 @@ export class ProjectChats {
       if (
         nextSend(chat.scheduled) ||
         chat.heldWakeups?.length ||
-        this.pending(id).length
+        this.sessions.pending(id).length
       )
         throw new Error(
           "Cancel the scheduled messages and Claude's background work before archiving.",
@@ -888,7 +755,7 @@ export class ProjectChats {
         throw new Error(
           "Send or remove its queued and scheduled messages first.",
         );
-      if (this.pending(id).length || chat.heldWakeups?.length)
+      if (this.sessions.pending(id).length || chat.heldWakeups?.length)
         throw new Error(
           "Claude left background work or a wake-up in this thread. Stop it first.",
         );
@@ -923,7 +790,7 @@ export class ProjectChats {
       const chat = await this.storage.load(id);
       if (!chat.worktree || !(await worktreeExists(chat.worktree)))
         throw new Error("The thread's worktree is gone.");
-      await this.halt(id);
+      await this.active.halt(id);
       if (chat.queue?.length || chat.scheduled?.length) {
         delete chat.queue;
         delete chat.scheduled;
@@ -949,7 +816,7 @@ export class ProjectChats {
         agentSession(chat, outgoing.provider).thread
       ) {
         const provider = outgoing.provider;
-        const active = this.claim(id, this.sessionInput(chat, provider));
+        const active = this.active.claim(id, this.sessionInput(chat, provider));
         try {
           await this.handoff(
             chat,
@@ -961,7 +828,7 @@ export class ProjectChats {
             computer,
           );
         } finally {
-          this.release(id, active);
+          this.active.release(id, active);
         }
       }
       await commitEverything(root, `Hand off to ${computer}`);
@@ -972,30 +839,6 @@ export class ProjectChats {
         tip: await headOf(root),
       };
     });
-  }
-  /** Stops the thread's answer and side questions, and waits until they have. */
-  private async halt(id: string) {
-    const deadline = Date.now() + 60_000;
-    // An agent can start a turn of its own meanwhile; that one stops too.
-    for (;;) {
-      const active = this.active.get(id);
-      const sides = [...this.sides]
-        .filter(([key]) => key.startsWith(`${id}:`))
-        .map(([, side]) => side);
-      if (!active && !sides.length) return;
-      active?.abort.abort();
-      for (const side of sides) side.abort.abort();
-      try {
-        await withTimeout(
-          Promise.allSettled([active?.ended, ...sides.map((s) => s.job)]),
-          Math.max(0, deadline - Date.now()),
-          "The agent didn't stop in time. Try again.",
-        );
-      } catch (e) {
-        if (this.active.has(id)) throw e;
-        return;
-      }
-    }
   }
   /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
@@ -1114,7 +957,7 @@ export class ProjectChats {
     const chat = await this.storage.load(id);
     if (!chat.cameFrom || chat.cameFrom.returnedAt) return;
     chat.cameFrom.returnedAt = Date.now();
-    this.closeSessions(id);
+    this.sessions.close(id);
     await this.storage.persist(chat);
   }
   /**
@@ -1217,7 +1060,7 @@ export class ProjectChats {
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
-    return { ...structuredClone(chat), requests: this.requests(id) };
+    return { ...structuredClone(chat), requests: this.active.requests(id) };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
@@ -1227,11 +1070,8 @@ export class ProjectChats {
       messages: messages.map((m) =>
         known[m.id] === m.version ? m.id : structuredClone(m),
       ),
-      requests: this.requests(id),
+      requests: this.active.requests(id),
     };
-  }
-  private requests(id: string) {
-    return this.active.get(id)?.requests.list() ?? [];
   }
   async image(chatId: string, imageId: string): Promise<string> {
     const chat = await this.storage.load(chatId);
@@ -1537,7 +1377,7 @@ export class ProjectChats {
     });
   }
   private async sendNow(id: string, input: ProjectChatSend) {
-    const active = this.claim(id, input);
+    const active = this.active.claim(id, input);
     try {
       const chat = await this.storage.load(id);
       assertHere(chat);
@@ -1546,7 +1386,7 @@ export class ProjectChats {
       const root = await this.chatRoot(chat, input.body);
       if (chat.shared) await this.sync(id);
       if (chat.messages.some((m) => m.id === input.id)) {
-        this.release(id, active);
+        this.active.release(id, active);
         return;
       }
       const asked = agentAsked(input);
@@ -1636,7 +1476,7 @@ export class ProjectChats {
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!asked) {
-        this.release(id, active);
+        this.active.release(id, active);
         return;
       }
       // The message is in. A handoff note can take minutes; the answer
@@ -1650,7 +1490,7 @@ export class ProjectChats {
         evidence,
       });
     } catch (e) {
-      this.release(id, active);
+      this.active.release(id, active);
       throw e;
     }
   }
@@ -1759,7 +1599,7 @@ export class ProjectChats {
       });
     } catch (e) {
       // The send already went through, so the thread shows the failure.
-      this.release(id, active);
+      this.active.release(id, active);
       const failed: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
@@ -1926,12 +1766,10 @@ export class ProjectChats {
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
     const idle = !this.active.has(chat.id);
-    const active = newActive(input, () => this.storage.chatChanged(chat.id));
+    const active = idle
+      ? this.active.claim(chat.id, input)
+      : this.active.create(chat.id, input);
     const { abort } = active;
-    if (idle) {
-      this.active.set(chat.id, active);
-      this.storage.chatChanged(chat.id);
-    }
     const message: ChatMessage =
       resumed ??
       streamingAnswer(provider, {
@@ -1962,7 +1800,12 @@ export class ProjectChats {
       Object.entries(agentRuntimes).map(async ([provider, runtime]) =>
         (
           (await runtime.reattach?.(
-            (key) => this.owns(key),
+            (key) =>
+              this.sessions.owns(
+                key,
+                (chatId) =>
+                  !!this.store.get().chats?.some((c) => c.id === chatId),
+              ),
             (key) => () => this.unpromptedFor(key),
           )) ?? []
         ).map((session) => ({
@@ -1972,10 +1815,7 @@ export class ProjectChats {
       ),
     ).then((lists) => {
       const sessions = lists.flat();
-      for (const { key, open } of sessions) {
-        this.providerSessions.add(key);
-        if (open) this.resuming.add(key);
-      }
+      for (const { key, open } of sessions) this.sessions.reattached(key, open);
       return sessions;
     });
     this.storage.waitFor(
@@ -1998,18 +1838,6 @@ export class ProjectChats {
   working() {
     return this.active.size;
   }
-  /** A key of this data folder's, for a thread that still exists. */
-  private owns(key: string) {
-    try {
-      const [dir, chatId] = JSON.parse(key) as string[];
-      return (
-        dir === this.dir &&
-        !!this.store.get().chats?.some((c) => c.id === chatId)
-      );
-    } catch {
-      return false;
-    }
-  }
   private async unpromptedFor(key: string) {
     const { chatId, branch } = parseSessionKey(key);
     const chat = await this.storage.load(chatId);
@@ -2021,7 +1849,7 @@ export class ProjectChats {
     let chat: ProjectChat | undefined;
     try {
       chat = await this.storage.load(chatId);
-      this.resuming.delete(key);
+      this.sessions.resumed(key);
       const message = [...chat.messages]
         .reverse()
         .find(
@@ -2042,8 +1870,7 @@ export class ProjectChats {
         message,
       );
     } catch (e) {
-      this.resuming.delete(key);
-      this.providerSessions.delete(key);
+      this.sessions.lost(key);
       this.storage.chatChanged(chatId);
       await agentRuntime(provider)
         .closeSession(key)
@@ -2074,7 +1901,7 @@ export class ProjectChats {
     prompt: string,
   ) {
     if (this.disposing) throw new Error("Relay is closing.");
-    const active = this.claim(chat.id, input);
+    const active = this.active.claim(chat.id, input);
     const message = streamingAnswer(input.provider);
     try {
       const root = await this.projects.root(chat.projectId);
@@ -2085,7 +1912,7 @@ export class ProjectChats {
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
-      this.release(chat.id, active);
+      this.active.release(chat.id, active);
       throw e;
     }
   }
@@ -2103,7 +1930,7 @@ export class ProjectChats {
       : replyRoot(chat.messages, input.parentId!);
     const rootId = root?.id ?? input.id;
     const key = `${chat.id}:${rootId}`;
-    if (this.sides.has(key))
+    if (this.active.sideRunning(key))
       throw new Error("Wait for the answer to your last side question.");
     const asked = agentAsked(input);
     if (!asked?.question) throw new Error("Ask a question after /btw.");
@@ -2149,11 +1976,11 @@ export class ProjectChats {
         ? this.sessionAside(chat, answer, earlier, asked.question, input, abort)
         : this.forkAside(chat, answer, earlier, asked.question, input, abort)
     ).finally(() => {
-      this.sides.delete(key);
+      this.active.sideDone(key);
       // The side answer moved `updated`, as any finished answer does.
       void this.storage.updateSummary(chat).catch(() => {});
     });
-    this.sides.set(key, { abort, job });
+    this.active.runSide(key, abort, job);
     void job.catch(() => {});
   }
   private async sessionAside(
@@ -2184,7 +2011,7 @@ export class ProjectChats {
     });
     try {
       answer.body = await agentRuntime(answer.provider).askSide!({
-        key: this.sessionKey(chat.id),
+        key: this.sessions.key(chat.id),
         thread: agentSession(chat, answer.provider).thread!,
         cwd,
         choice: input.choice,
@@ -2255,7 +2082,7 @@ export class ProjectChats {
           `${agentName(provider)} compacts without custom instructions.`,
         );
       const input = this.sessionInput(chat, provider, parentId);
-      const active = this.claim(id, input);
+      const active = this.active.claim(id, input);
       const { abort } = active;
       const message = streamingAnswer(provider, {
         compaction: true,
@@ -2265,7 +2092,7 @@ export class ProjectChats {
       try {
         await this.storage.save(chat);
       } catch (e) {
-        this.release(id, active);
+        this.active.release(id, active);
         throw e;
       }
       this.emit({ chatId: id, message });
@@ -2300,8 +2127,8 @@ export class ProjectChats {
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
-    const sessionKey = this.sessionKey(chat.id, input.parentId ?? undefined);
-    this.providerSessions.add(sessionKey);
+    const sessionKey = this.sessions.key(chat.id, input.parentId ?? undefined);
+    this.sessions.add(sessionKey);
     const provider = message.provider;
     if (rules.showsModel)
       void this.turnModel(provider, input, root).then((model) =>
@@ -2597,20 +2424,6 @@ export class ProjectChats {
       removed: !!worktree.path && !exists,
     };
   }
-  /**
-   * A turn whose answer shows as finished still saves before it gives the
-   * thread back; whatever the user does next waits for that, not refuses.
-   */
-  private async finished(id: string) {
-    const active = this.active.get(id);
-    if (active?.finishing)
-      await withTimeout(active.ended, 10_000, "").catch(() => {});
-  }
-  private async assertIdle(id: string) {
-    await this.finished(id);
-    if (this.active.has(id))
-      throw new Error("Wait for the answer to finish first.");
-  }
   async worktreeDiff(id: string, path: string) {
     const { worktree } = await this.worktreeOf(id);
     if (!(await worktreeExists(worktree)))
@@ -2621,7 +2434,7 @@ export class ProjectChats {
   removeWorktree(id: string) {
     return this.control(id, async () => {
       const { chat, worktree } = await this.worktreeOf(id);
-      await this.assertIdle(id);
+      await this.active.assertIdle(id);
       if (worktree.path) {
         threadTerminals.closeWithin(worktree.path);
         await projectTasks.stopWithin(worktree.path);
@@ -2643,10 +2456,10 @@ export class ProjectChats {
     if (chat.shared) return "Shared conversations stay in the project folder.";
     if ((await this.projects.inspect(chat.projectId)).plain)
       return "Worktrees need a Git repository.";
-    await this.finished(chat.id);
+    await this.active.finished(chat.id);
     if (this.active.has(chat.id) || this.councilBusy(chat))
       return "Wait for the answer to finish first.";
-    if (this.pending(chat.id).length || chat.heldWakeups?.length)
+    if (this.sessions.pending(chat.id).length || chat.heldWakeups?.length)
       return "Claude left background work or a wake-up in this thread. Stop it first.";
     const busy = (this.store.get().chats ?? []).find(
       (c) =>
@@ -2719,7 +2532,7 @@ export class ProjectChats {
         owed: Object.keys(chat.scopeHeard ?? {}),
       };
       // Live sessions started in the project folder; resumed, they start in the worktree.
-      this.closeSessions(id);
+      this.sessions.close(id);
       await this.storage.persist(chat);
       return chatSummary(chat);
     });
@@ -2809,7 +2622,7 @@ export class ProjectChats {
       if (chat.worktree && !(await worktreeExists(chat.worktree)))
         throw new Error("This thread's worktree was removed.");
       // An agent editing the same folder would race the rollback.
-      for (const id of this.active.keys()) {
+      for (const id of this.active.ids()) {
         const other = this.storage.cached(id);
         if (
           other?.projectId === chat.projectId &&
@@ -3161,18 +2974,20 @@ export class ProjectChats {
    * picked back up by `reattach`.
    */
   async dispose({ detach = false } = {}) {
-    this.unhearPending();
+    this.sessions.stopListening();
     if (detach) {
       this.disposing = true;
       for (const timer of this.timers.values()) clearTimeout(timer);
-      for (const a of this.sides.values()) a.abort.abort();
+      for (const a of this.active.allSides()) a.abort.abort();
       for (const a of this.titleJobs.values()) a.abort.abort();
       // What was stopped writes its last state before the store goes to disk.
       await Promise.allSettled(
-        [...this.sides.values(), ...this.titleJobs.values()].map((a) => a.job),
+        [...this.active.allSides(), ...this.titleJobs.values()].map(
+          (a) => a.job,
+        ),
       );
       await Promise.allSettled(
-        [...this.active.keys()].map((id) => {
+        [...this.active.ids()].map((id) => {
           const chat = this.storage.cached(id);
           return chat && this.storage.save(chat);
         }),
@@ -3187,16 +3002,16 @@ export class ProjectChats {
     );
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.disposing = true;
-    for (const a of this.active.values()) a.abort.abort();
-    for (const a of this.sides.values()) a.abort.abort();
+    for (const a of this.active.all()) a.abort.abort();
+    for (const a of this.active.allSides()) a.abort.abort();
     for (const a of this.titleJobs.values()) a.abort.abort();
-    await Promise.allSettled([...this.sides.values()].map((a) => a.job));
-    await Promise.allSettled([...this.active.values()].map((a) => a.job));
+    await Promise.allSettled([...this.active.allSides()].map((a) => a.job));
+    await Promise.allSettled([...this.active.all()].map((a) => a.job));
     await Promise.allSettled([...this.titleJobs.values()].map((a) => a.job));
     await Promise.allSettled([...this.titleUpdates]);
     await Promise.allSettled([...this.controls.values()]);
     // A send already inside validation can attach its job while shutdown waits.
-    await Promise.allSettled([...this.active.values()].map((a) => a.job));
+    await Promise.allSettled([...this.active.all()].map((a) => a.job));
     await Promise.allSettled([...this.reviewSteps]);
     await Promise.allSettled([
       ...this.syncing.values(),
@@ -3205,14 +3020,7 @@ export class ProjectChats {
     await Promise.all(this.storage.busy().writes);
     // A finished answer refreshes its sidebar summary without waiting for it.
     await this.store.flush();
-    await Promise.all(
-      [...this.providerSessions].flatMap((key) =>
-        Object.values(agentRuntimes).map((runtime) =>
-          runtime.closeSession(key).catch(() => {}),
-        ),
-      ),
-    );
-    this.providerSessions.clear();
+    await this.sessions.closeAll();
     await Promise.all(
       Object.values(agentRuntimes).map((runtime) =>
         runtime.dispose?.().catch(() => {}),
