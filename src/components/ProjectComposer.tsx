@@ -7,11 +7,7 @@ import {
   type Ref,
 } from "react";
 import { Paperclip } from "lucide-react";
-import {
-  agentMentionPattern,
-  reportsUsage,
-  type AgentProvider,
-} from "../../shared/agents";
+import { reportsUsage, type AgentProvider } from "../../shared/agents";
 import type { RelayCommand } from "../../shared/commands";
 import type { ComposedSend } from "../../shared/compose-send";
 import type { ResumeSettings } from "../../shared/projects";
@@ -125,11 +121,12 @@ export function ProjectComposer({
     agent,
   });
   const catalogs = useModelCatalogs(projectId);
-  const runs = useAgentRuns(composer, catalogs, dropMention);
+  const promptInput = useRef<PromptInputHandle>(null);
+  const draft = useComposerDraft(keys.draft, shared, promptInput);
+  const runs = useAgentRuns(composer, catalogs, draft.dropMention);
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
   const [spark, setSpark] = useState(0);
   const input = useRef<HTMLElement>(null);
-  const promptInput = useRef<PromptInputHandle>(null);
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
   );
@@ -145,7 +142,6 @@ export function ProjectComposer({
   );
   agentSettings.current = runs.resumeSettings;
   const filePick = useRef<HTMLInputElement>(null);
-  const draft = useComposerDraft(keys.draft, shared, promptInput);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const recipient = draftRecipient(draft.text, composer.provider);
   const councilOn =
@@ -157,16 +153,6 @@ export function ProjectComposer({
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const quick = useQuickSwitchHud(runs, recipient);
-  /** An agent was picked here, so an @mention would only override it. */
-  function dropMention() {
-    const prefix = agentMentionPattern.exec(draft.text.trimStart())?.[0];
-    if (prefix)
-      promptInput.current?.insertText({
-        start: 0,
-        end: draft.text.length - draft.text.trimStart().length + prefix.length,
-        text: "",
-      });
-  }
   const settingCommands = useSettingCommands({
     state: composer,
     runs,
