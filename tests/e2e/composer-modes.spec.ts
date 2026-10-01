@@ -259,6 +259,17 @@ test("restores per-project composer settings, answers native approvals, and impl
         BrowserWindow.getAllWindows().every((w) => !relaySeen(w)),
       ),
     ).toBe(true);
+    // Plan was for the thread it started; the project's next one starts in
+    // Build, still on its runtime mode.
+    await page
+      .getByRole("button", { name: "New thread in Web Store", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Mode: Build", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Runtime mode", exact: true }),
+    ).toHaveText("Auto-accept edits");
   } finally {
     await app?.close();
     await fixture.close();

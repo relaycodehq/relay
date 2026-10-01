@@ -241,7 +241,7 @@ it("starts a thread on the agent its first message went to", () => {
     picks: {},
     runtimeMode: "auto",
     interactionMode: "plan",
-    ultraplan: false,
+    ultraplan: true,
     council: "angles",
   });
   startThreadSettings("new:project", "thread", "claude");
@@ -252,11 +252,15 @@ it("starts a thread on the agent its first message went to", () => {
     picks: {},
     interactionMode: "plan",
   });
-  // The new-thread composer keeps following the default agent, on its models.
+  // The new-thread composer keeps following the default agent, on its models
+  // and runtime mode, but the next thread starts in Build.
   expect(loadComposerSettings("new:project")).toMatchObject({
     provider: undefined,
     choice: sol,
     claude: { model: "opus" },
+    runtimeMode: "auto",
+    interactionMode: "default",
+    ultraplan: false,
   });
 });
 

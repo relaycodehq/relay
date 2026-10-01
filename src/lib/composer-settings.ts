@@ -289,14 +289,22 @@ export function saveComposerSettings(
 }
 /**
  * Hands a new thread's composer settings to the thread it started, on the
- * agent the first message went to. The new-thread composer keeps its models.
+ * agent the first message went to. The new-thread composer keeps its models
+ * and runtime mode, but Plan and Ultraplan were for that thread: the next one
+ * starts in Build.
  */
 export function startThreadSettings(
   from: string,
   to: string,
   provider: Provider,
 ) {
-  saveComposerSettings(to, { ...loadComposerSettings(from), provider });
+  const settings = loadComposerSettings(from);
+  saveComposerSettings(to, { ...settings, provider });
+  saveComposerSettings(from, {
+    ...settings,
+    interactionMode: "default",
+    ultraplan: false,
+  });
 }
 /**
  * Opens a composer on what a message was sent with. The choice is the model
