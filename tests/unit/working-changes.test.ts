@@ -89,6 +89,7 @@ it("reveals the working diff first, and knows a partly staged file's other list"
   expect(otherArea(partly, "unstaged")).toBe("staged");
   expect(otherArea(untracked, "unstaged")).toBeNull();
   expect(otherArea(staged, "staged")).toBeNull();
+  expect(otherArea(conflicted, "staged")).toBe("unstaged");
 });
 
 it("reads back only a well-formed saved view", () => {
