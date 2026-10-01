@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Check,
@@ -46,6 +45,7 @@ import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettingsDraft } from "../lib/useAISettingsDraft";
 import { useLeaveOnEscape } from "../lib/useLeaveOnEscape";
+import { useSavedSetting } from "../lib/useSavedSetting";
 import { useUpdates } from "../lib/updates";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
@@ -499,20 +499,16 @@ export function Settings({
   useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
   const [error, setError] = useState<unknown>();
 
-  const ai = useAISettingsDraft(setError),
-    qc = useQueryClient();
-  const smartProjectNames = useQuery({
-    queryKey: ["smart-project-names"],
-    queryFn: () => api.smartProjectNames(),
-    staleTime: Infinity,
-  });
-  const saveSmartProjectNames = useMutation({
-    mutationFn: (enabled: boolean) => api.saveSmartProjectNames(enabled),
-    onSuccess: async (enabled) => {
-      qc.setQueryData(["smart-project-names"], enabled);
-      await qc.invalidateQueries({ queryKey: ["projects"] });
+  const ai = useAISettingsDraft(setError);
+  const smartNames = useSavedSetting(
+    {
+      queryKey: ["smart-project-names"],
+      queryFn: () => api.smartProjectNames(),
+      staleTime: Infinity,
     },
-  });
+    (enabled) => api.saveSmartProjectNames(enabled),
+    ["projects"],
+  );
   const { values, change } = ai;
 
   // Releases stamp their own version at build time; the updater knows it.
@@ -722,22 +718,11 @@ export function Settings({
         <>
           <Switch
             label="Smart project names"
-            checked={
-              (saveSmartProjectNames.isPending
-                ? saveSmartProjectNames.variables
-                : smartProjectNames.data) ?? true
-            }
-            disabled={
-              smartProjectNames.data === undefined ||
-              saveSmartProjectNames.isPending
-            }
-            onChange={(enabled) => saveSmartProjectNames.mutate(enabled)}
+            checked={smartNames.value ?? true}
+            disabled={!smartNames.loaded || smartNames.saving}
+            onChange={(enabled) => smartNames.set(enabled)}
           />
-          {(smartProjectNames.isError || saveSmartProjectNames.isError) && (
-            <ErrorBox
-              error={smartProjectNames.error ?? saveSmartProjectNames.error}
-            />
-          )}
+          {smartNames.error && <ErrorBox error={smartNames.error} />}
         </>
       ),
     },

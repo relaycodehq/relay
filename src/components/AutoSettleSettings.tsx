@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSavedSetting } from "../lib/useSavedSetting";
 import { api } from "../lib/api";
 import { ComposerSelect } from "./ComposerSelect";
 import { ErrorBox } from "./ui";
@@ -15,19 +15,12 @@ type Choice = (typeof choices)[number]["value"];
 
 /** How long a thread stays quiet before it settles by itself; off turns merged-PR settling off too. */
 export function AutoSettleSelect() {
-  const qc = useQueryClient();
-  const days = useQuery({
-    queryKey: ["auto-settle-days"],
-    queryFn: () => api.autoSettleDays(),
-  });
-  const save = useMutation({
-    mutationFn: (days: number | null) => api.saveAutoSettleDays(days),
-    onSuccess: async (saved) => {
-      qc.setQueryData(["auto-settle-days"], saved);
-      await qc.invalidateQueries({ queryKey: ["project-chats"] });
-    },
-  });
-  const current = save.isPending ? save.variables : days.data;
+  const days = useSavedSetting(
+    { queryKey: ["auto-settle-days"], queryFn: () => api.autoSettleDays() },
+    (days) => api.saveAutoSettleDays(days),
+    ["project-chats"],
+  );
+  const current = days.value;
   if (current === undefined) return null;
   const value = current === null ? "off" : String(current);
   return (
@@ -43,12 +36,10 @@ export function AutoSettleSelect() {
               ? []
               : [{ value, label: `After ${value} days` }]),
           ]}
-          onChange={(next) => save.mutate(next === "off" ? null : Number(next))}
+          onChange={(next) => days.set(next === "off" ? null : Number(next))}
         />
       </div>
-      {(days.isError || save.isError) && (
-        <ErrorBox error={days.error ?? save.error} />
-      )}
+      {days.error && <ErrorBox error={days.error} />}
     </>
   );
 }
