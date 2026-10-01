@@ -6,6 +6,7 @@ import type { ChatSummary } from "../../shared/projects";
 import type { HandoffView } from "../../shared/handoff";
 import { liveLabel } from "../../shared/activity-labels";
 import { api } from "../lib/api";
+import { DRAFT_PREFIX, readDraft, writeDraft } from "../lib/drafts";
 import { canPeek, remoteCall, RemotePeek } from "./RemotePeek";
 import "./waiting-strip.css";
 import "./handoff.css";
@@ -23,6 +24,20 @@ export function awayPlaceholder(chat: ChatSummary) {
     return `This thread continues on ${cameFrom.computer}.`;
 }
 
+/** What the thread is asked to do once it's back with work that didn't land. */
+export function resolveReturnPrompt(chat: ChatSummary) {
+  const { sentTo, worktree } = chat;
+  const ref = `refs/relay/handoffs/${sentTo!.id}`;
+  const branch = worktree?.branch ?? "this branch";
+  return [
+    `Your work from ${sentTo!.computer} came back but couldn't land: \`${branch}\` got new commits here while you were away, and both change ${(sentTo!.conflicts ?? []).map((f) => `\`${f}\``).join(", ")}.`,
+    "",
+    `Your commits are at \`${ref}\`. Apply them onto \`${branch}\` with \`git cherry-pick HEAD..${ref}\` and resolve the conflicts as they come, keeping what both sides meant. If one needs a judgement call, stop and ask me.`,
+    "",
+    `Once they're all in, delete the ref with \`git update-ref -d ${ref}\`. Don't push.`,
+  ].join("\n");
+}
+
 /** What the strip says about a thread on another computer. */
 export function handoffLine(view: HandoffView): {
   title: string;
@@ -31,6 +46,12 @@ export function handoffLine(view: HandoffView): {
 } {
   const { sentTo, online, remote } = view;
   const where = sentTo.computer;
+  if (sentTo.conflicts?.length)
+    return {
+      title: `Its work from ${where} clashes with this worktree`,
+      detail: `both sides changed ${sentTo.conflicts.join(", ")}`,
+      failed: true,
+    };
   if (sentTo.error)
     return {
       title:
@@ -182,7 +203,7 @@ export function HandoffStrip({
           (sentTo.state === "returning" && sentTo.error)) && (
           <button
             type="button"
-            className="primary-action"
+            className={sentTo.conflicts?.length ? undefined : "primary-action"}
             disabled={busy || !data.online}
             title={
               data.online
@@ -192,6 +213,23 @@ export function HandoffStrip({
             onClick={() => act(() => api.bringBackThread(chat.id))}
           >
             {sentTo.error ? "Try again" : "Bring back"}
+          </button>
+        )}
+        {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
+          <button
+            type="button"
+            className="primary-action"
+            disabled={busy || !data.online}
+            title="Bring it back with its work set aside, and ask it to replay that work here"
+            onClick={() => {
+              const key = DRAFT_PREFIX + chat.id,
+                draft = readDraft(key).trim();
+              const prompt = resolveReturnPrompt({ ...chat, sentTo });
+              writeDraft(key, draft ? `${prompt}\n\n${draft}` : prompt);
+              act(() => api.bringBackThread(chat.id, true));
+            }}
+          >
+            Bring back to resolve
           </button>
         )}
       </div>

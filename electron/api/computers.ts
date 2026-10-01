@@ -27,10 +27,12 @@ export function computerHandlers(ctx: ApiContext) {
     handoffView: (args) => handoffs().sender.view(idSchema.parse(args[0])),
     handoffViews: () => handoffs().sender.views(),
     bringBackThread: (args) =>
-      handoffs().sender.bringBack(idSchema.parse(args[0])),
+      handoffs().sender.bringBack(
+        idSchema.parse(args[0]),
+        z.boolean().optional().parse(args[1]),
+      ),
     keepThreadHere: (args) =>
       handoffs().sender.keepHere(idSchema.parse(args[0])),
-    updateComputer: (args) =>
-      handoffs().sender.update(idSchema.parse(args[0])),
+    updateComputer: (args) => handoffs().sender.update(idSchema.parse(args[0])),
   } satisfies Handlers;
 }

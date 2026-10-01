@@ -29,6 +29,8 @@ export interface ChatSentTo {
   state: "sending" | "away" | "returning";
   /** Why the last step failed; the thread stays where the state says. */
   error?: string;
+  /** Coming back, its work clashed with commits made here meanwhile, in these files. */
+  conflicts?: string[];
 }
 
 /** On the computer that took a thread over: where it came from. */
@@ -222,7 +224,8 @@ export interface ComputersApi {
   handoffView(chatId: string): Promise<HandoffView | null>;
   /** Every thread that's on another computer, or on its way, by chat id. */
   handoffViews(): Promise<Record<string, HandoffView>>;
-  bringBackThread(chatId: string): Promise<void>;
+  /** `park` brings it back even if its work clashes, left at its handoff ref. */
+  bringBackThread(chatId: string, park?: boolean): Promise<void>;
   /** Keeps a thread whose handoff failed here; refused once the other side has it. */
   keepThreadHere(chatId: string): Promise<void>;
   /** Has a paired computer update Relay and restart; it reconnects by itself. */

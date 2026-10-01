@@ -25,7 +25,7 @@ import {
   bundleBranch,
   fetchBundle,
   hasCommit,
-  headOf,
+  landReturned,
   repositoryNames,
 } from "./git";
 
@@ -262,8 +262,12 @@ export class Handoffs {
     await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
     this.run(chatId, () => this.send(chatId, sentTo.id, sentTo.computerId));
   }
-  /** Brings the thread back, or tries again after the last attempt failed. */
-  async bringBack(chatId: string) {
+  /**
+   * Brings the thread back, or tries again after the last attempt failed.
+   * `park` brings it back even when its work clashes with the worktree,
+   * leaving the work at its handoff ref for the thread to replay.
+   */
+  async bringBack(chatId: string, park = false) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) throw new Error("This thread is already here.");
     if (sentTo.state === "sending")
@@ -274,8 +278,11 @@ export class Handoffs {
     await this.chats.updateSentTo(chatId, sentTo.id, {
       state: "returning",
       error: undefined,
+      conflicts: undefined,
     });
-    this.run(chatId, () => this.back(chatId, sentTo.id, sentTo.computerId));
+    this.run(chatId, () =>
+      this.back(chatId, sentTo.id, sentTo.computerId, park),
+    );
   }
   /** Gives up on a handoff that never arrived, keeping the thread here. */
   async keepHere(chatId: string) {
@@ -399,7 +406,12 @@ export class Handoffs {
     }
   }
   /** The other side stops, notes and commits; its work comes back into this worktree. */
-  private async back(chatId: string, id: string, computerId: string) {
+  private async back(
+    chatId: string,
+    id: string,
+    computerId: string,
+    park: boolean,
+  ) {
     const folder = join(this.dir, id);
     const ref = `refs/relay/handoffs/${id}`;
     try {
@@ -423,15 +435,24 @@ export class Handoffs {
           throw new Error("The bundle doesn't hold the returned commit.");
       } else if (!(await hasCommit(path, back.tip)))
         throw new Error("The returned commit is missing here.");
-      if ((await headOf(path)) !== back.tip)
-        await git(path, ["merge", "--ff-only", "-q", back.tip], 60_000).catch(
+      if (!park) {
+        const computer = this.computers.get(computerId).name;
+        const conflicts = await landReturned(path, back.tip, computer).catch(
           (e) => {
             throw new Error(
-              `The worktree moved on while the thread was away, so its work can't simply come back (${message(e)}). It's kept at ${ref}.`,
+              `Its work couldn't land in the worktree (${message(e)}). It's kept at ${ref}.`,
             );
           },
         );
-      await git(path, ["update-ref", "-d", ref]).catch(() => {});
+        if (conflicts.length) {
+          await this.chats.updateSentTo(chatId, id, {
+            error: `Its work and what was committed here meanwhile both change ${conflicts.join(", ")}. It's kept at ${ref}.`,
+            conflicts,
+          });
+          return;
+        }
+        await git(path, ["update-ref", "-d", ref]).catch(() => {});
+      }
       await this.chats.returned(chatId, id, messages);
       this.statuses.delete(id);
       await rm(folder, { recursive: true, force: true });

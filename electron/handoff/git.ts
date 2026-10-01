@@ -2,6 +2,8 @@ import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { git } from "../git";
+import { moveCheckout, replayOnto } from "../branch-rebase";
+import { serializeRepo } from "../working-tree";
 import { repoOf, remoteUrl } from "../repository";
 import { needsFullBundle } from "../../shared/handoff";
 
@@ -121,6 +123,36 @@ export const hasCommit = (root: string, commit: string) =>
     () => true,
     () => false,
   );
+
+const isAncestor = (root: string, a: string, b: string) =>
+  git(root, ["merge-base", "--is-ancestor", a, b]).then(
+    () => true,
+    () => false,
+  );
+
+/**
+ * Brings work that came back at `tip` into the worktree at `path`. When the
+ * worktree moved on meanwhile, the returned commits are replayed on top of
+ * it; the files they clash on when they can't be, and nothing moves then.
+ */
+export function landReturned(
+  path: string,
+  tip: string,
+  from: string,
+): Promise<string[]> {
+  return serializeRepo(path, async () => {
+    const head = await headOf(path);
+    if (head === tip || (await isAncestor(path, tip, head))) return [];
+    if (await isAncestor(path, head, tip)) {
+      await git(path, ["merge", "--ff-only", "-q", tip], 60_000);
+      return [];
+    }
+    const replayed = await replayOnto(path, tip, head);
+    if ("conflicts" in replayed) return replayed.conflicts;
+    await moveCheckout(path, head, replayed.sha, `handoff: back from ${from}`);
+    return [];
+  });
+}
 
 /** Catches the remote-tracking branches up; best effort, the bundle may carry everything anyway. */
 export const fetchRemotes = (root: string) =>
