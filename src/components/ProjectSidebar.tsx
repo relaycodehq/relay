@@ -202,14 +202,16 @@ export function ProjectSidebar({
               onNew={onNewScratch}
             />
             <ProjectsSection
-              groups={groups}
-              drag={drag}
-              folds={folds}
-              rows={rows}
-              threads={all}
-              current={projectId}
-              onNew={newThread}
-              onShared={onShared}
+              tree={{
+                groups,
+                drag,
+                folds,
+                rows,
+                threads: all,
+                current: projectId,
+                onNew: newThread,
+                onShared,
+              }}
               error={error}
               empty={!realProjects.length}
               onAdd={onAdd}
