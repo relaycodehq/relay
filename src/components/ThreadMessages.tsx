@@ -2,13 +2,13 @@ import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import type {
   ChatMessage,
-  ChatSummary,
   ProjectChat as ProjectChatData,
 } from "../../shared/projects";
 import type { ChatThread } from "../lib/useChatThread";
 import type { Councils } from "../lib/useCouncils";
 import type { ThreadMessageActions } from "../lib/useMessageActions";
 import type { QueuedMessageActions } from "../lib/useQueuedMessages";
+import type { ThreadHandle } from "../lib/useThreadHandle";
 import type { ThreadScroll } from "../lib/useThreadScroll";
 import type { ThreadWorktree } from "../lib/useThreadWorktree";
 import {
@@ -48,7 +48,7 @@ function resumable(
  * questions, then what's still to come, queued or ready to resume.
  */
 export function ThreadMessages({
-  chat,
+  handle: { chat, busy },
   projectPath,
   thread: {
     history,
@@ -81,10 +81,9 @@ export function ThreadMessages({
   },
   queue: { steer, move, returnToComposer },
   worktree,
-  busy,
   onResume,
 }: {
-  chat?: ChatSummary;
+  handle: ThreadHandle;
   projectPath: string;
   thread: ChatThread;
   /** Where the view's refs and scroll handler land. */
@@ -93,7 +92,6 @@ export function ThreadMessages({
   actions: ThreadMessageActions;
   queue: QueuedMessageActions;
   worktree: ThreadWorktree;
-  busy: boolean;
   /** Sends the cut-short answer's input again. */
   onResume: () => void;
 }) {

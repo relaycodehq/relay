@@ -266,7 +266,7 @@ export function ProjectChat({
       />
       {!isEmpty && (
         <ThreadMessages
-          chat={chat}
+          handle={handle}
           projectPath={project.path}
           thread={thread}
           view={view}
@@ -274,7 +274,6 @@ export function ProjectChat({
           actions={actions}
           queue={queue}
           worktree={worktree}
-          busy={busy}
           onResume={() => void resume(() => composer.current?.agentSettings())}
         />
       )}
