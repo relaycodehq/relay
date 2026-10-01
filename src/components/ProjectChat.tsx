@@ -35,8 +35,8 @@ import { useQueuedMessages } from "../lib/useQueuedMessages";
 import { useSessionCommands } from "../lib/useSessionCommands";
 import { useThreadScroll } from "../lib/useThreadScroll";
 import { useThreadSend } from "../lib/useThreadSend";
+import { useThreadHandle } from "../lib/useThreadHandle";
 import { useThreadWorktree } from "../lib/useThreadWorktree";
-import { useThreadWrites } from "../lib/useThreadWrites";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { AgentRequestCard } from "./AgentRequestCard";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
@@ -128,8 +128,8 @@ export function ProjectChat({
   );
   const thread = useChatThread(chat, rootId),
     { history, messages, root, shown, running } = thread;
-  const writes = useThreadWrites(),
-    { busy, error, setError } = writes;
+  const handle = useThreadHandle(chat, id, project.id, history.refetch),
+    { busy, error } = handle;
   const presence = useChatPresence(chat, viewing);
   const attachments = useComposerAttachments(id),
     { setSelection, workItem, setWorkItem } = attachments;
@@ -144,11 +144,9 @@ export function ProjectChat({
     [],
   );
   const worktree = useThreadWorktree({
-    chat,
-    draftId: id,
+    handle,
     project,
     running,
-    setError,
     onDraftWorkspace,
   });
   const { workspace, folder } = worktree;
@@ -156,21 +154,16 @@ export function ProjectChat({
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
   const session = useSessionCommands({
-    chat,
+    handle,
     shown,
     root: root?.id ?? null,
     running,
-    writes,
-    refetch: history.refetch,
     onCommand,
   });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id));
   const councils = useCouncils({
-    chat,
-    projectId: project.id,
+    handle,
     data: history.data,
-    refetch: history.refetch,
-    writes,
     onCreated,
     onSent: () => followAnswer(),
   });
@@ -192,9 +185,7 @@ export function ProjectChat({
     }
   }, [contextText?.id]);
   const { send, resume } = useThreadSend({
-    chat,
-    draftId: id,
-    projectId: project.id,
+    handle,
     create: () =>
       api.createProjectChat(
         project.id,
@@ -204,30 +195,22 @@ export function ProjectChat({
     root,
     attachments,
     viewing: viewing.path,
-    writes,
     confirmSwitch: agentSwitch.confirm,
-    refetch: history.refetch,
     onCreated,
     onSent: () => followAnswer(),
     onOpen: setRootId,
   });
   const queue = useQueuedMessages({
-    chat,
-    draftId: id,
-    projectId: project.id,
+    handle,
     messages,
     queue: history.data?.queue,
     attachments,
-    writes,
-    refetch: history.refetch,
     onOpen: setRootId,
   });
   const actions = useMessageActions({
-    projectId: project.id,
-    chatId: chat?.id,
+    handle,
     messages,
     worktree: worktree.status,
-    setError,
     onOpenReply: setRootId,
     onCreated,
     onOpenCode,
@@ -347,7 +330,7 @@ export function ProjectChat({
             scope={scope}
             handleRef={composer}
             thread={thread}
-            writes={writes}
+            handle={handle}
             councils={councils}
             background={background}
             session={session}

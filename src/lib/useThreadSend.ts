@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type { ComposedSend } from "../../shared/compose-send";
 import type {
   AgentProvider,
@@ -13,7 +12,7 @@ import { startThreadSettings } from "./composer-settings";
 import { withAttachments } from "./draft-attachments";
 import { saveDraftWorkspace } from "./drafts";
 import type { ComposerAttachments } from "./useComposerAttachments";
-import type { ThreadWrites } from "./useThreadWrites";
+import type { ThreadHandle } from "./useThreadHandle";
 
 /**
  * What the composer sends: a message to the open conversation, a `/btw` on
@@ -21,24 +20,17 @@ import type { ThreadWrites } from "./useThreadWrites";
  * its first message.
  */
 export function useThreadSend({
-  chat,
-  draftId,
-  projectId,
+  handle: { chat, id, busy, run, setError, refetch, listChanged },
   create,
   root,
   attachments,
   viewing,
-  writes: { busy, run, setError },
   confirmSwitch,
-  refetch,
   onCreated,
   onSent,
   onOpen,
 }: {
-  chat?: ChatSummary;
-  /** The thread's id, or the unsent one's; see lib/drafts. */
-  draftId: string;
-  projectId: string;
+  handle: ThreadHandle;
   /** Makes the thread the first message goes to. */
   create: () => Promise<ChatSummary>;
   /** The side conversation's first message, while one is open. */
@@ -46,16 +38,13 @@ export function useThreadSend({
   attachments: ComposerAttachments;
   /** The file open beside the thread, which the agent hears about. */
   viewing: string | null;
-  writes: ThreadWrites;
   confirmSwitch: (to: AgentProvider | undefined) => Promise<boolean>;
-  refetch: () => Promise<unknown>;
   onCreated: (c: ChatSummary) => Promise<void>;
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
   /** Opens a conversation of the thread: a side one by its first message, or the main one. */
   onOpen: (rootId: string | null) => void;
 }) {
-  const qc = useQueryClient();
   const created = useRef<ChatSummary | undefined>(undefined);
   async function send(
     value: ComposedSend,
@@ -78,11 +67,11 @@ export function useThreadSend({
       if (!root) attachments.clear();
       onSent();
       if (!chat) {
-        saveDraftWorkspace(draftId, "checkout");
-        startThreadSettings(draftId, target.id, recipient(value));
+        saveDraftWorkspace(id, "checkout");
+        startThreadSettings(id, target.id, recipient(value));
         await onCreated(target);
       } else await refetch();
-      await qc.invalidateQueries({ queryKey: ["project-chats", projectId] });
+      await listChanged();
     });
   }
   /** `/btw`: its thread opens, and the main thread's draft and attachments wait. */

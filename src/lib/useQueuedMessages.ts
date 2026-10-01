@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   replyRoot,
   type ChatMessage,
-  type ChatSummary,
   type ProjectChat as ProjectChatData,
   type ProjectChatSend,
 } from "../../shared/projects";
@@ -15,30 +14,22 @@ import { loadDraftImages, saveDraftImages } from "./draft-images";
 import { readDraft, writeDraft } from "./drafts";
 import { threadDraftKey } from "./thread-storage";
 import type { ComposerAttachments } from "./useComposerAttachments";
-import type { ThreadWrites } from "./useThreadWrites";
+import type { ThreadHandle } from "./useThreadHandle";
 
 export type QueuedMessageActions = ReturnType<typeof useQueuedMessages>;
 
 /** What can be done with a queued or scheduled message: send it now, move it, or take it back into the composer. */
 export function useQueuedMessages({
-  chat,
-  draftId,
-  projectId,
+  handle: { chat, id, busy, run, refetch, listChanged },
   messages,
   queue,
   attachments,
-  writes: { busy, run },
-  refetch,
   onOpen,
 }: {
-  chat?: ChatSummary;
-  draftId: string;
-  projectId: string;
+  handle: ThreadHandle;
   messages: ChatMessage[];
   queue: ProjectChatData["queue"];
   attachments: ComposerAttachments;
-  writes: ThreadWrites;
-  refetch: () => Promise<unknown>;
   /** Opens the conversation a returned message belongs to: a side one by its first message, or the main one. */
   onOpen: (rootId: string | null) => void;
 }) {
@@ -54,7 +45,7 @@ export function useQueuedMessages({
     await run(async () => {
       await api.projectChatQueueAction(chat.id, action, messageId, index);
       await refetch();
-      void qc.invalidateQueries({ queryKey: ["project-chats", projectId] });
+      void listChanged();
     });
   }
   function move(moving: string, target: QueueDrop) {
@@ -73,7 +64,7 @@ export function useQueuedMessages({
       const parent = input.parentId
         ? replyRoot(messages, input.parentId).id
         : null;
-      const key = threadDraftKey(draftId, parent);
+      const key = threadDraftKey(id, parent);
       const old = readDraft(key);
       const back = returnedDraft(
         old,
@@ -90,7 +81,7 @@ export function useQueuedMessages({
       writeDraft(key, back.body);
       // A reply goes back to its side conversation, which keeps its own settings.
       saveSentSettings(
-        parent ? `${draftId}:${parent}` : draftId,
+        parent ? `${id}:${parent}` : id,
         recipient(input),
         input,
       );
@@ -100,7 +91,7 @@ export function useQueuedMessages({
       setRestored((n) => n + 1);
       await api.projectChatQueueAction(chat.id, "remove", input.id);
       await refetch();
-      void qc.invalidateQueries({ queryKey: ["project-chats", projectId] });
+      void listChanged();
     });
   }
   return {

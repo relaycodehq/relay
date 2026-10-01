@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  ChatSummary,
   ChatWorkspace,
   Project,
   WorktreeStatus,
@@ -9,34 +8,31 @@ import type {
 import type { TurnDiffTarget } from "../components/TurnChanges";
 import { api } from "./api";
 import { loadDraftWorkspace, saveDraftWorkspace } from "./drafts";
+import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "./working-tree-key";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
 /** Where a thread works: picked before its first message, then the worktree it made, if any. */
 export function useThreadWorktree({
-  chat,
-  draftId,
+  handle: { chat, id, setError, listChanged },
   project,
   running,
-  setError,
   onDraftWorkspace,
 }: {
-  chat?: ChatSummary;
-  draftId: string;
+  handle: ThreadHandle;
   project: Project;
   running: boolean;
-  setError: (error: unknown) => void;
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
 }) {
   const qc = useQueryClient();
   // Where a new thread will work; a started one keeps its own.
   const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
-    chat ? "checkout" : loadDraftWorkspace(draftId),
+    chat ? "checkout" : loadDraftWorkspace(id),
   );
   useEffect(() => {
     if (chat) return;
-    saveDraftWorkspace(draftId, workspace);
+    saveDraftWorkspace(id, workspace);
     onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
   const query = useQuery({
@@ -67,7 +63,7 @@ export function useThreadWorktree({
       setBusy(false);
       void query.refetch();
       void qc.invalidateQueries({ queryKey: workingTreeKey() });
-      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
+      void listChanged();
     }
   }
   return {

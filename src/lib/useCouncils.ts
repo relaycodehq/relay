@@ -1,5 +1,4 @@
 import { useMemo, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   fixRequest,
   type DeepReviewStart,
@@ -13,30 +12,23 @@ import { councilWorking } from "../../shared/ultraplan";
 import { findingCode } from "../components/DeepReview";
 import { api } from "./api";
 import { saveSentSettings } from "./composer-settings";
-import type { ThreadWrites } from "./useThreadWrites";
+import type { ThreadHandle } from "./useThreadHandle";
 
 export type Councils = ReturnType<typeof useCouncils>;
 
 /** A thread's deep review and ultraplans: their state, and what the thread can do with them. */
 export function useCouncils({
-  chat,
-  projectId,
+  handle: { chat, projectId, busy, run, setError, refetch, listChanged },
   data,
-  refetch,
-  writes: { busy, run, setError },
   onCreated,
   onSent,
 }: {
-  chat?: ChatSummary;
-  projectId: string;
+  handle: ThreadHandle;
   data?: ProjectChatData;
-  refetch: () => Promise<unknown>;
-  writes: ThreadWrites;
   onCreated: (c: ChatSummary) => Promise<void>;
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
 }) {
-  const qc = useQueryClient();
   const review = data?.deepReview;
   // Reviewers work in threads of their own; this one waits for the lead.
   const reviewing = review?.status === "reviewing";
@@ -72,7 +64,7 @@ export function useCouncils({
       await api.startDeepReview(target.id, config);
       onSent();
       await onCreated(target);
-      await qc.invalidateQueries({ queryKey: ["project-chats", projectId] });
+      await listChanged();
     });
   }
   // Straight to the lead; whatever the composer holds stays there.

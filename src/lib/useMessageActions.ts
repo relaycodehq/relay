@@ -16,6 +16,7 @@ import { api } from "./api";
 import { forkThreadSettings } from "./composer-settings";
 import { prefillClaudeSignIn } from "./thread-terminals";
 import { useStableCallback } from "./useStableCallback";
+import type { ThreadHandle } from "./useThreadHandle";
 import { worktreeDiff } from "./useThreadWorktree";
 import { workingTreeKey } from "./working-tree-key";
 
@@ -26,22 +27,18 @@ export type MessageActions = ReturnType<typeof useMessageActions>;
  * re-rendering while typing; each still sees this render's thread.
  */
 export function useMessageActions({
-  projectId,
-  chatId,
+  handle: { chat, projectId, setError },
   messages,
   worktree,
-  setError,
   onOpenReply,
   onCreated,
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
 }: {
-  projectId: string;
-  chatId?: string;
+  handle: ThreadHandle;
   messages: ChatMessage[];
   worktree?: WorktreeStatus;
-  setError: (error: unknown) => void;
   /** Opens the side conversation that starts at `rootId`. */
   onOpenReply: (rootId: string) => void;
   onCreated: (c: ChatSummary) => Promise<void>;
@@ -50,6 +47,7 @@ export function useMessageActions({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
 }) {
   const qc = useQueryClient();
+  const chatId = chat?.id;
   const signInToClaude = useCallback(
     () =>
       chatId ? prefillClaudeSignIn(projectId, chatId) : Promise.resolve(false),

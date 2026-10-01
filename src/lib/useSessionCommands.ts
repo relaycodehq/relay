@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { agentName, agentProviders, agents } from "../../shared/agents";
 import type { RelayCommand } from "../../shared/commands";
-import type { ChatMessage, ChatSummary } from "../../shared/projects";
+import type { ChatMessage } from "../../shared/projects";
 import { latestContext } from "../components/ContextWindowMeter";
 import { api } from "./api";
-import type { ThreadWrites } from "./useThreadWrites";
+import type { ThreadHandle } from "./useThreadHandle";
 
 export type SessionCommands = ReturnType<typeof useSessionCommands>;
 
@@ -14,22 +14,18 @@ export type SessionCommands = ReturnType<typeof useSessionCommands>;
  * the workspace go on to `onCommand`.
  */
 export function useSessionCommands({
-  chat,
+  handle: { chat, busy, setError, refetch },
   shown,
   root,
   running,
-  writes: { busy, setError },
-  refetch,
   onCommand,
 }: {
-  chat?: ChatSummary;
+  handle: ThreadHandle;
   /** The open conversation's messages. */
   shown: ChatMessage[];
   /** The side conversation open, if any; it compacts its own session. */
   root: string | null;
   running: boolean;
-  writes: ThreadWrites;
-  refetch: () => Promise<unknown>;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
   const context = latestContext(shown);

@@ -13,8 +13,8 @@ import type { ChatThread } from "../lib/useChatThread";
 import type { ComposerAttachments } from "../lib/useComposerAttachments";
 import type { Councils } from "../lib/useCouncils";
 import type { SessionCommands } from "../lib/useSessionCommands";
+import type { ThreadHandle } from "../lib/useThreadHandle";
 import type { ThreadWorktree } from "../lib/useThreadWorktree";
-import type { ThreadWrites } from "../lib/useThreadWrites";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { awayPlaceholder } from "./HandoffStrip";
@@ -86,7 +86,7 @@ export function ThreadComposer({
   scope,
   handleRef,
   thread: { root, shown, running },
-  writes: { busy, setError },
+  handle: { busy, setError },
   councils: { reviewing, planning },
   background: { agentBatch, pending, stopped, leftBehind },
   session: { runCommand, context, compacting, showContext, compact },
@@ -107,7 +107,7 @@ export function ThreadComposer({
   scope: ChatScope;
   handleRef: Ref<ComposerHandle>;
   thread: ChatThread;
-  writes: ThreadWrites;
+  handle: ThreadHandle;
   councils: Councils;
   background: BackgroundWork;
   session: SessionCommands;
