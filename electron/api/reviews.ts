@@ -10,38 +10,15 @@ import {
 } from "../../shared/validation";
 import { pageSchema, type ApiContext, type Handlers } from "./context";
 
-type TriageMethod =
-  "triageState" | "startTriage" | "cancelTriage" | "groupPaths";
-
 /** Reviewing a Gitea pull request: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
   const { store, triage, requireClient, prKey, projectChats } = ctx;
 
-  async function triageCall(args: unknown[], method: TriageMethod) {
+  function triageOf(args: unknown[]) {
     const ref = refSchema.parse(args[0]),
       head = shaSchema.parse(args[1]),
-      base = shaSchema.parse(args[2]),
-      key = prKey(ref);
-    if (method === "triageState") return triage.state(key, `${base}:${head}`);
-    if (method === "startTriage")
-      return triage.start(requireClient(), ref, key, head, base);
-    if (method === "groupPaths")
-      return triage.groupPaths(
-        requireClient(),
-        ref,
-        key,
-        head,
-        base,
-        z.string().max(100).parse(args[3]),
-      );
-    const state = await triage.state(key, `${base}:${head}`);
-    if (
-      state?.status === "scanning" ||
-      state?.status === "classifying" ||
-      state?.status === "matching"
-    )
-      triage.cancel();
-    return;
+      base = shaSchema.parse(args[2]);
+    return { ref, head, base, key: prKey(ref) };
   }
 
   return {
@@ -136,21 +113,46 @@ export function reviewHandlers(ctx: ApiContext) {
         z.boolean().parse(args[2]),
       );
     },
-    reply: (args) => {
+    reply: async (args) => {
       const r = refSchema.parse(args[0]);
-      return requireClient().reply(
+      await requireClient().reply(
         r,
         z.number().int().positive().parse(args[1]),
         bodySchema.parse(args[2]),
       );
     },
-    comment: (args) => {
+    comment: async (args) => {
       const r = refSchema.parse(args[0]);
-      return requireClient().comment(r, bodySchema.parse(args[1]));
+      await requireClient().comment(r, bodySchema.parse(args[1]));
     },
-    triageState: triageCall,
-    startTriage: triageCall,
-    cancelTriage: triageCall,
-    groupPaths: triageCall,
+    triageState: (args) => {
+      const { head, base, key } = triageOf(args);
+      return triage.state(key, `${base}:${head}`);
+    },
+    startTriage: (args) => {
+      const { ref, head, base, key } = triageOf(args);
+      return triage.start(requireClient(), ref, key, head, base);
+    },
+    groupPaths: (args) => {
+      const { ref, head, base, key } = triageOf(args);
+      return triage.groupPaths(
+        requireClient(),
+        ref,
+        key,
+        head,
+        base,
+        z.string().max(100).parse(args[3]),
+      );
+    },
+    cancelTriage: async (args) => {
+      const { head, base, key } = triageOf(args);
+      const state = await triage.state(key, `${base}:${head}`);
+      if (
+        state?.status === "scanning" ||
+        state?.status === "classifying" ||
+        state?.status === "matching"
+      )
+        triage.cancel();
+    },
   } satisfies Handlers;
 }

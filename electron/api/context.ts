@@ -2,7 +2,7 @@ import { z } from "zod";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import type { ChatSummary } from "../../shared/projects";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
-import type { ApiMethod, Repo } from "../../shared/types";
+import type { Api, ApiMethod, Repo } from "../../shared/types";
 import type { AgentUpdates } from "../agent-updates";
 import type { AppLinks } from "../app/links";
 import type { GiteaLogin } from "../app/login";
@@ -51,12 +51,15 @@ export interface Services {
   agentUpdates: AgentUpdates;
 }
 
+/** What a method's promise resolves to in the page. */
+export type Reply<M extends ApiMethod> = Awaited<ReturnType<Api[M]>>;
+
 /**
- * Handlers for some of the Api's methods. Grouped methods can share one
- * function that tells them apart by name.
+ * Handlers for some of the Api's methods, each answering with what the Api
+ * declares for it.
  */
 export type Handlers = {
-  [M in ApiMethod]?: (args: unknown[], method: M) => unknown;
+  [M in ApiMethod]?: (args: unknown[]) => Reply<M> | Promise<Reply<M>>;
 };
 
 export const pageSchema = z.number().int().min(1).max(100000);

@@ -10,7 +10,7 @@ import { projectNameSchema } from "../../shared/projects";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { idSchema } from "../../shared/rooms";
 import { isSourceControlOn } from "../../shared/source-control";
-import type { Api, Pull } from "../../shared/types";
+import type { Pull } from "../../shared/types";
 import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { imageMime } from "../../shared/project-files";
@@ -40,28 +40,12 @@ export function projectHandlers(ctx: ApiContext) {
     requireClient,
     place,
   } = ctx;
-  async function pullRequests(
-    args: unknown[],
-    method: "projectBranchPulls" | "projectPreparePull" | "projectCreatePull",
-  ) {
+  async function pullRequestPlace(where: unknown) {
     // A worktree thread's PR opens from its own branch.
-    const { root, projectId, chatId } = await place(args[0]);
+    const { root, projectId, chatId } = await place(where);
     const client = requireClient();
     const repo = await projects.linked(projectId, client);
-    if (method === "projectBranchPulls") return branchPulls(root, client, repo);
-    if (method === "projectPreparePull")
-      return pullRequestCreation.prepare(root, client, repo);
-    const created = await pullRequestCreation.create(
-      root,
-      client,
-      createPullRequestSchema.parse(args[1]),
-    );
-    if (chatId)
-      await projectChats.recordPull(chatId, {
-        number: created.pull.ref.number,
-        url: created.pull.url,
-      });
-    return created;
+    return { root, chatId, client, repo };
   }
   return {
     projectIcon: async (args) =>
@@ -215,10 +199,29 @@ export function projectHandlers(ctx: ApiContext) {
         isSourceControlOn(settings, kind),
       );
     },
-    projectBranchPulls: pullRequests,
-    projectPreparePull: pullRequests,
-    projectCreatePull: pullRequests,
-    projectPulls: async (args): ReturnType<Api["projectPulls"]> => {
+    projectBranchPulls: async (args) => {
+      const { root, client, repo } = await pullRequestPlace(args[0]);
+      return branchPulls(root, client, repo);
+    },
+    projectPreparePull: async (args) => {
+      const { root, client, repo } = await pullRequestPlace(args[0]);
+      return pullRequestCreation.prepare(root, client, repo);
+    },
+    projectCreatePull: async (args) => {
+      const { root, chatId, client } = await pullRequestPlace(args[0]);
+      const created = await pullRequestCreation.create(
+        root,
+        client,
+        createPullRequestSchema.parse(args[1]),
+      );
+      if (chatId)
+        await projectChats.recordPull(chatId, {
+          number: created.pull.ref.number,
+          url: created.pull.url,
+        });
+      return created;
+    },
+    projectPulls: async (args) => {
       const client = requireClient();
       const repo = await projects.linked(idSchema.parse(args[0]), client);
       const page = await client.page<Pull>(

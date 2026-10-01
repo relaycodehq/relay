@@ -35,32 +35,13 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
     requireFolder,
   } = ctx;
 
-  async function checkout(
-    args: unknown[],
-    method: "workingTree" | "workingDiff" | "gitAction",
-  ) {
-    const r = repoSchema.parse(args[0]);
-    const root = await validateRepo(
-      requireFolder(r),
-      requireClient().account.server,
-      r,
-    );
-    if (method === "workingTree") return workingTree(root);
-    if (method === "workingDiff")
-      return workingDiff(
-        root,
-        workingPathSchema.parse(args[1]),
-        z.enum(["staged", "unstaged"]).parse(args[2]),
-      );
-    return performGitAction(root, gitActionSchema.parse(args[1]), (file) =>
-      shell.trashItem(file),
-    );
+  async function checkoutRoot(where: unknown) {
+    const r = repoSchema.parse(where);
+    return validateRepo(requireFolder(r), requireClient().account.server, r);
   }
 
-  async function localFile(
-    args: unknown[],
-    method: "readLocalFile" | "saveLocalFile",
-  ) {
+  /** A file in the PR's checkout, which must be at the head the page shows. */
+  async function localFile(args: unknown[]) {
     const r = refSchema.parse(args[0]);
     const dir = requireFolder(r);
     const head = shaSchema.parse(args[1]);
@@ -69,24 +50,23 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       throw new Error(
         "This PR has new commits. Refresh it and check out the new head before editing.",
       );
-    const server = requireClient().account.server;
-    if (method === "readLocalFile")
-      return readLocalFile(dir, server, r, head, path);
-    return saveLocalFile(
-      dir,
-      server,
-      r,
-      head,
-      path,
-      digestSchema.parse(args[3]),
-      textSchema.parse(args[4]),
-    );
+    return { r, dir, head, path, server: requireClient().account.server };
   }
 
   return {
-    workingTree: checkout,
-    workingDiff: checkout,
-    gitAction: checkout,
+    workingTree: async (args) => workingTree(await checkoutRoot(args[0])),
+    workingDiff: async (args) =>
+      workingDiff(
+        await checkoutRoot(args[0]),
+        workingPathSchema.parse(args[1]),
+        z.enum(["staged", "unstaged"]).parse(args[2]),
+      ),
+    gitAction: async (args) =>
+      performGitAction(
+        await checkoutRoot(args[0]),
+        gitActionSchema.parse(args[1]),
+        (file) => shell.trashItem(file),
+      ),
     folder: (args) => {
       const r = repoSchema.parse(args[0]),
         dir = linkedFolder(r);
@@ -114,8 +94,22 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       });
       return local;
     },
-    readLocalFile: localFile,
-    saveLocalFile: localFile,
+    readLocalFile: async (args) => {
+      const { r, dir, head, path, server } = await localFile(args);
+      return readLocalFile(dir, server, r, head, path);
+    },
+    saveLocalFile: async (args) => {
+      const { r, dir, head, path, server } = await localFile(args);
+      return saveLocalFile(
+        dir,
+        server,
+        r,
+        head,
+        path,
+        digestSchema.parse(args[3]),
+        textSchema.parse(args[4]),
+      );
+    },
     askAboutLines: async (args) => {
       const ref = refSchema.parse(args[0]),
         question = lineQuestionSchema.parse(args[1]);

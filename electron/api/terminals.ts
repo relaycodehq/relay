@@ -18,12 +18,9 @@ const terminalSizeSchema = z.object({
 /** A thread's shell, and the project's long-running tasks. */
 export function terminalHandlers(ctx: ApiContext) {
   const { projects, projectChats } = ctx;
-  async function changeTask(
-    args: unknown[],
-    method: "stopProjectTask" | "restartProjectTask",
-  ) {
+  async function changeTask(args: unknown[], change: "stop" | "restart") {
     const id = idSchema.parse(args[0]);
-    return projectTasks[method === "stopProjectTask" ? "stop" : "restart"](
+    return projectTasks[change](
       await projects.taskFolder(id),
       z.string().max(64).parse(args[1]),
       projectChats.worktreeFolders(id),
@@ -37,8 +34,8 @@ export function terminalHandlers(ctx: ApiContext) {
         projectChats.worktreeFolders(id),
       );
     },
-    stopProjectTask: changeTask,
-    restartProjectTask: changeTask,
+    stopProjectTask: (args) => changeTask(args, "stop"),
+    restartProjectTask: (args) => changeTask(args, "restart"),
     openTerminal: async (args) => {
       const projectId = idSchema.parse(args[0]);
       const chatId = idSchema.nullable().parse(args[1]);

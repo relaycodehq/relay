@@ -41,11 +41,8 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     // Own keys only: names the renderer made up, "toString" among them, stay unknown.
     if (!Object.hasOwn(handlers, method))
       throw new Error(`Unknown application method: ${String(method)}.`);
-    const handler = handlers[method] as (
-      args: unknown[],
-      method: ApiMethod,
-    ) => unknown;
-    return handler(args, method);
+    const handler = handlers[method] as (args: unknown[]) => unknown;
+    return handler(args);
   };
 }
 
