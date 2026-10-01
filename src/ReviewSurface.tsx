@@ -43,7 +43,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "./lib/api";
-import { matches } from "./lib/shortcuts";
+import { useShortcut } from "./lib/shortcuts";
 import { linksTo, type ProjectFileLink } from "../shared/project-file-links";
 import type {
   Account,
@@ -672,23 +672,9 @@ export function Connected({
     const url = incomingLink?.url ?? pendingUrl;
     if (url) void openUrl(url);
   }, [pendingUrl, incomingLink]);
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
-      // A thread's review stays on its own PR.
-      if (!embedded && matches("pr-open", e)) {
-        e.preventDefault();
-        setUrlOpen((v) => !v);
-      }
-      if (e.repeat) return;
-      if (matches("review-files", e)) {
-        e.preventDefault();
-        setFilesHidden((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  // A thread's review stays on its own PR.
+  useShortcut("pr-open", !embedded, () => setUrlOpen((v) => !v));
+  useShortcut("review-files", true, () => setFilesHidden((v) => !v));
   const refresh = async () => {
     navigation.current++;
     await Promise.all([

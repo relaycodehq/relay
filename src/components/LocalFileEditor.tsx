@@ -355,17 +355,21 @@ export default function LocalFileEditor({
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, []);
   const saveKeys = useShortcutLabel("save");
+  const saveNow = useRef(save);
+  saveNow.current = save;
+  // Not useShortcut: saving works while typing, inside the editor's own
+  // dialog, and before anything else hears the keys.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (matches("save", event)) {
         event.preventDefault();
         event.stopPropagation();
-        void save();
+        void saveNow.current();
       }
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  });
+  }, []);
   const large = (source?.contents.split("\n").length ?? 0) > 5000;
   return (
     <EditorFrame

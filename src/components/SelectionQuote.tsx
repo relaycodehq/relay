@@ -3,7 +3,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { TextQuote } from "lucide-react";
 import { selectionQuote } from "../lib/composer-quotes";
-import { ariaShortcut, matches, useShortcutLabel } from "../lib/shortcuts";
+import { ariaShortcut, useShortcut, useShortcutLabel } from "../lib/shortcuts";
 
 interface Offer {
   text: string;
@@ -97,17 +97,7 @@ export function SelectionQuote({
     document.getSelection()?.removeAllRanges();
     onQuote(text);
   };
-  useEffect(() => {
-    if (!offer) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (matches("quote", event)) {
-        event.preventDefault();
-        quote(offer.text);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  });
+  useShortcut("quote", !!offer, () => offer && quote(offer.text));
   if (!offer) return null;
   const above = offer.top > 96;
   const keep = (event: { preventDefault: () => void }) =>

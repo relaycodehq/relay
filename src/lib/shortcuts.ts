@@ -219,32 +219,38 @@ export function isTypingTarget(e: Event) {
   );
 }
 
+/** Modal `<dialog>`s have no role attribute; popovers and menus do. */
+export const POPUPS = 'dialog[open], [role="dialog"], [role="menu"]';
+
+/** A dialog, popover or menu is open, and the keyboard is its. */
+export const popupOpen = () => !!document.querySelector(POPUPS);
+
 /**
  * Calls `onFire` when `id`'s keys are pressed anywhere in the window, except
- * while a dialog or menu is open.
+ * while a popup is open or an IME is composing. A plain-key (`bare`) command
+ * only listens outside text fields. Held keys repeat only with `repeat`.
  */
 export function useShortcut(
   id: ShortcutId,
   enabled: boolean,
   onFire: () => void,
+  { repeat = false }: { repeat?: boolean } = {},
 ) {
   const fire = useRef(onFire);
   fire.current = onFire;
   useEffect(() => {
     if (!enabled) return;
+    const bare = !!command(id).bare;
     const down = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.repeat || e.isComposing) return;
+      if (e.defaultPrevented || e.isComposing || (e.repeat && !repeat)) return;
       if (!matches(id, e)) return;
-      if (
-        document.querySelector('dialog[open], [role="dialog"], [role="menu"]')
-      )
-        return;
+      if ((bare && isTypingTarget(e)) || popupOpen()) return;
       e.preventDefault();
       fire.current();
     };
     window.addEventListener("keydown", down);
     return () => window.removeEventListener("keydown", down);
-  }, [id, enabled]);
+  }, [id, enabled, repeat]);
 }
 
 /** Esc Esc and the like, which only a dedicated handler can tell apart. */

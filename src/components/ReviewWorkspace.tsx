@@ -63,7 +63,7 @@ import {
 } from "../lib/conversation-timeline";
 import { useTypography } from "../lib/typography";
 import { persistedStore } from "../lib/persisted-store";
-import { isTypingTarget, matches } from "../lib/shortcuts";
+import { useShortcut } from "../lib/shortcuts";
 import { createPortal } from "react-dom";
 import type { PaneSlots } from "./WorkspacePanes";
 
@@ -221,31 +221,10 @@ export function ReviewWorkspace({
       onSelectFile(next.filename);
     }
   };
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (
-        tab !== "files" ||
-        e.defaultPrevented ||
-        isTypingTarget(e) ||
-        document.querySelector("dialog[open]")
-      )
-        return;
-      if (matches("review-read", e)) {
-        e.preventDefault();
-        if (!e.repeat) toggleRead();
-      }
-      if (matches("review-next", e)) {
-        e.preventDefault();
-        move(1);
-      }
-      if (matches("review-prev", e)) {
-        e.preventDefault();
-        move(-1);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  });
+  const onFiles = tab === "files";
+  useShortcut("review-read", onFiles, toggleRead);
+  useShortcut("review-next", onFiles, () => move(1), { repeat: true });
+  useShortcut("review-prev", onFiles, () => move(-1), { repeat: true });
   const read = !!file && progress.read[file.filename] === revision;
   const readCount = files.filter(
     (f) => progress.read[f.filename] === revision,

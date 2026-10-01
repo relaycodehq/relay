@@ -17,9 +17,7 @@ import {
 import { AgentTurn } from "./AgentTurn";
 import { RichText } from "./ui";
 import { SubagentStatus, agentKind } from "./Subagents";
-
-// Escape here belongs to a popup open over the run, like an image preview.
-const POPUP = 'dialog[open], [role="dialog"], [role="menu"]';
+import { POPUPS } from "../lib/shortcuts";
 
 export function SubagentThread({
   chatId,
@@ -60,7 +58,8 @@ export function SubagentThread({
     // Escape toward stopping the turn.
     const key = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      const popups = [...document.querySelectorAll(POPUP)];
+      // Escape then belongs to a popup open over the run, like an image preview.
+      const popups = [...document.querySelectorAll(POPUPS)];
       if (popups.some((popup) => popup !== self.current)) return;
       event.preventDefault();
       close.current();

@@ -34,7 +34,7 @@ import {
   usePullSearch,
   type PullState,
 } from "../lib/usePullBoard";
-import { matches, useShortcutLabel } from "../lib/shortcuts";
+import { useShortcut, useShortcutLabel } from "../lib/shortcuts";
 import {
   NeedsTile,
   ProjectCard,
@@ -136,18 +136,10 @@ export function PullRequestsPage({
     return () => clearTimeout(t);
   }, [typed]);
   const searchRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
-      if (matches("pr-search", e)) {
-        e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useShortcut("pr-search", true, () => {
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  });
   const searchKeys = useShortcutLabel("pr-search");
   const openKeys = useShortcutLabel("pr-open");
   const context: PullContext = { verdicts, started, onOpen };

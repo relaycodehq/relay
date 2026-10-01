@@ -22,7 +22,7 @@ import {
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { matches, useShortcutLabel } from "../lib/shortcuts";
+import { popupOpen, useShortcut, useShortcutLabel } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -213,9 +213,7 @@ export default function ProjectShell() {
     setPeek(false);
     (besidePane ? setHiddenBesidePane : setHiddenAlone)(!projectsHidden);
   };
-  // ⌘B's listener outlives renders; this keeps it toggling the current state.
-  const toggleProjectsRef = useRef(toggleProjects);
-  toggleProjectsRef.current = toggleProjects;
+  useShortcut("sidebar", true, toggleProjects);
   useEffect(() => {
     localStorage.setItem("relay-projects-hidden", String(hiddenAlone));
   }, [hiddenAlone]);
@@ -252,7 +250,7 @@ export default function ProjectShell() {
       if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
         return cancel();
       timer ??= window.setTimeout(() => {
-        if (document.querySelector('dialog[open], [role="dialog"]')) return;
+        if (popupOpen()) return;
         peekFromEdge.current = true;
         setPeek(true);
       }, 150);
@@ -341,10 +339,9 @@ export default function ProjectShell() {
       terminalFor(project.id, chat?.id ?? null).focusOnShow = true;
     setTerminalOpen(shellKey, !terminalOpen);
   }
-  const toggleTerminalRef = useRef(toggleTerminal);
+  useShortcut("terminal", true, toggleTerminal);
   const sidebarKeys = useShortcutLabel("sidebar");
   const terminalKeys = useShortcutLabel("terminal");
-  toggleTerminalRef.current = toggleTerminal;
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
   // Git and file panes follow the thread: its worktree once it has one.
   const inWorktree =
@@ -426,48 +423,9 @@ export default function ProjectShell() {
   useEffect(() => {
     if (boot.data?.pendingUrl) openUrl(boot.data.pendingUrl);
   }, [boot.data?.pendingUrl]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.isComposing && matches("terminal", e)) {
-        e.preventDefault();
-        toggleTerminalRef.current();
-      }
-      if (
-        matches("sidebar", e) &&
-        !e.repeat &&
-        !document.querySelector('dialog[open], [role="dialog"]')
-      ) {
-        e.preventDefault();
-        toggleProjectsRef.current();
-      }
-      if (matches("settings", e)) {
-        e.preventDefault();
-        setSettings(true);
-      }
-      if (
-        matches("new-thread", e) &&
-        !e.isComposing &&
-        project &&
-        !legacy &&
-        !error &&
-        // Modal <dialog>s have no role attribute; popovers do.
-        !document.querySelector('dialog[open], [role="dialog"]')
-      ) {
-        e.preventDefault();
-        pickNewThread();
-      }
-      if (
-        matches("new-scratch", e) &&
-        !e.isComposing &&
-        !document.querySelector('dialog[open], [role="dialog"]')
-      ) {
-        e.preventDefault();
-        void newScratch();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [project?.id, projects.data, legacy, error]);
+  useShortcut("settings", true, () => setSettings(true));
+  useShortcut("new-thread", !!project && !legacy && !error, pickNewThread);
+  useShortcut("new-scratch", true, () => void newScratch());
   async function add() {
     if (lock.blocked()) return;
     try {

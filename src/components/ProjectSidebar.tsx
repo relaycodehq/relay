@@ -56,9 +56,9 @@ import { mac } from "../lib/mod-key";
 import {
   digitOf,
   holdsModifiersOf,
-  matches as pressed,
   modifiersLabel,
   useBindings,
+  useShortcut,
   useShortcutLabel,
 } from "../lib/shortcuts";
 import { modifierCode } from "../../shared/shortcuts";
@@ -650,16 +650,9 @@ export function ProjectSidebar({
       },
     ],
   });
-  useEffect(() => {
-    const toggle = (e: KeyboardEvent) => {
-      if (pressed("activity", e)) {
-        e.preventDefault();
-        setView((v) => (v === "activity" ? "threads" : "activity"));
-      }
-    };
-    window.addEventListener("keydown", toggle);
-    return () => window.removeEventListener("keydown", toggle);
-  }, []);
+  useShortcut("activity", true, () =>
+    setView((v) => (v === "activity" ? "threads" : "activity")),
+  );
   /**
    * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
    * first nine cards (or whichever modifiers open them). ⌘ used as part of
@@ -673,6 +666,7 @@ export function ProjectSidebar({
   const activityKeys = useShortcutLabel("activity");
   const jumpTo = useRef<(index: number) => boolean>(() => false);
   const settleOpen = useRef<() => boolean>(() => false);
+  useShortcut("settle", true, () => settleOpen.current());
   useEffect(() => {
     let reveal: number | undefined;
     const cancel = () => {
@@ -697,14 +691,6 @@ export function ProjectSidebar({
         reveal = window.setTimeout(() => setCmdHeld(true), CMD_HINT_DELAY_MS);
       const digit = digitOf("jump-thread", e);
       if (digit && jumpTo.current(digit - 1)) e.preventDefault();
-      if (
-        pressed("settle", e) &&
-        !e.repeat &&
-        !e.isComposing &&
-        !document.querySelector('dialog[open], [role="dialog"]') &&
-        settleOpen.current()
-      )
-        e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
       if (!holdsModifiersOf("jump-thread", e)) release();

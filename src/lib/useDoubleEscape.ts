@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { isTypingTarget } from "./shortcuts";
+import { isTypingTarget, popupOpen } from "./shortcuts";
 
 /** How long the first Escape stays armed, waiting for the second. */
 const DOUBLE_ESCAPE_MS = 1500;
-
-// Escape pressed here belongs to them: open popups and dialogs close, and
-// other fields (search, rename, terminal, editor) cancel their own thing.
-const POPUP = 'dialog[open], [role="dialog"], [role="menu"]';
 
 function inside(event: KeyboardEvent, selector: string) {
   return event.target instanceof Element && !!event.target.closest(selector);
@@ -53,7 +49,9 @@ export function useDoubleEscape(
         !event.ctrlKey &&
         !event.altKey &&
         !event.shiftKey &&
-        !document.querySelector(POPUP) &&
+        // Escape there belongs to them: open popups and dialogs close, and
+        // other fields (search, rename, terminal, editor) cancel their own thing.
+        !popupOpen() &&
         (scoped || !isTypingTarget(event));
       if (event.key !== "Escape" && armedNow) arm(false);
     };
