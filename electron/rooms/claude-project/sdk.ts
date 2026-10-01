@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { readFile } from "node:fs/promises";
 import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../../executables";
 import { claudeDefaultsFrom } from "../../../shared/agent-defaults";
 import { AsyncQueue } from "../../async-queue";
+import type { AgentOptions } from "../../agents/types";
 
 export async function sdk(): Promise<
   typeof import("@anthropic-ai/claude-agent-sdk")
@@ -56,3 +58,15 @@ export async function withProbe<T>(
     stream.close();
   }
 }
+/** A prompt's screenshots, as the image blocks of a user message. */
+export const claudeImages = (images: AgentOptions["images"]) =>
+  Promise.all(
+    (images ?? []).map(async (image) => ({
+      type: "image" as const,
+      source: {
+        type: "base64" as const,
+        media_type: image.mimeType,
+        data: (await readFile(image.path)).toString("base64"),
+      },
+    })),
+  );

@@ -1,13 +1,12 @@
-import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { findExecutable } from "../../executables";
-import type { AgentOptions } from "../../agents/types";
 import {
   sessionConfig,
   sessionSignature,
   type ClaudeRunOptions,
 } from "./config";
 import { ClaudeTurnReader } from "./reader";
+import { claudeImages } from "./sdk";
 import {
   closeSession,
   newSession,
@@ -88,18 +87,7 @@ export async function runClaudeProject(
     if (options.adopt) session.hosted?.mark("start", turn.from);
     session.plan = "";
     session.busy = true;
-    const imageBlocks = (images: AgentOptions["images"]) =>
-      Promise.all(
-        (images ?? []).map(async (image) => ({
-          type: "image" as const,
-          source: {
-            type: "base64" as const,
-            media_type: image.mimeType,
-            data: (await readFile(image.path)).toString("base64"),
-          },
-        })),
-      );
-    const images = await imageBlocks(options.images);
+    const images = await claudeImages(options.images);
     options.signal.throwIfAborted();
     if (options.compact && !session.threadId && !options.session?.id)
       throw new Error("There is no Claude session to compact yet.");
@@ -136,7 +124,7 @@ export async function runClaudeProject(
             throw new Error(
               "This turn has finished. Send the queued message as a new turn.",
             );
-          const attached = await imageBlocks(steerImages);
+          const attached = await claudeImages(steerImages);
           const uuid = randomUUID();
           reader.track(uuid, id);
           // "next" folds the message into the running turn at its next step.
