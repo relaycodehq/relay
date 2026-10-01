@@ -214,6 +214,15 @@ type ClaudeSession = {
   agents: SubagentTracker;
 };
 const sessions = new Map<string, ClaudeSession>();
+const pendingListeners = new Set<() => void>();
+/** Hears when any session's background work or wake-ups may have changed. */
+export function onClaudePending(listener: () => void) {
+  pendingListeners.add(listener);
+  return () => void pendingListeners.delete(listener);
+}
+const pendingChanged = () => {
+  for (const listener of pendingListeners) listener();
+};
 function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();
@@ -294,6 +303,7 @@ async function pump(
   } finally {
     session.agents.close();
     session.frames.end(failure);
+    pendingChanged();
   }
 }
 function restore(session: ClaudeSession, message: SDKMessage) {
@@ -369,6 +379,7 @@ function trackTasks(
         since: previous.get(task.task_id)?.since ?? Date.now(),
         ...(agentTask(task.task_type) && { agent: true }),
       });
+  pendingChanged();
 }
 const agentTask = (type?: string) =>
   type === "local_agent" || type === "local_workflow";
@@ -392,6 +403,7 @@ function scheduled(session: ClaudeSession, input: unknown) {
     recurring: cron.recurring,
     ...(cron.recurring ? {} : { at: wakeupTime(cron.schedule) }),
   }));
+  pendingChanged();
 }
 /** When a one-shot wake-up fires: its cron pins minute, hour, day and month, in local time. */
 export function wakeupTime(schedule: string, now = Date.now()) {

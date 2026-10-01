@@ -8,6 +8,7 @@ import { Projects } from "../../electron/projects";
 import { ProjectChats } from "../../electron/project-chats";
 import { RemoteBridge, type RemoteHost } from "../../electron/remote/bridge";
 import { chatHandlers } from "../../electron/api/chats";
+import { reviewHandlers } from "../../electron/api/reviews";
 import { apiContext } from "../../electron/api/context";
 import type { RemoteEvent } from "../../shared/remote";
 vi.mock("electron", () => ({ shell: {} }));
@@ -36,13 +37,14 @@ it("lists a PR thread whose review is under way on the phone as on the desktop",
     projectChats: chats,
     login,
   } as unknown as Parameters<typeof apiContext>[0]);
-  await store.update((s) => {
-    s.progress[api.prKey(ref)] = {
-      read: { "src/a.ts": "abc" },
-      drafts: [],
-      marks: [],
-    };
-  });
+  const heard: string[] = [];
+  chats.onSummaries((id) => heard.push(id));
+  await reviewHandlers(api).saveProgress([
+    ref,
+    { read: { "src/a.ts": "abc" }, drafts: [], marks: [] },
+  ]);
+  // Nothing in the thread changed, so the sidebar hears it from the review.
+  expect(heard).toEqual([projectId]);
 
   const desktop = chatHandlers(api).projectChats([projectId]);
 

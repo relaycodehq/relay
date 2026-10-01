@@ -27,6 +27,7 @@ import { registerAppImage } from "./linux-desktop-entry";
 import { linuxPasswordStore } from "./linux-password-store";
 import { LiveSyncs } from "./live-sync";
 import { ProjectChats } from "./project-chats";
+import { ChatSummaryFeed } from "./chat-summaries";
 import { ProjectSharing } from "./project-sharing";
 import { Projects } from "./projects";
 import { PullRequestCreation } from "./pull-request-create";
@@ -225,7 +226,6 @@ app
       (event) => {
         window.send("relay:project-chat", event);
         phoneRemote?.chatEvent(event);
-        menubar.refresh();
       },
       new ProjectSharing(projects, roomService, () => login.require()),
       async (chat, selection) => {
@@ -295,6 +295,15 @@ app
       agentUpdates,
     });
     const dispatch: Dispatch = createDispatch(api);
+    const summaries = new ChatSummaryFeed(api.listChats, (event) => {
+      window.send("relay:project-chats", event);
+    });
+    chats.onSummaries((projectId) => {
+      summaries.changed(projectId);
+      menubar.refresh();
+    });
+    // Whether a PR thread's review began reads with the account.
+    login.changed = () => chats.summariesChanged();
     const handoffDir = join(app.getPath("userData"), "handoffs");
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {

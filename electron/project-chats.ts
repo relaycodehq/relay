@@ -11,6 +11,7 @@ import {
   claudeAgentRun,
   claudeAgents,
   claudePending,
+  onClaudePending,
   stopClaudeAgent,
   stopClaudeTask,
 } from "./rooms/claude-project";
@@ -107,7 +108,10 @@ import type {
 import { codexQuestionChoice } from "../shared/settings";
 import { resolveTurnModel } from "../shared/turn-model";
 /** A turn that's about to run, with the means to stop it and answer its requests. */
-function newActive(input: ProjectChatSend): ActiveChat {
+function newActive(
+  input: ProjectChatSend,
+  requestsChanged: () => void,
+): ActiveChat {
   const abort = new AbortController();
   let end!: () => void;
   const ended = new Promise<void>((resolve) => (end = resolve));
@@ -115,7 +119,7 @@ function newActive(input: ProjectChatSend): ActiveChat {
     started: Date.now(),
     abort,
     input,
-    requests: new AgentRequests(abort.signal),
+    requests: new AgentRequests(abort.signal, requestsChanged),
     ended,
     end,
   };
@@ -251,6 +255,12 @@ export class ProjectChats {
     return job;
   }
   private disposing = false;
+  private summaryListeners = new Set<(projectId: string) => void>();
+  /** Claude's background work and wake-ups show in its threads' summaries. */
+  private unhearPending = onClaudePending(() => {
+    for (const key of this.providerSessions)
+      this.chatChanged(parseSessionKey(key).chatId);
+  });
   /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
   private timers = new Map<string, NodeJS.Timeout>();
   private cache = new Map<string, ProjectChat>();
@@ -298,8 +308,9 @@ export class ProjectChats {
   private claim(id: string, input: ProjectChatSend) {
     if (this.active.has(id))
       throw new Error("This chat already has a running answer.");
-    const active = newActive(input);
+    const active = newActive(input, () => this.chatChanged(id));
     this.active.set(id, active);
+    this.chatChanged(id);
     return active;
   }
   /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
@@ -307,6 +318,7 @@ export class ProjectChats {
     active.requests.close();
     if (this.active.get(id) === active) this.active.delete(id);
     active.end();
+    this.chatChanged(id);
   }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
@@ -335,6 +347,7 @@ export class ProjectChats {
         this.providerSessions.delete(key);
         for (const runtime of Object.values(agentRuntimes))
           void runtime.closeSession(key).catch(() => {});
+        this.chatChanged(id);
       }
   }
   /** Saves the chat and tells the renderer this message, and what hangs off it, changed. */
@@ -387,6 +400,29 @@ export class ProjectChats {
       selection: LineQuestion,
     ) => Promise<unknown>,
   ) {}
+  /**
+   * Hears which project's thread list may read differently: a summary saved,
+   * a turn claimed or released, a request asked or answered, or Claude's
+   * background work moving. Returns the way to stop listening.
+   */
+  onSummaries(listener: (projectId: string) => void) {
+    this.summaryListeners.add(listener);
+    return () => void this.summaryListeners.delete(listener);
+  }
+  /** Says a project's list may read differently; every project's, given none. */
+  summariesChanged(projectId?: string) {
+    const ids = projectId
+      ? [projectId]
+      : new Set((this.store.get().chats ?? []).map((c) => c.projectId));
+    for (const id of ids)
+      for (const listener of this.summaryListeners) listener(id);
+  }
+  private chatChanged(id: string) {
+    const projectId =
+      this.cache.get(id)?.projectId ??
+      this.store.get().chats?.find((c) => c.id === id)?.projectId;
+    if (projectId) this.summariesChanged(projectId);
+  }
   list(projectId: string): ChatSummary[] {
     this.projects.get(projectId);
     const chats = (this.store.get().chats ?? []).filter(
@@ -399,7 +435,7 @@ export class ProjectChats {
       const active = parent && this.active.get(c.id);
       if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
     }
-    // Once for the list: the sidebar asks every few seconds.
+    // Once for the list: it is read on every change to any of its threads.
     const live = this.pending();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
@@ -754,9 +790,7 @@ export class ProjectChats {
       messages: [],
     };
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     this.cache.set(chat.id, chat);
     return this.summary(chat);
   }
@@ -812,9 +846,7 @@ export class ProjectChats {
         );
     }
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     this.cache.set(chat.id, chat);
     return this.summary(chat);
   }
@@ -997,9 +1029,7 @@ export class ProjectChats {
       },
     };
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     this.cache.set(chat.id, chat);
     const { provider, ...settings } = thread.settings;
     void this.send(chat.id, {
@@ -1135,9 +1165,7 @@ export class ProjectChats {
       messages: [],
     };
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     this.cache.set(chat.id, chat);
     return chat;
   }
@@ -1156,9 +1184,7 @@ export class ProjectChats {
       messages: [],
     };
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     this.cache.set(chat.id, chat);
     return chat;
   }
@@ -2053,9 +2079,12 @@ export class ProjectChats {
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
     const idle = !this.active.has(chat.id);
-    const active = newActive(input);
+    const active = newActive(input, () => this.chatChanged(chat.id));
     const { abort } = active;
-    if (idle) this.active.set(chat.id, active);
+    if (idle) {
+      this.active.set(chat.id, active);
+      this.chatChanged(chat.id);
+    }
     const message: ChatMessage =
       resumed ??
       streamingAnswer(provider, {
@@ -2166,6 +2195,7 @@ export class ProjectChats {
     } catch (e) {
       this.resuming.delete(key);
       this.providerSessions.delete(key);
+      this.chatChanged(chatId);
       await agentRuntime(provider)
         .closeSession(key)
         .catch(() => {});
@@ -3048,6 +3078,13 @@ export class ProjectChats {
       if (index >= 0) s.chats![index] = this.summary(chat);
       else s.chats!.push(this.summary(chat));
     });
+    this.summariesChanged(chat.projectId);
+  }
+  private async addSummary(chat: ProjectChat) {
+    await this.store.update((s) => {
+      (s.chats ??= []).push(this.summary(chat));
+    });
+    this.summariesChanged(chat.projectId);
   }
   private async deliver(chat: ProjectChat) {
     const pending = chat.messages.filter(
@@ -3199,9 +3236,7 @@ export class ProjectChats {
     const chat: ProjectChat = { ...metadata, messages: [] };
     this.cache.set(chat.id, chat);
     await this.save(chat);
-    await this.store.update((s) => {
-      (s.chats ??= []).push(this.summary(chat));
-    });
+    await this.addSummary(chat);
     await this.sync(chat.id);
     return this.summary(chat);
   }
@@ -3231,6 +3266,7 @@ export class ProjectChats {
    * picked back up by `reattach`.
    */
   async dispose({ detach = false } = {}) {
+    this.unhearPending();
     if (detach) {
       this.disposing = true;
       for (const timer of this.timers.values()) clearTimeout(timer);

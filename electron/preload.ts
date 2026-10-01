@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { ApiMethod } from "../shared/types";
+import type { RelayEvents } from "../shared/events";
 const methods = [
   "localCheckInfo",
   "localCheckState",
@@ -282,10 +283,13 @@ const subscribe =
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   };
+const on = <C extends keyof RelayEvents>(channel: C) =>
+  subscribe<RelayEvents[C]>(channel);
 contextBridge.exposeInMainWorld("relay", {
   ...api,
   pathForFile: (file: File) => webUtils.getPathForFile(file),
-  onProjectChat: subscribe("relay:project-chat"),
+  onProjectChat: on("relay:project-chat"),
+  onProjectChats: on("relay:project-chats"),
   onUpdate: subscribe("relay:update"),
   onDictationState: subscribe("relay:dictation"),
   onAgentVersions: subscribe("relay:agent-updates"),

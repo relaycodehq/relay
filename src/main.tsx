@@ -13,6 +13,7 @@ import { initWindowFocus } from "./lib/window-focus";
 import { initFocusRing } from "./lib/focus-ring";
 import { initTypography } from "./lib/typography";
 import { initShortcuts } from "./lib/shortcuts";
+import { followChatEvents } from "./lib/chat-events";
 initAppearance();
 initTypography();
 initWindowFocus();
@@ -29,6 +30,7 @@ const client = new QueryClient({
     mutations: { retry: false },
   },
 });
+if (window.relay) followChatEvents(client);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* The preload bridge only exists in the desktop app; a browser tab on

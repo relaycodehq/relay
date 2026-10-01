@@ -15,7 +15,7 @@ type TriageMethod =
 
 /** Reviewing a Gitea pull request: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
-  const { store, triage, requireClient, prKey } = ctx;
+  const { store, triage, requireClient, prKey, projectChats } = ctx;
 
   async function triageCall(args: unknown[], method: TriageMethod) {
     const ref = refSchema.parse(args[0]),
@@ -115,6 +115,10 @@ export function reviewHandlers(ctx: ApiContext) {
       await store.update((s) => {
         s.progress[key] = progress;
       });
+      // An unused PR thread lists once its review begins; see listChats.
+      for (const c of store.get().chats ?? [])
+        if (c.scope.kind === "pr" && prKey(c.scope.ref) === key)
+          projectChats.summariesChanged(c.projectId);
     },
     submitReview: (args) =>
       requireClient().submit(

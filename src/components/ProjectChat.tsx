@@ -698,25 +698,14 @@ export function ProjectChat({
     },
     [chat?.id, chat?.shared?.roomId],
   );
+  // The history itself refetches through lib/chat-events.
   useEffect(
     () =>
       api.onProjectChat((e) => {
-        if (e.chatId === chat?.id) {
+        if (e.chatId === chat?.id)
           setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-          // The thread polls only while its history holds a streaming answer.
-          // One that shows up through an event alone, like the answer after a
-          // handoff note, would otherwise leave its approvals unfetched.
-          const known = qc
-            .getQueryData<ProjectChatData>(["project-chat", chat.id])
-            ?.messages.some((m) => m.id === e.message.id);
-          if (e.message.status !== "streaming" || !known) {
-            void qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
-            // What Claude left running rides on the summary.
-            void qc.invalidateQueries({ queryKey: ["project-chats"] });
-          }
-        }
       }),
-    [chat?.id, qc],
+    [chat?.id],
   );
   useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
   useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);

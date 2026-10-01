@@ -51,6 +51,7 @@ import { agentsSince } from "../../shared/waiting";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import { SnoozeMenu } from "./SnoozeMenu";
 import { api } from "../lib/api";
+import { SCRATCH_CHATS } from "../lib/chat-events";
 import { mac } from "../lib/mod-key";
 import {
   digitOf,
@@ -95,8 +96,6 @@ const SHELF_PAGE = 5;
 const CMD_HINT_DELAY_MS = 500;
 const PROJECT_DRAG = "application/x-relay-project";
 const GROUP_DRAG = "application/x-relay-group";
-/** Under "project-chats", so every refresh of the chat lists reaches it too. */
-const SCRATCH_CHATS = ["project-chats", "scratchpad"];
 
 type DropTarget =
   | { kind: "project"; id: string; where: "before" | "after" }
@@ -636,33 +635,20 @@ export function ProjectSidebar({
       ),
     };
   };
+  // Kept current by the desktop's pushes; see lib/chat-events.
   const lists = useQueries({
     queries: [
       ...realProjects.map((p) => ({
         queryKey: ["project-chats", p.id],
         queryFn: () => api.projectChats(p.id),
-        refetchInterval: 5000,
       })),
       // One list for every Scratchpad folder: there's one per chat.
       {
         queryKey: SCRATCH_CHATS,
         queryFn: () => api.scratchChats(),
-        refetchInterval: 5000,
       },
     ],
   });
-  useEffect(
-    () =>
-      api.onProjectChat((e) => {
-        if (
-          e.title ||
-          e.message.role === "user" ||
-          e.message.status !== "streaming"
-        )
-          void qc.invalidateQueries({ queryKey: ["project-chats"] });
-      }),
-    [qc],
-  );
   useEffect(() => {
     const toggle = (e: KeyboardEvent) => {
       if (pressed("activity", e)) {

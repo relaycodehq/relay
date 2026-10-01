@@ -18,7 +18,16 @@ export const unseal = async (value: string) =>
 
 /** The signed-in Gitea account, and bringing a saved one back from the Keychain. */
 export class GiteaLogin {
-  client: Gitea | null = null;
+  private current: Gitea | null = null;
+  /** Hears sign-ins and sign-outs, a restored account's too. */
+  changed?: () => void;
+  get client() {
+    return this.current;
+  }
+  set client(next: Gitea | null) {
+    this.current = next;
+    this.changed?.();
+  }
   restore: "idle" | "unlocking" | "failed" = "idle";
   private generation = 0;
 

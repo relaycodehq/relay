@@ -16,7 +16,11 @@ export class AgentRequests {
       reject: (error: Error) => void;
     }
   >();
-  constructor(private signal: AbortSignal) {}
+  /** `changed` hears each request asked, answered or dropped. */
+  constructor(
+    private signal: AbortSignal,
+    private changed: () => void = () => {},
+  ) {}
   list() {
     return structuredClone([...this.pending.values()].map((p) => p.request));
   }
@@ -31,7 +35,7 @@ export class AgentRequests {
     const id = randomUUID();
     return new Promise<AgentResponse>((resolve, reject) => {
       const clear = () => {
-        this.pending.delete(id);
+        if (this.pending.delete(id)) this.changed();
         signal.removeEventListener("abort", abort);
       };
       const abort = () => {
@@ -49,6 +53,7 @@ export class AgentRequests {
           reject(error);
         },
       });
+      this.changed();
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
     });

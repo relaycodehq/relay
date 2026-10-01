@@ -3,6 +3,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   claudePending,
   listClaudeModels,
+  onClaudePending,
   runClaudeProject,
   stopClaudeTask,
   wakeupTime,
@@ -251,10 +252,13 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
   await expect(stopClaudeTask(key, "later")).rejects.toThrow(
     "That work has already finished.",
   );
+  // Between turns too, so thread lists follow without asking.
+  const heard = vi.fn();
+  const unhear = onClaudePending(heard);
   finish();
-  await vi.waitFor(() =>
-    expect(claudePending(key).map((p) => p.id)).toEqual(["later"]),
-  );
+  await vi.waitFor(() => expect(heard).toHaveBeenCalled());
+  expect(claudePending(key).map((p) => p.id)).toEqual(["later"]);
+  unhear();
 });
 
 it("reads a one-shot wake-up's fire time from its cron", () => {

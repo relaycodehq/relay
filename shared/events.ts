@@ -1,0 +1,20 @@
+import type { ChatMessage, ChatSummary } from "./projects";
+
+/** A thread's message as it streams or changes; `title` once the thread is named. */
+export interface ProjectChatEvent {
+  chatId: string;
+  message: ChatMessage;
+  title?: string;
+}
+
+/** A project's thread list, as `projectChats` returns it, whenever it reads differently. */
+export interface ProjectChatsEvent {
+  projectId: string;
+  chats: ChatSummary[];
+}
+
+/** What the main process pushes to the window, by channel. */
+export interface RelayEvents {
+  "relay:project-chat": ProjectChatEvent;
+  "relay:project-chats": ProjectChatsEvent;
+}

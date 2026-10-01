@@ -16,7 +16,12 @@ import { Projects } from "../../electron/projects";
 import { ProjectChats } from "../../electron/project-chats";
 import { findExecutable } from "../../electron/executables";
 import { defaultAISettings } from "../../shared/settings";
-import { applyChatPatch, type ChatMessage } from "../../shared/projects";
+import {
+  applyChatPatch,
+  type ChatMessage,
+  type ChatSummary,
+} from "../../shared/projects";
+import { ChatSummaryFeed } from "../../electron/chat-summaries";
 import { fakeCli } from "../fixtures/fake-cli";
 vi.mock("../../electron/executables", async (actual) => ({
   ...(await actual<typeof import("../../electron/executables")>()),
@@ -2300,3 +2305,34 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
     "handed over from another computer",
   );
 }, 30000);
+
+it("pushes the thread list as a turn runs, waits and ends, and as it's triaged", async () => {
+  // As main.ts wires it, without waiting for more changes.
+  const pushed: ChatSummary[][] = [];
+  const feed = new ChatSummaryFeed(
+    (id) => chats.list(id),
+    (e) => pushed.push(e.chats),
+    0,
+  );
+  chats.onSummaries((id) => feed.changed(id));
+  const chat = await chats.create(projectId, { kind: "project" });
+  const latest = () => pushed.at(-1)?.find((c) => c.id === chat.id);
+  await chats.send(chat.id, input("@codex fixture request approval"));
+  await vi.waitFor(() => expect(latest()?.waiting).toBe(true));
+  expect(latest()?.running).toBe(true);
+  const [request] = (await chats.get(chat.id)).requests!;
+  chats.respond(chat.id, request!.id, { kind: "approval", decision: "accept" });
+  await vi.waitFor(() => expect(latest()?.waiting).toBe(false));
+  await vi.waitFor(() => expect(latest()?.running).toBeUndefined(), {
+    timeout: 6000,
+  });
+  const until = Date.now() + 60_000;
+  await chats.triage(chat.id, { kind: "snooze", until });
+  await vi.waitFor(() => expect(latest()?.snoozedUntil).toBe(until));
+  // What went out last is what the sidebar would have fetched.
+  feed.flush();
+  expect(pushed.at(-1)).toEqual(chats.list(projectId));
+  // Nothing goes out twice in a row.
+  const sent = pushed.map((list) => JSON.stringify(list));
+  expect(sent.filter((s, i) => s === sent[i - 1])).toEqual([]);
+}, 15000);

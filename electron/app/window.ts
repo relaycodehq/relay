@@ -9,6 +9,7 @@ import {
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { threadTerminals } from "../thread-terminals";
+import type { RelayEvents } from "../../shared/events";
 
 const root = join(__dirname, "../dist/index.html");
 const dev = process.env.RELAY_DEV_URL;
@@ -42,7 +43,11 @@ export class AppWindow {
 
   constructor(private hooks: { closed(): void; rendererGone(): void }) {}
 
-  send(channel: string, payload: unknown) {
+  /** Pushes to the renderer; channels in `RelayEvents` must carry their payload. */
+  send<C extends string>(
+    channel: C,
+    payload: C extends keyof RelayEvents ? RelayEvents[C] : unknown,
+  ) {
     if (this.win && !this.win.isDestroyed())
       this.win.webContents.send(channel, payload);
   }

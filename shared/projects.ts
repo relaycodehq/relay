@@ -11,6 +11,7 @@ import { idSchema } from "./rooms";
 import { aiSettingsSchema } from "./settings";
 import { refSchema, filePathSchema } from "./validation";
 import type { TurnModel } from "./turn-model";
+import type { ProjectChatEvent, ProjectChatsEvent } from "./events";
 import type { DirListing, FileInfo } from "./project-files";
 import type { FilePair, LocalFile, Page, ProjectPull, Repo } from "./types";
 import type { GitAction, WorkingTree, ChangeArea } from "./working-tree";
@@ -794,11 +795,7 @@ export interface ProjectApi {
     status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
   /** Recent commits on the checked-out branch, newest first. */
-  onProjectChat(
-    callback: (event: {
-      chatId: string;
-      message: ChatMessage;
-      title?: string;
-    }) => void,
-  ): () => void;
+  onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
+  /** A project's thread list, pushed whenever any of its threads reads differently. */
+  onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
 }

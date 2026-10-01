@@ -638,15 +638,14 @@ function useReviewerThread(chatId: string, live: boolean) {
         : false,
   });
   const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
+  // The history itself refetches through lib/chat-events.
   useEffect(
     () =>
       api.onProjectChat((e) => {
-        if (e.chatId !== chatId) return;
-        setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-        if (e.message.status !== "streaming")
-          void qc.invalidateQueries({ queryKey: ["project-chat", chatId] });
+        if (e.chatId === chatId)
+          setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
       }),
-    [chatId, qc],
+    [chatId],
   );
   return useMemo(() => {
     const byId = new Map((history.data?.messages ?? []).map((m) => [m.id, m]));
