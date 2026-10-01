@@ -25,6 +25,7 @@ import {
   unlinkCli,
 } from "../source-control";
 import { clis } from "../source-control/clis";
+import { azureDevOps } from "../source-control/azure-devops";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../release-notes";
@@ -33,7 +34,7 @@ import type { ApiContext, Handlers } from "./context";
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
-  const sourceControl = () => sourceControlStatus(store, ctx.login, devops);
+  const sourceControl = () => sourceControlStatus(store, ctx.login);
   const typedPath = (value: unknown) =>
     z.string().trim().min(1).max(4096).optional().parse(value);
   /** A program picked in a file dialog; null when cancelled. */
@@ -119,6 +120,7 @@ export function settingsHandlers(ctx: ApiContext) {
         z.boolean().optional().parse(args[1]),
       ),
     devopsStatus: () => devops.status(),
+    devopsConnection: () => azureDevOps(devops),
     saveDevOpsSettings: (args) =>
       devops.save(
         devopsSettingsSchema.parse(args[0]),
@@ -129,8 +131,10 @@ export function settingsHandlers(ctx: ApiContext) {
       return devops.workItems(
         id ? projects.get(id) : null,
         z.boolean().optional().parse(args[1]),
+        z.enum(["mine", "team"]).optional().parse(args[2]),
       );
     },
+    devopsFields: () => devops.fields(),
     gitInfo: () => gitInfo(),
     chooseGit: async (args) => {
       const typed = typedPath(args[0]);
@@ -182,7 +186,6 @@ export function settingsHandlers(ctx: ApiContext) {
     setSourceControlEnabled: async (args) => {
       await setSourceControlEnabled(
         store,
-        devops,
         z.enum(sourceControlKinds).parse(args[0]),
         z.boolean().parse(args[1]),
       );

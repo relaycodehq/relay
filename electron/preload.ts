@@ -189,6 +189,8 @@ const methods = [
   "devopsStatus",
   "saveDevOpsSettings",
   "devopsWorkItems",
+  "devopsConnection",
+  "devopsFields",
   "plugins",
   "setPluginEnabled",
   "clockifyStatus",

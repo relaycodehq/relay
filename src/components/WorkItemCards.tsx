@@ -20,8 +20,9 @@ import {
 import type { WorkItem } from "../../shared/devops";
 import type { Project } from "../../shared/projects";
 import { api } from "../lib/api";
-import { useDevOpsStatus } from "./DevOpsSettings";
+import { devopsKey, useDevOpsStatus } from "../lib/plugins";
 import { relativeDate } from "./ui";
+import { useStoredFlag } from "../lib/useStoredFlag";
 import "./work-items.css";
 
 /** Azure Boards colours by state name; unknown states stay neutral. */
@@ -105,7 +106,11 @@ export function WorkItemCards({
     qc = useQueryClient();
   const settings = status.data?.settings;
   const hidden = !!settings?.hiddenProjects.includes(project.id);
-  const enabled = !!settings?.enabled && !hidden;
+  const enabled = !!settings?.enabled && !!settings.organization && !hidden;
+  // The team's items once Settings names its members; kept per computer.
+  const hasTeam = !!settings?.team.members.length;
+  const [teamPicked, setTeamPicked] = useStoredFlag("relay-work-items-team");
+  const scope = hasTeam && teamPicked ? "team" : "mine";
   // Set once this card row hid the project, so the user can take it back.
   const [justHidden, setJustHidden] = useState(false);
   const [hideError, setHideError] = useState<string>();
@@ -121,7 +126,7 @@ export function WorkItemCards({
         },
         {},
       );
-      qc.setQueryData(["devops-status"], next);
+      qc.setQueryData(devopsKey, next);
       setJustHidden(hide);
     } catch (e) {
       setHideError(
@@ -130,8 +135,8 @@ export function WorkItemCards({
     }
   };
   const items = useQuery({
-    queryKey: ["devops-items", project.id],
-    queryFn: () => api.devopsWorkItems(project.id),
+    queryKey: ["devops-items", project.id, scope],
+    queryFn: () => api.devopsWorkItems(project.id, false, scope),
     enabled,
     staleTime: 2 * 60_000,
     retry: false,
@@ -197,10 +202,34 @@ export function WorkItemCards({
     });
 
   return (
-    <section className="work-items" aria-label="Your work items">
+    <section
+      className="work-items"
+      aria-label={scope === "team" ? "Team work items" : "Your work items"}
+    >
       <header className="work-items-header">
         <h2>
-          Your work items
+          {hasTeam ? (
+            <span
+              className="work-items-whose"
+              role="group"
+              aria-label="Whose work items"
+            >
+              <button
+                aria-pressed={scope === "mine"}
+                onClick={() => setTeamPicked(false)}
+              >
+                Your work items
+              </button>
+              <button
+                aria-pressed={scope === "team"}
+                onClick={() => setTeamPicked(true)}
+              >
+                Team
+              </button>
+            </span>
+          ) : (
+            "Your work items"
+          )}
           {data && <small>{pool.length}</small>}
         </h2>
         {matched && (
@@ -270,7 +299,7 @@ export function WorkItemCards({
               setRefreshing(true);
               // Bypass the main process cache, then pick up its fresh answer.
               void api
-                .devopsWorkItems(project.id, true)
+                .devopsWorkItems(project.id, true, scope)
                 .then(() => items.refetch())
                 .catch(() => items.refetch())
                 .finally(() => setRefreshing(false));
@@ -342,6 +371,11 @@ export function WorkItemCards({
                       <span className="work-item-meta">
                         <TypeIcon type={w.type} />
                         <span className="work-item-id">#{w.id}</span>
+                        {scope === "team" && w.assignedTo && (
+                          <span className="work-item-assignee">
+                            {w.assignedTo}
+                          </span>
+                        )}
                         {w.changed && (
                           <time dateTime={w.changed}>
                             {relativeDate(w.changed)}

@@ -1,10 +1,16 @@
 import { useState, type ComponentType, type ReactNode } from "react";
-import { ChevronRight, Timer, type LucideIcon } from "lucide-react";
+import {
+  ChevronRight,
+  SquareKanban,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import { plugins, type PluginId } from "../../../shared/plugins";
 import { usePluginEnabled, useSetPluginEnabled } from "../../lib/plugins";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { Switch } from "../SettingsCard";
 import { ClockifySettings, ClockifySummary } from "./ClockifySettings";
+import { DevOpsSettings, DevOpsSummary } from "./DevOpsSettings";
 import { PluginSavedContext, PluginStatus } from "./plugin-ui";
 import "./plugins.css";
 
@@ -18,6 +24,7 @@ const ui: Record<
   }
 > = {
   clockify: { icon: Timer, Panel: ClockifySettings, Summary: ClockifySummary },
+  devops: { icon: SquareKanban, Panel: DevOpsSettings, Summary: DevOpsSummary },
 };
 
 /**

@@ -1057,9 +1057,9 @@ export function Settings({
       category: "integrations",
       title: "Source control",
       description:
-        "CI and pull requests from GitHub and Gitea, work items from Azure DevOps. Relay uses the CLIs and accounts on this computer.",
+        "CI and pull requests from GitHub and Gitea. Relay uses the CLIs and accounts on this computer.",
       keywords:
-        "github gitea forgejo azure devops az boards work items tasks bugs tickets token pat jev openrouter filter projects hints hide gh tea cli ci actions pull request host sign in login link path",
+        "github gitea forgejo gh tea cli ci actions pull request host sign in login link path token",
       block: true,
       accessory: () => <SourceControlRescan />,
       render: () => <SourceControlSettings onConnect={onConnect} />,

@@ -6,8 +6,7 @@ import type {
   SourceControlKind,
   SourceControlProvider,
 } from "../../shared/source-control";
-import { AzureDevOpsMark, GiteaMark, GitHubMark } from "./BrandIcons";
-import { AzureDevOpsDetails } from "./DevOpsSettings";
+import { GiteaMark, GitHubMark } from "./BrandIcons";
 import {
   CliPathField,
   RescanButton,
@@ -18,16 +17,15 @@ import {
 import { ErrorBox } from "./ui";
 
 const queryKey = ["source-control"];
-const marks: Record<SourceControlKind, ReactNode> = {
+// Azure DevOps is a plugin now, so it never reaches this list.
+const marks: Partial<Record<SourceControlKind, ReactNode>> = {
   github: <GitHubMark />,
   gitea: <GiteaMark />,
-  "azure-devops": <AzureDevOpsMark />,
 };
 /** What the switch stops, said once it's off. */
-const offNotes: Record<SourceControlKind, string> = {
+const offNotes: Partial<Record<SourceControlKind, string>> = {
   github: "Turned off: Relay doesn't show GitHub CI status.",
   gitea: "Turned off: Relay doesn't show Gitea CI status.",
-  "azure-devops": "Turned off: your work items don't show under new threads.",
 };
 const fixLabels: Record<SourceControlFix, string> = {
   link: "Link it…",
@@ -35,8 +33,8 @@ const fixLabels: Record<SourceControlFix, string> = {
   "sign-in": "Sign in…",
   "set-up": "Set up…",
 };
-/** What else follows a host: CI, the tea logins, the work item cards. */
-const followers = ["ci-status", "tea-setup", "devops-status", "devops-items"];
+/** What else follows a host: CI and the tea logins. */
+const followers = ["ci-status", "tea-setup"];
 
 type Apply = (
   run: () => Promise<SourceControlProvider[] | null>,
@@ -57,7 +55,7 @@ export function SourceControlRescan() {
   );
 }
 
-/** Settings → Integrations: where pull requests, CI and work items come from. */
+/** Settings → Integrations: where pull requests and CI come from. */
 export function SourceControlSettings({
   onConnect,
 }: {
@@ -91,9 +89,7 @@ export function SourceControlSettings({
         retry={() => void providers.refetch()}
       />
     ) : (
-      <p className="setting-muted">
-        Looking for GitHub, Gitea and Azure DevOps…
-      </p>
+      <p className="setting-muted">Looking for GitHub and Gitea…</p>
     );
   return (
     <>
@@ -164,14 +160,7 @@ function ProviderRow({
       }}
       details={
         <>
-          {kind === "azure-devops" ? (
-            <AzureDevOpsDetails
-              cliField={cliField}
-              onSaved={() => void apply(() => api.sourceControl())}
-            />
-          ) : (
-            cliField
-          )}
+          {cliField}
           {!enabled && fix !== "set-up" && (
             <p className="tool-row-off">{offNotes[kind]}</p>
           )}

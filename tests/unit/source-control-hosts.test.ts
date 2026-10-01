@@ -76,7 +76,11 @@ describe("Azure DevOps in Settings", () => {
   it("asks to be set up before anything else", async () => {
     const row = await azureDevOps(await devops({}));
     expect(row).toMatchObject({ signIn: "signed-out", fix: "set-up" });
-    expect(row).toMatchObject({ cli: "az", version: "2.86.0" });
+    // A token sign-in never starts `az`, which takes seconds.
+    expect(row.version).toBeUndefined();
+    expect(
+      await azureDevOps(await devops({ auth: "azure-cli" })),
+    ).toMatchObject({ cli: "az", version: "2.86.0" });
   });
 
   it("names who Azure DevOps accepts, and on which organization", async () => {

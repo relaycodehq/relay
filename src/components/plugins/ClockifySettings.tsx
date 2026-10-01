@@ -150,6 +150,7 @@ export function ClockifySettings() {
                   }}
                 />
                 <button
+                  key="connect"
                   className="primary"
                   disabled={connecting || !token.trim()}
                   onClick={() => void connect()}
@@ -170,7 +171,10 @@ export function ClockifySettings() {
               </>
             ) : (
               <>
-                <button onClick={() => setReplacing(true)}>Replace</button>
+                {/* Keyed so the clicked Connect never turns into a focused Forget. */}
+                <button key="replace" onClick={() => setReplacing(true)}>
+                  Replace
+                </button>
                 <button
                   className="text-button"
                   onClick={() => {

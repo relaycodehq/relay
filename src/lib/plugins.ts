@@ -23,8 +23,34 @@ export function useSetPluginEnabled() {
     }
     // A running day pauses when its plugin is turned off.
     await qc.invalidateQueries({ queryKey: clockifyKey });
+    // Azure DevOps keeps its switch in its own settings.
+    await qc.invalidateQueries({ queryKey: devopsKey });
   };
 }
+
+export const devopsKey = ["devops-status"];
+export const devopsConnectionKey = ["devops-connection"];
+
+export const useDevOpsStatus = () =>
+  useQuery({ queryKey: devopsKey, queryFn: () => api.devopsStatus() });
+
+/** The organization's work item fields, for sorting and team filters. */
+export const useDevOpsFields = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["devops-fields"],
+    queryFn: () => api.devopsFields(),
+    enabled,
+    staleTime: 60 * 60_000,
+    retry: false,
+  });
+
+/** Who Azure DevOps signs Relay in as, and where `az` is; once it has an organization. */
+export const useDevOpsConnection = (enabled: boolean) =>
+  useQuery({
+    queryKey: devopsConnectionKey,
+    queryFn: () => api.devopsConnection(),
+    enabled,
+  });
 
 export const clockifyKey = ["clockify-status"];
 

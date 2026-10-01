@@ -127,8 +127,11 @@ function dayStart() {
 }
 
 const clockify: Partial<Api> = {
-  plugins: async () => ({ clockify: true }),
-  setPluginEnabled: async (_id, enabled) => ({ clockify: enabled }),
+  plugins: async () => ({ clockify: true, devops: false }),
+  setPluginEnabled: async (_id, enabled) => ({
+    clockify: enabled,
+    devops: false,
+  }),
   projects: async () => projects,
   clockifyStatus: async () => status,
   clockifyWorkspaces: async () => [{ id: "w1", name: "Contoso" }],

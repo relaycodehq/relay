@@ -54,8 +54,12 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
         canceled: false,
         filePaths: [dir],
       });
-      const g = globalThis as { devopsCalls?: string[] };
+      const g = globalThis as {
+        devopsCalls?: string[];
+        devopsQueries?: string[];
+      };
       g.devopsCalls = [];
+      g.devopsQueries = [];
       const reply = (body: unknown) =>
         new Response(JSON.stringify(body), {
           headers: { "content-type": "application/json" },
@@ -79,6 +83,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
           "System.Tags": tags,
           "System.ChangedDate": changed,
           "System.Description": "<p>Customers cannot find licenses.</p>",
+          "System.AssignedTo": { displayName: "Jan Novak" },
         },
       });
       const original = net.fetch.bind(net);
@@ -86,10 +91,50 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
         const url = String(input);
         if (url.startsWith("https://dev.azure.com/")) {
           g.devopsCalls!.push(url);
+          if (url.includes("/_apis/wit/fields"))
+            return reply({
+              value: [
+                {
+                  name: "Priority",
+                  referenceName: "Microsoft.VSTS.Common.Priority",
+                },
+                { name: "State", referenceName: "System.State" },
+              ],
+            });
+          if (url.includes("/_apis/wit/wiql"))
+            g.devopsQueries!.push(JSON.parse(String(init?.body)).query);
           if (url.includes("/_apis/wit/wiql"))
             return reply({
               workItems: [{ id: 9789 }, { id: 10263 }, { id: 10032 }],
             });
+          if (url.includes("/_apis/connectionData"))
+            return reply({
+              authenticatedUser: { providerDisplayName: "Ann Example" },
+            });
+          if (url.includes("classificationnodes"))
+            return reply({
+              id: 1,
+              children: [
+                {
+                  id: 2,
+                  attributes: {
+                    startDate: new Date(Date.now() - 4 * 864e5).toISOString(),
+                    finishDate: new Date(Date.now() + 6 * 864e5).toISOString(),
+                  },
+                },
+              ],
+            });
+          const sprint = item(
+            10032,
+            "Implement RFID",
+            "Active",
+            "Software\\DEVICE",
+            "Kiosk",
+          );
+          Object.assign(sprint.fields, {
+            "System.IterationId": 2,
+            "Microsoft.VSTS.Common.Priority": 1,
+          });
           return reply({
             value: [
               item(
@@ -105,13 +150,7 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
                 "On Hold",
                 "Software\\DEVICE",
               ),
-              item(
-                10032,
-                "Implement RFID",
-                "Active",
-                "Software\\DEVICE",
-                "Kiosk",
-              ),
+              sprint,
             ],
           });
         }
@@ -143,33 +182,77 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
 
     await page.keyboard.press("ControlOrMeta+Comma");
     const settings = page.getByRole("dialog");
+    // Integrations keeps only the pull request and CI hosts.
     await settings.getByRole("button", { name: "Integrations" }).click();
-    // Azure DevOps sits with the other hosts; its switch waits for a setup.
-    const hosts = settings.getByRole("region", { name: "Source control" });
-    const use = hosts.getByRole("switch", { name: "Use Azure DevOps" });
-    await expect(use).toBeDisabled();
-    await hosts.getByRole("button", { name: "Set up…" }).click();
-    await hosts.getByLabel("Organization").fill("contoso");
-    await hosts.getByLabel("Project", { exact: true }).fill("Software");
-    await hosts.getByLabel("Personal access token").fill("pat-123");
-    await hosts.getByRole("button", { name: "Save and test" }).click();
-    await expect(hosts.getByRole("status")).toHaveText(
-      "Connected · 3 open items assigned to you",
+    await expect(
+      settings.getByRole("region", { name: "Source control" }),
+    ).toContainText("Gitea");
+    await expect(
+      settings.getByRole("region", { name: "Source control" }),
+    ).not.toContainText("Azure DevOps");
+
+    // Azure DevOps is a plugin; switching it on opens its card to set it up.
+    await settings.getByRole("button", { name: "Plugins" }).click();
+    const plugin = settings
+      .locator(".plugin-card")
+      .filter({ hasText: "Azure DevOps work items" });
+    await plugin
+      .getByRole("switch", { name: "Turn on Azure DevOps work items" })
+      .check();
+    await expect(plugin).toContainText("Needs your organization");
+    // Fields save as you leave them; the token waits for Connect.
+    await plugin.getByLabel("Azure DevOps organization").fill("contoso");
+    await plugin.getByLabel("Azure DevOps project").fill("Software");
+    await plugin.getByLabel("Azure DevOps project").press("Enter");
+    await expect(plugin).toContainText("Needs a personal access token");
+    await plugin.getByLabel("Personal access token").fill("pat-123");
+    await plugin.getByRole("button", { name: "Connect" }).click();
+    await expect(plugin.locator(".plugin-card-text small")).toHaveText(
+      "contoso / Software · 3 open items assigned to you",
     );
-    // Setting it up turns the work items on.
-    await expect(use).toBeChecked();
+    await expect(plugin).toContainText("Signed in as Ann Example.");
     await screenshot(page, { path: join(root, "settings.png") });
 
-    // The filter and the projects sit in the same details, saved together.
-    await hosts
+    await plugin
       .getByLabel("Show only the items that belong to the open project")
       .check();
-    await hosts.getByLabel("OpenRouter API key").fill("sk-or-test");
-    await hosts.getByLabel("licensing hints").fill("Licensing, license keys");
-    await hosts.getByRole("button", { name: "Save and test" }).click();
-    await expect(hosts.getByRole("status")).toHaveText(
-      "Connected · 3 open items assigned to you",
+    await plugin.getByLabel("OpenRouter API key").fill("sk-or-test");
+    await plugin.getByRole("button", { name: "Connect" }).click();
+    await expect(plugin.getByRole("button", { name: "Replace" })).toHaveCount(
+      2,
     );
+    await plugin.getByLabel("licensing hints").fill("Licensing, license keys");
+    await plugin.getByLabel("licensing hints").press("Enter");
+    await expect(plugin.getByLabel("licensing hints")).toHaveValue(
+      "Licensing, license keys",
+    );
+    await screenshot(page, { path: join(root, "settings-filter.png") });
+
+    // The team: who's in it and which of their items, in the same order as yours.
+    await plugin.getByLabel("Team members").fill("jan@example.com");
+    await plugin.getByLabel("Team members").press("Enter");
+    await plugin.getByRole("button", { name: "Add a filter" }).click();
+    // A field Azure DevOps doesn't have isn't saved.
+    await plugin.getByLabel("Team filter field 1").fill("Stat");
+    await plugin.getByLabel("Team filter field 1").press("Enter");
+    await expect(plugin.getByLabel("Team filter field 1")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await expect(plugin.getByRole("alert")).toHaveText("No field “Stat”");
+    await plugin.getByLabel("Team filter field 1").fill("State");
+    await plugin.getByLabel("Team filter field 1").press("Enter");
+    await plugin.getByLabel("Team filter values 1").fill("Review, Testing");
+    await plugin.getByLabel("Team filter values 1").press("Enter");
+    await expect(
+      plugin.getByRole("button", { name: "Add a filter" }),
+    ).toBeVisible();
+    // The default order reads by display name once the fields load.
+    await expect(
+      plugin.getByLabel("Sort field 1", { exact: true }),
+    ).toHaveValue("Priority");
+    await plugin.getByText("This sprint first").scrollIntoViewIfNeeded();
+    await screenshot(page, { path: join(root, "settings-team.png") });
     await settings.getByRole("button", { name: "Close dialog" }).click();
 
     const cards = page.getByRole("region", { name: "Your work items" });
@@ -179,10 +262,30 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
 
     await cards.getByRole("button", { name: /^All/ }).click();
     await expect(cards.locator(".work-item-card")).toHaveCount(3);
+    // This sprint's item leads, though it changed no later than the others.
+    await expect(cards.locator(".work-item-card").first()).toContainText(
+      "Implement RFID",
+    );
     await cards.getByLabel("Search work items").fill("rfid");
     await expect(cards.locator(".work-item-card")).toHaveCount(1);
     await cards.getByLabel("Search work items").fill("");
     await screenshot(page, { path: join(root, "cards-all.png") });
+
+    // The team's items sit beside yours, with who has each.
+    await cards.getByRole("button", { name: "Team" }).click();
+    const team = page.getByRole("region", { name: "Team work items" });
+    await expect(team.locator(".work-item-card").first()).toContainText(
+      "Jan Novak",
+    );
+    const queries = await app.evaluate(
+      () => (globalThis as { devopsQueries?: string[] }).devopsQueries!,
+    );
+    expect(queries.at(-1)).toContain(
+      "[System.AssignedTo] IN ('jan@example.com')",
+    );
+    expect(queries.at(-1)).toContain("[System.State] IN ('Review', 'Testing')");
+    await screenshot(page, { path: join(root, "cards-team.png") });
+    await team.getByRole("button", { name: "Your work items" }).click();
 
     // Projects outside Azure DevOps can hide the cards, and take it back.
     const jevCalls = async () =>
@@ -250,8 +353,6 @@ test("assigned Azure DevOps work items appear under a new thread and Jev narrows
     await expect(sent).toContainText("I am going to work on this card");
     await expect(page.locator(".work-item-chip")).toHaveCount(0);
     await screenshot(page, { path: join(root, "sent.png") });
-    // Once: the hints were saved with the filter, so Jev never saw it without them.
-    expect(await jevCalls()).toBe(1);
     console.log("screenshots in", root);
   } finally {
     await app.close();

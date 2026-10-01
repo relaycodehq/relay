@@ -19,6 +19,13 @@ export const plugins = {
       "Start a timer in the morning; at the end of the day Relay splits it across your projects from the threads you worked in, drafts each entry and sends them to Clockify once you've checked them.",
     keywords: "time tracking timesheet hours clockify timer day log work",
   },
+  devops: {
+    title: "Azure DevOps work items",
+    description:
+      "Your open Azure DevOps work items under every new thread, this sprint's first and then by priority. Pick one and Relay hands it to the agent with your message.",
+    keywords:
+      "azure devops az boards work items tasks bugs tickets sprint iteration priority token pat jev openrouter filter projects hints hide",
+  },
 } satisfies Record<string, PluginManifest>;
 
 export type PluginId = keyof typeof plugins;

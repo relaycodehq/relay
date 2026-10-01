@@ -10,7 +10,10 @@ import {
   type DevOpsSecrets,
   type DevOpsSettings,
   type DevOpsStatus,
+  type SortKey,
   type WorkItem,
+  type WorkItemField,
+  type WorkItemScope,
   type WorkItemsResult,
 } from "../shared/devops";
 import type { Project } from "../shared/projects";
@@ -34,10 +37,14 @@ const fields = [
   "System.TeamProject",
   "System.Tags",
   "System.ChangedDate",
+  "System.AssignedTo",
+  "System.IterationId",
+  "Microsoft.VSTS.Common.Priority",
   "System.Description",
   "Microsoft.VSTS.TCM.ReproSteps",
 ];
 const itemsTtl = 2 * 60_000;
+const fieldsTtl = 60 * 60_000;
 /** Keeps each Jev request well inside its 64k-token budget. */
 const filterBatch = 80;
 /** Filter answers for projects or hints unused this long are dropped. */
@@ -45,6 +52,12 @@ const relevanceTtl = 30 * 24 * 60 * 60_000;
 
 const sha = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+interface IterationNode {
+  id: number;
+  attributes?: { startDate?: string; finishDate?: string };
+  children?: IterationNode[];
+}
 
 interface RelevanceCache {
   /** Filter cache key → last use and question hash → yes-probability. */
@@ -58,7 +71,11 @@ export class DevOps {
   /** Secrets that could not be encrypted live for this session only. */
   private session: { pat?: string; openRouterKey?: string } = {};
   private cliToken?: { value: string; expires: number };
-  private items?: { key: string; at: number; items: WorkItem[] };
+  private items = new Map<
+    WorkItemScope,
+    { key: string; at: number; items: WorkItem[] }
+  >();
+  private fieldList?: { key: string; at: number; fields: WorkItemField[] };
   /** Loaded from `cacheFile` on first use, so answers outlive restarts. */
   private relevance?: Promise<RelevanceCache>;
   /** One filter run per cache key at a time, so overlaps never ask twice. */
@@ -81,6 +98,8 @@ export class DevOps {
             ...defaultDevOpsSettings,
             ...saved,
             filter: { ...defaultDevOpsSettings.filter, ...saved.filter },
+            sort: { ...defaultDevOpsSettings.sort, ...saved.sort },
+            team: { ...defaultDevOpsSettings.team, ...saved.team },
           }
         : defaultDevOpsSettings,
     );
@@ -114,17 +133,15 @@ export class DevOps {
       if (secrets.openRouterKey !== undefined)
         s.devopsOpenRouterKey = openRouterKey ?? undefined;
     });
-    this.items = undefined;
+    this.items.clear();
+    this.fieldList = undefined;
     this.cliToken = undefined;
     return this.status();
   }
 
-  /** Turns work items on or off, keeping the rest of the settings. */
+  /** The plugin's switch: work items on or off, keeping the rest of the settings. */
   async setEnabled(enabled: boolean) {
-    const settings = this.settings();
-    if (enabled && !settings.organization)
-      throw new Error("Set up Azure DevOps first: add your organization.");
-    return this.save({ ...settings, enabled }, {});
+    return this.save({ ...this.settings(), enabled }, {});
   }
 
   /**
@@ -149,6 +166,7 @@ export class DevOps {
   async workItems(
     project: Project | null,
     refresh = false,
+    scope: WorkItemScope = "mine",
   ): Promise<WorkItemsResult> {
     const settings = this.settings();
     if (!settings.enabled) throw new Error("Azure DevOps is turned off.");
@@ -156,7 +174,7 @@ export class DevOps {
     // Hidden projects never reach Azure DevOps or the filter.
     if (project && settings.hiddenProjects.includes(project.id))
       return { items: [], relevance: null, threshold };
-    const items = await this.assigned(settings, refresh);
+    const items = await this.list(settings, refresh, scope);
     const result: WorkItemsResult = {
       items,
       relevance: null,
@@ -172,27 +190,98 @@ export class DevOps {
     return result;
   }
 
-  private async assigned(settings: DevOpsSettings, refresh: boolean) {
+  /** The fields the organization's work items have, by display name. */
+  async fields(): Promise<WorkItemField[]> {
+    const settings = this.settings();
     const base = organizationUrl(settings.organization);
-    const key = `${base}|${settings.project}|${settings.auth}`;
+    return this.fieldsAt(
+      settings,
+      base,
+      await this.authorization(settings, base),
+    );
+  }
+
+  private async fieldsAt(settings: DevOpsSettings, base: string, auth: string) {
+    const key = `${base}|${settings.project}`;
     if (
-      !refresh &&
-      this.items?.key === key &&
-      Date.now() - this.items.at < itemsTtl
+      this.fieldList?.key === key &&
+      Date.now() - this.fieldList.at < fieldsTtl
     )
-      return this.items.items;
+      return this.fieldList.fields;
+    const { value } = await this.request<{ value: WorkItemField[] }>(
+      `${base}${projectPath(settings)}/_apis/wit/fields?api-version=7.1`,
+      auth,
+    );
+    const fields = value
+      .map(({ name, referenceName }) => ({ name, referenceName }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    this.fieldList = { key, at: Date.now(), fields };
+    return fields;
+  }
+
+  /**
+   * Your items or the team's: assigned to you or to its members, through its
+   * filters, in the order Settings gives.
+   */
+  private async list(
+    settings: DevOpsSettings,
+    refresh: boolean,
+    scope: WorkItemScope,
+  ) {
+    const base = organizationUrl(settings.organization);
+    const key = JSON.stringify([
+      base,
+      settings.project,
+      settings.auth,
+      settings.sort,
+      scope === "team" ? settings.team : null,
+    ]);
+    const cached = this.items.get(scope);
+    if (!refresh && cached?.key === key && Date.now() - cached.at < itemsTtl)
+      return cached.items;
+    if (scope === "team" && !settings.team.members.length) return [];
     const auth = await this.authorization(settings, base);
-    const scope = settings.project
-      ? `/${encodeURIComponent(settings.project)}`
-      : "";
+    // Reference names go as they are; display names are looked up once.
+    const reference = async (name: string) => {
+      if (name.includes(".")) return name;
+      const lower = name.toLowerCase();
+      const found = (await this.fieldsAt(settings, base, auth)).find(
+        (f) =>
+          f.name.toLowerCase() === lower ||
+          f.referenceName.toLowerCase() === lower,
+      );
+      if (!found)
+        throw new Error(
+          `Azure DevOps has no work item field called “${name}”.`,
+        );
+      return found.referenceName;
+    };
+    const sortKeys: SortKey[] = [];
+    for (const k of settings.sort.fields)
+      sortKeys.push({ ...k, field: await reference(k.field) });
+    const filters = [];
+    for (const f of scope === "team" ? settings.team.filters : [])
+      filters.push({ ...f, field: await reference(f.field) });
+    // A filter on the state picks the states; otherwise closed items stay out.
+    const byState = filters.some(
+      (f) => f.field.toLowerCase() === "system.state",
+    );
     const wiql = await this.request<{ workItems: { id: number }[] }>(
-      `${base}${scope}/_apis/wit/wiql?api-version=7.1&$top=200`,
+      `${base}${projectPath(settings)}/_apis/wit/wiql?api-version=7.1&$top=200`,
       auth,
       {
         query: [
           "SELECT [System.Id] FROM WorkItems",
-          "WHERE [System.AssignedTo] = @Me",
-          `AND [System.State] NOT IN (${closedStates.map((s) => `'${s}'`).join(", ")})`,
+          scope === "mine"
+            ? "WHERE [System.AssignedTo] = @Me"
+            : `WHERE [System.AssignedTo] IN (${settings.team.members.map(wiqlString).join(", ")})`,
+          byState
+            ? ""
+            : `AND [System.State] NOT IN (${closedStates.map(wiqlString).join(", ")})`,
+          ...filters.map(
+            (f) =>
+              `AND [${f.field}] IN (${f.values.map(wiqlString).join(", ")})`,
+          ),
           settings.project ? "AND [System.TeamProject] = @project" : "",
           "ORDER BY [System.ChangedDate] DESC",
         ]
@@ -207,17 +296,72 @@ export class DevOps {
         value: { id: number; fields: Record<string, unknown> }[];
       }>(`${base}/_apis/wit/workitemsbatch?api-version=7.1`, auth, {
         ids,
-        fields,
+        fields: [...new Set([...fields, ...sortKeys.map((k) => k.field)])],
         errorPolicy: "omit",
       });
+      const found = batch.value.filter(Boolean);
+      const sprints = settings.sort.currentSprint
+        ? await this.currentSprints(base, auth, [
+            ...new Set(
+              found.map((w) => String(w.fields["System.TeamProject"])),
+            ),
+          ])
+        : new Set<number>();
       const order = new Map(ids.map((id, i) => [id, i]));
-      items = batch.value
-        .filter(Boolean)
-        .map((w) => toWorkItem(base, w.id, w.fields))
-        .sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+      const inSprint = (w: (typeof found)[number]) =>
+        Number(sprints.has(w.fields["System.IterationId"] as number));
+      // Ties keep the WIQL's order: most recently changed first.
+      items = found
+        .sort(
+          (a, b) =>
+            inSprint(b) - inSprint(a) ||
+            sortKeys.reduce(
+              (by, k) =>
+                by ||
+                compareField(
+                  fieldValue(a.fields, k.field),
+                  fieldValue(b.fields, k.field),
+                  k.direction,
+                ),
+              0,
+            ) ||
+            order.get(a.id)! - order.get(b.id)!,
+        )
+        .map((w) => toWorkItem(base, w.id, w.fields, sprints));
     }
-    this.items = { key, at: Date.now(), items };
+    this.items.set(scope, { key, at: Date.now(), items });
     return items;
+  }
+
+  /**
+   * The iterations running today in these projects, whichever team plans
+   * them: a sprint is current while its dates hold today.
+   */
+  private async currentSprints(base: string, auth: string, projects: string[]) {
+    const now = Date.now(),
+      current = new Set<number>();
+    const visit = (node: IterationNode) => {
+      const start = Date.parse(node.attributes?.startDate ?? ""),
+        finish = Date.parse(node.attributes?.finishDate ?? "");
+      // The finish date is the sprint's last day, so it runs through it.
+      if (start <= now && now < finish + 24 * 60 * 60_000) current.add(node.id);
+      node.children?.forEach(visit);
+    };
+    await Promise.all(
+      projects.map(async (project) => {
+        try {
+          visit(
+            await this.request<IterationNode>(
+              `${base}/${encodeURIComponent(project)}/_apis/wit/classificationnodes/Iterations?$depth=10&api-version=7.1`,
+              auth,
+            ),
+          );
+        } catch {
+          // Without sprint dates the items still sort by priority.
+        }
+      }),
+    );
+    return current;
   }
 
   private async authorization(settings: DevOpsSettings, base: string) {
@@ -519,10 +663,12 @@ function toWorkItem(
   base: string,
   id: number,
   f: Record<string, unknown>,
+  sprints: Set<number>,
 ): WorkItem {
   const text = (k: string) =>
     typeof f[k] === "string" ? (f[k] as string) : "";
   const project = text("System.TeamProject");
+  const assignee = f["System.AssignedTo"];
   return {
     id,
     title: text("System.Title"),
@@ -535,11 +681,60 @@ function toWorkItem(
       .map((t) => t.trim())
       .filter(Boolean),
     changed: text("System.ChangedDate"),
+    priority:
+      typeof f["Microsoft.VSTS.Common.Priority"] === "number"
+        ? f["Microsoft.VSTS.Common.Priority"]
+        : null,
+    currentSprint: sprints.has(f["System.IterationId"] as number),
+    assignedTo:
+      typeof assignee === "string" ? assignee : (identityName(assignee) ?? ""),
     description: plainText(
       text("System.Description") || text("Microsoft.VSTS.TCM.ReproSteps"),
     ).slice(0, 2000),
     url: `${base}/${encodeURIComponent(project)}/_workitems/edit/${id}`,
   };
+}
+
+const projectPath = (settings: DevOpsSettings) =>
+  settings.project ? `/${encodeURIComponent(settings.project)}` : "";
+
+const wiqlString = (value: string) => `'${value.replace(/'/g, "''")}'`;
+
+const identityName = (value: unknown) =>
+  value && typeof value === "object" && "displayName" in value
+    ? String(value.displayName)
+    : undefined;
+
+/** A field from a batch answer; a hand-typed reference name may differ in case. */
+function fieldValue(fields: Record<string, unknown>, reference: string) {
+  if (reference in fields) return fields[reference];
+  const lower = reference.toLowerCase();
+  return Object.entries(fields).find(([k]) => k.toLowerCase() === lower)?.[1];
+}
+
+/** One sort key's verdict; an item without the field sorts last either way. */
+export function compareField(
+  a: unknown,
+  b: unknown,
+  direction: SortKey["direction"],
+) {
+  const value = (v: unknown) =>
+    typeof v === "number"
+      ? v
+      : typeof v === "boolean"
+        ? Number(v)
+        : typeof v === "string"
+          ? v || undefined
+          : identityName(v);
+  const x = value(a),
+    y = value(b);
+  if (x === undefined || y === undefined)
+    return x === y ? 0 : x === undefined ? 1 : -1;
+  const by =
+    typeof x === "number" && typeof y === "number"
+      ? x - y
+      : String(x).localeCompare(String(y), undefined, { numeric: true });
+  return direction === "asc" ? by : -by;
 }
 
 const entities: Record<string, string> = {

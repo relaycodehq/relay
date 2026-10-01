@@ -1,5 +1,30 @@
 import { z } from "zod";
+import type { SourceControlProvider } from "./source-control";
 import { agentMentionPattern } from "./agents";
+
+/** A field's display name, like `Priority`, or its reference name, like `System.State`. */
+const fieldName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(
+    /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u,
+    "Enter a field name, like Priority or System.State.",
+  );
+
+export const sortKeySchema = z
+  .object({ field: fieldName, direction: z.enum(["asc", "desc"]) })
+  .strict();
+export type SortKey = z.infer<typeof sortKeySchema>;
+
+export const fieldFilterSchema = z
+  .object({
+    field: fieldName,
+    values: z.array(z.string().trim().min(1).max(200)).min(1).max(20),
+  })
+  .strict();
+export type FieldFilter = z.infer<typeof fieldFilterSchema>;
 
 export const devopsSettingsSchema = z
   .object({
@@ -27,6 +52,22 @@ export const devopsSettingsSchema = z
         keywords: z.record(z.string().max(80), z.string().trim().max(1000)),
       })
       .strict(),
+    /** One order for your items and the team's; ties keep the most recently changed first. */
+    sort: z
+      .object({
+        /** Items in an iteration running today lead. */
+        currentSprint: z.boolean(),
+        fields: z.array(sortKeySchema).max(3),
+      })
+      .strict(),
+    /** The team's items: whose, and which of theirs. */
+    team: z
+      .object({
+        /** Emails, as Azure DevOps knows its people. */
+        members: z.array(z.string().trim().min(1).max(320)).max(50),
+        filters: z.array(fieldFilterSchema).max(3),
+      })
+      .strict(),
   })
   .strict();
 export type DevOpsSettings = z.infer<typeof devopsSettingsSchema>;
@@ -38,7 +79,20 @@ export const defaultDevOpsSettings: DevOpsSettings = {
   auth: "pat",
   hiddenProjects: [],
   filter: { enabled: false, model: "jev-latest", threshold: 0.5, keywords: {} },
+  sort: {
+    currentSprint: true,
+    fields: [{ field: "Microsoft.VSTS.Common.Priority", direction: "asc" }],
+  },
+  team: { members: [], filters: [] },
 };
+
+export type WorkItemScope = "mine" | "team";
+
+/** A field Azure DevOps knows, for picking one in Settings. */
+export interface WorkItemField {
+  name: string;
+  referenceName: string;
+}
 
 /** `undefined` keeps the saved secret, `null` forgets it. */
 export const devopsSecretsSchema = z
@@ -66,6 +120,12 @@ export interface WorkItem {
   project: string;
   tags: string[];
   changed: string;
+  /** 1 is the most urgent; null when the process has no priority. */
+  priority: number | null;
+  /** In an iteration whose dates hold today. */
+  currentSprint: boolean;
+  /** Who it's assigned to; empty when no one. */
+  assignedTo: string;
   /** Plain-text description, trimmed. */
   description: string;
   url: string;
@@ -88,7 +148,12 @@ export interface DevOpsApi {
   devopsWorkItems(
     projectId: string | null,
     refresh?: boolean,
+    scope?: WorkItemScope,
   ): Promise<WorkItemsResult>;
+  /** The fields the organization's work items have, for sorting and filters. */
+  devopsFields(): Promise<WorkItemField[]>;
+  /** Who Azure DevOps takes the saved sign-in for, and where `az` is. */
+  devopsConnection(): Promise<SourceControlProvider>;
 }
 
 /** Accepts `org`, `https://dev.azure.com/org` or `https://org.visualstudio.com`. */

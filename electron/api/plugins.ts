@@ -13,19 +13,24 @@ import type { ApiContext, Handlers } from "./context";
 
 /** Settings → Plugins, and each built-in plugin's own calls. */
 export function pluginHandlers(ctx: ApiContext) {
-  const { store, clockify } = ctx;
-  const toggles = (): PluginToggles =>
-    Object.fromEntries(
+  const { store, clockify, devops } = ctx;
+  const toggles = (): PluginToggles => ({
+    ...(Object.fromEntries(
       pluginIds.map((id) => [id, !!store.get().plugins?.[id]]),
-    ) as PluginToggles;
+    ) as PluginToggles),
+    // Azure DevOps kept the switch it had before it became a plugin.
+    devops: devops.settings().enabled,
+  });
   return {
     plugins: () => toggles(),
     setPluginEnabled: async (args) => {
       const id = pluginIdSchema.parse(args[0]);
       const enabled = z.boolean().parse(args[1]);
-      await store.update((s) => {
-        s.plugins = { ...s.plugins, [id]: enabled };
-      });
+      if (id === "devops") await devops.setEnabled(enabled);
+      else
+        await store.update((s) => {
+          s.plugins = { ...s.plugins, [id]: enabled };
+        });
       if (id === "clockify" && !enabled) await clockify.turnedOff();
       return toggles();
     },

@@ -93,6 +93,7 @@ it("turns work item HTML into plain text", () => {
 
 it("loads assigned items, asks Jev one question per item and caches answers", async () => {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("classificationnodes")) return json({ id: 1 });
     const body = JSON.parse(String(init?.body));
     if (url.includes("/_apis/wit/wiql")) {
       expect(url).toBe(
@@ -152,14 +153,14 @@ it("loads assigned items, asks Jev one question per item and caches answers", as
     url: "https://dev.azure.com/contoso/Software/_workitems/edit/9789",
   });
   expect(first.relevance).toEqual({ 9789: 0.96, 10263: 0.03 });
-  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(fetch).toHaveBeenCalledTimes(4);
 
   // Cached items and answers need no further requests.
   await devops.workItems(project);
-  expect(fetch).toHaveBeenCalledTimes(3);
-  // A refresh reloads items, but unchanged items keep their answers.
+  expect(fetch).toHaveBeenCalledTimes(4);
+  // A refresh reloads items and sprints, but unchanged items keep their answers.
   await devops.workItems(project, true);
-  expect(fetch).toHaveBeenCalledTimes(5);
+  expect(fetch).toHaveBeenCalledTimes(7);
 });
 
 it("asks Jev again only when what it sees changes, even after a restart", async () => {
@@ -258,6 +259,227 @@ it("never asks Azure DevOps or Jev for a hidden project", async () => {
   expect(devops.settings().hiddenProjects).toEqual([]);
 });
 
+it("puts this sprint's items first, then sorts by priority", async () => {
+  const day = 24 * 60 * 60_000,
+    now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10) + "T00:00:00Z";
+  const dates = (start: number, finish: string) => ({
+    startDate: new Date(start).toISOString(),
+    finishDate: finish,
+  });
+  // id, iteration, priority; the WIQL answers most recently changed first.
+  const plan: [number, number, number | undefined][] = [
+    [1, 41, 2],
+    [2, 42, 3],
+    [3, 7, undefined],
+    [4, 42, 1],
+    [5, 43, 2],
+  ];
+  const asked: string[] = [];
+  const { devops } = await setup(async (url) => {
+    asked.push(url.split("?")[0]);
+    if (url.includes("/_apis/wit/wiql"))
+      return json({ workItems: plan.map(([id]) => ({ id })) });
+    if (url.includes("classificationnodes"))
+      return json({
+        id: 7,
+        children: [
+          {
+            id: 41,
+            attributes: dates(
+              now - 20 * day,
+              new Date(now - 6 * day).toISOString(),
+            ),
+          },
+          // Ends today: the finish date is the sprint's last day.
+          { id: 42, attributes: dates(now - 5 * day, today) },
+          {
+            id: 43,
+            attributes: dates(
+              now + 9 * day,
+              new Date(now + 20 * day).toISOString(),
+            ),
+          },
+        ],
+      });
+    return json({
+      value: plan.map(([id, iteration, priority]) => {
+        const w = fields(id, `Item ${id}`);
+        return {
+          ...w,
+          fields: {
+            ...w.fields,
+            "System.IterationId": iteration,
+            ...(priority ? { "Microsoft.VSTS.Common.Priority": priority } : {}),
+          },
+        };
+      }),
+    });
+  });
+  await devops.save(
+    { ...settings, filter: { ...settings.filter, enabled: false } },
+    {},
+  );
+  const { items } = await devops.workItems(project);
+  expect(items.map((w) => [w.id, w.currentSprint, w.priority])).toEqual([
+    [4, true, 1],
+    [2, true, 3],
+    [1, false, 2],
+    [5, false, 2],
+    [3, false, null],
+  ]);
+  expect(asked).toContain(
+    "https://dev.azure.com/contoso/Software/_apis/wit/classificationnodes/Iterations",
+  );
+});
+
+it("sorts by the fields Settings names, looking up display names", async () => {
+  const asked: string[] = [];
+  let batchFields: string[] = [];
+  const { devops } = await setup(async (url, init) => {
+    asked.push(url.split("?")[0]);
+    if (url.includes("/_apis/wit/fields"))
+      return json({
+        value: [
+          { name: "Severity", referenceName: "Microsoft.VSTS.Common.Severity" },
+          { name: "State", referenceName: "System.State" },
+        ],
+      });
+    if (url.includes("/_apis/wit/wiql"))
+      return json({ workItems: [1, 2, 3, 4].map((id) => ({ id })) });
+    batchFields = JSON.parse(String(init?.body)).fields;
+    const item = (id: number, severity?: string, state = "Active") => {
+      const w = fields(id, `Item ${id}`);
+      return {
+        ...w,
+        fields: {
+          ...w.fields,
+          "System.State": state,
+          ...(severity ? { "Microsoft.VSTS.Common.Severity": severity } : {}),
+        },
+      };
+    };
+    return json({
+      value: [
+        item(1, "3 - Medium", "Active"),
+        item(2, undefined, "New"),
+        item(3, "1 - Critical", "Active"),
+        item(4, "3 - Medium", "New"),
+      ],
+    });
+  });
+  await devops.save(
+    {
+      ...settings,
+      filter: { ...settings.filter, enabled: false },
+      sort: {
+        currentSprint: false,
+        fields: [
+          { field: "severity", direction: "asc" },
+          { field: "System.State", direction: "desc" },
+        ],
+      },
+    },
+    {},
+  );
+  const { items } = await devops.workItems(project);
+  // Missing severity sorts last; equal severity falls to State, descending.
+  expect(items.map((w) => w.id)).toEqual([3, 4, 1, 2]);
+  expect(batchFields).toContain("Microsoft.VSTS.Common.Severity");
+  // With the sprint off, iterations are never asked for.
+  expect(asked.some((u) => u.includes("classificationnodes"))).toBe(false);
+
+  await devops.save(
+    {
+      ...devops.settings(),
+      sort: {
+        currentSprint: false,
+        fields: [{ field: "Effort", direction: "asc" }],
+      },
+    },
+    {},
+  );
+  await expect(devops.workItems(project)).rejects.toThrow(
+    /no work item field called “Effort”/,
+  );
+});
+
+it("lists the team's items through their filters", async () => {
+  const queries: string[] = [];
+  const { devops } = await setup(async (url, init) => {
+    if (url.includes("/_apis/wit/fields"))
+      return json({
+        value: [{ name: "State", referenceName: "System.State" }],
+      });
+    if (url.includes("classificationnodes")) return json({ id: 1 });
+    if (url.includes("/_apis/wit/wiql")) {
+      queries.push(JSON.parse(String(init?.body)).query);
+      return json({ workItems: [{ id: 7 }] });
+    }
+    const w = fields(7, "Review the licensing search");
+    return json({
+      value: [
+        {
+          ...w,
+          fields: {
+            ...w.fields,
+            "System.AssignedTo": {
+              displayName: "Jan Novak",
+              uniqueName: "jan@example.com",
+            },
+          },
+        },
+      ],
+    });
+  });
+  const base = { ...settings, filter: { ...settings.filter, enabled: false } };
+  // No members, no team: nothing is asked.
+  await devops.save(base, {});
+  expect((await devops.workItems(project, false, "team")).items).toEqual([]);
+  expect(queries).toEqual([]);
+
+  await devops.save(
+    {
+      ...base,
+      team: {
+        members: ["ann@example.com", "o'brien@example.com"],
+        filters: [{ field: "State", values: ["Review", "Testing"] }],
+      },
+    },
+    {},
+  );
+  const { items } = await devops.workItems(project, false, "team");
+  expect(items[0]).toMatchObject({ id: 7, assignedTo: "Jan Novak" });
+  expect(queries[0]).toContain(
+    "WHERE [System.AssignedTo] IN ('ann@example.com', 'o''brien@example.com')",
+  );
+  expect(queries[0]).toContain("AND [System.State] IN ('Review', 'Testing')");
+  // The filter picks the states, so closed ones aren't left out on top.
+  expect(queries[0]).not.toContain("NOT IN");
+  // Your own items are a separate list with their own query.
+  await devops.workItems(project);
+  expect(queries[1]).toContain("WHERE [System.AssignedTo] = @Me");
+});
+
+it("still lists items when their sprints can't be read", async () => {
+  const { devops } = await setup(async (url) => {
+    if (url.includes("/_apis/wit/wiql"))
+      return json({ workItems: [{ id: 1 }, { id: 2 }] });
+    if (url.includes("classificationnodes"))
+      return json({ message: "No access to iterations." }, 403);
+    return json({ value: [fields(1, "One"), fields(2, "Two")] });
+  });
+  await devops.save(
+    { ...settings, filter: { ...settings.filter, enabled: false } },
+    {},
+  );
+  const { items } = await devops.workItems(project);
+  expect(items.map((w) => [w.id, w.currentSprint])).toEqual([
+    [1, false],
+    [2, false],
+  ]);
+});
+
 it("sends an attached work item ahead of the user's message", async () => {
   const { workItemMessage } = await import("../../shared/devops");
   const item = {
@@ -269,6 +491,9 @@ it("sends an attached work item ahead of the user's message", async () => {
     project: "Software",
     tags: ["Licensing"],
     changed: "",
+    priority: 2,
+    currentSprint: false,
+    assignedTo: "Ann Example",
     description: "Customers cannot find licenses.",
     url: "https://dev.azure.com/contoso/Software/_workitems/edit/9789",
   };
@@ -317,12 +542,15 @@ it("says who Azure DevOps takes the sign-in for, and tells a refusal from no net
   );
 });
 
-it("turns work items on only once there is an organization", async () => {
+it("goes on before it's set up, and asks for the organization first", async () => {
   const { devops } = await setup(async () => json({}));
   await devops.setEnabled(false);
   expect(devops.settings().enabled).toBe(false);
   // The rest of the settings stay as they were.
   expect(devops.settings().project).toBe("Software");
   await devops.save({ ...devops.settings(), organization: "" }, {});
-  await expect(devops.setEnabled(true)).rejects.toThrow(/organization/);
+  // The plugin's switch opens its card to set it up.
+  await devops.setEnabled(true);
+  expect(devops.settings().enabled).toBe(true);
+  await expect(devops.workItems(null)).rejects.toThrow(/organization/);
 });

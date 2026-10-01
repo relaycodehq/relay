@@ -44,6 +44,32 @@
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
+/* Yours or the team's: two quiet words, the picked one in full colour. */
+.work-items-whose {
+  display: flex;
+  gap: 10px;
+}
+.work-items-whose button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  opacity: 0.6;
+}
+.work-items-whose button:hover,
+.work-items-whose button[aria-pressed="true"] {
+  opacity: 1;
+}
+.work-items-whose button[aria-pressed="true"] {
+  color: var(--text);
+}
+.work-item-assignee {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .work-items-scope {
   display: flex;
   padding: 2px;

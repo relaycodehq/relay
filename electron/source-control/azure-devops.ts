@@ -7,14 +7,16 @@ import { DevOpsUnreachable, type DevOps } from "../devops";
 import { cliFields, probeCli } from "./clis";
 
 /**
- * Azure DevOps as the work item cards reach it: with a personal access token
- * or the `az` login, asking Azure DevOps who that is.
+ * Azure DevOps as the work items plugin reaches it: with a personal access
+ * token or the `az` login, asking Azure DevOps who that is.
  */
 export async function azureDevOps(
   devops: DevOps,
 ): Promise<SourceControlProvider> {
   const { settings, hasPat } = devops.status();
-  const cli = await probeCli("azure-devops");
+  // Only the Azure CLI sign-in needs `az`, which takes seconds to start.
+  const cli =
+    settings.auth === "azure-cli" ? await probeCli("azure-devops") : {};
   const base = {
     kind: "azure-devops",
     name: sourceControlNames["azure-devops"],
