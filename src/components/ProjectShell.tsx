@@ -33,36 +33,17 @@ import {
   GitGraph,
   Pencil,
 } from "lucide-react";
-import { parseRoomInvitation } from "../../shared/rooms";
-import type { PullRef, Repo } from "../../shared/types";
 import { type Project, type ChatSummary } from "../../shared/projects";
 import { api } from "../lib/api";
-import {
-  clearDraftScope,
-  freshNewThread,
-  readDraft,
-  writeDraft,
-} from "../lib/drafts";
-import { openThread, threadDraftKey } from "../lib/thread-storage";
+import { openThread } from "../lib/thread-storage";
 import { sweepThreadStorage } from "../lib/thread-storage-sweep";
-import {
-  loadComposerSettings,
-  saveComposerSettings,
-} from "../lib/composer-settings";
 import { Connected, SignIn } from "../ReviewSurface";
 import { PullsTitle } from "./PullRequestsPage";
-import {
-  projectFor,
-  repoKey,
-  type PullsLocation,
-  type PullsPageHandle,
-  type PullsTarget,
-} from "../lib/pull-board";
+import { projectFor } from "../lib/pull-board";
 import { Settings } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
-import { sendDraft } from "../lib/draft-send";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectBadge } from "./ProjectBadge";
 import { NewThreadPicker } from "./NewThreadPicker";
@@ -77,6 +58,10 @@ import { useSidebarVisibility } from "../lib/useSidebarVisibility";
 import { useThreadFolder } from "../lib/useThreadFolder";
 import { useThreadTerminal } from "../lib/useThreadTerminal";
 import { usePaneOpens } from "../lib/usePaneOpens";
+import { useIncomingLinks } from "../lib/useIncomingLinks";
+import { useNewThreads } from "../lib/useNewThreads";
+import { usePullThreads } from "../lib/usePullThreads";
+import { usePullsPage } from "../lib/usePullsPage";
 import {
   NavigationLockProvider,
   useNavigationLockRoot,
@@ -85,7 +70,6 @@ import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useSettingsPage } from "../lib/useSettingsPage";
 import { useSignIn } from "../lib/useSignIn";
 import "./projects.css";
-const NOWHERE: PullsLocation = { repo: null, pull: null };
 const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {
@@ -117,9 +101,7 @@ export default function ProjectShell() {
   const gitActions = useRef<GitActionsHandle>(null);
   const chatComposer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
-  const [error, setError] = useState<unknown>(),
-    [incoming, setIncoming] = useState<{ url: string }>(),
-    [queuedUrl, setQueuedUrl] = useState<string>();
+  const [error, setError] = useState<unknown>();
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);
@@ -138,27 +120,17 @@ export default function ProjectShell() {
     newThreadIn,
   } = nav;
   const legacy = nav.inbox;
-  // The Pull requests page reports where it is for the title; the title and
-  // the sidebar send it back to the board.
-  const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE);
-  const pullsPage = useRef<PullsPageHandle>(null);
-  const goToPulls = (target: PullsTarget) => {
-    if (lock.blocked()) return;
-    pullsPage.current?.go(target);
-  };
   // The Pull requests page stands in for the chat alone.
   const sidebar = useSidebarVisibility(
     !legacy && panes.visible.some((id) => id !== "chat"),
   );
   const projectsHidden = sidebar.hidden;
-  const [pickingProject, setPickingProject] = useState(false);
   const settings = useSettingsPage(nav.selected, chatId, legacy);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const [share, setShare] = useState<ChatSummary>(),
-    [invitation, setInvitation] = useState<string>(),
     [browseShared, setBrowseShared] = useState(false);
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
@@ -169,226 +141,29 @@ export default function ProjectShell() {
   const opens = usePaneOpens(nav, view, folder, lock, setError);
   const { openCode, togglePane, openTurnDiff, openInEditor, openChatFile } =
     opens;
-  useEffect(() => {
-    // The page took its link when it opened; coming back mustn't open it again.
-    if (!legacy) setIncoming(undefined);
-  }, [legacy]);
-  function openUrl(url: string) {
-    if (lock.blocked("Your link will open afterward.")) {
-      setQueuedUrl(url);
-      return;
-    }
-    try {
-      const invitation = url.includes("#join=")
-        ? parseRoomInvitation(url)
-        : null;
-      if (invitation?.conversation) setInvitation(url);
-      else {
-        setIncoming({ url });
-        nav.setInbox(true);
-      }
-      if (!boot.data?.account) void signIn.withAccount();
-    } catch (e) {
-      setError(e);
-    }
-  }
-  useEffect(() => api.onOpenUrl(openUrl), [boot.data?.account]);
-  useEffect(() => {
-    if (!lock.locked && queuedUrl) {
-      setQueuedUrl(undefined);
-      setError(undefined);
-      openUrl(queuedUrl);
-    }
-  }, [lock.locked, queuedUrl]);
-  useEffect(() => {
-    if (boot.data?.pendingUrl) openUrl(boot.data.pendingUrl);
-  }, [boot.data?.pendingUrl]);
+  const links = useIncomingLinks(boot.data, nav, signIn, lock, setError);
+  const prs = usePullThreads(nav, lock, setError);
+  const pullsPage = usePullsPage(
+    lock,
+    projects.refetch,
+    prs.openInProject,
+    setError,
+  );
+  const starts = useNewThreads(
+    nav,
+    projects,
+    lock,
+    () => chatComposer.current?.focus(),
+    setError,
+  );
   useShortcut("settings", true, () => settings.setOpen(true));
-  useShortcut("new-thread", !!project && !legacy && !error, pickNewThread);
-  useShortcut("new-scratch", true, () => void newScratch());
-  async function add() {
-    if (lock.blocked()) return;
-    try {
-      const p = await api.addProject();
-      if (p) {
-        await projects.refetch();
-        nav.setSelected(p.id);
-        nav.setInbox(false);
-      }
-    } catch (e) {
-      setError(e);
-    }
-  }
-  /**
-   * A PR from the Pull requests page opens on its project's thread with the
-   * Review beside it; opening it the first time makes that thread.
-   */
-  async function openPullInProject(p: Project, ref: PullRef) {
-    if (!p.repository || lock.blocked()) return;
-    // The project's spelling of its repository, which its threads use.
-    const pr = {
-      owner: p.repository.owner,
-      name: p.repository.name,
-      number: ref.number,
-    };
-    const chatsOf = () =>
-      qc.fetchQuery({
-        queryKey: ["project-chats", p.id],
-        queryFn: () => api.projectChats(p.id),
-        staleTime: 0,
-      });
-    try {
-      let thread = (await chatsOf()).find(
-        (c) => c.scope.kind === "pr" && c.scope.ref.number === pr.number,
-      );
-      if (!thread) {
-        thread = await api.createProjectChat(p.id, { kind: "pr", ref: pr });
-        await chatsOf();
-      }
-      navigate(p, thread);
-      panes.show("changes");
-    } catch (e) {
-      setError(e);
-    }
-  }
-  /** Adds a project from the Pull requests page; the PR open there moves to its thread. */
-  async function addPullProject(repo?: Repo) {
-    try {
-      const p = await api.addProject();
-      if (!p) return;
-      await projects.refetch();
-      if (!repo) return;
-      if (!p.repository || repoKey(p.repository) !== repoKey(repo))
-        throw new Error(
-          `${p.name} is added, but it isn’t a clone of ${repo.owner}/${repo.name}.`,
-        );
-      if (pullsWhere.pull && pullsWhere.repo?.key === repoKey(repo))
-        await openPullInProject(p, { ...repo, number: pullsWhere.pull.number });
-    } catch (e) {
-      setError(e);
-    }
-  }
-  async function newChat(scope: ChatSummary["scope"] = { kind: "project" }) {
-    if (!project) return;
-    try {
-      const next = await api.createProjectChat(project.id, scope);
-      await chats.refetch();
-      openChat(next.id);
-      panes.show("chat");
-      return next;
-    } catch (e) {
-      setError(e);
-    }
-  }
-  async function discuss(ref: PullRef) {
-    const existing = chats.data?.find(
-      (c) => c.scope.kind === "pr" && c.scope.ref.number === ref.number,
-    );
-    if (existing) openChat(existing.id);
-    else await newChat({ kind: "pr", ref });
-    panes.show("chat");
-  }
-  /**
-   * Reviewing a PR from the new thread makes it that PR's thread, taking the
-   * unsent message and composer settings along, so a review started without
-   * messages has a thread to come back to.
-   */
-  const startingReview = useRef(false);
-  async function startReviewThread(ref: PullRef) {
-    if (!project || startingReview.current) return;
-    const existing = chats.data?.find(
-      (c) => c.scope.kind === "pr" && c.scope.ref.number === ref.number,
-    );
-    if (existing) return setChatId(existing.id);
-    startingReview.current = true;
-    const from = draftId;
-    try {
-      const next = await api.createProjectChat(project.id, {
-        kind: "pr",
-        ref,
-      });
-      saveComposerSettings(next.id, loadComposerSettings(from));
-      const draft = readDraft(threadDraftKey(from));
-      if (draft) {
-        writeDraft(threadDraftKey(next.id), draft);
-        writeDraft(threadDraftKey(from), "");
-      }
-      await chats.refetch();
-      setChatId(next.id);
-    } catch (e) {
-      setError(e);
-    } finally {
-      startingReview.current = false;
-    }
-  }
-  const reviewOpen = panes.layout.open.changes;
-  useEffect(() => {
-    if (reviewOpen && pull && !chat && chats.data && !lock.locked)
-      void startReviewThread(pull);
-  }, [reviewOpen, pull?.number, chat?.id, !!chats.data]);
-  /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
-  function pickNewThread() {
-    if (lock.blocked()) return;
-    if (realProjects.length === 1) openNewThread(realProjects[0]);
-    else if (realProjects.length) setPickingProject(true);
-    else void newScratch();
-  }
-  /** ⌘⇧N: a chat about anything, in a folder of its own. */
-  async function newScratch() {
-    if (lock.blocked()) return;
-    try {
-      const p = await api.createScratch();
-      await projects.refetch();
-      openNewThread(p);
-    } catch (e) {
-      setError(e);
-    }
-  }
-  function openNewThread(p: Project) {
-    if (!navigate(p, undefined, true)) return;
-    // After the new thread's composer mounts and a closing picker hands focus back.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => chatComposer.current?.focus()),
-    );
-  }
-  /**
-   * A new thread in the project folder on `text`: sent on the agent new
-   * threads start with, or left as a draft to change first.
-   */
-  async function startThread(text: string, send: boolean) {
-    if (!project || lock.blocked()) return;
-    const id = freshNewThread(project.id);
-    clearDraftScope(id);
-    writeDraft(threadDraftKey(id), text);
-    try {
-      const sent =
-        send &&
-        (await sendDraft(qc, {
-          key: threadDraftKey(id),
-          id,
-          project,
-          reply: false,
-        }));
-      if (sent) {
-        await chats.refetch();
-        navigate(project, sent);
-        return;
-      }
-    } catch (e) {
-      setError(e);
-    }
-    navigate(project, undefined, id);
-  }
-  async function reviewBranchPr(ref: PullRef) {
-    if (!project || lock.blocked()) return;
-    await discuss(ref);
-    panes.show("changes");
-  }
+  useShortcut("new-thread", !!project && !legacy && !error, starts.pick);
+  useShortcut("new-scratch", true, () => void starts.scratch());
   function runCommand(command: RelayCommand) {
     if (lock.blocked()) return false;
     if (command === "openpr") gitActions.current?.openPr();
     else if ((command === "new" || command === "clear") && project?.scratch)
-      void newScratch();
+      void starts.scratch();
     else if ((command === "new" || command === "clear") && project)
       navigate(project, undefined, true);
     else if (command === "files" || command === "changes") openCode(command);
@@ -452,7 +227,7 @@ export default function ProjectShell() {
               <strong>{settings.where}</strong>
             </div>
           ) : legacy ? (
-            <PullsTitle where={pullsWhere} onNav={goToPulls} />
+            <PullsTitle where={pullsPage.where} onNav={pullsPage.go} />
           ) : (
             <div className="project-window-title">
               {project?.plain ? (
@@ -513,7 +288,7 @@ export default function ProjectShell() {
                   disabled={lock.locked}
                   ref={gitActions}
                   onConnect={() => void signIn.withAccount()}
-                  onReview={(ref) => void reviewBranchPr(ref)}
+                  onReview={(ref) => void prs.review(ref)}
                   onChanges={() => openCode("changes")}
                   onError={setError}
                 />
@@ -599,10 +374,10 @@ export default function ProjectShell() {
             }
             account={account?.user.login}
             onOpen={navigate}
-            onPickNew={pickNewThread}
-            onNewScratch={() => void newScratch()}
+            onPickNew={starts.pick}
+            onNewScratch={() => void starts.scratch()}
             onSendDraft={() => chatComposer.current?.submit()}
-            onAdd={() => void add()}
+            onAdd={() => void starts.addProject()}
             onShared={(p) => {
               if (navigate(p)) setBrowseShared(true);
             }}
@@ -617,7 +392,7 @@ export default function ProjectShell() {
               // else it returns to where the page was left.
               if (lock.blocked()) return;
               if (!account) void signIn.withAccount(() => nav.setInbox(true));
-              else if (legacy) goToPulls({ to: "board" });
+              else if (legacy) pullsPage.go({ to: "board" });
               else nav.setInbox(true);
             }}
           />
@@ -628,7 +403,7 @@ export default function ProjectShell() {
             <Connected
               account={account}
               initialWorkspace={boot.data.workspace}
-              incomingLink={incoming}
+              incomingLink={links.incoming}
               pulls={{
                 projects: projects.data ?? NO_PROJECTS,
                 projectOf: (repo) =>
@@ -637,12 +412,12 @@ export default function ProjectShell() {
                     account.server,
                     repo,
                   ),
-                onOpenInProject: (p, ref) => void openPullInProject(p, ref),
+                onOpenInProject: (p, ref) => void prs.openInProject(p, ref),
                 onOpenProject: (p) => navigate(p),
-                onAddProject: (repo) => void addPullProject(repo),
-                onLocation: setPullsWhere,
+                onAddProject: (repo) => void pullsPage.addProject(repo),
+                onLocation: pullsPage.setWhere,
               }}
-              ref={pullsPage}
+              ref={pullsPage.page}
               onSettings={(category) =>
                 settings.show(category === "rooms" ? category : undefined)
               }
@@ -658,11 +433,17 @@ export default function ProjectShell() {
               <br />
               Connect Gitea when you’re ready to review pull requests together.
             </p>
-            <button className="primary" onClick={() => void add()}>
+            <button
+              className="primary"
+              onClick={() => void starts.addProject()}
+            >
               <FolderPlus size={16} />
               Add project folder
             </button>
-            <button className="text-button" onClick={() => void newScratch()}>
+            <button
+              className="text-button"
+              onClick={() => void starts.scratch()}
+            >
               Or just chat in Scratchpad
             </button>
           </main>
@@ -691,7 +472,7 @@ export default function ProjectShell() {
                     if (chat) void signIn.withAccount(() => setShare(chat));
                   }}
                   onDraftWorkspace={nav.setDraftWorkspace}
-                  onStartThread={startThread}
+                  onStartThread={starts.start}
                   onCreated={async (c) => {
                     if (!c.worktree) adoptDraftTerminal(project.id, c.id);
                     await chats.refetch();
@@ -704,7 +485,7 @@ export default function ProjectShell() {
                   onSelectPR={(ref) => newThreadIn({ kind: "pr", ref })}
                   onDeepReview={() => newThreadIn({ kind: "review" })}
                   onSwitchProject={(next) => navigate(next, undefined, true)}
-                  onAddProject={() => void add()}
+                  onAddProject={() => void starts.addProject()}
                   canChoosePR={!!account && !!project.repository}
                   onOpenCode={openCode}
                   onOpenFile={openChatFile}
@@ -755,7 +536,8 @@ export default function ProjectShell() {
                                   );
                               },
                               onDiscuss: (target, selectedPull) => {
-                                void discuss(selectedPull)
+                                void prs
+                                  .open(selectedPull)
                                   .then(() =>
                                     opens.ask({
                                       text: `About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
@@ -914,16 +696,16 @@ export default function ProjectShell() {
           <button onClick={() => void linked()}>Connect Gitea</button>
         </Modal>
       )}
-      {pickingProject && (
+      {starts.picking && (
         <NewThreadPicker
           projects={realProjects}
           current={project?.id ?? null}
           onSelect={(p) => {
-            setPickingProject(false);
-            openNewThread(p);
+            starts.setPicking(false);
+            starts.open(p);
           }}
-          onAdd={() => void add()}
-          onClose={() => setPickingProject(false)}
+          onAdd={() => void starts.addProject()}
+          onClose={() => starts.setPicking(false)}
         />
       )}
       {signIn.open && (
@@ -936,7 +718,7 @@ export default function ProjectShell() {
             onConnected={signIn.connected}
             loginRestore={boot.data.loginRestore}
             savedServer={boot.data.savedServer}
-            invitationUrl={incoming?.url}
+            invitationUrl={links.incoming?.url}
             platform={boot.data.platform}
             onRestoreAction={async (action) => {
               if (action === "retry") await api.retryLoginRestore();
@@ -946,14 +728,14 @@ export default function ProjectShell() {
           />
         </Modal>
       )}
-      {invitation && (
+      {links.invitation && (
         <JoinConversation
-          url={invitation}
+          url={links.invitation}
           projects={projects.data ?? []}
           account={account ?? null}
-          onAdd={add}
+          onAdd={starts.addProject}
           onSignIn={() => void signIn.withAccount()}
-          onClose={() => setInvitation(undefined)}
+          onClose={() => links.setInvitation(undefined)}
           onJoined={async (p, c) => {
             if (c) openThread.save(p, c.id);
             nav.setSelected(p);
@@ -961,7 +743,7 @@ export default function ProjectShell() {
             if (c) openChat(c.id);
             nav.setInbox(false);
             panes.show("chat");
-            setInvitation(undefined);
+            links.setInvitation(undefined);
           }}
         />
       )}
