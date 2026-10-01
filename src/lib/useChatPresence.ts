@@ -4,6 +4,8 @@ import type { ChatSummary } from "../../shared/projects";
 import { api } from "./api";
 import { useStoredFlag } from "./useStoredFlag";
 
+export type ChatPresence = ReturnType<typeof useChatPresence>;
+
 /** Who else has a shared thread open, and where; they see where you are
  * only while `sharePresence` is on. */
 export function useChatPresence(

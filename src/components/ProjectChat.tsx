@@ -14,10 +14,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  LockKeyhole,
-  Users,
   X,
-  ArrowLeft,
   GitPullRequest,
   FolderGit2,
   ChevronDown,
@@ -37,7 +34,7 @@ import { useNavigationLock } from "../lib/navigation-lock";
 import { readDraft, writeDraft } from "../lib/drafts";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import { ErrorBox, IconButton, Loading } from "./ui";
-import { LiveSyncControls } from "./LiveSyncControls";
+import { ThreadHeader } from "./ThreadHeader";
 import {
   ProjectComposer,
   type ComposerControls,
@@ -175,11 +172,7 @@ export function ProjectChat({
   } = useChatThread(chat, rootId);
   const writes = useThreadWrites(),
     { busy, error, setError } = writes;
-  const { peers, sharePresence, setSharePresence } = useChatPresence(
-    chat,
-    viewing,
-  );
-  const [sharingOpen, setSharingOpen] = useState(false);
+  const presence = useChatPresence(chat, viewing);
   const attachments = useComposerAttachments(id),
     { selection, setSelection, workItem, setWorkItem, codeRefs, setCodeRefs } =
       attachments;
@@ -410,73 +403,14 @@ export function ProjectChat({
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
-      <div className="thread-subheader">
-        {root ? (
-          <button className="text-button" onClick={() => setRootId(null)}>
-            <ArrowLeft size={14} />
-            Back to conversation
-          </button>
-        ) : (
-          <span className="thread-privacy">
-            {chat?.shared ? <Users size={13} /> : <LockKeyhole size={13} />}{" "}
-            {chat?.shared ? "Shared with your project" : "Private thread"}
-          </span>
-        )}
-        <span className="spacer" />
-        {chat?.shared && (
-          <button
-            className="text-button"
-            onClick={() => setSharingOpen((v) => !v)}
-            aria-expanded={sharingOpen}
-          >
-            Together{peers.length ? ` · ${peers.length + 1}` : ""}
-          </button>
-        )}
-        {chat && !project.plain && (
-          <button
-            className="text-button"
-            aria-label="Share conversation"
-            onClick={onShare}
-            disabled={
-              (!chat.shared &&
-                messages.some((message) => message.images?.length)) ||
-              chat.scope.kind === "review"
-            }
-            title={
-              chat.scope.kind === "review"
-                ? "Deep reviews can't be shared yet"
-                : !chat.shared &&
-                    messages.some((message) => message.images?.length)
-                  ? "This conversation contains private screenshots and cannot be shared yet"
-                  : undefined
-            }
-          >
-            <Users size={14} />
-            {chat.shared ? "Invite" : "Share"}
-          </button>
-        )}
-      </div>
-      {chat?.shared && sharingOpen && (
-        <div className="project-chat-sharing">
-          <label>
-            <input
-              type="checkbox"
-              checked={sharePresence}
-              onChange={(e) => setSharePresence(e.target.checked)}
-            />
-            Share my location
-          </label>
-          <LiveSyncControls chatId={chat.id} />
-        </div>
-      )}
-      {chat?.shared &&
-        sharingOpen &&
-        peers.map((p) => (
-          <div className="chat-peer-presence" key={p.userId}>
-            {p.name} · {p.path?.split("/").pop() ?? "In conversation"}
-            {p.total ? ` · ${p.viewed}/${p.total} viewed` : ""}
-          </div>
-        ))}
+      <ThreadHeader
+        chat={chat}
+        plain={project.plain}
+        presence={presence}
+        screenshots={messages.some((message) => message.images?.length)}
+        onShare={onShare}
+        onBack={root ? () => setRootId(null) : undefined}
+      />
       {!isEmpty && (
         <div className="project-messages" ref={scroll} onScroll={onScroll}>
           {chat && history.isPending && (
