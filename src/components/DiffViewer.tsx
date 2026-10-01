@@ -12,7 +12,6 @@ import {
 import { useContentHash } from "../lib/diagnostics";
 import { DiagnosticMessage } from "./ProjectChecks";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type {
   CodeViewDiffItem,
   DiffLineAnnotation,
@@ -45,6 +44,7 @@ import { useAISettings } from "../lib/useAISettings";
 import { agentName } from "../../shared/agents";
 import { useSyntaxThemes } from "../lib/appearance";
 import { useFileDiff } from "../lib/useFileDiff";
+import { usePullFileContents } from "../lib/usePullFileContents";
 import { labelDiffGapControls } from "../lib/diffGapControls";
 interface Props {
   /** A project thread's workspace, where blame is read instead of the PR's linked folder. */
@@ -114,20 +114,7 @@ export function DiffViewer({
   const questionAgent = agentName(
     useAISettings().data?.questionsProvider ?? "codex",
   );
-  const contents = useQuery({
-    queryKey: [
-      "contents",
-      pull.owner,
-      pull.name,
-      pull.number,
-      pull.head.sha,
-      pull.merge_base,
-      file.filename,
-    ],
-    queryFn: () => api.contents(pull, file, pull.head.sha, pull.merge_base),
-    gcTime: 0,
-    staleTime: Infinity,
-  });
+  const contents = usePullFileContents(pull, file);
   const viewer = useRef<CodeViewHandle<Annotation, undefined>>(null);
   const [problemLine, setProblemLine] = useState<number>();
   useEffect(() => {
