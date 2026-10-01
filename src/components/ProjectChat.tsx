@@ -51,9 +51,7 @@ import { useQueuedMessages } from "../lib/useQueuedMessages";
 import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter } from "./ContextWindowMeter";
-import { ScopeButtons } from "./ThreadScope";
-import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
-import { ScratchpadWord } from "./ScratchpadWord";
+import { ScopeButtons, ThreadIntroduction } from "./ThreadScope";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
 import type { CodeReference } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
@@ -540,49 +538,14 @@ export function ProjectChat({
           />
         ))}
 
-        {isEmpty && project.scratch && (
-          <div className="thread-introduction">
-            <h1 aria-label="What should we work on in Scratchpad?">
-              What should we work on in <ScratchpadWord />?
-            </h1>
-          </div>
-        )}
-        {isEmpty && !project.scratch && (
-          <div className="thread-introduction">
-            <h1
-              aria-label={
-                scope.kind === "pr"
-                  ? `Let’s review PR #${scope.ref.number} in ${project.name}.`
-                  : scope.kind === "review"
-                    ? `Deep review of ${project.name}`
-                    : `What should we work on in ${project.name}?`
-              }
-            >
-              {scope.kind === "pr" ? (
-                <>Let’s review PR #{scope.ref.number} in </>
-              ) : scope.kind === "review" ? (
-                <>Deep review of </>
-              ) : (
-                <>What should we work on in </>
-              )}
-              <ProjectHeadlinePicker
-                project={project}
-                projects={projects}
-                onSelect={onSwitchProject}
-                onAdd={onAddProject}
-              />
-              {scope.kind === "pr" ? "." : scope.kind === "review" ? "" : "?"}
-            </h1>
-            <p>
-              {scope.kind === "pr"
-                ? "Ask about the changes. Open the review when you’re ready."
-                : scope.kind === "review"
-                  ? "Reviewers read the changes on their own. The lead checks what they found, then fixes it with you."
-                  : project.plain
-                    ? "Understand the code or work on an idea."
-                    : "Understand the code, work on an idea, or review your changes."}
-            </p>
-          </div>
+        {isEmpty && (
+          <ThreadIntroduction
+            project={project}
+            projects={projects}
+            scope={scope}
+            onSwitchProject={onSwitchProject}
+            onAddProject={onAddProject}
+          />
         )}
         {!!error && <ErrorBox error={error} />}
         {isEmpty && scope.kind === "review" && !chat ? (

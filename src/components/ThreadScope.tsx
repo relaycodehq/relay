@@ -6,7 +6,9 @@ import {
 } from "lucide-react";
 import type { ChatScope, Project } from "../../shared/projects";
 import type { PullRef } from "../../shared/types";
+import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ProjectPullPicker } from "./ProjectPullPicker";
+import { ScratchpadWord } from "./ScratchpadWord";
 
 /** What a thread is about, picked beside the composer while it's empty. */
 export function ScopeButtons({
@@ -75,5 +77,66 @@ export function ScopeButtons({
         </button>
       )}
     </>
+  );
+}
+
+/** An empty thread's headline: what it's about, in which project. */
+export function ThreadIntroduction({
+  project,
+  projects,
+  scope,
+  onSwitchProject,
+  onAddProject,
+}: {
+  project: Project;
+  projects: Project[];
+  scope: ChatScope;
+  onSwitchProject: (project: Project) => void;
+  onAddProject: () => void;
+}) {
+  if (project.scratch)
+    return (
+      <div className="thread-introduction">
+        <h1 aria-label="What should we work on in Scratchpad?">
+          What should we work on in <ScratchpadWord />?
+        </h1>
+      </div>
+    );
+  return (
+    <div className="thread-introduction">
+      <h1
+        aria-label={
+          scope.kind === "pr"
+            ? `Let’s review PR #${scope.ref.number} in ${project.name}.`
+            : scope.kind === "review"
+              ? `Deep review of ${project.name}`
+              : `What should we work on in ${project.name}?`
+        }
+      >
+        {scope.kind === "pr" ? (
+          <>Let’s review PR #{scope.ref.number} in </>
+        ) : scope.kind === "review" ? (
+          <>Deep review of </>
+        ) : (
+          <>What should we work on in </>
+        )}
+        <ProjectHeadlinePicker
+          project={project}
+          projects={projects}
+          onSelect={onSwitchProject}
+          onAdd={onAddProject}
+        />
+        {scope.kind === "pr" ? "." : scope.kind === "review" ? "" : "?"}
+      </h1>
+      <p>
+        {scope.kind === "pr"
+          ? "Ask about the changes. Open the review when you’re ready."
+          : scope.kind === "review"
+            ? "Reviewers read the changes on their own. The lead checks what they found, then fixes it with you."
+            : project.plain
+              ? "Understand the code or work on an idea."
+              : "Understand the code, work on an idea, or review your changes."}
+      </p>
+    </div>
   );
 }
