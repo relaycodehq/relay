@@ -101,6 +101,8 @@ export class ProjectChats {
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
     };
+    // Hosts look methods up at call time, not with .bind(this): tests
+    // vi.spyOn(chats, "send"), and this.turns is only built last.
     this.councils = new Councils(core, {
       send: (id, input) => this.send(id, input),
       lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
