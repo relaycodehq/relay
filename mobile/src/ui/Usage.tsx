@@ -30,7 +30,7 @@ const paceColor = (pace: MeterPace, fallback: string) =>
   pace === "warn" ? warn : pace === "hot" || pace === "spent" ? hot : fallback;
 
 /** Only Claude and Codex report plan limits. */
-export const hasUsage = (provider: AgentProvider) =>
+const hasUsage = (provider: AgentProvider) =>
   provider === "claude" || provider === "codex";
 
 /** The agent's plan usage, looked up now and every few minutes while a thread is open. */
@@ -70,7 +70,7 @@ function meters(usage: ProviderUsage | undefined): UsageMeter[] {
   );
 }
 
-export function usageLabel(usage: ProviderUsage | undefined) {
+function usageLabel(usage: ProviderUsage | undefined) {
   const list = meters(usage);
   if (!list.length) return undefined;
   const worst = list.reduce((a, m) => (rank[m.pace] > rank[a.pace] ? m : a));

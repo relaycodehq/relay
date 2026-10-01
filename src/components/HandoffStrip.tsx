@@ -26,7 +26,7 @@ export function awayPlaceholder(chat: ChatSummary) {
 }
 
 /** What the thread is asked to do once it's back with work that didn't land. */
-export function resolveReturnPrompt(chat: ChatSummary) {
+function resolveReturnPrompt(chat: ChatSummary) {
   const { sentTo, worktree } = chat;
   const ref = `refs/relay/handoffs/${sentTo!.id}`;
   const branch = worktree?.branch ?? "this branch";
@@ -40,7 +40,7 @@ export function resolveReturnPrompt(chat: ChatSummary) {
 }
 
 /** What the strip says about a thread on another computer. */
-export function handoffLine(view: HandoffView): {
+function handoffLine(view: HandoffView): {
   title: string;
   detail?: string;
   failed?: boolean;

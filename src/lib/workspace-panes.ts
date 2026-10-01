@@ -101,10 +101,8 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
 }
 
 /** The open panes, in order. */
-export const visiblePanes = ({
-  order,
-  open,
-}: Pick<PaneLayout, "order" | "open">) => order.filter((id) => open[id]);
+const visiblePanes = ({ order, open }: Pick<PaneLayout, "order" | "open">) =>
+  order.filter((id) => open[id]);
 
 /** A folder without Git has no changes or history to show. */
 export const panesOf = (order: PaneId[], plain?: boolean) =>

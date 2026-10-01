@@ -73,7 +73,7 @@ const relayDark: Palette = {
   diffDeletion: "#45272c",
 };
 
-export const themes: Theme[] = [
+const themes: Theme[] = [
   {
     id: "relay",
     name: "Relay",

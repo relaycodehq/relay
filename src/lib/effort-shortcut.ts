@@ -58,7 +58,7 @@ function arrowPairLabel(downId: ShortcutId, upId: ShortcutId) {
 }
 
 export const effortKeysLabel = () => arrowPairLabel("effort-down", "effort-up");
-export const quickKeysLabel = () => arrowPairLabel("quick-prev", "quick-next");
+const quickKeysLabel = () => arrowPairLabel("quick-prev", "quick-next");
 
 export const useEffortKeysLabel = () => useShortcutValue(effortKeysLabel);
 export const useQuickKeysLabel = () => useShortcutValue(quickKeysLabel);

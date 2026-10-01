@@ -19,7 +19,7 @@ const fieldName = z
  */
 export const currentSprintField = "@CurrentIteration";
 
-export const sortKeySchema = z
+const sortKeySchema = z
   .object({
     field: z.union([z.literal(currentSprintField), fieldName]),
     direction: z.enum(["asc", "desc"]),
@@ -27,7 +27,7 @@ export const sortKeySchema = z
   .strict();
 export type SortKey = z.infer<typeof sortKeySchema>;
 
-export const fieldFilterSchema = z
+const fieldFilterSchema = z
   .object({
     field: fieldName,
     values: z.array(z.string().trim().min(1).max(200)).min(1).max(20),

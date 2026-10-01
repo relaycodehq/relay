@@ -84,7 +84,7 @@ function excerpt(text: string, budget: number): string {
  * conversation order. Side conversations, handoff notes and compactions aren't
  * what the thread is about.
  */
-export function titleContext(messages: ChatMessage[]): string {
+function titleContext(messages: ChatMessage[]): string {
   const sections = messages.flatMap((m, index) => {
     if (m.parentId || m.side || m.handoff || m.compaction) return [];
     const body =

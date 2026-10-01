@@ -747,11 +747,7 @@ function fieldValue(fields: Record<string, unknown>, reference: string) {
 }
 
 /** One sort key's verdict; an item without the field sorts last either way. */
-export function compareField(
-  a: unknown,
-  b: unknown,
-  direction: SortKey["direction"],
-) {
+function compareField(a: unknown, b: unknown, direction: SortKey["direction"]) {
   const value = (v: unknown) =>
     typeof v === "number"
       ? v

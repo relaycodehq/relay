@@ -27,13 +27,7 @@ export interface PullContext {
   onOpen: (pull: BoardPull) => void;
 }
 
-export function PullGlyph({
-  pull,
-  size = 15,
-}: {
-  pull: BoardPull;
-  size?: number;
-}) {
+function PullGlyph({ pull, size = 15 }: { pull: BoardPull; size?: number }) {
   const [Icon, label] =
     pull.state === "merged"
       ? [GitMerge, "Merged"]
@@ -53,7 +47,7 @@ export function PullGlyph({
   );
 }
 
-export function Person({ login, size = 18 }: { login: string; size?: number }) {
+function Person({ login, size = 18 }: { login: string; size?: number }) {
   let hash = 0;
   for (const c of login) hash = (hash * 31 + c.charCodeAt(0)) | 0;
   return (
@@ -84,7 +78,7 @@ export function RepoMark({ project }: { project?: Project }) {
 }
 
 /** Where a PR stands, from your side. */
-export function standing(
+function standing(
   pull: BoardPull,
   verdict: Verdict | null | undefined,
   started: boolean,

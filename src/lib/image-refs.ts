@@ -6,7 +6,7 @@ import { pasteBlock } from "../../shared/pasted-texts";
  * on send the tokens are renumbered to match that order.
  */
 export const imageToken = (n: number) => `[Image #${n}]`;
-export const imageTokenPattern = /\[Image #(\d+)\]/g;
+const imageTokenPattern = /\[Image #(\d+)\]/g;
 
 /** Text that is nothing but screenshot tokens, like a pasted image sent alone. */
 export const onlyImageTokens = (text: string) =>
@@ -31,7 +31,7 @@ function replaceTokens(text: string, replace: (n: number) => string) {
 }
 
 /** The numbers a draft refers to, in the order they first appear. */
-export function imageRefs(text: string): number[] {
+function imageRefs(text: string): number[] {
   const seen: number[] = [];
   replaceTokens(text, (n) => {
     if (!seen.includes(n)) seen.push(n);

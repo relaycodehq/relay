@@ -98,7 +98,7 @@ function snap(
  * One ratchet tick into `out` at audio time `t`. `vary`, around 1, makes each
  * click a little different, as real parts are.
  */
-export function tick(ctx: BaseAudioContext, out: AudioNode, t: number, vary: number) {
+function tick(ctx: BaseAudioContext, out: AudioNode, t: number, vary: number) {
   snap(ctx, out, t, { gain: 1.3, decay: 0.008, freq: 3000 * vary, q: 1.6, type: "bandpass" });
   snap(ctx, out, t, { gain: 0.4, decay: 0.004, freq: 7000, q: 1, type: "highpass" });
   const ring = ctx.createOscillator();

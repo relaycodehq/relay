@@ -151,7 +151,7 @@ function shapePath(shape: Shape): Path2D {
  * samples. Each segment gets its own width and round caps, so width changes
  * blend seamlessly and sharp turns never spike.
  */
-export function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
+function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
   const { points: p, widths: w } = s;
   if (!p.length) return;
   ctx.save();

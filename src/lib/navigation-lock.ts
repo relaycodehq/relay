@@ -9,7 +9,7 @@ import {
 } from "react";
 
 /** What every move that would drop an unsaved edit says instead. */
-export const LOCKED_MESSAGE = "Save or close the edited file first.";
+const LOCKED_MESSAGE = "Save or close the edited file first.";
 
 /**
  * Held while an editor has unsaved changes (or is saving them): moving to

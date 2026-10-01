@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const name = z
+const name = z
   .string()
   .min(1)
   .max(255)

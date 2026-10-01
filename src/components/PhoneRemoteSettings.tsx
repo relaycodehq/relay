@@ -232,7 +232,7 @@ export function PhoneRemoteSettings() {
   );
 }
 
-export function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
+function TailscaleRow({ tailnet }: { tailnet?: PhoneTailnet }) {
   const connected = tailnet?.status === "connected";
   return (
     <SettingsRow

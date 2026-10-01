@@ -33,7 +33,7 @@ function reachable(thread: string, known: KnownThreads): boolean {
 }
 
 /** Of `keys`, the per-thread and per-project ones nothing can reach. */
-export function staleKeys(keys: string[], known: KnownThreads): string[] {
+function staleKeys(keys: string[], known: KnownThreads): string[] {
   return keys.filter((key) => {
     const owner = keyOwner(key);
     if (!owner) return false;

@@ -265,7 +265,7 @@ const fresh = (): Store => ({
   lastPrompt: {},
 });
 
-export const sameSetup = (a: Setup, b: Setup) =>
+const sameSetup = (a: Setup, b: Setup) =>
   JSON.stringify(a) === JSON.stringify(b);
 /** Unpinned setups kept; pinned ones are kept on top of these. */
 const HISTORY = 8;

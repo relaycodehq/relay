@@ -3,7 +3,7 @@ import type { ClockifyStatus } from "../../shared/clockify";
 import type { PluginId, PluginToggles } from "../../shared/plugins";
 import { api } from "./api";
 
-export const usePlugins = () =>
+const usePlugins = () =>
   useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
 
 export function usePluginEnabled(id: PluginId) {

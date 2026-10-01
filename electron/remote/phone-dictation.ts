@@ -186,7 +186,7 @@ export class PhoneDictations {
 }
 
 /** 16-bit little-endian PCM to the engine's float samples. */
-export function toSamples(pcm: string) {
+function toSamples(pcm: string) {
   const bytes = Buffer.from(pcm, "base64");
   const samples = new Float32Array(bytes.length >> 1);
   for (let i = 0; i < samples.length; i++)

@@ -70,7 +70,7 @@ const one =
   (spec: string, twice?: boolean) =>
   (mac: boolean): KeyCombo[] => [combo(mac, spec, twice)];
 
-export const shortcutCommands = {
+const shortcutCommands = {
   settings: {
     title: "Open settings",
     group: "General",
