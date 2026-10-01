@@ -10,7 +10,6 @@ export interface CodeReference {
   code: string;
 }
 
-const MENTION = agentMentionPattern;
 // Mirrors codeReferenceMessage so sent messages render as pills again.
 const BLOCK =
   /^About (.+?):(\d+)(?:–(\d+))? \(([^()\n]+)\):\n\n(`{3,})\n([\s\S]*?)\n?\5(?:\n+|$)/;
@@ -43,7 +42,7 @@ export function codeReferenceLines(ref: Pick<CodeReference, "start" | "end">) {
 /** The plain text agents receive: each reference as a fenced excerpt. */
 export function codeReferenceMessage(refs: CodeReference[], body: string) {
   if (!refs.length) return body;
-  const mention = MENTION.exec(body.trim());
+  const mention = agentMentionPattern.exec(body.trim());
   const text = mention ? body.trim().slice(mention[0].length) : body.trim();
   const blocks = refs.map((ref) => {
     const fence = "`".repeat(
@@ -60,7 +59,7 @@ export function parseCodeReferences(body: string): {
   refs: CodeReference[];
   body: string;
 } {
-  const mention = MENTION.exec(body);
+  const mention = agentMentionPattern.exec(body);
   let rest = mention ? body.slice(mention[0].length) : body;
   const refs: CodeReference[] = [];
   for (let match; (match = BLOCK.exec(rest));) {
