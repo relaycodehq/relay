@@ -1,21 +1,7 @@
 import { useState } from "react";
-import { useNow } from "../lib/useNow";
 import { useQuery } from "@tanstack/react-query";
-import type { SidebarView } from "../../shared/types";
-import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
-import { NameInput } from "./NameInput";
-import {
-  firstThreads,
-  ShowMore,
-  ThreadRename,
-  ThreadRow,
-  ThreadRowMenu,
-  ThreadTitle,
-  type SidebarRows,
-} from "./SidebarThread";
-import { CardAgents, CardState } from "./ThreadStatus";
 import {
   Bell,
   Check,
@@ -30,63 +16,54 @@ import {
   Pencil,
   GitPullRequest,
   Plus,
-  RotateCcw,
   Search,
   Settings2,
   SquarePen,
-  Sunrise,
   Users,
   X,
 } from "lucide-react";
+import type { SidebarView } from "../../shared/types";
 import {
   projectNameSchema,
   type Project,
   type ChatSummary,
 } from "../../shared/projects";
-import {
-  chatActivitySections,
-  shortAge,
-  wakeLabel,
-} from "../../shared/chat-activity";
+import { chatActivitySections } from "../../shared/chat-activity";
 import { agentsSince } from "../../shared/waiting";
-import { MenuAction, MenuPopup } from "./SidebarMenu";
-import { SnoozeMenu } from "./SnoozeMenu";
-import { api } from "../lib/api";
-import { mac } from "../lib/mod-key";
-import {
-  modifiersLabel,
-  useBindings,
-  useShortcutLabel,
-} from "../lib/shortcuts";
-import { groupKey, useSidebarFolds } from "../lib/useSidebarFolds";
-import { SHELF_PAGE, useShelves } from "../lib/useShelves";
-import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
-import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
-import { AgentUpdateButton } from "./AgentUpdates";
-import type { SettingsCategory } from "./Settings";
-import { ClockifyTimer } from "./plugins/ClockifyTimer";
-import { ProjectBadge, useProjectIcon } from "./ProjectBadge";
-import { DraftCard } from "./DraftCard";
-import {
-  activityDrafts,
-  useDraftKeys,
-  type ActivityDraft,
-} from "../lib/drafts";
 import {
   parentGroup,
   type ProjectFolderNode,
 } from "../../shared/project-folders";
+import { api } from "../lib/api";
+import { useShortcutLabel } from "../lib/shortcuts";
+import { useNow } from "../lib/useNow";
+import { useSidebarView } from "../lib/useSidebarView";
+import { groupKey, useSidebarFolds } from "../lib/useSidebarFolds";
+import { useShelves } from "../lib/useShelves";
 import { useProjectGroups } from "../lib/useProjectGroups";
 import { dropSide, useProjectDrag } from "../lib/useProjectDrag";
-import "./sidebar.css";
-import { AwayPeek, AwayWhere } from "./AwayCard";
-import { awayStopped } from "../lib/useAwayViews";
 import { useSidebarThreads } from "../lib/useSidebarThreads";
 import { useUnread } from "../lib/useUnread";
 import { useThreadSearch } from "../lib/useThreadSearch";
 import { useThreadActions } from "../lib/useThreadActions";
 import { useActivityKeys } from "../lib/useActivityKeys";
 import { useAttention } from "../lib/useAttention";
+import { MenuAction, MenuPopup } from "./SidebarMenu";
+import { ErrorBox, IconButton, Spinner } from "./ui";
+import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
+import { AgentUpdateButton } from "./AgentUpdates";
+import type { SettingsCategory } from "./Settings";
+import { ClockifyTimer } from "./plugins/ClockifyTimer";
+import { useProjectIcon } from "./ProjectBadge";
+import { NameInput } from "./NameInput";
+import {
+  firstThreads,
+  ShowMore,
+  ThreadRow,
+  type SidebarRows,
+} from "./SidebarThread";
+import { ActivityView } from "./SidebarActivity";
+import "./sidebar.css";
 
 /** A section's heading; the label folds the list beneath it. */
 function SectionTitle({
@@ -172,8 +149,6 @@ export function ProjectSidebar({
   onAttention?: (mark: "waiting" | "unread" | undefined) => void;
 }) {
   const now = useNow(30_000);
-  // Follows drafts as they gain or lose text; each card follows its own.
-  const draftKeys = useDraftKeys();
   // Scratchpad chats list under their own heading, never as projects.
   const realProjects = projects.filter((p) => !p.scratch);
   const scratchIds = new Set(
@@ -207,8 +182,7 @@ export function ProjectSidebar({
     onNew,
     setError,
   });
-  const { triage, settle, regenerating } = actions;
-  const open = actions.open;
+  const { open, settle } = actions;
   const shortcuts = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
     active: sections.active,
@@ -218,7 +192,6 @@ export function ProjectSidebar({
     settle,
   });
   const attention = useAttention(sections.active, unread, onAttention);
-  const jumpBinding = useBindings("jump-thread")[0];
   const settleKeys = useShortcutLabel("settle");
   const rows: SidebarRows = {
     chatId,
@@ -232,15 +205,6 @@ export function ProjectSidebar({
   const newThreadKeys = useShortcutLabel("new-thread");
   const newScratchKeys = useShortcutLabel("new-scratch");
   const activityKeys = useShortcutLabel("activity");
-  const drafts =
-    view === "activity"
-      ? activityDrafts(
-          draftKeys,
-          byId,
-          new Map(all.map((c) => [c.id, c])),
-          chatId,
-        )
-      : [];
   const renderProject = (p: Project) => {
     const chats = all.filter((c) => c.projectId === p.id);
     const isOpen = folds.isOpen(p.id, p.id === projectId);
@@ -609,243 +573,6 @@ export function ProjectSidebar({
     );
   }
 
-  const card = (c: ChatSummary, index: number) => {
-    const p = byId.get(c.projectId);
-    const shortcut =
-      shortcuts && cmdHeld && jumpBinding && index < 9 ? index + 1 : undefined;
-    const isUnread = unread(c);
-    const selected = chatId === c.id;
-    return (
-      <ContextMenu.Root key={c.id}>
-        <AwayPeek view={away[c.id]}>
-          <ContextMenu.Trigger
-            role="button"
-            tabIndex={0}
-            className={[
-              "sb-card",
-              selected && "selected",
-              isUnread && "unread",
-              // Only the open thread, finished-but-unread ones and open
-              // questions stay bright; everything else, running included, dims.
-              !selected && !isUnread && !c.waiting && "dim",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={() => open(c)}
-            onKeyDown={rowKeys(() => open(c))}
-          >
-            <div className="sb-card-top">
-              <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-              <span className="sb-card-name">
-                <span className="sb-card-project">{p?.name}</span>
-                {shortcut && (
-                  <kbd className="sb-card-shortcut" aria-hidden>
-                    <span className={mac ? "glyph" : undefined}>
-                      {modifiersLabel(jumpBinding)}
-                    </span>
-                    {shortcut}
-                  </kbd>
-                )}
-              </span>
-              <CardState
-                chat={c}
-                unread={isUnread}
-                now={now}
-                stopped={awayStopped(away[c.id])}
-              />
-              <div className="sb-card-actions">
-                {!c.waiting && (
-                  <SnoozeMenu
-                    now={now}
-                    onSnooze={(until) =>
-                      void triage(c, { kind: "snooze", until })
-                    }
-                  />
-                )}
-                {!c.running && !c.waiting && (
-                  <button
-                    className="sb-card-action"
-                    title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      settle(c);
-                    }}
-                  >
-                    <Check size={13} />
-                    Settle
-                  </button>
-                )}
-              </div>
-            </div>
-            {actions.renaming === c.id ? (
-              <ThreadRename
-                chat={c}
-                actions={actions}
-                className="sb-group-input sb-card-title-input"
-              />
-            ) : (
-              <ThreadTitle
-                className="sb-card-title"
-                title={c.title}
-                regenerating={regenerating.has(c.id)}
-              />
-            )}
-            <div className="sb-card-meta">
-              {c.scope.kind === "pr" && (
-                <span className="sb-card-scope">
-                  <GitPullRequest size={11} />#{c.scope.ref.number}
-                </span>
-              )}
-              <span className="sb-card-branch">{c.branch}</span>
-              <AwayWhere view={away[c.id]} />
-              <CardAgents chat={c} />
-            </div>
-          </ContextMenu.Trigger>
-        </AwayPeek>
-        <ThreadRowMenu chat={c} rows={rows} />
-      </ContextMenu.Root>
-    );
-  };
-
-  const draftCard = (d: ActivityDraft) => (
-    <DraftCard
-      key={d.key}
-      draft={d}
-      selected={d.id === draftId}
-      onOpen={() => (d.chat ? onChat(d.chat) : onDraft(d.project, d.id))}
-      onSendOpen={onSendDraft}
-    />
-  );
-
-  const compactRow = (c: ChatSummary, kind: "snoozed" | "settled") => {
-    const p = byId.get(c.projectId);
-    return (
-      <ContextMenu.Root key={c.id}>
-        <ContextMenu.Trigger
-          role="button"
-          tabIndex={0}
-          className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
-          onClick={() => open(c)}
-          onKeyDown={rowKeys(() => open(c))}
-        >
-          <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-          {actions.renaming === c.id ? (
-            <ThreadRename
-              chat={c}
-              actions={actions}
-              className="sb-group-input sb-compact-title-input"
-            />
-          ) : (
-            <ThreadTitle
-              className="sb-compact-title"
-              title={c.title}
-              regenerating={regenerating.has(c.id)}
-            />
-          )}
-          <small
-            title={
-              c.autoSettled
-                ? c.worktree?.landed
-                  ? "Settled when its PR merged"
-                  : "Settled after days without activity"
-                : undefined
-            }
-          >
-            {kind === "snoozed"
-              ? wakeLabel(c.snoozedUntil!, new Date(now))
-              : shortAge(c.updated, now)}
-          </small>
-          <button
-            className="sb-card-action icon"
-            title={kind === "snoozed" ? "Wake now" : "Move back to activity"}
-            aria-label={kind === "snoozed" ? "Wake now" : "Unsettle"}
-            onClick={(e) => {
-              e.stopPropagation();
-              void triage(c, {
-                kind: kind === "snoozed" ? "wake" : "unsettle",
-              });
-            }}
-          >
-            {kind === "snoozed" ? (
-              <Sunrise size={13} />
-            ) : (
-              <RotateCcw size={13} />
-            )}
-          </button>
-        </ContextMenu.Trigger>
-        <ThreadRowMenu chat={c} rows={rows} />
-      </ContextMenu.Root>
-    );
-  };
-
-  const shelf = (
-    kind: "snoozed" | "settled",
-    label: string,
-    items: ChatSummary[],
-  ) => {
-    const shown = shelves.shown[kind];
-    return (
-      items.length > 0 && (
-        <section className="sb-shelf">
-          <button
-            className="sb-shelf-toggle"
-            aria-expanded={shelves.open[kind]}
-            onClick={() => shelves.toggle(kind)}
-          >
-            <span>
-              {label} <b>{items.length}</b>
-            </span>
-            <hr />
-            <ChevronRight size={12} />
-          </button>
-          {shelves.open[kind] && (
-            <div className="sb-shelf-list">
-              {items.slice(0, shown).map((c) => compactRow(c, kind))}
-              {items.length > shown && (
-                <button
-                  className="sb-thread sb-ghost"
-                  onClick={() => shelves.more(kind)}
-                >
-                  <span className="sb-thread-title">
-                    Show {Math.min(SHELF_PAGE, items.length - shown)} more
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-      )
-    );
-  };
-
-  const activity = (
-    <div className="sb-scroll sb-activity">
-      <div className="sb-view-heading">
-        <h2>Activity</h2>
-        <small>
-          {sections.active.length
-            ? `${sections.active.length} open`
-            : "All settled"}
-        </small>
-      </div>
-      <div className={`sb-cards ${shortcuts && cmdHeld ? "shortcuts" : ""}`}>
-        {drafts.map(draftCard)}
-        {sections.active.map(card)}
-      </div>
-      {!sections.active.length && !drafts.length && (
-        <div className="sb-empty">
-          <span className="sb-empty-icon">
-            <Check size={18} />
-          </span>
-          <strong>Inbox zero</strong>
-          <p>Threads come back here when an agent replies or needs you.</p>
-        </div>
-      )}
-      {shelf("snoozed", "Snoozed", sections.snoozed)}
-      {shelf("settled", "Settled", sections.settled)}
-    </div>
-  );
-
   const scratch = all.filter((c) => scratchIds.has(c.projectId));
   const moreScratch = folds.showsAll("scratchpad");
   // The open Scratchpad chat before its first message.
@@ -1012,7 +739,23 @@ export function ProjectSidebar({
           )}
         </button>
       </div>
-      {search.query ? searching : view === "activity" ? activity : threads}
+      {search.query ? (
+        searching
+      ) : view === "activity" ? (
+        <ActivityView
+          rows={rows}
+          threads={all}
+          sections={sections}
+          away={away}
+          hints={shortcuts && cmdHeld}
+          shelves={shelves}
+          draftId={draftId}
+          onDraft={onDraft}
+          onSendDraft={onSendDraft}
+        />
+      ) : (
+        threads
+      )}
       {viewError && <ErrorBox error={viewError} />}
       <div className="sb-footer">
         <button
