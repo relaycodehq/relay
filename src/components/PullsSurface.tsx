@@ -29,14 +29,15 @@ import { usePullSelection } from "../lib/usePullSelection";
 import { usePullsRepo } from "../lib/usePullsRepo";
 import { useSavedWorkspace } from "../lib/useSavedWorkspace";
 import { useStoredFlag } from "../lib/useStoredFlag";
-import { OpenPullUrl } from "./OpenPullUrl";
-import { PaneControls } from "./PaneControls";
-import { PullRequestsPage } from "./PullRequestsPage";
-import { ErrorToast, ReviewPanes } from "./ReviewPanes";
-import { RoomInvitationDialog } from "./RoomInvitationDialog";
+// In the order stylesheets were loaded before this was split, which the cascade follows.
 import { RoomPanel } from "./RoomPanel";
-import type { SettingsCategory } from "./Settings";
+import { RoomInvitationDialog } from "./RoomInvitationDialog";
 import { Loading, Modal } from "./ui";
+import { PaneControls } from "./PaneControls";
+import { ErrorToast, ReviewPanes } from "./ReviewPanes";
+import { PullRequestsPage } from "./PullRequestsPage";
+import { OpenPullUrl } from "./OpenPullUrl";
+import type { SettingsCategory } from "./Settings";
 
 const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
 
