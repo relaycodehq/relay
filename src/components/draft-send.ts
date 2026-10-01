@@ -1,8 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { ChatSummary, ProjectChatSend } from "../../shared/projects";
+import type { ChatSummary } from "../../shared/projects";
 import { agentMention } from "../../shared/rooms";
-import { workItemMessage } from "../../shared/devops";
-import { codeReferenceMessage } from "../../shared/code-references";
+import { buildSend } from "../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../shared/settings";
 import { api } from "../lib/api";
 import {
@@ -17,9 +16,8 @@ import {
 } from "../lib/composer-settings";
 import {
   clearDraftAttachments,
-  loadCodeRefs,
-  loadSelection,
-  loadWorkItem,
+  loadDraftAttachments,
+  withAttachments,
 } from "../lib/draft-attachments";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
@@ -95,27 +93,25 @@ export async function sendDraft(
   const images = await Promise.all(
     (await loadDraftImages(key)).map(flattenSketch),
   );
-  const body =
-    mention || recipient === "message" ? text : `@${recipient} ${text}`;
-  const value: Omit<ProjectChatSend, "id"> = {
-    ...(chat?.running ? { delivery: "queue" as const } : {}),
-    body,
-    choice,
-    ...messageContext(recipient, settings.claude),
-    provider: recipient === "message" ? "codex" : recipient,
-    runtimeMode: settings.runtimeMode,
-    interactionMode: council ? "plan" : settings.interactionMode,
-    ...(council ? { ultraplan: settings.council } : {}),
-    ...(images.length
-      ? {
-          images: images.map(({ name, mimeType, dataUrl }) => ({
-            name,
-            mimeType,
-            dataUrl,
-          })),
-        }
-      : {}),
-  };
+  const value = buildSend(
+    {
+      to: recipient,
+      choice,
+      ...messageContext(recipient, settings.claude),
+      runtimeMode: settings.runtimeMode,
+      interactionMode: settings.interactionMode,
+    },
+    text,
+    {
+      ...(council ? { council: settings.council } : {}),
+      ...(chat?.running ? { running: { steer: false } } : {}),
+      images: images.map(({ name, mimeType, dataUrl }) => ({
+        name,
+        mimeType,
+        dataUrl,
+      })),
+    },
+  );
   const target =
     chat ??
     started.get(id) ??
@@ -125,16 +121,9 @@ export async function sendDraft(
       scope.kind === "project" ? loadDraftWorkspace(id) : undefined,
     ));
   started.set(id, target);
-  const workItem = loadWorkItem(id);
-  const selection = loadSelection(id);
   await api.sendProjectChat(target.id, {
-    ...value,
+    ...withAttachments(value, loadDraftAttachments(id)),
     id: crypto.randomUUID(),
-    body: codeReferenceMessage(
-      loadCodeRefs(id),
-      workItem ? workItemMessage(workItem, body) : body,
-    ),
-    ...(selection ? { selection: { ...selection, question: body } } : {}),
   });
   started.delete(id);
   // A council is one question's worth; its thread goes on with the lead.

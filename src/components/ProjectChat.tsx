@@ -61,7 +61,9 @@ import {
   loadCodeRefs,
   loadSelection,
   loadWorkItem,
+  withAttachments,
 } from "../lib/draft-attachments";
+import type { ComposedSend } from "../../shared/compose-send";
 import {
   startThreadSettings,
   saveSentSettings,
@@ -90,9 +92,7 @@ import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
-import { workItemMessage } from "../../shared/devops";
 import {
-  codeReferenceMessage,
   parseCodeReferences,
   sameCodeReference,
   type CodeReference,
@@ -1117,20 +1117,7 @@ export function ProjectChat({
     }
   }
   async function send(
-    value: Pick<
-      ProjectChatSend,
-      | "body"
-      | "provider"
-      | "choice"
-      | "contextWindow"
-      | "runtimeMode"
-      | "interactionMode"
-      | "images"
-      | "delivery"
-      | "sendAt"
-      | "side"
-      | "ultraplan"
-    >,
+    value: ComposedSend,
     dispatch?: () => void,
   ): Promise<boolean> {
     if (busy) return false;
@@ -1150,22 +1137,16 @@ export function ProjectChat({
           scope.kind === "project" ? workspace : undefined,
         ));
       created.current = target;
-      const attached = !root && workItem,
-        refs = root ? [] : codeRefs;
-      const body = attached
-        ? workItemMessage(attached, value.body)
-        : value.body;
       await api.sendProjectChat(target.id, {
-        ...value,
-        body: codeReferenceMessage(refs, body),
+        // A side conversation leaves the thread's attachments waiting.
+        ...withAttachments(
+          value,
+          root ? { codeRefs: [] } : { workItem, codeRefs, selection },
+        ),
         id: crypto.randomUUID(),
         ...(root ? { parentId: root.id } : {}),
         ...(viewing.path ? { viewing: viewing.path } : {}),
-        ...(!root && selection
-          ? { selection: { ...selection, question: value.body } }
-          : {}),
       });
-      // A side conversation leaves the thread's attachments waiting.
       if (!root) {
         setSelection(undefined);
         setWorkItem(undefined);
@@ -1191,18 +1172,7 @@ export function ProjectChat({
     }
   }
   /** `/btw`: its thread opens, and the main thread's draft and attachments wait. */
-  async function askAside(
-    value: Pick<
-      ProjectChatSend,
-      | "body"
-      | "provider"
-      | "choice"
-      | "contextWindow"
-      | "runtimeMode"
-      | "interactionMode"
-    >,
-    dispatch?: () => void,
-  ) {
+  async function askAside(value: ComposedSend, dispatch?: () => void) {
     if (!chat) {
       setError(
         new Error("Ask the agent something first, then ask on the side."),

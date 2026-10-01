@@ -38,7 +38,13 @@ import {
   modelSchema,
   reasoningEffortSchema,
 } from "../../shared/settings";
-import type { ProjectChatSend, ResumeSettings } from "../../shared/projects";
+import type { ResumeSettings } from "../../shared/projects";
+import {
+  buildSend,
+  implementPlan,
+  type ComposedSend,
+  type SendSettings,
+} from "../../shared/compose-send";
 import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import {
@@ -190,20 +196,7 @@ export function ProjectComposer({
   /** The attachment alone is a complete message. */
   allowEmpty?: boolean;
   onSend: (
-    value: Pick<
-      ProjectChatSend,
-      | "body"
-      | "choice"
-      | "contextWindow"
-      | "provider"
-      | "runtimeMode"
-      | "interactionMode"
-      | "images"
-      | "delivery"
-      | "sendAt"
-      | "side"
-      | "ultraplan"
-    >,
+    value: ComposedSend,
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
     dispatch?: () => void,
   ) => Promise<boolean>;
@@ -434,6 +427,12 @@ export function ProjectComposer({
       isPickAgent(to) ? pickOf(to) : { model: "", reasoningEffort: "" },
     );
   const contextFor = (to: string) => messageContext(to, claude);
+  const sendSettings = (to: MessageProvider): SendSettings | undefined => {
+    const choice = choiceFor(to);
+    return (
+      choice && { to, choice, ...contextFor(to), runtimeMode, interactionMode }
+    );
+  };
   const [pickModel, setPickModel] = useState(0);
   const catalogs = useMemo(
     () => ({
@@ -1098,15 +1097,9 @@ export function ProjectComposer({
       const outgoing = takeDraft(false);
       try {
         const sent = await onSend(
-          {
+          buildSend(sendSettings(recipient)!, `@${recipient} ${btw.args}`, {
             side: true,
-            body: `@${recipient} ${btw.args}`,
-            provider: recipient,
-            choice: choiceFor(recipient)!,
-            ...contextFor(recipient),
-            runtimeMode,
-            interactionMode,
-          },
+          }),
           outgoing.dispatch,
         );
         if (!sent) outgoing.restore();
@@ -1144,37 +1137,16 @@ export function ProjectComposer({
       }
       const outgoing = takeDraft(true);
       const sent = await onSend(
-        {
-          ...(sendAt
-            ? { sendAt }
-            : running
-              ? {
-                  delivery:
-                    steer && !councilOn
-                      ? ("steer" as const)
-                      : ("queue" as const),
-                }
-              : {}),
-          body:
-            mention || recipient === "message"
-              ? body
-              : `@${recipient} ${body}`.trim(),
-          choice: choiceFor(recipient)!,
-          ...contextFor(recipient),
-          provider: recipient === "message" ? "codex" : recipient,
-          runtimeMode,
-          interactionMode: councilOn ? "plan" : interactionMode,
-          ...(councilOn ? { ultraplan: council } : {}),
-          ...(attached.length
-            ? {
-                images: attached.map(({ name, mimeType, dataUrl }) => ({
-                  name,
-                  mimeType,
-                  dataUrl,
-                })),
-              }
-            : {}),
-        },
+        buildSend(sendSettings(recipient)!, body, {
+          ...(councilOn ? { council } : {}),
+          ...(running ? { running: { steer } } : {}),
+          sendAt,
+          images: attached.map(({ name, mimeType, dataUrl }) => ({
+            name,
+            mimeType,
+            dataUrl,
+          })),
+        }),
         outgoing.dispatch,
       );
       if (!sent) {
@@ -1259,14 +1231,15 @@ export function ProjectComposer({
               if (!selected || sending.current) return;
               sending.current = true;
               try {
-                const accepted = await onSend({
-                  body: `@${planProvider} Implement the plan from your previous response.`,
-                  provider: planProvider,
-                  choice: choiceFor(planProvider)!,
-                  ...contextFor(planProvider),
-                  runtimeMode,
-                  interactionMode: "default",
-                });
+                const accepted = await onSend(
+                  buildSend(
+                    {
+                      ...sendSettings(planProvider)!,
+                      interactionMode: "default",
+                    },
+                    implementPlan(planProvider),
+                  ),
+                );
                 if (accepted) {
                   setProvider(planProvider);
                   setInteractionMode("default");
