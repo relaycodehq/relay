@@ -67,7 +67,9 @@ import {
 } from "../lib/shortcuts";
 import { modifierCode } from "../../shared/shortcuts";
 import { useWindowFocused } from "../lib/window-focus";
-import { readJson } from "../lib/persisted-store";
+import { readJson, writeJson } from "../lib/persisted-store";
+import { groupKey, useSidebarFolds } from "../lib/useSidebarFolds";
+import { SHELF_PAGE, useShelves } from "../lib/useShelves";
 import { ErrorBox, IconButton, rowKeys, Spinner } from "./ui";
 import { CheckUpdatesButton, UpdateButton } from "./UpdateButton";
 import { AgentUpdateButton } from "./AgentUpdates";
@@ -98,7 +100,6 @@ import { awayStopped, useAwayViews, withAway } from "../lib/useAwayViews";
 const THREADS_PER_PROJECT = 5;
 const SEARCH_RESULTS = 50;
 const STALE_AFTER = 24 * 60 * 60 * 1000;
-const SHELF_PAGE = 5;
 const CMD_HINT_DELAY_MS = 500;
 const PROJECT_DRAG = "application/x-relay-project";
 const GROUP_DRAG = "application/x-relay-group";
@@ -111,14 +112,6 @@ type DropTarget =
 function readObject<T>(key: string, fallback: T): T {
   const value = readJson(key);
   return value && typeof value === "object" ? (value as T) : fallback;
-}
-
-function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Sidebar conveniences never block the workspace.
-  }
 }
 
 /**
@@ -554,35 +547,8 @@ export function ProjectSidebar({
     },
   });
   useEffect(() => saveView(view), [view, saveView]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      Object.entries(
-        readObject<Record<string, unknown>>("relay-project-expansion", {}),
-      )
-        .filter(([, value]) => typeof value === "boolean")
-        .map(([key, value]) => [key, value === true]),
-    ),
-  );
-  useEffect(() => writeJson("relay-project-expansion", expanded), [expanded]);
-  const [folded, setFolded] = useState(() => {
-    const saved = readObject<Record<string, unknown>>(
-      "relay-sidebar-folded",
-      {},
-    );
-    return {
-      scratchpad: saved.scratchpad === true,
-      projects: saved.projects === true,
-    };
-  });
-  useEffect(() => writeJson("relay-sidebar-folded", folded), [folded]);
-  const fold = (section: keyof typeof folded) =>
-    setFolded((s) => ({ ...s, [section]: !s[section] }));
-  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
-  const [shelves, setShelves] = useState({ snoozed: false, settled: false });
-  const [shelfShown, setShelfShown] = useState({
-    snoozed: SHELF_PAGE,
-    settled: SHELF_PAGE,
-  });
+  const folds = useSidebarFolds();
+  const shelves = useShelves();
   const groups = useQuery({
     queryKey: ["project-groups"],
     queryFn: () => api.projectGroups(),
@@ -625,7 +591,7 @@ export function ProjectSidebar({
   };
   const createGroup = (parent: string, name: string, project?: string) => {
     const path = joinGroup(parent, name);
-    setExpanded((state) => ({ ...state, ["folder:" + path]: true }));
+    folds.setOpen(groupKey(path), true);
     void changeGroups(
       () =>
         project
@@ -644,8 +610,7 @@ export function ProjectSidebar({
   };
   const startGroup = (parent: string, project?: string) => {
     setRenaming(undefined);
-    if (parent)
-      setExpanded((state) => ({ ...state, ["folder:" + parent]: true }));
+    if (parent) folds.setOpen(groupKey(parent), true);
     setDraft({ parent, project });
   };
   const [dragging, setDragging] = useState<string | null>(null);
@@ -738,10 +703,7 @@ export function ProjectSidebar({
     if (expandTimer.current) clearTimeout(expandTimer.current.timer);
     expandTimer.current = {
       key,
-      timer: window.setTimeout(
-        () => setExpanded((state) => ({ ...state, [key]: true })),
-        550,
-      ),
+      timer: window.setTimeout(() => folds.setOpen(key, true), 550),
     };
   };
   // Kept current by the desktop's pushes; see lib/chat-events.
@@ -1075,8 +1037,8 @@ export function ProjectSidebar({
 
   const renderProject = (p: Project) => {
     const chats = all.filter((c) => c.projectId === p.id);
-    const isOpen = expanded[p.id] ?? p.id === projectId;
-    const more = showAll[p.id];
+    const isOpen = folds.isOpen(p.id, p.id === projectId);
+    const more = folds.showsAll(p.id);
     const visible = more ? chats : chats.slice(0, THREADS_PER_PROJECT);
     const busy = chats.some((c) => c.running || agentsSince(c.pending));
     return (
@@ -1138,7 +1100,7 @@ export function ProjectSidebar({
                 className="sb-project-expand"
                 aria-label={`${isOpen ? "Collapse" : "Expand"} ${p.name}`}
                 aria-expanded={isOpen}
-                onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
+                onClick={() => folds.setOpen(p.id, !isOpen)}
               >
                 <ProjectFolderIcon id={p.id} open={isOpen} />
               </button>
@@ -1147,7 +1109,7 @@ export function ProjectSidebar({
                 className="sb-project-name"
                 title={p.path}
                 aria-expanded={isOpen}
-                onClick={() => setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
+                onClick={() => folds.setOpen(p.id, !isOpen)}
               >
                 <span>{p.name}</span>
                 <ChevronRight
@@ -1202,7 +1164,7 @@ export function ProjectSidebar({
               <ShowMore
                 more={more}
                 hidden={chats.length - THREADS_PER_PROJECT}
-                onToggle={() => setShowAll((s) => ({ ...s, [p.id]: !more }))}
+                onToggle={() => folds.setShowsAll(p.id, !more)}
               />
             )}
           </div>
@@ -1353,8 +1315,8 @@ export function ProjectSidebar({
           />
         )}
         {node.folders.map((folder) => {
-          const key = "folder:" + folder.path;
-          const isOpen = expanded[key] ?? true;
+          const key = groupKey(folder.path);
+          const isOpen = folds.isOpen(key, true);
           const into = drop?.kind === "folder" && drop.path === folder.path;
           const empty =
             !folder.folders.length &&
@@ -1400,10 +1362,7 @@ export function ProjectSidebar({
                   onSubmit={(name) => {
                     setRenaming(undefined);
                     const to = joinGroup(parentGroup(folder.path), name);
-                    setExpanded((state) => ({
-                      ...state,
-                      ["folder:" + to]: isOpen,
-                    }));
+                    folds.setOpen(groupKey(to), isOpen);
                     void changeGroups(() =>
                       api.renameProjectGroup(folder.path, to),
                     );
@@ -1434,9 +1393,7 @@ export function ProjectSidebar({
                       aria-label={`${isOpen ? "Collapse" : "Expand"} group ${folder.path}`}
                       aria-expanded={isOpen}
                       title="Double-click to rename"
-                      onClick={() =>
-                        setExpanded((state) => ({ ...state, [key]: !isOpen }))
-                      }
+                      onClick={() => folds.setOpen(key, !isOpen)}
                       onDoubleClick={() => setRenaming(folder.path)}
                     >
                       <span>{folder.name}</span>
@@ -1650,43 +1607,41 @@ export function ProjectSidebar({
     kind: "snoozed" | "settled",
     label: string,
     items: ChatSummary[],
-  ) =>
-    items.length > 0 && (
-      <section className="sb-shelf">
-        <button
-          className="sb-shelf-toggle"
-          aria-expanded={shelves[kind]}
-          onClick={() => {
-            setShelves((s) => ({ ...s, [kind]: !s[kind] }));
-            setShelfShown((s) => ({ ...s, [kind]: SHELF_PAGE }));
-          }}
-        >
-          <span>
-            {label} <b>{items.length}</b>
-          </span>
-          <hr />
-          <ChevronRight size={12} />
-        </button>
-        {shelves[kind] && (
-          <div className="sb-shelf-list">
-            {items.slice(0, shelfShown[kind]).map((c) => compactRow(c, kind))}
-            {items.length > shelfShown[kind] && (
-              <button
-                className="sb-thread sb-ghost"
-                onClick={() =>
-                  setShelfShown((s) => ({ ...s, [kind]: s[kind] + SHELF_PAGE }))
-                }
-              >
-                <span className="sb-thread-title">
-                  Show {Math.min(SHELF_PAGE, items.length - shelfShown[kind])}{" "}
-                  more
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-      </section>
+  ) => {
+    const shown = shelves.shown[kind];
+    return (
+      items.length > 0 && (
+        <section className="sb-shelf">
+          <button
+            className="sb-shelf-toggle"
+            aria-expanded={shelves.open[kind]}
+            onClick={() => shelves.toggle(kind)}
+          >
+            <span>
+              {label} <b>{items.length}</b>
+            </span>
+            <hr />
+            <ChevronRight size={12} />
+          </button>
+          {shelves.open[kind] && (
+            <div className="sb-shelf-list">
+              {items.slice(0, shown).map((c) => compactRow(c, kind))}
+              {items.length > shown && (
+                <button
+                  className="sb-thread sb-ghost"
+                  onClick={() => shelves.more(kind)}
+                >
+                  <span className="sb-thread-title">
+                    Show {Math.min(SHELF_PAGE, items.length - shown)} more
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )
     );
+  };
 
   const activity = (
     <div className="sb-scroll sb-activity">
@@ -1717,7 +1672,7 @@ export function ProjectSidebar({
   );
 
   const scratch = all.filter((c) => scratchIds.has(c.projectId));
-  const moreScratch = showAll.scratchpad;
+  const moreScratch = folds.showsAll("scratchpad");
   // The open Scratchpad chat before its first message.
   const scratchDraft = !!projectId && scratchIds.has(projectId) && !chatId;
   const scratchpad = (
@@ -1725,8 +1680,8 @@ export function ProjectSidebar({
       <div className="sb-section-heading">
         <SectionTitle
           label="Scratchpad"
-          open={!folded.scratchpad}
-          onToggle={() => fold("scratchpad")}
+          open={!folds.folded.scratchpad}
+          onToggle={() => folds.fold("scratchpad")}
         />
         <IconButton
           label={`New chat  ${newScratchKeys}`.trim()}
@@ -1735,7 +1690,7 @@ export function ProjectSidebar({
           <Plus size={14} />
         </IconButton>
       </div>
-      {!folded.scratchpad && (
+      {!folds.folded.scratchpad && (
         <div className="sb-thread-list flat">
           {scratchDraft && (
             <div className="sb-thread-row">
@@ -1756,9 +1711,7 @@ export function ProjectSidebar({
             <ShowMore
               more={moreScratch}
               hidden={scratch.length - THREADS_PER_PROJECT}
-              onToggle={() =>
-                setShowAll((s) => ({ ...s, scratchpad: !moreScratch }))
-              }
+              onToggle={() => folds.setShowsAll("scratchpad", !moreScratch)}
             />
           )}
         </div>
@@ -1789,8 +1742,8 @@ export function ProjectSidebar({
       >
         <SectionTitle
           label="Projects"
-          open={!folded.projects}
-          onToggle={() => fold("projects")}
+          open={!folds.folded.projects}
+          onToggle={() => folds.fold("projects")}
         />
         <div className="sb-heading-actions">
           <div className="sb-row-actions">
@@ -1804,8 +1757,8 @@ export function ProjectSidebar({
         </div>
       </div>
       {groupError && <p className="sb-note error">{groupError}</p>}
-      {!folded.projects && renderFolder(tree)}
-      {!folded.projects && !realProjects.length && (
+      {!folds.folded.projects && renderFolder(tree)}
+      {!folds.folded.projects && !realProjects.length && (
         <p className="sb-note">Add a project folder to get started.</p>
       )}
     </div>

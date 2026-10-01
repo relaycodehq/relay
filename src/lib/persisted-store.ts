@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /** What `key` holds, parsed; undefined when it's unset, malformed or storage is unavailable. */
 export function readJson(key: string): unknown {
@@ -8,6 +8,25 @@ export function readJson(key: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** Saves `value` under `key` as JSON; storage that's unavailable or full is no error. */
+export function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // What's kept this way is a convenience; it never blocks the workspace.
+  }
+}
+
+/**
+ * Component state kept per device under `key`, saved as it changes. `parse`
+ * turns what was saved (undefined when nothing or malformed) into the state.
+ */
+export function useStoredState<T>(key: string, parse: (saved: unknown) => T) {
+  const [value, setValue] = useState(() => parse(readJson(key)));
+  useEffect(() => writeJson(key, value), [value]);
+  return [value, setValue] as const;
 }
 
 /**
