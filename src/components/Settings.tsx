@@ -33,7 +33,6 @@ import {
   type SettingEntry,
 } from "../lib/settings-search";
 import type { Account } from "../../shared/types";
-import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
 import { keys } from "../lib/mod-key";
 import {
@@ -45,7 +44,8 @@ import {
 import { useQuickKeysLabel } from "../lib/effort-shortcut";
 import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
-import { useAISettings } from "../lib/useAISettings";
+import { useAISettingsDraft } from "../lib/useAISettingsDraft";
+import { useLeaveOnEscape } from "../lib/useLeaveOnEscape";
 import { useUpdates } from "../lib/updates";
 import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
@@ -495,33 +495,11 @@ export function Settings({
   useEffect(() => searchInput.current?.focus(), []);
   const [category, setCategory] = useState<CategoryId>(initialCategory);
   const [query, setQuery] = useState("");
-  // Escape clears the search, then leaves. Popups and fields that handle it
-  // themselves keep it; popups close during the event, so decide first.
-  const leave = useRef(() => {});
-  leave.current = () => (query ? setQuery("") : onClose());
-  useEffect(() => {
-    let counts = false;
-    const capture = (e: KeyboardEvent) => {
-      counts =
-        e.key === "Escape" &&
-        !e.isComposing &&
-        !document.querySelector('dialog[open], [role="dialog"], [role="menu"]');
-    };
-    const bubble = (e: KeyboardEvent) => {
-      if (counts && !e.defaultPrevented) leave.current();
-    };
-    window.addEventListener("keydown", capture, true);
-    window.addEventListener("keydown", bubble);
-    return () => {
-      window.removeEventListener("keydown", capture, true);
-      window.removeEventListener("keydown", bubble);
-    };
-  }, []);
+  // Escape clears the search, then leaves.
+  useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
   const [error, setError] = useState<unknown>();
 
-  // AI settings keep their explicit save: a model run is expensive to change
-  // by accident.
-  const settings = useAISettings(),
+  const ai = useAISettingsDraft(setError),
     qc = useQueryClient();
   const smartProjectNames = useQuery({
     queryKey: ["smart-project-names"],
@@ -535,20 +513,7 @@ export function Settings({
       await qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
-  const [draft, setDraft] = useState<AISettings>();
-  const [saving, setSaving] = useState(false),
-    [saved, setSaved] = useState(false);
-  const values = draft ?? settings.data;
-  const change = (
-    kind: "grouping" | "questions" | "split" | "commitMessage" | "timesheet",
-    value: AISettings["questions"],
-    provider: AgentProvider,
-  ) => {
-    if (values) {
-      setDraft({ ...values, [kind]: value, [`${kind}Provider`]: provider });
-      setSaved(false);
-    }
-  };
+  const { values, change } = ai;
 
   // Releases stamp their own version at build time; the updater knows it.
   const updates = useUpdates();
@@ -893,10 +858,7 @@ export function Settings({
             >
               <AgentSelect
                 value={values.threadProvider}
-                onChange={(threadProvider) => {
-                  setDraft({ ...values, threadProvider });
-                  setSaved(false);
-                }}
+                onChange={ai.setThreadProvider}
               />
             </SettingsRow>
             <SettingsRow
@@ -973,7 +935,7 @@ export function Settings({
             )}
             <SettingsFooter
               note={
-                saved ? (
+                ai.saved ? (
                   <span role="status">Settings saved</span>
                 ) : (
                   "Fast mode uses more credits where available. Existing grouping checkpoints keep their saved model, reasoning effort and speed."
@@ -982,34 +944,17 @@ export function Settings({
             >
               <button
                 className="primary"
-                disabled={
-                  !draft ||
-                  saving ||
-                  !aiSettingsSchema.safeParse(values).success
-                }
-                onClick={async () => {
-                  setSaving(true);
-                  setError(undefined);
-                  try {
-                    const next = await api.saveAISettings(values);
-                    qc.setQueryData(["ai-settings"], next);
-                    setDraft(undefined);
-                    setSaved(true);
-                  } catch (error) {
-                    setError(error);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
+                disabled={!ai.canSave}
+                onClick={ai.save}
               >
-                {saving ? "Saving…" : "Save AI settings"}
+                {ai.saving ? "Saving…" : "Save AI settings"}
               </button>
             </SettingsFooter>
           </SettingsCard>
-        ) : settings.error ? (
+        ) : ai.settings.error ? (
           <ErrorBox
-            error={settings.error}
-            retry={() => void settings.refetch()}
+            error={ai.settings.error}
+            retry={() => void ai.settings.refetch()}
           />
         ) : (
           <p className="setting-muted">Loading model settings…</p>
