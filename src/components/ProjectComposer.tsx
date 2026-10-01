@@ -1,4 +1,3 @@
-import { runtimeModes } from "../../shared/agent-modes";
 import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
 import { ComposerToolbar } from "./ComposerToolbar";
 import {
@@ -6,19 +5,7 @@ import {
   type PromptInputHandle,
 } from "./ComposerPromptInput";
 import { useComposerCommands } from "./ComposerCommands";
-import {
-  isComposerCommand,
-  relayCommand,
-  type CommandOption,
-  type RelayCommand,
-} from "../../shared/commands";
-import {
-  composerCommand,
-  composerTargets,
-  modelCommandOptions,
-  modelEfforts,
-  type CommandSettings,
-} from "../../shared/composer-commands";
+import { relayCommand, type RelayCommand } from "../../shared/commands";
 import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import {
   useCallback,
@@ -31,7 +18,6 @@ import {
   type Ref,
 } from "react";
 import { ArrowUp, GitBranch, Paperclip, X } from "lucide-react";
-import { effortLabels } from "../../shared/settings";
 import type { ResumeSettings } from "../../shared/projects";
 import {
   buildSend,
@@ -39,15 +25,11 @@ import {
   type ComposedSend,
 } from "../../shared/compose-send";
 import { draftRecipient } from "../../shared/recipient";
-import { isPickAgent } from "../lib/composer-settings";
 import { useComposerSettings } from "../lib/useComposerSettings";
 import { useModelCatalogs } from "../lib/useModelCatalogs";
 import { useAgentRuns } from "../lib/useAgentRuns";
 import {
   agentMentionPattern,
-  agentName,
-  agentProviders,
-  agents,
   type AgentProvider,
   reportsUsage,
 } from "../../shared/agents";
@@ -65,12 +47,9 @@ import { dictationSnapshot, stopDictation } from "../lib/dictation/session";
 import { useComposerToolbar } from "../lib/composer-toolbar";
 import { sendAction, steerKeyLabel, useSendKey } from "../lib/send-key";
 import { effortStep, quickStep } from "../lib/effort-shortcut";
-import {
-  presetIndex,
-  quickItems,
-  stepPreset,
-  useQuickSwitch,
-} from "../lib/quick-switch";
+import { quickItems } from "../lib/quick-switch";
+import { useQuickSwitchHud } from "../lib/useQuickSwitchHud";
+import { useSettingCommands } from "../lib/useSettingCommands";
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { EffortControl, offersEffort } from "./ComposerEffortControl";
 import { api } from "../lib/api";
@@ -200,27 +179,11 @@ export function ProjectComposer({
     shared,
     agent,
   );
-  const { provider, setProvider, setChoice, claude, setClaude, saveLastModel } =
-    composer;
+  const { provider, setProvider, saveLastModel } = composer;
   const catalogs = useModelCatalogs(projectId);
-  const {
-    codex: codexModels,
-    picks: pickCatalogs,
-    defaults,
-    of: modelsOf,
-    defaultNames,
-  } = catalogs;
+  const { codex: codexModels, defaultNames } = catalogs;
   const runs = useAgentRuns(composer, catalogs, dropMention);
-  const {
-    codex: selected,
-    claudeListed,
-    levels: { claude: claudeDefaultLevel, codex: codexDefaultLevel },
-    pickOf,
-    choiceFor,
-    contextFor,
-    sendSettings,
-    setPickEffort,
-  } = runs;
+  const { codex: selected, choiceFor, contextFor, sendSettings } = runs;
   const {
     runtimeMode,
     setRuntimeMode,
@@ -316,38 +279,7 @@ export function ProjectComposer({
   }, []);
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
-  const [pickModel, setPickModel] = useState(0);
-  // Quick switch: with presets set up, ⌃⌘←/→ steps through them.
-  const quickSwitch = useQuickSwitch();
-  const quickPresets = quickSwitch.enabled ? quickSwitch.presets : [];
-  const [quick, setQuick] = useState({ open: false, at: -1, dir: 1 });
-  const quickHover = useRef(false);
-  const quickTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(quickTimer.current), []);
-  const hideQuickSoon = () => {
-    clearTimeout(quickTimer.current);
-    quickTimer.current = setTimeout(() => {
-      if (!quickHover.current) setQuick((q) => ({ ...q, open: false }));
-    }, 1400);
-  };
-  const pickPreset = (at: number, dir: number) => {
-    runs.applyPreset(quickPresets[at]);
-    setQuick({ open: true, at, dir });
-    hideQuickSoon();
-  };
-  function stepQuick(step: -1 | 1) {
-    const run = runs.now(recipient);
-    const from = run ? presetIndex(quickPresets, run, quick.at) : -1;
-    // The revolver goes on round past the ends; the other styles stop there.
-    const wrap = quickSwitch.style === "revolver";
-    const at = stepPreset(quickPresets.length, from, step, wrap);
-    if (at < 0) return;
-    // At an end: show where you are without changing anything.
-    if (at === from) {
-      setQuick({ open: true, at, dir: step });
-      hideQuickSoon();
-    } else pickPreset(at, step);
-  }
+  const quick = useQuickSwitchHud(runs, recipient);
   /** An agent was picked here, so an @mention would only override it. */
   function dropMention() {
     const prefix = agentMentionPattern.exec(draft.trimStart())?.[0];
@@ -358,130 +290,20 @@ export function ProjectComposer({
         text: "",
       });
   }
-  /** The recipient's model, as /model and /effort see it; "" is Default. */
-  const recipientModel = () =>
-    recipient === "claude"
-      ? claude.model
-      : isPickAgent(recipient)
-        ? pickOf(recipient).model
-        : (selected?.model ?? "");
-  const commandSettings = (): CommandSettings => ({
-    recipient,
-    targets: composerTargets,
-    model: recipientModel(),
-    fast: !!selected?.fast,
-    plan: interactionMode === "plan",
-    catalogs: Object.fromEntries(agentProviders.map((p) => [p, modelsOf(p)])),
-    defaultNames,
+  const settingCommands = useSettingCommands({
+    state: composer,
+    runs,
+    catalogs,
+    to: recipient,
+    onCommand,
   });
-  // Every model /model can switch to, the current agent's first.
-  function modelOptions() {
-    const { model, catalogs } = commandSettings();
-    return modelCommandOptions(recipient, catalogs, defaultNames).map((m) => ({
-      ...m,
-      label: m.value,
-      source: agentName(m.provider),
-      current: m.provider === recipient && m.value === (model || "default"),
-    }));
-  }
-  const toggles = (on: boolean): CommandOption[] => [
-    { value: "on", label: "on", current: on },
-    { value: "off", label: "off", current: !on },
-  ];
-  // Values offered after a composer command, for the current agent.
-  function commandOptions(command: RelayCommand): CommandOption[] | undefined {
-    if (command === "provider")
-      return composerTargets.map((value) => ({
-        value,
-        label: value,
-        description:
-          value === "codex"
-            ? `Codex · ${codexModels.find((m) => m.id === selected?.model)?.name ?? (selected?.model || "default model")}`
-            : value === "claude"
-              ? `Claude · ${claudeListed ? claudeListed.name + (claude.contextWindow ? " · 200k" : "") : claude.model || "default model"}`
-              : value === "message"
-                ? "Send without running an agent"
-                : `${agentName(value)} · ${pickCatalogs[value]?.models?.find((m) => m.id === pickOf(value).model)?.name ?? (pickOf(value).model || "default model")}`,
-        current: value === recipient,
-      }));
-    if (command === "model") return modelOptions();
-    if (recipient === "message") return undefined;
-    if (command === "effort") {
-      const { model, catalogs } = commandSettings();
-      const efforts = modelEfforts(recipient, model, catalogs);
-      const effort =
-        recipient === "claude"
-          ? claude.reasoningEffort
-          : isPickAgent(recipient)
-            ? pickOf(recipient).reasoningEffort
-            : selected?.reasoningEffort;
-      const runs =
-        recipient === "claude"
-          ? claudeDefaultLevel
-          : recipient === "codex"
-            ? codexDefaultLevel
-            : defaults.effort(recipient, pickOf(recipient).model);
-      return [
-        {
-          value: "default",
-          label: "default",
-          description: runs ? effortLabels[runs] : "Model default",
-          current: !effort,
-        },
-        ...efforts.map((e) => ({
-          value: e,
-          label: e,
-          description: effortLabels[e],
-          current: e === effort,
-        })),
-      ];
-    }
-    if (command === "permissions")
-      return runtimeModes.map((m) => ({
-        value: m.value,
-        label: m.value,
-        description: `${m.label} · ${m.description}`,
-        current: m.value === runtimeMode,
-      }));
-    if (command === "plan") return toggles(interactionMode === "plan");
-    if (command === "fast" && agents[recipient].fast)
-      return toggles(!!selected?.fast);
-    return undefined;
-  }
-  // Applies a settings command to this composer; anything else goes up.
-  function runCommand(command: RelayCommand, args: string): boolean | string {
-    if (!isComposerCommand(command)) return onCommand(command, args);
-    if (command === "model" && !args) {
-      setPickModel((n) => n + 1);
-      return true;
-    }
-    const change = composerCommand(command, args, commandSettings());
-    if (typeof change === "string") return change;
-    if (change.command === "provider") {
-      runs.pickAgent(change.provider);
-    } else if (change.command === "model")
-      runs.select(change.provider, change.model);
-    else if (change.command === "effort") {
-      const { reasoningEffort } = change;
-      if (recipient === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
-      else if (isPickAgent(recipient))
-        setPickEffort(recipient, reasoningEffort);
-      else if (selected) setChoice({ ...selected, reasoningEffort });
-    } else if (change.command === "permissions")
-      setRuntimeMode(change.runtimeMode);
-    else if (change.command === "plan") {
-      setInteractionMode(change.plan ? "plan" : "default");
-      if (!change.plan) setUltraplan(false);
-    } else if (selected) setChoice({ ...selected, fast: change.fast });
-    return true;
-  }
   const commands = useComposerCommands({
     draft,
     onDraft,
     projectId,
     provider: recipient,
-    onCommand: runCommand,
-    options: commandOptions,
+    onCommand: settingCommands.run,
+    options: settingCommands.options,
     input,
     onSkillPick: (skill) => promptInput.current?.insertSkill(skill),
     onFill: (range) => promptInput.current?.insertText(range),
@@ -774,19 +596,16 @@ export function ProjectComposer({
       </div>
       {notice}
       <QuickSwitchHud
-        style={quickSwitch.style}
-        open={quick.open && quickPresets.length > 0}
-        items={quickItems(quickPresets, modelsOf)}
-        index={quick.at}
-        dir={quick.dir}
+        style={quick.style}
+        open={quick.hud.open && quick.presets.length > 0}
+        items={quickItems(quick.presets, catalogs.of)}
+        index={quick.hud.at}
+        dir={quick.hud.dir}
         onPick={(at, dir) => {
-          pickPreset(at, dir ?? (at < quick.at ? -1 : 1));
+          quick.pick(at, dir ?? (at < quick.hud.at ? -1 : 1));
           input.current?.focus();
         }}
-        onHover={(over) => {
-          quickHover.current = over;
-          if (!over) hideQuickSoon();
-        }}
+        onHover={quick.hover}
       />
       <form
         ref={composerForm}
@@ -881,10 +700,10 @@ export function ProjectComposer({
               runs.stepEffort(recipient, step);
               return;
             }
-            const quickDir = quickPresets.length ? quickStep(e) : 0;
+            const quickDir = quick.presets.length ? quickStep(e) : 0;
             if (quickDir) {
               e.preventDefault();
-              stepQuick(quickDir);
+              quick.step(quickDir);
               return;
             }
             const action = sendAction(e, sendKey);
@@ -958,7 +777,7 @@ export function ProjectComposer({
                   ready={!!selected}
                   catalogs={runs.picker}
                   onOpen={catalogs.refresh}
-                  openSignal={pickModel}
+                  openSignal={settingCommands.pickerSignal}
                   onSelect={runs.select}
                   defaultNames={defaultNames}
                 />
