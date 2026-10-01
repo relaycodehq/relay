@@ -23,7 +23,7 @@ import {
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { popupOpen, useShortcut, useShortcutLabel } from "../lib/shortcuts";
+import { useShortcut, useShortcutLabel } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FolderPlus,
@@ -35,7 +35,6 @@ import {
   GitCompareArrows,
   GitGraph,
   PanelBottom,
-  PanelLeft,
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
@@ -84,7 +83,7 @@ import {
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectBadge } from "./ProjectBadge";
 import { NewThreadPicker } from "./NewThreadPicker";
-import { RelayMark } from "./RelayMark";
+import { TitlebarBrand } from "./ShellTitlebar";
 import { PaneResizer } from "./PaneResizer";
 import { ProjectChecksButton } from "./ProjectChecks";
 import { RunningTasks } from "./RunningTasks";
@@ -98,7 +97,7 @@ import {
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { fitHeader } from "../lib/header-fit";
-import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { useSidebarVisibility } from "../lib/useSidebarVisibility";
 import { requestChannel } from "../lib/request-channel";
 import {
   NavigationLockProvider,
@@ -110,9 +109,6 @@ import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
-/** How close to the window's left edge the pointer peeks a hidden sidebar. */
-const EDGE_PEEK_WIDTH = 12;
-const SIDEBAR_BESIDE_PANE_KEY = "relay-projects-hidden-beside-pane";
 const NOWHERE: PullsLocation = { repo: null, pull: null };
 const NO_PROJECTS: Project[] = [];
 
@@ -186,110 +182,17 @@ export default function ProjectShell() {
   // Which of the project's unsent threads shows while no thread is open.
   const draftId = project ? currentNewThread(project.id) : "";
   const panes = useWorkspacePanes(chatId ?? draftId);
-  // The sidebar remembers two states: beside the chat alone, and beside a side
-  // pane (a PR's Review, say). Until toggled there, the latter follows the
-  // "make room" setting.
-  const autoHide = useSidebarAutoHide();
   // The Pull requests page stands in for the chat alone.
-  const besidePane = !legacy && panes.visible.some((id) => id !== "chat");
-  const [hiddenAlone, setHiddenAlone] = useState(
-    () => localStorage.getItem("relay-projects-hidden") === "true",
+  const sidebar = useSidebarVisibility(
+    !legacy && panes.visible.some((id) => id !== "chat"),
   );
-  const [hiddenBesidePane, setHiddenBesidePane] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_BESIDE_PANE_KEY);
-    return saved ? saved === "true" : null;
-  });
-  const projectsHidden = besidePane
-    ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
-    : hiddenAlone;
-  // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
-  const [peek, setPeek] = useState(false);
+  const projectsHidden = sidebar.hidden;
   const [pickingProject, setPickingProject] = useState(false);
-  const peekTimer = useRef<number | undefined>(undefined);
-  const peekOpen = () => {
-    window.clearTimeout(peekTimer.current);
-    if (projectsHidden) setPeek(true);
-  };
-  const peekClose = () => {
-    window.clearTimeout(peekTimer.current);
-    peekTimer.current = window.setTimeout(() => setPeek(false), 250);
-  };
-  const toggleProjects = () => {
-    window.clearTimeout(peekTimer.current);
-    setPeek(false);
-    (besidePane ? setHiddenBesidePane : setHiddenAlone)(!projectsHidden);
-  };
-  useShortcut("sidebar", true, toggleProjects);
-  useEffect(() => {
-    localStorage.setItem("relay-projects-hidden", String(hiddenAlone));
-  }, [hiddenAlone]);
-  useEffect(() => {
-    if (hiddenBesidePane === null)
-      localStorage.removeItem(SIDEBAR_BESIDE_PANE_KEY);
-    else
-      localStorage.setItem(SIDEBAR_BESIDE_PANE_KEY, String(hiddenBesidePane));
-  }, [hiddenBesidePane]);
-  // Flipping the setting is a fresh answer for side panes.
-  const autoHideWas = useRef(autoHide);
-  useEffect(() => {
-    if (autoHideWas.current === autoHide) return;
-    autoHideWas.current = autoHide;
-    setHiddenBesidePane(null);
-  }, [autoHide]);
-  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
   // Settings is a page: going anywhere else, a ⌘1 jump say, leaves it.
   useEffect(() => {
     setSettings(false);
     setSettingsCategory(undefined);
   }, [selected, chatId, legacy]);
-  // Resting the pointer along the window's left edge peeks it too. It's
-  // watched rather than covered, so the edge still takes clicks and
-  // selections; the short dwell keeps a pointer flung past it, or a drag,
-  // from opening it.
-  const layoutRef = useRef<HTMLDivElement>(null);
-  const asideRef = useRef<HTMLElement>(null);
-  const edgePeekOn = projectsHidden && !peek;
-  useEffect(() => {
-    if (!edgePeekOn) return;
-    let timer: number | undefined;
-    const cancel = () => {
-      window.clearTimeout(timer);
-      timer = undefined;
-    };
-    const onMove = (e: MouseEvent) => {
-      const top = layoutRef.current?.getBoundingClientRect().top ?? 0;
-      if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
-        return cancel();
-      timer ??= window.setTimeout(() => {
-        if (popupOpen()) return;
-        peekFromEdge.current = true;
-        setPeek(true);
-      }, 150);
-    };
-    window.addEventListener("mousemove", onMove);
-    document.documentElement.addEventListener("mouseleave", cancel);
-    return () => {
-      cancel();
-      window.removeEventListener("mousemove", onMove);
-      document.documentElement.removeEventListener("mouseleave", cancel);
-    };
-  }, [edgePeekOn]);
-  // The sidebar slides in under a pointer that hasn't entered it, so its own
-  // mouseleave can't close it; until the pointer gets in, leaving the edge does.
-  const peekFromEdge = useRef(false);
-  useEffect(() => {
-    if (!peek || !peekFromEdge.current) return;
-    peekFromEdge.current = false;
-    const onMove = (e: MouseEvent) => {
-      const inside =
-        e.target instanceof Node && asideRef.current?.contains(e.target);
-      if (!inside && e.clientX <= EDGE_PEEK_WIDTH) return;
-      if (!inside) peekClose();
-      window.removeEventListener("mousemove", onMove);
-    };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
-  }, [peek]);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
@@ -351,7 +254,6 @@ export default function ProjectShell() {
     setTerminalOpen(shellKey, !terminalOpen);
   }
   useShortcut("terminal", true, toggleTerminal);
-  const sidebarKeys = useShortcutLabel("sidebar");
   const terminalKeys = useShortcutLabel("terminal");
   const codeOpen = panes.layout.open.changes || panes.layout.open.files;
   // Git and file panes follow the thread: its worktree once it has one.
@@ -816,45 +718,16 @@ export default function ProjectShell() {
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
-  const dot =
-    projectsHidden && attention
-      ? attention === "waiting"
-        ? "Needs your input"
-        : "New activity"
-      : undefined;
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
         className={`titlebar project-titlebar ${projectsHidden && !settings ? "sidebar-collapsed" : ""}`}
       >
-        <div className="project-titlebar-brand">
-          <span className="traffic-space" />
-          <button
-            type="button"
-            className="icon-button relay-sidebar-toggle"
-            title={`${projectsHidden ? "Show" : "Hide"} sidebar${sidebarKeys && ` · ${sidebarKeys}`}`}
-            aria-label={
-              (projectsHidden ? "Show sidebar" : "Hide sidebar") +
-              (dot ? ` · ${dot}` : "")
-            }
-            aria-pressed={!projectsHidden}
-            disabled={settings}
-            onClick={toggleProjects}
-            onMouseEnter={peekOpen}
-            onMouseLeave={peekClose}
-          >
-            <PanelLeft size={16} />
-            {dot && (
-              <span
-                className={`sb-status ${attention} relay-brand-dot`}
-                aria-hidden="true"
-              >
-                <i />
-              </span>
-            )}
-          </button>
-          <RelayMark size={38} />
-        </div>
+        <TitlebarBrand
+          sidebar={sidebar}
+          attention={attention}
+          disabled={settings}
+        />
         <div className="project-titlebar-main" ref={fitHeader}>
           {settings ? (
             <div className="project-window-title">
@@ -1000,16 +873,16 @@ export default function ProjectShell() {
           )}
         </div>
       </header>
-      <div className="project-layout" ref={layoutRef}>
+      <div className="project-layout" ref={sidebar.layoutRef}>
         <aside
-          ref={asideRef}
-          className={`projects-sidebar ${projectsHidden ? "overlay" : ""} ${peek ? "peek" : ""}`}
+          ref={sidebar.asideRef}
+          className={`projects-sidebar ${projectsHidden ? "overlay" : ""} ${sidebar.peek ? "peek" : ""}`}
           aria-label="Projects"
-          aria-hidden={projectsHidden && !peek ? true : undefined}
-          inert={projectsHidden && !peek ? true : undefined}
+          aria-hidden={projectsHidden && !sidebar.peek ? true : undefined}
+          inert={projectsHidden && !sidebar.peek ? true : undefined}
           hidden={settings}
-          onMouseEnter={projectsHidden ? peekOpen : undefined}
-          onMouseLeave={projectsHidden ? peekClose : undefined}
+          onMouseEnter={projectsHidden ? sidebar.peekOpen : undefined}
+          onMouseLeave={projectsHidden ? sidebar.peekClose : undefined}
         >
           <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
           <ProjectSidebar
