@@ -1,4 +1,5 @@
 import { keyedQueue } from "./keyed-queue";
+import { turnRules, type ChatTurn } from "./chat-turn";
 import {
   claudeAgentRun,
   claudeAgents,
@@ -1963,6 +1964,7 @@ export class ProjectChats {
         ? mention.question
         : `${mention.question ? `My request: ${mention.question}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${input.ultraplan ? `\n\n${briefPrompt(council(input.ultraplan).length)}` : ""}`.trimStart();
       this.reply(chat, active, answer, root, prompt, input, {
+        kind: "reply",
         skills,
         // What a command couldn't carry, the session hears next turn.
         caughtUp: !command || !updates.length,
@@ -2000,11 +2002,7 @@ export class ProjectChats {
     root: string,
     prompt: string,
     input: ProjectChatSend,
-    options?: {
-      skills?: CodexSkill[];
-      caughtUp?: boolean;
-      briefed?: () => void;
-    },
+    turn: ChatTurn & { kind: "reply" } = { kind: "reply" },
   ) {
     active.job = this.answer(
       chat,
@@ -2013,7 +2011,7 @@ export class ProjectChats {
       prompt,
       input,
       active.abort,
-      options,
+      turn,
     )
       .then((last) => {
         answer = last;
@@ -2117,6 +2115,7 @@ export class ProjectChats {
         handoffPrompt(to, computer),
         input,
         abort,
+        { kind: "handoff" },
       );
     } finally {
       clearTimeout(timer);
@@ -2159,8 +2158,8 @@ export class ProjectChats {
       }
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       await this.answer(chat, message, root, "", input, abort, {
-        adopt: true,
-        resumed: !!resumed,
+        kind: "adopt",
+        resumed,
       });
     } finally {
       if (idle) this.endRun(chat, active);
@@ -2445,7 +2444,7 @@ export class ProjectChats {
       prompt,
       { ...input, parentId: answer.parentId },
       abort,
-      { side: true },
+      { kind: "side" },
     );
   }
   /** Compacts the provider session behind the newest answer on this branch. */
@@ -2497,7 +2496,7 @@ export class ProjectChats {
         instructions ?? "",
         input,
         abort,
-        { compact: true },
+        { kind: "compact" },
       ).finally(() => this.endRun(chat, active));
       void active.job.catch(() => {});
     });
@@ -2509,28 +2508,9 @@ export class ProjectChats {
     prompt: string,
     input: ProjectChatSend,
     abort: AbortController,
-    {
-      skills = [],
-      compact = false,
-      adopt = false,
-      resumed = false,
-      caughtUp = true,
-      side = false,
-      briefed,
-    }: {
-      skills?: CodexSkill[];
-      compact?: boolean;
-      adopt?: boolean;
-      /** Carries on an answer a restart cut off; its snapshot is from before. */
-      resumed?: boolean;
-      /** A forked side thread's turn (any agent without askSide): read-only, beside the main answer. */
-      side?: boolean;
-      /** The prompt told the session everything it hadn't heard yet. */
-      caughtUp?: boolean;
-      /** Crosses off what the prompt told the agent, once the turn didn't fail. */
-      briefed?: () => void;
-    } = {},
+    turn: ChatTurn,
   ) {
+    const rules = turnRules(turn);
     let flush: ReturnType<typeof setTimeout> | null = null,
       checkpoint: ReturnType<typeof setTimeout> | null = null;
     const publish = () => {
@@ -2595,7 +2575,7 @@ export class ProjectChats {
     const sessionKey = this.sessionKey(chat.id, input.parentId ?? undefined);
     this.providerSessions.add(sessionKey);
     const provider = message.provider;
-    if (!compact)
+    if (rules.showsModel)
       void this.turnModel(provider, input, root).then((resolved) => {
         model = resolved;
         message.model = resolved;
@@ -2604,13 +2584,14 @@ export class ProjectChats {
     const sessionId = agentSession(chat, provider, input.parentId).thread;
     // A side thread forks the main one whole, its running turn included.
     const main = agentSession(chat, provider).thread;
-    const fork: { point: ForkPoint; from?: ChatMessage } | undefined = compact
-      ? undefined
-      : side
-        ? !sessionId && main
-          ? { point: { thread: main, at: "" } }
-          : undefined
-        : this.forkFor(chat, provider, input.parentId ?? undefined);
+    const fork: { point: ForkPoint; from?: ChatMessage } | undefined =
+      turn.kind === "compact"
+        ? undefined
+        : rules.side
+          ? !sessionId && main
+            ? { point: { thread: main, at: "" } }
+            : undefined
+          : this.forkFor(chat, provider, input.parentId ?? undefined);
     // Each agent session hears about running processes on its own.
     const noteKey = JSON.stringify([sessionKey, provider]);
     if (!sessionId) projectTasks.forgetNote(noteKey);
@@ -2635,9 +2616,9 @@ export class ProjectChats {
           if (active?.abort === abort) active.steer = control.steer;
         },
         onSteered: continueBelow,
-        skills,
-        compact,
-        adopt,
+        skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
+        compact: turn.kind === "compact",
+        adopt: turn.kind === "adopt",
         onContext: (usage: import("../shared/projects").ContextUsage) => {
           message.context = usage;
           changed();
@@ -2722,14 +2703,16 @@ export class ProjectChats {
         ...(chat.reviewer
           ? {
               readOnly: true,
-              ...(chat.reviewer.codex && !compact && !adopt
+              ...(chat.reviewer.codex && rules.reviews
                 ? { review: chat.reviewer.codex }
                 : {}),
             }
           : {}),
-        ...(side ? { readOnly: true, side: true } : {}),
+        ...(rules.side ? { readOnly: true, side: true } : {}),
         // The thread's running answer owns its requests; a side turn asks none.
-        onRequest: side ? undefined : this.active.get(chat.id)?.requests.ask,
+        onRequest: rules.side
+          ? undefined
+          : this.active.get(chat.id)?.requests.ask,
         session: {
           key: sessionKey,
           id: sessionId,
@@ -2747,10 +2730,9 @@ export class ProjectChats {
       // Taken right before the agent starts, so the card lists only its edits.
       const first = message.id;
       // A side turn changes nothing, and edits made meanwhile are the main answer's.
-      const before =
-        compact || side
-          ? null
-          : await (resumed ? resumeTurn : startTurn)(root, first);
+      const before = rules.records
+        ? await (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
+        : null;
       try {
         // Awaited first: a steer can move the answer to a new message meanwhile.
         const body = await agentRuntime(provider).run({
@@ -2768,7 +2750,7 @@ export class ProjectChats {
           if (files.length) message.changes = files;
         }
       }
-      if (compact) {
+      if (turn.kind === "compact") {
         // The summary goes beside the answer: a compaction still says nothing.
         const summary = message.body.trim();
         if (summary) message.compactSummary = summary.slice(0, 100000);
@@ -2797,22 +2779,13 @@ export class ProjectChats {
           if (fork.from) delete fork.from.forkPoint;
         }
       }
-      if (!message.handoff && !message.unprompted && !side)
-        chat.queuePaused = true;
+      if (rules.pausesQueue(message)) chat.queuePaused = true;
     } finally {
-      // The session has heard the conversation up to this answer, unless the
-      // turn told it nothing new (a handoff note, a compaction, a command
-      // that went out alone): then it still has to hear what came after its
-      // last answer, such as a question asked of another agent.
-      if (
-        message.status !== "failed" &&
-        caughtUp &&
-        !compact &&
-        !message.handoff
-      ) {
-        sessionFor(chat, provider, branch).through = message.id;
+      if (message.status !== "failed") {
+        if (rules.advancesSession(message))
+          sessionFor(chat, provider, branch).through = message.id;
+        if (turn.kind === "reply") turn.briefed?.();
       }
-      if (message.status !== "failed") briefed?.();
       message.ended = Date.now();
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
@@ -2831,7 +2804,7 @@ export class ProjectChats {
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (
         message.status === "complete" &&
-        !compact &&
+        rules.titles &&
         !branch &&
         firstUser &&
         firstUser.id === input.id
