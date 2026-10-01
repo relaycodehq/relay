@@ -19,6 +19,8 @@ interface State {
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */
   projectGroupsOrdered?: true;
   sidebarView?: import("../shared/types").SidebarView;
+  /** Days without activity before a thread settles; null never, unset the default. */
+  autoSettleDays?: number | null;
   chats?: import("../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;

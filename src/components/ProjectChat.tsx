@@ -63,6 +63,7 @@ import {
   loadWorkItem,
 } from "../lib/draft-attachments";
 import {
+  forkThreadSettings,
   startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
@@ -1388,7 +1389,9 @@ export function ProjectChat({
     if (!chatId) return;
     setError(undefined);
     try {
-      await onCreated(await api.forkProjectChat(chatId, m.id));
+      const forked = await api.forkProjectChat(chatId, m.id);
+      forkThreadSettings(chatId, forked.id, m.provider);
+      await onCreated(forked);
     } catch (e) {
       setError(e);
     }

@@ -269,6 +269,9 @@ export interface Api
   saveAISettings(settings: AISettings): Promise<AISettings>;
   smartProjectNames(): Promise<boolean>;
   saveSmartProjectNames(enabled: boolean): Promise<boolean>;
+  /** Days without activity before a thread settles by itself; null never. */
+  autoSettleDays(): Promise<number | null>;
+  saveAutoSettleDays(days: number | null): Promise<number | null>;
   saveSidebarView(view: SidebarView): Promise<void>;
   /** The agent last picked for a new thread, here or on the phone; null before either has. */
   newThreadAgent(): Promise<AgentProvider | null>;

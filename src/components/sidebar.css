@@ -433,6 +433,47 @@
   letter-spacing: normal;
   text-transform: none;
 }
+/* Renaming a thread in place, in a row, a card or a shelf. */
+.sb-thread-rename {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.sb-thread-rename .sb-group-input {
+  margin-top: 0;
+}
+.sb-thread-rename input {
+  height: 26px;
+  font-size: 12.5px;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.sb-thread-input {
+  padding: 2px 6px 2px 31px;
+}
+.sb-thread-list.flat .sb-thread-input {
+  padding-left: 6px;
+}
+.sb-card-title-input,
+.sb-compact-title-input {
+  padding: 0;
+}
+.sb-title-regenerating {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+/* The thread whose right-click menu is open. */
+.sb-thread-row[data-popup-open] .sb-thread:not(.selected),
+.sb-compact[data-popup-open] {
+  background: var(--hover);
+}
+.sb-card[data-popup-open]:not(.selected) {
+  background: color-mix(in srgb, var(--hover) 60%, transparent);
+}
+.sb-card.dim[data-popup-open] {
+  opacity: 1;
+}
 .sb-nav,
 .sb-thread-list,
 .sb-cards,

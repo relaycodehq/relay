@@ -78,7 +78,16 @@ import {
   startTurn,
   turnDiff,
 } from "./turn-changes";
-import { cleanTitle, generateThreadTitle, promptTitle } from "./thread-titles";
+import {
+  cleanTitle,
+  generateThreadTitle,
+  promptTitle,
+  regenerateThreadTitle,
+} from "./thread-titles";
+import {
+  autoSettledAt,
+  DEFAULT_AUTO_SETTLE_DAYS,
+} from "../shared/chat-activity";
 import {
   createWorktree,
   moveIntoWorktree,
@@ -425,6 +434,10 @@ export class ProjectChats {
       selection: LineQuestion,
     ) => Promise<unknown>,
   ) {}
+  autoSettleDays(): number | null {
+    const days = this.store.get().autoSettleDays;
+    return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
+  }
   list(projectId: string): ChatSummary[] {
     this.projects.get(projectId);
     const chats = (this.store.get().chats ?? []).filter(
@@ -439,6 +452,8 @@ export class ProjectChats {
     }
     // Once for the list: the sidebar asks every few seconds.
     const live = this.pending();
+    const now = Date.now();
+    const autoSettleDays = this.autoSettleDays();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
@@ -467,20 +482,25 @@ export class ProjectChats {
             at: w.at,
           })),
         ];
-        return active || pending.length
-          ? {
-              ...c,
-              ...(active
-                ? {
-                    running: true,
-                    runningSince: active.started,
-                    runningAgents: running,
-                    waiting: active.requests.list().length > 0,
-                  }
-                : {}),
-              ...(pending.length ? { pending } : {}),
-            }
-          : c;
+        const listed: ChatSummary =
+          active || pending.length
+            ? {
+                ...c,
+                ...(active
+                  ? {
+                      running: true,
+                      runningSince: active.started,
+                      runningAgents: running,
+                      waiting: active.requests.list().length > 0,
+                    }
+                  : {}),
+                ...(pending.length ? { pending } : {}),
+              }
+            : c;
+        const settledAt = autoSettledAt(listed, now, autoSettleDays);
+        return settledAt
+          ? { ...listed, settledAt, autoSettled: true as const }
+          : listed;
       });
   }
   /**
@@ -712,6 +732,13 @@ export class ProjectChats {
   async triage(id: string, triage: ChatTriage) {
     const chat = await this.load(id);
     const now = Date.now();
+    if (triage.kind === "unread" || triage.kind === "auto-settle") {
+      if (triage.kind === "unread") chat.markedUnread = true;
+      else if (triage.enabled) delete chat.autoSettleOff;
+      else chat.autoSettleOff = true;
+      await this.persist(chat);
+      return this.summary(chat);
+    }
     if (triage.kind === "archive") {
       if (this.active.has(id) || this.councilBusy(chat))
         throw new Error("Stop the running answer before archiving.");
@@ -745,6 +772,8 @@ export class ProjectChats {
     if (triage.kind === "settle") chat.settledAt = now;
     else if (triage.kind === "unsettle" || triage.kind === "snooze")
       delete chat.settledAt;
+    // Settled by hand or automatically, moving it back keeps it out until something new happens.
+    if (triage.kind === "unsettle") chat.unsettledAt = now;
     if (triage.kind === "snooze") {
       if (triage.until <= now) throw new Error("Choose a future wake time.");
       chat.snoozedAt = now;
@@ -756,8 +785,9 @@ export class ProjectChats {
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
     const chat = await this.load(id);
-    if ((chat.seenAt ?? 0) >= seenAt) return;
-    chat.seenAt = seenAt;
+    if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
+    chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
+    delete chat.markedUnread;
     await this.persist(chat);
   }
   async rename(id: string, candidate: string) {
@@ -807,11 +837,23 @@ export class ProjectChats {
    * included when the answer is in one. The original keeps its turns' changes
    * to review and roll back; the fork starts without them.
    */
-  async fork(id: string, messageId: string) {
+  async fork(id: string, messageId?: string) {
     const source = await this.load(id);
     if (source.scope.kind === "review")
       throw new Error("A deep review can't be forked.");
-    const at = source.messages.find((m) => m.id === messageId);
+    const at = messageId
+      ? source.messages.find((m) => m.id === messageId)
+      : [...source.messages]
+          .reverse()
+          .find(
+            (m) =>
+              m.role === "assistant" &&
+              m.status !== "streaming" &&
+              !m.parentId &&
+              !m.side &&
+              !m.handoff &&
+              !m.compaction,
+          );
     if (at?.role !== "assistant" || at.status === "streaming")
       throw new Error("Fork from an answer that has finished.");
     const upTo = source.messages.slice(0, source.messages.indexOf(at) + 1);
@@ -3297,6 +3339,58 @@ export class ProjectChats {
     chat.title = title;
     await this.persist(chat);
     this.emit({ chatId: chat.id, message: structuredClone(message), title });
+  }
+  /**
+   * Names the thread again from the whole conversation, on demand, even over
+   * a name you typed. Tries the latest answer's agent, then the helper agents.
+   */
+  async regenerateTitle(id: string) {
+    const chat = await this.load(id);
+    if (this.titleJobs.has(id))
+      throw new Error("This thread's title is already being generated.");
+    const answer = [...chat.messages]
+      .reverse()
+      .find(
+        (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
+      );
+    if (!answer)
+      throw new Error("Wait for the first answer to name the thread.");
+    const abort = new AbortController();
+    const job = (async () => {
+      const { choice } = this.sessionInput(chat, answer.provider);
+      for (const provider of [
+        answer.provider,
+        ...helperProviders.filter((p) => p !== answer.provider),
+      ]) {
+        try {
+          const title = await regenerateThreadTitle({
+            previous: chat.title,
+            messages: chat.messages,
+            provider,
+            choice:
+              provider === answer.provider ? choice : { ...choice, model: "" },
+            signal: abort.signal,
+          });
+          if (title || abort.signal.aborted) return title;
+        } catch (error) {
+          if (abort.signal.aborted) return null;
+          console.warn(
+            `Regenerating a thread title via ${provider} failed:`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+      return null;
+    })();
+    this.titleJobs.set(id, { abort, job: job.then(() => {}) });
+    const title = await job.finally(() => this.titleJobs.delete(id));
+    if (abort.signal.aborted) throw new Error("Relay is closing.");
+    if (!title) throw new Error("No agent could name this thread.");
+    const fresh = await this.load(id);
+    fresh.title = title;
+    delete fresh.renamed;
+    await this.persist(fresh);
+    return this.summary(fresh);
   }
   private syncing = new Map<string, Promise<void>>();
   private async updateSummary(chat: ProjectChat) {

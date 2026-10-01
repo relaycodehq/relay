@@ -81,6 +81,7 @@ import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
 import { Avatar, ErrorBox } from "./ui";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
+import { AutoSettleSelect } from "./AutoSettleSettings";
 import { ProviderIcon } from "./ComposerModelPicker";
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import { ThemeImportSettings } from "./ThemeImportSettings";
@@ -797,6 +798,16 @@ export function Settings({
           )}
         </>
       ),
+    },
+    {
+      id: "auto-settle",
+      category: "appearance",
+      title: "Auto-settle quiet threads",
+      description:
+        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. Turn it off for one thread from its right-click menu.",
+      keywords:
+        "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
+      render: () => <AutoSettleSelect />,
     },
     {
       id: "sidebar-auto-hide",

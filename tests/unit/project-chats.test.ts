@@ -2224,3 +2224,87 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   expect(main).toHaveLength(1);
   expect(JSON.stringify(main[0].turn.input)).not.toContain("which test covers");
 }, 20000);
+
+it("forks from the latest finished answer when none is named, on that answer's agent", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  for (const [body, count] of [
+    ["@codex Cache guard behavior", 2],
+    ["@claude Now fix it", 5],
+  ] as const) {
+    await chats.send(chat.id, {
+      ...input(body),
+      provider: body.startsWith("@claude") ? "claude" : "codex",
+    });
+    await vi.waitFor(
+      async () => {
+        const messages = (await chats.get(chat.id)).messages;
+        expect(messages).toHaveLength(count);
+        expect(messages.at(-1)?.status).toBe("complete");
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+  const source = (await chats.get(chat.id)).messages;
+  const fork = await chats.fork(chat.id);
+  expect(fork.provider).toBe("claude");
+  const forked = await chats.get(fork.id);
+  // The handoff note Codex left on the way out came along, but isn't the fork point.
+  expect(forked.messages.map((m) => m.body)).toEqual(source.map((m) => m.body));
+  expect(forked.forkedAt).toBe(forked.messages.at(-1)!.id);
+}, 25000);
+
+it("regenerates a title from the whole thread, even over a name you typed", async () => {
+  vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await expect(chats.regenerateTitle(chat.id)).rejects.toThrow("first answer");
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).title).toBe("Cache guard behavior"),
+    { timeout: 8000 },
+  );
+  await chats.rename(chat.id, "My name for it");
+  expect(await chats.regenerateTitle(chat.id)).toMatchObject({
+    title: "Cache guard rework",
+  });
+  expect((await chats.get(chat.id)).renamed).toBeUndefined();
+  const prompt = (await readFile(join(root, "capture.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .map((r) => r.turn?.input[0].text ?? "")
+    .find((text: string) => text.startsWith("Regenerate the title"));
+  expect(prompt).toContain('The previous title was "My name for it"');
+  expect(prompt).toContain("USER:\nExplain the cache guard");
+}, 15000);
+
+it("marks a thread unread until it's read again", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.triage(chat.id, { kind: "unread" });
+  expect(chats.list(projectId)[0].markedUnread).toBe(true);
+  // Reading what was already read still clears the mark.
+  await chats.markSeen(chat.id, 0);
+  expect(chats.list(projectId)[0].markedUnread).toBeUndefined();
+});
+
+it("settles a quiet thread by itself until it's moved back by hand", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(chat.updated + 3 * 86_400_000);
+    expect(chats.list(projectId)[0]).toMatchObject({
+      settledAt: chat.updated,
+      autoSettled: true,
+    });
+    await chats.triage(chat.id, { kind: "auto-settle", enabled: false });
+    expect(chats.list(projectId)[0].autoSettled).toBeUndefined();
+    await chats.triage(chat.id, { kind: "auto-settle", enabled: true });
+    expect(chats.list(projectId)[0].autoSettled).toBe(true);
+    await chats.triage(chat.id, { kind: "unsettle" });
+    vi.setSystemTime(chat.updated + 30 * 86_400_000);
+    expect(chats.list(projectId)[0].settledAt).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});

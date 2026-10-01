@@ -561,7 +561,11 @@ if (args.includes("--permission-prompt-tool")) {
         });
         return;
       }
-      if (m.params.input[0].text.startsWith("Generate a short title")) {
+      const titling = m.params.input[0].text;
+      if (
+        titling.startsWith("Generate a short title") ||
+        titling.startsWith("Regenerate the title")
+      ) {
         send({
           method: "item/completed",
           params: {
@@ -570,7 +574,9 @@ if (args.includes("--permission-prompt-tool")) {
               id: "fixture-title",
               type: "agentMessage",
               phase: "final_answer",
-              text: '{"title":"Cache guard behavior"}',
+              text: titling.startsWith("Regenerate")
+                ? '{"title":"Cache guard rework"}'
+                : '{"title":"Cache guard behavior"}',
             },
           },
         });

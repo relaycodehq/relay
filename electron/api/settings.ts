@@ -10,6 +10,7 @@ import {
 } from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
+import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../new-thread-models";
 import { parseVersion } from "../../shared/agent-updates";
@@ -85,6 +86,17 @@ export function settingsHandlers(ctx: ApiContext) {
         s.smartProjectNames = enabled;
       });
       return enabled;
+    },
+    autoSettleDays: () => {
+      const days = store.get().autoSettleDays;
+      return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
+    },
+    saveAutoSettleDays: async (args) => {
+      const days = z.number().int().min(1).max(90).nullable().parse(args[0]);
+      await store.update((s) => {
+        s.autoSettleDays = days;
+      });
+      return days;
     },
     saveSidebarView: async (args) => {
       const view = z.enum(["threads", "activity"]).parse(args[0]);
