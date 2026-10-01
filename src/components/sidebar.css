@@ -190,16 +190,28 @@
   font-weight: 500;
   color: var(--muted);
 }
+/* Like a group label: the toggle fills the row, so hover lights the row. */
+.sb-section-heading:has(.sb-section-toggle) {
+  padding-left: 0;
+}
+.sb-section-heading h2 {
+  flex: 1;
+  min-width: 0;
+}
 .sb .sb-section-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 5px;
-  padding: 0;
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: 7px;
   font: inherit;
   color: inherit;
 }
 .sb .sb-section-toggle:hover {
   color: var(--text);
+  background: var(--hover);
 }
 .sb-view-heading small {
   color: var(--muted);
