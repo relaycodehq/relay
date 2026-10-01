@@ -143,6 +143,12 @@ it("starts every new thread on the models the desktop and phone share", () => {
     picks: { cursor: { model: "auto" } },
     interactionMode: "plan",
   });
+  // A thread with nothing saved here, from the phone or another build,
+  // opens on them too, not on Codex's Default.
+  expect(loadComposerSettings("unseen")).toMatchObject({
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max", contextWindow: "200k" },
+  });
   // A thread's own settings stay its own.
   saveComposerSettings("thread", { ...loaded, choice: undefined });
   expect(loadComposerSettings("thread").choice).toBeUndefined();

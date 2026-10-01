@@ -252,6 +252,8 @@ export function cachedNewThreadModels(): NewThreadModels | undefined {
 }
 export const cacheNewThreadModels = (models: NewThreadModels) =>
   localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
+/** Whether a composer saved settings under `key`. */
+export const hasComposerSettings = (key: string) => read(key) !== null;
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
@@ -265,7 +267,9 @@ export function loadComposerSettings(
   }
   return {
     provider,
-    ...(isNewThread(key)
+    // A thread this window has no settings for (started on the phone, or in
+    // another build of Relay) opens on the models last used, like a new one.
+    ...(isNewThread(key) || !saved
       ? withNewThreadModels(readModels(saved), cachedNewThreadModels() ?? {})
       : readModels(saved)),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),

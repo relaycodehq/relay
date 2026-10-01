@@ -43,6 +43,7 @@ import { agentMention } from "../../shared/rooms";
 import { useAISettings } from "../lib/useAISettings";
 import {
   composerProvider,
+  hasComposerSettings,
   isPickAgent,
   livePick,
   loadComposerSettings,
@@ -160,6 +161,7 @@ export function ProjectComposer({
   notice,
   placeholder,
   inherit,
+  agent,
   ultraplanOffered = false,
 }: {
   handleRef?: Ref<ComposerHandle>;
@@ -168,6 +170,8 @@ export function ProjectComposer({
   settingsKey: string;
   /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
   inherit?: { settingsKey: string; provider?: AgentProvider };
+  /** The agent that answered last; the composer runs it until one is picked here. */
+  agent?: AgentProvider;
   onDraft: (v: string) => void;
   shared: boolean;
   running: boolean;
@@ -226,13 +230,18 @@ export function ProjectComposer({
   const [dictationOwner] = useState(() => ({}));
   const composerForm = useRef<HTMLFormElement>(null);
   const [saved] = useState(() => loadComposerSettings(settingsKey, inherit));
+  const [unsaved] = useState(
+    () =>
+      !hasComposerSettings(settingsKey) &&
+      !(inherit && hasComposerSettings(inherit.settingsKey)),
+  );
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
   const [picked, setProvider] = useState(saved.provider);
   const provider = composerProvider(
     picked,
     shared,
-    settings.data?.threadProvider,
+    agent ?? settings.data?.threadProvider,
   );
   // A new thread starts on the agent last picked for one, here or on the
   // phone; picking one here makes it that agent for both.
@@ -263,8 +272,11 @@ export function ProjectComposer({
   const [claude, setClaude] = useState(saved.claude);
   const [picks, setPicks] = useState(saved.picks);
   // Its models follow the ones last picked for a new thread or sent with,
-  // here or on the phone; picking one here makes it the model for both.
-  const [lastModels, saveLastModel] = useNewThreadModels(followsLastAgent);
+  // here or on the phone; picking one here makes it the model for both. A
+  // thread with nothing saved here takes them up once.
+  const followsLastModels = followsLastAgent || (unsaved && !shared);
+  const [lastModels, saveLastModel] = useNewThreadModels(followsLastModels);
+  const tookLastModels = useRef(false);
   const models = useMemo(
     () => newThreadModelsOf({ choice, claude, picks }),
     [choice, claude, picks],
@@ -272,7 +284,9 @@ export function ProjectComposer({
   const current = useRef({ choice, claude, picks });
   current.current = { choice, claude, picks };
   useEffect(() => {
-    if (!followsLastAgent || !lastModels) return;
+    if (!followsLastModels || !lastModels) return;
+    if (!followsLastAgent && tookLastModels.current) return;
+    tookLastModels.current = true;
     const changed = Object.fromEntries(
       agentProviders.flatMap((p) =>
         lastModels[p] && !sameModel(lastModels[p], models[p])
@@ -285,7 +299,7 @@ export function ProjectComposer({
     setChoice(next.choice);
     setClaude(next.claude);
     setPicks(next.picks);
-  }, [followsLastAgent, lastModels]);
+  }, [followsLastModels, lastModels]);
   const shownModels = useRef<NewThreadModels>(undefined);
   useEffect(() => {
     const before = shownModels.current;

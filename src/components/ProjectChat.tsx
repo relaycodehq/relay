@@ -2107,6 +2107,7 @@ export function ProjectChat({
                   }
                 : undefined
             }
+            agent={chat?.provider}
             draftKey={draftKey}
             onDraft={onDraft}
             shared={!!chat?.shared}

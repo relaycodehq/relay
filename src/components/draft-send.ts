@@ -64,7 +64,7 @@ export async function sendDraft(
   const provider = composerProvider(
     lastAgent || settings.provider,
     !!chat?.shared,
-    ai.threadProvider,
+    chat?.provider ?? ai.threadProvider,
   );
   const mention = agentMention(text);
   const recipient = mention?.provider ?? provider;
