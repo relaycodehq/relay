@@ -1,12 +1,17 @@
 import { useCallback, useSyncExternalStore } from "react";
-import {
-  chatScopeSchema,
-  chatWorkspaceSchema,
-  type ChatScope,
-  type ChatWorkspace,
-  type ChatSummary,
-  type Project,
+import type {
+  ChatScope,
+  ChatWorkspace,
+  ChatSummary,
+  Project,
 } from "../../shared/projects";
+import {
+  DRAFT_PREFIX,
+  composerSettingsKey,
+  currentNewThreadKey,
+  threadDraftKey,
+  threadStorage,
+} from "./thread-storage";
 
 // Chat drafts live outside React state so a keystroke re-renders only the
 // composer that shows the draft, not the whole conversation around it.
@@ -14,8 +19,6 @@ const listeners = new Map<string, Set<() => void>>();
 // Told when a draft gains its first text or loses its last, not per keystroke.
 const indexListeners = new Set<() => void>();
 let index: string[] | undefined;
-
-export const DRAFT_PREFIX = "chat-draft:";
 
 export function readDraft(key: string): string {
   return localStorage.getItem(key) ?? "";
@@ -82,54 +85,41 @@ export function newThreadProject(id: string): string | undefined {
   return match?.[1];
 }
 const isSlot = (id: string) => id.split(":").length === 3;
-const hasText = (id: string) => !!readDraft(DRAFT_PREFIX + id).trim();
+export const hasText = (id: string) => !!readDraft(threadDraftKey(id)).trim();
 
-const currentKey = (projectId: string) => "relay-new-thread:" + projectId;
 /** The new thread a project last showed. */
 export function currentNewThread(projectId: string): string {
-  const saved = localStorage.getItem(currentKey(projectId));
+  const saved = localStorage.getItem(currentNewThreadKey(projectId));
   return saved && newThreadProject(saved) === projectId
     ? saved
     : newThreadId(projectId);
 }
 export const setCurrentNewThread = (projectId: string, id: string) =>
-  localStorage.setItem(currentKey(projectId), id);
+  localStorage.setItem(currentNewThreadKey(projectId), id);
 
 /** The scope an unsent thread was written for; the repository by default. */
-const scopeKey = (id: string) => "relay-draft-scope:" + id.slice(4);
-export function loadDraftScope(id: string): ChatScope {
-  try {
-    const stored = chatScopeSchema.safeParse(
-      JSON.parse(localStorage.getItem(scopeKey(id)) || "null"),
-    );
-    return stored.success ? stored.data : { kind: "project" };
-  } catch {
-    return { kind: "project" };
-  }
-}
+export const loadDraftScope = (id: string): ChatScope =>
+  threadStorage(id).scope.load();
 export const saveDraftScope = (id: string, scope: ChatScope) =>
-  localStorage.setItem(scopeKey(id), JSON.stringify(scope));
+  threadStorage(id).scope.save(scope);
 /** Drops the scope and the workspace picked for it. */
 export function clearDraftScope(id: string) {
-  localStorage.removeItem(scopeKey(id));
-  localStorage.removeItem(workspaceKey(id));
+  const { scope, workspace } = threadStorage(id);
+  scope.clear();
+  workspace.save("checkout");
 }
 
 /** Where an unsent thread will work; the project folder by default. */
-const workspaceKey = (id: string) => "relay-draft-workspace:" + id.slice(4);
 export const loadDraftWorkspace = (id: string): ChatWorkspace =>
-  chatWorkspaceSchema.safeParse(localStorage.getItem(workspaceKey(id))).data ??
-  "checkout";
-export function saveDraftWorkspace(id: string, workspace: ChatWorkspace) {
-  if (workspace === "checkout") localStorage.removeItem(workspaceKey(id));
-  else localStorage.setItem(workspaceKey(id), workspace);
-}
+  threadStorage(id).workspace.load();
+export const saveDraftWorkspace = (id: string, workspace: ChatWorkspace) =>
+  threadStorage(id).workspace.save(workspace);
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */
 export function forgetNewThread(id: string) {
   clearDraftScope(id);
-  localStorage.removeItem("chat-reply:" + id);
-  if (isSlot(id)) localStorage.removeItem("composer-settings:" + id);
+  threadStorage(id).reply.save(null);
+  if (isSlot(id)) localStorage.removeItem(composerSettingsKey(id));
 }
 
 /**
@@ -142,18 +132,18 @@ export function freshNewThread(projectId: string): string {
   const base = newThreadId(projectId);
   if (!hasText(base)) return base;
   // Composers save their settings on sight; empty slots would pile up.
-  const prefix = "composer-settings:" + base + ":";
+  const prefix = composerSettingsKey(base + ":");
   const left: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key?.startsWith(prefix))
-      left.push(key.slice("composer-settings:".length));
+      left.push(key.slice(composerSettingsKey("").length));
   }
   for (const id of left) if (!hasText(id)) forgetNewThread(id);
   const slot = newThreadId(projectId, Date.now().toString(36));
   // It starts on the settings the project's new threads have.
-  const settings = localStorage.getItem("composer-settings:" + base);
-  if (settings) localStorage.setItem("composer-settings:" + slot, settings);
+  const settings = localStorage.getItem(composerSettingsKey(base));
+  if (settings) localStorage.setItem(composerSettingsKey(slot), settings);
   return slot;
 }
 

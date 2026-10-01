@@ -46,10 +46,11 @@ import {
   type ReviewTarget,
 } from "../../shared/deep-review";
 import { effortLabels, findClaudeModel } from "../../shared/settings";
-import { savedRuntimeMode } from "../../shared/agent-modes";
 import type { PullRef } from "../../shared/types";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import { api } from "../lib/api";
+import { loadComposerSettings } from "../lib/composer-settings";
+import { readJson } from "../lib/persisted-store";
 import { useClaudeModels } from "../lib/useClaudeModels";
 import { sendsMessage, useSendKey } from "../lib/send-key";
 import { FileEntryIcon, RichText } from "./ui";
@@ -133,15 +134,8 @@ const setupSchema = deepReviewStartSchema
       .catch("uncommitted"),
     base: z.string().catch(""),
   });
-function savedSetup(projectId: string): Setup | undefined {
-  try {
-    return setupSchema.safeParse(
-      JSON.parse(localStorage.getItem(setupKey(projectId)) || "null"),
-    ).data;
-  } catch {
-    return;
-  }
-}
+const savedSetup = (projectId: string): Setup | undefined =>
+  setupSchema.safeParse(readJson(setupKey(projectId))).data;
 
 /** Replaces the composer in a new deep review thread. */
 export function DeepReviewSetup({
@@ -262,15 +256,7 @@ export function DeepReviewSetup({
   async function start() {
     if (!target || busy) return;
     // The lead works on fixes the way the composer was last set for new threads.
-    let runtimeMode = savedRuntimeMode(undefined);
-    try {
-      const composer = JSON.parse(
-        localStorage.getItem(`composer-settings:${settingsKey}`) || "null",
-      );
-      runtimeMode = savedRuntimeMode(composer?.runtimeMode);
-    } catch {
-      // Keep the default.
-    }
+    const { runtimeMode } = loadComposerSettings(settingsKey);
     const started = await onStart({
       target,
       reviewers: setup.reviewers,

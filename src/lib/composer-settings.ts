@@ -26,6 +26,8 @@ import {
   type ModelChoice,
   type ReasoningEffort,
 } from "../../shared/settings";
+import { readJson } from "./persisted-store";
+import { composerSettingsKey } from "./thread-storage";
 
 type Provider = AgentProvider | "message";
 /**
@@ -62,14 +64,7 @@ export interface ComposerSettings {
   /** The council's kind, kept while Ultraplan is off. */
   council: UltraplanKind;
 }
-const storageKey = (key: string) => "composer-settings:" + key;
-function read(key: string) {
-  try {
-    return JSON.parse(localStorage.getItem(storageKey(key)) || "null");
-  } catch {
-    return null;
-  }
-}
+const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
   value === "message" || isAgentProvider(value);
 function readPicks(value: unknown): ComposerSettings["picks"] {
@@ -241,15 +236,8 @@ export function withNewThreadModels(
  */
 const newThreadModelsKey = "composer-models:new-thread";
 const isNewThread = (key: string) => key.startsWith("new:");
-export function cachedNewThreadModels(): NewThreadModels | undefined {
-  try {
-    return newThreadModelsSchema.safeParse(
-      JSON.parse(localStorage.getItem(newThreadModelsKey) || "null"),
-    ).data;
-  } catch {
-    return undefined;
-  }
-}
+export const cachedNewThreadModels = (): NewThreadModels | undefined =>
+  newThreadModelsSchema.safeParse(readJson(newThreadModelsKey)).data;
 export const cacheNewThreadModels = (models: NewThreadModels) =>
   localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
 /** Whether a composer saved settings under `key`. */
@@ -283,7 +271,7 @@ export function saveComposerSettings(
   { provider, ...settings }: ComposerSettings,
 ) {
   localStorage.setItem(
-    storageKey(key),
+    composerSettingsKey(key),
     JSON.stringify({ ...settings, agent: provider }),
   );
 }

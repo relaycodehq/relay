@@ -29,6 +29,7 @@ import {
   type PastedText,
 } from "../../shared/pasted-texts";
 import type { DictationTarget } from "../lib/dictation/session";
+import { draftChips } from "../lib/thread-storage";
 import {
   beginDictation,
   ComposerDictation,
@@ -333,14 +334,6 @@ interface QuoteTip {
   top: number;
   bottom: number;
 }
-function stored<T>(key: string, fallback: T, valid: (v: unknown) => v is T) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) ?? "null");
-    return valid(value) ? value : fallback;
-  } catch {
-    return fallback;
-  }
-}
 export function ComposerPromptInput({
   value,
   onChange,
@@ -370,29 +363,10 @@ export function ComposerPromptInput({
   const callbacks = useRef({ onChange, onCursor, onOpenPaste });
   callbacks.current = { onChange, onCursor, onOpenPaste };
   const [tip, setTip] = useState<QuoteTip | null>(null);
-  const labels = useRef<Record<string, string>>(
-    stored(
-      "skill-chips:" + draftKey,
-      {},
-      (v): v is Record<string, string> => !!v && typeof v === "object",
-    ),
-  );
-  const quotes = useRef<string[]>(
-    stored(
-      "quote-chips:" + draftKey,
-      [],
-      (v): v is string[] =>
-        Array.isArray(v) && v.every((q) => typeof q === "string"),
-    ),
-  );
-  const files = useRef<string[]>(
-    stored(
-      "file-chips:" + draftKey,
-      [],
-      (v): v is string[] =>
-        Array.isArray(v) && v.every((f) => typeof f === "string"),
-    ),
-  );
+  const chips = draftChips(draftKey);
+  const labels = useRef(chips.skills.load());
+  const quotes = useRef(chips.quotes.load());
+  const files = useRef(chips.files.load());
   const editor = useEditor({
     extensions: [
       Extension.create({
@@ -588,10 +562,7 @@ export function ComposerPromptInput({
       insertSkill(pick) {
         if (!editor) return;
         labels.current[pick.token] = pick.label;
-        localStorage.setItem(
-          "skill-chips:" + draftKey,
-          JSON.stringify(labels.current),
-        );
+        chips.skills.save(labels.current);
         const from = position(editor.state.doc, pick.start),
           to = position(editor.state.doc, pick.end);
         editor.view.dispatch(closeHistory(editor.state.tr));
@@ -624,10 +595,7 @@ export function ComposerPromptInput({
       insertFiles(paths, point) {
         if (!editor || !paths.length) return;
         files.current = [...new Set([...files.current, ...paths])];
-        localStorage.setItem(
-          "file-chips:" + draftKey,
-          JSON.stringify(files.current),
-        );
+        chips.files.save(files.current);
         const { doc } = editor.state;
         const hit = point && editor.view.posAtCoords(point)?.pos;
         // The pointer can land between blocks; the tags go in the nearest one.
@@ -657,10 +625,7 @@ export function ComposerPromptInput({
           if (node.type.name === "relayQuote") present.push(node.attrs.text);
         });
         quotes.current = [...new Set([...present, quote])];
-        localStorage.setItem(
-          "quote-chips:" + draftKey,
-          JSON.stringify(quotes.current),
-        );
+        chips.quotes.save(quotes.current);
         // After any selection rather than over it: the quote came from the thread.
         editor.view.dispatch(closeHistory(editor.state.tr));
         editor

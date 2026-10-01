@@ -48,7 +48,6 @@ import { api } from "../lib/api";
 import {
   clearDraftScope,
   currentNewThread,
-  DRAFT_PREFIX,
   freshNewThread,
   loadDraftScope,
   readDraft,
@@ -56,6 +55,7 @@ import {
   setCurrentNewThread,
   writeDraft,
 } from "../lib/drafts";
+import { openThread, threadDraftKey } from "../lib/thread-storage";
 import {
   loadComposerSettings,
   saveComposerSettings,
@@ -351,7 +351,7 @@ export default function ProjectShell() {
   useEffect(() => {
     if (project) {
       localStorage.setItem("relay-project-id", project.id);
-      const saved = localStorage.getItem("relay-project-chat:" + project.id);
+      const saved = openThread.load(project.id);
       setChatId(saved || null);
       setDraftScope(loadDraftScope(currentNewThread(project.id)));
       panes.switchTo(saved || currentNewThread(project.id));
@@ -371,7 +371,7 @@ export default function ProjectShell() {
   }, [legacy]);
   useEffect(() => {
     if (project && project.id === restoredProject)
-      localStorage.setItem("relay-project-chat:" + project.id, chatId ?? "");
+      openThread.save(project.id, chatId);
   }, [project?.id, chatId, restoredProject]);
   function openUrl(url: string) {
     if (dirty) {
@@ -558,10 +558,10 @@ export default function ProjectShell() {
         ref,
       });
       saveComposerSettings(next.id, loadComposerSettings(from));
-      const draft = readDraft(DRAFT_PREFIX + from);
+      const draft = readDraft(threadDraftKey(from));
       if (draft) {
-        writeDraft(DRAFT_PREFIX + next.id, draft);
-        writeDraft(DRAFT_PREFIX + from, "");
+        writeDraft(threadDraftKey(next.id), draft);
+        writeDraft(threadDraftKey(from), "");
       }
       await chats.refetch();
       setChatId(next.id);
@@ -670,8 +670,7 @@ export default function ProjectShell() {
     fresh: boolean | string = false,
   ) {
     if (dirty) return;
-    if (fresh || next)
-      localStorage.setItem("relay-project-chat:" + p.id, next?.id ?? "");
+    if (fresh || next) openThread.save(p.id, next?.id ?? null);
     if (fresh) {
       const id = fresh === true ? freshNewThread(p.id) : fresh;
       // Switching projects restores the saved scope, so a fresh thread drops it.
@@ -1404,7 +1403,7 @@ export default function ProjectShell() {
           onSignIn={() => void withAccount()}
           onClose={() => setInvitation(undefined)}
           onJoined={async (p, c) => {
-            if (c) localStorage.setItem("relay-project-chat:" + p, c.id);
+            if (c) openThread.save(p, c.id);
             setSelected(p);
             await chats.refetch();
             if (c) openChat(c.id);

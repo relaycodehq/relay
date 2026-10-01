@@ -62,12 +62,8 @@ import {
   saveDraftWorkspace,
   writeDraft,
 } from "../lib/drafts";
-import {
-  loadCodeRefs,
-  loadSelection,
-  loadWorkItem,
-  withAttachments,
-} from "../lib/draft-attachments";
+import { withAttachments } from "../lib/draft-attachments";
+import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import type { ComposedSend } from "../../shared/compose-send";
 import {
   startThreadSettings,
@@ -654,7 +650,7 @@ export function ProjectChat({
   });
   const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
   const [rootId, setRootId] = useState<string | null>(() =>
-    localStorage.getItem("chat-reply:" + id),
+    threadStorage(id).reply.load(),
   );
   const [composerRevision, setComposerRevision] = useState(0);
   const [busy, setBusy] = useState(false),
@@ -663,9 +659,15 @@ export function ProjectChat({
     "relay-project-presence",
   );
   const [sharingOpen, setSharingOpen] = useState(false);
-  const [selection, setSelection] = useState(() => loadSelection(id));
-  const [workItem, setWorkItem] = useState(() => loadWorkItem(id));
-  const [codeRefs, setCodeRefs] = useState(() => loadCodeRefs(id));
+  const [selection, setSelection] = useState(() =>
+    threadStorage(id).selection.load(),
+  );
+  const [workItem, setWorkItem] = useState(() =>
+    threadStorage(id).workItem.load(),
+  );
+  const [codeRefs, setCodeRefs] = useState(() =>
+    threadStorage(id).codeRefs.load(),
+  );
   const created = useRef<ChatSummary | undefined>(undefined);
   const [visible, setVisible] = useState(FIRST_MESSAGES);
   const scroll = useRef<HTMLDivElement>(null),
@@ -716,21 +718,9 @@ export function ProjectChat({
       }),
     [chat?.id, qc],
   );
-  useEffect(() => {
-    if (selection)
-      localStorage.setItem("chat-selection:" + id, JSON.stringify(selection));
-    else localStorage.removeItem("chat-selection:" + id);
-  }, [id, selection]);
-  useEffect(() => {
-    if (workItem)
-      localStorage.setItem("chat-work-item:" + id, JSON.stringify(workItem));
-    else localStorage.removeItem("chat-work-item:" + id);
-  }, [id, workItem]);
-  useEffect(() => {
-    if (codeRefs.length)
-      localStorage.setItem("chat-code-refs:" + id, JSON.stringify(codeRefs));
-    else localStorage.removeItem("chat-code-refs:" + id);
-  }, [id, codeRefs]);
+  useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
+  useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);
+  useEffect(() => threadStorage(id).codeRefs.save(codeRefs), [id, codeRefs]);
   const messages = useMemo(() => {
     const byId = new Map((history.data?.messages ?? []).map((m) => [m.id, m]));
     for (const m of Object.values(updates))
@@ -1005,11 +995,10 @@ export function ProjectChat({
     }
     return onCommand(command, args);
   }
-  const draftKey = `chat-draft:${id}${root ? ":" + root.id : ""}`;
+  const draftKey = threadDraftKey(id, root?.id);
   const onDraft = (v: string, key = draftKey) => writeDraft(key, v);
   useLayoutEffect(() => {
-    if (rootId) localStorage.setItem("chat-reply:" + id, rootId);
-    else localStorage.removeItem("chat-reply:" + id);
+    threadStorage(id).reply.save(rootId);
     returning.current = readingPlaces.get(place);
     follow.current = !returning.current;
     oldest.current = undefined;
@@ -1027,7 +1016,7 @@ export function ProjectChat({
         );
       else setSelection(contextText.selection);
       if (text) {
-        const key = "chat-draft:" + id,
+        const key = threadDraftKey(id),
           old = readDraft(key);
         onDraft(`${old}${old ? "\n\n" : ""}${text}`, key);
       }
@@ -1198,7 +1187,7 @@ export function ProjectChat({
       const parent = input.parentId
         ? replyRoot(messages, input.parentId).id
         : null;
-      const key = `chat-draft:${id}${parent ? ":" + parent : ""}`;
+      const key = threadDraftKey(id, parent);
       const old = readDraft(key);
       const restoredCode = parent
         ? { refs: [], body: input.body }
@@ -1244,10 +1233,8 @@ export function ProjectChat({
           ),
         ]);
       if (input.selection) {
-        localStorage.setItem(
-          "chat-selection:" + id,
-          JSON.stringify(input.selection),
-        );
+        // Saved now, not by the effect: the queue entry goes next.
+        threadStorage(id).selection.save(input.selection);
         setSelection(input.selection);
       }
       setRootId(parent);

@@ -128,6 +128,7 @@ import {
   type DraftImage,
 } from "../lib/draft-images";
 import { readDraft, useDraft } from "../lib/drafts";
+import { takeLegacyPastes } from "../lib/thread-storage";
 import { useStableCallback } from "../lib/useStableCallback";
 import { flattenSketch, type Sketch } from "../lib/sketch";
 import { SketchEditor, SketchOverlay, type SketchHistory } from "./ImageSketch";
@@ -374,10 +375,8 @@ export function ProjectComposer({
   const [viewingPaste, setViewingPaste] = useState<number>();
   // Earlier versions kept pastes beside the draft; move any left into it.
   useEffect(() => {
-    const key = "pasted-texts:" + draftKey;
-    const kept = localStorage.getItem(key);
+    const kept = takeLegacyPastes(draftKey);
     if (kept === null) return;
-    localStorage.removeItem(key);
     try {
       const value: unknown = JSON.parse(kept);
       const blocks = (Array.isArray(value) ? value : [])
