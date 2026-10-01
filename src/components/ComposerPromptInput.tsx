@@ -72,7 +72,7 @@ export interface PromptInputHandle {
   /** Where dictated words go: live at the caret, greyed while they may still change. */
   dictation: DictationTarget;
 }
-const Skill = Node.create({
+export const Skill = Node.create({
   name: "relaySkill",
   group: "inline",
   inline: true,
@@ -143,7 +143,7 @@ export const Quote = Node.create({
   },
 });
 // A long paste, kept where it was pasted; sent as its fenced text.
-const Paste = Node.create({
+export const Paste = Node.create({
   name: "relayPaste",
   group: "inline",
   inline: true,
@@ -346,7 +346,7 @@ const leaf = (node: PMNode) =>
               : "";
 // A quote is a Markdown blockquote, so one that follows text on the same line
 // starts a line of its own; promptContent drops that break again.
-function serialize(content: Fragment, end = content.size) {
+export function serialize(content: Fragment, end = content.size) {
   let out = "",
     first = true;
   content.nodesBetween(0, end, (node, pos) => {
@@ -365,7 +365,7 @@ function serialize(content: Fragment, end = content.size) {
 export const promptText = (doc: PMNode, end = doc.content.size) =>
   serialize(doc.content, end);
 const text = promptText;
-function position(doc: PMNode, offset: number) {
+export function position(doc: PMNode, offset: number) {
   let result = 1,
     found = false;
   doc.descendants((node, pos) => {
@@ -449,7 +449,7 @@ export function promptContent(
   return { type: "doc", content: [{ type: "paragraph", content: nodes }] };
 }
 /** The nth paste pill and where it sits. */
-function pasteAt(doc: PMNode, index: number) {
+export function pasteAt(doc: PMNode, index: number) {
   let found: { node: PMNode; pos: number } | undefined,
     seen = 0;
   doc.descendants((node, pos) => {
