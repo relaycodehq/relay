@@ -1,14 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  LogIn,
-  LogOut,
-  Monitor,
-  Moon,
-  RotateCcw,
-  Search,
-  Sun,
-} from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { LogIn, LogOut, Search } from "lucide-react";
 import type { SettingsCategory } from "../lib/settings-page";
 import {
   matches,
@@ -30,57 +21,18 @@ import { command, shortcutGroups, shortcutIds } from "../../shared/shortcuts";
 import { ShortcutKeys, ShortcutsResetAll } from "./ShortcutSettings";
 import { useAISettingsDraft } from "../lib/useAISettingsDraft";
 import { useLeaveOnEscape } from "../lib/useLeaveOnEscape";
-import { useSavedSetting } from "../lib/useSavedSetting";
 import { useUpdates } from "../lib/updates";
-import { setMode, setThemeChoice, useAppearance } from "../lib/appearance";
-import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
-import { setImagePills, useImagePills } from "../lib/image-pills";
-import {
-  ComposerToolbarReset,
-  ComposerToolbarSettings,
-} from "./ComposerToolbarSettings";
-import {
-  setSidebarAutoHide,
-  useSidebarAutoHide,
-} from "../lib/sidebar-auto-hide";
 import {
   setSendKey,
   steerKeyLabel,
   useSendKey,
   type SendKey,
 } from "../lib/send-key";
-import {
-  DEFAULT_CONTRAST,
-  isCustomized,
-  clearedColors,
-  normalizeHex,
-  resolveChoice,
-  resolvePalette,
-  themesFor,
-  type AppearanceMode,
-  type Palette as ThemePalette,
-  type ResolvedAppearance,
-  type ThemeChoice,
-  type ThemeKind,
-} from "../lib/themes";
-import { relayIconSvg, svgDataUrl } from "../lib/relay-icon";
 import { Avatar, ErrorBox } from "./ui";
 import { ModelField } from "./ModelField";
 import { ComposerSelect } from "./ComposerSelect";
-import { AutoSettleSelect } from "./AutoSettleSettings";
 import { ProviderIcon } from "./ComposerModelPicker";
-import { ThemeCodePreview } from "./ThemeCodePreview";
-import { ThemeImportSettings } from "./ThemeImportSettings";
-import {
-  TypographyAdvancedSwitch,
-  TypographySettings,
-} from "./TypographySettings";
-import {
-  SettingsCard,
-  SettingsFooter,
-  SettingsRow,
-  Switch,
-} from "./SettingsCard";
+import { SettingsCard, SettingsFooter, SettingsRow } from "./SettingsCard";
 import { UpdateCheck, updateLine } from "./UpdateCheck";
 import { Changelog } from "./Changelog";
 import { AgentVersionSettings } from "./AgentUpdates";
@@ -105,6 +57,7 @@ import { usePluginEnabled } from "../lib/plugins";
 import { categories, categoryOf } from "./settings/categories";
 import { Setting } from "./settings/Setting";
 import { SettingsNav } from "./settings/SettingsNav";
+import { useAppearanceEntries } from "./settings/appearance";
 import "./settings.css";
 import {
   agentName,
@@ -114,86 +67,6 @@ import {
 } from "../../shared/agents";
 
 export type { SettingsCategory };
-
-/** A miniature window per look; two looks share it half and half. */
-function ThemePreview({ looks }: { looks: ResolvedAppearance[] }) {
-  const pane = ({ palette, accent }: ResolvedAppearance, half?: string) => (
-    <div
-      key={palette.kind}
-      className={`theme-preview-window ${half ?? ""}`}
-      style={{ background: palette.surface, borderColor: palette.border }}
-    >
-      <div
-        className="theme-preview-sidebar"
-        style={{ background: palette.sidebar }}
-      >
-        <i style={{ background: palette.text, opacity: 0.55 }} />
-        <i style={{ background: palette.selected }} />
-        <i style={{ background: palette.muted, opacity: 0.5 }} />
-        <i style={{ background: palette.muted, opacity: 0.5 }} />
-      </div>
-      <div className="theme-preview-body">
-        <i style={{ background: palette.text, opacity: 0.8, width: "62%" }} />
-        <i style={{ background: palette.muted, opacity: 0.6, width: "84%" }} />
-        <i style={{ background: palette.muted, opacity: 0.6, width: "48%" }} />
-        <b style={{ background: accent }} />
-      </div>
-    </div>
-  );
-  return (
-    <div className="theme-preview">
-      {looks.length > 1
-        ? [pane(looks[0], "left"), pane(looks[1], "right")]
-        : pane(looks[0])}
-    </div>
-  );
-}
-
-const kindLabels: Record<ThemeKind, string> = { light: "Light", dark: "Dark" };
-
-/** The theme's background with its accent at the centre. */
-function ThemeDot({
-  palette,
-  accent,
-}: {
-  palette: ThemePalette;
-  accent?: string;
-}) {
-  return (
-    <span
-      className="theme-dot"
-      style={{
-        background: `radial-gradient(circle, ${accent ?? palette.accent} 0 3px, ${palette.surface} 3.5px)`,
-      }}
-    />
-  );
-}
-
-function ThemeSelect({
-  kind,
-  look,
-  onChange,
-}: {
-  kind: ThemeKind;
-  look: ResolvedAppearance;
-  onChange: (theme: string) => void;
-}) {
-  return (
-    <div className="composer-tools model-field theme-select">
-      <ComposerSelect
-        label={`${kindLabels[kind]} theme`}
-        value={look.theme.id}
-        icon={<ThemeDot palette={look.palette} accent={look.accent} />}
-        options={themesFor(kind).map((theme) => ({
-          value: theme.id,
-          label: theme.name,
-          icon: <ThemeDot palette={theme[kind]!} />,
-        }))}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
 
 function AgentSelect({
   value,
@@ -216,155 +89,6 @@ function AgentSelect({
         onChange={onChange}
       />
     </div>
-  );
-}
-
-/** A colour well beside its hex code; either one edits the colour. */
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (color: string) => void;
-}) {
-  const [draft, setDraft] = useState<string>();
-  return (
-    <div className="color-field">
-      <input
-        type="color"
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <input
-        type="text"
-        aria-label={`${label} hex code`}
-        spellCheck={false}
-        maxLength={7}
-        value={draft ?? value.toUpperCase()}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          const color = normalizeHex(e.target.value);
-          if (color && e.target.value.replace("#", "").length === 6)
-            onChange(color);
-        }}
-        onBlur={(e) => {
-          const color = normalizeHex(e.target.value);
-          if (color) onChange(color);
-          setDraft(undefined);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-      />
-    </div>
-  );
-}
-
-/** One colour mode's theme and the few colours you can tune on top of it. */
-function ThemeChoiceCard({
-  kind,
-  choice,
-  look,
-}: {
-  kind: ThemeKind;
-  choice: ThemeChoice;
-  look: ResolvedAppearance;
-}) {
-  const { theme, palette, accent } = look;
-  const base = resolvePalette(kind, { theme: theme.id });
-  const change = (patch: Partial<ThemeChoice>) => setThemeChoice(kind, patch);
-  const label = kindLabels[kind];
-  const contrast = choice.contrast ?? DEFAULT_CONTRAST;
-  return (
-    <SettingsCard>
-      <SettingsRow label="Theme" hint={theme.description}>
-        <ThemeSelect
-          kind={kind}
-          look={look}
-          // A new theme brings its own colours; contrast is a preference.
-          onChange={(id) => change({ theme: id, ...clearedColors })}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Accent"
-        hint="Highlights, selection and the app icon."
-      >
-        <div className="accent-picker">
-          {[...new Set([base.accent, ...theme.swatches])].map((color) => (
-            <button
-              key={color}
-              className={`accent-swatch ${
-                accent.toLowerCase() === color.toLowerCase() ? "selected" : ""
-              }`}
-              style={{ background: color }}
-              aria-label={`${label} accent ${color}`}
-              aria-pressed={accent.toLowerCase() === color.toLowerCase()}
-              title={color}
-              onClick={() =>
-                change({ accent: color === base.accent ? undefined : color })
-              }
-            />
-          ))}
-          <label className="accent-custom" title="Custom colour">
-            <input
-              type="color"
-              aria-label={`${label} custom accent`}
-              value={accent}
-              onChange={(e) => change({ accent: e.target.value })}
-            />
-          </label>
-        </div>
-      </SettingsRow>
-      <SettingsRow label="Background">
-        <ColorField
-          label={`${label} background`}
-          value={palette.surface}
-          onChange={(color) =>
-            change({ background: color === base.surface ? undefined : color })
-          }
-        />
-      </SettingsRow>
-      <SettingsRow label="Foreground">
-        <ColorField
-          label={`${label} foreground`}
-          value={palette.text}
-          onChange={(color) =>
-            change({ foreground: color === base.text ? undefined : color })
-          }
-        />
-      </SettingsRow>
-      <SettingsRow
-        label="Contrast"
-        hint="How far sidebars, borders and secondary text stand apart."
-      >
-        <input
-          type="range"
-          min={0}
-          max={100}
-          aria-label={`${label} contrast`}
-          value={contrast}
-          onChange={(e) => {
-            const value = Number(e.target.value);
-            change({
-              contrast: value === DEFAULT_CONTRAST ? undefined : value,
-            });
-          }}
-        />
-        <span className="settings-row-value">{contrast}</span>
-      </SettingsRow>
-      <SettingsFooter note="Code keeps the theme’s own syntax colours.">
-        <button
-          disabled={!isCustomized(choice)}
-          onClick={() => change({ ...clearedColors, contrast: undefined })}
-        >
-          <RotateCcw size={12} />
-          Reset to {theme.name}
-        </button>
-      </SettingsFooter>
-    </SettingsCard>
   );
 }
 
@@ -395,57 +119,20 @@ export function Settings({
   // Escape clears the search, then leaves.
   useLeaveOnEscape(() => (query ? setQuery("") : onClose()));
   const [error, setError] = useState<unknown>();
+  const appearanceEntries = useAppearanceEntries();
 
   const ai = useAISettingsDraft(setError);
-  const smartNames = useSavedSetting(
-    {
-      queryKey: ["smart-project-names"],
-      queryFn: () => api.smartProjectNames(),
-      staleTime: Infinity,
-    },
-    (enabled) => api.saveSmartProjectNames(enabled),
-    ["projects"],
-  );
   const { values, change } = ai;
 
   // Releases stamp their own version at build time; the updater knows it.
   const updates = useUpdates();
   const dictationModel = useDictationModel();
-  const appearance = useAppearance();
-  const cacheHeat = useCacheHeat();
-  const imagePills = useImagePills();
-  const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
   // Plugins that are off leave no trace in the rest of Settings.
   const timesheets = usePluginEnabled("clockify");
   // Search finds shortcuts by their current keys.
   useShortcutOverrides();
   const quickKeys = useQuickKeysLabel();
-  const iconSrc = useMemo(
-    () => svgDataUrl(relayIconSvg(appearance.accent)),
-    [appearance.accent],
-  );
-  const { mode } = appearance.value;
-  const looks: Record<ThemeKind, ResolvedAppearance> = {
-    light: resolveChoice("light", appearance.value.light),
-    dark: resolveChoice("dark", appearance.value.dark),
-  };
-  const modes: [
-    AppearanceMode,
-    string,
-    typeof Monitor,
-    ResolvedAppearance[],
-  ][] = [
-    ["system", "System", Monitor, [looks.light, looks.dark]],
-    ["light", "Light", Sun, [looks.light]],
-    ["dark", "Dark", Moon, [looks.dark]],
-  ];
-  // Following the system shows both themes; the preview follows the one
-  // being edited.
-  const kinds: ThemeKind[] = mode === "system" ? ["light", "dark"] : [mode];
-  const [editing, setEditing] = useState<ThemeKind>();
-  const previewKind =
-    editing && kinds.includes(editing) ? editing : appearance.palette.kind;
 
   const sendKeyEntry: SettingEntry = {
     id: "send-key",
@@ -483,188 +170,7 @@ export function Settings({
     ),
   };
   const entries: SettingEntry[] = [
-    {
-      id: "theme",
-      category: "appearance",
-      title: "Theme",
-      description:
-        "Follow the system or keep Relay light or dark. Each mode has its own theme.",
-      keywords:
-        "appearance color colour mode light dark system night code preview syntax diff",
-      block: true,
-      render: () => (
-        <>
-          <div className="mode-grid" role="radiogroup" aria-label="Color mode">
-            {modes.map(([value, label, Icon, previews]) => (
-              <button
-                key={value}
-                role="radio"
-                aria-checked={mode === value}
-                className={`theme-card ${mode === value ? "selected" : ""}`}
-                onClick={() => setMode(value)}
-              >
-                <ThemePreview looks={previews} />
-                <span className="theme-card-label">
-                  <Icon size={14} />
-                  <strong>{label}</strong>
-                  {mode === value && <Check size={13} />}
-                </span>
-              </button>
-            ))}
-          </div>
-          <ThemeCodePreview look={looks[previewKind]} />
-        </>
-      ),
-    },
-    ...kinds.map((kind) => ({
-      id: `${kind}-theme`,
-      category: "appearance" as const,
-      title: `${kindLabels[kind]} theme`,
-      description:
-        mode === "system"
-          ? `Used while your system is in ${kind} mode.`
-          : undefined,
-      keywords:
-        themesFor(kind)
-          .map((t) => t.name)
-          .join(" ") +
-        " accent background foreground contrast color colour palette skin",
-      block: true,
-      render: () => (
-        <div onFocusCapture={() => setEditing(kind)}>
-          <ThemeChoiceCard
-            kind={kind}
-            choice={appearance.value[kind]}
-            look={looks[kind]}
-          />
-        </div>
-      ),
-    })),
-    {
-      id: "typography",
-      category: "appearance",
-      title: "Typography",
-      keywords:
-        "font family typeface size text code monospace terminal interface prompt zoom smoothing wrap",
-      block: true,
-      accessory: () => <TypographyAdvancedSwitch />,
-      render: () => <TypographySettings />,
-    },
-    {
-      id: "vscode-themes",
-      category: "appearance",
-      title: "VS Code themes",
-      description:
-        "Install any colour theme from Open VSX. Its themes join the light and dark lists above, code colours included.",
-      keywords:
-        "vscode vs code open vsx import install extension marketplace cursor noir",
-      block: true,
-      render: () => <ThemeImportSettings />,
-    },
-    {
-      id: "composer-toolbar",
-      category: "appearance",
-      title: "Composer toolbar",
-      description: "Drag to reorder. Drop below the bar to hide.",
-      keywords:
-        "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode attach dictation microphone",
-      block: true,
-      accessory: () => <ComposerToolbarReset />,
-      render: () => <ComposerToolbarSettings />,
-    },
-    {
-      id: "image-pills",
-      category: "appearance",
-      title: "Screenshots in the message",
-      description:
-        "A pasted or dropped screenshot also goes into the text as a pill, which the agent reads as [Image #1]. Off keeps screenshots above the message only.",
-      keywords:
-        "screenshot image picture paste drop attach pill chip inline thumbnail composer message",
-      render: () => (
-        <Switch
-          label="Put screenshots in the message"
-          checked={imagePills}
-          onChange={setImagePills}
-        />
-      ),
-    },
-    {
-      id: "cache-heat",
-      category: "appearance",
-      title: "Prompt cache fire and ice",
-      description:
-        "Flames on the context meter while the prompt cache is fresh, an ice cube once it has expired. Right-click the ring to put it out for one chat.",
-      keywords: "prompt cache fire flame ice cold fresh context meter ring",
-      render: () => (
-        <Switch
-          label="Show prompt cache fire and ice"
-          checked={cacheHeat}
-          onChange={setCacheHeat}
-        />
-      ),
-    },
-    {
-      id: "smart-project-names",
-      category: "appearance",
-      title: "Smart project names",
-      description:
-        "Turn relay-releases into Relay Releases. Off keeps the original folder or repository name. Names you type yourself stay as typed.",
-      keywords:
-        "projects naming folder repository capitalize separators hyphen underscore original smart",
-      render: () => (
-        <>
-          <Switch
-            label="Smart project names"
-            checked={smartNames.value ?? true}
-            disabled={!smartNames.loaded || smartNames.saving}
-            onChange={(enabled) => smartNames.set(enabled)}
-          />
-          {smartNames.error && <ErrorBox error={smartNames.error} />}
-        </>
-      ),
-    },
-    {
-      id: "auto-settle",
-      category: "appearance",
-      title: "Auto-settle quiet threads",
-      description:
-        "Move a thread to Settled once it has been quiet this long, or once Relay sees its PR merged. New activity brings it back. Turn it off for one thread from its right-click menu.",
-      keywords:
-        "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
-      render: () => <AutoSettleSelect />,
-    },
-    {
-      id: "sidebar-auto-hide",
-      category: "appearance",
-      title: "Make room for side panes",
-      description:
-        "Hide the projects sidebar while Changes, Files or History is open, and bring it back when they close.",
-      keywords: "sidebar projects hide collapse changes files history pane",
-      render: () => (
-        <Switch
-          label="Hide the sidebar while side panes are open"
-          checked={sidebarAutoHide}
-          onChange={setSidebarAutoHide}
-        />
-      ),
-    },
-    {
-      id: "icon",
-      category: "appearance",
-      title: "App icon",
-      description:
-        "The dock icon and the Relay mark follow your accent color automatically.",
-      keywords: "dock logo mark brand",
-      render: () => (
-        <img
-          className="settings-app-icon"
-          src={iconSrc}
-          width={64}
-          height={64}
-          alt="Relay app icon preview"
-        />
-      ),
-    },
+    ...appearanceEntries,
     {
       id: "gitea",
       category: "account",
