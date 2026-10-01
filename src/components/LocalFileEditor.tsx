@@ -1,60 +1,25 @@
-import { EditorPath } from "./EditorPath";
-import { useSymbolNavigation } from "./SymbolNavigation";
-import { useLineBlame } from "./LineBlame";
-import type { ChecksController } from "../lib/useProjectChecks";
+import type { ReactNode } from "react";
+import { FolderGit2 } from "lucide-react";
+import type { Pull } from "../../shared/types";
 import { useContentHash } from "../lib/diagnostics";
-import { DiagnosticMessage } from "./ProjectChecks";
-import { diagnosticSummary, diagnosticSeverity } from "../../shared/checks";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  EditProvider,
-  type CodeViewHandle,
-  type CodeViewProps,
-} from "@pierre/diffs/react";
-import {
-  Editor,
-  type EditorFactory,
-  type EditorKeymap,
-  type Marker,
-} from "@pierre/diffs/edit";
-import type { CodeViewDiffItem, FileDiffMetadata } from "@pierre/diffs";
-import {
-  Columns2,
-  FolderGit2,
-  Save,
-  Undo2,
-  Redo2,
-  RotateCw,
-  X,
-} from "lucide-react";
-import type { LocalFile, Pull } from "../../shared/types";
-import { api } from "../lib/api";
-import { matches, useShortcutLabel } from "../lib/shortcuts";
-import { useTheme } from "../lib/useTheme";
-import { useSyntaxThemes } from "../lib/appearance";
-import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
-import { ErrorBox, IconButton, Loading, Modal } from "./ui";
-import { useFileDiff } from "../lib/useFileDiff";
-import { useHoldNavigation } from "../lib/navigation-lock";
+import { editorKeys } from "../lib/editor-keys";
+import { useShortcutLabel } from "../lib/shortcuts";
+import { useBufferChecks } from "../lib/useBufferChecks";
+import { useEditableDiff } from "../lib/useEditableDiff";
+import { useEditorCompare } from "../lib/useEditorCompare";
+import { useLocalFile, type LocalProject } from "../lib/useLocalFile";
+import type { ChecksController } from "../lib/useProjectChecks";
+import { useSaveShortcut } from "../lib/useSaveShortcut";
+import { CheckPanel } from "./local-file-editor/CheckPanel";
+import { EditCode } from "./local-file-editor/EditCode";
+import { EditorBar } from "./local-file-editor/EditorBar";
+import { EditorFooter } from "./local-file-editor/EditorFooter";
+import { FolderPrompt, UnsavedPrompt } from "./local-file-editor/prompts";
+import { useEditorBlame } from "./local-file-editor/useEditorBlame";
+import { useSymbolNavigation } from "./SymbolNavigation";
+import { ErrorBox, Loading, Modal } from "./ui";
 
-const keymap: EditorKeymap = [
-  {
-    bindings: {
-      "cmdOrCtrl+d": "copyLineDown",
-      "cmdOrCtrl+r": "openSearchReplacePanel",
-      "shift+alt+ArrowUp": "moveLineUp",
-      "shift+alt+ArrowDown": "moveLineDown",
-    },
-  },
-];
-const createEditor: EditorFactory<undefined, undefined> = (type, options) =>
-  new Editor(type, {
-    ...options,
-    historyMaxEntries: 200,
-    keymap,
-    clipboard: { readText: (type) => (type ? "" : api.readClipboard()) },
-  });
-
+/** A file from a project's folder or a PR's checkout, edited against its committed version. */
 export default function LocalFileEditor({
   checks,
   pull,
@@ -67,8 +32,7 @@ export default function LocalFileEditor({
 }: {
   checks: ChecksController;
   pull?: Pull;
-  /** `plain`: a folder without Git, so no HEAD to compare with or blame. */
-  project?: { id: string; head: string; plain?: boolean };
+  project?: LocalProject;
   inline?: boolean;
   path: string;
   line?: number;
@@ -76,364 +40,62 @@ export default function LocalFileEditor({
   /** Extra buttons in the inline bar, after the editing controls. */
   actions?: ReactNode;
 }) {
-  const theme = useTheme();
-  const syntaxThemes = useSyntaxThemes();
-  const [source, setSource] = useState<LocalFile>();
-  const [error, setError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
-  const [needsFolder, setNeedsFolder] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [confirmation, setConfirmation] = useState<"close" | "reload" | null>(
-    null,
-  );
-  const [bufferText, setBufferText] = useState<string>();
-  // Inline, the editor reads like a plain file with change bars; the
-  // side-by-side comparison with HEAD is one click away.
+  const file = useLocalFile(project, pull, path, onClose);
+  const { source } = file;
   const plain = !!project?.plain;
-  const [comparing, setCompare] = useState(
-    () => !inline || localStorage.getItem("relay-editor-compare") === "true",
-  );
-  const compare = comparing && !plain;
-  useEffect(() => {
-    if (inline) localStorage.setItem("relay-editor-compare", String(comparing));
-  }, [inline, comparing]);
-  const bufferHash = useContentHash(bufferText);
+  const [compare, toggleCompare] = useEditorCompare(inline, plain);
+  const hash = useContentHash(file.buffer);
+  const base = project ? "HEAD" : "PR head";
   const target = pull ?? {
     projectId: project!.id,
     head: { sha: source?.head ?? project!.head },
   };
-  const revision = pull?.head.sha ?? source?.head ?? project!.head;
-  const compared = useFileDiff(
-    useMemo(
-      () =>
-        source && {
-          editable: true,
-          old: {
-            name: path,
-            contents: source.original,
-            cacheKey: `${revision}:${path}`,
-          },
-          next: {
-            name: path,
-            contents: source.contents,
-            cacheKey: `local:${source.version}`,
-          },
-          binary: false,
-        },
-      [source],
-    ),
-  );
-  const diff = compared.diff;
-  useHoldNavigation(dirty || saving);
-  const blame = useLineBlame(
+  const blame = useEditorBlame(
     target,
-    plain
-      ? { deletions: undefined, additions: undefined }
-      : {
-          deletions: {
-            revision: revision,
-            path,
-            label: project ? "HEAD" : "PR head",
-          },
-          additions: {
-            revision: revision,
-            path,
-            label: "Local checkout",
-            ...(source?.original !== bufferText
-              ? {
-                  unavailable: pull
-                    ? "This local version differs from the PR. Hover the PR-head line on the left for committed history."
-                    : "This local version differs from HEAD. Hover the HEAD line on the left for committed history.",
-                }
-              : {}),
-          },
-        },
+    path,
+    file.revision,
+    base,
+    source?.original !== file.buffer,
+    plain,
     compare ? "split" : "unified",
-  );
-  const checkState = checks.state;
-  const checked =
-    checkState?.status === "ready" &&
-    bufferHash &&
-    checkState.files[path]?.hash === bufferHash
-      ? checkState.files[path]
-      : undefined;
-  const history = (size: number) => (
-    <>
-      <IconButton
-        label="Undo code edit"
-        className="editor-history"
-        onClick={() => viewer.current?.getEditor(path)?.undo()}
-      >
-        <Undo2 size={size} />
-      </IconButton>
-      <IconButton
-        label="Redo code edit"
-        className="editor-history"
-        onClick={() => viewer.current?.getEditor(path)?.redo()}
-      >
-        <Redo2 size={size} />
-      </IconButton>
-    </>
   );
   const symbols = useSymbolNavigation(
     target,
     path,
-    bufferHash,
-    checkState,
+    hash,
+    checks.state,
     "editing",
   );
-  const fileProblems = useMemo(
-    () =>
-      checked && checkState
-        ? checkState.diagnostics.filter((d) => d.path === path)
-        : [],
-    [checked, checkState, path],
+  const { problems, markers } = useBufferChecks(
+    checks,
+    path,
+    file.buffer,
+    hash,
+    file.setError,
   );
-  const markers = useMemo<Marker[]>(
-    () =>
-      fileProblems
-        .filter((d) => d.line && d.column)
-        .sort(
-          (a, b) =>
-            ({ info: 0, warning: 1, error: 2 })[a.severity] -
-            { info: 0, warning: 1, error: 2 }[b.severity],
-        )
-        .map((d) => ({
-          start: { line: d.line! - 1, character: d.column! - 1 },
-          end: {
-            line: (d.endLine ?? d.line!) - 1,
-            character: Math.max((d.endColumn ?? d.column! + 1) - 1, 0),
-          },
-          severity: d.severity,
-          message: d.message,
-          source: d.code,
-        })),
-    [fileProblems],
-  );
-  const markersRef = useRef(markers);
-  markersRef.current = markers;
-  const text = useRef("");
-  const baseline = useRef("");
-  const version = useRef("");
-  const savingRef = useRef(false);
-  const live = useRef(true);
-  const loadGeneration = useRef(0);
-  const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
-  const focusedDiff = useRef<FileDiffMetadata | undefined>(undefined);
-  useEffect(() => {
-    viewer.current?.getEditor(path)?.setMarkers(markers);
-  }, [markers, path, diff]);
-  useEffect(() => {
-    if (bufferText === undefined || !checks.enabled || !checkState?.id) return;
-    const timer = setTimeout(() => {
-      void checks.buffer(path, bufferText).catch(setError);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [bufferText, path, checks.enabled, checkState?.id]);
-  useEffect(
-    () => () => {
-      void checks.buffer(path, null).catch(() => {});
-    },
-    [path, checks.buffer],
-  );
-  const editorOptions = useMemo<
-    CodeViewProps<undefined, undefined>["editorOptions"]
-  >(
-    () => ({
-      onAttach: (editor) => {
-        editor.setMarkers(markersRef.current);
-        if (focusedDiff.current === diff) return;
-        focusedDiff.current = diff;
-        requestAnimationFrame(() => {
-          if (live.current) editor.focus({ lineNumber: line ?? 1 });
-        });
-      },
-    }),
-    [diff, line],
-  );
-  const snapshotDirty = () => text.current !== baseline.current;
-
-  const load = async (link = false) => {
-    const generation = ++loadGeneration.current;
-    const isCurrent = () =>
-      live.current && generation === loadGeneration.current;
-    setLoading(true);
-    setError(undefined);
-    try {
-      const folder =
-        project ||
-        (link ? await api.linkFolder(pull!) : await api.folder(pull!));
-      if (!isCurrent()) return;
-      if (!folder) {
-        setNeedsFolder(true);
-        return;
-      }
-      setNeedsFolder(false);
-      const file = project
-        ? await api.projectFile(project.id, path)
-        : await api.readLocalFile(pull!, revision, path);
-      if (!isCurrent()) return;
-      text.current = baseline.current = file.contents;
-      setBufferText(file.contents);
-      version.current = file.version;
-      setDirty(false);
-      setSaved(false);
-      setSource(file);
-    } catch (error) {
-      if (isCurrent()) setError(error);
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  };
-  useEffect(() => {
-    live.current = true;
-    void load();
-    return () => {
-      live.current = false;
-      loadGeneration.current++;
-    };
-  }, []);
-  const items = useMemo<CodeViewDiffItem[]>(
-    () =>
-      diff
-        ? [
-            {
-              id: path,
-              type: "diff",
-              fileDiff: diff,
-              edit: true,
-              version: Date.now(),
-            },
-          ]
-        : [],
-    [diff],
-  );
-  const requestClose = () => {
-    if (savingRef.current) return;
-    if (snapshotDirty()) setConfirmation("close");
-    else onClose();
-  };
-  const save = async (close = false) => {
-    if (!source || !snapshotDirty() || savingRef.current || loading) return;
-    savingRef.current = true;
-    setSaving(true);
-    setError(undefined);
-    const contents = text.current;
-    try {
-      const result = await (project
-        ? api.saveProjectFile(
-            project.id,
-            path,
-            source.head,
-            version.current,
-            contents,
-          )
-        : api.saveLocalFile(pull!, revision, path, version.current, contents));
-      if (!live.current) return;
-      version.current = result.version;
-      baseline.current = contents;
-      setDirty(snapshotDirty());
-      setSaved(true);
-      setConfirmation(null);
-      if (close && !snapshotDirty()) onClose();
-    } catch (error) {
-      if (live.current) setError(error);
-    } finally {
-      savingRef.current = false;
-      if (live.current) setSaving(false);
-    }
-  };
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!snapshotDirty() && !savingRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, []);
+  const view = useEditableDiff(path, source, file.revision, line, markers);
   const saveKeys = useShortcutLabel("save");
-  const saveNow = useRef(save);
-  saveNow.current = save;
-  // Not useShortcut: saving works while typing, inside the editor's own
-  // dialog, and before anything else hears the keys.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (matches("save", event)) {
-        event.preventDefault();
-        event.stopPropagation();
-        void saveNow.current();
-      }
-    };
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
-  }, []);
-  const large = (source?.contents.split("\n").length ?? 0) > 5000;
+  useSaveShortcut(file.save);
   return (
     <EditorFrame
       inline={inline}
       title={`Edit locally · ${path.split("/").pop()}`}
       className="local-editor-modal"
-      onClose={requestClose}
+      onClose={file.requestClose}
     >
       {symbols.overlay}
       {inline && (
-        <div className="editor-bar">
-          <EditorPath path={path} title={source?.path ?? path}>
-            <span
-              className={`editor-bar-state ${dirty ? "dirty" : ""}`}
-              role="status"
-            >
-              {saving
-                ? "Saving…"
-                : dirty
-                  ? "Unsaved changes"
-                  : saved
-                    ? "Saved"
-                    : ""}
-            </span>
-          </EditorPath>
-          {source && symbols.controls}
-          <span className="divider" />
-          {history(15)}
-          <IconButton
-            label="Reload local file"
-            disabled={saving || loading}
-            onClick={() =>
-              snapshotDirty() ? setConfirmation("reload") : void load()
-            }
-          >
-            <RotateCw size={15} />
-          </IconButton>
-          {actions}
-          {!plain && (
-            <IconButton
-              label={`Compare with ${project ? "HEAD" : "PR head"}`}
-              active={compare}
-              onClick={() => setCompare((v) => !v)}
-            >
-              <Columns2 size={15} />
-            </IconButton>
-          )}
-          <button
-            className="primary"
-            aria-label="Save locally"
-            title={`Save to the local folder${saveKeys && ` (${saveKeys})`}`}
-            disabled={!dirty || saving || loading}
-            onClick={() => void save()}
-          >
-            Save
-          </button>
-          <IconButton
-            label="Close file"
-            disabled={saving}
-            onClick={requestClose}
-          >
-            <X size={15} />
-          </IconButton>
-        </div>
+        <EditorBar
+          path={path}
+          file={file}
+          editor={view.editor}
+          symbols={symbols.controls}
+          actions={actions}
+          base={base}
+          compare={compare}
+          onCompare={plain ? undefined : toggleCompare}
+          saveKeys={saveKeys}
+        />
       )}
       <div
         className="local-editor-path"
@@ -447,270 +109,53 @@ export default function LocalFileEditor({
         </span>
         {source?.branch && <small>{source.branch}</small>}
       </div>
-      {!!(error || compared.error) && (
-        <ErrorBox error={error || compared.error} />
+      {!!(file.error || view.error) && (
+        <ErrorBox error={file.error || view.error} />
       )}
-      {confirmation && (
-        <div className="editor-confirmation" role="alert">
-          <strong>Keep your unsaved edits?</strong>
-          <span>
-            {confirmation === "reload"
-              ? "Reloading replaces this buffer with the current disk version."
-              : "Save to the local folder, or discard this editing session."}
-          </span>
-          <div>
-            <button onClick={() => setConfirmation(null)}>Keep editing</button>
-            <button
-              className="danger subtle"
-              disabled={saving}
-              onClick={() => {
-                setConfirmation(null);
-                if (confirmation === "close") onClose();
-                else void load();
-              }}
-            >
-              {confirmation === "close"
-                ? "Discard edits"
-                : "Reload and discard edits"}
-            </button>
-            {confirmation === "close" && (
-              <button
-                className="primary"
-                disabled={saving}
-                onClick={() => void save(true)}
-              >
-                Save and close
-              </button>
-            )}
-          </div>
-        </div>
+      {file.confirmation && (
+        <UnsavedPrompt file={file} asking={file.confirmation} />
       )}
       {!source ? (
-        <div className="local-editor-empty">
-          {loading ? (
-            <Loading text="Checking the local checkout…" />
-          ) : (
-            <>
-              {needsFolder && (
-                <p>
-                  Link this repository to your local checkout to edit its files.
-                </p>
-              )}
-              <button onClick={() => void load(true)}>
-                <FolderGit2 size={15} />{" "}
-                {needsFolder ? "Link local folder" : "Choose another folder"}
-              </button>
-              {!needsFolder && (
-                <button onClick={() => void load()}>Retry</button>
-              )}
-            </>
-          )}
-        </div>
+        <FolderPrompt file={file} />
       ) : (
         <>
-          {checks.enabled && checks.info?.targets.length ? (
-            <div className="editor-checks">
-              <span>
-                {checkState?.status === "failed"
-                  ? checkState.message
-                  : checked && diagnosticSeverity(checked)
-                    ? diagnosticSummary(checked)
-                    : checkState?.status === "ready" && !checkState.files[path]
-                      ? "This file is outside the selected compiler configuration"
-                      : checkState?.status === "ready" &&
-                          checkState.files[path]?.hash === bufferHash
-                        ? "No compiler errors in this file"
-                        : "Checking live buffer…"}
-              </span>
-              {fileProblems.length > 0 && (
-                <details>
-                  <summary>Problems in this file</summary>
-                  <div>
-                    {fileProblems.map((d, i) => (
-                      <button
-                        key={i}
-                        onClick={() =>
-                          viewer.current?.getEditor(path)?.focus({
-                            lineNumber: d.line ?? 1,
-                            character: (d.column ?? 1) - 1,
-                          })
-                        }
-                      >
-                        <small>Line {d.line}</small>
-                        <DiagnosticMessage diagnostic={d} />
-                      </button>
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          ) : null}
+          <CheckPanel
+            checks={checks}
+            path={path}
+            hash={hash}
+            problems={problems}
+            editor={view.editor}
+          />
           {!inline && symbols.controls}
           {blame.overlay}
           <div className="editor-versions" hidden={!compare}>
-            <span>{project ? "HEAD" : "PR head"} · read-only</span>
+            <span>{base} · read-only</span>
             <span>Local working tree · editable</span>
           </div>
           <div
             className="local-editor-surface"
             {...blame.handlers}
-            inert={loading}
-            aria-busy={loading}
-            onKeyDownCapture={(event) => {
-              const lookup = matches("references", event)
-                ? "references"
-                : matches("definition", event)
-                  ? "definition"
-                  : undefined;
-              if (lookup) {
-                const caret = viewer.current?.getEditor(path)?.getViewState()
-                  .selections?.[0]?.start;
-                if (caret) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  symbols.at(caret.line + 1, caret.character + 1, lookup);
-                }
-                return;
-              }
-              // Match the current file's indentation when inserting a new line.
-              const target = event.nativeEvent.composedPath()[0];
-              if (
-                event.key !== "Enter" ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.altKey ||
-                event.shiftKey ||
-                event.nativeEvent.isComposing ||
-                !(target instanceof HTMLElement) ||
-                !target.isContentEditable
-              )
-                return;
-              const editor = viewer.current?.getEditor(path);
-              const selections = editor?.getViewState().selections;
-              if (!editor || selections?.length !== 1) return;
-              const { start, end } = selections[0];
-              if (start.line !== end.line || start.character !== end.character)
-                return;
-              const lines = editor.getText().split(/\r?\n/);
-              const current = lines[start.line] ?? "";
-              const indent = current.match(/^[\t ]*/)?.[0] ?? "";
-              const unit = lines.some((v) => v.startsWith("\t"))
-                ? "\t"
-                : " ".repeat(
-                    lines.reduce(
-                      (width, value) =>
-                        Math.min(
-                          width,
-                          value.match(/^( +)\S/)?.[1].length ?? width,
-                        ),
-                      4,
-                    ),
-                  );
-              const before = current.slice(0, start.character);
-              const after = current.slice(start.character);
-              const extra = /[\{\[(]\s*$/.test(before) ? unit : "";
-              const eol = editor.getText().includes("\r\n") ? "\r\n" : "\n";
-              event.preventDefault();
-              event.stopPropagation();
-              editor.applyEdits([
-                {
-                  range: { start, end },
-                  newText:
-                    eol +
-                    indent +
-                    extra +
-                    (extra && /^\s*[}\])]/.test(after) ? eol + indent : ""),
-                },
-              ]);
-              const caret = {
-                line: start.line + 1,
-                character: (indent + extra).length,
-              };
-              editor.setSelections([
-                { start: caret, end: caret, direction: "none" },
-              ]);
-            }}
+            inert={file.loading}
+            aria-busy={file.loading}
+            onKeyDownCapture={editorKeys(view.editor, symbols.at)}
           >
-            {!diff ? (
+            {!view.diff ? (
               <Loading text="Preparing editable diff…" />
             ) : (
-              <EditProvider createEditor={createEditor}>
-                <StyledDiffCodeView
-                  viewerRef={viewer}
-                  className="diff-code-view local-edit-code"
-                  scrollPastEnd
-                  items={items}
-                  editorOptions={editorOptions}
-                  onItemEditChange={(event) => {
-                    text.current = event.file.contents;
-                    setBufferText(event.file.contents);
-                    setDirty(snapshotDirty());
-                    setSaved(false);
-                  }}
-                  onItemEditComplete={() => "reject"}
-                  unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-diff], [data-file] {opacity:1 !important;} [data-code] {tab-size:2;}`}
-                  options={{
-                    ...symbols.handlers,
-                    useTokenTransformer: true,
-                    theme: syntaxThemes,
-                    themeType: theme,
-                    diffStyle: compare ? "split" : "unified",
-                    expandUnchanged: true,
-                    disableFileHeader: true,
-                    diffIndicators: "bars",
-                    overflow: "scroll",
-                    lineDiffType: "word-alt",
-                    preferredHighlighter: "shiki-js",
-                    tokenizeMaxLength: 5000,
-                    tokenizeMaxLineLength: 1000,
-                    maxLineDiffLength: 1000,
-                  }}
-                />
-              </EditProvider>
+              <EditCode
+                view={view}
+                symbols={symbols.handlers}
+                compare={compare}
+                onEdit={file.edit}
+              />
             )}
           </div>
           {!inline && (
-            <div className="local-editor-footer">
-              <span role="status">
-                {saving
-                  ? "Saving…"
-                  : dirty
-                    ? "Unsaved changes"
-                    : saved
-                      ? "Saved to local folder"
-                      : "Editing local checkout"}
-              </span>
-              <span className="editor-shortcuts">
-                {saveKeys && `${saveKeys} · `}Save
-                {large ? " · Large file, plain text" : ""}
-              </span>
-              {history(16)}
-              <IconButton
-                label="Reload local file"
-                disabled={saving || loading}
-                onClick={() =>
-                  snapshotDirty() ? setConfirmation("reload") : void load()
-                }
-              >
-                <RotateCw size={16} />
-              </IconButton>
-              <button onClick={requestClose} disabled={saving}>
-                Done
-              </button>
-              <button
-                className="primary"
-                disabled={!dirty || saving || loading}
-                onClick={() => void save()}
-              >
-                <Save size={14} /> Save locally
-              </button>
-            </div>
-          )}
-          {!inline && (
-            <p className="local-editor-note">
-              Changes stay in your checkout. Commit and push separately to
-              update the PR.
-            </p>
+            <EditorFooter
+              file={file}
+              editor={view.editor}
+              saveKeys={saveKeys}
+            />
           )}
         </>
       )}
