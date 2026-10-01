@@ -7,7 +7,7 @@ import {
   useMicrophones,
 } from "../lib/dictation/microphones";
 import { useDictationModel } from "../lib/dictation/session";
-import { ComposerSelect } from "./ComposerSelect";
+import { SettingsSelect } from "./SettingsCard";
 import "./dictation.css";
 
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
@@ -65,13 +65,11 @@ export function DictationMicrophoneSetting() {
   const options = useMicrophones();
   const chosen = useDictationMicrophone();
   return (
-    <div className="composer-tools model-field">
-      <ComposerSelect
-        label="Microphone"
-        value={options.some((o) => o.value === chosen) ? chosen : ""}
-        options={options}
-        onChange={setDictationMicrophone}
-      />
-    </div>
+    <SettingsSelect
+      label="Microphone"
+      value={options.some((o) => o.value === chosen) ? chosen : ""}
+      options={options}
+      onChange={setDictationMicrophone}
+    />
   );
 }

@@ -13,12 +13,12 @@ import {
   useTypography,
   type Typography,
 } from "../lib/typography";
-import { ComposerSelect } from "./ComposerSelect";
 import { FontPicker } from "./FontPicker";
 import {
   SettingsCard,
   SettingsFooter,
   SettingsRow,
+  SettingsSelect,
   Switch,
 } from "./SettingsCard";
 import { ThemeCodePreview } from "./ThemeCodePreview";
@@ -36,17 +36,16 @@ function SizeSelect({
   onChange: (size: number) => void;
 }) {
   return (
-    <div className="composer-tools model-field size-select">
-      <ComposerSelect
-        label={label}
-        value={String(value)}
-        options={options.map((size) => ({
-          value: String(size),
-          label: size === FOLLOW_INTERFACE ? "Match interface" : `${size} px`,
-        }))}
-        onChange={(size) => onChange(Number(size))}
-      />
-    </div>
+    <SettingsSelect
+      field="size-select"
+      label={label}
+      value={String(value)}
+      options={options.map((size) => ({
+        value: String(size),
+        label: size === FOLLOW_INTERFACE ? "Match interface" : `${size} px`,
+      }))}
+      onChange={(size) => onChange(Number(size))}
+    />
   );
 }
 

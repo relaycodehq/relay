@@ -1,5 +1,12 @@
 import { useState, type KeyboardEvent } from "react";
-import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Plus,
+  X,
+  Zap,
+} from "lucide-react";
 import { agentProviders } from "../../shared/agents";
 import { effortLabels, type ReasoningEffort } from "../../shared/settings";
 import { useCatalogs } from "../lib/useCatalogs";
@@ -20,7 +27,7 @@ import {
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { ComposerSelect } from "./ComposerSelect";
 import { QuickSwitchHud } from "./QuickSwitchHud";
-import { SettingsCard, SettingsRow, Switch } from "./SettingsCard";
+import { Segmented, SettingsCard, SettingsRow, Switch } from "./SettingsCard";
 
 const styleNames: Record<QuickSwitchStyle, string> = {
   drum: "Drum",
@@ -72,19 +79,14 @@ export function QuickSwitchSettings() {
             )
           }
         >
-          <div className="segmented settings-segmented">
-            {quickSwitchStyles.map((style) => (
-              <button
-                key={style}
-                type="button"
-                className={quick.style === style ? "active" : ""}
-                aria-pressed={quick.style === style}
-                onClick={() => save({ style })}
-              >
-                {styleNames[style]}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            value={quick.style}
+            options={quickSwitchStyles.map((style) => [
+              style,
+              styleNames[style],
+            ])}
+            onChange={(style) => save({ style })}
+          />
         </SettingsRow>
         {quick.style === "revolver" && (
           <SettingsRow
@@ -198,7 +200,9 @@ export function QuickSwitchSettings() {
                 type="button"
                 className="quick-remove"
                 aria-label={`Remove preset ${i + 1}`}
-                onClick={() => save({ presets: presets.filter((_, j) => j !== i) })}
+                onClick={() =>
+                  save({ presets: presets.filter((_, j) => j !== i) })
+                }
               >
                 <X size={14} />
               </button>

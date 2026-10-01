@@ -2,16 +2,7 @@ import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
-function ComposerSelectImpl<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  icon,
-  container,
-  heading,
-  className = "",
-}: {
+export interface ComposerSelectProps<T extends string> {
   label: string;
   value: T;
   options: {
@@ -27,7 +18,18 @@ function ComposerSelectImpl<T extends string>({
   /** A title over the options, with keys that change it from the composer. */
   heading?: { label: string; hint?: string };
   className?: string;
-}) {
+}
+
+function ComposerSelectImpl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+  container,
+  heading,
+  className = "",
+}: ComposerSelectProps<T>) {
   return (
     <Select.Root
       value={value}
