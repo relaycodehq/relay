@@ -40,7 +40,6 @@ import {
   type ChatScope,
   type ChatWorkspace,
   type ProjectChatSend,
-  type AgentProvider,
   type ProjectChat as ProjectChatData,
 } from "../../shared/projects";
 import { api } from "../lib/api";
@@ -68,10 +67,7 @@ import {
   type ComposerControls,
   type ComposerHandle,
 } from "./ProjectComposer";
-import {
-  AgentSwitchDialog,
-  agentSwitchNoticeHidden,
-} from "./AgentSwitchDialog";
+import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { SelectionQuote } from "./SelectionQuote";
 import { Message } from "./ProjectMessage";
 import { useCouncils } from "../lib/useCouncils";
@@ -82,6 +78,7 @@ import { useThreadScroll } from "../lib/useThreadScroll";
 import { useMessageActions } from "../lib/useMessageActions";
 import { useThreadWrites } from "../lib/useThreadWrites";
 import { useComposerAttachments } from "../lib/useComposerAttachments";
+import { useAgentSwitch } from "../lib/useAgentSwitch";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -283,12 +280,8 @@ export function ProjectChat({
     (m) => m.compaction && m.status === "streaming",
   );
   const [showContext, setShowContext] = useState(0);
-  const [agentSwitch, setAgentSwitch] = useState<{
-    from: AgentProvider;
-    to: AgentProvider;
-    resolve: (proceed: boolean) => void;
-  }>();
-  const activeAgent = contextAgent(shown, root?.id);
+  const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id)),
+    confirmSwitch = agentSwitch.confirm;
   const {
     review,
     reviewing,
@@ -360,18 +353,6 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
-  /** Taking over from another agent loses its session: say so first. */
-  async function confirmSwitch(to: AgentProvider | undefined) {
-    return (
-      !to ||
-      !activeAgent ||
-      to === activeAgent ||
-      agentSwitchNoticeHidden() ||
-      new Promise<boolean>((resolve) =>
-        setAgentSwitch({ from: activeAgent, to, resolve }),
-      )
-    );
-  }
   /** Carries on the stopped answer with whichever agent the composer has picked. */
   async function resume() {
     if (!chat || busy) return;
@@ -1290,14 +1271,11 @@ export function ProjectChat({
         )}
       </div>
       <WorktreeDialogs chat={chat} worktree={worktree} />
-      {agentSwitch && (
+      {agentSwitch.asking && (
         <AgentSwitchDialog
-          from={agentSwitch.from}
-          to={agentSwitch.to}
-          onDecide={(proceed) => {
-            setAgentSwitch(undefined);
-            agentSwitch.resolve(proceed);
-          }}
+          from={agentSwitch.asking.from}
+          to={agentSwitch.asking.to}
+          onDecide={agentSwitch.decide}
         />
       )}
       {chat && agentView && (
