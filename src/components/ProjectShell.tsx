@@ -114,8 +114,12 @@ export default function ProjectShell() {
       q.state.data?.loginRestore === "unlocking" ? 500 : false,
     refetchIntervalInBackground: true,
   });
+  /** What asked for the sign-in form, to carry on once it connects. */
+  const afterSignIn = useRef<() => unknown>(undefined);
   useEffect(() => {
-    if (boot.data?.account) setSignin(false);
+    if (!boot.data?.account) return;
+    setSignin(false);
+    afterSignIn.current = undefined;
   }, [boot.data?.account?.id]);
   const projects = useQuery({
     queryKey: ["projects", boot.data?.account?.id],
@@ -388,7 +392,7 @@ export default function ProjectShell() {
         setIncoming({ url });
         setLegacy(true);
       }
-      if (!boot.data?.account) setSignin(true);
+      if (!boot.data?.account) void withAccount();
     } catch (e) {
       setError(e);
     }
@@ -744,16 +748,15 @@ export default function ProjectShell() {
   }
   async function linked() {
     if (!project) return;
-    if (!boot.data?.account) {
-      setSignin(true);
-      return;
-    }
-    try {
-      await api.linkProject(project.id);
-      await projects.refetch();
-    } catch (e) {
-      setError(e);
-    }
+    const id = project.id;
+    await withAccount(async () => {
+      try {
+        await api.linkProject(id);
+        await projects.refetch();
+      } catch (e) {
+        setError(e);
+      }
+    });
   }
   const connected = async (account: Account) => {
     const next = await api.bootstrap();
@@ -765,7 +768,34 @@ export default function ProjectShell() {
     });
     qc.setQueryData(["bootstrap"], { ...next, account });
     setSignin(false);
+    const then = afterSignIn.current;
+    afterSignIn.current = undefined;
+    await then?.();
   };
+  /**
+   * Runs `then` signed in to Gitea: right away, through tea's login when it
+   * has one, and only otherwise after the sign-in form.
+   */
+  async function withAccount(then?: () => unknown) {
+    if (boot.data?.account) return then?.();
+    // The form shows the Keychain wait; tea mustn't race the saved token.
+    if (boot.data?.loginRestore !== "unlocking") {
+      const logins = (await api.teaSetup().catch(() => null))?.logins ?? [];
+      const saved = boot.data?.savedServer && new URL(boot.data.savedServer);
+      const login =
+        logins.find((l) => saved && new URL(l.url).host === saved.host) ??
+        logins[0];
+      // On failure the form offers the same login and shows why.
+      const account =
+        login && (await api.connectWithTea(login.name).catch(() => null));
+      if (account) {
+        afterSignIn.current = then;
+        return connected(account);
+      }
+    }
+    afterSignIn.current = then;
+    setSignin(true);
+  }
   // A folder without Git has no changes or history to show.
   const paneOrder = project?.plain
     ? panes.layout.order.filter((id) => id === "chat" || id === "files")
@@ -891,7 +921,7 @@ export default function ProjectShell() {
                 connected={!!account}
                 disabled={dirty}
                 request={openPrRequest}
-                onConnect={() => setSignin(true)}
+                onConnect={() => void withAccount()}
                 onReview={(ref) => void reviewBranchPr(ref)}
                 onChanges={() => openCode("changes")}
                 onError={setError}
@@ -998,11 +1028,15 @@ export default function ProjectShell() {
               setSettingsCategory(category);
               setSettings(true);
             }}
-            onAccount={() => setSignin(true)}
+            onAccount={() => {
+              if (!account) return void withAccount();
+              setSettingsCategory("account");
+              setSettings(true);
+            }}
             onInbox={() => {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.
-              if (!account) setSignin(true);
+              if (!account) void withAccount(() => setLegacy(true));
               else if (legacy) goToPulls({ to: "board" });
               else setLegacy(true);
             }}
@@ -1077,7 +1111,7 @@ export default function ProjectShell() {
                   contextText={contextText}
                   onContextUsed={() => setContextText(undefined)}
                   onShare={() => {
-                    if (chat) setShare(chat);
+                    if (chat) void withAccount(() => setShare(chat));
                   }}
                   onDraftWorkspace={setDraftWorkspace}
                   onCreated={async (c) => {
@@ -1311,7 +1345,7 @@ export default function ProjectShell() {
           }}
           onConnect={() => {
             setSettings(false);
-            setSignin(true);
+            void withAccount();
           }}
           onOpenChat={(projectId, chatId) => {
             const p = projects.data?.find((p) => p.id === projectId);
@@ -1342,7 +1376,10 @@ export default function ProjectShell() {
         <Modal
           title="Gitea account"
           className="project-signin"
-          onClose={() => setSignin(false)}
+          onClose={() => {
+            setSignin(false);
+            afterSignIn.current = undefined;
+          }}
         >
           <SignIn
             onConnected={connected}
@@ -1364,7 +1401,7 @@ export default function ProjectShell() {
           projects={projects.data ?? []}
           account={account ?? null}
           onAdd={add}
-          onSignIn={() => setSignin(true)}
+          onSignIn={() => void withAccount()}
           onClose={() => setInvitation(undefined)}
           onJoined={async (p, c) => {
             if (c) localStorage.setItem("relay-project-chat:" + p, c.id);
@@ -1389,13 +1426,13 @@ export default function ProjectShell() {
           }}
         />
       )}
-      {share && (
+      {share && project && (
         <ShareConversation
           chat={share}
-          project={project!}
+          project={project}
           account={account ?? null}
           onClose={() => setShare(undefined)}
-          onSignIn={() => setSignin(true)}
+          onSignIn={() => void withAccount()}
           onShared={() => void chats.refetch()}
         />
       )}
