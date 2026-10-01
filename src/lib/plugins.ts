@@ -40,6 +40,21 @@ export const useClockifyStatus = (enabled = true) =>
         : false,
   });
 
+/** The Clockify workspaces the saved key can see. */
+export const useClockifyWorkspaces = (host: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ["clockify-workspaces", host],
+    queryFn: () => api.clockifyWorkspaces(),
+    enabled,
+  });
+
+/** Relay projects that can be tracked: every one but the scratch pad. */
+export const useTrackableProjects = () =>
+  useQuery({
+    queryKey: ["clockify-relay-projects"],
+    queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
+  });
+
 /** The workspace's Clockify projects, for names and colours. */
 export const useClockifyProjects = (enabled = true) =>
   useQuery({

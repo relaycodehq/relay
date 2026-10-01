@@ -1,0 +1,422 @@
+/* Preview frame. */
+.pl-preview {
+  height: 100vh;
+  overflow: auto;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 16px;
+  padding: 24px;
+}
+.pl-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pl-toolbar .segmented button {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+.pl-sample-label {
+  width: 100%;
+  text-align: center;
+}
+.settings-screen.pl-sheet {
+  display: flex;
+  height: 720px;
+}
+.pl-nav-item > button:disabled {
+  opacity: 1;
+}
+.settings-nav nav .pl-nav-item > button:disabled {
+  cursor: default;
+}
+.pl-content {
+  padding-top: 18px;
+}
+
+/* Shared pieces. */
+.pl-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.pl-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.14s ease-out;
+}
+.pl-chevron.open {
+  transform: rotate(90deg);
+}
+.pl-head-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.pl-head-text strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.pl-head-text small {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl-attention {
+  color: var(--accent) !important;
+}
+.pl-saved {
+  font-size: 11.5px;
+  color: var(--muted);
+  animation: pl-saved 1.6s ease-out forwards;
+}
+@keyframes pl-saved {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.pl-reveal {
+  animation: pl-reveal 0.16s ease-out;
+}
+@keyframes pl-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.pl-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pl-segmented {
+  width: 180px;
+}
+.pl-segmented button {
+  font-size: 12px;
+}
+
+/* Project mapping: name on the left, Clockify project with its colour right. */
+.pl-map .pl-map-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 12px 7px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.pl-map-name {
+  font-size: 13px;
+}
+.pl-map-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pl-map .plugin-select {
+  width: 240px;
+}
+.settings-screen .pl-fold {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pl-fold:hover {
+  background: var(--hover);
+}
+.pl-fold span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}
+.pl-reveal .pl-map-row:last-child {
+  border-bottom: 0;
+}
+.pl-fold[aria-expanded="true"] {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+/* A · Stack. */
+.pl-stack {
+  display: grid;
+  gap: 10px;
+}
+.pl-card,
+.pl-readout {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--toolbar) 35%, transparent);
+}
+.pl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 14px;
+}
+.settings-screen .pl-head-button {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px 0 12px 12px;
+  border: 0;
+  border-radius: 12px 0 0 12px;
+  background: transparent;
+}
+.settings-screen .pl-head-button:hover {
+  background: transparent;
+}
+.pl-head-button:hover .pl-chevron {
+  color: var(--text);
+}
+.pl-card-body {
+  padding: 2px 16px 16px 50px;
+}
+.pl-description {
+  margin: 0 0 6px;
+  max-width: 560px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.pl-section h5 {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* B · Pages. */
+.pl-nav-children {
+  display: grid;
+  gap: 1px;
+  margin: 1px 0 3px 25px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+.settings-nav nav .pl-nav-children button {
+  height: 28px;
+  font-size: 12.5px;
+}
+.pl-nav-children button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-nav-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.settings-screen .pl-crumb {
+  gap: 2px;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pl-crumb:hover {
+  color: var(--text);
+}
+.pl-overview .pl-overview-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.pl-overview .pl-overview-row:last-child {
+  border-bottom: 0;
+}
+.settings-screen .pl-overview-open {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.pl-overview-open .pl-head-text {
+  flex: 1;
+}
+.pl-overview-arrow {
+  color: var(--muted);
+}
+.pl-overview-open:hover .pl-overview-arrow {
+  color: var(--text);
+}
+.pl-page {
+  display: grid;
+  gap: 6px;
+}
+.pl-page > .settings-card {
+  margin-bottom: 8px;
+}
+.pl-disclosure > button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 4px;
+  border: 0;
+  background: transparent;
+}
+.pl-disclosure > button:hover {
+  background: transparent;
+}
+.pl-disclosure > button > span {
+  font-size: 13px;
+  font-weight: 500;
+}
+.pl-disclosure > button > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pl-disclosure.open > button > small {
+  opacity: 0;
+}
+.pl-disclosure > .pl-reveal {
+  margin: 0 0 10px 22px;
+}
+
+/* C · Readout. */
+.pl-readout .pl-head-button {
+  padding-left: 14px;
+}
+.pl-readout .pl-chevron {
+  margin-left: auto;
+}
+.pl-facts {
+  display: grid;
+  margin: 0;
+  padding: 0 14px 12px 56px;
+}
+.pl-fact {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 3px 0;
+}
+.pl-fact dt {
+  padding-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pl-fact dd {
+  margin: 0;
+  min-width: 0;
+}
+.settings-screen .pl-fact-value {
+  max-width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-left: -8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12.5px;
+  white-space: normal;
+  text-align: left;
+}
+.pl-fact-value:hover {
+  background: var(--hover);
+}
+.pl-fact-value > svg {
+  flex: none;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.pl-fact-value:hover > svg,
+.pl-fact-value:focus-visible > svg {
+  opacity: 1;
+}
+.pl-fact.editing {
+  padding: 6px 0;
+}
+.pl-fact-edit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pl-fact.wide .pl-fact-edit,
+.pl-fact-edit:has(.settings-card) {
+  display: grid;
+  justify-items: start;
+}
+.pl-fact-edit .settings-card {
+  width: 100%;
+}
+.pl-fact-edit .settings-row-control input:not([type="checkbox"]) {
+  width: 200px;
+}
+.pl-inline-number {
+  width: 80px;
+}
+.pl-inline-text {
+  width: 240px;
+}
+.pl-inline-number,
+.pl-inline-text {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.pl-map-readout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 20px;
+}
+.pl-map-readout > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.pl-arrow {
+  color: var(--muted);
+}
+.pl-muted-line {
+  color: var(--muted);
+}
+.pl-available {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}

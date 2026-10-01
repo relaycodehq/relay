@@ -1,234 +1,279 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   clockifyHosts,
   clockifySettingsSchema,
   type ClockifyHost,
   type ClockifySettings,
+  type ClockifyStatus,
 } from "../../../shared/clockify";
 import { api } from "../../lib/api";
-import { clockifyKey, useClockifyStatus } from "../../lib/plugins";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../SettingsCard";
+import {
+  clockifyKey,
+  useClockifyStatus,
+  useClockifyWorkspaces,
+  useTrackableProjects,
+} from "../../lib/plugins";
+import { SettingsCard, SettingsRow } from "../SettingsCard";
 import { ErrorBox } from "../ui";
+import { ClockifyProjectMap } from "./ClockifyProjectMap";
+import { PluginStatus, usePluginSaved } from "./plugin-ui";
 
-/** The Clockify plugin's connection, workspace and which projects it tracks. */
+/** The Clockify card's header line: who it reports to, or what's missing. */
+export function ClockifySummary() {
+  const status = useClockifyStatus().data;
+  const connected = !!status?.hasToken;
+  const workspaces = useClockifyWorkspaces(
+    status?.settings.host ?? "",
+    connected,
+  );
+  const relayProjects = useTrackableProjects();
+  if (!status) return null;
+  const { workspaceId, projects } = status.settings;
+  if (!connected)
+    return <PluginStatus attention>Needs an API key</PluginStatus>;
+  if (!workspaceId)
+    return <PluginStatus attention>Choose a workspace</PluginStatus>;
+  const tracked = Object.keys(projects).length;
+  if (!tracked)
+    return <PluginStatus attention>Choose the projects to track</PluginStatus>;
+  const workspace = workspaces.data?.find((w) => w.id === workspaceId)?.name;
+  const total = relayProjects.data?.length;
+  const count = total
+    ? `${tracked} of ${total} projects`
+    : `${tracked} ${tracked === 1 ? "project" : "projects"}`;
+  return (
+    <PluginStatus>
+      {workspace ? `${workspace} · ` : ""}
+      {count} tracked
+    </PluginStatus>
+  );
+}
+
+/**
+ * The Clockify plugin's connection, day and tracked projects. Every change
+ * saves at once; only a new API key waits for Connect.
+ */
 export function ClockifySettings() {
   const qc = useQueryClient();
+  const saved = usePluginSaved();
   const status = useClockifyStatus();
-  const [draft, setDraft] = useState<Partial<ClockifySettings>>({});
   const [token, setToken] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [account, setAccount] = useState<string>();
+  const [quiet, setQuiet] = useState<string>();
   const [error, setError] = useState<unknown>();
-  const [note, setNote] = useState<string>();
+  const latest = useRef(0);
+  const settings = status.data?.settings;
   const connected = !!status.data?.hasToken;
-  const workspaces = useQuery({
-    queryKey: ["clockify-workspaces", status.data?.settings.host],
-    queryFn: () => api.clockifyWorkspaces(),
-    enabled: connected,
-  });
+  const workspaces = useClockifyWorkspaces(settings?.host ?? "", connected);
   const clockifyProjects = useQuery({
-    queryKey: [
-      "clockify-projects",
-      status.data?.settings.host,
-      status.data?.settings.workspaceId,
-    ],
+    queryKey: ["clockify-projects", settings?.host, settings?.workspaceId],
     queryFn: () => api.clockifyProjects(),
-    enabled: connected && !!status.data?.settings.workspaceId,
+    enabled: connected && !!settings?.workspaceId,
   });
-  const relayProjects = useQuery({
-    queryKey: ["clockify-relay-projects"],
-    queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
-  });
-  const saved = status.data;
-  if (!saved)
+  const relayProjects = useTrackableProjects();
+  if (!status.data || !settings)
     return status.error ? (
       <ErrorBox error={status.error} retry={() => void status.refetch()} />
     ) : (
       <p className="setting-muted">Loading…</p>
     );
-  const values = { ...saved.settings, ...draft };
-  const change = (next: Partial<ClockifySettings>) => {
-    setDraft({ ...draft, ...next });
-    setNote(undefined);
-  };
 
-  async function save(secret?: string | null) {
-    setBusy(true);
+  async function save(
+    patch: Partial<ClockifySettings>,
+    secrets: { token?: string | null } = {},
+  ) {
+    const next = { ...settings!, ...patch };
+    if (!clockifySettingsSchema.safeParse(next).success) return;
+    const seq = ++latest.current;
     setError(undefined);
-    setNote(undefined);
+    // Show the change at once; an older save landing late mustn't undo a newer one.
+    qc.setQueryData<ClockifyStatus>(
+      clockifyKey,
+      (s) => s && { ...s, settings: next },
+    );
     try {
-      const next = await api.saveClockifySettings(
-        // A new region or key can mean another account's workspace.
-        secret !== undefined || draft.host
-          ? { ...values, workspaceId: draft.workspaceId ?? "" }
-          : values,
-        secret === undefined ? {} : { token: secret },
-      );
-      qc.setQueryData(clockifyKey, next);
-      await qc.invalidateQueries({ queryKey: ["clockify-workspaces"] });
-      await qc.invalidateQueries({ queryKey: ["clockify-projects"] });
-      setDraft({});
-      setToken("");
-      setNote(
-        secret === null
-          ? "Key forgotten"
-          : next.account
-            ? `Connected as ${next.account}`
-            : "Saved",
-      );
+      const result = await api.saveClockifySettings(next, secrets);
+      if (seq === latest.current) qc.setQueryData(clockifyKey, result);
+      if (secrets.token !== undefined) {
+        await qc.invalidateQueries({ queryKey: ["clockify-workspaces"] });
+        await qc.invalidateQueries({ queryKey: ["clockify-projects"] });
+      }
+      saved();
+      return result;
     } catch (e) {
       setError(e);
-    } finally {
-      setBusy(false);
+      void status.refetch();
     }
   }
 
-  const tracked = Object.keys(values.projects).length;
+  async function connect() {
+    setConnecting(true);
+    // A new key can mean another account, so its own active workspace.
+    const result = await save({ workspaceId: "" }, { token: token.trim() });
+    setConnecting(false);
+    if (!result) return;
+    setToken("");
+    setReplacing(false);
+    setAccount(result.account);
+  }
+
+  const keyHint = !connected
+    ? "From Clockify → Preferences → Advanced → API key."
+    : replacing
+      ? "The new key replaces the saved one when it connects."
+      : `${account ? `Connected as ${account}. ` : ""}${
+          status.data.persistent
+            ? "Saved in your system keychain."
+            : "Kept until Relay quits: this computer can't store it encrypted."
+        }`;
+
   return (
     <>
-      <SettingsCard>
-        <SettingsRow
-          label="API key"
-          hint={
-            connected
-              ? saved.persistent
-                ? "Saved in your system keychain."
-                : "Kept until Relay quits: this computer can't store it encrypted."
-              : "From Clockify → Preferences → Advanced → API key."
-          }
-        >
-          <input
-            type="password"
-            aria-label="Clockify API key"
-            placeholder={connected ? "Replace the saved key" : "Paste your key"}
-            value={token}
-            autoComplete="off"
-            onChange={(e) => setToken(e.target.value)}
-          />
-          {connected && (
-            <button
-              className="text-button"
-              disabled={busy}
-              onClick={() => void save(null)}
-            >
-              Forget
-            </button>
-          )}
-        </SettingsRow>
-        <SettingsRow label="Region" hint="Where your Clockify data lives.">
-          <select
-            className="plugin-select"
-            aria-label="Clockify region"
-            value={values.host}
-            onChange={(e) => change({ host: e.target.value as ClockifyHost })}
-          >
-            {Object.entries(clockifyHosts).map(([id, host]) => (
-              <option key={id} value={id}>
-                {host.label}
-              </option>
-            ))}
-          </select>
-        </SettingsRow>
-        {connected && (
-          <SettingsRow label="Workspace">
+      <div className="plugin-section">
+        <h5>Connection</h5>
+        <SettingsCard>
+          <SettingsRow label="API key" hint={keyHint}>
+            {!connected || replacing ? (
+              <>
+                <input
+                  type="password"
+                  aria-label="Clockify API key"
+                  placeholder="Paste your key"
+                  value={token}
+                  autoComplete="off"
+                  onChange={(e) => setToken(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && token.trim()) void connect();
+                  }}
+                />
+                <button
+                  className="primary"
+                  disabled={connecting || !token.trim()}
+                  onClick={() => void connect()}
+                >
+                  {connecting ? "Connecting…" : "Connect"}
+                </button>
+                {replacing && (
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setReplacing(false);
+                      setToken("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button onClick={() => setReplacing(true)}>Replace</button>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setAccount(undefined);
+                    void save({ workspaceId: "" }, { token: null });
+                  }}
+                >
+                  Forget
+                </button>
+              </>
+            )}
+          </SettingsRow>
+          <SettingsRow label="Region" hint="Where your Clockify data lives.">
             <select
               className="plugin-select"
-              aria-label="Clockify workspace"
-              value={values.workspaceId}
-              disabled={!workspaces.data}
+              aria-label="Clockify region"
+              value={settings.host}
               onChange={(e) =>
-                change({ workspaceId: e.target.value, projects: {} })
+                void save({
+                  host: e.target.value as ClockifyHost,
+                  // Another region is another account's workspaces.
+                  workspaceId: "",
+                })
               }
             >
-              {!values.workspaceId && <option value="">Choose…</option>}
-              {workspaces.data?.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
+              {Object.entries(clockifyHosts).map(([id, host]) => (
+                <option key={id} value={id}>
+                  {host.label}
                 </option>
               ))}
             </select>
           </SettingsRow>
-        )}
-        <SettingsRow
-          label="Quiet minutes"
-          hint="How long after you last touched a project it still counts as working on it."
-        >
-          <input
-            type="number"
-            className="plugin-number"
-            aria-label="Quiet minutes"
-            min={1}
-            max={120}
-            value={values.idleMinutes}
-            onChange={(e) => change({ idleMinutes: Number(e.target.value) })}
-          />
-        </SettingsRow>
-        <SettingsFooter note={note && <span role="status">{note}</span>}>
-          <button
-            className="primary"
-            disabled={
-              busy ||
-              !clockifySettingsSchema.safeParse(values).success ||
-              (!Object.keys(draft).length && !token.trim())
-            }
-            onClick={() => void save(token.trim() || undefined)}
-          >
-            {busy ? "Saving…" : token.trim() ? "Save and connect" : "Save"}
-          </button>
-        </SettingsFooter>
-      </SettingsCard>
-      {!!error && <ErrorBox error={error} />}
-      {connected && values.workspaceId && (
-        <SettingsCard className="plugin-projects">
+          {connected && (
+            <SettingsRow label="Workspace">
+              <select
+                className="plugin-select"
+                aria-label="Clockify workspace"
+                value={settings.workspaceId}
+                disabled={!workspaces.data}
+                onChange={(e) =>
+                  void save({ workspaceId: e.target.value, projects: {} })
+                }
+              >
+                {!settings.workspaceId && <option value="">Choose…</option>}
+                {workspaces.data?.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </SettingsRow>
+          )}
+        </SettingsCard>
+      </div>
+      <div className="plugin-section">
+        <h5>Your day</h5>
+        <SettingsCard>
           <SettingsRow
-            label="Projects"
-            hint={
-              tracked
-                ? `Time goes to Clockify for ${tracked} ${tracked === 1 ? "project" : "projects"}. The rest is left out.`
-                : "Pick the Clockify project for each project you want tracked."
-            }
-          />
+            label="Quiet minutes"
+            hint="How long after you last touched a project it still counts as working on it."
+          >
+            <input
+              type="number"
+              className="plugin-number"
+              aria-label="Quiet minutes"
+              min={1}
+              max={120}
+              value={quiet ?? settings.idleMinutes}
+              onChange={(e) => setQuiet(e.target.value)}
+              onBlur={() => {
+                if (
+                  quiet !== undefined &&
+                  Number(quiet) !== settings.idleMinutes
+                )
+                  void save({ idleMinutes: Number(quiet) });
+                setQuiet(undefined);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+          </SettingsRow>
+        </SettingsCard>
+      </div>
+      {connected && settings.workspaceId && (
+        <div className="plugin-section">
+          <h5>Projects</h5>
           {clockifyProjects.error ? (
             <ErrorBox
               error={clockifyProjects.error}
               retry={() => void clockifyProjects.refetch()}
             />
           ) : (
-            relayProjects.data?.map((p) => (
-              <SettingsRow key={p.id} label={p.name}>
-                <select
-                  className="plugin-select"
-                  aria-label={`Clockify project for ${p.name}`}
-                  value={values.projects[p.id] ?? ""}
-                  disabled={!clockifyProjects.data}
-                  onChange={(e) => {
-                    const projects = { ...values.projects };
-                    if (e.target.value) projects[p.id] = e.target.value;
-                    else delete projects[p.id];
-                    change({ projects });
-                  }}
-                >
-                  <option value="">Not tracked</option>
-                  {clockifyProjects.data?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.clientName ? `${c.name} · ${c.clientName}` : c.name}
-                    </option>
-                  ))}
-                </select>
-              </SettingsRow>
-            ))
+            <ClockifyProjectMap
+              relayProjects={relayProjects.data ?? []}
+              clockifyProjects={clockifyProjects.data}
+              value={settings.projects}
+              onChange={(projects) => void save({ projects })}
+            />
           )}
-          <SettingsFooter>
-            <button
-              className="primary"
-              disabled={busy || !Object.keys(draft).length}
-              onClick={() => void save()}
-            >
-              Save
-            </button>
-          </SettingsFooter>
-        </SettingsCard>
+        </div>
       )}
+      {!!error && <ErrorBox error={error} />}
     </>
   );
 }

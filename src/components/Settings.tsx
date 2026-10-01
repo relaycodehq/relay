@@ -115,7 +115,7 @@ import {
 } from "./DictationSettings";
 import { useDictationModel } from "../lib/dictation/session";
 import { QuickSwitchSettings } from "./QuickSwitchSettings";
-import { PluginPanel, PluginSwitch } from "./plugins/PluginSettings";
+import { PluginCard } from "./plugins/PluginSettings";
 import { pluginIds, plugins } from "../../shared/plugins";
 import { usePluginEnabled } from "../lib/plugins";
 import "./settings.css";
@@ -230,7 +230,9 @@ interface Entry {
   block?: boolean;
   /** A small control beside the title, for block entries. */
   accessory?: () => ReactNode;
-  render: () => ReactNode;
+  /** Entries that draw their whole card, given their (highlighted) title. */
+  card?: (title: ReactNode) => ReactNode;
+  render?: () => ReactNode;
 }
 
 /** Runs of entries under the same heading, in order. */
@@ -1068,9 +1070,7 @@ export function Settings({
       title: plugins[id].title,
       description: plugins[id].description,
       keywords: `plugin extension ${plugins[id].keywords}`,
-      block: true,
-      accessory: () => <PluginSwitch id={id} />,
-      render: () => <PluginPanel id={id} />,
+      card: (title) => <PluginCard id={id} title={title} />,
     })),
     {
       id: "room-hosting",
@@ -1227,6 +1227,16 @@ export function Settings({
   const current = categories.find((c) => c.id === category)!;
 
   const row = (entry: Entry) => {
+    if (entry.card)
+      return (
+        <section
+          key={entry.id}
+          className="setting card"
+          aria-label={entry.title}
+        >
+          {entry.card(<Highlight text={entry.title} query={query} />)}
+        </section>
+      );
     const text = (
       <div className="setting-text">
         <h4>
@@ -1249,7 +1259,7 @@ export function Settings({
         ) : (
           text
         )}
-        <div className="setting-control">{entry.render()}</div>
+        <div className="setting-control">{entry.render?.()}</div>
       </section>
     );
   };

@@ -13,7 +13,7 @@ import { initTypography } from "../src/lib/typography";
 import { RefreshCw, Settings2 } from "lucide-react";
 import { IconButton } from "../src/components/ui";
 import { ClockifyTimer } from "../src/components/plugins/ClockifyTimer";
-import { ClockifySettings } from "../src/components/plugins/ClockifySettings";
+import { PluginCard } from "../src/components/plugins/PluginSettings";
 import {
   defaultClockifySettings,
   tidy,
@@ -271,8 +271,16 @@ function Preview() {
           ))}
         </p>
         <h3>Settings → Plugins → Clockify</h3>
-        <div style={{ maxWidth: 680 }}>
-          <ClockifySettings />
+        <div
+          className="settings-screen"
+          style={{
+            display: "block",
+            height: "auto",
+            maxWidth: 700,
+            padding: 16,
+          }}
+        >
+          <PluginCard id="clockify" title="Clockify time tracking" />
         </div>
       </main>
     </div>
