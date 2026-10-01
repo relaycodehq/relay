@@ -1,6 +1,4 @@
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
-  AgentProvider,
   ChatMessage,
   ProjectChat,
   ProjectChatSend,
@@ -12,16 +10,9 @@ import {
   promptTitle,
   regenerateThreadTitle,
 } from "../thread-titles";
-import { chatSummary, type ChatStorage } from "./storage";
-
-export interface TitlesHost {
-  emit(event: ProjectChatEvent): void;
-  /** The thread has a turn running. */
-  busy(id: string): boolean;
-  /** What a hidden turn on the agent's session would run on. */
-  choice(chat: ProjectChat, provider: AgentProvider): ProjectChatSend["choice"];
-  closing(): boolean;
-}
+import type { ChatCore } from "./core";
+import { sessionInput } from "./sessions";
+import { chatSummary } from "./storage";
 
 /** A thread's name: the prompt's excerpt, then one an agent writes, or yours. */
 export class ThreadTitles {
@@ -32,18 +23,15 @@ export class ThreadTitles {
   private updates = new Set<Promise<void>>();
   /** Threads a title was asked for since Relay started; a failed one is asked again after a restart. */
   private asked = new Set<string>();
-  constructor(
-    private storage: ChatStorage,
-    private host: TitlesHost,
-  ) {}
+  constructor(private core: ChatCore) {}
 
   async rename(id: string, candidate: string) {
     const title = cleanTitle(candidate);
     if (!title) throw new Error("Enter a thread name up to 120 characters.");
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     chat.title = title;
     chat.renamed = true;
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
     return chatSummary(chat);
   }
 
@@ -62,7 +50,7 @@ export class ThreadTitles {
   ) {
     const firstUser = chat.messages.find((m) => m.role === "user");
     if (
-      this.host.closing() ||
+      this.core.closing() ||
       !firstUser ||
       !answer.provider ||
       chat.renamed ||
@@ -107,14 +95,18 @@ export class ThreadTitles {
 
   /** Retries titles for threads whose first title run failed earlier. */
   ensure(id: string) {
-    const chat = this.storage.cached(id);
-    if (!chat || this.host.busy(id) || chat.shared) return;
+    const chat = this.core.storage.cached(id);
+    if (!chat || this.core.active.has(id) || chat.shared) return;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const answer = chat.messages.find(
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,
     );
     if (!firstUser || !answer) return;
-    this.generate(chat, answer, this.host.choice(chat, answer.provider));
+    this.generate(
+      chat,
+      answer,
+      sessionInput(chat, answer.provider, this.core.store).choice,
+    );
   }
 
   private async update(
@@ -133,8 +125,8 @@ export class ThreadTitles {
     )
       return;
     chat.title = title;
-    await this.storage.persist(chat);
-    this.host.emit({
+    await this.core.storage.persist(chat);
+    this.core.emit({
       chatId: chat.id,
       message: structuredClone(message),
       title,
@@ -146,7 +138,7 @@ export class ThreadTitles {
    * a name you typed. Tries the latest answer's agent, then the helper agents.
    */
   async regenerate(id: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (this.jobs.has(id))
       throw new Error("This thread's title is already being generated.");
     const answer = [...chat.messages]
@@ -158,7 +150,11 @@ export class ThreadTitles {
       throw new Error("Wait for the first answer to name the thread.");
     const abort = new AbortController();
     const job = (async () => {
-      const choice = this.host.choice(chat, answer.provider);
+      const choice = sessionInput(
+        chat,
+        answer.provider,
+        this.core.store,
+      ).choice;
       for (const provider of [
         answer.provider,
         ...helperProviders.filter((p) => p !== answer.provider),
@@ -187,10 +183,10 @@ export class ThreadTitles {
     const title = await job.finally(() => this.jobs.delete(id));
     if (abort.signal.aborted) throw new Error("Relay is closing.");
     if (!title) throw new Error("No agent could name this thread.");
-    const fresh = await this.storage.load(id);
+    const fresh = await this.core.storage.load(id);
     fresh.title = title;
     delete fresh.renamed;
-    await this.storage.persist(fresh);
+    await this.core.storage.persist(fresh);
     return chatSummary(fresh);
   }
 

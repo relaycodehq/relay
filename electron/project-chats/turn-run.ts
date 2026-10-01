@@ -1,4 +1,3 @@
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
   AgentActivity,
   AgentProvider,
@@ -13,19 +12,13 @@ import { watchAgentWorktrees } from "../agent-worktrees";
 import { agentRuntime } from "../agents";
 import { AnswerRecorder } from "../answer-recorder";
 import { turnRules, type ChatTurn } from "../chat-turn";
-import type { Projects } from "../projects";
 import { ClaudeSignedOutError } from "../rooms/claude-sign-in";
 import { projectTasks } from "../tasks";
 import { finishTurn, resumeTurn, startTurn } from "../turn-changes";
-import type { ActiveTurns, AgentControl } from "./active";
-import {
-  agentSession,
-  dropSession,
-  sessionFor,
-  type ProviderSessions,
-} from "./sessions";
+import type { AgentControl } from "./active";
+import type { ChatCore } from "./core";
+import { agentSession, dropSession, sessionFor } from "./sessions";
 import type { ChatSharing } from "./sharing";
-import type { ChatStorage } from "./storage";
 import type { ThreadTitles } from "./titles";
 
 /**
@@ -66,13 +59,9 @@ export async function turnModel(
 /** Runs one agent turn in a thread, recording its answer as it streams. */
 export class TurnRunner {
   constructor(
-    private storage: ChatStorage,
-    private sessions: ProviderSessions,
-    private active: ActiveTurns,
+    private core: ChatCore,
     private titles: ThreadTitles,
     private sharing: ChatSharing,
-    private projects: Projects,
-    private emit: (event: ProjectChatEvent) => void,
     /** The folder Relay makes threads' worktrees in. */
     private worktreesFolder: string,
     /** Claude started a turn of its own in the session. */
@@ -101,14 +90,17 @@ export class TurnRunner {
     const answer = new AnswerRecorder(
       chat,
       message,
-      (m) => this.emit({ chatId: chat.id, message: m }),
-      () => void this.storage.save(chat).catch(() => abort.abort()),
+      (m) => this.core.emit({ chatId: chat.id, message: m }),
+      () => void this.core.storage.save(chat).catch(() => abort.abort()),
     );
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
-    const sessionKey = this.sessions.key(chat.id, input.parentId ?? undefined);
-    this.sessions.add(sessionKey);
+    const sessionKey = this.core.sessions.key(
+      chat.id,
+      input.parentId ?? undefined,
+    );
+    this.core.sessions.add(sessionKey);
     const provider = message.provider;
     if (rules.showsModel)
       void turnModel(provider, input, root).then((model) =>
@@ -138,14 +130,14 @@ export class TurnRunner {
       async (worktrees) => {
         if (worktrees.length) chat.agentWorktrees = worktrees;
         else delete chat.agentWorktrees;
-        await this.storage.persist(chat);
+        await this.core.storage.persist(chat);
       },
     );
     let point: string | undefined;
     try {
       const options = {
         onControl: (control: AgentControl) => {
-          const active = this.active.get(chat.id);
+          const active = this.core.active.get(chat.id);
           if (active?.abort === abort) active.steer = control.steer;
         },
         onSteered: (id: string) => answer.continueBelow(id),
@@ -161,7 +153,7 @@ export class TurnRunner {
             noteKey,
             chat.id,
             chat.worktree
-              ? await this.projects.root(chat.projectId)
+              ? await this.core.projects.root(chat.projectId)
               : undefined,
           ),
         choice: input.choice,
@@ -169,7 +161,7 @@ export class TurnRunner {
         onText: (body: string) => answer.text(body),
         onPlan: (body: string) => answer.plan(body),
         images: attached.map((image) => ({
-          path: this.storage.imagePath(chat.id, image),
+          path: this.core.storage.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
         onTitle: (title: string) => {
@@ -203,7 +195,7 @@ export class TurnRunner {
         // The thread's running answer owns its requests; a side turn asks none.
         onRequest: rules.side
           ? undefined
-          : this.active.get(chat.id)?.requests.ask,
+          : this.core.active.get(chat.id)?.requests.ask,
         session: {
           key: sessionKey,
           id: sessionId,
@@ -213,7 +205,7 @@ export class TurnRunner {
           },
           onId: async (id: string) => {
             sessionFor(chat, provider, branch).thread = id;
-            await this.storage.save(chat);
+            await this.core.storage.save(chat);
           },
           onUnprompted: () => this.unprompted(chat, root, provider, branch),
         },
@@ -276,7 +268,7 @@ export class TurnRunner {
       }
       if (rules.pausesQueue(failed)) chat.queuePaused = true;
     } finally {
-      const owner = this.active.get(chat.id);
+      const owner = this.core.active.get(chat.id);
       if (owner?.abort === abort) owner.finishing = true;
       const ended = answer.message;
       if (ended.status !== "failed") {
@@ -289,7 +281,7 @@ export class TurnRunner {
       // a snoozed or settled one.
       chat.updated = ended.ended;
       answer.end();
-      await this.storage.save(chat);
+      await this.core.storage.save(chat);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&

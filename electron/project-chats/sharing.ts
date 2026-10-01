@@ -1,13 +1,9 @@
-import type { ProjectChatEvent } from "../../shared/events";
 import type { ProjectChat } from "../../shared/projects";
 import type { ProjectSharing } from "../project-sharing";
-import type { Store } from "../store";
-import { chatSummary, type ChatStorage } from "./storage";
+import type { ChatCore } from "./core";
+import { chatSummary } from "./storage";
 
 export interface SharingHost {
-  emit(event: ProjectChatEvent): void;
-  /** The thread has a turn running. */
-  busy(id: string): boolean;
   /** Pulls the thread's shared messages and reads it back. */
   sync(id: string): Promise<unknown>;
 }
@@ -16,8 +12,7 @@ export interface SharingHost {
 export class ChatSharing {
   private syncing = new Map<string, Promise<void>>();
   constructor(
-    private store: Store,
-    private storage: ChatStorage,
+    private core: ChatCore,
     private remote: ProjectSharing | undefined,
     private host: SharingHost,
   ) {}
@@ -39,14 +34,14 @@ export class ChatSharing {
           pending: false,
         });
         local.version++;
-        this.host.emit({ chatId: chat.id, message: structuredClone(local) });
+        this.core.emit({ chatId: chat.id, message: structuredClone(local) });
       }
     }
-    await this.storage.save(chat);
+    await this.core.storage.save(chat);
   }
 
   async info(id: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (!this.remote) throw new Error("Sharing is unavailable.");
     return {
       ...(await this.remote.info(chat.projectId)),
@@ -55,11 +50,11 @@ export class ChatSharing {
   }
 
   async share(id: string) {
-    if (this.host.busy(id))
+    if (this.core.active.has(id))
       throw new Error(
         "Stop or finish the current answer before sharing this conversation.",
       );
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (chat.messages.some((message) => message.images?.length))
       throw new Error(
         "This conversation contains private screenshots and cannot be shared yet.",
@@ -70,7 +65,7 @@ export class ChatSharing {
     if (!this.remote) throw new Error("Sharing is unavailable.");
     await this.remote.allow(chat.projectId);
     chat.shared = await this.remote.share(chat);
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
     await this.host.sync(id);
     return chatSummary(chat);
   }
@@ -80,7 +75,7 @@ export class ChatSharing {
     const existing = this.syncing.get(id);
     if (existing) return existing;
     const job = (async () => {
-      const chat = await this.storage.load(id);
+      const chat = await this.core.storage.load(id);
       if (!chat.shared) return;
       if (!this.remote) throw new Error("Sharing is unavailable.");
       await this.deliver(chat);
@@ -117,7 +112,7 @@ export class ChatSharing {
           ]),
         );
         chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
-        await this.storage.persist(chat);
+        await this.core.storage.persist(chat);
       }
     })();
     this.syncing.set(id, job);
@@ -137,20 +132,20 @@ export class ChatSharing {
     id: string,
     value: { path: string | null; viewed: number; total: number } | null,
   ) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (!chat.shared || !this.remote) return [];
     return this.remote.presence(chat, value);
   }
 
   async workspace(id: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (!chat.shared || !this.remote)
       throw new Error("Share the conversation before enabling live sync.");
     return this.remote.workspace(chat);
   }
 
   async invite(id: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (!chat.shared || !this.remote)
       throw new Error("Share this conversation before inviting someone.");
     return this.remote.invite(chat);
@@ -165,8 +160,8 @@ export class ChatSharing {
     const metadata = (await this.list(projectId)).find((c) => c.id === roomId);
     if (!metadata)
       throw new Error("Shared conversation not found in this project.");
-    if (this.store.get().chats?.some((c) => c.id === roomId)) {
-      const existing = await this.storage.load(roomId);
+    if (this.core.storage.has(roomId)) {
+      const existing = await this.core.storage.load(roomId);
       if (existing.projectId !== projectId)
         throw new Error(
           "This conversation is linked to another local project.",
@@ -174,9 +169,9 @@ export class ChatSharing {
       return chatSummary(existing);
     }
     const chat: ProjectChat = { ...metadata, messages: [] };
-    this.storage.keep(chat);
-    await this.storage.save(chat);
-    await this.storage.addSummary(chat);
+    this.core.storage.keep(chat);
+    await this.core.storage.save(chat);
+    await this.core.storage.addSummary(chat);
     await this.host.sync(chat.id);
     return chatSummary(chat);
   }

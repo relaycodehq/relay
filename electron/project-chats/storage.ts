@@ -79,11 +79,15 @@ export class ChatStorage {
     this.ready = ready;
   }
 
+  /** The store lists the thread. */
+  has(id: string) {
+    return !!this.store.get().chats?.some((c) => c.id === id);
+  }
+
   /** The cached chat itself, read from disk the first time; never hand it out. */
   async load(id: string): Promise<ProjectChat> {
     await this.ready;
-    if (!this.store.get().chats?.some((c) => c.id === id))
-      throw new Error("Chat not found.");
+    if (!this.has(id)) throw new Error("Chat not found.");
     if (!this.cache.has(id)) {
       let pending = this.loading.get(id);
       if (!pending) {

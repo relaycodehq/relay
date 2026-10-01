@@ -1,4 +1,3 @@
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
   ChatMessage,
   ProjectChat,
@@ -10,21 +9,17 @@ import { agentAsked } from "../../shared/recipient";
 import { agentMention } from "../../shared/rooms";
 import { agentRuntime } from "../agents";
 import { streamingAnswer } from "../answer-recorder";
-import type { ActiveTurns } from "./active";
-import { agentSession, type ProviderSessions } from "./sessions";
-import type { ChatStorage } from "./storage";
+import type { ChatCore } from "./core";
+import { agentSession } from "./sessions";
 import { turnModel, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
 
 /** `/btw` questions and their follow-ups, answered beside the thread's own turn. */
 export class SideQuestions {
   constructor(
-    private storage: ChatStorage,
-    private sessions: ProviderSessions,
-    private active: ActiveTurns,
+    private core: ChatCore,
     private worktrees: ThreadWorktrees,
     private runner: TurnRunner,
-    private emit: (event: ProjectChatEvent) => void,
   ) {}
 
   /**
@@ -41,7 +36,7 @@ export class SideQuestions {
       : replyRoot(chat.messages, input.parentId!);
     const rootId = root?.id ?? input.id;
     const key = `${chat.id}:${rootId}`;
-    if (this.active.sideRunning(key))
+    if (this.core.active.sideRunning(key))
       throw new Error("Wait for the answer to your last side question.");
     const asked = agentAsked(input);
     if (!asked?.question) throw new Error("Ask a question after /btw.");
@@ -50,7 +45,7 @@ export class SideQuestions {
     const main = agentSession(chat, provider).thread;
     if (!main && !agentSession(chat, provider, rootId).thread)
       throw new Error(
-        this.active.has(chat.id)
+        this.core.active.has(chat.id)
           ? `${agentName(provider)} is still starting on this thread. Ask again in a moment.`
           : `${agentName(provider)} hasn't worked in this thread yet. Ask it something first.`,
       );
@@ -69,7 +64,7 @@ export class SideQuestions {
       provider,
       version: 1,
       ...(input.images?.length
-        ? { images: await this.storage.saveImages(chat.id, input.images) }
+        ? { images: await this.core.storage.saveImages(chat.id, input.images) }
         : {}),
       ...(root ? { parentId: root.id } : { side: true }),
     };
@@ -78,20 +73,20 @@ export class SideQuestions {
       (m) => m.id === rootId || m.parentId === rootId,
     );
     chat.messages.push(user, answer);
-    await this.storage.save(chat);
-    this.emit({ chatId: chat.id, message: user });
-    this.emit({ chatId: chat.id, message: answer });
+    await this.core.storage.save(chat);
+    this.core.emit({ chatId: chat.id, message: user });
+    this.core.emit({ chatId: chat.id, message: answer });
     const abort = new AbortController();
     const job = (
       fromSession
         ? this.fromSession(chat, answer, earlier, asked.question, input, abort)
         : this.inFork(chat, answer, earlier, asked.question, input, abort)
     ).finally(() => {
-      this.active.sideDone(key);
+      this.core.active.sideDone(key);
       // The side answer moved `updated`, as any finished answer does.
-      void this.storage.updateSummary(chat).catch(() => {});
+      void this.core.storage.updateSummary(chat).catch(() => {});
     });
-    this.active.runSide(key, abort, job);
+    this.core.active.runSide(key, abort, job);
     void job.catch(() => {});
   }
   private async fromSession(
@@ -122,7 +117,7 @@ export class SideQuestions {
     });
     try {
       answer.body = await agentRuntime(answer.provider).askSide!({
-        key: this.sessions.key(chat.id),
+        key: this.core.sessions.key(chat.id),
         thread: agentSession(chat, answer.provider).thread!,
         cwd,
         choice: input.choice,
@@ -139,8 +134,8 @@ export class SideQuestions {
       answer.ended = Date.now();
       chat.updated = answer.ended;
       answer.version++;
-      this.emit({ chatId: chat.id, message: structuredClone(answer) });
-      await this.storage.save(chat);
+      this.core.emit({ chatId: chat.id, message: structuredClone(answer) });
+      await this.core.storage.save(chat);
     }
   }
   private async inFork(

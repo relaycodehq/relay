@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import type {
   AgentProvider,
   AgentSession,
   ProjectChat,
+  ProjectChatSend,
 } from "../../shared/projects";
+import { sentAgent } from "../../shared/recipient";
+import { codexQuestionChoice } from "../../shared/settings";
 import { agentRuntimes } from "../agents";
 import {
   claudeAgentRun,
@@ -11,6 +15,7 @@ import {
   onClaudePending,
   stopClaudeAgent,
 } from "../rooms/claude-project";
+import type { Store } from "../store";
 
 /** An agent's session and the last message it heard, on the main conversation or a side one. */
 export function agentSession(
@@ -40,6 +45,44 @@ export function dropSession(
 ) {
   const sessions = parentId ? chat.replySessions?.[parentId] : chat.sessions;
   if (sessions) delete sessions[provider];
+}
+
+/**
+ * The model a hidden turn runs on when the session's last turn was another
+ * agent's: Codex's saved question model, the others' defaults.
+ */
+function defaultChoice(
+  provider: AgentProvider,
+  store: Pick<Store, "aiSettings">,
+) {
+  return provider === "codex"
+    ? codexQuestionChoice(store.aiSettings())
+    : { model: "", reasoningEffort: "" as const, fast: false };
+}
+/** A hidden turn on an existing session, with the settings that session last ran under. */
+export function sessionInput(
+  chat: ProjectChat,
+  provider: AgentProvider,
+  store: Pick<Store, "aiSettings">,
+  parentId?: string,
+): ProjectChatSend {
+  const previous = chat.lastInput;
+  const same = previous && sentAgent(previous) === provider;
+  return {
+    id: randomUUID(),
+    body: `@${provider}`,
+    to: provider,
+    provider,
+    // Matching the last turn's settings keeps the live session instead of reopening it.
+    // Another provider's model id would not resolve here.
+    choice: same ? previous.choice : defaultChoice(provider, store),
+    ...(same && previous.contextWindow
+      ? { contextWindow: previous.contextWindow }
+      : {}),
+    runtimeMode: previous?.runtimeMode ?? "full-access",
+    interactionMode: previous?.interactionMode ?? "default",
+    ...(parentId ? { parentId } : {}),
+  };
 }
 
 /** A key from `ProviderSessions.key`; `branch` is undefined on the main thread. */

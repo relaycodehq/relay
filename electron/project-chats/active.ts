@@ -40,10 +40,10 @@ export class ActiveTurns {
     return this.turns.has(id);
   }
   ids() {
-    return this.turns.keys();
+    return [...this.turns.keys()];
   }
   all() {
-    return this.turns.values();
+    return [...this.turns.values()];
   }
   get size() {
     return this.turns.size;
@@ -137,6 +137,6 @@ export class ActiveTurns {
     this.sides.delete(key);
   }
   allSides() {
-    return this.sides.values();
+    return [...this.sides.values()];
   }
 }
