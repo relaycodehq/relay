@@ -8,6 +8,7 @@ import {
   stopClaudeTask,
   wakeupTime,
 } from "../../electron/rooms/claude-project";
+import { ClaudeWork } from "../../electron/rooms/claude-project/pending";
 import { ClaudeSignedOutError } from "../../electron/rooms/claude-sign-in";
 import type { AgentActivity, ContextUsage } from "../../shared/projects";
 
@@ -259,6 +260,32 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
   await vi.waitFor(() => expect(heard).toHaveBeenCalled());
   expect(claudePending(key).map((p) => p.id)).toEqual(["later"]);
   unhear();
+});
+
+it("keeps when it first saw a task, and only the wake-ups Claude listed last", () => {
+  vi.useFakeTimers({ now: 1000 });
+  const work = new ClaudeWork();
+  const build = { task_id: "build", description: "npm run build" };
+  work.track([build]);
+  vi.setSystemTime(5000);
+  work.track([build, { task_id: "logs", description: "tail", ambient: true }]);
+  expect(work.list()).toEqual([
+    { kind: "task", id: "build", description: "npm run build", since: 1000 },
+  ]);
+  const cron = (id: string) => ({
+    id,
+    prompt: "Check CI",
+    recurring: true,
+    schedule: "*/5 * * * *",
+  });
+  work.schedule({
+    session_crons: Array.from({ length: 25 }, (_, i) => cron(`c${i}`)),
+  });
+  expect(work.list()).toHaveLength(21);
+  work.track([]);
+  work.schedule({ hook_event_name: "Stop" });
+  expect(work.any).toBe(false);
+  vi.useRealTimers();
 });
 
 it("reads a one-shot wake-up's fire time from its cron", () => {

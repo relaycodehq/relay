@@ -1,21 +1,12 @@
 import { terminate } from "../terminate";
 import { runClaudeProject, type ClaudeRunOptions } from "./claude-project";
-import { readFile } from "node:fs/promises";
+import { claudeImages } from "./claude-project/sdk";
 import { findExecutable, spawnExecutable } from "../executables";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   if (options.runtimeMode && !options.helper) return runClaudeProject(options);
   const executable = await findExecutable("claude");
   options.signal.throwIfAborted();
-  const images = await Promise.all(
-    (options.images ?? []).map(async (image) => ({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: image.mimeType,
-        data: (await readFile(image.path)).toString("base64"),
-      },
-    })),
-  );
+  const images = await claudeImages(options.images);
   options.signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawnExecutable(
