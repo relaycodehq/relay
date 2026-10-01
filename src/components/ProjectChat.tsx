@@ -81,6 +81,7 @@ import { useBackgroundWork } from "../lib/useBackgroundWork";
 import { useThreadScroll } from "../lib/useThreadScroll";
 import { useMessageActions } from "../lib/useMessageActions";
 import { useThreadWrites } from "../lib/useThreadWrites";
+import { useComposerAttachments } from "../lib/useComposerAttachments";
 import { SideQuestion } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -89,7 +90,6 @@ import { ScratchpadWord } from "./ScratchpadWord";
 import { WorkItemCards, WorkItemChip } from "./WorkItemCards";
 import {
   parseCodeReferences,
-  sameCodeReference,
   type CodeReference,
 } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
@@ -237,15 +237,9 @@ export function ProjectChat({
     viewing,
   );
   const [sharingOpen, setSharingOpen] = useState(false);
-  const [selection, setSelection] = useState(() =>
-    threadStorage(id).selection.load(),
-  );
-  const [workItem, setWorkItem] = useState(() =>
-    threadStorage(id).workItem.load(),
-  );
-  const [codeRefs, setCodeRefs] = useState(() =>
-    threadStorage(id).codeRefs.load(),
-  );
+  const attachments = useComposerAttachments(id),
+    { selection, setSelection, workItem, setWorkItem, codeRefs, setCodeRefs } =
+      attachments;
   const created = useRef<ChatSummary | undefined>(undefined);
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
@@ -257,9 +251,6 @@ export function ProjectChat({
     }),
     [],
   );
-  useEffect(() => threadStorage(id).selection.save(selection), [id, selection]);
-  useEffect(() => threadStorage(id).workItem.save(workItem), [id, workItem]);
-  useEffect(() => threadStorage(id).codeRefs.save(codeRefs), [id, codeRefs]);
   const worktree = useThreadWorktree({
     chat,
     draftId: id,
@@ -359,12 +350,7 @@ export function ProjectChat({
     if (contextText) {
       setRootId(null);
       const { code, text } = contextText;
-      if (code)
-        setCodeRefs((refs) =>
-          refs.some((ref) => sameCodeReference(ref, code))
-            ? refs
-            : [...refs, code],
-        );
+      if (code) attachments.addCodeRefs([code]);
       else setSelection(contextText.selection);
       if (text) {
         const key = threadDraftKey(id),
@@ -424,11 +410,7 @@ export function ProjectChat({
         ...(root ? { parentId: root.id } : {}),
         ...(viewing.path ? { viewing: viewing.path } : {}),
       });
-      if (!root) {
-        setSelection(undefined);
-        setWorkItem(undefined);
-        setCodeRefs([]);
-      }
+      if (!root) attachments.clear();
       followAnswer();
       if (!chat) {
         saveDraftWorkspace(id, "checkout");
@@ -502,18 +484,9 @@ export function ProjectChat({
         recipient(input),
         input,
       );
-      if (restoredCode.refs.length)
-        setCodeRefs((refs) => [
-          ...refs,
-          ...restoredCode.refs.filter(
-            (next) => !refs.some((ref) => sameCodeReference(ref, next)),
-          ),
-        ]);
-      if (input.selection) {
-        // Saved now, not by the effect: the queue entry goes next.
-        threadStorage(id).selection.save(input.selection);
-        setSelection(input.selection);
-      }
+      attachments.addCodeRefs(restoredCode.refs);
+      // The queue entry goes next.
+      if (input.selection) attachments.restoreSelection(input.selection);
       setRootId(parent);
       setComposerRevision((value) => value + 1);
       await api.projectChatQueueAction(chat.id, "remove", input.id);
