@@ -44,25 +44,18 @@
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
-/* Yours or the team's: two quiet words, the picked one in full colour. */
-.work-items-whose {
+/* With a team, the heading is a switch between yours and theirs. */
+.work-items-heading {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 7px;
+  margin-right: auto;
 }
-.work-items-whose button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  opacity: 0.6;
-}
-.work-items-whose button:hover,
-.work-items-whose button[aria-pressed="true"] {
-  opacity: 1;
-}
-.work-items-whose button[aria-pressed="true"] {
-  color: var(--text);
+.work-items-heading small {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  opacity: 0.7;
 }
 .work-item-assignee {
   min-width: 0;

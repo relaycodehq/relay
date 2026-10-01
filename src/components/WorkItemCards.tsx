@@ -207,31 +207,37 @@ export function WorkItemCards({
       aria-label={scope === "team" ? "Team work items" : "Your work items"}
     >
       <header className="work-items-header">
-        <h2>
-          {hasTeam ? (
-            <span
-              className="work-items-whose"
+        {hasTeam ? (
+          // The heading becomes the switch, like the project one beside it.
+          <div className="work-items-heading">
+            <div
+              className="work-items-scope"
               role="group"
               aria-label="Whose work items"
             >
               <button
+                className={scope === "mine" ? "active" : ""}
                 aria-pressed={scope === "mine"}
                 onClick={() => setTeamPicked(false)}
               >
                 Your work items
               </button>
               <button
+                className={scope === "team" ? "active" : ""}
                 aria-pressed={scope === "team"}
                 onClick={() => setTeamPicked(true)}
               >
                 Team
               </button>
-            </span>
-          ) : (
-            "Your work items"
-          )}
-          {data && <small>{pool.length}</small>}
-        </h2>
+            </div>
+            {data && <small>{pool.length}</small>}
+          </div>
+        ) : (
+          <h2>
+            Your work items
+            {data && <small>{pool.length}</small>}
+          </h2>
+        )}
         {matched && (
           <div
             className="work-items-scope"
