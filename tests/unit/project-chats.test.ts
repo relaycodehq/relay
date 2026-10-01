@@ -932,6 +932,10 @@ it("lets a message's `to` decide who answers over its body's mention", async () 
       }),
     { timeout: 6000 },
   );
+  expect(chats.list(projectId).find((c) => c.id === chat.id)).toMatchObject({
+    provider: "codex",
+    contextAgent: "codex",
+  });
 }, 15000);
 it("previews only the images a turn read, and only when they really are images", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -1213,6 +1217,11 @@ it("forks Claude's session for a side conversation, and gives another agent the 
     "Claude found the same cache guard.",
   ]);
   expect(history[1].focus).toBe(true);
+  // Codex answered last, on the side; Claude still holds the main conversation.
+  expect(chats.list(projectId).find((c) => c.id === chat.id)).toMatchObject({
+    provider: "codex",
+    contextAgent: "claude",
+  });
 }, 30000);
 
 it("forks a thread at an answer, and its first turn continues that answer's session", async () => {

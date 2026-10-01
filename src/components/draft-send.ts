@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { ChatSummary } from "../../shared/projects";
-import { draftRecipient } from "../../shared/recipient";
+import { draftRecipient, threadContextAgent } from "../../shared/recipient";
 import { buildSend } from "../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -59,16 +59,18 @@ export async function sendDraft(
   const lastAgent = chat
     ? undefined
     : await qc.fetchQuery(newThreadAgentQuery).catch(() => undefined);
+  // The agent the thread's composer would warn about leaving.
+  const holder = chat && threadContextAgent(chat);
   const provider = composerProvider(
     lastAgent || settings.provider,
     !!chat?.shared,
-    chat?.provider ?? ai.threadProvider,
+    holder ?? ai.threadProvider,
   );
   const recipient = draftRecipient(text, provider);
   if (
-    chat?.provider &&
+    holder &&
     recipient !== "message" &&
-    recipient !== chat.provider &&
+    recipient !== holder &&
     !agentSwitchNoticeHidden()
   )
     return false;

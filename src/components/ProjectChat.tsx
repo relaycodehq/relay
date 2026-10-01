@@ -1,7 +1,12 @@
 import { AgentRequestCard } from "./AgentRequestCard";
 import { clock } from "../../shared/waiting";
 import type { RelayCommand } from "../../shared/commands";
-import { agentAsked, recipient } from "../../shared/recipient";
+import {
+  agentAsked,
+  contextAgent,
+  recipient,
+  threadContextAgent,
+} from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
@@ -865,17 +870,7 @@ export function ProjectChat({
     to: AgentProvider;
     resolve: (proceed: boolean) => void;
   }>();
-  // Which agent answered last on this branch, and so holds its working context.
-  // A side conversation's root belongs to the main session, so it does not count.
-  const activeAgent = [...shown]
-    .reverse()
-    .find(
-      (m) =>
-        m.role === "assistant" &&
-        !m.compaction &&
-        !m.handoff &&
-        m.id !== root?.id,
-    )?.provider;
+  const activeAgent = contextAgent(shown, root?.id);
   const review = history.data?.deepReview;
   // Reviewers work in threads of their own; this one waits for the lead.
   const reviewing = review?.status === "reviewing";
@@ -2073,7 +2068,7 @@ export function ProjectChat({
                   }
                 : undefined
             }
-            agent={chat?.provider}
+            agent={chat && threadContextAgent(chat)}
             draftKey={draftKey}
             onDraft={onDraft}
             shared={!!chat?.shared}

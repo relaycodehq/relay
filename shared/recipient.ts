@@ -1,5 +1,5 @@
 import { agentMentionPattern, type AgentProvider } from "./agents";
-import type { ProjectChatSend } from "./projects";
+import type { ChatMessage, ChatSummary, ProjectChatSend } from "./projects";
 import { agentMention } from "./rooms";
 
 /** Who a message goes to: an agent, or "message", a note no agent answers. */
@@ -37,3 +37,28 @@ export function sentAgent(
 /** Who a draft goes to: the agent it starts with a mention of, else the one picked. */
 export const draftRecipient = (text: string, picked: Recipient): Recipient =>
   agentMention(text)?.provider ?? picked;
+
+/**
+ * The agent holding a conversation's working context: the last one to answer
+ * in it. Compactions and handoff notes don't count, nor a side conversation's
+ * root (`rootId`), which belongs to the main session. Taking over from it
+ * loses its session.
+ */
+export const contextAgent = (
+  conversation: ChatMessage[],
+  rootId?: string,
+): AgentProvider | undefined =>
+  [...conversation]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "assistant" &&
+        !m.compaction &&
+        !m.handoff &&
+        m.id !== rootId,
+    )?.provider;
+
+/** A thread's main `contextAgent`; summaries saved before it was kept have only their latest answer's. */
+export const threadContextAgent = (
+  chat: Pick<ChatSummary, "contextAgent" | "provider">,
+) => chat.contextAgent ?? chat.provider;

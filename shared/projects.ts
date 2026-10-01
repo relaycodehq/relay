@@ -119,6 +119,8 @@ export interface ChatSummary {
   shared?: { roomId: string; server: string; memberId: string };
   /** Provider of the latest answer, for the activity card. */
   provider?: AgentProvider;
+  /** The agent holding the main conversation's context; see shared/recipient. */
+  contextAgent?: AgentProvider;
   /** No messages yet; absent on summaries saved before this field existed. */
   empty?: boolean;
   /** Settled until a newer update; see shared/chat-activity. */

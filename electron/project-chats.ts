@@ -58,7 +58,7 @@ import type {
   ContextUsage,
 } from "../shared/projects";
 import { agentMention } from "../shared/rooms";
-import { agentAsked, sentAgent } from "../shared/recipient";
+import { agentAsked, contextAgent, sentAgent } from "../shared/recipient";
 import {
   migrateAgentSessions,
   replyRoot,
@@ -1184,10 +1184,12 @@ export class ProjectChats {
     const provider = [...messages]
       .reverse()
       .find((m) => m.role === "assistant")?.provider;
+    const holder = contextAgent(messages.filter((m) => !m.parentId));
     const nextSend = this.nextSend(scheduled);
     return {
       ...summary,
       ...(provider ? { provider } : {}),
+      ...(holder ? { contextAgent: holder } : {}),
       ...(nextSend ? { nextSend } : {}),
       empty: !messages.length && !scheduled?.length,
     };

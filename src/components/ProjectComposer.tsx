@@ -182,7 +182,7 @@ export function ProjectComposer({
   settingsKey: string;
   /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
   inherit?: { settingsKey: string; provider?: AgentProvider };
-  /** The agent that answered last; the composer runs it until one is picked here. */
+  /** The agent holding the thread's context; the composer runs it until one is picked here. */
   agent?: AgentProvider;
   onDraft: (v: string) => void;
   shared: boolean;

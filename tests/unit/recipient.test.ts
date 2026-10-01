@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { agentAsked, recipient, sentAgent } from "../../shared/recipient";
+import type { ChatMessage } from "../../shared/projects";
+import {
+  agentAsked,
+  contextAgent,
+  recipient,
+  sentAgent,
+} from "../../shared/recipient";
 
 it("reads who answers a message from before `to` off its leading mention", () => {
   // An older phone typed @claude on a Codex composer: Claude answers, as ever.
@@ -29,4 +35,35 @@ it("lets `to` decide over whatever the body starts with", () => {
     provider: "cursor",
     question: "look",
   });
+});
+
+const message = (
+  provider: ChatMessage["provider"],
+  extra: Partial<ChatMessage> = {},
+): ChatMessage => ({
+  id: crypto.randomUUID(),
+  role: "assistant",
+  body: "",
+  status: "complete",
+  created: 1,
+  provider,
+  version: 1,
+  ...extra,
+});
+
+it("finds the agent holding the context past compactions, handoff notes and a side root", () => {
+  const root = message("codex");
+  expect(
+    contextAgent([
+      message("codex"),
+      message("claude"),
+      message("cursor", { status: "failed" }),
+      message("codex", { compaction: true }),
+      message("opencode", { handoff: { from: "opencode", to: "claude" } }),
+      message("claude", { role: "user" }),
+    ]),
+  ).toBe("cursor");
+  // A side conversation counts only its own answers.
+  expect(contextAgent([root], root.id)).toBeUndefined();
+  expect(contextAgent([root, message("claude")], root.id)).toBe("claude");
 });
