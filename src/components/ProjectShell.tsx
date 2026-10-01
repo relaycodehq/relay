@@ -13,7 +13,9 @@ import {
   PaneToggles,
   type PaneSlots,
 } from "./WorkspacePanes";
-import { useWorkspacePanes, type PaneId } from "../lib/workspace-panes";
+import type { PaneId } from "../lib/workspace-panes";
+import { useShellNavigation } from "../lib/useShellNavigation";
+import { NO_VIEWING, useThreadView } from "../lib/useThreadView";
 import { workingTreeKey } from "../lib/working-tree-key";
 import type { TurnDiffTarget } from "../lib/turn-diff";
 import {
@@ -21,7 +23,6 @@ import {
   JoinConversation,
   BrowseShared,
 } from "./ProjectSharingDialogs";
-import type { LineQuestion } from "../../shared/questions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShortcut, useShortcutLabel } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,20 +40,12 @@ import {
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
 import type { PullRef, Repo } from "../../shared/types";
-import {
-  type ChatWorkspace,
-  type Project,
-  type ChatSummary,
-} from "../../shared/projects";
+import { type Project, type ChatSummary } from "../../shared/projects";
 import { api } from "../lib/api";
 import {
   clearDraftScope,
-  currentNewThread,
   freshNewThread,
-  loadDraftScope,
   readDraft,
-  saveDraftScope,
-  setCurrentNewThread,
   writeDraft,
 } from "../lib/drafts";
 import { openThread, threadDraftKey } from "../lib/thread-storage";
@@ -75,7 +68,6 @@ import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
 import { sendDraft } from "../lib/draft-send";
-import type { CodeReference } from "../../shared/code-references";
 import {
   matchLink,
   type ProjectFileLink,
@@ -108,7 +100,6 @@ import { useSettingsPage } from "../lib/useSettingsPage";
 import { useSignIn } from "../lib/useSignIn";
 import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
-const NO_VIEWING = { path: null, viewed: 0, total: 0 };
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
 const NOWHERE: PullsLocation = { repo: null, pull: null };
@@ -140,25 +131,31 @@ export default function ProjectShell() {
     );
     return () => clearTimeout(sweep);
   }, [!!projects.data]);
-  const [selected, setSelected] = useState(() =>
-      localStorage.getItem("relay-project-id"),
-    ),
-    [chatId, setChatId] = useState<string | null>(null);
-  const [draftScope, setDraftScope] = useState<ChatSummary["scope"]>({
-    kind: "project",
-  });
-  const [draftWorkspace, setDraftWorkspace] =
-    useState<ChatWorkspace>("checkout");
   const gitActions = useRef<GitActionsHandle>(null);
   const chatComposer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
   const [error, setError] = useState<unknown>(),
-    [legacy, setLegacy] = useState(
-      () => localStorage.getItem("relay-surface") === "inbox",
-    ),
     [incoming, setIncoming] = useState<{ url: string }>(),
     [queuedUrl, setQueuedUrl] = useState<string>();
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
+  const view = useThreadView();
+  const nav = useShellNavigation(projects.data, lock, view);
+  const {
+    project,
+    chats,
+    chat,
+    chatId,
+    setChatId,
+    draftId,
+    draftScope,
+    scope,
+    pull,
+    panes,
+    navigate,
+    openChat,
+    newThreadIn,
+  } = nav;
+  const legacy = nav.inbox;
   // The Pull requests page reports where it is for the title; the title and
   // the sidebar send it back to the board.
   const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE);
@@ -167,20 +164,13 @@ export default function ProjectShell() {
     if (lock.blocked()) return;
     pullsPage.current?.go(target);
   };
-  const project =
-    projects.data?.find((p) => p.id === selected) ??
-    projects.data?.find((p) => !p.scratch) ??
-    projects.data?.[0];
-  // Which of the project's unsent threads shows while no thread is open.
-  const draftId = project ? currentNewThread(project.id) : "";
-  const panes = useWorkspacePanes(chatId ?? draftId);
   // The Pull requests page stands in for the chat alone.
   const sidebar = useSidebarVisibility(
     !legacy && panes.visible.some((id) => id !== "chat"),
   );
   const projectsHidden = sidebar.hidden;
   const [pickingProject, setPickingProject] = useState(false);
-  const settings = useSettingsPage(selected, chatId, legacy);
+  const settings = useSettingsPage(nav.selected, chatId, legacy);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
@@ -192,35 +182,11 @@ export default function ProjectShell() {
     () => requestChannel<ProjectFileLink>(),
     [project?.id],
   );
-  const [turnDiff, setTurnDiff] = useState<
-      (TurnDiffTarget & { request: number }) | null
-    >(null),
-    [viewing, setViewing] = useState<{
-      path: string | null;
-      viewed: number;
-      total: number;
-    }>({ path: null, viewed: 0, total: 0 }),
-    [contextText, setContextText] = useState<{
-      id: string;
-      text: string;
-      selection?: LineQuestion;
-      code?: CodeReference;
-    }>(),
-    [share, setShare] = useState<ChatSummary>(),
+  const [share, setShare] = useState<ChatSummary>(),
     [invitation, setInvitation] = useState<string>(),
     [browseShared, setBrowseShared] = useState(false);
-  const [restoredProject, setRestoredProject] = useState<string>();
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
-  const chats = useQuery({
-    queryKey: ["project-chats", project?.id],
-    queryFn: () => api.projectChats(project!.id),
-    enabled: !!project,
-  });
-  const chat = chats.data?.find((c) => c.id === chatId);
-  // A PR thread reviews its PR; any other thread shows the working tree.
-  const scope = chat?.scope ?? draftScope;
-  const pull = scope.kind === "pr" ? scope.ref : null;
   const shellKey = project ? terminalKey(project.id, chat?.id ?? null) : "";
   const terminalOpen = useTerminalOpen(shellKey);
   // A thread's terminal works where its files are: a worktree thread has
@@ -231,7 +197,7 @@ export default function ProjectShell() {
       : !chat.worktree.path
         ? WORKTREE_PENDING
         : undefined
-    : !chat && scope.kind === "project" && draftWorkspace === "worktree"
+    : !chat && scope.kind === "project" && nav.draftWorkspace === "worktree"
       ? WORKTREE_PENDING
       : undefined;
   const showTerminal = !!project && !legacy && terminalOpen && !terminalBlocked;
@@ -271,29 +237,9 @@ export default function ProjectShell() {
     !!chats.data?.some((c) => c.running || agentsSince(c.pending)),
   );
   useEffect(() => {
-    if (project) {
-      localStorage.setItem("relay-project-id", project.id);
-      const saved = openThread.load(project.id);
-      setChatId(saved || null);
-      setDraftScope(loadDraftScope(currentNewThread(project.id)));
-      panes.switchTo(saved || currentNewThread(project.id));
-      setTurnDiff(null);
-      setRestoredProject(project.id);
-    }
-  }, [project?.id]);
-  useEffect(() => {
-    if (project && project.id === restoredProject)
-      saveDraftScope(draftId, draftScope);
-  }, [draftScope, draftId, restoredProject]);
-  useEffect(() => {
-    localStorage.setItem("relay-surface", legacy ? "inbox" : "project");
     // The page took its link when it opened; coming back mustn't open it again.
     if (!legacy) setIncoming(undefined);
   }, [legacy]);
-  useEffect(() => {
-    if (project && project.id === restoredProject)
-      openThread.save(project.id, chatId);
-  }, [project?.id, chatId, restoredProject]);
   function openUrl(url: string) {
     if (lock.blocked("Your link will open afterward.")) {
       setQueuedUrl(url);
@@ -306,7 +252,7 @@ export default function ProjectShell() {
       if (invitation?.conversation) setInvitation(url);
       else {
         setIncoming({ url });
-        setLegacy(true);
+        nav.setInbox(true);
       }
       if (!boot.data?.account) void signIn.withAccount();
     } catch (e) {
@@ -333,8 +279,8 @@ export default function ProjectShell() {
       const p = await api.addProject();
       if (p) {
         await projects.refetch();
-        setSelected(p.id);
-        setLegacy(false);
+        nav.setSelected(p.id);
+        nav.setInbox(false);
       }
     } catch (e) {
       setError(e);
@@ -409,11 +355,6 @@ export default function ProjectShell() {
     else await newChat({ kind: "pr", ref });
     panes.show("chat");
   }
-  /** Opens a thread with the panes it had open when it was last on screen. */
-  function openChat(id: string) {
-    setChatId(id);
-    panes.switchTo(id);
-  }
   /**
    * Reviewing a PR from the new thread makes it that PR's thread, taking the
    * unsent message and composer settings along, so a review started without
@@ -459,13 +400,10 @@ export default function ProjectShell() {
     const open = panes.layout.open[id];
     if (open && id === "files" && lock.blocked()) return;
     panes.setOpen(id, !open);
-    if (open && id !== "chat") setViewing(NO_VIEWING);
+    if (open && id !== "chat") view.setViewing(NO_VIEWING);
   }
   function openTurnDiff(target: TurnDiffTarget) {
-    setTurnDiff((previous) => ({
-      ...target,
-      request: (previous?.request ?? 0) + 1,
-    }));
+    view.showTurn(target);
     panes.show("changes");
   }
   function openInEditor(target: ProjectFileLink & { search?: string }) {
@@ -475,7 +413,7 @@ export default function ProjectShell() {
   }
   function revealChange(target: ProjectFileLink) {
     changeReveals.send(target);
-    setTurnDiff(null);
+    view.closeTurn();
     panes.show("changes");
   }
   // A file clicked in the chat shows its diff in Changes (Review in a PR
@@ -522,35 +460,6 @@ export default function ProjectShell() {
       setError(e);
     }
   }
-  /**
-   * Opens `next`, or with `fresh` one of the project's unsent threads: a new
-   * one on the repository, or with a draft's id that draft, in the scope it
-   * was written for.
-   */
-  function navigate(
-    p: Project,
-    next?: ChatSummary,
-    fresh: boolean | string = false,
-  ) {
-    if (lock.blocked()) return false;
-    if (fresh || next) openThread.save(p.id, next?.id ?? null);
-    if (fresh) {
-      const id = fresh === true ? freshNewThread(p.id) : fresh;
-      // Switching projects restores the saved scope, so a fresh thread drops it.
-      if (fresh === true) clearDraftScope(id);
-      setCurrentNewThread(p.id, id);
-      setDraftScope(loadDraftScope(id));
-      if (!next) panes.switchTo(id, fresh === true);
-    }
-    setSelected(p.id);
-    if (next || fresh) setChatId(next?.id ?? null);
-    if (next) panes.switchTo(next.id);
-    setLegacy(false);
-    setTurnDiff(null);
-    setContextText(undefined);
-    setViewing(NO_VIEWING);
-    return true;
-  }
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pickNewThread() {
     if (lock.blocked()) return;
@@ -575,15 +484,6 @@ export default function ProjectShell() {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => chatComposer.current?.focus()),
     );
-  }
-  /** A thread keeps the scope it started with; another one takes a new thread. */
-  function newThreadIn(scope: ChatSummary["scope"]) {
-    if (lock.blocked()) return;
-    // From a thread it starts afresh, not in a draft written for something else.
-    if (chat && project)
-      setCurrentNewThread(project.id, freshNewThread(project.id));
-    setChatId(null);
-    setDraftScope(scope);
   }
   /**
    * A new thread in the project folder on `text`: sent on the agent new
@@ -866,9 +766,9 @@ export default function ProjectShell() {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.
               if (lock.blocked()) return;
-              if (!account) void signIn.withAccount(() => setLegacy(true));
+              if (!account) void signIn.withAccount(() => nav.setInbox(true));
               else if (legacy) goToPulls({ to: "board" });
-              else setLegacy(true);
+              else nav.setInbox(true);
             }}
           />
           {projects.error && <ErrorBox error={projects.error} />}
@@ -934,13 +834,13 @@ export default function ProjectShell() {
                   projects={realProjects}
                   chat={chat}
                   draftScope={draftScope}
-                  viewing={codeOpen ? viewing : NO_VIEWING}
-                  contextText={contextText}
-                  onContextUsed={() => setContextText(undefined)}
+                  viewing={codeOpen ? view.viewing : NO_VIEWING}
+                  contextText={view.context}
+                  onContextUsed={() => view.setContext(undefined)}
                   onShare={() => {
                     if (chat) void signIn.withAccount(() => setShare(chat));
                   }}
-                  onDraftWorkspace={setDraftWorkspace}
+                  onDraftWorkspace={nav.setDraftWorkspace}
                   onStartThread={startThread}
                   onCreated={async (c) => {
                     if (!c.worktree) adoptDraftTerminal(project.id, c.id);
@@ -997,7 +897,7 @@ export default function ProjectShell() {
                                 openInEditor({ path, line, directory: false }),
                               reveals: changeReveals,
                               onPresence: (next) => {
-                                setViewing(next);
+                                view.setViewing(next);
                                 if (next.path)
                                   localStorage.setItem(
                                     `relay-project-review-file:${project.id}:${pull.number}`,
@@ -1007,7 +907,7 @@ export default function ProjectShell() {
                               onDiscuss: (target, selectedPull) => {
                                 void discuss(selectedPull)
                                   .then(() => {
-                                    setContextText({
+                                    view.setContext({
                                       id: crypto.randomUUID(),
                                       text: `About ${target.path}:${target.start}${target.end !== target.start ? `–${target.end}` : ""} (${target.side === "deletions" ? "before PR" : "PR head"})\n\n`,
                                       selection: {
@@ -1051,15 +951,15 @@ export default function ProjectShell() {
                         key={where}
                         where={where}
                         slots={changesSlots}
-                        onViewing={setViewing}
+                        onViewing={view.setViewing}
                         onOpenFile={(path, line) =>
                           openInEditor({ path, line, directory: false })
                         }
-                        turn={turnDiff}
-                        onCloseTurn={() => setTurnDiff(null)}
+                        turn={view.turnDiff}
+                        onCloseTurn={() => view.closeTurn()}
                         reveals={changeReveals}
                         onAsk={(code) => {
-                          setContextText({
+                          view.setContext({
                             id: crypto.randomUUID(),
                             text: "",
                             code,
@@ -1087,7 +987,7 @@ export default function ProjectShell() {
                       project={project}
                       where={where}
                       checks={checks}
-                      onViewing={setViewing}
+                      onViewing={view.setViewing}
                       opens={fileOpens}
                     />
                   </>
@@ -1154,7 +1054,7 @@ export default function ProjectShell() {
             onDisconnect={async () => {
               await signIn.signOut();
               settings.setOpen(false);
-              setLegacy(false);
+              nav.setInbox(false);
             }}
           />
         )}
@@ -1215,10 +1115,10 @@ export default function ProjectShell() {
           onClose={() => setInvitation(undefined)}
           onJoined={async (p, c) => {
             if (c) openThread.save(p, c.id);
-            setSelected(p);
+            nav.setSelected(p);
             await chats.refetch();
             if (c) openChat(c.id);
-            setLegacy(false);
+            nav.setInbox(false);
             panes.show("chat");
             setInvitation(undefined);
           }}
