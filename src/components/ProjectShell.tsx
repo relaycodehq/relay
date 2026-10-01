@@ -94,6 +94,10 @@ import {
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import {
+  NavigationLockProvider,
+  useNavigationLockRoot,
+} from "../lib/navigation-lock";
 import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
@@ -157,12 +161,15 @@ export default function ProjectShell() {
     ),
     [incoming, setIncoming] = useState<{ url: string }>(),
     [queuedUrl, setQueuedUrl] = useState<string>();
+  const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   // The Pull requests page reports where it is for the title; the title and
   // the sidebar send it back to the board.
   const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE),
     [pullsNav, setPullsNav] = useState<PullsNav | null>(null);
-  const goToPulls = (target: PullsTarget) =>
+  const goToPulls = (target: PullsTarget) => {
+    if (lock.blocked()) return;
     setPullsNav((n) => ({ ...target, request: (n?.request ?? 0) + 1 }));
+  };
   const project =
     projects.data?.find((p) => p.id === selected) ??
     projects.data?.find((p) => !p.scratch) ??
@@ -275,8 +282,7 @@ export default function ProjectShell() {
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
-  const [dirty, setDirty] = useState(false),
-    [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
+  const [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
     [changeTarget, setChangeTarget] = useState<FileTarget | null>(null),
     [turnDiff, setTurnDiff] = useState<
       (TurnDiffTarget & { request: number }) | null
@@ -367,7 +373,6 @@ export default function ProjectShell() {
       panes.switchTo(saved || currentNewThread(project.id));
       setTurnDiff(null);
       setRestoredProject(project.id);
-      setDirty(false);
     }
   }, [project?.id]);
   useEffect(() => {
@@ -384,13 +389,8 @@ export default function ProjectShell() {
       openThread.save(project.id, chatId);
   }, [project?.id, chatId, restoredProject]);
   function openUrl(url: string) {
-    if (dirty) {
+    if (lock.blocked("Your link will open afterward.")) {
       setQueuedUrl(url);
-      setError(
-        new Error(
-          "Save or close the edited file first. Your link will open afterward.",
-        ),
-      );
       return;
     }
     try {
@@ -407,14 +407,14 @@ export default function ProjectShell() {
       setError(e);
     }
   }
-  useEffect(() => api.onOpenUrl(openUrl), [boot.data?.account, dirty]);
+  useEffect(() => api.onOpenUrl(openUrl), [boot.data?.account]);
   useEffect(() => {
-    if (!dirty && queuedUrl) {
+    if (!lock.locked && queuedUrl) {
       setQueuedUrl(undefined);
       setError(undefined);
       openUrl(queuedUrl);
     }
-  }, [dirty, queuedUrl]);
+  }, [lock.locked, queuedUrl]);
   useEffect(() => {
     if (boot.data?.pendingUrl) openUrl(boot.data.pendingUrl);
   }, [boot.data?.pendingUrl]);
@@ -441,7 +441,6 @@ export default function ProjectShell() {
         !e.isComposing &&
         project &&
         !legacy &&
-        !dirty &&
         !error &&
         // Modal <dialog>s have no role attribute; popovers do.
         !document.querySelector('dialog[open], [role="dialog"]')
@@ -452,7 +451,6 @@ export default function ProjectShell() {
       if (
         matches("new-scratch", e) &&
         !e.isComposing &&
-        !dirty &&
         !document.querySelector('dialog[open], [role="dialog"]')
       ) {
         e.preventDefault();
@@ -461,8 +459,9 @@ export default function ProjectShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [project?.id, projects.data, legacy, dirty, error]);
+  }, [project?.id, projects.data, legacy, error]);
   async function add() {
+    if (lock.blocked()) return;
     try {
       const p = await api.addProject();
       if (p) {
@@ -479,7 +478,7 @@ export default function ProjectShell() {
    * Review beside it; opening it the first time makes that thread.
    */
   async function openPullInProject(p: Project, ref: PullRef) {
-    if (dirty || !p.repository) return;
+    if (!p.repository || lock.blocked()) return;
     // The project's spelling of its repository, which its threads use.
     const pr = {
       owner: p.repository.owner,
@@ -583,7 +582,7 @@ export default function ProjectShell() {
   }
   const reviewOpen = panes.layout.open.changes;
   useEffect(() => {
-    if (reviewOpen && pull && !chat && chats.data && !dirty)
+    if (reviewOpen && pull && !chat && chats.data && !lock.locked)
       void startReviewThread(pull);
   }, [reviewOpen, pull?.number, chat?.id, !!chats.data]);
   function openCode(next: "changes" | "files") {
@@ -591,7 +590,7 @@ export default function ProjectShell() {
   }
   function togglePane(id: PaneId) {
     const open = panes.layout.open[id];
-    if (open && id === "files" && dirty) return;
+    if (open && id === "files" && lock.blocked()) return;
     panes.setOpen(id, !open);
     if (open && id !== "chat") setViewing(NO_VIEWING);
   }
@@ -603,12 +602,7 @@ export default function ProjectShell() {
     panes.show("changes");
   }
   function openInEditor(target: ProjectFileLink & { search?: string }) {
-    if (dirty) {
-      setError(
-        new Error("Save or close the edited file before opening another file."),
-      );
-      return;
-    }
+    if (lock.blocked()) return;
     setOpenFileTarget((previous) => ({
       ...target,
       projectId: project!.id,
@@ -679,7 +673,7 @@ export default function ProjectShell() {
     next?: ChatSummary,
     fresh: boolean | string = false,
   ) {
-    if (dirty) return;
+    if (lock.blocked()) return false;
     if (fresh || next) openThread.save(p.id, next?.id ?? null);
     if (fresh) {
       const id = fresh === true ? freshNewThread(p.id) : fresh;
@@ -696,17 +690,18 @@ export default function ProjectShell() {
     setTurnDiff(null);
     setContextText(undefined);
     setViewing(NO_VIEWING);
+    return true;
   }
   /** ⌘N and the sidebar's New thread ask for the project unless there's only one. */
   function pickNewThread() {
-    if (dirty) return;
+    if (lock.blocked()) return;
     if (realProjects.length === 1) openNewThread(realProjects[0]);
     else if (realProjects.length) setPickingProject(true);
     else void newScratch();
   }
   /** ⌘⇧N: a chat about anything, in a folder of its own. */
   async function newScratch() {
-    if (dirty) return;
+    if (lock.blocked()) return;
     try {
       const p = await api.createScratch();
       await projects.refetch();
@@ -716,7 +711,7 @@ export default function ProjectShell() {
     }
   }
   function openNewThread(p: Project) {
-    navigate(p, undefined, true);
+    if (!navigate(p, undefined, true)) return;
     requestAnimationFrame(() =>
       requestAnimationFrame(() =>
         document
@@ -729,7 +724,7 @@ export default function ProjectShell() {
   }
   /** A thread keeps the scope it started with; another one takes a new thread. */
   function newThreadIn(scope: ChatSummary["scope"]) {
-    if (dirty) return;
+    if (lock.blocked()) return;
     // From a thread it starts afresh, not in a draft written for something else.
     if (chat && project)
       setCurrentNewThread(project.id, freshNewThread(project.id));
@@ -737,15 +732,12 @@ export default function ProjectShell() {
     setDraftScope(scope);
   }
   async function reviewBranchPr(ref: PullRef) {
-    if (!project || dirty) return;
+    if (!project || lock.blocked()) return;
     await discuss(ref);
     panes.show("changes");
   }
   function runCommand(command: RelayCommand) {
-    if (dirty) {
-      setError(new Error("Save or close your edited file first."));
-      return false;
-    }
+    if (lock.blocked()) return false;
     if (command === "openpr") setOpenPrRequest((n) => n + 1);
     else if ((command === "new" || command === "clear") && project?.scratch)
       void newScratch();
@@ -838,7 +830,7 @@ export default function ProjectShell() {
         ? "Needs your input"
         : "New activity"
       : undefined;
-  return (
+  const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
         className={`titlebar project-titlebar ${projectsHidden ? "sidebar-collapsed" : ""}`}
@@ -871,7 +863,7 @@ export default function ProjectShell() {
           <RelayMark size={38} />
         </div>
         {legacy ? (
-          <PullsTitle where={pullsWhere} disabled={dirty} onNav={goToPulls} />
+          <PullsTitle where={pullsWhere} onNav={goToPulls} />
         ) : (
           <div className="project-window-title">
             {project?.plain ? (
@@ -928,7 +920,7 @@ export default function ProjectShell() {
                 project={project}
                 where={where}
                 connected={!!account}
-                disabled={dirty}
+                disabled={lock.locked}
                 request={openPrRequest}
                 onConnect={() => void withAccount()}
                 onReview={(ref) => void reviewBranchPr(ref)}
@@ -953,7 +945,7 @@ export default function ProjectShell() {
                 id,
                 open: panes.layout.open[id],
                 disabled:
-                  (id === "files" && dirty && panes.layout.open.files) ||
+                  (id === "files" && lock.locked && panes.layout.open.files) ||
                   (panes.layout.open[id] && panes.visible.length === 1),
                 ...(id === "chat"
                   ? { label: "Chat", icon: <MessageSquare size={14} /> }
@@ -1016,7 +1008,6 @@ export default function ProjectShell() {
             projectId={legacy ? undefined : project?.id}
             chatId={legacy ? undefined : chat?.id}
             inbox={legacy}
-            dirty={dirty}
             account={account?.user.login}
             onChat={(c) => {
               const p = projects.data?.find((p) => p.id === c.projectId);
@@ -1029,8 +1020,7 @@ export default function ProjectShell() {
             onDraft={(p, id) => navigate(p, undefined, id)}
             onAdd={() => void add()}
             onShared={(p) => {
-              navigate(p);
-              setBrowseShared(true);
+              if (navigate(p)) setBrowseShared(true);
             }}
             onAttention={setAttention}
             onSettings={(category) => {
@@ -1045,6 +1035,7 @@ export default function ProjectShell() {
             onInbox={() => {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.
+              if (lock.blocked()) return;
               if (!account) void withAccount(() => setLegacy(true));
               else if (legacy) goToPulls({ to: "board" });
               else setLegacy(true);
@@ -1055,7 +1046,6 @@ export default function ProjectShell() {
         {legacy && account ? (
           <div className="project-legacy">
             <Connected
-              onDirtyChange={setDirty}
               account={account}
               initialWorkspace={boot.data.workspace}
               incomingLink={incoming}
@@ -1130,14 +1120,13 @@ export default function ProjectShell() {
                   }}
                   onRepository={() => newThreadIn({ kind: "project" })}
                   onChoosePR={() => {
-                    if (!dirty) setChoosePR(true);
+                    if (!lock.blocked()) setChoosePR(true);
                   }}
                   onSelectPR={(ref) => newThreadIn({ kind: "pr", ref })}
                   onDeepReview={() => newThreadIn({ kind: "review" })}
                   onSwitchProject={(next) => navigate(next, undefined, true)}
                   onAddProject={() => void add()}
                   canChoosePR={!!account && !!project.repository}
-                  dirty={dirty}
                   onOpenCode={openCode}
                   onOpenFile={openChatFile}
                   onOpenTurnDiff={openTurnDiff}
@@ -1170,7 +1159,6 @@ export default function ProjectShell() {
                       account && project.repository ? (
                         <div className="project-review">
                           <Connected
-                            onDirtyChange={setDirty}
                             key={`${project.id}:${pull.number}`}
                             embedded={{
                               ref: pull,
@@ -1268,7 +1256,7 @@ export default function ProjectShell() {
                       icon={<Files size={14} />}
                       title="Files"
                       detail={worktreeDetail}
-                      closeDisabled={dirty}
+                      closeDisabled={lock.locked}
                       onClose={() => togglePane("files")}
                     />
                     <ProjectFiles
@@ -1276,8 +1264,6 @@ export default function ProjectShell() {
                       project={project}
                       where={where}
                       checks={checks}
-                      dirty={dirty}
-                      onDirtyChange={setDirty}
                       onViewing={setViewing}
                       openTarget={openFileTarget}
                       onOpenTargetConsumed={() => setOpenFileTarget(null)}
@@ -1447,6 +1433,7 @@ export default function ProjectShell() {
       )}
     </div>
   );
+  return <NavigationLockProvider value={lock}>{page}</NavigationLockProvider>;
 }
 
 /** The header's thread name; double-click or use the pencil to rename it. */

@@ -389,7 +389,6 @@ export function ProjectSidebar({
   projectId,
   chatId,
   draftId,
-  dirty,
   account,
   onChat,
   onNew,
@@ -410,7 +409,6 @@ export function ProjectSidebar({
   chatId?: string;
   /** The unsent thread that's open, when no thread is. */
   draftId?: string;
-  dirty: boolean;
   account?: string;
   onChat: (c: ChatSummary) => void;
   onNew: (p: Project) => void;
@@ -776,11 +774,11 @@ export function ProjectSidebar({
       .toLowerCase()
       .includes(query);
   const open = (c: ChatSummary) => {
-    if (!dirty) onChat(c);
+    onChat(c);
   };
   /** Settling the open thread moves on to its neighbour in activity, or a new thread. */
   const settle = (c: ChatSummary) => {
-    if (c.id === chatId && !dirty) {
+    if (c.id === chatId) {
       const index = sections.active.findIndex((a) => a.id === c.id);
       const rest = sections.active.filter((a) => a.id !== c.id);
       const next = rest[Math.min(Math.max(index, 0), rest.length - 1)];
@@ -824,7 +822,6 @@ export function ProjectSidebar({
       <div key={c.id} className={`sb-thread-row ${stale ? "stale" : ""}`}>
         <button
           className={`sb-thread ${chatId === c.id ? "selected" : ""} ${unread(c) ? "unread" : ""}`}
-          disabled={dirty}
           title={c.title}
           onClick={() => open(c)}
         >
@@ -906,7 +903,7 @@ export function ProjectSidebar({
           <ContextMenu.Root>
             <ContextMenu.Trigger
               className="sb-project-row"
-              draggable={!dirty}
+              draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(PROJECT_DRAG, p.id);
                 e.dataTransfer.effectAllowed = "move";
@@ -955,14 +952,12 @@ export function ProjectSidebar({
                 </Menu.Root>
                 <IconButton
                   label={`Shared conversations in ${p.name}`}
-                  disabled={dirty}
                   onClick={() => onShared(p)}
                 >
                   <Users size={13} />
                 </IconButton>
                 <IconButton
                   label={`New thread in ${p.name}`}
-                  disabled={dirty}
                   onClick={() => onNew(p)}
                 >
                   <Plus size={14} />
@@ -976,11 +971,7 @@ export function ProjectSidebar({
           <div className="sb-thread-list">
             {visible.map((c) => threadRow(c))}
             {!chats.length && (
-              <button
-                className="sb-thread sb-ghost"
-                disabled={dirty}
-                onClick={() => onNew(p)}
-              >
+              <button className="sb-thread sb-ghost" onClick={() => onNew(p)}>
                 <span className="sb-thread-title">Start a thread</span>
               </button>
             )}
@@ -1014,11 +1005,7 @@ export function ProjectSidebar({
       >
         Rename
       </MenuAction>
-      <MenuAction
-        icon={<SquarePen size={13} />}
-        disabled={dirty}
-        onClick={() => onNew(p)}
-      >
+      <MenuAction icon={<SquarePen size={13} />} onClick={() => onNew(p)}>
         New thread
       </MenuAction>
       <Menu.Separator className="sb-menu-separator" />
@@ -1203,7 +1190,7 @@ export function ProjectSidebar({
                 <ContextMenu.Root>
                   <ContextMenu.Trigger
                     className={`sb-folder-row ${into ? "drop-into" : ""}`}
-                    draggable={!dirty}
+                    draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData(GROUP_DRAG, folder.path);
                       e.dataTransfer.effectAllowed = "move";
@@ -1286,7 +1273,6 @@ export function ProjectSidebar({
         key={c.id}
         role="button"
         tabIndex={0}
-        aria-disabled={dirty}
         className={[
           "sb-card",
           selected && "selected",
@@ -1355,7 +1341,6 @@ export function ProjectSidebar({
       key={d.key}
       draft={d}
       selected={d.id === draftId}
-      dirty={dirty}
       onOpen={() => (d.chat ? onChat(d.chat) : onDraft(d.project, d.id))}
     />
   );
@@ -1473,7 +1458,6 @@ export function ProjectSidebar({
         <h2>Scratchpad</h2>
         <IconButton
           label={`New chat  ${newScratchKeys}`.trim()}
-          disabled={dirty}
           onClick={onNewScratch}
         >
           <Plus size={14} />
@@ -1491,11 +1475,7 @@ export function ProjectSidebar({
           (c) => threadRow(c),
         )}
         {!scratch.length && !scratchDraft && (
-          <button
-            className="sb-thread sb-ghost"
-            disabled={dirty}
-            onClick={onNewScratch}
-          >
+          <button className="sb-thread sb-ghost" onClick={onNewScratch}>
             <span className="sb-thread-title">Ask anything</span>
           </button>
         )}
@@ -1518,7 +1498,6 @@ export function ProjectSidebar({
         <button
           className={`sb-nav-item ${inbox ? "selected" : ""}`}
           aria-current={inbox ? "page" : undefined}
-          disabled={dirty}
           onClick={onInbox}
         >
           <GitPullRequest size={15} />
@@ -1541,7 +1520,7 @@ export function ProjectSidebar({
               <FolderPlus size={13} />
             </IconButton>
           </div>
-          <IconButton label="Add project" disabled={dirty} onClick={onAdd}>
+          <IconButton label="Add project" onClick={onAdd}>
             <Plus size={14} />
           </IconButton>
         </div>
@@ -1608,7 +1587,6 @@ export function ProjectSidebar({
           className="sb-top-button"
           aria-label="New thread"
           title={`New thread  ${newThreadKeys}`.trim()}
-          disabled={dirty}
           onClick={onPickNew}
         >
           <Plus size={16} />

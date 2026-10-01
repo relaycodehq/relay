@@ -57,11 +57,9 @@ export type PullsNav = PullsTarget & { request: number };
 /** The window title's trail back from a PR or a project's page. */
 export function PullsTitle({
   where,
-  disabled,
   onNav,
 }: {
   where: PullsLocation;
-  disabled?: boolean;
   onNav: (target: PullsTarget) => void;
 }) {
   const { repo, pull } = where;
@@ -69,9 +67,7 @@ export function PullsTitle({
     <div className="project-window-title pulls-title">
       <GitPullRequest size={14} />
       {repo || pull ? (
-        <button disabled={disabled} onClick={() => onNav({ to: "board" })}>
-          Pull requests
-        </button>
+        <button onClick={() => onNav({ to: "board" })}>Pull requests</button>
       ) : (
         <strong>Pull requests</strong>
       )}
@@ -79,10 +75,7 @@ export function PullsTitle({
         <>
           <span className="breadcrumb-slash">/</span>
           {pull ? (
-            <button
-              disabled={disabled}
-              onClick={() => onNav({ to: "repo", repo: repo.key })}
-            >
+            <button onClick={() => onNav({ to: "repo", repo: repo.key })}>
               {repo.label}
             </button>
           ) : (

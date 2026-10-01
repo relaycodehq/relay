@@ -391,7 +391,6 @@ function Preview() {
                 projects={projects}
                 projectId={project?.id}
                 chatId={thread?.id}
-                dirty={false}
                 account="you"
                 onChat={() => {}}
                 onNew={() => {}}

@@ -7,6 +7,7 @@ import type { ProjectFileLink } from "../../shared/project-file-links";
 import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { useNavigationLock } from "../lib/navigation-lock";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { ancestors } from "../lib/file-tree";
 import { useExpanded } from "../lib/useFileTree";
@@ -92,8 +93,6 @@ export function ProjectFiles({
   project,
   where,
   checks,
-  dirty,
-  onDirtyChange,
   onViewing,
   openTarget,
   onOpenTargetConsumed,
@@ -103,8 +102,6 @@ export function ProjectFiles({
   where: string;
   /** Owned by the shell, which shows the status in the title bar. */
   checks: ChecksController;
-  dirty: boolean;
-  onDirtyChange: (v: boolean) => void;
   onViewing: (v: Viewing) => void;
   openTarget?: FileTarget | null;
   onOpenTargetConsumed?: () => void;
@@ -116,8 +113,9 @@ export function ProjectFiles({
     enabled: !project.plain,
   });
   // Preserve an edited buffer (and its original revision) if Git moves externally.
+  const { locked } = useNavigationLock();
   const editorCheckout = useRef(tree.data);
-  if (!dirty) editorCheckout.current = tree.data;
+  if (!locked) editorCheckout.current = tree.data;
   const expansion = useExpanded(where);
   const [selection, setSelection] = useState<Selection | null>(() => {
       const path = filePathSchema.safeParse(
@@ -132,7 +130,7 @@ export function ProjectFiles({
     setSelection(next);
   };
   useEffect(() => {
-    if (!openTarget || openTarget.projectId !== project.id || dirty) return;
+    if (!openTarget || openTarget.projectId !== project.id || locked) return;
     if (openTarget.search !== undefined) {
       setFilter(openTarget.search);
       setSelection(null);
@@ -145,7 +143,7 @@ export function ProjectFiles({
         select({ kind: "file", path: openTarget.path, line: openTarget.line });
     }
     onOpenTargetConsumed?.();
-  }, [openTarget?.request, project.id, dirty]);
+  }, [openTarget?.request, project.id, locked]);
   useEffect(() => {
     if (file) localStorage.setItem("relay-project-file:" + where, file.path);
     else localStorage.removeItem("relay-project-file:" + where);
@@ -208,7 +206,7 @@ export function ProjectFiles({
                 return (
                   <button
                     key={path}
-                    disabled={dirty && path !== file?.path}
+                    disabled={locked && path !== file?.path}
                     className={path === file?.path ? "selected" : ""}
                     style={{
                       position: "absolute",
@@ -241,7 +239,7 @@ export function ProjectFiles({
             where={where}
             title={project.name}
             selected={selection?.path ?? null}
-            lockedPath={dirty && file ? file.path : null}
+            lockedPath={locked && file ? file.path : null}
             expansion={expansion}
             onSelect={(path, kind) => select({ kind, path })}
             onCreated={(path, kind) => select({ kind, path })}
@@ -297,7 +295,6 @@ export function ProjectFiles({
                 path={file.path}
                 line={file.line}
                 inline
-                onDirtyChange={onDirtyChange}
                 actions={
                   <RevealButtons
                     where={where}
@@ -306,10 +303,7 @@ export function ProjectFiles({
                     onError={setActionError}
                   />
                 }
-                onClose={() => {
-                  setSelection(null);
-                  onDirtyChange(false);
-                }}
+                onClose={() => setSelection(null)}
               />
             </Suspense>
           </div>

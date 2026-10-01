@@ -10,13 +10,11 @@ import type { Project } from "../../shared/projects";
 export function ProjectHeadlinePicker({
   project,
   projects,
-  disabled,
   onSelect,
   onAdd,
 }: {
   project: Project;
   projects: Project[];
-  disabled: boolean;
   onSelect: (project: Project) => void;
   onAdd: () => void;
 }) {
@@ -33,12 +31,7 @@ export function ProjectHeadlinePicker({
       <Popover.Trigger
         type="button"
         className="headline-project-trigger"
-        disabled={disabled}
-        title={
-          disabled
-            ? "Save or close the edited file before switching projects"
-            : project.path
-        }
+        title={project.path}
       >
         <span className="headline-project-name">{project.name}</span>
         <ProjectRibbon key={project.id} />

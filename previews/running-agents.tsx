@@ -107,7 +107,6 @@ function Preview() {
         <QueryClientProvider key={mode} client={clients[mode]}>
           <ProjectSidebar
             projects={projects}
-            dirty={false}
             onChat={() => {}}
             onNew={() => {}}
             onPickNew={() => {}}

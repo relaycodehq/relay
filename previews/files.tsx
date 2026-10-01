@@ -2,7 +2,7 @@
 // viewer, editor, rename, create and trash. Nothing here touches the disk.
 // Open http://127.0.0.1:5177/previews/files.html
 import "./desktop-stub";
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../src/styles.css";
@@ -12,6 +12,10 @@ import "../src/components/sidebar.css";
 import { initAppearance } from "../src/lib/appearance";
 import { initWindowFocus } from "../src/lib/window-focus";
 import { ProjectFiles } from "../src/components/ProjectViews";
+import {
+  NavigationLockProvider,
+  useNavigationLockRoot,
+} from "../src/lib/navigation-lock";
 import type { ChecksController } from "../src/lib/useProjectChecks";
 import type { Project } from "../shared/projects";
 import type { DirEntry } from "../shared/project-files";
@@ -241,21 +245,25 @@ const client = new QueryClient();
 
 function Preview() {
   // The shell owns this in the app; it locks the tree to the file being edited.
-  const [dirty, setDirty] = useState(false);
+  const lock = useNavigationLockRoot(() => {});
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <p style={{ margin: 0, padding: "6px 12px", fontSize: 11, opacity: 0.7 }}>
-        Sample data in memory: nothing here touches the disk.
-      </p>
-      <ProjectFiles
-        project={project}
-        where="sample"
-        checks={checks}
-        dirty={dirty}
-        onDirtyChange={setDirty}
-        onViewing={() => {}}
-      />
-    </div>
+    <NavigationLockProvider value={lock}>
+      <div
+        style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+      >
+        <p
+          style={{ margin: 0, padding: "6px 12px", fontSize: 11, opacity: 0.7 }}
+        >
+          Sample data in memory: nothing here touches the disk.
+        </p>
+        <ProjectFiles
+          project={project}
+          where="sample"
+          checks={checks}
+          onViewing={() => {}}
+        />
+      </div>
+    </NavigationLockProvider>
   );
 }
 

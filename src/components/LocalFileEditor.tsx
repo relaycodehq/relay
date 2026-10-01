@@ -35,6 +35,7 @@ import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { useFileDiff } from "../lib/useFileDiff";
+import { useHoldNavigation } from "../lib/navigation-lock";
 
 const keymap: EditorKeymap = [
   {
@@ -59,7 +60,6 @@ export default function LocalFileEditor({
   pull,
   project,
   inline = false,
-  onDirtyChange,
   path,
   line,
   onClose,
@@ -70,7 +70,6 @@ export default function LocalFileEditor({
   /** `plain`: a folder without Git, so no HEAD to compare with or blame. */
   project?: { id: string; head: string; plain?: boolean };
   inline?: boolean;
-  onDirtyChange?: (dirty: boolean) => void;
   path: string;
   line?: number;
   onClose: () => void;
@@ -127,11 +126,7 @@ export default function LocalFileEditor({
     ),
   );
   const diff = compared.diff;
-  useEffect(
-    () => onDirtyChange?.(dirty || saving),
-    [dirty, saving, onDirtyChange],
-  );
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useHoldNavigation(dirty || saving);
   const blame = useLineBlame(
     target,
     plain

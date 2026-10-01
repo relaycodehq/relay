@@ -786,7 +786,6 @@ function App() {
                   <ProjectHeadlinePicker
                     project={project}
                     projects={projects}
-                    disabled={false}
                     onSelect={setProject}
                     onAdd={() => setToast("Adds a project, as in the app")}
                   />

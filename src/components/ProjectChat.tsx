@@ -54,6 +54,7 @@ import {
 } from "../../shared/projects";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { useNavigationLock } from "../lib/navigation-lock";
 import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
@@ -572,7 +573,6 @@ export function ProjectChat({
   onSwitchProject,
   onAddProject,
   canChoosePR,
-  dirty,
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
@@ -602,7 +602,6 @@ export function ProjectChat({
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
   canChoosePR: boolean;
-  dirty: boolean;
   onOpenCode: (mode: "changes" | "files") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
@@ -613,6 +612,8 @@ export function ProjectChat({
   const qc = useQueryClient(),
     id = chat?.id ?? draftId,
     scope = chat?.scope ?? draftScope;
+  // Checking out another branch would change the file under an unsaved edit.
+  const { locked: checkoutDisabled } = useNavigationLock();
   const history = useQuery({
     queryKey: ["project-chat", chat?.id],
     queryFn: async () => {
@@ -1508,14 +1509,12 @@ export function ProjectChat({
               project={project}
               selected={scope.kind === "pr" ? scope.ref : null}
               onSelect={onSelectPR}
-              disabled={dirty}
               compact
             />
           ) : (
             <button
               className={`thread-context-button ${scope.kind === "pr" ? "selected" : ""}`}
               onClick={onChoosePR}
-              disabled={dirty}
             >
               <GitPullRequest size={14} />
               {scope.kind === "pr" ? `PR #${scope.ref.number}` : "Review a PR"}
@@ -1525,7 +1524,6 @@ export function ProjectChat({
           <button
             className={`thread-context-button ${scope.kind === "review" ? "selected" : ""}`}
             onClick={onDeepReview}
-            disabled={dirty}
           >
             <ScanSearch size={14} />
             Deep review
@@ -1996,7 +1994,6 @@ export function ProjectChat({
               <ProjectHeadlinePicker
                 project={project}
                 projects={projects}
-                disabled={dirty}
                 onSelect={onSwitchProject}
                 onAdd={onAddProject}
               />
@@ -2023,7 +2020,7 @@ export function ProjectChat({
             changes={checkout.data?.changes.length ?? 0}
             canChoosePR={canChoosePR}
             busy={busy}
-            checkoutDisabled={dirty}
+            checkoutDisabled={checkoutDisabled}
             onStart={startReview}
           />
         ) : (
@@ -2054,7 +2051,7 @@ export function ProjectChat({
             branch={checkout.data?.branch}
             plain={project.plain}
             projectId={project.id}
-            checkoutDisabled={dirty}
+            checkoutDisabled={checkoutDisabled}
             workspace={
               <>
                 {agentBatch.length > 0 && (

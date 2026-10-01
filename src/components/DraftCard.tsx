@@ -9,13 +9,11 @@ import { sendDraft } from "./draft-send";
 export function DraftCard({
   draft,
   selected,
-  dirty,
   onOpen,
 }: {
   draft: ActivityDraft;
   /** Its thread is the one open. */
   selected: boolean;
-  dirty: boolean;
   onOpen: () => void;
 }) {
   const qc = useQueryClient();
@@ -27,7 +25,7 @@ export function DraftCard({
   const sendable =
     !draft.reply && (!!chat || loadDraftScope(draft.id).kind !== "review");
   const open = () => {
-    if (!dirty && !selected) onOpen();
+    if (!selected) onOpen();
   };
   async function send() {
     // The open draft goes through its composer, exactly as if sent there.
@@ -42,12 +40,7 @@ export function DraftCard({
     setSending(true);
     setError(undefined);
     try {
-      if (await sendDraft(qc, draft)) return;
-      if (dirty)
-        setError(
-          "Save or close the edited file, then send it from its thread.",
-        );
-      else onOpen();
+      if (!(await sendDraft(qc, draft))) onOpen();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -58,7 +51,6 @@ export function DraftCard({
     <div
       role="button"
       tabIndex={0}
-      aria-disabled={dirty}
       aria-current={selected || undefined}
       className={`sb-card draft ${selected ? "selected" : ""}`}
       title={chat ? `Draft in ${chat.title}` : `New thread in ${project.name}`}

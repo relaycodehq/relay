@@ -255,7 +255,6 @@ export function SignIn({
   );
 }
 export function Connected({
-  onDirtyChange,
   embedded,
   pulls,
   account,
@@ -264,7 +263,6 @@ export function Connected({
   initialWorkspace,
   incomingLink,
 }: {
-  onDirtyChange?: (dirty: boolean) => void;
   embedded?: {
     ref: PullRef;
     /** The thread's workspace: local changes and blame read its folder. */
@@ -1050,7 +1048,6 @@ export function Connected({
           }
         >
           <LocalFileEditor
-            onDirtyChange={onDirtyChange}
             checks={checks}
             {...editing}
             onClose={() => {
