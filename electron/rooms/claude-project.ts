@@ -14,7 +14,6 @@ import { claudeActivity, claudeEditedPaths } from "./activity";
 import { SubagentTracker } from "./claude-agents";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 import { answeredFindings, reportedFindings } from "../../shared/deep-review";
-import type { AgentQuestion } from "../../shared/agent-modes";
 import type {
   AgentActivity,
   ChatPending,
@@ -23,11 +22,7 @@ import type {
 } from "../../shared/projects";
 import { withTimeout } from "../timeout";
 import { settingsEffort } from "../../shared/agent-defaults";
-import type {
-  FoundSession,
-  HostedHandlers,
-  HostedQuery,
-} from "../agent-host/client";
+import type { FoundSession, HostedQuery } from "../agent-host/client";
 import type { HookFrame } from "../agent-host/protocol";
 import { AsyncQueue } from "../async-queue";
 import { HostedSessions, inAgentHost } from "../agents/hosted-sessions";
@@ -40,6 +35,7 @@ import {
   type SDKMessage,
 } from "./claude-project/sdk";
 import { ClaudeWork, pendingChanged } from "./claude-project/pending";
+import { hostedHandlers, sessionCallbacks } from "./claude-project/requests";
 import {
   claudePermissionMode,
   sessionConfig,
@@ -409,142 +405,6 @@ export async function askClaudeSide(options: {
     input.close();
     stream.close();
   }
-}
-/** What Claude Code asks of Relay while a session runs, answered with the current turn's options. */
-function sessionCallbacks(holder: ClaudeSession) {
-  const promptSubmit = async () => {
-    // Claude Code holds the prompt until this returns; a slow scan just skips the note.
-    const note = await Promise.race([
-      holder.options.context?.().catch(() => undefined),
-      new Promise<undefined>((r) => setTimeout(r, 3000)),
-    ]);
-    return note
-      ? {
-          hookSpecificOutput: {
-            hookEventName: "UserPromptSubmit" as const,
-            additionalContext: note,
-          },
-        }
-      : {};
-  };
-  const canUseTool: NonNullable<Options["canUseTool"]> = async (
-    tool,
-    input,
-    callback,
-  ) => {
-    await holder.ready?.promise;
-    const options = holder.options;
-    // A reviewer works unattended and leaves the checkout as it found it.
-    if (options.readOnly) {
-      if (tool === "AskUserQuestion" || tool === "ExitPlanMode")
-        return {
-          behavior: "deny",
-          message:
-            "Nobody is watching this review to answer. Decide on your own and keep reviewing.",
-        };
-      // Claude Code runs the commands it knows only read without asking,
-      // so a command that gets here might change files.
-      if (tool === "Bash")
-        return {
-          behavior: "deny",
-          message:
-            "This review only reads the code. Run only commands that read, and report problems instead of changing files.",
-        };
-      return { behavior: "allow", updatedInput: input };
-    }
-    if (!options.onRequest)
-      return {
-        behavior: "deny",
-        message: "This caller cannot answer permission requests.",
-      };
-    if (tool === "AskUserQuestion") {
-      const questions = ((input.questions as any[]) ?? []).map(
-        (q, i): AgentQuestion => ({
-          id: String(i),
-          header: q.header,
-          question: q.question,
-          multiple: !!q.multiSelect,
-          options: q.options,
-        }),
-      );
-      const response = await options.onRequest(
-        { kind: "question", title: "Claude needs your input", questions },
-        callback.signal,
-      );
-      if (response.kind !== "question")
-        return { behavior: "deny", message: "No answers provided." };
-      return {
-        behavior: "allow",
-        updatedInput: {
-          ...input,
-          answers: Object.fromEntries(
-            questions.map((q) => [
-              q.question,
-              response.answers[q.id]?.join(", ") ?? "",
-            ]),
-          ),
-        },
-      };
-    }
-    if (tool === "ExitPlanMode") {
-      if (typeof input.plan === "string") {
-        holder.plan = input.plan.slice(0, 100000);
-        options.onPlan?.(holder.plan);
-        options.onText(holder.plan);
-      }
-      return {
-        behavior: "deny",
-        message:
-          "Your plan is shown in Relay. Wait for the user's feedback or implementation request in a later turn.",
-      };
-    }
-    if (options.runtimeMode === "full-access")
-      return { behavior: "allow", updatedInput: input };
-    const canRemember = !!callback.suggestions?.length;
-    const response = await options.onRequest(
-      {
-        kind: "approval",
-        title: `Allow ${tool}?`,
-        detail: JSON.stringify(input, null, 2),
-        decisions: canRemember
-          ? ["accept", "acceptForSession", "decline", "cancel"]
-          : ["accept", "decline", "cancel"],
-      },
-      callback.signal,
-    );
-    if (response.kind !== "approval")
-      return { behavior: "deny", message: "Invalid response." };
-    if (
-      response.decision === "accept" ||
-      response.decision === "acceptForSession"
-    )
-      return {
-        behavior: "allow",
-        updatedInput: input,
-        ...(response.decision === "acceptForSession"
-          ? {
-              updatedPermissions: callback.suggestions!.map((s) => ({
-                ...s,
-                destination: "session" as const,
-              })),
-            }
-          : {}),
-      };
-    return {
-      behavior: "deny",
-      message: "Denied by the user.",
-      interrupt: response.decision === "cancel",
-    };
-  };
-  return { promptSubmit, canUseTool };
-}
-function hostedHandlers(holder: ClaudeSession): HostedHandlers {
-  const { promptSubmit, canUseTool } = sessionCallbacks(holder);
-  return {
-    canUseTool: (tool, input, context) =>
-      canUseTool(tool, input, context as Parameters<typeof canUseTool>[2]),
-    hooks: { UserPromptSubmit: promptSubmit },
-  };
 }
 /** Starts the session's Claude Code, in the agent host when there is one. */
 async function startSession(
