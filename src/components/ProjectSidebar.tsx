@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "../lib/useNow";
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import type { Bootstrap, SidebarView } from "../../shared/types";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SidebarView } from "../../shared/types";
+import { useSidebarView } from "../lib/useSidebarView";
 import { Menu } from "@base-ui/react/menu";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { ThreadMenu, type ThreadMenuAction } from "./ThreadMenu";
@@ -522,31 +518,11 @@ export function ProjectSidebar({
   const [search, setSearch] = useState("");
   /** The query whose results are listed past the first SEARCH_RESULTS. */
   const [allResultsFor, setAllResultsFor] = useState<string>();
-  const [view, setView] = useState<SidebarView>(() => {
-    if (initialView) return initialView;
-    // Preserve the selection from versions that only used browser storage.
-    try {
-      if (localStorage.getItem("relay-sidebar-view") === "activity")
-        return "activity";
-    } catch {
-      // App data remains usable when browser storage isn't.
-    }
-    return "threads";
-  });
-  const { mutate: saveView, error: viewError } = useMutation({
-    mutationFn: (next: SidebarView) => api.saveSidebarView(next),
-    onSuccess: (_, sidebarView) => {
-      qc.setQueryData<Bootstrap>(["bootstrap"], (boot) =>
-        boot ? { ...boot, sidebarView } : boot,
-      );
-      try {
-        localStorage.removeItem("relay-sidebar-view");
-      } catch {
-        // The choice has already been saved in app data.
-      }
-    },
-  });
-  useEffect(() => saveView(view), [view, saveView]);
+  const {
+    view,
+    toggle: toggleView,
+    error: viewError,
+  } = useSidebarView(initialView);
   const folds = useSidebarFolds();
   const shelves = useShelves();
   const groups = useQuery({
@@ -720,9 +696,6 @@ export function ProjectSidebar({
       },
     ],
   });
-  useShortcut("activity", true, () =>
-    setView((v) => (v === "activity" ? "threads" : "activity")),
-  );
   /**
    * Holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on the
    * first nine cards (or whichever modifiers open them). ⌘ used as part of
@@ -1829,7 +1802,7 @@ export function ProjectSidebar({
           title={`View activity  ${activityKeys}`.trim()}
           onClick={() => {
             setSearch("");
-            setView((v) => (v === "activity" ? "threads" : "activity"));
+            toggleView();
           }}
         >
           <Bell size={15} />
