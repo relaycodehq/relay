@@ -691,21 +691,6 @@
   opacity: 0.45;
   cursor: default;
 }
-.settings-keys {
-  display: flex;
-  gap: 4px;
-}
-.settings-keys kbd {
-  min-width: 22px;
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  text-align: center;
-  background: var(--toolbar);
-}
 .settings-content a {
   color: var(--accent);
   font-size: 12.5px;

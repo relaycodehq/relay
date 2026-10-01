@@ -95,7 +95,6 @@
   gap: 2px;
   padding: 1px 1px 6px;
 }
-.sp-month,
 .sp-head-title {
   flex: 1;
   padding-left: 4px;
@@ -124,21 +123,6 @@
   padding: 9px 10px 9px 14px;
   border-top: 1px solid var(--border);
 }
-.sp-foot-when {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-  font-variant-numeric: tabular-nums;
-}
-.sp-foot-when strong {
-  font-size: 12.5px;
-  font-weight: 550;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sp-foot-when small,
 .sp-foot-hint {
   font-size: 11px;
   color: var(--muted);

@@ -54,13 +54,6 @@
   color: var(--muted);
 }
 
-/* Settings → Computers: the one-time link, to copy onto the other computer. */
-.handoff-pairing-link {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
 /* The peek at a thread on another computer: one run, so no list beside it. */
 .remote-peek-card {
   width: 400px;

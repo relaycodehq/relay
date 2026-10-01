@@ -434,11 +434,6 @@ em.waiting {
   font-family: var(--font-mono);
   font-size: 11.5px;
 }
-.cm-error {
-  margin: 8px 0 0;
-  color: var(--danger);
-  font-size: 12px;
-}
 
 /* Taking threads over. */
 .cm-row {
