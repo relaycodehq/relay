@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
   AgentProvider,
   ProjectChat,
@@ -12,12 +11,8 @@ import type {
 } from "../../shared/deep-review";
 import type { ThinkerTask } from "../../shared/ultraplan";
 import { DeepReviews, type PullInfo } from "../deep-review";
-import type { Projects } from "../projects";
 import { Ultraplans } from "../ultraplan";
-import type { ActiveTurns } from "./active";
-import type { ThreadControl } from "./control";
-import type { ProviderSessions } from "./sessions";
-import type { ChatStorage } from "./storage";
+import type { ChatCore } from "./core";
 
 export interface CouncilHost {
   send(id: string, input: ProjectChatSend): Promise<void>;
@@ -27,7 +22,6 @@ export interface CouncilHost {
     input: ProjectChatSend,
     prompt: string,
   ): Promise<void>;
-  closing(): boolean;
 }
 
 /**
@@ -40,35 +34,30 @@ export class Councils {
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
   private steps = new Set<Promise<void>>();
   constructor(
-    private storage: ChatStorage,
-    private projects: Projects,
-    private active: ActiveTurns,
-    sessions: ProviderSessions,
-    private control: ThreadControl,
-    private emit: (event: ProjectChatEvent) => void,
+    private core: ChatCore,
     private host: CouncilHost,
   ) {
     this.reviews = new DeepReviews({
-      load: (id) => this.storage.load(id),
-      project: (id) => this.projects.get(id),
-      root: (projectId) => this.projects.root(projectId),
+      load: (id) => this.core.storage.load(id),
+      project: (id) => this.core.projects.get(id),
+      root: (projectId) => this.core.projects.root(projectId),
       createReviewer: (parent, task) => this.createReviewer(parent, task),
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
-      active: (id) => this.active.has(id),
-      stop: (id) => this.active.get(id)?.abort.abort(),
-      close: (id) => sessions.close(id),
+      active: (id) => this.core.active.has(id),
+      stop: (id) => this.core.active.get(id)?.abort.abort(),
+      close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
-      summary: (chat) => this.storage.updateSummary(chat),
+      summary: (chat) => this.core.storage.updateSummary(chat),
     });
     this.ultraplans = new Ultraplans({
-      load: (id) => this.storage.load(id),
+      load: (id) => this.core.storage.load(id),
       createThinker: (parent, task) => this.createThinker(parent, task),
       send: (id, input) => this.host.send(id, input),
       lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
-      active: (id) => this.active.has(id),
-      stop: (id) => this.active.get(id)?.abort.abort(),
-      close: (id) => sessions.close(id),
+      active: (id) => this.core.active.has(id),
+      stop: (id) => this.core.active.get(id)?.abort.abort(),
+      close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
     });
   }
@@ -119,18 +108,18 @@ export class Councils {
   }
 
   startReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
-      this.projects.assertCheckoutAvailable(
-        (await this.storage.load(id)).projectId,
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
+      this.core.projects.assertCheckoutAvailable(
+        (await this.core.storage.load(id)).projectId,
       );
       await this.reviews.start(id, config, pull);
     });
   }
 
   resumeReview(id: string) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
       await this.reviews.resume(id);
     });
   }
@@ -140,14 +129,14 @@ export class Councils {
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ) {
-    return this.control(id, () =>
+    return this.core.control(id, () =>
       this.reviews.setFinding(id, findingId, status),
     );
   }
 
   resumeUltraplan(id: string, request: string) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
       await this.ultraplans.resume(id, request);
     });
   }
@@ -156,9 +145,9 @@ export class Councils {
   private async touch(chat: ProjectChat, messageId: string) {
     const message = chat.messages.find((m) => m.id === messageId);
     if (message) message.version++;
-    await this.storage.save(chat);
+    await this.core.storage.save(chat);
     if (message)
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
+      this.core.emit({ chatId: chat.id, message: structuredClone(message) });
   }
 
   /** A thinker's own thread, shown only inside its council. */
@@ -175,7 +164,7 @@ export class Councils {
       updated: Date.now(),
       messages: [],
     };
-    await this.storage.add(chat);
+    await this.core.storage.add(chat);
     return chat;
   }
 
@@ -193,7 +182,7 @@ export class Councils {
       updated: Date.now(),
       messages: [],
     };
-    await this.storage.add(chat);
+    await this.core.storage.add(chat);
     return chat;
   }
 }

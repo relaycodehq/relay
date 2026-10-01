@@ -1,5 +1,4 @@
 import { rm } from "node:fs/promises";
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
   ChatMessage,
   ProjectChat,
@@ -7,18 +6,15 @@ import type {
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
-import type { ActiveTurns } from "./active";
-import type { ThreadControl } from "./control";
+import type { ChatCore } from "./core";
 import type { ChatSchedule } from "./schedule";
 import type { ChatSharing } from "./sharing";
-import type { ChatStorage } from "./storage";
 
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
   sendNow(id: string, input: ProjectChatSend): Promise<void>;
   /** Deep review reviewers or Ultraplan thinkers are still at work in the thread. */
   councilBusy(chat: ProjectChat): boolean;
-  closing(): boolean;
 }
 
 /**
@@ -52,18 +48,15 @@ export function steers(
 /** Messages waiting for the thread's running answer, and steering it with one. */
 export class ChatQueue {
   constructor(
-    private storage: ChatStorage,
-    private active: ActiveTurns,
+    private core: ChatCore,
     private schedule: ChatSchedule,
     private sharing: ChatSharing,
-    private control: ThreadControl,
-    private emit: (event: ProjectChatEvent) => void,
     private host: QueueHost,
   ) {}
 
   /** Queues a message behind the thread's running answer, and steers it with one sent to. */
   async add(id: string, input: ProjectChatSend) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (
       chat.messages.some((m) => m.id === input.id) ||
       chat.queue?.some((q) => q.input.id === input.id)
@@ -86,26 +79,26 @@ export class ChatQueue {
         : undefined,
     };
     (chat.queue ??= []).push({ input, created: Date.now() });
-    await this.storage.save(chat);
+    await this.core.storage.save(chat);
     if (input.delivery === "steer") await this.steer(chat, input.id);
   }
 
   /** Sends the next queued message, unless the thread is busy or its queue stopped. */
   async drain(id: string) {
-    if (this.host.closing() || this.active.has(id)) return;
-    const chat = await this.storage.load(id);
+    if (this.core.closing() || this.core.active.has(id)) return;
+    const chat = await this.core.storage.load(id);
     if (this.host.councilBusy(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {
       await this.host.sendNow(id, next.input);
       chat.queue = chat.queue!.filter((q) => q.input.id !== next.input.id);
-      await this.storage.save(chat);
-      if (!this.active.has(id)) await this.drain(id);
+      await this.core.storage.save(chat);
+      if (!this.core.active.has(id)) await this.drain(id);
     } catch (e) {
       next.error = e instanceof Error ? e.message : String(e);
       chat.queuePaused = true;
-      await this.storage.save(chat);
+      await this.core.storage.save(chat);
     }
   }
 
@@ -116,13 +109,13 @@ export class ChatQueue {
    */
   private async steer(chat: ProjectChat, messageId: string) {
     const next = chat.queue?.find((q) => q.input.id === messageId),
-      active = this.active.get(chat.id);
+      active = this.core.active.get(chat.id);
     if (!next) throw new Error("Queued message not found.");
     delete next.error;
     chat.queue = [next, ...chat.queue!.filter((q) => q !== next)];
     chat.queuePaused = false;
     if (!active) {
-      await this.storage.save(chat);
+      await this.core.storage.save(chat);
       return this.drain(chat.id);
     }
     const asked = agentAsked(next.input);
@@ -131,9 +124,9 @@ export class ChatQueue {
       !active.steer ||
       !steers(next.input, active.input, !!chat.shared)
     )
-      return this.storage.save(chat);
+      return this.core.storage.save(chat);
     const images = next.input.images?.length
-      ? await this.storage.saveImages(chat.id, next.input.images)
+      ? await this.core.storage.saveImages(chat.id, next.input.images)
       : [];
     const message: ChatMessage = {
       id: next.input.id,
@@ -161,7 +154,7 @@ export class ChatQueue {
             : ""),
         next.input.id,
         images.map((image) => ({
-          path: this.storage.imagePath(chat.id, image),
+          path: this.core.storage.imagePath(chat.id, image),
           mimeType: image.mimeType,
         })),
       );
@@ -170,14 +163,14 @@ export class ChatQueue {
       // Sent later as its own turn, which saves its images again.
       await Promise.all(
         images.map((image) =>
-          rm(this.storage.imagePath(chat.id, image), { force: true }),
+          rm(this.core.storage.imagePath(chat.id, image), { force: true }),
         ),
       );
-      return this.storage.save(chat);
+      return this.core.storage.save(chat);
     }
     chat.queue = chat.queue!.filter((q) => q !== next);
-    await this.storage.save(chat);
-    this.emit({ chatId: chat.id, message });
+    await this.core.storage.save(chat);
+    this.core.emit({ chatId: chat.id, message });
     if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
   }
 
@@ -187,9 +180,9 @@ export class ChatQueue {
     messageId: string,
     index = 0,
   ) {
-    const sendNow = await this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
-      const chat = await this.storage.load(id);
+    const sendNow = await this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
+      const chat = await this.core.storage.load(id);
       const scheduled = chat.scheduled?.find((s) => s.input.id === messageId);
       if (scheduled && action !== "move") {
         chat.scheduled = chat.scheduled!.filter((s) => s !== scheduled);
@@ -209,7 +202,7 @@ export class ChatQueue {
         rest.splice(Math.min(index, rest.length), 0, moving);
         chat.queue = rest;
       }
-      await this.storage.save(chat);
+      await this.core.storage.save(chat);
       await this.drain(id);
     });
     // Outside the control above, since send takes its own turn.

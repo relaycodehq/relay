@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { ProjectChatEvent } from "../../shared/events";
 import type {
   AgentProvider,
   ChatMessage,
@@ -16,24 +15,17 @@ import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "../answer-recorder";
 import type { ChatTurn } from "../chat-turn";
 import { currentBranchOrNull } from "../git";
-import type { Projects } from "../projects";
 import { codexSkills, type CodexSkill } from "../provider-commands";
-import type { Store } from "../store";
 import { promptTitle } from "../thread-titles";
 import { turnPrompt } from "../turn-prompt";
-import type { ActiveChat, ActiveTurns } from "./active";
-import type { ThreadControl } from "./control";
+import type { ActiveChat } from "./active";
+import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { assertHere } from "./handoff";
 import type { ChatQueue } from "./queue";
 import { interrupt } from "./revive";
-import {
-  agentSession,
-  parseSessionKey,
-  type ProviderSessions,
-} from "./sessions";
+import { agentSession, parseSessionKey } from "./sessions";
 import type { ChatSharing } from "./sharing";
-import type { ChatStorage } from "./storage";
 import { forkFor, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
 
@@ -50,7 +42,6 @@ const handoffPrompt = (to: AgentProvider, computer?: string) =>
 export interface TurnsHost {
   /** Pulls a shared thread's messages and reads it back. */
   sync(id: string): Promise<unknown>;
-  closing(): boolean;
 }
 
 /**
@@ -60,18 +51,12 @@ export interface TurnsHost {
  */
 export class ChatTurns {
   constructor(
-    private store: Store,
-    private projects: Projects,
-    private storage: ChatStorage,
-    private sessions: ProviderSessions,
-    private active: ActiveTurns,
+    private core: ChatCore,
     private worktrees: ThreadWorktrees,
     private sharing: ChatSharing,
     private runner: TurnRunner,
     private councils: Councils,
     private queue: ChatQueue,
-    private control: ThreadControl,
-    private emit: (event: ProjectChatEvent) => void,
     private evidence:
       | ((chat: ProjectChat, selection: LineQuestion) => Promise<unknown>)
       | undefined,
@@ -88,25 +73,27 @@ export class ChatTurns {
     active: ActiveChat,
     turn?: { request?: string; answer?: string },
   ) {
-    this.active.release(chat.id, active);
+    this.core.active.release(chat.id, active);
     // A steer the agent never confirmed reading still went to it; stop waiting.
     const unread = chat.messages.filter((m) => m.unread);
     for (const m of unread) {
       delete m.unread;
       m.version++;
-      this.emit({ chatId: chat.id, message: structuredClone(m) });
+      this.core.emit({ chatId: chat.id, message: structuredClone(m) });
     }
-    if (unread.length) void this.storage.save(chat).catch(() => {});
+    if (unread.length) void this.core.storage.save(chat).catch(() => {});
     if (turn) this.councils.step(chat.id, turn);
-    void this.storage.updateSummary(chat).catch(() => {});
-    void this.control(chat.id, () => this.queue.drain(chat.id)).catch(() => {});
+    void this.core.storage.updateSummary(chat).catch(() => {});
+    void this.core
+      .control(chat.id, () => this.queue.drain(chat.id))
+      .catch(() => {});
   }
   resume(id: string, settings?: ResumeSettings) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
-      const chat = await this.storage.load(id);
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
+      const chat = await this.core.storage.load(id);
       assertHere(chat);
-      if (this.active.has(id))
+      if (this.core.active.has(id))
         throw new Error("This thread is already running.");
       if (!chat.lastInput)
         throw new Error(
@@ -130,16 +117,16 @@ export class ChatTurns {
     });
   }
   async sendNow(id: string, input: ProjectChatSend) {
-    const active = this.active.claim(id, input);
+    const active = this.core.active.claim(id, input);
     try {
-      const chat = await this.storage.load(id);
+      const chat = await this.core.storage.load(id);
       assertHere(chat);
       if (!chat.worktree && !chat.thinker)
-        this.projects.assertCheckoutAvailable(chat.projectId);
+        this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.worktrees.root(chat, input.body);
       if (chat.shared) await this.host.sync(id);
       if (chat.messages.some((m) => m.id === input.id)) {
-        this.active.release(id, active);
+        this.core.active.release(id, active);
         return;
       }
       const asked = agentAsked(input);
@@ -213,7 +200,7 @@ export class ChatTurns {
         provider: asked?.provider ?? input.provider,
         version: 1,
         ...(input.images?.length
-          ? { images: await this.storage.saveImages(id, input.images) }
+          ? { images: await this.core.storage.saveImages(id, input.images) }
           : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...(chat.shared ? { pending: true } : {}),
@@ -224,12 +211,12 @@ export class ChatTurns {
       chat.branch = (await currentBranchOrNull(root)) ?? chat.branch;
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
-      this.storage.keep(chat);
-      await this.storage.persist(chat);
-      this.emit({ chatId: id, message: user });
+      this.core.storage.keep(chat);
+      await this.core.storage.persist(chat);
+      this.core.emit({ chatId: id, message: user });
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (!asked) {
-        this.active.release(id, active);
+        this.core.active.release(id, active);
         return;
       }
       // The message is in. A handoff note can take minutes; the answer
@@ -243,7 +230,7 @@ export class ChatTurns {
         evidence,
       });
     } catch (e) {
-      this.active.release(id, active);
+      this.core.active.release(id, active);
       throw e;
     }
   }
@@ -326,8 +313,8 @@ export class ChatTurns {
       chat.messages.push(answer);
       if (input.ultraplan)
         this.councils.begin(chat, input, asked.provider, answer.id);
-      await this.storage.save(chat);
-      this.emit({ chatId: id, message: answer });
+      await this.core.storage.save(chat);
+      this.core.emit({ chatId: id, message: answer });
       const { prompt, caughtUp, briefed } = turnPrompt({
         chat,
         input,
@@ -352,7 +339,7 @@ export class ChatTurns {
       });
     } catch (e) {
       // The send already went through, so the thread shows the failure.
-      this.active.release(id, active);
+      this.core.active.release(id, active);
       const failed: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
@@ -366,8 +353,8 @@ export class ChatTurns {
       };
       chat.messages.push(failed);
       if (chat.queue?.length) chat.queuePaused = true;
-      await this.storage.save(chat).catch(() => {});
-      this.emit({ chatId: id, message: failed });
+      await this.core.storage.save(chat).catch(() => {});
+      this.core.emit({ chatId: id, message: failed });
     }
   }
   /**
@@ -436,8 +423,8 @@ export class ChatTurns {
       ...(parentId ? { parentId } : {}),
     });
     chat.messages.push(message);
-    await this.storage.save(chat);
-    this.emit({ chatId: chat.id, message: structuredClone(message) });
+    await this.core.storage.save(chat);
+    this.core.emit({ chatId: chat.id, message: structuredClone(message) });
     const abort = new AbortController();
     const stop = () => abort.abort();
     active.abort.signal.addEventListener("abort", stop, { once: true });
@@ -471,14 +458,14 @@ export class ChatTurns {
     /** The answer a restart cut off, carrying on where the session is. */
     resumed?: ChatMessage,
   ) {
-    if (this.host.closing()) throw new Error("Relay is closing.");
+    if (this.core.closing()) throw new Error("Relay is closing.");
     const input = this.sessionInput(chat, provider, parentId);
     // Usually the thread is idle and this becomes its running answer, so new
     // messages queue behind it. A prompt racing it waits in the session instead.
-    const idle = !this.active.has(chat.id);
+    const idle = !this.core.active.has(chat.id);
     const active = idle
-      ? this.active.claim(chat.id, input)
-      : this.active.create(chat.id, input);
+      ? this.core.active.claim(chat.id, input)
+      : this.core.active.create(chat.id, input);
     const { abort } = active;
     const message: ChatMessage =
       resumed ??
@@ -490,9 +477,9 @@ export class ChatTurns {
     try {
       if (!resumed) {
         chat.messages.push(message);
-        await this.storage.save(chat);
+        await this.core.storage.save(chat);
       }
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
+      this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       await this.runner.run(chat, message, root, "", input, abort, {
         kind: "adopt",
         resumed,
@@ -511,10 +498,10 @@ export class ChatTurns {
         (
           (await runtime.reattach?.(
             (key) =>
-              this.sessions.owns(
+              this.core.sessions.owns(
                 key,
                 (chatId) =>
-                  !!this.store.get().chats?.some((c) => c.id === chatId),
+                  !!this.core.store.get().chats?.some((c) => c.id === chatId),
               ),
             (key) => () => this.unpromptedFor(key),
           )) ?? []
@@ -525,10 +512,11 @@ export class ChatTurns {
       ),
     ).then((lists) => {
       const sessions = lists.flat();
-      for (const { key, open } of sessions) this.sessions.reattached(key, open);
+      for (const { key, open } of sessions)
+        this.core.sessions.reattached(key, open);
       return sessions;
     });
-    this.storage.waitFor(
+    this.core.storage.waitFor(
       back.then(
         () => {},
         (e) => console.warn("Could not take back the running agents:", e),
@@ -546,7 +534,7 @@ export class ChatTurns {
   }
   private async unpromptedFor(key: string) {
     const { chatId, branch } = parseSessionKey(key);
-    const chat = await this.storage.load(chatId);
+    const chat = await this.core.storage.load(chatId);
     return this.unprompted(
       chat,
       await this.worktrees.root(chat),
@@ -559,8 +547,8 @@ export class ChatTurns {
     const { chatId, branch } = parseSessionKey(key);
     let chat: ProjectChat | undefined;
     try {
-      chat = await this.storage.load(chatId);
-      this.sessions.resumed(key);
+      chat = await this.core.storage.load(chatId);
+      this.core.sessions.resumed(key);
       const message = [...chat.messages]
         .reverse()
         .find(
@@ -581,8 +569,8 @@ export class ChatTurns {
         message,
       );
     } catch (e) {
-      this.sessions.lost(key);
-      this.storage.chatChanged(chatId);
+      this.core.sessions.lost(key);
+      this.core.storage.chatChanged(chatId);
       await agentRuntime(provider)
         .closeSession(key)
         .catch(() => {});
@@ -592,12 +580,12 @@ export class ChatTurns {
           if (
             m.status === "streaming" &&
             (m.parentId ?? undefined) === branch &&
-            !this.active.has(chat.id)
+            !this.core.active.has(chat.id)
           ) {
             interrupt(m);
             failed = true;
           }
-        if (failed) await this.storage.save(chat).catch(() => {});
+        if (failed) await this.core.storage.save(chat).catch(() => {});
       }
       console.warn("Could not pick a turn back up:", e);
     }
@@ -607,29 +595,29 @@ export class ChatTurns {
    * so it has no user message of its own; later turns are ordinary ones.
    */
   async lead(chat: ProjectChat, input: ProjectChatSend, prompt: string) {
-    if (this.host.closing()) throw new Error("Relay is closing.");
-    const active = this.active.claim(chat.id, input);
+    if (this.core.closing()) throw new Error("Relay is closing.");
+    const active = this.core.active.claim(chat.id, input);
     const message = streamingAnswer(input.provider);
     try {
-      const root = await this.projects.root(chat.projectId);
+      const root = await this.core.projects.root(chat.projectId);
       // Resume and later sends pick the lead's agent and settings up from here.
       chat.lastInput = input;
       chat.messages.push(message);
-      await this.storage.persist(chat);
-      this.emit({ chatId: chat.id, message: structuredClone(message) });
+      await this.core.storage.persist(chat);
+      this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
-      this.active.release(chat.id, active);
+      this.core.active.release(chat.id, active);
       throw e;
     }
   }
   /** Compacts the provider session behind the newest answer on this branch. */
   compact(id: string, parentId?: string, instructions?: string) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
-      if (this.active.has(id))
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
+      if (this.core.active.has(id))
         throw new Error("Wait for the current answer before compacting.");
-      const chat = await this.storage.load(id);
+      const chat = await this.core.storage.load(id);
       assertHere(chat);
       if (parentId && chat.messages.find((m) => m.id === parentId)?.side)
         throw new Error(
@@ -650,7 +638,7 @@ export class ChatTurns {
           `${agentName(provider)} compacts without custom instructions.`,
         );
       const input = this.sessionInput(chat, provider, parentId);
-      const active = this.active.claim(id, input);
+      const active = this.core.active.claim(id, input);
       const { abort } = active;
       const message = streamingAnswer(provider, {
         compaction: true,
@@ -658,12 +646,12 @@ export class ChatTurns {
       });
       chat.messages.push(message);
       try {
-        await this.storage.save(chat);
+        await this.core.storage.save(chat);
       } catch (e) {
-        this.active.release(id, active);
+        this.core.active.release(id, active);
         throw e;
       }
-      this.emit({ chatId: id, message });
+      this.core.emit({ chatId: id, message });
       active.job = this.runner
         .run(chat, message, root, instructions ?? "", input, abort, {
           kind: "compact",
@@ -678,7 +666,7 @@ export class ChatTurns {
    */
   private defaultChoice(provider: AgentProvider) {
     return provider === "codex"
-      ? codexQuestionChoice(this.store.aiSettings())
+      ? codexQuestionChoice(this.core.store.aiSettings())
       : { model: "", reasoningEffort: "" as const, fast: false };
   }
 }

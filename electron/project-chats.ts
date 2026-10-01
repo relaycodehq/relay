@@ -36,6 +36,7 @@ import type { Store } from "./store";
 import { ActiveTurns, type ActiveChat } from "./project-chats/active";
 import { SideQuestions } from "./project-chats/asides";
 import { threadControl } from "./project-chats/control";
+import type { ChatCore } from "./project-chats/core";
 import { Councils } from "./project-chats/councils";
 import { assertHere, ComputerHandoff } from "./project-chats/handoff";
 import { ChatQueue } from "./project-chats/queue";
@@ -90,138 +91,75 @@ export class ProjectChats {
       this.storage.chatChanged(id),
     );
     this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
-    this.councils = new Councils(
-      this.storage,
-      projects,
-      this.active,
-      this.sessions,
-      this.control,
-      (event) => this.emit(event),
-      {
-        send: (id, input) => this.send(id, input),
-        lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
-        closing: () => this.disposing,
-      },
-    );
-    this.schedule = new ChatSchedule(
+    const core: ChatCore = {
       store,
-      this.storage,
-      this.sessions,
-      this.control,
-      {
-        send: (id, input, fromRelay) => this.send(id, input, fromRelay),
-        sessionInput: (chat, provider, parentId) =>
-          this.turns.sessionInput(chat, provider, parentId),
-        closing: () => this.disposing,
-      },
-    );
-    this.titles = new ThreadTitles(this.storage, {
+      projects,
+      storage: this.storage,
+      sessions: this.sessions,
+      active: this.active,
+      control: this.control,
       emit: (event) => this.emit(event),
-      busy: (id) => this.active.has(id),
+      closing: () => this.disposing,
+    };
+    this.councils = new Councils(core, {
+      send: (id, input) => this.send(id, input),
+      lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
+    });
+    this.schedule = new ChatSchedule(core, {
+      send: (id, input, fromRelay) => this.send(id, input, fromRelay),
+      sessionInput: (chat, provider, parentId) =>
+        this.turns.sessionInput(chat, provider, parentId),
+    });
+    this.titles = new ThreadTitles(core, {
       choice: (chat, provider) =>
         this.turns.sessionInput(chat, provider).choice,
-      closing: () => this.disposing,
     });
-    this.sharing = new ChatSharing(store, this.storage, sharing, {
-      emit: (event) => this.emit(event),
-      busy: (id) => this.active.has(id),
+    this.sharing = new ChatSharing(core, sharing, {
       sync: (id) => this.sync(id),
     });
     this.worktrees = new ThreadWorktrees(
-      store,
-      this.storage,
-      projects,
-      this.active,
-      this.sessions,
-      this.control,
+      core,
       join(dirname(dir), "worktrees"),
       (chat) => this.councils.busy(chat),
     );
-    this.files = new TurnFiles(
-      this.storage,
-      projects,
-      this.active,
-      this.worktrees,
-      this.control,
-      (event) => this.emit(event),
-    );
-    this.handoffs = new ComputerHandoff(
-      store,
-      this.storage,
-      this.active,
-      this.sessions,
-      this.schedule,
-      this.control,
-      (event) => this.emit(event),
-      {
-        send: (id, input) => this.send(id, input),
-        sessionInput: (chat, provider) =>
-          this.turns.sessionInput(chat, provider),
-        note: (chat, root, provider, active, computer) =>
-          this.turns.handoff(
-            chat,
-            root,
-            provider,
-            provider,
-            undefined,
-            active,
-            computer,
-          ),
-        councilBusy: (chat) => this.councils.busy(chat),
-        closing: () => this.disposing,
-      },
-    );
+    this.files = new TurnFiles(core, this.worktrees);
+    this.handoffs = new ComputerHandoff(core, this.schedule, {
+      send: (id, input) => this.send(id, input),
+      sessionInput: (chat, provider) => this.turns.sessionInput(chat, provider),
+      note: (chat, root, provider, active, computer) =>
+        this.turns.handoff(
+          chat,
+          root,
+          provider,
+          provider,
+          undefined,
+          active,
+          computer,
+        ),
+      councilBusy: (chat) => this.councils.busy(chat),
+    });
     this.runner = new TurnRunner(
-      this.storage,
-      this.sessions,
-      this.active,
+      core,
       this.titles,
       this.sharing,
-      projects,
-      (event) => this.emit(event),
       this.worktrees.folder,
       (chat, root, provider, parentId) =>
         this.turns.unprompted(chat, root, provider, parentId),
     );
-    this.asides = new SideQuestions(
-      this.storage,
-      this.sessions,
-      this.active,
-      this.worktrees,
-      this.runner,
-      (event) => this.emit(event),
-    );
-    this.queue = new ChatQueue(
-      this.storage,
-      this.active,
-      this.schedule,
-      this.sharing,
-      this.control,
-      (event) => this.emit(event),
-      {
-        sendNow: (id, input) => this.turns.sendNow(id, input),
-        councilBusy: (chat) => this.councils.busy(chat),
-        closing: () => this.disposing,
-      },
-    );
+    this.asides = new SideQuestions(core, this.worktrees, this.runner);
+    this.queue = new ChatQueue(core, this.schedule, this.sharing, {
+      sendNow: (id, input) => this.turns.sendNow(id, input),
+      councilBusy: (chat) => this.councils.busy(chat),
+    });
     this.turns = new ChatTurns(
-      store,
-      projects,
-      this.storage,
-      this.sessions,
-      this.active,
+      core,
       this.worktrees,
       this.sharing,
       this.runner,
       this.councils,
       this.queue,
-      this.control,
-      (event) => this.emit(event),
       evidence,
-      {
-        sync: (id) => this.sync(id),
-        closing: () => this.disposing,
-      },
+      { sync: (id) => this.sync(id) },
     );
   }
   /**

@@ -8,10 +8,8 @@ import type {
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
 import { stopClaudeTask } from "../rooms/claude-project";
-import type { Store } from "../store";
-import type { ThreadControl } from "./control";
-import type { ProviderSessions } from "./sessions";
-import { nextSend, type ChatStorage } from "./storage";
+import type { ChatCore } from "./core";
+import { nextSend } from "./storage";
 
 export interface ScheduleHost {
   send(id: string, input: ProjectChatSend, fromRelay?: boolean): Promise<void>;
@@ -21,7 +19,6 @@ export interface ScheduleHost {
     provider: AgentProvider,
     parentId?: string,
   ): ProjectChatSend;
-  closing(): boolean;
 }
 
 /**
@@ -33,16 +30,13 @@ export class ChatSchedule {
   /** Each chat's earliest Send later message, and the wake-ups Relay sends itself. */
   private timers = new Map<string, NodeJS.Timeout>();
   constructor(
-    private store: Store,
-    private storage: ChatStorage,
-    private sessions: ProviderSessions,
-    private control: ThreadControl,
+    private core: ChatCore,
     private host: ScheduleHost,
   ) {}
 
   /** Arms the wake-ups kept when Relay last closed, and scheduled messages. */
   armAll() {
-    for (const chat of this.store.get().chats ?? []) {
+    for (const chat of this.core.store.get().chats ?? []) {
       for (const wakeup of chat.heldWakeups ?? []) this.arm(chat.id, wakeup);
       if (chat.nextSend) this.armSend(chat.id, chat.nextSend);
     }
@@ -64,7 +58,7 @@ export class ChatSchedule {
   ) {
     clearTimeout(this.timers.get(key));
     this.timers.delete(key);
-    if (!at || this.host.closing()) return;
+    if (!at || this.core.closing()) return;
     const delay = Math.min(Math.max(at - Date.now(), 0), 2 ** 31 - 1);
     this.timers.set(
       key,
@@ -89,7 +83,7 @@ export class ChatSchedule {
     if (at <= Date.now()) throw new Error("Choose a time in the future.");
     if (at > Date.now() + 366 * 86_400_000)
       throw new Error("Schedule a message at most a year ahead.");
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (
       chat.messages.some((m) => m.id === input.id) ||
       chat.scheduled?.some((s) => s.input.id === input.id)
@@ -121,15 +115,15 @@ export class ChatSchedule {
   /** Saves the thread after its scheduled messages changed, and re-arms the earliest. */
   async save(chat: ProjectChat) {
     if (!chat.scheduled?.length) delete chat.scheduled;
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
     this.armSend(chat.id, nextSend(chat.scheduled));
   }
 
   /** Sends the scheduled messages that are due, oldest first. */
   private async sendDue(chatId: string) {
-    if (this.host.closing()) return;
-    const due = await this.control(chatId, async () => {
-      const chat = await this.storage.load(chatId);
+    if (this.core.closing()) return;
+    const due = await this.core.control(chatId, async () => {
+      const chat = await this.core.storage.load(chatId);
       const now = Date.now();
       const due = (chat.scheduled ?? [])
         .filter((s) => !s.error && s.at <= now)
@@ -146,8 +140,8 @@ export class ChatSchedule {
     try {
       await this.host.send(chatId, item.input);
     } catch (e) {
-      await this.control(chatId, async () => {
-        const chat = await this.storage.load(chatId);
+      await this.core.control(chatId, async () => {
+        const chat = await this.core.storage.load(chatId);
         (chat.scheduled ??= []).push({
           ...item,
           error: e instanceof Error ? e.message : String(e),
@@ -169,12 +163,12 @@ export class ChatSchedule {
   private async dropWakeup(chat: ProjectChat, id: string) {
     chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
     if (!chat.heldWakeups?.length) delete chat.heldWakeups;
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
   }
 
   private async fireWakeup(chatId: string, id: string) {
-    if (this.host.closing()) return;
-    const chat = await this.storage.load(chatId);
+    if (this.core.closing()) return;
+    const chat = await this.core.storage.load(chatId);
     const wakeup = chat.heldWakeups?.find((w) => w.id === id);
     if (!wakeup) return;
     await this.dropWakeup(chat, id);
@@ -193,11 +187,13 @@ export class ChatSchedule {
    * scheduled. The SDK can't delete wake-ups, so Claude is asked to, in the open.
    */
   async stopPending(id: string, pendingId: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     // Its timer finds it gone and sends nothing.
     if (chat.heldWakeups?.some((w) => w.id === pendingId))
       return this.dropWakeup(chat, pendingId);
-    const work = this.sessions.pending(id).find((p) => p.item.id === pendingId);
+    const work = this.core.sessions
+      .pending(id)
+      .find((p) => p.item.id === pendingId);
     if (!work) throw new Error("That work has already finished.");
     if (work.item.kind === "task") return stopClaudeTask(work.key, pendingId);
     return this.host.send(
@@ -217,9 +213,9 @@ export class ChatSchedule {
    */
   async keepPending() {
     const now = Date.now();
-    const left = this.sessions.pending();
+    const left = this.core.sessions.pending();
     for (const chatId of new Set(left.map((p) => p.chatId))) {
-      const chat = await this.storage.load(chatId).catch(() => undefined);
+      const chat = await this.core.storage.load(chatId).catch(() => undefined);
       if (!chat) continue;
       const stopped: StoppedWork[] = [];
       const work = left.filter((p) => p.chatId === chatId);
@@ -239,16 +235,16 @@ export class ChatSchedule {
           at: now,
           items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
         };
-      await this.storage.persist(chat);
+      await this.core.storage.persist(chat);
     }
   }
 
   async resolveStopped(id: string, action: "resume" | "dismiss") {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     const stopped = chat.stopped;
     if (!stopped) return;
     delete chat.stopped;
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
     if (action === "dismiss") return;
     // Each conversation's Claude hears about the work it started.
     for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {

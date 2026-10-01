@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { ProjectChatEvent } from "../../shared/events";
 import {
   remoteRecentCalls,
   type ChatCameFrom,
@@ -17,13 +16,12 @@ import type {
 } from "../../shared/projects";
 import { readTurn } from "../../shared/agent-trace";
 import { commitEverything, headOf } from "../handoff/git";
-import type { Store } from "../store";
 import { worktreeExists } from "../worktrees";
-import type { ActiveChat, ActiveTurns } from "./active";
-import type { ThreadControl } from "./control";
+import type { ActiveChat } from "./active";
+import type { ChatCore } from "./core";
 import type { ChatSchedule } from "./schedule";
-import { agentSession, type ProviderSessions } from "./sessions";
-import { chatSummary, type ChatStorage } from "./storage";
+import { agentSession } from "./sessions";
+import { chatSummary } from "./storage";
 
 /** Where a thread stands between computers, or nothing when it's simply here. */
 function elsewhere(chat: ChatSummary) {
@@ -105,19 +103,13 @@ export interface HandoffHost {
   ): Promise<unknown>;
   /** Deep review reviewers or Ultraplan thinkers are still at work in the thread. */
   councilBusy(chat: ProjectChat): boolean;
-  closing(): boolean;
 }
 
 /** A thread moving to another of your computers, and coming back. */
 export class ComputerHandoff {
   constructor(
-    private store: Store,
-    private storage: ChatStorage,
-    private active: ActiveTurns,
-    private sessions: ProviderSessions,
+    private core: ChatCore,
     private schedule: ChatSchedule,
-    private control: ThreadControl,
-    private emit: (event: ProjectChatEvent) => void,
     private host: HandoffHost,
   ) {}
 
@@ -126,9 +118,9 @@ export class ComputerHandoff {
    * from here on nothing new starts in it. `leave` then does the stopping.
    */
   mark(id: string, sentTo: Omit<ChatSentTo, "state">) {
-    return this.control(id, async () => {
-      if (this.host.closing()) throw new Error("Relay is closing.");
-      const chat = await this.storage.load(id);
+    return this.core.control(id, async () => {
+      if (this.core.closing()) throw new Error("Relay is closing.");
+      const chat = await this.core.storage.load(id);
       assertHere(chat);
       if (chat.cameFrom)
         throw new Error(
@@ -148,14 +140,14 @@ export class ComputerHandoff {
         throw new Error(
           "Send or remove its queued and scheduled messages first.",
         );
-      if (this.sessions.pending(id).length || chat.heldWakeups?.length)
+      if (this.core.sessions.pending(id).length || chat.heldWakeups?.length)
         throw new Error(
           "Claude left background work or a wake-up in this thread. Stop it first.",
         );
       if (this.host.councilBusy(chat))
         throw new Error("Wait for the council or review to finish first.");
       chat.sentTo = { ...sentTo, state: "sending" };
-      await this.storage.persist(chat);
+      await this.core.storage.persist(chat);
     });
   }
   /** Updates a thread's handoff while it's still `handoffId`; null ends it, keeping the thread here. */
@@ -164,13 +156,13 @@ export class ComputerHandoff {
     handoffId: string,
     change: Partial<ChatSentTo> | null,
   ) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (chat.sentTo?.id !== handoffId) return;
     if (change) {
       chat.sentTo = { ...chat.sentTo, ...change };
       if ("error" in change && !change.error) delete chat.sentTo.error;
     } else delete chat.sentTo;
-    await this.storage.persist(chat);
+    await this.core.storage.persist(chat);
   }
   /**
    * The thread leaves for `computer`: its agent stops and is waited for,
@@ -179,11 +171,11 @@ export class ComputerHandoff {
    * which on a computer the thread came to are its own.
    */
   leave(id: string, computer: string, since = 0) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
       if (!chat.worktree || !(await worktreeExists(chat.worktree)))
         throw new Error("The thread's worktree is gone.");
-      await this.active.halt(id);
+      await this.core.active.halt(id);
       if (chat.queue?.length || chat.scheduled?.length) {
         delete chat.queue;
         delete chat.scheduled;
@@ -209,18 +201,18 @@ export class ComputerHandoff {
         agentSession(chat, outgoing.provider).thread
       ) {
         const provider = outgoing.provider;
-        const active = this.active.claim(
+        const active = this.core.active.claim(
           id,
           this.host.sessionInput(chat, provider),
         );
         try {
           await this.host.note(chat, root, provider, active, computer);
         } finally {
-          this.active.release(id, active);
+          this.core.active.release(id, active);
         }
       }
       await commitEverything(root, `Hand off to ${computer}`);
-      await this.storage.persist(chat);
+      await this.core.storage.persist(chat);
       return {
         chat: structuredClone(chat),
         root,
@@ -230,7 +222,7 @@ export class ComputerHandoff {
   }
   /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
-    return (this.store.get().chats ?? []).find(
+    return (this.core.store.get().chats ?? []).find(
       (c) => c.cameFrom?.id === handoffId,
     );
   }
@@ -270,7 +262,7 @@ export class ComputerHandoff {
           : {}),
       },
     };
-    await this.storage.add(chat);
+    await this.core.storage.add(chat);
     const { provider, ...settings } = thread.settings;
     void this.host
       .send(chat.id, {
@@ -285,12 +277,14 @@ export class ComputerHandoff {
   }
   /** What a thread that came here wrote since, for its trip back. */
   async handBack(id: string, deviceId: string) {
-    const summary = (this.store.get().chats ?? []).find((c) => c.id === id);
+    const summary = (this.core.store.get().chats ?? []).find(
+      (c) => c.id === id,
+    );
     const came = summary?.cameFrom;
     if (!came || came.deviceId !== deviceId)
       throw new Error("This thread didn't come from that computer.");
     const { chat, root, tip } = came.returnedAt
-      ? await this.storage.load(id).then(async (chat) => ({
+      ? await this.core.storage.load(id).then(async (chat) => ({
           chat,
           root: chat.worktree!.path!,
           tip: await headOf(chat.worktree!.path!),
@@ -312,12 +306,12 @@ export class ComputerHandoff {
    * sees its own answer.
    */
   async latestTurn(id: string): Promise<HandoffTurn> {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     const answers = chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
       .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
     const last = answers.at(-1);
-    const active = this.active.get(id);
+    const active = this.core.active.get(id);
     const model = (active?.input ?? chat.lastInput)?.choice.model;
     const request = active?.requests.list()[0];
     const peek: HandoffTurn = {
@@ -344,19 +338,19 @@ export class ComputerHandoff {
   }
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
-    const chat = await this.storage.load(id);
+    const chat = await this.core.storage.load(id);
     if (!chat.cameFrom || chat.cameFrom.returnedAt) return;
     chat.cameFrom.returnedAt = Date.now();
-    this.sessions.close(id);
-    await this.storage.persist(chat);
+    this.core.sessions.close(id);
+    await this.core.storage.persist(chat);
   }
   /**
    * A thread back from another computer: what was written there joins the
    * conversation, and the next turn hears the note written for the trip.
    */
   returned(id: string, handoffId: string, messages: ChatMessage[]) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
       const sentTo = chat.sentTo;
       if (sentTo?.id !== handoffId) throw new Error("This thread isn't away.");
       const known = new Set(chat.messages.map((m) => m.id));
@@ -379,9 +373,9 @@ export class ComputerHandoff {
       };
       delete chat.sentTo;
       chat.updated = Date.now();
-      await this.storage.persist(chat);
+      await this.core.storage.persist(chat);
       for (const m of arrived)
-        this.emit({ chatId: id, message: structuredClone(m) });
+        this.core.emit({ chatId: id, message: structuredClone(m) });
     });
   }
 }

@@ -1,14 +1,10 @@
 import { isAbsolute, join } from "node:path";
-import type { ProjectChatEvent } from "../../shared/events";
 import { turnImages } from "../../shared/projects";
 import { answerImagePaths } from "../../shared/answer-images";
-import type { Projects } from "../projects";
 import { dropRevert, redoRevert, revertTurn, turnDiff } from "../turn-changes";
 import { worktreeExists } from "../worktrees";
-import type { ActiveTurns } from "./active";
-import type { ThreadControl } from "./control";
+import type { ChatCore } from "./core";
 import { imageFileData } from "./images";
-import type { ChatStorage } from "./storage";
 import type { ThreadWorktrees } from "./worktrees";
 
 /**
@@ -17,26 +13,22 @@ import type { ThreadWorktrees } from "./worktrees";
  */
 export class TurnFiles {
   constructor(
-    private storage: ChatStorage,
-    private projects: Projects,
-    private active: ActiveTurns,
+    private core: ChatCore,
     private worktrees: ThreadWorktrees,
-    private control: ThreadControl,
-    private emit: (event: ProjectChatEvent) => void,
   ) {}
 
   async image(chatId: string, imageId: string): Promise<string> {
-    const chat = await this.storage.load(chatId);
+    const chat = await this.core.storage.load(chatId);
     const image = chat.messages
       .flatMap((message) => message.images ?? [])
       .find((item) => item.id === imageId);
     if (!image) throw new Error("Screenshot not found in this conversation.");
-    return this.storage.image(chatId, image);
+    return this.core.storage.image(chatId, image);
   }
 
   /** Only a path the turn itself read or its answer shows, so the renderer can't reach any other file on disk. */
   async turnImagePath(chatId: string, messageId: string, path: string) {
-    const chat = await this.storage.load(chatId);
+    const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message || !isAbsolute(path))
       throw new Error("This turn didn't read that image.");
@@ -60,23 +52,27 @@ export class TurnFiles {
   }
 
   async diff(chatId: string, messageId: string, path: string) {
-    const chat = await this.storage.load(chatId);
+    const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
       throw new Error("This turn didn't change that file.");
-    return turnDiff(await this.projects.root(chat.projectId), messageId, path);
+    return turnDiff(
+      await this.core.projects.root(chat.projectId),
+      messageId,
+      path,
+    );
   }
 
   /** Where a file one turn changed sits on disk (`messageId` null: any file of the thread's worktree). */
   async path(chatId: string, messageId: string | null, path: string) {
-    const chat = await this.storage.load(chatId);
+    const chat = await this.core.storage.load(chatId);
     if (messageId === null)
       return join(await this.worktrees.path(chatId), path);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
       throw new Error("This turn didn't change that file.");
     const root =
-      chat.worktree?.path ?? (await this.projects.root(chat.projectId));
+      chat.worktree?.path ?? (await this.core.projects.root(chat.projectId));
     return join(root, path);
   }
 
@@ -88,15 +84,16 @@ export class TurnFiles {
     mode: "revert" | "redo",
     force: boolean,
   ): Promise<{ conflicts: string[] }> {
-    return this.control(chatId, async () => {
-      await this.storage.load(chatId);
-      const chat = this.storage.cached(chatId)!;
-      if (!chat.worktree) this.projects.assertCheckoutAvailable(chat.projectId);
+    return this.core.control(chatId, async () => {
+      await this.core.storage.load(chatId);
+      const chat = this.core.storage.cached(chatId)!;
+      if (!chat.worktree)
+        this.core.projects.assertCheckoutAvailable(chat.projectId);
       if (chat.worktree && !(await worktreeExists(chat.worktree)))
         throw new Error("This thread's worktree was removed.");
       // An agent editing the same folder would race the rollback.
-      for (const id of this.active.ids()) {
-        const other = this.storage.cached(id);
+      for (const id of this.core.active.ids()) {
+        const other = this.core.storage.cached(id);
         if (
           other?.projectId === chat.projectId &&
           other.worktree?.path === chat.worktree?.path
@@ -113,7 +110,7 @@ export class TurnFiles {
       );
       if (!message || !files.length) return { conflicts: [] };
       const root =
-        chat.worktree?.path ?? (await this.projects.root(chat.projectId));
+        chat.worktree?.path ?? (await this.core.projects.root(chat.projectId));
       let moved: string[];
       if (mode === "revert") {
         const result = await revertTurn(
@@ -169,8 +166,8 @@ export class TurnFiles {
           : `I restored your edits to ${listed}${more} from your turn at ${when} after an earlier rollback.`,
       ].slice(-10);
       message.version++;
-      await this.storage.save(chat);
-      this.emit({ chatId, message: structuredClone(message) });
+      await this.core.storage.save(chat);
+      this.core.emit({ chatId, message: structuredClone(message) });
       return { conflicts: [] };
     });
   }
