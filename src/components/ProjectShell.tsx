@@ -1,4 +1,4 @@
-import { GitActions } from "./GitActions";
+import { GitActions, type GitActionsHandle } from "./GitActions";
 import { HandoffButton } from "./HandoffButton";
 import { workspaceId } from "../../shared/workspaces";
 import { CiStatusIcon } from "./CiStatus";
@@ -21,7 +21,7 @@ import {
   BrowseShared,
 } from "./ProjectSharingDialogs";
 import type { LineQuestion } from "../../shared/questions";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { matches, useShortcutLabel } from "../lib/shortcuts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -65,7 +65,7 @@ import { Connected, SignIn } from "../ReviewSurface";
 import {
   PullsTitle,
   type PullsLocation,
-  type PullsNav,
+  type PullsPageHandle,
   type PullsTarget,
 } from "./PullRequestsPage";
 import { projectFor, repoKey } from "../lib/pull-board";
@@ -94,6 +94,7 @@ import {
 } from "../lib/thread-terminals";
 import { useProjectChecks } from "../lib/useProjectChecks";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { requestChannel } from "../lib/request-channel";
 import {
   NavigationLockProvider,
   useNavigationLockRoot,
@@ -150,7 +151,7 @@ export default function ProjectShell() {
   });
   const [draftWorkspace, setDraftWorkspace] =
     useState<ChatWorkspace>("checkout");
-  const [openPrRequest, setOpenPrRequest] = useState(0);
+  const gitActions = useRef<GitActionsHandle>(null);
   const [choosePR, setChoosePR] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
   const [settings, setSettings] = useState(false),
@@ -164,11 +165,11 @@ export default function ProjectShell() {
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   // The Pull requests page reports where it is for the title; the title and
   // the sidebar send it back to the board.
-  const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE),
-    [pullsNav, setPullsNav] = useState<PullsNav | null>(null);
+  const [pullsWhere, setPullsWhere] = useState<PullsLocation>(NOWHERE);
+  const pullsPage = useRef<PullsPageHandle>(null);
   const goToPulls = (target: PullsTarget) => {
     if (lock.blocked()) return;
-    setPullsNav((n) => ({ ...target, request: (n?.request ?? 0) + 1 }));
+    pullsPage.current?.go(target);
   };
   const project =
     projects.data?.find((p) => p.id === selected) ??
@@ -282,9 +283,14 @@ export default function ProjectShell() {
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
-  const [openFileTarget, setOpenFileTarget] = useState<FileTarget | null>(null),
-    [changeTarget, setChangeTarget] = useState<FileTarget | null>(null),
-    [turnDiff, setTurnDiff] = useState<
+  // Files the chat asks the Files and Changes panes to show. One per project,
+  // so a file asked for in one never opens in the next.
+  const fileOpens = useMemo(() => requestChannel<FileTarget>(), [project?.id]);
+  const changeReveals = useMemo(
+    () => requestChannel<ProjectFileLink>(),
+    [project?.id],
+  );
+  const [turnDiff, setTurnDiff] = useState<
       (TurnDiffTarget & { request: number }) | null
     >(null),
     [viewing, setViewing] = useState<{
@@ -603,19 +609,11 @@ export default function ProjectShell() {
   }
   function openInEditor(target: ProjectFileLink & { search?: string }) {
     if (lock.blocked()) return;
-    setOpenFileTarget((previous) => ({
-      ...target,
-      projectId: project!.id,
-      request: (previous?.request ?? 0) + 1,
-    }));
+    fileOpens.send(target);
     panes.show("files");
   }
   function revealChange(target: ProjectFileLink) {
-    setChangeTarget((previous) => ({
-      ...target,
-      projectId: project!.id,
-      request: (previous?.request ?? 0) + 1,
-    }));
+    changeReveals.send(target);
     setTurnDiff(null);
     panes.show("changes");
   }
@@ -738,7 +736,7 @@ export default function ProjectShell() {
   }
   function runCommand(command: RelayCommand) {
     if (lock.blocked()) return false;
-    if (command === "openpr") setOpenPrRequest((n) => n + 1);
+    if (command === "openpr") gitActions.current?.openPr();
     else if ((command === "new" || command === "clear") && project?.scratch)
       void newScratch();
     else if ((command === "new" || command === "clear") && project)
@@ -921,7 +919,7 @@ export default function ProjectShell() {
                 where={where}
                 connected={!!account}
                 disabled={lock.locked}
-                request={openPrRequest}
+                ref={gitActions}
                 onConnect={() => void withAccount()}
                 onReview={(ref) => void reviewBranchPr(ref)}
                 onChanges={() => openCode("changes")}
@@ -1061,8 +1059,8 @@ export default function ProjectShell() {
                 onOpenProject: (p) => navigate(p),
                 onAddProject: (repo) => void addPullProject(repo),
                 onLocation: setPullsWhere,
-                nav: pullsNav,
               }}
+              ref={pullsPage}
               onSettings={(category) => {
                 setSettingsCategory(
                   category === "rooms" ? category : undefined,
@@ -1166,11 +1164,7 @@ export default function ProjectShell() {
                               slots: changesSlots,
                               onEditFile: (path, line) =>
                                 openInEditor({ path, line, directory: false }),
-                              reveal:
-                                changeTarget?.projectId === project.id
-                                  ? changeTarget
-                                  : null,
-                              onRevealConsumed: () => setChangeTarget(null),
+                              reveals: changeReveals,
                               onPresence: (next) => {
                                 setViewing(next);
                                 if (next.path)
@@ -1224,7 +1218,6 @@ export default function ProjectShell() {
                     ) : (
                       <ProjectChanges
                         key={where}
-                        project={project}
                         where={where}
                         slots={changesSlots}
                         onViewing={setViewing}
@@ -1233,8 +1226,7 @@ export default function ProjectShell() {
                         }
                         turn={turnDiff}
                         onCloseTurn={() => setTurnDiff(null)}
-                        reveal={changeTarget}
-                        onRevealConsumed={() => setChangeTarget(null)}
+                        reveals={changeReveals}
                         onAsk={(code) => {
                           setContextText({
                             id: crypto.randomUUID(),
@@ -1265,8 +1257,7 @@ export default function ProjectShell() {
                       where={where}
                       checks={checks}
                       onViewing={setViewing}
-                      openTarget={openFileTarget}
-                      onOpenTargetConsumed={() => setOpenFileTarget(null)}
+                      opens={fileOpens}
                     />
                   </>
                 )}

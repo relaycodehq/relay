@@ -8,6 +8,7 @@ import { filePathSchema } from "../../shared/validation";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { useNavigationLock } from "../lib/navigation-lock";
+import { useRequests, type RequestChannel } from "../lib/request-channel";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { ancestors } from "../lib/file-tree";
 import { useExpanded } from "../lib/useFileTree";
@@ -23,8 +24,6 @@ const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
 
 type Viewing = { path: string | null; viewed: number; total: number };
 export type FileTarget = ProjectFileLink & {
-  request: number;
-  projectId: string;
   /** Lists the files matching this instead of opening one. */
   search?: string;
 };
@@ -36,7 +35,6 @@ export type FileTarget = ProjectFileLink & {
  * Files pane.
  */
 export function ProjectChanges({
-  project,
   where,
   slots,
   onViewing,
@@ -44,10 +42,8 @@ export function ProjectChanges({
   onAsk,
   turn,
   onCloseTurn,
-  reveal,
-  onRevealConsumed,
+  reveals,
 }: {
-  project: Project;
   /** Workspace id: the checkout, or the thread's worktree. */
   where: string;
   slots: PaneSlots;
@@ -56,8 +52,7 @@ export function ProjectChanges({
   onAsk: (ref: CodeReference) => void;
   turn?: (TurnDiffTarget & { request: number }) | null;
   onCloseTurn: () => void;
-  reveal?: FileTarget | null;
-  onRevealConsumed: () => void;
+  reveals: RequestChannel<ProjectFileLink>;
 }) {
   if (turn)
     return (
@@ -76,8 +71,7 @@ export function ProjectChanges({
       onOpenFile={onOpenFile}
       onAsk={onAsk}
       onSelection={(path) => onViewing({ path, viewed: 0, total: 0 })}
-      reveal={reveal?.projectId === project.id ? reveal : null}
-      onRevealConsumed={onRevealConsumed}
+      reveals={reveals}
     />
   );
 }
@@ -94,8 +88,7 @@ export function ProjectFiles({
   where,
   checks,
   onViewing,
-  openTarget,
-  onOpenTargetConsumed,
+  opens,
 }: {
   project: Project;
   /** Workspace id: the checkout, or the thread's worktree. */
@@ -103,8 +96,8 @@ export function ProjectFiles({
   /** Owned by the shell, which shows the status in the title bar. */
   checks: ChecksController;
   onViewing: (v: Viewing) => void;
-  openTarget?: FileTarget | null;
-  onOpenTargetConsumed?: () => void;
+  /** Files to open, such as ones clicked in the chat. */
+  opens?: RequestChannel<FileTarget>;
 }) {
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
@@ -129,21 +122,18 @@ export function ProjectFiles({
     if (next) expansion.expand(ancestors(next.path));
     setSelection(next);
   };
-  useEffect(() => {
-    if (!openTarget || openTarget.projectId !== project.id || locked) return;
-    if (openTarget.search !== undefined) {
-      setFilter(openTarget.search);
+  useRequests(opens, (target) => {
+    if (target.search !== undefined) {
+      setFilter(target.search);
       setSelection(null);
     } else {
       setFilter("");
-      if (openTarget.directory) {
-        expansion.expand([...ancestors(openTarget.path), openTarget.path]);
-        setSelection({ kind: "dir", path: openTarget.path });
-      } else
-        select({ kind: "file", path: openTarget.path, line: openTarget.line });
+      if (target.directory) {
+        expansion.expand([...ancestors(target.path), target.path]);
+        setSelection({ kind: "dir", path: target.path });
+      } else select({ kind: "file", path: target.path, line: target.line });
     }
-    onOpenTargetConsumed?.();
-  }, [openTarget?.request, project.id, locked]);
+  });
   useEffect(() => {
     if (file) localStorage.setItem("relay-project-file:" + where, file.path);
     else localStorage.removeItem("relay-project-file:" + where);

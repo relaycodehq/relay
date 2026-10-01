@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu } from "@base-ui/react/menu";
 import {
@@ -19,6 +19,10 @@ import { Spinner } from "./ui";
 import "./git-actions.css";
 
 type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
+export type GitActionsHandle = {
+  /** Opens the branch's PR, as the PR button does. */
+  openPr: () => void;
+};
 const MAX_COMMIT_FILES = 1000;
 
 /**
@@ -30,7 +34,7 @@ export function GitActions({
   where,
   connected,
   disabled,
-  request,
+  ref,
   onConnect,
   onReview,
   onChanges,
@@ -41,8 +45,7 @@ export function GitActions({
   where: string;
   connected: boolean;
   disabled: boolean;
-  /** Bumped to open the branch's PR, as the PR button did. */
-  request: number;
+  ref?: Ref<GitActionsHandle>;
   onConnect: () => void;
   onReview: (ref: PullRef) => void;
   onChanges: () => void;
@@ -150,13 +153,11 @@ export function GitActions({
     else if (action === "merge") setMerging(true);
     else setCommitting(action);
   }
-  const seen = useRef(request);
-  useEffect(() => {
-    if (request !== seen.current) {
-      seen.current = request;
+  useImperativeHandle(ref, () => ({
+    openPr() {
       if (!disabled && hasPr) openPr();
-    }
-  }, [request]);
+    },
+  }));
   if (!t) return null;
   const hint =
     primary === "commit_push"

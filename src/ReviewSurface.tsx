@@ -15,7 +15,16 @@ import {
 } from "./components/GroupedFileList";
 import { TriageControls } from "./components/TriageControls";
 import { isAnalyzing, notedPaths } from "../shared/triage";
-import { useEffect, useRef, useState, useMemo, lazy, Suspense } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useMemo,
+  lazy,
+  Suspense,
+  type Ref,
+} from "react";
 import { useStoredFlag } from "./lib/useStoredFlag";
 import {
   useInfiniteQuery,
@@ -54,8 +63,9 @@ import { ReviewWorkspace } from "./components/ReviewWorkspace";
 import {
   PullRequestsPage,
   type PullsLocation,
-  type PullsNav,
+  type PullsPageHandle,
 } from "./components/PullRequestsPage";
+import { useRequests, type RequestChannel } from "./lib/request-channel";
 import { PULL_BOARD } from "./lib/usePullBoard";
 import { repoKey } from "./lib/pull-board";
 import type { Project } from "../shared/projects";
@@ -257,6 +267,7 @@ export function SignIn({
 export function Connected({
   embedded,
   pulls,
+  ref,
   account,
   onSettings,
   pendingUrl,
@@ -277,9 +288,8 @@ export function Connected({
     slots?: PaneSlots;
     /** Open a file in the host's editor instead of a modal. */
     onEditFile?: (path: string, line?: number) => void;
-    /** A file to select, such as one clicked in the host's chat. */
-    reveal?: (ProjectFileLink & { request: number }) | null;
-    onRevealConsumed?: () => void;
+    /** Files to select, such as ones clicked in the host's chat. */
+    reveals?: RequestChannel<ProjectFileLink>;
   };
   /**
    * On the Pull requests page: its board shows while no PR is open, and a PR
@@ -293,9 +303,9 @@ export function Connected({
     onAddProject: (repo?: Repo) => void;
     /** Where the page is, for the window title. */
     onLocation: (where: PullsLocation) => void;
-    /** Leave the open PR for the board or a project's page. */
-    nav: PullsNav | null;
   };
+  /** On the Pull requests page: how the window title and sidebar leave a PR. */
+  ref?: Ref<PullsPageHandle>;
   account: Account;
   onSettings: (category?: SettingsCategory) => void;
   pendingUrl?: string;
@@ -521,7 +531,8 @@ export function Connected({
     files.isError,
   ]);
   // Declared after the fallback above, so a requested file wins over it.
-  const reveal = embedded?.reveal;
+  const [reveal, setReveal] = useState<ProjectFileLink | null>(null);
+  useRequests(embedded?.reveals, setReveal);
   useEffect(() => {
     if (!reveal || (!analysisResult && !files.data)) return;
     const match = allFiles.find((f) => linksTo(reveal, f.filename));
@@ -538,9 +549,9 @@ export function Connected({
             : `This pull request doesn’t change ${reveal.path}.`,
         ),
       );
-    embedded?.onRevealConsumed?.();
+    setReveal(null);
   }, [
-    reveal?.request,
+    reveal,
     allFiles,
     analysisResult,
     files.data,
@@ -608,15 +619,12 @@ export function Connected({
     if (project) pulls!.onOpenInProject(project, r);
     else select(r);
   };
-  const nav = pulls?.nav;
-  // A request from before this mount is spent; answering it would drop the restored PR.
-  const handledNav = useRef(nav?.request);
-  useEffect(() => {
-    if (!nav || nav.request === handledNav.current) return;
-    handledNav.current = nav.request;
-    setRepo(nav.to === "repo" ? nav.repo : null);
-    deselect();
-  }, [nav?.request]);
+  useImperativeHandle(ref, () => ({
+    go(target) {
+      setRepo(target.to === "repo" ? target.repo : null);
+      deselect();
+    },
+  }));
   const repoLabel = (key: string) => {
     const [owner, name] = key.split("/");
     return pulls?.projectOf({ owner, name })?.name ?? key;

@@ -21,6 +21,7 @@ import type {
 import type { CodeReference } from "../../shared/code-references";
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { useRequests, type RequestChannel } from "../lib/request-channel";
 import { linksTo, type ProjectFileLink } from "../../shared/project-file-links";
 import { ErrorBox, FileEntryIcon, IconButton, Loading, Modal } from "./ui";
 import { PaneResizer } from "./PaneResizer";
@@ -36,8 +37,7 @@ export function LocalChanges({
   slots,
   onOpenFile,
   onAsk,
-  reveal,
-  onRevealConsumed,
+  reveals,
 }: {
   pull?: Pull;
   projectId?: string;
@@ -47,9 +47,8 @@ export function LocalChanges({
   onOpenFile?: (path: string, line?: number) => void;
   /** Attaches selected diff lines to the project chat composer. */
   onAsk?: (ref: CodeReference) => void;
-  /** A file to select, such as one clicked in the chat. */
-  reveal?: (ProjectFileLink & { request: number }) | null;
-  onRevealConsumed?: () => void;
+  /** Files to select, such as ones clicked in the chat. */
+  reveals?: RequestChannel<ProjectFileLink>;
 }) {
   const qc = useQueryClient(),
     key = projectId
@@ -91,11 +90,7 @@ export function LocalChanges({
     [line, setLine] = useState<number>(),
     [revealed, setRevealed] = useState(0);
   const fileList = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!reveal) return;
-    setWanted(reveal);
-    onRevealConsumed?.();
-  }, [reveal?.request]);
+  useRequests(reveals, setWanted);
   useEffect(() => {
     if (storageKey)
       localStorage.setItem(

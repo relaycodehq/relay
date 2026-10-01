@@ -51,8 +51,10 @@ export interface PullsLocation {
   pull: { number: number; title?: string } | null;
 }
 export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
-/** Leaves an open PR; each new `request` asks again. */
-export type PullsNav = PullsTarget & { request: number };
+export type PullsPageHandle = {
+  /** Leaves the open PR for the board or a project's page. */
+  go: (target: PullsTarget) => void;
+};
 
 /** The window title's trail back from a PR or a project's page. */
 export function PullsTitle({
