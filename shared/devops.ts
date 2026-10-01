@@ -144,9 +144,10 @@ export interface WorkItemsResult {
 
 export interface DevOpsApi {
   devopsStatus(): Promise<DevOpsStatus>;
+  /** Secrets left out, or left out of `secrets`, stay as saved. */
   saveDevOpsSettings(
     settings: DevOpsSettings,
-    secrets: DevOpsSecrets,
+    secrets?: DevOpsSecrets,
   ): Promise<DevOpsStatus>;
   devopsWorkItems(
     projectId: string | null,

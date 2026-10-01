@@ -9,7 +9,7 @@ import {
   pluginIds,
   type PluginToggles,
 } from "../../shared/plugins";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Settings → Plugins, and each built-in plugin's own calls. */
 export function pluginHandlers(ctx: ApiContext) {
@@ -23,38 +23,37 @@ export function pluginHandlers(ctx: ApiContext) {
   });
   return {
     plugins: () => toggles(),
-    setPluginEnabled: async (args) => {
-      const id = pluginIdSchema.parse(args[0]);
-      const enabled = z.boolean().parse(args[1]);
-      if (id === "devops") await devops.setEnabled(enabled);
-      else
-        await store.update((s) => {
-          s.plugins = { ...s.plugins, [id]: enabled };
-        });
-      if (id === "clockify" && !enabled) await clockify.turnedOff();
-      return toggles();
-    },
+    setPluginEnabled: takes(
+      [pluginIdSchema, z.boolean()],
+      async (id, enabled) => {
+        if (id === "devops") await devops.setEnabled(enabled);
+        else
+          await store.update((s) => {
+            s.plugins = { ...s.plugins, [id]: enabled };
+          });
+        if (id === "clockify" && !enabled) await clockify.turnedOff();
+        return toggles();
+      },
+    ),
     clockifyStatus: () => clockify.status(),
-    saveClockifySettings: (args) =>
-      clockify.save(
-        clockifySettingsSchema.parse(args[0]),
-        clockifySecretsSchema.parse(args[1] ?? {}),
-      ),
+    saveClockifySettings: takes(
+      [clockifySettingsSchema, clockifySecretsSchema.optional()],
+      (settings, secrets) => clockify.save(settings, secrets ?? {}),
+    ),
     clockifyWorkspaces: () => clockify.workspaces(),
     clockifyProjects: () => clockify.projects(),
-    clockifyTimer: (args) =>
-      clockify.timer(
-        z.enum(["start", "pause", "resume", "stop"]).parse(args[0]),
-      ),
-    clockifyTouch: (args) =>
-      clockify.touch(
-        z.string().min(1).max(200).parse(args[0]),
-        z.string().min(1).max(200).optional().parse(args[1]),
-      ),
-    saveClockifyReview: (args) =>
-      clockify.saveReview(
-        z.array(clockifyBlockEditSchema).max(500).parse(args[0]),
-      ),
+    clockifyTimer: takes(
+      [z.enum(["start", "pause", "resume", "stop"])],
+      (action) => clockify.timer(action),
+    ),
+    clockifyTouch: takes(
+      [z.string().min(1).max(200), z.string().min(1).max(200).optional()],
+      (projectId, chatId) => clockify.touch(projectId, chatId),
+    ),
+    saveClockifyReview: takes(
+      [z.array(clockifyBlockEditSchema).max(500)],
+      (edits) => clockify.saveReview(edits),
+    ),
     describeClockifyReview: () => clockify.describe(),
     submitClockifyReview: () => clockify.submit(),
     discardClockifyReview: () => clockify.discard(),

@@ -29,14 +29,15 @@ import { azureDevOps } from "../source-control/azure-devops";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../release-notes";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+const sourceControlKindSchema = z.enum(sourceControlKinds);
+const typedPathSchema = z.string().trim().min(1).max(4096).optional();
 
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
   const sourceControl = () => sourceControlStatus(store, ctx.login);
-  const typedPath = (value: unknown) =>
-    z.string().trim().min(1).max(4096).optional().parse(value);
   /** A program picked in a file dialog; null when cancelled. */
   async function chooseProgram(
     program: string,
@@ -60,8 +61,7 @@ export function settingsHandlers(ctx: ApiContext) {
     return phoneRemote;
   }
   /** Only a CLI Relay finds can be linked by hand. */
-  function cliProvider(value: unknown) {
-    const provider = agentProviderSchema.parse(value);
+  function cliProvider(provider: AgentProvider) {
     if (!isCliProvider(provider))
       throw new Error(
         `${agents[provider].name} runs from an SDK Relay downloads; there is nothing to link.`,
@@ -79,65 +79,57 @@ export function settingsHandlers(ctx: ApiContext) {
   }
   return {
     smartProjectNames: () => store.get().smartProjectNames ?? true,
-    saveSmartProjectNames: async (args) => {
-      const enabled = z.boolean().parse(args[0]);
+    saveSmartProjectNames: takes([z.boolean()], async (enabled) => {
       await store.update((s) => {
         s.smartProjectNames = enabled;
       });
       return enabled;
-    },
-    saveSidebarView: async (args) => {
-      const view = z.enum(["threads", "activity"]).parse(args[0]);
+    }),
+    saveSidebarView: takes([z.enum(["threads", "activity"])], async (view) => {
       await store.update((s) => {
         s.sidebarView = view;
       });
-    },
+    }),
     aiSettings: () => store.aiSettings(),
-    saveAISettings: async (args) => {
-      const settings = aiSettingsSchema.parse(args[0]);
+    saveAISettings: takes([aiSettingsSchema], async (settings) => {
       await store.update((s) => {
         s.aiSettings = settings;
       });
       return settings;
-    },
+    }),
     newThreadAgent: () => store.get().newThreadAgent ?? null,
-    saveNewThreadAgent: async (args) => {
-      const provider = agentProviderSchema.parse(args[0]);
+    saveNewThreadAgent: takes([agentProviderSchema], async (provider) => {
       await store.update((s) => {
         s.newThreadAgent = provider;
       });
-    },
+    }),
     newThreadModels: () => store.get().newThreadModels ?? {},
-    saveNewThreadModel: (args) =>
-      saveNewThreadModel(
-        store,
-        agentProviderSchema.parse(args[0]),
-        newThreadModelSchema.parse(args[1]),
-      ),
-    providerUsage: (args) =>
-      readProviderUsage(
-        usageProviderSchema.parse(args[0]),
-        z.boolean().optional().parse(args[1]),
-      ),
+    saveNewThreadModel: takes(
+      [agentProviderSchema, newThreadModelSchema],
+      (provider, model) => saveNewThreadModel(store, provider, model),
+    ),
+    providerUsage: takes(
+      [usageProviderSchema, z.boolean().optional()],
+      (provider, force) => readProviderUsage(provider, force),
+    ),
     devopsStatus: () => devops.status(),
     devopsConnection: () => azureDevOps(devops),
-    saveDevOpsSettings: (args) =>
-      devops.save(
-        devopsSettingsSchema.parse(args[0]),
-        devopsSecretsSchema.parse(args[1] ?? {}),
-      ),
-    devopsWorkItems: (args) => {
-      const id = z.string().max(200).nullable().parse(args[0]);
-      return devops.workItems(
-        id ? projects.get(id) : null,
-        z.boolean().optional().parse(args[1]),
-        z.enum(["mine", "team"]).optional().parse(args[2]),
-      );
-    },
+    saveDevOpsSettings: takes(
+      [devopsSettingsSchema, devopsSecretsSchema.optional()],
+      (settings, secrets) => devops.save(settings, secrets ?? {}),
+    ),
+    devopsWorkItems: takes(
+      [
+        z.string().max(200).nullable(),
+        z.boolean().optional(),
+        z.enum(["mine", "team"]).optional(),
+      ],
+      (id, force, scope) =>
+        devops.workItems(id ? projects.get(id) : null, force, scope),
+    ),
     devopsFields: () => devops.fields(),
     gitInfo: () => gitInfo(),
-    chooseGit: async (args) => {
-      const typed = typedPath(args[0]);
+    chooseGit: takes([typedPathSchema], async (typed) => {
       const path = typed
         ? await resolveCliPath("git", typed)
         : await chooseProgram("git", ["exe"]);
@@ -148,7 +140,7 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       setGitPath(path);
       return gitInfo();
-    },
+    }),
     resetGit: async () => {
       await store.update((s) => {
         delete s.gitPath;
@@ -163,10 +155,11 @@ export function settingsHandlers(ctx: ApiContext) {
     releaseNotes: () => fetchReleaseNotes(),
     agentVersions: () => agentUpdates.current,
     checkAgentVersions: () => agentUpdates.check(true),
-    updateAgent: (args) =>
-      agentUpdates.update(agentProviderSchema.parse(args[0])),
-    linkAgent: async (args) => {
-      const provider = cliProvider(args[0]);
+    updateAgent: takes([agentProviderSchema], (provider) =>
+      agentUpdates.update(provider),
+    ),
+    linkAgent: takes([agentProviderSchema], async (agent) => {
+      const provider = cliProvider(agent);
       const { cli } = agents[provider];
       const path = await chooseProgram(cli);
       if (!path) return null;
@@ -177,32 +170,32 @@ export function settingsHandlers(ctx: ApiContext) {
         );
       await relinkAgents(provider, path);
       return agentUpdates.check(true);
-    },
-    unlinkAgent: async (args) => {
-      await relinkAgents(cliProvider(args[0]), undefined);
+    }),
+    unlinkAgent: takes([agentProviderSchema], async (provider) => {
+      await relinkAgents(cliProvider(provider), undefined);
       return agentUpdates.check(true);
-    },
+    }),
     sourceControl,
-    setSourceControlEnabled: async (args) => {
-      await setSourceControlEnabled(
-        store,
-        z.enum(sourceControlKinds).parse(args[0]),
-        z.boolean().parse(args[1]),
-      );
+    setSourceControlEnabled: takes(
+      [sourceControlKindSchema, z.boolean()],
+      async (kind, enabled) => {
+        await setSourceControlEnabled(store, kind, enabled);
+        return sourceControl();
+      },
+    ),
+    linkSourceControlCli: takes(
+      [sourceControlKindSchema, typedPathSchema],
+      async (kind, typed) => {
+        const path = typed ?? (await chooseProgram(clis[kind].program));
+        if (!path) return null;
+        await linkCli(store, kind, path);
+        return sourceControl();
+      },
+    ),
+    unlinkSourceControlCli: takes([sourceControlKindSchema], async (kind) => {
+      await unlinkCli(store, kind);
       return sourceControl();
-    },
-    linkSourceControlCli: async (args) => {
-      const kind = z.enum(sourceControlKinds).parse(args[0]);
-      const path =
-        typedPath(args[1]) ?? (await chooseProgram(clis[kind].program));
-      if (!path) return null;
-      await linkCli(store, kind, path);
-      return sourceControl();
-    },
-    unlinkSourceControlCli: async (args) => {
-      await unlinkCli(store, z.enum(sourceControlKinds).parse(args[0]));
-      return sourceControl();
-    },
+    }),
     signInCursor: async () => {
       await signInCursor();
       return agentUpdates.check(true);
@@ -222,12 +215,15 @@ export function settingsHandlers(ctx: ApiContext) {
     },
     warmDictation: () => dictation.warm(),
     phoneRemoteState: () => requirePhoneRemote().state(),
-    setPhoneRemote: (args) =>
-      requirePhoneRemote().setEnabled(z.boolean().parse(args[0])),
+    setPhoneRemote: takes([z.boolean()], (enabled) =>
+      requirePhoneRemote().setEnabled(enabled),
+    ),
     phonePairing: () => requirePhoneRemote().pairing(),
-    phoneAppearance: (args) =>
-      requirePhoneRemote().setAppearance(phoneAppearanceSchema.parse(args[0])),
-    revokePhone: (args) =>
-      requirePhoneRemote().revoke(z.string().uuid().parse(args[0])),
+    phoneAppearance: takes([phoneAppearanceSchema], (appearance) =>
+      requirePhoneRemote().setAppearance(appearance),
+    ),
+    revokePhone: takes([z.string().uuid()], (id) =>
+      requirePhoneRemote().revoke(id),
+    ),
   } satisfies Handlers;
 }

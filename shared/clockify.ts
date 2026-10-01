@@ -116,7 +116,7 @@ export interface ClockifyApi {
   /** Saves and, given a new token, checks it; returns the account's name. */
   saveClockifySettings(
     settings: ClockifySettings,
-    secrets: ClockifySecrets,
+    secrets?: ClockifySecrets,
   ): Promise<ClockifyStatus & { account?: string }>;
   clockifyWorkspaces(): Promise<ClockifyWorkspace[]>;
   clockifyProjects(): Promise<ClockifyProject[]>;
