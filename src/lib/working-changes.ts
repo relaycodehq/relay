@@ -107,7 +107,7 @@ export const sideLabels = (area: ChangeArea) =>
     : { deletions: "Index", additions: "Working file" };
 
 /** The commit message and the selected diff, kept per project. */
-export interface SavedChanges {
+interface SavedChanges {
   selected: SelectedChange | null;
   message: string;
   grouped: boolean;

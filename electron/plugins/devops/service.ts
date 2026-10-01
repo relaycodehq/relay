@@ -12,13 +12,10 @@ import type { Project } from "../../../shared/projects";
 import type { Store } from "../../store";
 import { DevOpsAuth } from "./auth";
 import { DevOpsClient, type Fetch } from "./client";
-import { DevOpsKeys } from "./keys";
+import { DevOpsKeys, type Decrypt, type Encrypt } from "./keys";
 import { RelevanceFilter } from "./relevance";
 import { readSettings } from "./settings";
 import { loadWorkItems } from "./work-items";
-
-type Encrypt = (value: string) => Promise<string | null>;
-type Decrypt = (value: string) => Promise<string>;
 
 const itemsTtl = 2 * 60_000;
 const fieldsTtl = 60 * 60_000;

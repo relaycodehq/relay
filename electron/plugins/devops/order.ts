@@ -28,7 +28,7 @@ export function sortItems(
 }
 
 /** A field from a batch answer; a hand-typed reference name may differ in case. */
-export function fieldValue(fields: Record<string, unknown>, reference: string) {
+function fieldValue(fields: Record<string, unknown>, reference: string) {
   if (reference in fields) return fields[reference];
   const lower = reference.toLowerCase();
   return Object.entries(fields).find(([k]) => k.toLowerCase() === lower)?.[1];

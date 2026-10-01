@@ -15,7 +15,7 @@ import type { RoomRequest } from "./transport";
 
 type Mention = NonNullable<ReturnType<typeof roomMention>>;
 
-export interface Question {
+interface Question {
   connection: RoomConnection;
   roomId: string;
   /** The posted question the answer replies to. */
@@ -27,7 +27,7 @@ export interface Question {
   local: Pick<LocalFolder, "dirty" | "head">;
 }
 
-export function answerPrompt(
+function answerPrompt(
   q: Pick<Question, "mention" | "pull" | "context" | "local">,
   topic: RoomMessage[],
 ) {

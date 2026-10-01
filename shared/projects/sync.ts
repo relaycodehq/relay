@@ -19,6 +19,7 @@ export const knownOf = (
 export class MissingMessage extends Error {
   constructor() {
     super("Conversation update is missing a message.");
+    this.name = "MissingMessage";
   }
 }
 /** Rebuilds a patched chat, reusing the previous message objects it only named. */

@@ -7,7 +7,7 @@ import { pasteMarkdown, type PastedText } from "../../shared/pasted-texts";
 export const fileMarkdown = (path: string) => "`" + path + "`";
 
 /** What a pill or line break stands for in the sent text. */
-export const pillText = (node: PMNode) =>
+const pillText = (node: PMNode) =>
   node.type.name === "relaySkill"
     ? node.attrs.token
     : node.type.name === "relayImage"

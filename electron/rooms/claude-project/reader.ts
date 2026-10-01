@@ -18,7 +18,7 @@ import { ToolRows } from "./tool-rows";
  * What a frame leaves the turn to do: read on, see whether Claude runs a
  * steer it couldn't fold in as a follow-up turn, or finish with the answer.
  */
-export type Verdict = "more" | "follow-up" | { answer: string };
+type Verdict = "more" | "follow-up" | { answer: string };
 
 /** Reads one turn's frames into its answer, as they come. */
 export class ClaudeTurnReader {

@@ -15,7 +15,7 @@ const sha = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
 /** What Jev knows about the Relay project. */
-export function projectState(project: Project, keywords: string) {
+function projectState(project: Project, keywords: string) {
   return {
     project: {
       name: project.name,
@@ -31,7 +31,7 @@ export function projectState(project: Project, keywords: string) {
 }
 
 /** The yes/no question Jev answers about one work item. */
-export function itemQuestion(w: WorkItem, keywords: string) {
+function itemQuestion(w: WorkItem, keywords: string) {
   return {
     type: "noul",
     instructions: {

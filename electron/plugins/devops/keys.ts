@@ -1,8 +1,8 @@
 import type { DevOpsSecrets } from "../../../shared/devops";
 import type { Store } from "../../store";
 
-type Encrypt = (value: string) => Promise<string | null>;
-type Decrypt = (value: string) => Promise<string>;
+export type Encrypt = (value: string) => Promise<string | null>;
+export type Decrypt = (value: string) => Promise<string>;
 type Kind = keyof DevOpsSecrets;
 
 /** Where each sits in the store, from before plugins had `PluginSecrets`. */
