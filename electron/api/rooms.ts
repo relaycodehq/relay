@@ -17,7 +17,13 @@ import { workingPathSchema } from "../../shared/working-tree";
 import type { PullRef } from "../../shared/types";
 import type { SyncWorkspace } from "../live-sync";
 import { validateRepo } from "../working-tree";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+const syncTargetSchema = z.union([
+  z.object({ chatId: idSchema }).strict(),
+  refSchema,
+]);
+type SyncTarget = z.infer<typeof syncTargetSchema>;
 
 /** Shared pull-request rooms, their hosting, and live file sync with them. */
 export function roomHandlers(ctx: ApiContext) {
@@ -40,17 +46,13 @@ export function roomHandlers(ctx: ApiContext) {
     key: repoKey(ref),
     dir: linkedFolder(ref),
   });
-  const room = (args: unknown[]) => roomOf(refSchema.parse(args[0]));
 
-  function syncTarget(where: unknown) {
-    const target = z
-      .union([z.object({ chatId: idSchema }).strict(), refSchema])
-      .parse(where);
+  function syncOf(target: SyncTarget) {
     const key = "chatId" in target ? "chat:" + target.chatId : prKey(target);
-    return { target, key, sync: liveSyncs.get(key) };
+    return { key, sync: liveSyncs.get(key) };
   }
-  function activeSync(where: unknown) {
-    const { sync } = syncTarget(where);
+  function activeSync(target: SyncTarget) {
+    const { sync } = syncOf(target);
     if (!sync?.status().active)
       throw new Error("Resume live sync before resolving files.");
     return sync;
@@ -58,12 +60,11 @@ export function roomHandlers(ctx: ApiContext) {
 
   return {
     roomHosting: () => rooms.hostingStatus(),
-    saveRoomHosting: (args) =>
-      rooms.saveHosting(roomHostingSchema.nullable().parse(args[0])),
-    roomAcceptInvitation: async (args) => {
-      const invitation = parseRoomInvitation(
-        z.string().max(16384).parse(args[0]),
-      );
+    saveRoomHosting: takes([roomHostingSchema.nullable()], (input) =>
+      rooms.saveHosting(input),
+    ),
+    roomAcceptInvitation: takes([z.string().max(16384)], async (url) => {
+      const invitation = parseRoomInvitation(url);
       if (!invitation.project || !invitation.number)
         throw new Error(
           "This older invitation has no PR target. Open its repository and paste the invitation in the room.",
@@ -87,47 +88,58 @@ export function roomHandlers(ctx: ApiContext) {
         projectId: invitation.projectId,
       });
       return { ref, state };
-    },
-    roomAccessInfo: async (args) => ({
-      server: await rooms.projectServer(room(args)),
     }),
-    allowRoomAccess: (args) =>
-      rooms.allowAccess(
-        room(args),
-        roomHostingSchema.shape.server.parse(args[1]),
-      ),
-    roomConnect: (args) =>
-      rooms.connect(room(args), connectRoomSchema.parse(args[1])),
-    roomState: (args) => rooms.state(room(args)),
-    roomDisconnect: async (args) => {
-      const context = room(args);
+    roomAccessInfo: takes([refSchema], async (ref) => ({
+      server: await rooms.projectServer(roomOf(ref)),
+    })),
+    allowRoomAccess: takes(
+      [refSchema, roomHostingSchema.shape.server],
+      (ref, server) => rooms.allowAccess(roomOf(ref), server),
+    ),
+    roomConnect: takes([refSchema, connectRoomSchema], (ref, input) =>
+      rooms.connect(roomOf(ref), input),
+    ),
+    roomState: takes([refSchema], (ref) => rooms.state(roomOf(ref))),
+    roomDisconnect: takes([refSchema], async (ref) => {
+      const context = roomOf(ref);
       // PR keys extend this repository's key: [account, owner, name, number].
       await liveSyncs.stopWhere((key) =>
         key.startsWith(context.key.slice(0, -1) + ","),
       );
       return rooms.disconnect(context);
-    },
-    roomPoll: (args) =>
-      rooms.poll(
-        room(args),
-        z.number().int().nonnegative().parse(args[1]),
-        args[2] === undefined
-          ? undefined
-          : z.number().int().nonnegative().parse(args[2]),
-      ),
-    roomSend: (args) => rooms.send(room(args), sendRoomSchema.parse(args[1])),
-    roomCancel: (args) => rooms.cancel(room(args), idSchema.parse(args[1])),
-    roomPresence: (args) =>
-      rooms.presence(room(args), presenceSchema.nullable().parse(args[1])),
-    roomInvite: (args) => rooms.invite(room(args)),
-    roomMembers: (args) => rooms.members(room(args)),
-    roomRevoke: (args) => rooms.revoke(room(args), idSchema.parse(args[1])),
-    liveSyncState: (args) => syncTarget(args[0]).sync?.status() ?? idleSync,
-    liveSyncStop: async (args) => {
-      await syncTarget(args[0]).sync?.stop();
-    },
-    liveSyncStart: async (args) => {
-      const { target, key, sync } = syncTarget(args[0]);
+    }),
+    roomPoll: takes(
+      [
+        refSchema,
+        z.number().int().nonnegative(),
+        z.number().int().nonnegative().optional(),
+      ],
+      (ref, cursor, before) => rooms.poll(roomOf(ref), cursor, before),
+    ),
+    roomSend: takes([refSchema, sendRoomSchema], (ref, input) =>
+      rooms.send(roomOf(ref), input),
+    ),
+    roomCancel: takes([refSchema, idSchema], (ref, id) =>
+      rooms.cancel(roomOf(ref), id),
+    ),
+    roomPresence: takes(
+      [refSchema, presenceSchema.nullable()],
+      (ref, presence) => rooms.presence(roomOf(ref), presence),
+    ),
+    roomInvite: takes([refSchema], (ref) => rooms.invite(roomOf(ref))),
+    roomMembers: takes([refSchema], (ref) => rooms.members(roomOf(ref))),
+    roomRevoke: takes([refSchema, idSchema], (ref, id) =>
+      rooms.revoke(roomOf(ref), id),
+    ),
+    liveSyncState: takes(
+      [syncTargetSchema],
+      (target) => syncOf(target).sync?.status() ?? idleSync,
+    ),
+    liveSyncStop: takes([syncTargetSchema], async (target) => {
+      await syncOf(target).sync?.stop();
+    }),
+    liveSyncStart: takes([syncTargetSchema], async (target) => {
+      const { key, sync } = syncOf(target);
       if (sync?.status().active) return sync.status();
       let workspace: SyncWorkspace;
       if ("chatId" in target)
@@ -154,15 +166,21 @@ export function roomHandlers(ctx: ApiContext) {
         if (project.path === workspace.root)
           projects.assertCheckoutAvailable(project.id);
       return liveSyncs.start(key, workspace);
-    },
-    liveSyncConflict: (args) =>
-      activeSync(args[0]).conflict(workingPathSchema.parse(args[1])),
-    liveSyncResolve: (args) =>
-      activeSync(args[0]).resolve(
-        workingPathSchema.parse(args[1]),
-        z.enum(["local", "shared"]).parse(args[2]),
-        z.number().int().positive().parse(args[3]),
-        digestSchema.nullable().parse(args[4]),
-      ),
+    }),
+    liveSyncConflict: takes(
+      [syncTargetSchema, workingPathSchema],
+      (target, path) => activeSync(target).conflict(path),
+    ),
+    liveSyncResolve: takes(
+      [
+        syncTargetSchema,
+        workingPathSchema,
+        z.enum(["local", "shared"]),
+        z.number().int().positive(),
+        digestSchema.nullable(),
+      ],
+      (target, path, choice, revision, localHash) =>
+        activeSync(target).resolve(path, choice, revision, localHash),
+    ),
   } satisfies Handlers;
 }

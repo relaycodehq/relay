@@ -1,6 +1,7 @@
 import { app, dialog, shell } from "electron";
 import { z } from "zod";
 import { lineQuestionSchema } from "../../shared/questions";
+import type { PullRef, Repo } from "../../shared/types";
 import {
   bodySchema,
   digestSchema,
@@ -22,7 +23,7 @@ import {
   workingDiff,
   workingTree,
 } from "../working-tree";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
 
 /** A reviewed repository's linked local checkout: its changes, files, and agents run in it. */
 export function reviewCheckoutHandlers(ctx: ApiContext) {
@@ -35,45 +36,38 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
     requireFolder,
   } = ctx;
 
-  async function checkoutRoot(where: unknown) {
-    const r = repoSchema.parse(where);
-    return validateRepo(requireFolder(r), requireClient().account.server, r);
-  }
+  const checkoutRoot = (r: Repo) =>
+    validateRepo(requireFolder(r), requireClient().account.server, r);
 
-  /** A file in the PR's checkout, which must be at the head the page shows. */
-  async function localFile(args: unknown[]) {
-    const r = refSchema.parse(args[0]);
+  /** The PR's checkout, which must be at the head the page shows. */
+  async function checkoutAt(r: PullRef, head: string) {
     const dir = requireFolder(r);
-    const head = shaSchema.parse(args[1]);
-    const path = filePathSchema.parse(args[2]);
     if ((await requireClient().pull(r)).head.sha !== head)
       throw new Error(
         "This PR has new commits. Refresh it and check out the new head before editing.",
       );
-    return { r, dir, head, path, server: requireClient().account.server };
+    return dir;
   }
+  const localFileArgs = [refSchema, shaSchema, filePathSchema] as const;
 
   return {
-    workingTree: async (args) => workingTree(await checkoutRoot(args[0])),
-    workingDiff: async (args) =>
-      workingDiff(
-        await checkoutRoot(args[0]),
-        workingPathSchema.parse(args[1]),
-        z.enum(["staged", "unstaged"]).parse(args[2]),
+    workingTree: takes([repoSchema], async (r) =>
+      workingTree(await checkoutRoot(r)),
+    ),
+    workingDiff: takes(
+      [repoSchema, workingPathSchema, z.enum(["staged", "unstaged"])],
+      async (r, path, area) => workingDiff(await checkoutRoot(r), path, area),
+    ),
+    gitAction: takes([repoSchema, gitActionSchema], async (r, action) =>
+      performGitAction(await checkoutRoot(r), action, (file) =>
+        shell.trashItem(file),
       ),
-    gitAction: async (args) =>
-      performGitAction(
-        await checkoutRoot(args[0]),
-        gitActionSchema.parse(args[1]),
-        (file) => shell.trashItem(file),
-      ),
-    folder: (args) => {
-      const r = repoSchema.parse(args[0]),
-        dir = linkedFolder(r);
+    ),
+    folder: takes([repoSchema], (r) => {
+      const dir = linkedFolder(r);
       return dir ? inspectFolder(dir, requireClient().account.server, r) : null;
-    },
-    linkFolder: async (args) => {
-      const r = repoSchema.parse(args[0]);
+    }),
+    linkFolder: takes([repoSchema], async (r) => {
       const result = await dialog.showOpenDialog(ctx.window.win!, {
         title: "Link local Git repository",
         properties: ["openDirectory"],
@@ -93,56 +87,68 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
         s.folders[repoKey(r)] = local.path;
       });
       return local;
-    },
-    readLocalFile: async (args) => {
-      const { r, dir, head, path, server } = await localFile(args);
-      return readLocalFile(dir, server, r, head, path);
-    },
-    saveLocalFile: async (args) => {
-      const { r, dir, head, path, server } = await localFile(args);
-      return saveLocalFile(
-        dir,
-        server,
-        r,
-        head,
-        path,
-        digestSchema.parse(args[3]),
-        textSchema.parse(args[4]),
-      );
-    },
-    askAboutLines: async (args) => {
-      const ref = refSchema.parse(args[0]),
-        question = lineQuestionSchema.parse(args[1]);
-      const dir = requireFolder(ref);
-      const settings = store.aiSettings();
-      await launchLineQuestion(
-        requireClient(),
-        dir,
-        app.getPath("userData"),
-        ref,
-        question,
-        settings.questions,
-        settings.questionsProvider,
-      );
-    },
-    launchCodex: async (args) => {
-      const r = refSchema.parse(args[0]),
-        dir = requireFolder(r);
-      const head = shaSchema.parse(args[1]);
-      const p = await requireClient().pull(r);
-      if (p.head.sha !== head)
-        throw new Error("This PR changed. Refresh before starting Codex.");
-      await launchCodex(
-        dir,
-        app.getPath("userData"),
-        r,
-        head,
-        filePathSchema.parse(args[2]),
-        z.number().int().positive().parse(args[3]),
-        sideSchema.parse(args[4]),
-        bodySchema.parse(args[5]),
-        requireClient().account.server,
-      );
-    },
+    }),
+    readLocalFile: takes(localFileArgs, async (r, head, path) => {
+      const dir = await checkoutAt(r, head);
+      return readLocalFile(dir, requireClient().account.server, r, head, path);
+    }),
+    saveLocalFile: takes(
+      [...localFileArgs, digestSchema, textSchema],
+      async (r, head, path, version, contents) => {
+        const dir = await checkoutAt(r, head);
+        return saveLocalFile(
+          dir,
+          requireClient().account.server,
+          r,
+          head,
+          path,
+          version,
+          contents,
+        );
+      },
+    ),
+    askAboutLines: takes(
+      [refSchema, lineQuestionSchema],
+      async (ref, question) => {
+        const dir = requireFolder(ref);
+        const settings = store.aiSettings();
+        await launchLineQuestion(
+          requireClient(),
+          dir,
+          app.getPath("userData"),
+          ref,
+          question,
+          settings.questions,
+          settings.questionsProvider,
+        );
+      },
+    ),
+    launchCodex: takes(
+      [
+        refSchema,
+        shaSchema,
+        filePathSchema,
+        z.number().int().positive(),
+        sideSchema,
+        bodySchema,
+      ],
+      async (r, head, path, line, side, comment) => {
+        const dir = requireFolder(r);
+        const p = await requireClient().pull(r);
+        if (p.head.sha !== head)
+          throw new Error("This PR changed. Refresh before starting Codex.");
+        await launchCodex(
+          dir,
+          app.getPath("userData"),
+          r,
+          head,
+          path,
+          line,
+          side,
+          comment,
+          requireClient().account.server,
+        );
+      },
+    ),
   } satisfies Handlers;
 }

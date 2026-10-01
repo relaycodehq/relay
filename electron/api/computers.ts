@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/rooms";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Settings → Computers, and handing threads to them. */
 export function computerHandlers(ctx: ApiContext) {
@@ -12,24 +12,26 @@ export function computerHandlers(ctx: ApiContext) {
   return {
     pairedComputers: () => handoffs().computers.list(),
     computersOverview: () => handoffs().sender.overview(),
-    pairComputer: (args) =>
-      handoffs().computers.pair(z.string().max(2000).parse(args[0])),
-    forgetComputer: (args) =>
-      handoffs().computers.forget(idSchema.parse(args[0])),
-    handoffTargets: (args) =>
-      handoffs().sender.targets(idSchema.parse(args[0])),
-    handOffThread: (args) =>
-      handoffs().sender.handOff(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      ),
-    retryHandoff: (args) => handoffs().sender.retry(idSchema.parse(args[0])),
-    handoffView: (args) => handoffs().sender.view(idSchema.parse(args[0])),
-    bringBackThread: (args) =>
-      handoffs().sender.bringBack(idSchema.parse(args[0])),
-    keepThreadHere: (args) =>
-      handoffs().sender.keepHere(idSchema.parse(args[0])),
-    updateComputer: (args) =>
-      handoffs().sender.update(idSchema.parse(args[0])),
+    pairComputer: takes([z.string().max(2000)], (link) =>
+      handoffs().computers.pair(link),
+    ),
+    forgetComputer: takes([idSchema], (id) => handoffs().computers.forget(id)),
+    handoffTargets: takes([idSchema], (chatId) =>
+      handoffs().sender.targets(chatId),
+    ),
+    handOffThread: takes([idSchema, idSchema], (chatId, computerId) =>
+      handoffs().sender.handOff(chatId, computerId),
+    ),
+    retryHandoff: takes([idSchema], (chatId) =>
+      handoffs().sender.retry(chatId),
+    ),
+    handoffView: takes([idSchema], (chatId) => handoffs().sender.view(chatId)),
+    bringBackThread: takes([idSchema], (chatId) =>
+      handoffs().sender.bringBack(chatId),
+    ),
+    keepThreadHere: takes([idSchema], (chatId) =>
+      handoffs().sender.keepHere(chatId),
+    ),
+    updateComputer: takes([idSchema], (id) => handoffs().sender.update(id)),
   } satisfies Handlers;
 }
