@@ -288,10 +288,17 @@ export function followLastAgent(
 }
 /** Whether a composer saved settings under `key`. */
 export const hasComposerSettings = (key: string) => read(key) !== null;
+/** Where a composer with nothing saved yet starts from. */
+export interface InheritedSettings {
+  /** The composer whose settings it starts on. */
+  settingsKey: string;
+  /** The agent it starts on, instead of that composer's. */
+  provider?: AgentProvider;
+}
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
-  inherit?: { settingsKey: string; provider?: AgentProvider },
+  inherit?: InheritedSettings,
 ): ComposerSettings {
   let saved = read(key);
   let provider = pickedProvider(key, saved);

@@ -22,7 +22,7 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "./draft-images";
-import { readDraft, useDraft } from "./drafts";
+import { readDraft, useDraft, writeDraft } from "./drafts";
 import { attachedImages, dataUrlBytes, nextImageNumber } from "./image-refs";
 import { useImagePills } from "./image-pills";
 import type { Sketch, SketchHistory } from "./sketch";
@@ -46,18 +46,13 @@ export interface DraftEditor {
  * besides typing. Screenshots are kept beside the text, long pastes become
  * pills in it, and other files go in as their paths.
  */
-export function useComposerDraft({
-  key,
-  shared,
-  editor,
-  onDraft,
-}: {
-  key: string;
-  shared: boolean;
-  editor: RefObject<DraftEditor | null>;
-  onDraft: (v: string) => void;
-}) {
+export function useComposerDraft(
+  key: string,
+  shared: boolean,
+  editor: RefObject<DraftEditor | null>,
+) {
   const text = useDraft(key);
+  const set = (value: string) => writeDraft(key, value);
   const [images, setImages] = useState<DraftImage[]>([]);
   const [error, setError] = useState<string>();
   const [preparing, setPreparing] = useState(false);
@@ -92,7 +87,7 @@ export function useComposerDraft({
         )
         .map(pasteMarkdown)
         .join("");
-      if (blocks) onDraft(text.trimEnd() + blocks);
+      if (blocks) set(text.trimEnd() + blocks);
     } catch {
       // Nothing readable to keep.
     }
@@ -184,6 +179,7 @@ export function useComposerDraft({
   }
   return {
     text,
+    set,
     images,
     /** The screenshots that go with the message. */
     attached,
@@ -273,14 +269,14 @@ export function useComposerDraft({
       return {
         dispatch() {
           taken = { text, images: withImages ? images : [] };
-          onDraft("");
+          set("");
           if (withImages) setImages([]);
         },
         restore() {
           if (!taken) return;
           const { text, images: back } = taken,
             typed = readDraft(key).trim();
-          onDraft(typed ? `${text.trimEnd()}\n\n${typed}` : text);
+          set(typed ? `${text.trimEnd()}\n\n${typed}` : text);
           if (back.length) setImages((now) => [...back, ...now]);
         },
       };

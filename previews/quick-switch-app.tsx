@@ -9,6 +9,7 @@ import "../src/styles.css";
 import "../src/components/projects.css";
 import { initAppearance } from "../src/lib/appearance";
 import { Settings } from "../src/components/Settings";
+import { ProjectBranchPicker } from "../src/components/ProjectBranchPicker";
 import { ProjectComposer } from "../src/components/ProjectComposer";
 import { defaultAISettings, type AISettings } from "../shared/settings";
 import { parseQuickSwitch, setQuickSwitch } from "../src/lib/quick-switch";
@@ -63,18 +64,13 @@ function Preview() {
         </button>
       </p>
       <ProjectComposer
-        settingsKey="new:qs"
-        draftKey="preview-draft:qs"
-        onCommand={() => false}
-        onDraft={() => {}}
-        shared={false}
-        running={false}
-        busy={false}
         projectId="qs"
-        checkoutDisabled={false}
-        context={null}
+        keys={{ draft: "preview-draft:qs", settings: "new:qs" }}
+        conversation={{ shared: false, running: false, busy: false }}
+        context={<ProjectBranchPicker projectId="qs" disabled={false} />}
         onSend={async () => false}
         onStop={() => {}}
+        onCommand={() => false}
       />
       {open && (
         <Settings

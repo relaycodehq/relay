@@ -8,6 +8,7 @@ import "../src/styles.css";
 import "../src/components/projects.css";
 import { initAppearance } from "../src/lib/appearance";
 import { Settings } from "../src/components/Settings";
+import { ProjectBranchPicker } from "../src/components/ProjectBranchPicker";
 import { ProjectComposer } from "../src/components/ProjectComposer";
 import { defaultAISettings, type AISettings } from "../shared/settings";
 import type { Api } from "../shared/types";
@@ -57,18 +58,13 @@ function Preview() {
         <section key={id} data-project={id} style={{ marginBottom: 24 }}>
           <h3 style={{ fontSize: 13 }}>{label}</h3>
           <ProjectComposer
-            settingsKey={`new:${id}`}
-            draftKey={`preview-draft:${id}`}
-            onCommand={() => false}
-            onDraft={() => {}}
-            shared={false}
-            running={false}
-            busy={false}
             projectId={id}
-            checkoutDisabled={false}
-            context={null}
+            keys={{ draft: `preview-draft:${id}`, settings: `new:${id}` }}
+            conversation={{ shared: false, running: false, busy: false }}
+            context={<ProjectBranchPicker projectId={id} disabled={false} />}
             onSend={async () => false}
             onStop={() => {}}
+            onCommand={() => false}
           />
         </section>
       ))}

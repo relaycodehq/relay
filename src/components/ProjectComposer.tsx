@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { GitBranch, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import {
   agentMentionPattern,
   reportsUsage,
@@ -16,6 +16,7 @@ import type { RelayCommand } from "../../shared/commands";
 import type { ComposedSend } from "../../shared/compose-send";
 import type { ResumeSettings } from "../../shared/projects";
 import { draftRecipient } from "../../shared/recipient";
+import type { InheritedSettings } from "../lib/composer-settings";
 import { useComposerToolbar } from "../lib/composer-toolbar";
 import { effortStep, quickStep } from "../lib/effort-shortcut";
 import { quickItems } from "../lib/quick-switch";
@@ -42,7 +43,6 @@ import { ComposerToolbar } from "./ComposerToolbar";
 import { DictationButton } from "./DictationButton";
 import { SketchEditor } from "./ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
-import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import { QuickSwitchHud } from "./QuickSwitchHud";
 import { UltraplanCouncilRow, UltraplanRing } from "./Ultraplan";
 import { UsageRing } from "./UsageRing";
@@ -57,98 +57,75 @@ export interface ComposerHandle {
 }
 /** What the rest of the window may do with the open thread's composer. */
 export type ComposerControls = Pick<ComposerHandle, "focus" | "submit">;
+/** What the conversation the composer writes to is doing, and allows. */
+export interface ComposerConversation {
+  /** Shared with people: a message is a note unless an agent is picked, and nothing attaches yet. */
+  shared: boolean;
+  /** An answer is coming; a message now queues, or steers it. */
+  running: boolean;
+  /** Nothing can go out now. */
+  busy: boolean;
+  /** The agent holding its context; the composer runs it until one is picked here. */
+  agent?: AgentProvider;
+  /** The agent whose last answer proposed a plan, offered to build it. */
+  planner?: AgentProvider;
+  /** It can plan with a council first; see shared/ultraplan. */
+  ultraplan?: boolean;
+}
 export function ProjectComposer({
-  handleRef,
-  onCommand,
-  draftKey,
-  settingsKey,
-  onDraft,
-  shared,
-  running,
-  busy,
-  branch,
-  plain,
+  ref,
   projectId,
-  checkoutDisabled,
+  keys,
+  conversation: {
+    shared,
+    running,
+    busy,
+    agent,
+    planner,
+    ultraplan: ultraplanOffered = false,
+  },
   context,
-  workspace,
-  branchLabel,
+  notice,
+  meter,
   attachment,
-  allowEmpty,
+  placeholder,
   onSend,
   onStop,
-  planProvider,
-  contextMeter,
-  notice,
-  placeholder,
-  inherit,
-  agent,
-  ultraplanOffered = false,
-  onStartThread,
+  onCommand,
 }: {
-  handleRef?: Ref<ComposerHandle>;
-  onCommand: (command: RelayCommand, args: string) => boolean | string;
-  draftKey: string;
-  settingsKey: string;
-  /** With nothing saved under `settingsKey` yet: start from these settings, on this agent. */
-  inherit?: { settingsKey: string; provider?: AgentProvider };
-  /** The agent holding the thread's context; the composer runs it until one is picked here. */
-  agent?: AgentProvider;
-  onDraft: (v: string) => void;
-  shared: boolean;
-  running: boolean;
-  busy: boolean;
-  branch?: string | null;
-  /** A folder without Git: no branch to show or switch. */
-  plain?: boolean;
+  ref?: Ref<ComposerHandle>;
   projectId: string;
-  checkoutDisabled: boolean;
-  context: ReactNode;
-  /** Where the thread works; sits before the branch. */
-  workspace?: ReactNode;
-  /** A branch the thread can't switch, shown instead of the picker. */
-  branchLabel?: string;
-  attachment?: ReactNode;
-  /** The attachment alone is a complete message. */
-  allowEmpty?: boolean;
+  /** Where its draft and its settings are kept; see lib/drafts and lib/composer-settings. */
+  keys: { draft: string; settings: string; inherit?: InheritedSettings };
+  conversation: ComposerConversation;
+  /** The row above it: what the conversation is about, and where it works. */
+  context?: ReactNode;
+  /** Sits on top of the input, attached to it. */
+  notice?: ReactNode;
+  /** The context window's meter, among the controls. */
+  meter?: ReactNode;
+  /** What goes with the message besides its text; `complete` when that alone is a message. */
+  attachment?: { view: ReactNode; complete: boolean };
+  placeholder?: string;
   onSend: (
     value: ComposedSend,
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
     dispatch?: () => void,
   ) => Promise<boolean>;
   onStop: () => void;
-  planProvider?: AgentProvider;
-  /** The main conversation of a private thread can plan with a council first. */
-  ultraplanOffered?: boolean;
-  contextMeter?: ReactNode;
-  /** Sits on top of the input, attached to it. */
-  notice?: ReactNode;
-  placeholder?: string;
-  /** Opens a new project-folder thread on `text`, sent or as a draft. */
-  onStartThread?: (text: string, send: boolean) => Promise<void>;
+  /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
+  onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
   const stop = useStopKeys(running, onStop);
-  const composerForm = useRef<HTMLFormElement>(null);
-  const composer = useComposerSettings(
-    { key: settingsKey, inherit },
+  const form = useRef<HTMLFormElement>(null);
+  const composer = useComposerSettings({
+    key: keys.settings,
+    inherit: keys.inherit,
     shared,
     agent,
-  );
-  const { provider } = composer;
+  });
   const catalogs = useModelCatalogs(projectId);
-  const { codex: codexModels, defaultNames } = catalogs;
   const runs = useAgentRuns(composer, catalogs, dropMention);
-  const { codex: selected } = runs;
-  const {
-    runtimeMode,
-    setRuntimeMode,
-    interactionMode,
-    setInteractionMode,
-    ultraplan,
-    setUltraplan,
-    council,
-    setCouncil,
-  } = composer;
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
   const [spark, setSpark] = useState(0);
   const input = useRef<HTMLElement>(null);
@@ -157,27 +134,24 @@ export function ProjectComposer({
     () => undefined,
   );
   useImperativeHandle(
-    handleRef,
+    ref,
     () => ({
       insertQuote: (text) => promptInput.current?.insertQuote(text),
       agentSettings: () => agentSettings.current(),
       focus: () => input.current?.focus(),
-      submit: () => composerForm.current?.requestSubmit(),
+      submit: () => form.current?.requestSubmit(),
     }),
     [],
   );
+  agentSettings.current = runs.resumeSettings;
   const filePick = useRef<HTMLInputElement>(null);
-  const draft = useComposerDraft({
-    key: draftKey,
-    shared,
-    editor: promptInput,
-    onDraft,
-  });
+  const draft = useComposerDraft(keys.draft, shared, promptInput);
   const [viewingPaste, setViewingPaste] = useState<number>();
-  const recipient = draftRecipient(draft.text, provider);
-  const councilOn = ultraplanOffered && ultraplan && recipient !== "message";
+  const recipient = draftRecipient(draft.text, composer.provider);
+  const councilOn =
+    ultraplanOffered && composer.ultraplan && recipient !== "message";
   const pickUltraplan = useCallback((on: boolean) => {
-    setUltraplan(on);
+    composer.setUltraplan(on);
     if (on) setSpark((n) => n + 1);
   }, []);
   const toolbar = useComposerToolbar();
@@ -202,7 +176,7 @@ export function ProjectComposer({
   });
   const commands = useComposerCommands({
     draft: draft.text,
-    onDraft,
+    onDraft: draft.set,
     projectId,
     provider: recipient,
     onCommand: settingCommands.run,
@@ -212,8 +186,7 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
-  agentSettings.current = runs.resumeSettings;
-  const { send, ...sending } = useComposerSend({
+  const sending = useComposerSend({
     draft,
     state: composer,
     runs,
@@ -221,19 +194,19 @@ export function ProjectComposer({
     councilOn,
     busy,
     running,
-    complete: !!allowEmpty,
+    complete: !!attachment?.complete,
     intercept: commands.interceptSend,
     onSend,
   });
   return (
     <div className="thread-compose-wrap">
-      {planProvider && (
+      {planner && (
         <div className="composer-plan-action">
           <button
             type="button"
             className="primary"
-            disabled={busy || running || !selected}
-            onClick={() => sending.implementPlan(planProvider)}
+            disabled={busy || running || !runs.codex}
+            onClick={() => sending.implementPlan(planner)}
           >
             Implement plan
           </button>
@@ -245,26 +218,7 @@ export function ProjectComposer({
           {commands.error}
         </p>
       )}
-      <div className="thread-context-controls">
-        {context}
-        {workspace}
-        {plain ? null : branchLabel ? (
-          <span
-            className="composer-branch-trigger workspace-trigger static"
-            title="This thread's worktree branch"
-          >
-            <GitBranch size={13} />
-            <span>{branchLabel}</span>
-          </span>
-        ) : (
-          <ProjectBranchPicker
-            projectId={projectId}
-            branch={branch}
-            disabled={checkoutDisabled || running || busy}
-            onStartThread={onStartThread}
-          />
-        )}
-      </div>
+      <div className="thread-context-controls">{context}</div>
       {notice}
       <QuickSwitchHud
         style={quick.style}
@@ -279,15 +233,15 @@ export function ProjectComposer({
         onHover={quick.hover}
       />
       <form
-        ref={composerForm}
+        ref={form}
         className="project-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          sending.send();
         }}
       >
         {councilOn && <UltraplanRing key={spark} />}
-        {attachment}
+        {attachment?.view}
         <ComposerAttachmentStrip
           draft={draft}
           onOpenPaste={setViewingPaste}
@@ -301,8 +255,8 @@ export function ProjectComposer({
         <ComposerPromptInput
           inputRef={input}
           handleRef={promptInput}
-          draftKey={draftKey}
-          key={draftKey}
+          draftKey={keys.draft}
+          key={keys.draft}
           aria-label="Message project"
           aria-expanded={commands.visible || undefined}
           aria-controls={commands.visible ? commands.id : undefined}
@@ -312,7 +266,7 @@ export function ProjectComposer({
           aria-autocomplete={commands.visible ? "list" : undefined}
           onBlur={commands.dismiss}
           value={draft.text}
-          onChange={onDraft}
+          onChange={draft.set}
           onCursor={commands.setCursor}
           onOpenPaste={setViewingPaste}
           images={draft.chips}
@@ -344,7 +298,7 @@ export function ProjectComposer({
             const action = sendAction(e, sendKey);
             if (action) {
               e.preventDefault();
-              send(action === "steer");
+              sending.send(action === "steer");
             }
           }}
           onPasteCapture={draft.paste}
@@ -356,9 +310,9 @@ export function ProjectComposer({
         />
         {councilOn && (
           <UltraplanCouncilRow
-            kind={council}
+            kind={composer.council}
             onKind={(kind) => {
-              setCouncil(kind);
+              composer.setCouncil(kind);
               setSpark((n) => n + 1);
             }}
           />
@@ -380,12 +334,12 @@ export function ProjectComposer({
               model: (
                 <ComposerModelPicker
                   provider={recipient}
-                  ready={!!selected}
+                  ready={!!runs.codex}
                   catalogs={runs.picker}
                   onOpen={catalogs.refresh}
                   openSignal={settingCommands.pickerSignal}
                   onSelect={runs.select}
-                  defaultNames={defaultNames}
+                  defaultNames={catalogs.defaultNames}
                 />
               ),
               effort: recipient !== "message" &&
@@ -394,22 +348,22 @@ export function ProjectComposer({
                     to={recipient}
                     state={composer}
                     runs={runs}
-                    codexModels={codexModels}
+                    codexModels={catalogs.codex}
                   />
                 ),
-              context: contextMeter,
+              context: meter,
               access: recipient !== "message" && (
                 <RuntimeModeSelect
                   provider={recipient}
-                  runtimeMode={runtimeMode}
-                  onRuntimeMode={setRuntimeMode}
+                  runtimeMode={composer.runtimeMode}
+                  onRuntimeMode={composer.setRuntimeMode}
                 />
               ),
               mode: recipient !== "message" && (
                 <InteractionModeMenu
-                  interactionMode={interactionMode}
+                  interactionMode={composer.interactionMode}
                   ultraplan={councilOn}
-                  onInteractionMode={setInteractionMode}
+                  onInteractionMode={composer.setInteractionMode}
                   onUltraplan={ultraplanOffered ? pickUltraplan : undefined}
                 />
               ),
@@ -436,8 +390,8 @@ export function ProjectComposer({
                 <DictationButton
                   owner={sending.dictation}
                   target={() => promptInput.current?.dictation}
-                  composer={composerForm}
-                  resetKey={draftKey}
+                  composer={form}
+                  resetKey={keys.draft}
                 />
               ),
             }}
@@ -450,7 +404,7 @@ export function ProjectComposer({
               disabled={sending.disabled}
               running={running}
               sendKey={sendKey}
-              onSendLater={(at) => void send(false, at)}
+              onSendLater={(at) => void sending.send(false, at)}
             />
           )}
         </div>

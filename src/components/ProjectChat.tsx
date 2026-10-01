@@ -327,18 +327,20 @@ export function ProjectChat({
         ) : (
           <ThreadComposer
             key={`${id}:${root?.id ?? "main"}:${queue.restored}`}
+            ref={composer}
             handle={handle}
             project={project}
             scope={scope}
-            composerRef={composer}
             thread={thread}
             councils={councils}
             background={background}
             session={session}
             attachments={attachments}
             worktree={worktree}
-            branch={checkout.data?.branch}
-            checkoutDisabled={checkoutDisabled}
+            checkout={{
+              branch: checkout.data?.branch,
+              locked: checkoutDisabled,
+            }}
             scopeButtons={scopeButtons}
             onSend={send}
             onStartThread={onStartThread}

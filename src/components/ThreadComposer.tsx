@@ -1,12 +1,11 @@
 import type { ReactNode, Ref } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { GitBranch, X } from "lucide-react";
 import { agentName } from "../../shared/agents";
 import type { ComposedSend } from "../../shared/compose-send";
 import type { ChatScope, Project } from "../../shared/projects";
 import { threadContextAgent } from "../../shared/recipient";
 import { api } from "../lib/api";
-import { writeDraft } from "../lib/drafts";
 import { threadDraftKey } from "../lib/thread-storage";
 import type { TurnDiffTarget } from "../lib/turn-diff";
 import type { BackgroundWork } from "../lib/useBackgroundWork";
@@ -22,6 +21,7 @@ import { awayPlaceholder } from "./HandoffStrip";
 import { ProjectComposer, type ComposerHandle } from "./ProjectComposer";
 import { SubagentsIndicator } from "./Subagents";
 import { ThreadNotice } from "./ThreadNotice";
+import { ProjectBranchPicker } from "./ProjectBranchPicker";
 import { IconButton } from "./ui";
 import { WorkItemChip } from "./WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
@@ -74,43 +74,82 @@ function AttachedContext({
   );
 }
 
+/** The project checkout's branch, and whether switching it is held off. */
+export interface ProjectCheckout {
+  branch?: string | null;
+  locked: boolean;
+}
+
+/** The branch the thread works on: the checkout's, to switch, or its own worktree's. */
+function ThreadBranch({
+  project,
+  worktree,
+  checkout,
+  disabled,
+  onStartThread,
+}: {
+  project: Project;
+  worktree: ThreadWorktree;
+  checkout: ProjectCheckout;
+  disabled: boolean;
+  onStartThread?: (text: string, send: boolean) => Promise<void>;
+}) {
+  // A folder without Git has no branch to show or switch.
+  if (project.plain) return null;
+  if (worktree.branch)
+    return (
+      <span
+        className="composer-branch-trigger workspace-trigger static"
+        title="This thread's worktree branch"
+      >
+        <GitBranch size={13} />
+        <span>{worktree.branch}</span>
+      </span>
+    );
+  return (
+    <ProjectBranchPicker
+      projectId={project.id}
+      branch={checkout.branch}
+      disabled={checkout.locked || disabled}
+      onStartThread={onStartThread}
+    />
+  );
+}
+
 /**
  * The open conversation's composer, told what the thread is doing: whether
  * its agents are at work, what it waits on, where it works, and what the
  * agent's session holds.
  */
 export function ThreadComposer({
+  ref,
   handle: { chat, id, busy, setError },
   project,
   scope,
-  composerRef,
   thread: { root, shown, running },
   councils: { reviewing, planning },
   background: { agentBatch, pending, stopped, leftBehind },
   session: { runCommand, context, compacting, showContext, compact },
   attachments,
   worktree,
-  branch,
-  checkoutDisabled,
+  checkout,
   scopeButtons,
   onSend,
   onStartThread,
   onOpenAgent,
   onOpenTurnDiff,
 }: {
+  ref: Ref<ComposerHandle>;
   handle: ThreadHandle;
   project: Project;
   scope: ChatScope;
-  composerRef: Ref<ComposerHandle>;
   thread: ChatThread;
   councils: Councils;
   background: BackgroundWork;
   session: SessionCommands;
   attachments: ComposerAttachments;
   worktree: ThreadWorktree;
-  /** The project checkout's branch. */
-  branch?: string | null;
-  checkoutDisabled: boolean;
+  checkout: ProjectCheckout;
   scopeButtons: ReactNode;
   onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
@@ -122,6 +161,9 @@ export function ThreadComposer({
   const qc = useQueryClient();
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
+  // A side thread doesn't wait for the main answer, nor queue behind it.
+  const waiting = root?.side ? false : running || reviewing || planning;
+  const held = busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt;
   const placeholder =
     (chat && awayPlaceholder(chat)) ??
     (root?.side
@@ -139,12 +181,13 @@ export function ThreadComposer({
                 : undefined);
   return (
     <ProjectComposer
-      handleRef={composerRef}
-      onCommand={runCommand}
-      // A side conversation keeps its own agent and opens on the one that wrote its message.
-      settingsKey={root ? `${id}:${root.id}` : id}
-      inherit={
-        root
+      ref={ref}
+      projectId={project.id}
+      keys={{
+        draft: draftKey,
+        // A side conversation keeps its own agent and opens on the one that wrote its message.
+        settings: root ? `${id}:${root.id}` : id,
+        inherit: root
           ? {
               settingsKey: id,
               provider:
@@ -152,22 +195,24 @@ export function ThreadComposer({
                   ? root.provider
                   : undefined,
             }
-          : undefined
-      }
-      agent={chat && threadContextAgent(chat)}
-      draftKey={draftKey}
-      onDraft={(v) => writeDraft(draftKey, v)}
-      shared={!!chat?.shared}
-      // A side thread doesn't wait for the main answer, nor queue behind it.
-      running={root?.side ? false : running || reviewing || planning}
-      busy={busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt}
-      branch={branch}
-      plain={project.plain}
-      projectId={project.id}
-      checkoutDisabled={checkoutDisabled}
-      onStartThread={onStartThread}
-      workspace={
+          : undefined,
+      }}
+      conversation={{
+        shared: !!chat?.shared,
+        running: waiting,
+        busy: held,
+        agent: chat && threadContextAgent(chat),
+        planner:
+          !running &&
+          shown.at(-1)?.status === "complete" &&
+          shown.at(-1)?.proposedPlan
+            ? shown.at(-1)?.provider
+            : undefined,
+        ultraplan: !root && !chat?.shared && scope.kind !== "review",
+      }}
+      context={
         <>
+          {scopeButtons}
           {agentBatch.length > 0 && (
             <SubagentsIndicator
               batch={agentBatch}
@@ -198,10 +243,15 @@ export function ThreadComposer({
               onError={setError}
             />
           )}
+          <ThreadBranch
+            project={project}
+            worktree={worktree}
+            checkout={checkout}
+            disabled={waiting || held}
+            onStartThread={onStartThread}
+          />
         </>
       }
-      branchLabel={worktree.branch}
-      onSend={onSend}
       notice={
         chat && (
           <ThreadNotice
@@ -212,19 +262,7 @@ export function ThreadComposer({
           />
         )
       }
-      placeholder={placeholder}
-      ultraplanOffered={!root && !chat?.shared && scope.kind !== "review"}
-      planProvider={
-        !running &&
-        shown.at(-1)?.status === "complete" &&
-        shown.at(-1)?.proposedPlan
-          ? shown.at(-1)?.provider
-          : undefined
-      }
-      onStop={() => {
-        if (chat) void api.cancelProjectChat(chat.id).catch(setError);
-      }}
-      contextMeter={
+      meter={
         chat &&
         context && (
           <ContextWindowMeter
@@ -238,13 +276,20 @@ export function ThreadComposer({
           />
         )
       }
-      context={scopeButtons}
-      allowEmpty={!root && (!!workItem || !!codeRefs.length)}
       attachment={
-        !root && (selection || workItem || codeRefs.length) ? (
-          <AttachedContext attachments={attachments} />
-        ) : undefined
+        !root && (selection || workItem || codeRefs.length)
+          ? {
+              view: <AttachedContext attachments={attachments} />,
+              complete: !!workItem || !!codeRefs.length,
+            }
+          : undefined
       }
+      placeholder={placeholder}
+      onSend={onSend}
+      onStop={() => {
+        if (chat) void api.cancelProjectChat(chat.id).catch(setError);
+      }}
+      onCommand={runCommand}
     />
   );
 }

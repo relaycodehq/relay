@@ -17,6 +17,7 @@ import {
   type AgentFollow,
   type ComposerModels,
   type ComposerSettings,
+  type InheritedSettings,
 } from "./composer-settings";
 import { useAISettings } from "./useAISettings";
 import { useNewThreadAgent } from "./useNewThreadAgent";
@@ -24,23 +25,23 @@ import { useNewThreadModels } from "./useNewThreadModels";
 
 export type ComposerState = ReturnType<typeof useComposerSettings>;
 
-/** Where a composer keeps its settings; see lib/composer-settings. */
-export interface ComposerSettingsKeys {
-  key: string;
-  /** With nothing saved under `key` yet: start from these settings, on this agent. */
-  inherit?: { settingsKey: string; provider?: AgentProvider };
-}
-
 /**
  * The agent, models and modes a composer sends with, saved under `key` as
  * they change.
  */
-export function useComposerSettings(
-  { key, inherit }: ComposerSettingsKeys,
-  shared: boolean,
+export function useComposerSettings({
+  key,
+  inherit,
+  shared,
+  agent,
+}: {
+  key: string;
+  /** With nothing saved under `key` yet: start from these settings. */
+  inherit?: InheritedSettings;
+  shared: boolean;
   /** The agent holding the thread's context; the composer runs it until one is picked here. */
-  agent: AgentProvider | undefined,
-) {
+  agent?: AgentProvider;
+}) {
   const ai = useAISettings();
   const [saved] = useState(() => loadComposerSettings(key, inherit));
   const [unsaved] = useState(
