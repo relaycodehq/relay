@@ -251,12 +251,10 @@ function Preview() {
         <aside className="projects-sidebar" style={{ width: 300 }}>
           <ProjectSidebar
             projects={projects}
-            chatId="away"
-            onChat={() => {}}
-            onNew={() => {}}
+            showing={{ chatId: "away" }}
+            onOpen={() => {}}
             onPickNew={() => {}}
             onNewScratch={() => {}}
-            onDraft={() => {}}
             onSendDraft={() => {}}
             onAdd={() => {}}
             onShared={() => {}}

@@ -22,15 +22,8 @@ import {
 } from "../../shared/chat-activity";
 import { agentName } from "../../shared/agents";
 import { api } from "../lib/api";
+import type { ThreadMenuAction } from "../lib/useThreadActions";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
-
-export type ThreadMenuAction =
-  | { kind: "new" }
-  | { kind: "fork" }
-  | { kind: "settle" }
-  | { kind: "rename" }
-  | { kind: "regenerate" }
-  | { kind: "triage"; triage: ChatTriage };
 
 /**
  * A thread's right-click menu, after T3 Code's: triage, naming, auto-settle

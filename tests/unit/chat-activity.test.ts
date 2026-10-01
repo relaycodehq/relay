@@ -4,6 +4,7 @@ import {
   chatActivitySection,
   chatActivitySections,
   chatIsEmpty,
+  elapsedLabel,
   shortAge,
   sentLabel,
   snoozePresets,
@@ -105,6 +106,13 @@ describe("chat activity", () => {
     expect(
       snoozePresets(new Date(2026, 8, 22, 19, 0)).map((p) => p.id),
     ).not.toContain("evening");
+  });
+
+  it("counts a running turn by the second, then by the minute past an hour", () => {
+    expect(elapsedLabel(10_000, 5_000)).toBe("0s");
+    expect(elapsedLabel(0, 59_999)).toBe("59s");
+    expect(elapsedLabel(0, 252_000)).toBe("4m 12s");
+    expect(elapsedLabel(0, 3_780_000)).toBe("1h 3m");
   });
 
   it("formats compact ages", () => {

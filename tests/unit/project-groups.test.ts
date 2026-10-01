@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  groupBefore,
+  groupPaths,
   moveGroupInList,
+  projectPlacement,
   projectFolderTree,
   projectGroupNameSchema,
   rebaseGroup,
@@ -76,6 +79,77 @@ describe("group order", () => {
     const tree = projectFolderTree([], sorted);
     expect(tree.folders.map((f) => f.path)).toEqual(["Home", "Work", "Work b"]);
     expect(tree.folders[1].folders.map((f) => f.name)).toEqual(["Api", "Web"]);
+  });
+});
+
+describe("dropping", () => {
+  const projects = [
+    { id: "a" },
+    { id: "b", folder: "Work" },
+    { id: "c" },
+    { id: "d", folder: "Work" },
+  ];
+  it("puts a project dropped after another before that one's next groupmate", () => {
+    expect(
+      projectPlacement(projects, "c", {
+        kind: "project",
+        id: "b",
+        where: "after",
+      }),
+    ).toEqual({ folder: "Work", before: "d" });
+    expect(
+      projectPlacement(projects, "a", {
+        kind: "project",
+        id: "d",
+        where: "after",
+      }),
+    ).toEqual({ folder: "Work", before: null });
+    expect(
+      projectPlacement(projects, "a", {
+        kind: "project",
+        id: "c",
+        where: "before",
+      }),
+    ).toEqual({ folder: "", before: "c" });
+  });
+  it("skips itself when finding the next groupmate", () => {
+    expect(
+      projectPlacement(projects, "d", {
+        kind: "project",
+        id: "b",
+        where: "after",
+      }),
+    ).toEqual({ folder: "Work", before: null });
+  });
+  it("puts a project dropped on a group last in it, and ignores unlisted neighbours", () => {
+    expect(
+      projectPlacement(projects, "a", { kind: "folder", path: "Work" }),
+    ).toEqual({ folder: "Work", before: null });
+    expect(
+      projectPlacement(projects, "a", {
+        kind: "project",
+        id: "x",
+        where: "after",
+      }),
+    ).toBeUndefined();
+  });
+  it("puts a group dropped after a sibling before the next sibling, past its own subgroups", () => {
+    const paths = groupPaths(
+      projectFolderTree([], ["Home", "Home/Side", "Work", "Work/Web", "Zoo"]),
+    );
+    expect(paths).toEqual(["Home", "Home/Side", "Work", "Work/Web", "Zoo"]);
+    expect(groupBefore(paths, "Zoo", { path: "Home", where: "after" })).toBe(
+      "Work",
+    );
+    expect(groupBefore(paths, "Home", { path: "Work", where: "after" })).toBe(
+      "Zoo",
+    );
+    expect(groupBefore(paths, "Home", { path: "Zoo", where: "after" })).toBe(
+      null,
+    );
+    expect(groupBefore(paths, "Zoo", { path: "Home", where: "before" })).toBe(
+      "Home",
+    );
   });
 });
 

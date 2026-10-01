@@ -389,14 +389,11 @@ function Preview() {
               <ProjectSidebar
                 initialView="threads"
                 projects={projects}
-                projectId={project?.id}
-                chatId={thread?.id}
+                showing={{ projectId: project?.id, chatId: thread?.id }}
                 account="you"
-                onChat={() => {}}
-                onNew={() => {}}
+                onOpen={() => {}}
                 onPickNew={() => {}}
                 onNewScratch={() => {}}
-                onDraft={() => {}}
                 onSendDraft={() => {}}
                 onAdd={() => {}}
                 onShared={() => {}}

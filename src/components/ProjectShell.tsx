@@ -1013,19 +1013,19 @@ export default function ProjectShell() {
           <ProjectSidebar
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
-            projectId={legacy ? undefined : project?.id}
-            chatId={legacy ? undefined : chat?.id}
-            inbox={legacy}
+            showing={
+              legacy
+                ? { inbox: true }
+                : {
+                    projectId: project?.id,
+                    chatId: chat?.id,
+                    draftId: chat ? undefined : draftId,
+                  }
+            }
             account={account?.user.login}
-            onChat={(c) => {
-              const p = projects.data?.find((p) => p.id === c.projectId);
-              if (p) navigate(p, c);
-            }}
-            onNew={(p) => navigate(p, undefined, true)}
+            onOpen={navigate}
             onPickNew={pickNewThread}
             onNewScratch={() => void newScratch()}
-            draftId={legacy || chat ? undefined : draftId}
-            onDraft={(p, id) => navigate(p, undefined, id)}
             onSendDraft={() => chatComposer.current?.submit()}
             onAdd={() => void add()}
             onShared={(p) => {

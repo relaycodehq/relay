@@ -107,11 +107,10 @@ function Preview() {
         <QueryClientProvider key={mode} client={clients[mode]}>
           <ProjectSidebar
             projects={projects}
-            onChat={() => {}}
-            onNew={() => {}}
+            showing={{}}
+            onOpen={() => {}}
             onPickNew={() => {}}
             onNewScratch={() => {}}
-            onDraft={() => {}}
             onSendDraft={() => {}}
             onAdd={() => {}}
             onShared={() => {}}
