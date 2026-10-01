@@ -19,6 +19,7 @@ import { commitEverything, headOf } from "../handoff/git";
 import { worktreeExists } from "../worktrees";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
+import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
 import { agentSession, sessionInput } from "./sessions";
 import { chatSummary } from "./storage";
@@ -99,8 +100,6 @@ export interface HandoffHost {
     active: ActiveChat,
     computer: string,
   ): Promise<unknown>;
-  /** Deep review reviewers or Ultraplan thinkers are still at work in the thread. */
-  councilBusy(chat: ProjectChat): boolean;
 }
 
 /** A thread moving to another of your computers, and coming back. */
@@ -108,6 +107,7 @@ export class ComputerHandoff {
   constructor(
     private core: ChatCore,
     private schedule: ChatSchedule,
+    private councils: Pick<Councils, "busy">,
     private host: HandoffHost,
   ) {}
 
@@ -142,7 +142,7 @@ export class ComputerHandoff {
         throw new Error(
           "Claude left background work or a wake-up in this thread. Stop it first.",
         );
-      if (this.host.councilBusy(chat))
+      if (this.councils.busy(chat))
         throw new Error("Wait for the council or review to finish first.");
       chat.sentTo = { ...sentTo, state: "sending" };
       await this.core.storage.persist(chat);

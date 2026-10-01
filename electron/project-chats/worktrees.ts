@@ -12,6 +12,7 @@ import {
   worktreeExists,
 } from "../worktrees";
 import type { ChatCore } from "./core";
+import type { Councils } from "./councils";
 import { chatSummary } from "./storage";
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
@@ -20,8 +21,7 @@ export class ThreadWorktrees {
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */
     readonly folder: string,
-    /** Deep review reviewers or Ultraplan thinkers are still at work in the thread. */
-    private councilBusy: (chat: ProjectChat) => boolean,
+    private councils: Pick<Councils, "busy">,
   ) {}
 
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
@@ -143,7 +143,7 @@ export class ThreadWorktrees {
     if ((await this.core.projects.inspect(chat.projectId)).plain)
       return "Worktrees need a Git repository.";
     await this.core.active.finished(chat.id);
-    if (this.core.active.has(chat.id) || this.councilBusy(chat))
+    if (this.core.active.has(chat.id) || this.councils.busy(chat))
       return "Wait for the answer to finish first.";
     if (this.core.sessions.pending(chat.id).length || chat.heldWakeups?.length)
       return "Claude left background work or a wake-up in this thread. Stop it first.";

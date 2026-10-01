@@ -7,14 +7,13 @@ import type {
 import { replyRoot } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
 import type { ChatCore } from "./core";
+import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
 import type { ChatSharing } from "./sharing";
 
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
   sendNow(id: string, input: ProjectChatSend): Promise<void>;
-  /** Deep review reviewers or Ultraplan thinkers are still at work in the thread. */
-  councilBusy(chat: ProjectChat): boolean;
 }
 
 /**
@@ -51,6 +50,7 @@ export class ChatQueue {
     private core: ChatCore,
     private schedule: ChatSchedule,
     private sharing: ChatSharing,
+    private councils: Pick<Councils, "busy">,
     private host: QueueHost,
   ) {}
 
@@ -87,7 +87,7 @@ export class ChatQueue {
   async drain(id: string) {
     if (this.core.closing() || this.core.active.has(id)) return;
     const chat = await this.core.storage.load(id);
-    if (this.host.councilBusy(chat)) return;
+    if (this.councils.busy(chat)) return;
     const next = chat.queue?.[0];
     if (!next || chat.queuePaused) return;
     try {

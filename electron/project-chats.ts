@@ -115,10 +115,10 @@ export class ProjectChats {
     this.worktrees = new ThreadWorktrees(
       core,
       join(dirname(dir), "worktrees"),
-      (chat) => this.councils.busy(chat),
+      this.councils,
     );
     this.files = new TurnFiles(core, this.worktrees);
-    this.handoffs = new ComputerHandoff(core, this.schedule, {
+    this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>
         this.turns.handoff(
@@ -130,7 +130,6 @@ export class ProjectChats {
           active,
           computer,
         ),
-      councilBusy: (chat) => this.councils.busy(chat),
     });
     this.runner = new TurnRunner(
       core,
@@ -141,10 +140,15 @@ export class ProjectChats {
         this.turns.unprompted(chat, root, provider, parentId),
     );
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
-    this.queue = new ChatQueue(core, this.schedule, this.sharing, {
-      sendNow: (id, input) => this.turns.sendNow(id, input),
-      councilBusy: (chat) => this.councils.busy(chat),
-    });
+    this.queue = new ChatQueue(
+      core,
+      this.schedule,
+      this.sharing,
+      this.councils,
+      {
+        sendNow: (id, input) => this.turns.sendNow(id, input),
+      },
+    );
     this.turns = new ChatTurns(
       core,
       this.worktrees,
