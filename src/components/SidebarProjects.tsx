@@ -4,7 +4,7 @@ import { ChevronRight, FolderPlus, Plus } from "lucide-react";
 import type { ChatSummary } from "../../shared/projects";
 import { useShortcutLabel } from "../lib/shortcuts";
 import type { SidebarFolds } from "../lib/useSidebarFolds";
-import { GroupContents, type ProjectTreeProps } from "./ProjectTree";
+import { GroupContents, type ProjectTree } from "./ProjectTree";
 import {
   firstThreads,
   ShowMore,
@@ -100,11 +100,12 @@ export function Scratchpad({
 
 /** The Projects heading, a note for what failed, and the tree. */
 export function ProjectsSection({
+  tree,
   error,
   empty,
   onAdd,
-  ...tree
-}: ProjectTreeProps & {
+}: {
+  tree: ProjectTree;
   error: string | undefined;
   /** There are no projects yet. */
   empty: boolean;
@@ -140,7 +141,9 @@ export function ProjectsSection({
         </div>
       </div>
       {error && <p className="sb-note error">{error}</p>}
-      {!folds.folded.projects && <GroupContents node={groups.tree} {...tree} />}
+      {!folds.folded.projects && (
+        <GroupContents node={groups.tree} tree={tree} />
+      )}
       {!folds.folded.projects && empty && (
         <p className="sb-note">Add a project folder to get started.</p>
       )}

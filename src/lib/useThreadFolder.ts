@@ -19,7 +19,7 @@ export function useThreadFolder({
   chats,
   inbox,
   pull,
-}: ShellNavigation) {
+}: Pick<ShellNavigation, "project" | "chat" | "chats" | "inbox" | "pull">) {
   const inWorktree = worktreeThread(chat);
   const where = project ? workspaceId(project.id, inWorktree?.id) : "";
   // The one poller for the working tree: panes, pickers and the chat read this

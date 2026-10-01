@@ -14,7 +14,7 @@ const REMEMBERED_THREADS = 200;
 
 type OpenPanes = Record<PaneId, boolean>;
 
-export interface PaneLayout {
+interface PaneLayout {
   order: PaneId[];
   /** The thread (or unsent draft) `open` belongs to. */
   thread: string;

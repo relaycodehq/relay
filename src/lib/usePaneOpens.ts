@@ -24,7 +24,7 @@ export type PaneOpens = ReturnType<typeof usePaneOpens>;
  * the chat about.
  */
 export function usePaneOpens(
-  { project, panes, pull }: ShellNavigation,
+  { project, panes, pull }: Pick<ShellNavigation, "project" | "panes" | "pull">,
   view: ThreadView,
   folder: ThreadFolder,
   lock: NavigationLock,
@@ -108,7 +108,6 @@ export function usePaneOpens(
     togglePane,
     openTurnDiff,
     openInEditor,
-    revealChange,
     openChatFile,
     ask,
     /** Asks the chat about lines of `pr`'s diff. */

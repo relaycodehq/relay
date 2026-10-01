@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ChatSummary, ChatTriage, Project } from "../../shared/projects";
 import { nextAfterSettle, triaged } from "./activity";
 import { api } from "./api";
+import { errorMessage } from "./error-message";
 import { forkThreadSettings } from "./composer-settings";
 
 export type ThreadMenuAction =
@@ -12,8 +13,6 @@ export type ThreadMenuAction =
   | { kind: "rename" }
   | { kind: "regenerate" }
   | { kind: "triage"; triage: ChatTriage };
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
 
@@ -49,7 +48,7 @@ export function useThreadActions({
   const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
     new Set(),
   );
-  const failed = (e: unknown) => setError(message(e));
+  const failed = (e: unknown) => setError(errorMessage(e));
   /** Every list holding it: its project's, and Scratchpad's for a scratch chat. */
   const patch = (c: ChatSummary, change: (c: ChatSummary) => ChatSummary) =>
     qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>

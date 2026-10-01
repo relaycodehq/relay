@@ -13,9 +13,8 @@ import {
   type ProjectPlace,
 } from "../../shared/project-folders";
 import { api } from "./api";
+import { errorMessage } from "./error-message";
 import { groupKey } from "./useSidebarFolds";
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export type ProjectGroups = ReturnType<typeof useProjectGroups>;
 
@@ -56,7 +55,7 @@ export function useProjectGroups(
     try {
       await work();
     } catch (e) {
-      setError(message(e));
+      setError(errorMessage(e));
     } finally {
       void refresh();
     }
@@ -132,6 +131,6 @@ export function useProjectGroups(
     moveProject: (id: string, target: ProjectPlace) =>
       void change(() => place(id, target)),
     reveal: (id: string) =>
-      void api.revealProject(id).catch((e) => setError(message(e))),
+      void api.revealProject(id).catch((e) => setError(errorMessage(e))),
   };
 }

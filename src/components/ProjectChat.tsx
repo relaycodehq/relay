@@ -36,6 +36,7 @@ import { useQueuedMessages } from "../lib/useQueuedMessages";
 import { useSessionCommands } from "../lib/useSessionCommands";
 import { useThreadScroll } from "../lib/useThreadScroll";
 import { useThreadSend } from "../lib/useThreadSend";
+import type { Viewing } from "../lib/useThreadView";
 import { useThreadHandle } from "../lib/useThreadHandle";
 import { useThreadWorktree } from "../lib/useThreadWorktree";
 import { workingTreeKey } from "../lib/working-tree-key";
@@ -108,7 +109,7 @@ export function ProjectChat({
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
   onStartThread?: (text: string, send: boolean) => Promise<void>;
-  viewing: { path: string | null; viewed: number; total: number };
+  viewing: Viewing;
   /** The thread's composer, while it shows one. */
   ref?: Ref<ComposerControls>;
 }) {

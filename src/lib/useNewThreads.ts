@@ -13,7 +13,10 @@ import type { ShellNavigation } from "./useShellNavigation";
  * chats, a thread on given text, and a project added to start in.
  */
 export function useNewThreads(
-  nav: ShellNavigation,
+  nav: Pick<
+    ShellNavigation,
+    "project" | "chats" | "setSelected" | "setInbox" | "navigate"
+  >,
   projects: UseQueryResult<Project[]>,
   lock: NavigationLock,
   /** Focuses the open thread's composer. */

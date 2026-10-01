@@ -18,7 +18,18 @@ const threadOf = (chats: ChatSummary[] | undefined, number: number) =>
 
 /** PR threads: found or made, and opened on the chat or beside the PR's Review. */
 export function usePullThreads(
-  nav: ShellNavigation,
+  nav: Pick<
+    ShellNavigation,
+    | "project"
+    | "chats"
+    | "chat"
+    | "draftId"
+    | "pull"
+    | "panes"
+    | "navigate"
+    | "openChat"
+    | "setChatId"
+  >,
   lock: NavigationLock,
   onError: (error: unknown) => void,
 ) {

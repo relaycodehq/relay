@@ -44,7 +44,7 @@ export function useSettingCommands({
   /** Any other command; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
-  const { claude, setClaude, setChoice, interactionMode } = state;
+  const { claude, interactionMode } = state;
   const { codex, claudeListed, levels, pickOf } = runs;
   /** Bumped by a bare /model, which opens the model picker. */
   const [pickerSignal, setPickerSignal] = useState(0);
@@ -149,17 +149,14 @@ export function useSettingCommands({
       if (change.command === "provider") runs.pickAgent(change.provider);
       else if (change.command === "model")
         runs.select(change.provider, change.model);
-      else if (change.command === "effort") {
-        const { reasoningEffort } = change;
-        if (to === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
-        else if (isPickAgent(to)) runs.setPickEffort(to, reasoningEffort);
-        else if (codex) setChoice({ ...codex, reasoningEffort });
-      } else if (change.command === "permissions")
+      else if (change.command === "effort")
+        runs.setEffort(to, change.reasoningEffort);
+      else if (change.command === "permissions")
         state.setRuntimeMode(change.runtimeMode);
       else if (change.command === "plan") {
         state.setInteractionMode(change.plan ? "plan" : "default");
         if (!change.plan) state.setUltraplan(false);
-      } else if (codex) setChoice({ ...codex, fast: change.fast });
+      } else runs.setFast(change.fast);
       return true;
     },
   };

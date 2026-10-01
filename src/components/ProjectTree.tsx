@@ -43,7 +43,7 @@ import {
 import { IconButton, Spinner } from "./ui";
 
 /** What every group and project in the tree works with. */
-export interface ProjectTreeProps {
+export interface ProjectTree {
   groups: ProjectGroups;
   drag: ProjectDrag;
   folds: SidebarFolds;
@@ -59,8 +59,11 @@ export interface ProjectTreeProps {
 /** A group's insides: a new group's name field, its groups, then its projects. */
 export function GroupContents({
   node,
-  ...tree
-}: ProjectTreeProps & { node: ProjectFolderNode }) {
+  tree,
+}: {
+  node: ProjectFolderNode;
+  tree: ProjectTree;
+}) {
   const { groups } = tree;
   return (
     <>
@@ -75,10 +78,10 @@ export function GroupContents({
         />
       )}
       {node.folders.map((folder) => (
-        <GroupSection key={folder.path} folder={folder} {...tree} />
+        <GroupSection key={folder.path} folder={folder} tree={tree} />
       ))}
       {node.projects.map((p) => (
-        <ProjectSection key={p.id} project={p} {...tree} />
+        <ProjectSection key={p.id} project={p} tree={tree} />
       ))}
     </>
   );
@@ -86,8 +89,11 @@ export function GroupContents({
 
 function GroupSection({
   folder,
-  ...tree
-}: ProjectTreeProps & { folder: ProjectFolderNode }) {
+  tree,
+}: {
+  folder: ProjectFolderNode;
+  tree: ProjectTree;
+}) {
   const { groups, drag, folds } = tree;
   const key = groupKey(folder.path);
   const isOpen = folds.isOpen(key, true);
@@ -176,7 +182,7 @@ function GroupSection({
       )}
       {isOpen && (
         <div className="sb-folder-body">
-          <GroupContents node={folder} {...tree} />
+          <GroupContents node={folder} tree={tree} />
           {empty && (
             <div
               className={`sb-group-empty ${into ? "drop-into" : ""}`}
@@ -241,15 +247,11 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
 
 function ProjectSection({
   project: p,
-  groups,
-  drag,
-  folds,
-  rows,
-  threads,
-  current,
-  onNew,
-  onShared,
-}: ProjectTreeProps & { project: Project }) {
+  tree: { groups, drag, folds, rows, threads, current, onNew, onShared },
+}: {
+  project: Project;
+  tree: ProjectTree;
+}) {
   const chats = threads.filter((c) => c.projectId === p.id);
   const isOpen = folds.isOpen(p.id, p.id === current);
   const more = folds.showsAll(p.id);

@@ -7,6 +7,7 @@ import {
   type DragEvent,
   type RefObject,
 } from "react";
+import { agentMentionPattern } from "../../shared/agents";
 import {
   cleanPaste,
   isLongPaste,
@@ -39,6 +40,7 @@ export interface DraftEditor {
   removeImage: (n: number) => void;
   /** False when the message cannot hold it. */
   insertPaste: (text: string) => boolean;
+  insertText: (range: { start: number; end: number; text: string }) => void;
 }
 
 /**
@@ -223,6 +225,16 @@ export function useComposerDraft(
       );
     },
     addFiles,
+    /** An agent was picked, so an @mention would only override it. */
+    dropMention() {
+      const prefix = agentMentionPattern.exec(text.trimStart())?.[0];
+      if (prefix)
+        editor.current?.insertText({
+          start: 0,
+          end: text.length - text.trimStart().length + prefix.length,
+          text: "",
+        });
+    },
     removeImage({ id, n }: DraftImage) {
       if (n !== undefined) editor.current?.removeImage(n);
       keepImages(

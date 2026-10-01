@@ -9,11 +9,11 @@ import type { SignInFlow } from "./useSignIn";
 /**
  * Links Relay is asked to open, at launch or later: an invitation to a
  * conversation opens its dialog, anything else the Pull requests page. A
- * link that comes while navigating is held waits for the lock.
+ * link that comes while navigation is locked waits until it's released.
  */
 export function useIncomingLinks(
   boot: Bootstrap | undefined,
-  { inbox, setInbox }: ShellNavigation,
+  { inbox, setInbox }: Pick<ShellNavigation, "inbox" | "setInbox">,
   signIn: SignInFlow,
   lock: NavigationLock,
   setError: (error: unknown) => void,

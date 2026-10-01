@@ -3,6 +3,7 @@ import type { ChatSummary } from "../../shared/projects";
 import { modifierCode } from "../../shared/shortcuts";
 import { mac } from "./mod-key";
 import { digitOf, holdsModifiersOf, useShortcut } from "./shortcuts";
+import type { ThreadActions } from "./useThreadActions";
 
 const CMD_HINT_DELAY_MS = 500;
 
@@ -17,16 +18,14 @@ export function useActivityKeys({
   active,
   chatId,
   jumping,
-  open,
-  settle,
+  actions: { open, settle },
 }: {
   /** Activity's open threads, in order. */
   active: ChatSummary[];
   /** The open thread. */
   chatId: string | undefined;
   jumping: boolean;
-  open: (c: ChatSummary) => void;
-  settle: (c: ChatSummary) => void;
+  actions: Pick<ThreadActions, "open" | "settle">;
 }) {
   const [held, setHeld] = useState(false);
   const jumpTo = useRef<(index: number) => boolean>(() => false);

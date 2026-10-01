@@ -6,28 +6,18 @@ import {
   effortLabels,
   reasoningEffortSchema,
   reasoningEffortsFor,
-  withClaudeContextWindow,
   type ReasoningEffort,
 } from "../../shared/settings";
-import { isPickAgent } from "../lib/composer-settings";
 import { useEffortKeysLabel } from "../lib/effort-shortcut";
 import type { AgentRuns } from "../lib/useAgentRuns";
 import type { ComposerState } from "../lib/useComposerSettings";
 import { ComposerSelect } from "./ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 
-/** Whether `to` has an effort to pick here, or for Claude a context window. */
-export const offersEffort = (runs: AgentRuns, to: AgentProvider) =>
-  !!runs.codex &&
-  (to === "codex" ||
-    (to === "claude" &&
-      (runs.claudeEfforts.length > 0 || !!runs.claudeRuns?.longContext)) ||
-    (isPickAgent(to) && runs.pickOf(to).efforts.length > 0));
-
 /** The recipient's reasoning effort, with Codex's Fast mode and Claude's context window. */
-export function EffortControl({
+export function ComposerEffortControl({
   to,
-  state: { claude, setClaude, setChoice },
+  state: { claude },
   runs,
   codexModels,
 }: {
@@ -71,10 +61,7 @@ export function EffortControl({
                 })),
               ],
               onChange: (value: string) =>
-                setClaude((c) => ({
-                  ...c,
-                  reasoningEffort: reasoningEffortSchema.parse(value),
-                })),
+                runs.setEffort("claude", reasoningEffortSchema.parse(value)),
             },
           ]
         : []),
@@ -87,22 +74,8 @@ export function EffortControl({
                 { value: "200k", label: "200k" },
                 { value: "1m", label: "1M" },
               ],
-              // Default stays Default; a picked model also takes the `[1m]`
-              // suffix, which accounts without 1M by default still need.
               onChange: (value: string) =>
-                setClaude((c) =>
-                  value === "200k"
-                    ? {
-                        ...c,
-                        model: withClaudeContextWindow(c.model, "200k"),
-                        contextWindow: "200k",
-                      }
-                    : {
-                        model:
-                          c.model && withClaudeContextWindow(c.model, "1m"),
-                        reasoningEffort: c.reasoningEffort,
-                      },
-                ),
+                runs.setContextWindow(value === "200k" ? "200k" : "1m"),
             },
           ]
         : []),
@@ -132,7 +105,7 @@ export function EffortControl({
           aria-label="Fast mode"
           aria-pressed={codex.fast}
           title={codex.fast ? "Fast mode enabled" : "Enable Fast mode"}
-          onClick={() => setChoice({ ...codex, fast: !codex.fast })}
+          onClick={() => runs.setFast(!codex.fast)}
         >
           <Zap size={14} />
           Fast
@@ -158,7 +131,7 @@ export function EffortControl({
           label: effortLabels[value],
         })),
       ]}
-      onChange={(effort) => runs.setPickEffort(to, effort)}
+      onChange={(effort) => runs.setEffort(to, effort)}
       heading={{ label: "Reasoning", hint }}
     />
   );

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ChatSummary } from "../../shared/projects";
 import { api } from "./api";
 import { useStoredFlag } from "./useStoredFlag";
+import type { Viewing } from "./useThreadView";
 
 export type ChatPresence = ReturnType<typeof useChatPresence>;
 
@@ -10,7 +11,7 @@ export type ChatPresence = ReturnType<typeof useChatPresence>;
  * only while `sharePresence` is on. */
 export function useChatPresence(
   chat: ChatSummary | undefined,
-  viewing: { path: string | null; viewed: number; total: number },
+  viewing: Viewing,
 ) {
   const [sharePresence, setSharePresence] = useStoredFlag(
     "relay-project-presence",
