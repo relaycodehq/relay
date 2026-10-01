@@ -25,7 +25,7 @@ interface State {
   roomHosting?: string;
   roomConnections?: Record<string, string>;
   roomJoins?: Record<string, string>;
-  roomDeliveries?: Record<string, import("./rooms/service").RoomDelivery>;
+  roomDeliveries?: Record<string, import("./rooms/deliveries").RoomDelivery>;
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../shared/agents").AgentProvider;

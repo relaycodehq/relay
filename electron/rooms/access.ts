@@ -1,6 +1,7 @@
 import type { Gitea } from "../gitea";
 import type { Store } from "../store";
 import type { RoomConnection } from "../../shared/rooms";
+import type { PullRef } from "../../shared/types";
 import { inspectRepository } from "../repository";
 import type { RoomRequest } from "./transport";
 export interface ProjectRoomContext {
@@ -9,6 +10,7 @@ export interface ProjectRoomContext {
   key: string;
   dir?: string;
 }
+export type PullRoomContext = ProjectRoomContext & { ref: PullRef };
 export class RoomAccess {
   private checked = new Map<string, number>();
   private inFlight = new Map<string, Promise<void>>();
