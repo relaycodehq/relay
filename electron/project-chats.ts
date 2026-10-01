@@ -18,6 +18,7 @@ import { ThreadTitles } from "./project-chats/titles";
 import { ChatSharing } from "./project-chats/sharing";
 import { ThreadWorktrees } from "./project-chats/worktrees";
 import { TurnFiles } from "./project-chats/turn-files";
+import { assertHere, ComputerHandoff } from "./project-chats/handoff";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
@@ -57,22 +58,17 @@ import { ClaudeSignedOutError } from "./rooms/claude-sign-in";
 import { projectTasks } from "./tasks";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { currentBranchOrNull } from "./git";
-import { commitEverything, headOf } from "./handoff/git";
-import {
-  remoteRecentCalls,
-  type ChatCameFrom,
-  type ChatSentTo,
-  type HandoffRemoteStatus,
-  type HandoffThread,
+import type {
+  ChatCameFrom,
+  ChatSentTo,
+  HandoffThread,
 } from "../shared/handoff";
-import { readTurn } from "../shared/agent-trace";
 import { finishTurn, resumeTurn, startTurn } from "./turn-changes";
 import { promptTitle } from "./thread-titles";
 import {
   autoSettledAt,
   DEFAULT_AUTO_SETTLE_DAYS,
 } from "../shared/chat-activity";
-import { worktreeExists } from "./worktrees";
 import { DeepReviews, type PullInfo } from "./deep-review";
 import { Ultraplans } from "./ultraplan";
 import type { ThinkerTask } from "../shared/ultraplan";
@@ -92,71 +88,6 @@ const handoffPrompt = (to: AgentProvider, computer?: string) =>
       ? `This conversation moves to another computer, ${computer}, from here. ${agentName(to)} picks it up there in a fresh session that cannot see yours; everything in the working tree is committed and goes with it.`
       : `${agentName(to)} is taking over this conversation from here and cannot see your session.`
   } Write a handoff note for it: the user's goal, what you did (files read or changed, commands run), what you found, decisions and their reasons, and what remains or should be verified next. Use concrete file paths. Answer from what you already know without running tools or changing anything. Keep it under 500 words.`;
-/** Where a thread stands between computers, or nothing when it's simply here. */
-function elsewhere(chat: ChatSummary) {
-  if (chat.sentTo)
-    return `This thread is on ${chat.sentTo.computer}. Bring it back to continue here.`;
-  if (chat.cameFrom?.returnedAt)
-    return `This thread went back to ${chat.cameFrom.computer}; it continues there.`;
-}
-function assertHere(chat: ChatSummary) {
-  const away = elsewhere(chat);
-  if (away) throw new Error(away);
-}
-/**
- * Messages crossing to another computer: new ids, and nothing that points
- * into this one's data (turn snapshots, screenshots, provider sessions).
- */
-export function portableMessages(
-  messages: ChatMessage[],
-  newIds = false,
-): ChatMessage[] {
-  const ids = new Map(
-    messages.map((m) => [m.id, newIds ? randomUUID() : m.id]),
-  );
-  return messages
-    .filter((m) => m.status !== "streaming")
-    .map(({ changes, pending, seq, forkPoint, images, unread, ...m }) => ({
-      ...structuredClone(m),
-      id: ids.get(m.id)!,
-      ...(m.parentId ? { parentId: ids.get(m.parentId) ?? m.parentId } : {}),
-      version: 1,
-    }));
-}
-/** What another computer hears of a handed-over thread's latest turn. */
-type HandoffTurn = Pick<
-  HandoffRemoteStatus,
-  | "latest"
-  | "failed"
-  | "recent"
-  | "calls"
-  | "says"
-  | "provider"
-  | "model"
-  | "question"
-  | "runningFor"
->;
-/** A turn's own last calls and latest commentary, trimmed to cross the bridge. */
-function turnPeek(m: ChatMessage): HandoffTurn {
-  const { activity } = readTurn(m);
-  const said = [...(m.trace ?? [])]
-    .reverse()
-    .find((e) => e.kind === "commentary" && e.text.trim());
-  const says = said?.kind === "commentary" && said.text.trim().slice(0, 300);
-  return {
-    provider: m.provider,
-    calls: activity.length,
-    recent: activity
-      .slice(-remoteRecentCalls)
-      .map(({ id, kind, label, status }) => ({
-        id,
-        kind,
-        label: label.slice(0, 300),
-        status,
-      })),
-    ...(says ? { says } : {}),
-  };
-}
 export class ProjectChats {
   private storage: ChatStorage;
   private sessions: ProviderSessions;
@@ -166,6 +97,7 @@ export class ProjectChats {
   private sharing: ChatSharing;
   private worktrees: ThreadWorktrees;
   private files: TurnFiles;
+  private handoffs: ComputerHandoff;
   private control = threadControl();
   private disposing = false;
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
@@ -302,6 +234,31 @@ export class ProjectChats {
       this.worktrees,
       this.control,
       (event) => this.emit(event),
+    );
+    this.handoffs = new ComputerHandoff(
+      store,
+      this.storage,
+      this.active,
+      this.sessions,
+      this.schedule,
+      this.control,
+      (event) => this.emit(event),
+      {
+        send: (id, input) => this.send(id, input),
+        sessionInput: (chat, provider) => this.sessionInput(chat, provider),
+        note: (chat, root, provider, active, computer) =>
+          this.handoff(
+            chat,
+            root,
+            provider,
+            provider,
+            undefined,
+            active,
+            computer,
+          ),
+        councilBusy: (chat) => this.councilBusy(chat),
+        closing: () => this.disposing,
+      },
     );
   }
   /**
@@ -550,271 +507,41 @@ export class ProjectChats {
     await this.storage.add(chat);
     return chatSummary(chat);
   }
-  /**
-   * Marks a thread as leaving for another computer, after checking it can:
-   * from here on nothing new starts in it. `leave` then does the stopping.
-   */
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      const chat = await this.storage.load(id);
-      assertHere(chat);
-      if (chat.cameFrom)
-        throw new Error(
-          `This thread came from ${chat.cameFrom.computer}. Bring it back there instead.`,
-        );
-      if (chat.shared)
-        throw new Error("Shared conversations stay on this computer.");
-      if (chat.scope.kind === "review" || chat.reviewer || chat.thinker)
-        throw new Error("A deep review can't move to another computer.");
-      if (!chat.messages.length)
-        throw new Error("Send a first message before handing the thread off.");
-      if (!chat.worktree || !(await worktreeExists(chat.worktree)))
-        throw new Error(
-          "Only a thread in its own worktree can move to another computer; the checkout's changes aren't this thread's alone.",
-        );
-      if (chat.queue?.length || chat.scheduled?.length)
-        throw new Error(
-          "Send or remove its queued and scheduled messages first.",
-        );
-      if (this.sessions.pending(id).length || chat.heldWakeups?.length)
-        throw new Error(
-          "Claude left background work or a wake-up in this thread. Stop it first.",
-        );
-      if (this.councilBusy(chat))
-        throw new Error("Wait for the council or review to finish first.");
-      chat.sentTo = { ...sentTo, state: "sending" };
-      await this.storage.persist(chat);
-    });
+    return this.handoffs.mark(id, sentTo);
   }
-  /** Updates a thread's handoff while it's still `handoffId`; null ends it, keeping the thread here. */
-  async updateSentTo(
+  updateSentTo(
     id: string,
     handoffId: string,
     change: Partial<ChatSentTo> | null,
   ) {
-    const chat = await this.storage.load(id);
-    if (chat.sentTo?.id !== handoffId) return;
-    if (change) {
-      chat.sentTo = { ...chat.sentTo, ...change };
-      if ("error" in change && !change.error) delete chat.sentTo.error;
-    } else delete chat.sentTo;
-    await this.storage.persist(chat);
+    return this.handoffs.updateSentTo(id, handoffId, change);
   }
-  /**
-   * The thread leaves for `computer`: its agent stops and is waited for,
-   * writes a handoff note in its own session, and everything in the worktree
-   * is committed. `since` limits the note to turns from that message on,
-   * which on a computer the thread came to are its own.
-   */
   leave(id: string, computer: string, since = 0) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
-      if (!chat.worktree || !(await worktreeExists(chat.worktree)))
-        throw new Error("The thread's worktree is gone.");
-      await this.active.halt(id);
-      if (chat.queue?.length || chat.scheduled?.length) {
-        delete chat.queue;
-        delete chat.scheduled;
-        this.schedule.armSend(id, undefined);
-      }
-      const root = chat.worktree.path!;
-      const latest = chat.messages.at(-1);
-      const outgoing = chat.messages
-        .slice(since)
-        .reverse()
-        .find(
-          (m) =>
-            m.role === "assistant" &&
-            !m.parentId &&
-            !m.compaction &&
-            !m.handoff &&
-            m.status !== "failed",
-        );
-      // A retry finds the note already written, with nothing after it.
-      if (
-        !latest?.handoff?.computer &&
-        outgoing?.provider &&
-        agentSession(chat, outgoing.provider).thread
-      ) {
-        const provider = outgoing.provider;
-        const active = this.active.claim(id, this.sessionInput(chat, provider));
-        try {
-          await this.handoff(
-            chat,
-            root,
-            provider,
-            provider,
-            undefined,
-            active,
-            computer,
-          );
-        } finally {
-          this.active.release(id, active);
-        }
-      }
-      await commitEverything(root, `Hand off to ${computer}`);
-      await this.storage.persist(chat);
-      return {
-        chat: structuredClone(chat),
-        root,
-        tip: await headOf(root),
-      };
-    });
+    return this.handoffs.leave(id, computer, since);
   }
-  /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
-    return (this.store.get().chats ?? []).find(
-      (c) => c.cameFrom?.id === handoffId,
-    );
+    return this.handoffs.handedOver(handoffId);
   }
-  /**
-   * A thread handed over from another computer, working in `worktree`. Its
-   * agent carries on at once, briefed with the note and the user's messages.
-   */
-  async adopt(
+  adopt(
     projectId: string,
     thread: HandoffThread,
     cameFrom: Omit<ChatCameFrom, "carried">,
     worktree: ChatWorktree,
   ) {
-    const messages = portableMessages(thread.messages, true);
-    const note = [...messages]
-      .reverse()
-      .find(
-        (m) => m.handoff?.computer && m.status === "complete" && m.body.trim(),
-      );
-    const chat: ProjectChat = {
-      id: randomUUID(),
-      projectId,
-      scope: thread.scope,
-      title: thread.title,
-      renamed: true,
-      created: Date.now(),
-      updated: Date.now(),
-      ...(worktree.branch ? { branch: worktree.branch } : {}),
-      worktree,
-      messages,
-      cameFrom: { ...cameFrom, carried: messages.length },
-      handover: {
-        computer: thread.from,
-        fresh: true,
-        ...(note
-          ? { note: { provider: note.handoff!.from, body: note.body } }
-          : {}),
-      },
-    };
-    await this.storage.add(chat);
-    const { provider, ...settings } = thread.settings;
-    void this.send(chat.id, {
-      ...settings,
-      id: randomUUID(),
-      body: `@${provider} Carry on with this work, handed over from ${thread.from}.`,
-      to: provider,
-      provider,
-    }).catch((e) => console.warn("A handed-over thread couldn't start:", e));
-    return chatSummary(chat);
+    return this.handoffs.adopt(projectId, thread, cameFrom, worktree);
   }
-  /** What a thread that came here wrote since, for its trip back. */
-  async handBack(id: string, deviceId: string) {
-    const summary = (this.store.get().chats ?? []).find((c) => c.id === id);
-    const came = summary?.cameFrom;
-    if (!came || came.deviceId !== deviceId)
-      throw new Error("This thread didn't come from that computer.");
-    const { chat, root, tip } = came.returnedAt
-      ? await this.storage.load(id).then(async (chat) => ({
-          chat,
-          root: chat.worktree!.path!,
-          tip: await headOf(chat.worktree!.path!),
-        }))
-      : await this.leave(id, came.computer, came.carried);
-    return {
-      messages: portableMessages(chat.messages.slice(came.carried)),
-      root,
-      tip,
-      branch: chat.worktree!.branch!,
-      since: came.tip,
-    };
+  handBack(id: string, deviceId: string) {
+    return this.handoffs.handBack(id, deviceId);
   }
-  /**
-   * How the main conversation's latest turn here goes: the start of the
-   * latest answer or the error it ended in, and for the peek its last calls,
-   * what its agent last said, and what it asks while it waits. Only what was
-   * written since the thread arrived, so the computer it came from never
-   * sees its own answer.
-   */
-  async latestTurn(id: string): Promise<HandoffTurn> {
-    const chat = await this.storage.load(id);
-    const answers = chat.messages
-      .slice(chat.cameFrom?.carried ?? 0)
-      .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
-    const last = answers.at(-1);
-    const active = this.active.get(id);
-    const model = (active?.input ?? chat.lastInput)?.choice.model;
-    const request = active?.requests.list()[0];
-    const peek: HandoffTurn = {
-      ...(last ? turnPeek(last) : {}),
-      ...(model ? { model } : {}),
-      ...(request
-        ? {
-            question: (request.questions?.[0]?.question ?? request.title)
-              .trim()
-              .slice(0, 300),
-          }
-        : {}),
-      ...(active ? { runningFor: Date.now() - active.started } : {}),
-    };
-    if (last?.status === "failed")
-      return {
-        failed: last.error?.trim() || "The agent stopped with an error.",
-        ...peek,
-      };
-    const answer = answers.reverse().find((m) => m.body.trim());
-    return answer
-      ? { latest: answer.body.trim().slice(0, 300), ...peek }
-      : peek;
+  latestTurn(id: string) {
+    return this.handoffs.latestTurn(id);
   }
-  /** The other computer has the thread back; this copy stays still. */
-  async handedBack(id: string) {
-    const chat = await this.storage.load(id);
-    if (!chat.cameFrom || chat.cameFrom.returnedAt) return;
-    chat.cameFrom.returnedAt = Date.now();
-    this.sessions.close(id);
-    await this.storage.persist(chat);
+  handedBack(id: string) {
+    return this.handoffs.handedBack(id);
   }
-  /**
-   * A thread back from another computer: what was written there joins the
-   * conversation, and the next turn hears the note written for the trip.
-   */
   returned(id: string, handoffId: string, messages: ChatMessage[]) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
-      const sentTo = chat.sentTo;
-      if (sentTo?.id !== handoffId) throw new Error("This thread isn't away.");
-      const known = new Set(chat.messages.map((m) => m.id));
-      const arrived = portableMessages(messages).map((m) =>
-        known.has(m.id) ? { ...m, id: randomUUID() } : m,
-      );
-      const note = [...arrived]
-        .reverse()
-        .find(
-          (m) =>
-            m.handoff?.computer && m.status === "complete" && m.body.trim(),
-        );
-      chat.messages.push(...arrived);
-      chat.handover = {
-        computer: sentTo.computer,
-        fresh: false,
-        ...(note
-          ? { note: { provider: note.handoff!.from, body: note.body } }
-          : {}),
-      };
-      delete chat.sentTo;
-      chat.updated = Date.now();
-      await this.storage.persist(chat);
-      for (const m of arrived)
-        this.emit({ chatId: id, message: structuredClone(m) });
-    });
+    return this.handoffs.returned(id, handoffId, messages);
   }
   startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
     return this.control(id, async () => {
