@@ -31,7 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { PaneResizer } from "./PaneResizer";
-import { SIDEBAR_WIDTH } from "../lib/settings-page";
+import { SIDEBAR_WIDTH, type SettingsCategory } from "../lib/settings-page";
 import type { Account } from "../../shared/types";
 import { aiSettingsSchema, type AISettings } from "../../shared/settings";
 import { api } from "../lib/api";
@@ -125,19 +125,8 @@ import {
   type AgentProvider,
 } from "../../shared/agents";
 
-export type SettingsCategory = CategoryId;
-type CategoryId =
-  | "appearance"
-  | "account"
-  | "models"
-  | "integrations"
-  | "plugins"
-  | "rooms"
-  | "phone"
-  | "computers"
-  | "dictation"
-  | "shortcuts"
-  | "about";
+export type { SettingsCategory };
+type CategoryId = SettingsCategory;
 
 const categories: {
   id: CategoryId;
@@ -747,8 +736,7 @@ export function Settings({
       id: "composer-toolbar",
       category: "appearance",
       title: "Composer toolbar",
-      description:
-        "Drag to reorder. Drop below the bar to hide.",
+      description: "Drag to reorder. Drop below the bar to hide.",
       keywords:
         "composer toolbar order reorder arrange move hide drag controls buttons usage limit quota session weekly ring meter context model effort access mode attach dictation microphone",
       block: true,

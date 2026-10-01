@@ -38,7 +38,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { parseRoomInvitation } from "../../shared/rooms";
-import type { Account, PullRef, Repo } from "../../shared/types";
+import type { PullRef, Repo } from "../../shared/types";
 import {
   type ChatWorkspace,
   type Project,
@@ -70,7 +70,7 @@ import {
   type PullsPageHandle,
   type PullsTarget,
 } from "../lib/pull-board";
-import { Settings, type SettingsCategory } from "./Settings";
+import { Settings } from "./Settings";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { ProjectChat } from "./ProjectChat";
 import type { ComposerControls } from "./ProjectComposer";
@@ -104,6 +104,8 @@ import {
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
+import { useSettingsPage } from "../lib/useSettingsPage";
+import { useSignIn } from "../lib/useSignIn";
 import { agentsSince } from "../../shared/waiting";
 import "./projects.css";
 const NO_VIEWING = { path: null, viewed: 0, total: 0 };
@@ -122,13 +124,7 @@ export default function ProjectShell() {
       q.state.data?.loginRestore === "unlocking" ? 500 : false,
     refetchIntervalInBackground: true,
   });
-  /** What asked for the sign-in form, to carry on once it connects. */
-  const afterSignIn = useRef<() => unknown>(undefined);
-  useEffect(() => {
-    if (!boot.data?.account) return;
-    setSignin(false);
-    afterSignIn.current = undefined;
-  }, [boot.data?.account?.id]);
+  const signIn = useSignIn(boot.data);
   const projects = useQuery({
     queryKey: ["projects", boot.data?.account?.id],
     queryFn: () => api.projects(),
@@ -156,11 +152,7 @@ export default function ProjectShell() {
   const gitActions = useRef<GitActionsHandle>(null);
   const chatComposer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
-  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>();
-  const [settings, setSettings] = useState(false),
-    [settingsWhere, setSettingsWhere] = useState(""),
-    [signin, setSignin] = useState(false),
-    [error, setError] = useState<unknown>(),
+  const [error, setError] = useState<unknown>(),
     [legacy, setLegacy] = useState(
       () => localStorage.getItem("relay-surface") === "inbox",
     ),
@@ -188,11 +180,7 @@ export default function ProjectShell() {
   );
   const projectsHidden = sidebar.hidden;
   const [pickingProject, setPickingProject] = useState(false);
-  // Settings is a page: going anywhere else, a ⌘1 jump say, leaves it.
-  useEffect(() => {
-    setSettings(false);
-    setSettingsCategory(undefined);
-  }, [selected, chatId, legacy]);
+  const settings = useSettingsPage(selected, chatId, legacy);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [changesSlots, setChangesSlots] = useState<PaneSlots>(NO_SLOTS);
@@ -320,7 +308,7 @@ export default function ProjectShell() {
         setIncoming({ url });
         setLegacy(true);
       }
-      if (!boot.data?.account) void withAccount();
+      if (!boot.data?.account) void signIn.withAccount();
     } catch (e) {
       setError(e);
     }
@@ -336,7 +324,7 @@ export default function ProjectShell() {
   useEffect(() => {
     if (boot.data?.pendingUrl) openUrl(boot.data.pendingUrl);
   }, [boot.data?.pendingUrl]);
-  useShortcut("settings", true, () => setSettings(true));
+  useShortcut("settings", true, () => settings.setOpen(true));
   useShortcut("new-thread", !!project && !legacy && !error, pickNewThread);
   useShortcut("new-scratch", true, () => void newScratch());
   async function add() {
@@ -644,7 +632,7 @@ export default function ProjectShell() {
   async function linked() {
     if (!project) return;
     const id = project.id;
-    await withAccount(async () => {
+    await signIn.withAccount(async () => {
       try {
         await api.linkProject(id);
         await projects.refetch();
@@ -652,44 +640,6 @@ export default function ProjectShell() {
         setError(e);
       }
     });
-  }
-  const connected = async (account: Account) => {
-    const next = await api.bootstrap();
-    qc.removeQueries({
-      predicate: (q) =>
-        !["bootstrap", "project-chat", "project-chats"].includes(
-          String(q.queryKey[0]),
-        ),
-    });
-    qc.setQueryData(["bootstrap"], { ...next, account });
-    setSignin(false);
-    const then = afterSignIn.current;
-    afterSignIn.current = undefined;
-    await then?.();
-  };
-  /**
-   * Runs `then` signed in to Gitea: right away, through tea's login when it
-   * has one, and only otherwise after the sign-in form.
-   */
-  async function withAccount(then?: () => unknown) {
-    if (boot.data?.account) return then?.();
-    // The form shows the Keychain wait; tea mustn't race the saved token.
-    if (boot.data?.loginRestore !== "unlocking") {
-      const logins = (await api.teaSetup().catch(() => null))?.logins ?? [];
-      const saved = boot.data?.savedServer && new URL(boot.data.savedServer);
-      const login =
-        logins.find((l) => saved && new URL(l.url).host === saved.host) ??
-        logins[0];
-      // On failure the form offers the same login and shows why.
-      const account =
-        login && (await api.connectWithTea(login.name).catch(() => null));
-      if (account) {
-        afterSignIn.current = then;
-        return connected(account);
-      }
-    }
-    afterSignIn.current = then;
-    setSignin(true);
   }
   // A folder without Git has no changes or history to show.
   const paneOrder = project?.plain
@@ -721,19 +671,19 @@ export default function ProjectShell() {
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
-        className={`titlebar project-titlebar ${projectsHidden && !settings ? "sidebar-collapsed" : ""}`}
+        className={`titlebar project-titlebar ${projectsHidden && !settings.open ? "sidebar-collapsed" : ""}`}
       >
         <TitlebarBrand
           sidebar={sidebar}
           attention={attention}
-          disabled={settings}
+          disabled={settings.open}
         />
         <div className="project-titlebar-main" ref={fitHeader}>
-          {settings ? (
+          {settings.open ? (
             <div className="project-window-title">
               <span>Settings</span>
               <span className="breadcrumb-slash">/</span>
-              <strong>{settingsWhere}</strong>
+              <strong>{settings.where}</strong>
             </div>
           ) : legacy ? (
             <PullsTitle where={pullsWhere} onNav={goToPulls} />
@@ -778,7 +728,7 @@ export default function ProjectShell() {
             </div>
           )}
           <span className="spacer" />
-          {!settings && !legacy && project && (
+          {!settings.open && !legacy && project && (
             <div className="thread-header-actions">
               <ProjectChecksButton
                 quiet
@@ -796,7 +746,7 @@ export default function ProjectShell() {
                   connected={!!account}
                   disabled={lock.locked}
                   ref={gitActions}
-                  onConnect={() => void withAccount()}
+                  onConnect={() => void signIn.withAccount()}
                   onReview={(ref) => void reviewBranchPr(ref)}
                   onChanges={() => openCode("changes")}
                   onError={setError}
@@ -808,10 +758,7 @@ export default function ProjectShell() {
                     <HandoffButton
                       chat={chat}
                       onError={setError}
-                      onSettings={() => {
-                        setSettingsCategory("computers");
-                        setSettings(true);
-                      }}
+                      onSettings={() => settings.show("computers")}
                     />
                     <span className="header-strip-sep" aria-hidden="true" />
                   </>
@@ -866,8 +813,11 @@ export default function ProjectShell() {
               </div>
             </div>
           )}
-          {projectsHidden && !settings && (
-            <IconButton label="Open settings" onClick={() => setSettings(true)}>
+          {projectsHidden && !settings.open && (
+            <IconButton
+              label="Open settings"
+              onClick={() => settings.setOpen(true)}
+            >
               <Settings2 size={16} />
             </IconButton>
           )}
@@ -880,7 +830,7 @@ export default function ProjectShell() {
           aria-label="Projects"
           aria-hidden={projectsHidden && !sidebar.peek ? true : undefined}
           inert={projectsHidden && !sidebar.peek ? true : undefined}
-          hidden={settings}
+          hidden={settings.open}
           onMouseEnter={projectsHidden ? sidebar.peekOpen : undefined}
           onMouseLeave={projectsHidden ? sidebar.peekClose : undefined}
         >
@@ -907,20 +857,16 @@ export default function ProjectShell() {
               if (navigate(p)) setBrowseShared(true);
             }}
             onAttention={setAttention}
-            onSettings={(category) => {
-              setSettingsCategory(category);
-              setSettings(true);
-            }}
+            onSettings={settings.show}
             onAccount={() => {
-              if (!account) return void withAccount();
-              setSettingsCategory("account");
-              setSettings(true);
+              if (!account) return void signIn.withAccount();
+              settings.show("account");
             }}
             onInbox={() => {
               // From the page itself it goes back to the board; from anywhere
               // else it returns to where the page was left.
               if (lock.blocked()) return;
-              if (!account) void withAccount(() => setLegacy(true));
+              if (!account) void signIn.withAccount(() => setLegacy(true));
               else if (legacy) goToPulls({ to: "board" });
               else setLegacy(true);
             }}
@@ -928,7 +874,7 @@ export default function ProjectShell() {
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
         {legacy && account ? (
-          <div className="project-legacy" hidden={settings}>
+          <div className="project-legacy" hidden={settings.open}>
             <Connected
               account={account}
               initialWorkspace={boot.data.workspace}
@@ -947,16 +893,13 @@ export default function ProjectShell() {
                 onLocation: setPullsWhere,
               }}
               ref={pullsPage}
-              onSettings={(category) => {
-                setSettingsCategory(
-                  category === "rooms" ? category : undefined,
-                );
-                setSettings(true);
-              }}
+              onSettings={(category) =>
+                settings.show(category === "rooms" ? category : undefined)
+              }
             />
           </div>
         ) : !project ? (
-          <main className="project-empty" hidden={settings}>
+          <main className="project-empty" hidden={settings.open}>
             <FolderGit2 size={40} />
             <h1>Your project. Your conversation.</h1>
             <p>
@@ -974,7 +917,7 @@ export default function ProjectShell() {
             </button>
           </main>
         ) : (
-          <div className="workspace-column" hidden={settings}>
+          <div className="workspace-column" hidden={settings.open}>
             <div className="workspace-panes">
               <Pane
                 id="chat"
@@ -995,7 +938,7 @@ export default function ProjectShell() {
                   contextText={contextText}
                   onContextUsed={() => setContextText(undefined)}
                   onShare={() => {
-                    if (chat) void withAccount(() => setShare(chat));
+                    if (chat) void signIn.withAccount(() => setShare(chat));
                   }}
                   onDraftWorkspace={setDraftWorkspace}
                   onStartThread={startThread}
@@ -1087,7 +1030,7 @@ export default function ProjectShell() {
                                 `relay-project-review-file:${project.id}:${pull.number}`,
                               ),
                             }}
-                            onSettings={() => setSettings(true)}
+                            onSettings={() => settings.setOpen(true)}
                           />
                         </div>
                       ) : (
@@ -1182,18 +1125,15 @@ export default function ProjectShell() {
             )}
           </div>
         )}
-        {settings && (
+        {settings.open && (
           <Settings
             account={account ?? null}
-            initialCategory={settingsCategory}
-            onWhere={setSettingsWhere}
-            onClose={() => {
-              setSettings(false);
-              setSettingsCategory(undefined);
-            }}
+            initialCategory={settings.category}
+            onWhere={settings.setWhere}
+            onClose={settings.close}
             onConnect={() => {
-              setSettings(false);
-              void withAccount();
+              settings.setOpen(false);
+              void signIn.withAccount();
             }}
             onOpenChat={(projectId, chatId) => {
               const p = projects.data?.find((p) => p.id === projectId);
@@ -1207,17 +1147,13 @@ export default function ProjectShell() {
                   const next = list.find((c) => c.id === chatId);
                   if (!next) return;
                   navigate(p, next);
-                  setSettings(false);
+                  settings.setOpen(false);
                 })
                 .catch(setError);
             }}
             onDisconnect={async () => {
-              await api.disconnect();
-              qc.removeQueries({
-                predicate: (q) => q.queryKey[0] !== "bootstrap",
-              });
-              qc.setQueryData(["bootstrap"], { ...boot.data, account: null });
-              setSettings(false);
+              await signIn.signOut();
+              settings.setOpen(false);
               setLegacy(false);
             }}
           />
@@ -1249,17 +1185,14 @@ export default function ProjectShell() {
           onClose={() => setPickingProject(false)}
         />
       )}
-      {signin && (
+      {signIn.open && (
         <Modal
           title="Gitea account"
           className="project-signin"
-          onClose={() => {
-            setSignin(false);
-            afterSignIn.current = undefined;
-          }}
+          onClose={signIn.cancel}
         >
           <SignIn
-            onConnected={connected}
+            onConnected={signIn.connected}
             loginRestore={boot.data.loginRestore}
             savedServer={boot.data.savedServer}
             invitationUrl={incoming?.url}
@@ -1278,7 +1211,7 @@ export default function ProjectShell() {
           projects={projects.data ?? []}
           account={account ?? null}
           onAdd={add}
-          onSignIn={() => void withAccount()}
+          onSignIn={() => void signIn.withAccount()}
           onClose={() => setInvitation(undefined)}
           onJoined={async (p, c) => {
             if (c) openThread.save(p, c.id);
@@ -1309,7 +1242,7 @@ export default function ProjectShell() {
           project={project}
           account={account ?? null}
           onClose={() => setShare(undefined)}
-          onSignIn={() => void withAccount()}
+          onSignIn={() => void signIn.withAccount()}
           onShared={() => void chats.refetch()}
         />
       )}
