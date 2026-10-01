@@ -2,10 +2,12 @@
 import { Extension, Node, type Editor, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { createPortal } from "react-dom";
+import { PreviewCard } from "@base-ui/react/preview-card";
 import StarterKit from "@tiptap/starter-kit";
 import { Slice, type Fragment, type Node as PMNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
   useEffect,
   useImperativeHandle,
@@ -28,8 +30,13 @@ import {
   pastesAfter,
   type PastedText,
 } from "../../shared/pasted-texts";
-import { imageToken, shortImageName } from "../lib/image-refs";
+import {
+  imageToken,
+  isPastedImageName,
+  shortImageName,
+} from "../lib/image-refs";
 import { formatSize } from "../lib/file-tree";
+import { ImagePeek, PEEK_DELAY } from "./ImagePeek";
 import type { DictationTarget } from "../lib/dictation/session";
 import { draftChips } from "../lib/thread-storage";
 import {
@@ -250,6 +257,29 @@ export const ImageTag = Node.create<object, ImageStorage>({
   renderText({ node }) {
     return imageToken(node.attrs.n);
   },
+  // A text selection across a pill outlines it; painting its insides blotches.
+  addProseMirrorPlugins() {
+    const name = this.name;
+    return [
+      new Plugin({
+        props: {
+          decorations({ doc, selection }) {
+            if (selection.empty) return null;
+            const marked: Decoration[] = [];
+            doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+              if (node.type.name === name)
+                marked.push(
+                  Decoration.node(pos, pos + node.nodeSize, {
+                    class: "in-selection",
+                  }),
+                );
+            });
+            return DecorationSet.create(doc, marked);
+          },
+        },
+      }),
+    ];
+  },
   addNodeView() {
     const storage = this.storage;
     return ({ node }) => {
@@ -262,23 +292,32 @@ export const ImageTag = Node.create<object, ImageStorage>({
       dom.dataset.n = String(n);
       const draw = () => {
         const image = storage.images.get(n);
+        // A paste's name says nothing, so its pill is just the picture.
+        const pasted = !!image && isPastedImageName(image.name);
         dom.classList.toggle("missing", !image);
+        dom.classList.toggle("pasted", pasted);
         dom.title = image
-          ? `${image.name}, sent as ${imageToken(n)}. Click to draw on it.`
+          ? `${image.name} · ${formatSize(image.bytes)}, sent as ${imageToken(n)}. Click to draw on it.`
           : "This screenshot is no longer in the draft";
         dom.replaceChildren();
-        const thumb = document.createElement(image ? "img" : "span");
-        thumb.className = "composer-image-chip-thumb";
-        thumb.setAttribute("aria-hidden", "true");
-        if (image) (thumb as HTMLImageElement).src = image.src;
-        const label = document.createElement("span");
-        label.textContent = image ? shortImageName(image.name) : `Image #${n}`;
-        dom.append(thumb, label);
         if (image) {
-          const size = document.createElement("span");
-          size.className = "composer-image-chip-size";
-          size.textContent = formatSize(image.bytes);
-          dom.append(size);
+          const thumb = document.createElement("img");
+          thumb.className = "composer-image-chip-thumb";
+          thumb.src = image.src;
+          thumb.alt = pasted ? `Image #${n}` : "";
+          dom.append(thumb);
+        } else {
+          const thumb = document.createElement("span");
+          thumb.className = "composer-image-chip-thumb";
+          thumb.setAttribute("aria-hidden", "true");
+          dom.append(thumb);
+        }
+        if (!pasted) {
+          const label = document.createElement("span");
+          label.textContent = image
+            ? shortImageName(image.name)
+            : `Image #${n}`;
+          dom.append(label);
         }
       };
       draw();
@@ -490,6 +529,9 @@ export function ComposerPromptInput({
   const callbacks = useRef({ onChange, onCursor, onOpenPaste, onOpenImage });
   callbacks.current = { onChange, onCursor, onOpenPaste, onOpenImage };
   const [tip, setTip] = useState<QuoteTip | null>(null);
+  const [peek, setPeek] = useState<{ anchor: Element; src: string } | null>(
+    null,
+  );
   const chips = draftChips(draftKey);
   const labels = useRef(chips.skills.load());
   const quotes = useRef(chips.quotes.load());
@@ -661,6 +703,47 @@ export function ComposerPromptInput({
       hide();
       dom.removeEventListener("mouseover", over);
       dom.removeEventListener("mouseout", out);
+      window.removeEventListener("scroll", hide, true);
+    };
+  }, [editor]);
+  // Hovering a screenshot pill grows its picture above it, as in the thread.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    let timer: number | undefined;
+    let hovered: Element | null = null;
+    const hide = () => {
+      window.clearTimeout(timer);
+      hovered = null;
+      setPeek(null);
+    };
+    const over = (event: MouseEvent) => {
+      const chip =
+        event.target instanceof Element
+          ? event.target.closest(".composer-image-chip")
+          : null;
+      if (chip === hovered) return;
+      hide();
+      const thumb = chip?.querySelector<HTMLImageElement>("img");
+      if (!chip || !thumb) return;
+      hovered = chip;
+      timer = window.setTimeout(
+        () => setPeek({ anchor: chip, src: thumb.src }),
+        PEEK_DELAY,
+      );
+    };
+    dom.addEventListener("mouseover", over);
+    dom.addEventListener("mouseleave", hide);
+    // Clicking opens the drawing editor, and typing may take the pill away.
+    dom.addEventListener("mousedown", hide);
+    dom.addEventListener("keydown", hide);
+    window.addEventListener("scroll", hide, true);
+    return () => {
+      hide();
+      dom.removeEventListener("mouseover", over);
+      dom.removeEventListener("mouseleave", hide);
+      dom.removeEventListener("mousedown", hide);
+      dom.removeEventListener("keydown", hide);
       window.removeEventListener("scroll", hide, true);
     };
   }, [editor]);
@@ -866,6 +949,12 @@ export function ComposerPromptInput({
           </div>,
           document.body,
         )}
+      <PreviewCard.Root
+        open={!!peek}
+        onOpenChange={(open) => !open && setPeek(null)}
+      >
+        {peek && <ImagePeek src={peek.src} anchor={peek.anchor} />}
+      </PreviewCard.Root>
     </div>
   );
 }

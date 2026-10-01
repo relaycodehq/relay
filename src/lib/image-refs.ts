@@ -8,6 +8,10 @@ import { pasteBlock } from "../../shared/pasted-texts";
 export const imageToken = (n: number) => `[Image #${n}]`;
 export const imageTokenPattern = /\[Image #(\d+)\]/g;
 
+/** Text that is nothing but screenshot tokens, like a pasted image sent alone. */
+export const onlyImageTokens = (text: string) =>
+  !text.replace(imageTokenPattern, "").trim();
+
 interface Numbered {
   /** Its token's number; screenshots attached before tokens have none. */
   n?: number;
@@ -87,6 +91,10 @@ export function imagesAfter<T>(text: string, images: T[], after: number) {
     ),
   };
 }
+
+/** A name nobody chose: a clipboard paste, or a macOS screenshot's timestamp. */
+export const isPastedImageName = (name: string) =>
+  /^(image|screenshot)(\.\w+)?$|^screenshot \d{4}-\d\d-\d\d at /i.test(name);
 
 /** Shortens a long file name in the middle, so its extension still shows. */
 export function shortImageName(name: string, max = 24) {

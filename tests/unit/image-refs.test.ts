@@ -9,8 +9,10 @@ import {
 import {
   attachedImages,
   imagesAfter,
+  isPastedImageName,
   nextImageNumber,
   numberImages,
+  onlyImageTokens,
   shortImageName,
 } from "../../src/lib/image-refs";
 import { pasteMarkdown } from "../../shared/pasted-texts";
@@ -81,4 +83,22 @@ it("turns image tokens into pills and back", () => {
   });
   expect(pills).toEqual([1, 2]);
   expect(promptText(doc)).toBe(draft);
+});
+
+it("treats a message of only screenshot tokens as having no text", () => {
+  expect(onlyImageTokens("[Image #1]")).toBe(true);
+  expect(onlyImageTokens(" [Image #1]\n[Image #2] ")).toBe(true);
+  expect(onlyImageTokens("[Image #1] why is this red?")).toBe(false);
+  expect(onlyImageTokens("[Image #1] [Image 2]")).toBe(false);
+});
+
+it("knows a pasted or timestamped screenshot's name from one somebody chose", () => {
+  for (const name of [
+    "image.png",
+    "Screenshot",
+    "Screenshot 2026-10-01 at 13.42.10.png",
+  ])
+    expect(isPastedImageName(name)).toBe(true);
+  for (const name of ["settings-mock.png", "image-diff.png", "screen.png"])
+    expect(isPastedImageName(name)).toBe(false);
 });

@@ -1,0 +1,87 @@
+/* Pasted screenshots (no real file name) drop the label in every look but Current. */
+.pill-looks:not(.look-current)
+  .composer-image-chip[data-pasted]
+  > span:not(.composer-image-chip-thumb),
+.pill-looks:not(.look-current) .composer-image-chip-size {
+  display: none;
+}
+
+/* Bigger thumb: the pill stays, the picture inside it grows. */
+.look-big .composer-image-chip {
+  padding: 2px;
+  gap: 6px;
+  vertical-align: middle;
+}
+.look-big .composer-image-chip:not([data-pasted]) {
+  padding-right: 7px;
+}
+.look-big .composer-image-chip-thumb {
+  width: 36px;
+  height: 24px;
+  border-radius: 4px;
+}
+
+/* Tile: no pill at all, the screenshot itself sits in the line. */
+.look-tile .composer-image-chip {
+  padding: 0;
+  gap: 6px;
+  border: 0;
+  background: none;
+  vertical-align: middle;
+  margin: 2px 0;
+}
+.look-tile .composer-image-chip-thumb {
+  width: 64px;
+  height: 40px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 24%, transparent);
+}
+.look-tile .composer-image-chip:not([data-pasted]) > span:last-child {
+  color: var(--muted);
+}
+.look-tile .composer-image-chip:hover .composer-image-chip-thumb {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent);
+}
+.look-tile .message-image-chip:hover {
+  background: none;
+}
+
+/* Thumb only: every screenshot is just its picture, named or not. */
+.look-thumb .composer-image-chip > span:not(.composer-image-chip-thumb) {
+  display: none;
+}
+.look-thumb .composer-image-chip {
+  padding: 2px;
+  vertical-align: middle;
+}
+.look-thumb .composer-image-chip-thumb {
+  width: 44px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+/* Grow on hover, like the colour swatches: drawn outside the thread, which
+   clips anything spilling past a message. Grows out of the thumbnail. */
+.pill-peek {
+  position: fixed;
+  z-index: 30;
+  width: 300px;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 24%, transparent),
+    0 10px 30px #0006;
+  pointer-events: none;
+  transform-origin: 0 100%;
+  animation: pill-peek-in 0.14s ease-out;
+}
+@keyframes pill-peek-in {
+  from {
+    opacity: 0;
+    transform: scale(0.15);
+  }
+}
+
+.no-strip .composer-images,
+.no-strip .message-images:not(.keep) {
+  display: none;
+}

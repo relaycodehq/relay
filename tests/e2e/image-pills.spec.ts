@@ -134,19 +134,25 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
       page,
       500,
       "#3e63dd",
-      "Screenshot 2026-10-01 at 13.42.10.png",
+      "settings-page-before-redesign.png",
     );
-    // The pill shows the file's name; the number is what the agent reads.
-    await expect(pills).toHaveText([
-      /^image\.png\s*[\d.]+ K?B$/,
-      /^Screenshot 2026…2\.10\.png/,
-    ]);
+    // A paste is just its picture, a named file shows its name; the number
+    // is what the agent reads.
+    await expect(pills).toHaveText(["", "settings-page-b…sign.png"]);
+    await expect(pills.first().getByRole("img", { name: "Image #1" })).toBeVisible();
     expect(await numbers(pills)).toEqual(["1", "2"]);
     await expect(strip).toHaveCount(2);
     await screenshot(page.locator(".project-composer"), {
       path: "test-results/screenshots/59-image-pills.png",
       animations: "disabled",
     });
+
+    // Resting on a pill grows its picture above it; typing puts it away.
+    await pills.nth(1).hover();
+    const peek = page.locator(".image-chip-peek");
+    await expect(peek.locator("img")).toBeVisible();
+    await page.keyboard.press("End");
+    await expect(peek).toHaveCount(0);
 
     // Deleting a pill takes its screenshot out of the message; undo puts both back.
     await page.keyboard.press("Backspace");
@@ -164,11 +170,11 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
       .click();
     await expect(pills).toHaveCount(1);
     expect(await numbers(pills)).toEqual(["2"]);
-    await expect(input).toHaveText(/^Make look like Screenshot 2026…/);
+    await expect(input).toHaveText(/^Make look like settings-page-b…/);
 
     await pills.first().click();
     const sketch = page.getByRole("dialog", {
-      name: "Draw on Screenshot 2026-10-01 at 13.42.10.png",
+      name: "Draw on settings-page-before-redesign.png",
     });
     // Escape only closes the editor once the screenshot has loaded.
     await expect(sketch.getByLabel("Drawing layer")).toBeVisible();
@@ -190,6 +196,20 @@ test("puts pasted screenshots in the message as numbered pills", async () => {
         exact: true,
       }),
     ).toBeVisible();
+    // The sent message keeps the pills where the tokens went.
+    const message = page.getByRole("article", { name: "Your message" }).last();
+    const sentPills = message.locator(".message-image-chip");
+    await expect(sentPills).toHaveCount(2);
+    await expect(message).not.toContainText("[Image #");
+    await expect(message.locator(".message-image")).toHaveCount(0);
+    // Resting on a pill grows its picture above it.
+    await sentPills.first().hover();
+    await expect(page.locator(".image-chip-peek img")).toBeVisible();
+    await sentPills.nth(1).click();
+    await expect(
+      page.getByRole("dialog", { name: /, image 2 of 2$/ }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
     const turn = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")

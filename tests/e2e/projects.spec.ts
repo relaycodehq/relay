@@ -451,7 +451,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(page.getByLabel("Attachments")).toBeVisible();
     // The screenshot also sits in the text, where the agent reads it as [Image #1].
     const imagePill = page.locator(".composer-image-chip");
-    await expect(imagePill).toHaveText(/^screen\.png\s*\d+ B$/);
+    await expect(imagePill).toHaveText("screen.png");
     await page.reload();
     await expect(page.getByLabel("Attachments")).toBeVisible();
     await expect(imagePill.locator("img")).toBeVisible();
@@ -471,20 +471,18 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         exact: true,
       }),
     ).toBeVisible();
-    await page
-      .locator(".project-message.user .message-image")
-      .last()
-      .scrollIntoViewIfNeeded();
-    await expect(
-      page.getByRole("button", { name: "Open screen.png" }),
-    ).toBeVisible();
-    await expect(page.locator(".project-message.user").last()).toContainText(
-      "[Image #1] Explain this project",
-    );
+    // The sent message keeps the pill where the token went, and no second
+    // copy of the screenshot below it.
+    const sent = page.locator(".project-message.user").last();
+    const pill = sent.getByRole("button", { name: "Open screen.png" });
+    await pill.scrollIntoViewIfNeeded();
+    await expect(pill).toBeVisible();
+    await expect(sent).toContainText("screen.png Explain this project");
+    await expect(sent).not.toContainText("[Image #");
+    await expect(sent.locator(".message-image")).toHaveCount(0);
     await expect
       .poll(() =>
-        page
-          .getByRole("button", { name: "Open screen.png" })
+        pill
           .locator("img")
           .evaluate((img) => (img as HTMLImageElement).naturalWidth),
       )

@@ -63,6 +63,7 @@ import {
   attachedImages,
   imagesAfter,
   nextImageNumber,
+  onlyImageTokens,
 } from "../lib/image-refs";
 import {
   loadDraftWorkspace,
@@ -115,13 +116,11 @@ import {
 } from "../../shared/code-references";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import {
-  pasteBlock,
   pastedTexts,
   pastesAfter,
   replacePastedTexts,
-  type PastedText,
 } from "../../shared/pasted-texts";
-import { PastedTextPill } from "./PastedTextCard";
+import { pilledImages, UserText, type SentImage } from "./UserText";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
 import { awayPlaceholder, HandoffStrip, ReturnedStrip } from "./HandoffStrip";
@@ -261,35 +260,6 @@ function QueuedBody({ input }: { input: ProjectChatSend }) {
     </>
   );
 }
-/** A sent message's text, with each paste shown as a pill where it went. */
-function UserText({ text }: { text: string }) {
-  const parts = useMemo(() => {
-    const parts: (string | PastedText)[] = [];
-    let last = 0;
-    for (const m of text.matchAll(pasteBlock)) {
-      parts.push(text.slice(last, m.index));
-      parts.push({ n: Number(m[1]), text: m[3] });
-      last = m.index! + m[0].length;
-    }
-    parts.push(text.slice(last));
-    return parts;
-  }, [text]);
-  return (
-    <>
-      {parts.map((part, i) =>
-        typeof part === "string" ? (
-          part.trim() ? (
-            <RichText key={i} text={part} />
-          ) : null
-        ) : (
-          <p key={i} className="message-paste">
-            <PastedTextPill paste={part} />
-          </p>
-        ),
-      )}
-    </>
-  );
-}
 /** Drag type for reordering queued messages, so other drops are ignored. */
 const QUEUED_DRAG = "application/x-relay-queued-message";
 /** Where the reader left each thread they scrolled up in, by the message at
@@ -372,22 +342,52 @@ const Message = memo(function Message({
         : [],
     [m.role, m.body, projectRoot],
   );
+  const sentImages = useMemo<SentImage[]>(
+    () =>
+      chatId
+        ? (m.images ?? []).map((image) => ({
+            image,
+            preview: userImage(chatId, image),
+          }))
+        : [],
+    [chatId, m.images],
+  );
   const allImages = useMemo(
     () =>
       chatId
         ? [
-            ...(m.images ?? []).map((image) => userImage(chatId, image)),
+            ...sentImages.map((sent) => sent.preview),
             ...[
               ...shown,
               ...turnImages(m).filter((path) => !shown.includes(path)),
             ].map((path) => readImage(chatId, m.id, path, projectRoot)),
           ]
         : [],
-    [chatId, m, projectRoot, shown],
+    [chatId, m, projectRoot, shown, sentImages],
   );
+  const parsed = useMemo(() => {
+    if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
+    const code = parseCodeReferences(m.body);
+    return { refs: code.refs, body: code.body };
+  }, [m.role, m.body]);
+  // A message of only attachments leaves just the agent mention, or its
+  // screenshots' tokens, behind; the images below say it all.
+  const said =
+    m.role === "user"
+      ? parsed.body?.replace(agentMentionPattern, "")
+      : parsed.body;
+  const text = m.role === "user" && said && onlyImageTokens(said) ? "" : said;
   const images = useWorkingImages(allImages, viewing);
+  // A screenshot with a pill in the text needs no second copy below it.
+  const pilled = useMemo(() => {
+    const ns = m.role === "user" && text ? pilledImages(text) : new Set<number>();
+    return new Set(
+      sentImages.flatMap((sent, i) => (ns.has(i + 1) ? [sent.preview.key] : [])),
+    );
+  }, [m.role, text, sentImages]);
   const stripImages = images.filter(
-    (image) => !image.path || !shown.includes(image.path),
+    (image) =>
+      !pilled.has(image.key) && (!image.path || !shown.includes(image.path)),
   );
   const answerImage = useCallback(
     (src: string, alt: string) => {
@@ -405,16 +405,6 @@ const Message = memo(function Message({
     [chatId, m.id, projectRoot],
   );
   const viewingIndex = images.findIndex((image) => image.key === viewing);
-  const parsed = useMemo(() => {
-    if (m.role !== "user" || !m.body) return { refs: [], body: m.body };
-    const code = parseCodeReferences(m.body);
-    return { refs: code.refs, body: code.body };
-  }, [m.role, m.body]);
-  // A message of only attachments leaves just the agent mention behind.
-  const text =
-    m.role === "user"
-      ? parsed.body?.replace(agentMentionPattern, "")
-      : parsed.body;
   if (m.handoff)
     return (
       <HandoffRow
@@ -499,7 +489,11 @@ const Message = memo(function Message({
       )}
       {text?.trim() ? (
         m.role === "user" ? (
-          <UserText text={text} />
+          <UserText
+            text={text}
+            images={sentImages}
+            onOpenImage={setViewing}
+          />
         ) : (
           <RichText
             text={text}
