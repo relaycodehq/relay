@@ -1,0 +1,102 @@
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  ChatSummary,
+  ChatWorkspace,
+  Project,
+  WorktreeStatus,
+} from "../../shared/projects";
+import type { TurnDiffTarget } from "../components/TurnChanges";
+import { api } from "./api";
+import { loadDraftWorkspace, saveDraftWorkspace } from "./drafts";
+import { workingTreeKey } from "./working-tree-key";
+
+export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
+
+/** Where a thread works: picked before its first message, then the worktree it made, if any. */
+export function useThreadWorktree({
+  chat,
+  draftId,
+  project,
+  running,
+  setError,
+  onDraftWorkspace,
+}: {
+  chat?: ChatSummary;
+  draftId: string;
+  project: Project;
+  running: boolean;
+  setError: (error: unknown) => void;
+  onDraftWorkspace?: (workspace: ChatWorkspace) => void;
+}) {
+  const qc = useQueryClient();
+  // Where a new thread will work; a started one keeps its own.
+  const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
+    chat ? "checkout" : loadDraftWorkspace(draftId),
+  );
+  useEffect(() => {
+    if (chat) return;
+    saveDraftWorkspace(draftId, workspace);
+    onDraftWorkspace?.(workspace);
+  }, [workspace, !chat]);
+  const query = useQuery({
+    queryKey: ["worktree", chat?.id],
+    queryFn: () => api.projectWorktree(chat!.id),
+    enabled: !!chat?.worktree,
+    refetchInterval: 5000,
+  });
+  const status = query.data;
+  const live = status?.path && !status.removed ? status : undefined;
+  const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<"remove" | "move">();
+  useEffect(() => {
+    // A finished turn leaves new changes to count.
+    if (!running && chat?.worktree) void query.refetch();
+  }, [running]);
+  async function remove() {
+    if (!chat || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.removeProjectWorktree(chat.id);
+      // What ran in it stopped with it.
+      void qc.invalidateQueries({ queryKey: ["project-tasks", project.id] });
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+      void query.refetch();
+      void qc.invalidateQueries({ queryKey: workingTreeKey() });
+      void qc.invalidateQueries({ queryKey: ["project-chats", project.id] });
+    }
+  }
+  return {
+    workspace,
+    setWorkspace,
+    status,
+    // Where this thread's files are: links in its answers resolve against it.
+    folder: live?.path ?? project.path,
+    branch: live?.branch,
+    busy,
+    /** The Remove or Move dialog, while one is open. */
+    dialog,
+    setDialog,
+    remove,
+  };
+}
+
+/** Everything the worktree has that the branch it came from doesn't, opened at `path`. */
+export function worktreeDiff(
+  chatId: string,
+  status: WorktreeStatus,
+  path?: string,
+): TurnDiffTarget {
+  return {
+    chatId,
+    messageId: "worktree",
+    files: status.files,
+    path,
+    label: status.branch ?? "Worktree",
+    worktree: true,
+  };
+}
