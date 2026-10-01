@@ -9,7 +9,6 @@ import {
 import type { LineQuestion } from "../../shared/questions";
 import {
   Fragment,
-  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -51,7 +50,6 @@ import {
 import { api } from "../lib/api";
 import { workingTreeKey } from "../lib/working-tree-key";
 import { useNavigationLock } from "../lib/navigation-lock";
-import { prefillClaudeSignIn } from "../lib/thread-terminals";
 import { loadDraftImages, saveDraftImages } from "../lib/draft-images";
 import {
   attachedImages,
@@ -63,7 +61,6 @@ import { withAttachments } from "../lib/draft-attachments";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import type { ComposedSend } from "../../shared/compose-send";
 import {
-  forkThreadSettings,
   startThreadSettings,
   saveSentSettings,
 } from "../lib/composer-settings";
@@ -82,6 +79,7 @@ import {
 import { SelectionQuote } from "./SelectionQuote";
 import { Message } from "./ProjectMessage";
 import { useCouncils } from "../lib/useCouncils";
+import { useMessageActions } from "../lib/useMessageActions";
 import { SideQuestion, type SideThread } from "./SideQuestion";
 import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
@@ -111,10 +109,7 @@ import {
 } from "./WorktreeControls";
 import { useThreadWorktree } from "../lib/useThreadWorktree";
 import type { TurnDiffTarget } from "./TurnChanges";
-import {
-  matchLink,
-  type ProjectFileLink,
-} from "../../shared/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import type { PullRef } from "../../shared/types";
 import {
   DeepReviewCouncil,
@@ -838,104 +833,26 @@ export function ProjectChat({
     );
     void queueAction("move", moving, index);
   }
-  // Stable handlers let memoized messages skip re-rendering while typing.
-  const latest = useRef({
+  const {
+    signInToClaude,
+    openReply,
+    forkThread,
+    openChanges,
+    openFile,
+    openTurnDiff,
+    rewindTurn,
+  } = useMessageActions({
+    projectId: project.id,
+    chatId: chat?.id,
     messages,
+    worktree: worktree.status,
+    setError,
+    onOpenReply: setRootId,
+    onCreated,
     onOpenCode,
     onOpenFile,
     onOpenTurnDiff,
-    onCreated,
-    chatId: chat?.id,
-    worktree: worktree.status,
   });
-  latest.current = {
-    messages,
-    onOpenCode,
-    onOpenFile,
-    onOpenTurnDiff,
-    onCreated,
-    chatId: chat?.id,
-    worktree: worktree.status,
-  };
-  const threadId = chat?.id;
-  const signInToClaude = useCallback(
-    () =>
-      threadId
-        ? prefillClaudeSignIn(project.id, threadId)
-        : Promise.resolve(false),
-    [project.id, threadId],
-  );
-  const openReply = useCallback((m: ChatMessage) => {
-    setRootId(replyRoot(latest.current.messages, m.id).id);
-  }, []);
-  const forkThread = useCallback(async (m: ChatMessage) => {
-    const { chatId, onCreated } = latest.current;
-    if (!chatId) return;
-    setError(undefined);
-    try {
-      const forked = await api.forkProjectChat(chatId, m.id);
-      forkThreadSettings(chatId, forked.id, m.provider);
-      await onCreated(forked);
-    } catch (e) {
-      setError(e);
-    }
-  }, []);
-  const openChanges = useCallback(
-    () => latest.current.onOpenCode("changes"),
-    [],
-  );
-  const openFile = useCallback((target: ProjectFileLink) => {
-    const { chatId, worktree, onOpenFile, onOpenTurnDiff } = latest.current;
-    // A file the worktree changed opens on its worktree diff; the checkout has the old one.
-    const matches = worktree
-      ? matchLink(
-          target,
-          worktree.files.map((f) => f.path),
-        )
-      : [];
-    const changed =
-      target.directory || matches.length === 1 ? matches[0] : undefined;
-    if (chatId && worktree && changed)
-      onOpenTurnDiff({
-        chatId,
-        messageId: "worktree",
-        files: worktree.files,
-        path: changed,
-        label: worktree.branch ?? "Worktree",
-        worktree: true,
-      });
-    else onOpenFile(target);
-  }, []);
-  const openTurnDiff = useCallback((m: ChatMessage, path?: string) => {
-    const { chatId, onOpenTurnDiff } = latest.current;
-    if (!chatId || !m.changes?.length) return;
-    onOpenTurnDiff({
-      chatId,
-      messageId: m.id,
-      files: m.changes,
-      path,
-      label: `${agentName(m.provider)} · ${new Date(
-        m.created,
-      ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-    });
-  }, []);
-  const rewindTurn = useCallback(
-    (
-      m: ChatMessage,
-      paths: string[] | null,
-      mode: "revert" | "redo",
-      force: boolean,
-    ) => {
-      const { chatId } = latest.current;
-      if (!chatId) return Promise.resolve({ conflicts: [] });
-      return api
-        .rewindProjectTurn(chatId, m.id, paths, mode, force)
-        .finally(
-          () => void qc.invalidateQueries({ queryKey: workingTreeKey() }),
-        );
-    },
-    [],
-  );
   const workspaceControl =
     scope.kind !== "project" || project.plain ? undefined : (
       <WorkspaceControl
