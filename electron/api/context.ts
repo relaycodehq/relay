@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { chatIsEmpty } from "../../shared/chat-activity";
+import type { ChatSummary } from "../../shared/projects";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
 import type { ApiMethod, Repo } from "../../shared/types";
 import type { AgentUpdates } from "../agent-updates";
@@ -94,6 +96,25 @@ export function apiContext(services: Services) {
     };
   }
   const placeRoot = async (where: unknown) => (await place(where)).root;
+  /** An unused PR thread is still a review in the making once files are viewed or drafted. */
+  function reviewStarted(chat: ChatSummary) {
+    if (chat.scope.kind !== "pr" || !login.client) return false;
+    const p = store.get().progress[prKey(chat.scope.ref)];
+    return (
+      !!p &&
+      (Object.keys(p.read).length > 0 ||
+        p.drafts.length > 0 ||
+        p.marks.length > 0 ||
+        !!p.reviewBody?.trim())
+    );
+  }
+  /** A project's threads as the sidebar and phones list them. */
+  const listChats = (projectId: string) =>
+    projectChats
+      .list(projectId)
+      .map((c) =>
+        chatIsEmpty(c) && reviewStarted(c) ? { ...c, empty: false } : c,
+      );
   return {
     ...services,
     requireClient,
@@ -103,6 +124,7 @@ export function apiContext(services: Services) {
     requireFolder,
     place,
     placeRoot,
+    listChats,
   };
 }
 

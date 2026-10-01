@@ -271,31 +271,30 @@ app
     }
     const triageService = new TriageService(loaded, app.getPath("userData"));
     triage = triageService;
-    const dispatch: Dispatch = createDispatch(
-      apiContext({
-        store: loaded,
-        projects,
-        projectChats: chats,
-        rooms: roomService,
-        devops,
-        clockify,
-        triage: triageService,
-        phoneRemote: () => phoneRemote,
-        handoffs: () => handoffs,
-        login,
-        window,
-        menubar,
-        links,
-        projectChecks,
-        blame,
-        ci,
-        liveSyncs,
-        pullRequestCreation,
-        updater,
-        dictation,
-        agentUpdates,
-      }),
-    );
+    const api = apiContext({
+      store: loaded,
+      projects,
+      projectChats: chats,
+      rooms: roomService,
+      devops,
+      clockify,
+      triage: triageService,
+      phoneRemote: () => phoneRemote,
+      handoffs: () => handoffs,
+      login,
+      window,
+      menubar,
+      links,
+      projectChecks,
+      blame,
+      ci,
+      liveSyncs,
+      pullRequestCreation,
+      updater,
+      dictation,
+      agentUpdates,
+    });
+    const dispatch: Dispatch = createDispatch(api);
     const handoffDir = join(app.getPath("userData"), "handoffs");
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {
@@ -315,7 +314,7 @@ app
       {
         projects: () => projects.list(login.client),
         projectPath: (id) => projects.get(id).path,
-        chats: (id) => chats.list(id),
+        chats: api.listChats,
         chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
         version: () => app.getVersion(),
         // The bridge forwards only its allowlist; see shared/remote.ts.
