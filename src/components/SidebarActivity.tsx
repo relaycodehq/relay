@@ -71,7 +71,7 @@ export function ActivityView({
     chatId,
   );
   return (
-    <div className="sb-scroll sb-activity">
+    <>
       <div className="sb-view-heading">
         <h2>Activity</h2>
         <small>
@@ -126,7 +126,7 @@ export function ActivityView({
         rows={rows}
         shelves={shelves}
       />
-    </div>
+    </>
   );
 }
 
