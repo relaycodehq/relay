@@ -12,6 +12,7 @@ import {
   sessionFor,
 } from "./project-chats/sessions";
 import { interrupt } from "./project-chats/revive";
+import { threadControl } from "./project-chats/control";
 import { ChatSchedule } from "./project-chats/schedule";
 import { ThreadTitles } from "./project-chats/titles";
 import { ChatSharing } from "./project-chats/sharing";
@@ -181,19 +182,7 @@ export class ProjectChats {
   private schedule: ChatSchedule;
   private titles: ThreadTitles;
   private sharing: ChatSharing;
-  private controls = new Map<string, Promise<unknown>>();
-  private control<T>(id: string, action: () => Promise<T>): Promise<T> {
-    const job = (this.controls.get(id) ?? Promise.resolve())
-      .catch(() => {})
-      .then(action);
-    this.controls.set(id, job);
-    void job
-      .finally(() => {
-        if (this.controls.get(id) === job) this.controls.delete(id);
-      })
-      .catch(() => {});
-    return job;
-  }
+  private control = threadControl();
   private disposing = false;
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
   private reviewSteps = new Set<Promise<void>>();
@@ -289,13 +278,18 @@ export class ProjectChats {
       this.storage.chatChanged(id),
     );
     this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
-    this.schedule = new ChatSchedule(store, this.storage, this.sessions, {
-      control: (id, action) => this.control(id, action),
-      send: (id, input, fromRelay) => this.send(id, input, fromRelay),
-      sessionInput: (chat, provider, parentId) =>
-        this.sessionInput(chat, provider, parentId),
-      closing: () => this.disposing,
-    });
+    this.schedule = new ChatSchedule(
+      store,
+      this.storage,
+      this.sessions,
+      this.control,
+      {
+        send: (id, input, fromRelay) => this.send(id, input, fromRelay),
+        sessionInput: (chat, provider, parentId) =>
+          this.sessionInput(chat, provider, parentId),
+        closing: () => this.disposing,
+      },
+    );
     this.titles = new ThreadTitles(this.storage, {
       emit: (event) => this.emit(event),
       busy: (id) => this.active.has(id),
@@ -2558,7 +2552,7 @@ export class ProjectChats {
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
     await Promise.allSettled(this.titles.running());
     await Promise.allSettled(this.titles.writing());
-    await Promise.allSettled([...this.controls.values()]);
+    await Promise.allSettled(this.control.pending());
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled([...this.active.all()].map((a) => a.job));
     await Promise.allSettled([...this.reviewSteps]);

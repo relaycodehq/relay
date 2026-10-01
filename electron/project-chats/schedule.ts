@@ -9,12 +9,11 @@ import type {
 import { replyRoot } from "../../shared/projects";
 import { stopClaudeTask } from "../rooms/claude-project";
 import type { Store } from "../store";
+import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";
 import { nextSend, type ChatStorage } from "./storage";
 
 export interface ScheduleHost {
-  /** Runs `action` in the thread's turn, after whatever it is doing. */
-  control<T>(id: string, action: () => Promise<T>): Promise<T>;
   send(id: string, input: ProjectChatSend, fromRelay?: boolean): Promise<void>;
   /** A hidden turn on an existing session. */
   sessionInput(
@@ -37,6 +36,7 @@ export class ChatSchedule {
     private store: Store,
     private storage: ChatStorage,
     private sessions: ProviderSessions,
+    private control: ThreadControl,
     private host: ScheduleHost,
   ) {}
 
@@ -128,7 +128,7 @@ export class ChatSchedule {
   /** Sends the scheduled messages that are due, oldest first. */
   private async sendDue(chatId: string) {
     if (this.host.closing()) return;
-    const due = await this.host.control(chatId, async () => {
+    const due = await this.control(chatId, async () => {
       const chat = await this.storage.load(chatId);
       const now = Date.now();
       const due = (chat.scheduled ?? [])
@@ -146,7 +146,7 @@ export class ChatSchedule {
     try {
       await this.host.send(chatId, item.input);
     } catch (e) {
-      await this.host.control(chatId, async () => {
+      await this.control(chatId, async () => {
         const chat = await this.storage.load(chatId);
         (chat.scheduled ??= []).push({
           ...item,
