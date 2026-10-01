@@ -2224,3 +2224,51 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   expect(main).toHaveLength(1);
   expect(JSON.stringify(main[0].turn.input)).not.toContain("which test covers");
 }, 20000);
+it("keeps a handed-over thread's briefing for the retry when its first turn fails", async () => {
+  const cli = await findExecutable("codex");
+  vi.mocked(findExecutable).mockRejectedValue(
+    new Error("Codex isn't installed"),
+  );
+  const { id } = await chats.adopt(
+    projectId,
+    {
+      from: "Laptop",
+      repositories: [],
+      title: "Changelog",
+      scope: { kind: "project" },
+      settings: { ...input(""), body: undefined, id: undefined } as never,
+      messages: [],
+      git: {} as never,
+    },
+    { id: randomUUID(), computer: "Laptop", deviceId: "d", at: 1, tip: "x" },
+    { path: projects.get(projectId)!.path, branch: "main" },
+  );
+  const settled = (status: string) =>
+    vi.waitFor(
+      async () =>
+        expect((await chats.get(id)).messages.at(-1)?.status).toBe(status),
+      { timeout: 8000 },
+    );
+  await settled("failed");
+  vi.mocked(findExecutable).mockResolvedValue(cli);
+  const prompts = async () =>
+    (await readFile(join(root, "capture.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((c) => c.turn)
+      .map((c) =>
+        (c.turn.input as { text?: string }[]).map((i) => i.text).join("\n"),
+      );
+  await chats.send(id, input("@codex Try again"));
+  await settled("complete");
+  expect((await prompts()).at(-1)).toContain(
+    "handed over from another computer",
+  );
+  // Told once it went through.
+  await chats.send(id, input("@codex And then?"));
+  await settled("complete");
+  expect((await prompts()).at(-1)).not.toContain(
+    "handed over from another computer",
+  );
+}, 30000);
