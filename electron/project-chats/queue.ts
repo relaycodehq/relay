@@ -21,6 +21,34 @@ export interface QueueHost {
   closing(): boolean;
 }
 
+/**
+ * Whether a queued message can join the answer running for `prior` instead of
+ * waiting for it: the same agent, conversation and settings, and nothing the
+ * agent only takes at the start of a turn (a selection, a skill, a command,
+ * or a screenshot in a shared thread).
+ */
+export function steers(
+  next: ProjectChatSend,
+  prior: ProjectChatSend | undefined,
+  shared: boolean,
+) {
+  const asked = agentAsked(next);
+  return !(
+    !asked ||
+    !prior ||
+    asked.provider !== agentAsked(prior)?.provider ||
+    next.parentId !== prior.parentId ||
+    next.runtimeMode !== prior.runtimeMode ||
+    next.interactionMode !== prior.interactionMode ||
+    JSON.stringify(next.choice) !== JSON.stringify(prior.choice) ||
+    next.contextWindow !== prior.contextWindow ||
+    (shared && next.images?.length) ||
+    next.selection ||
+    /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
+    /^\s*\//.test(asked.question)
+  );
+}
+
 /** Messages waiting for the thread's running answer, and steering it with one. */
 export class ChatQueue {
   constructor(
@@ -97,23 +125,11 @@ export class ChatQueue {
       await this.storage.save(chat);
       return this.drain(chat.id);
     }
-    const asked = agentAsked(next.input),
-      prior = active.input,
-      running = prior && agentAsked(prior)?.provider;
+    const asked = agentAsked(next.input);
     if (
       !asked ||
-      !prior ||
-      asked.provider !== running ||
       !active.steer ||
-      next.input.parentId !== prior.parentId ||
-      next.input.runtimeMode !== prior.runtimeMode ||
-      next.input.interactionMode !== prior.interactionMode ||
-      JSON.stringify(next.input.choice) !== JSON.stringify(prior.choice) ||
-      next.input.contextWindow !== prior.contextWindow ||
-      (chat.shared && next.input.images?.length) ||
-      next.input.selection ||
-      /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
-      /^\s*\//.test(asked.question)
+      !steers(next.input, active.input, !!chat.shared)
     )
       return this.storage.save(chat);
     const images = next.input.images?.length
