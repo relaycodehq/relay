@@ -1,11 +1,20 @@
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostedChild } from "../../electron/agent-host/child";
-import type {
+import {
   AgentHosts,
-  FoundSession,
-  HostedProcess,
+  type FoundSession,
+  type HostedProcess,
 } from "../../electron/agent-host/client";
-import type { SessionInfo } from "../../electron/agent-host/protocol";
+import {
+  protocolVersion,
+  readLines,
+  writeLine,
+  type SessionInfo,
+} from "../../electron/agent-host/protocol";
 import {
   hostAgents,
   HostedSessions,
@@ -15,6 +24,7 @@ import { AsyncQueue } from "../../electron/async-queue";
 afterEach(() => {
   hostAgents(undefined);
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("AsyncQueue", () => {
@@ -224,5 +234,68 @@ describe("HostedSessions", () => {
     // Other agents take theirs back themselves.
     for (const left of [kept, cursor, claude])
       expect(left.close).not.toHaveBeenCalled();
+  });
+});
+
+describe("a host that stops answering", () => {
+  let server: Server | undefined;
+  let dir: string | undefined;
+  afterEach(async () => {
+    server?.close();
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  it("doesn't hold a session's call forever", async () => {
+    dir = await realpath(await mkdtemp(join(tmpdir(), "relay-host-calls-")));
+    const socket = join(dir, "host.sock");
+    // Welcomes Relay, then never answers.
+    server = createServer((client) => {
+      readLines(client, (message) => {
+        if (message.t === "hello")
+          writeLine(client, {
+            t: "welcome",
+            version: "old",
+            pid: process.pid,
+            sessions: [
+              {
+                id: "s",
+                key: "thread",
+                kind: "claude",
+                meta: {},
+                split: 0,
+                open: false,
+              },
+            ],
+          });
+      });
+    });
+    await new Promise<void>((r) => server!.listen(socket, r));
+    await writeFile(
+      join(dir, `host-${process.pid}.json`),
+      JSON.stringify({
+        pid: process.pid,
+        socket,
+        token: "t",
+        version: "old",
+        protocol: protocolVersion,
+        started: Date.now(),
+      }),
+    );
+    const script = join(dir, "agent-host.mjs");
+    await writeFile(script, "");
+    const hosts = new AgentHosts(dir, script);
+    try {
+      const [found] = await hosts.discover();
+      const query = found.attach({ hooks: {} });
+      vi.useFakeTimers();
+      const settings = expect(query.getSettings()).rejects.toThrow(
+        "The agent host didn't answer getSettings in time.",
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+      await settings;
+    } finally {
+      vi.useRealTimers();
+      hosts.detach();
+    }
   });
 });

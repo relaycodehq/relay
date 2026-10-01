@@ -22,6 +22,14 @@ import {
 } from "./protocol";
 import { AsyncQueue } from "../async-queue";
 
+/**
+ * How long a session's control call may take. Claude Code answers them at
+ * once, even mid-turn, so a slower one met a stuck host or CLI. 20 seconds is
+ * what Relay already gives a freshly started CLI to answer the same requests
+ * when it lists models and commands.
+ */
+const callLimit = 20_000;
+
 /** What the host asks of Relay while a session runs. */
 export interface HostedHandlers {
   canUseTool?: (
@@ -274,12 +282,31 @@ class HostConnection {
     writeLine(this.socket, message);
   }
 
-  call(session: string, method: string, args: unknown[]) {
+  /** Past `timeout`, a host that stopped answering no longer holds the caller. */
+  call(session: string, method: string, args: unknown[], timeout?: number) {
     if (this.closed)
       return Promise.reject(new Error("The agent host has stopped."));
     const id = this.nextCall++;
     return new Promise<any>((resolve, reject) => {
-      this.calls.set(id, { resolve, reject });
+      const timer =
+        timeout === undefined
+          ? undefined
+          : setTimeout(() => {
+              this.calls.delete(id);
+              reject(
+                new Error(`The agent host didn't answer ${method} in time.`),
+              );
+            }, timeout);
+      this.calls.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       this.send({ t: "call", id, session, method, args });
     });
   }
@@ -511,7 +538,7 @@ export class HostedQuery {
   }
 
   private call(method: string, ...args: unknown[]) {
-    return this.connection.call(this.id, method, args);
+    return this.connection.call(this.id, method, args, callLimit);
   }
   interrupt() {
     return this.call("interrupt");
@@ -547,9 +574,11 @@ export class HostedQuery {
     question: string,
     options?: { history?: unknown[]; signal?: AbortSignal },
   ) {
-    const asked = this.call("askSideQuestion", question, {
-      history: options?.history,
-    });
+    // A whole answer, so no limit; the caller's signal cancels it.
+    const asked = this.connection.call(this.id, "askSideQuestion", [
+      question,
+      { history: options?.history },
+    ]);
     const signal = options?.signal;
     if (!signal) return asked;
     return Promise.race([
