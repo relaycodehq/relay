@@ -15,6 +15,7 @@ import { TurnFiles } from "./project-chats/turn-files";
 import { assertHere, ComputerHandoff } from "./project-chats/handoff";
 import { forkFor, TurnRunner } from "./project-chats/turn-run";
 import { SideQuestions } from "./project-chats/asides";
+import { ChatQueue } from "./project-chats/queue";
 import type { ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
 import { streamingAnswer } from "./answer-recorder";
@@ -22,7 +23,6 @@ import { agentRuntime, agentRuntimes } from "./agents";
 import type { AgentResponse } from "../shared/agent-modes";
 import { codexSkills, type CodexSkill } from "./provider-commands";
 import type { LineQuestion } from "../shared/questions";
-import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store";
@@ -87,6 +87,7 @@ export class ProjectChats {
   private handoffs: ComputerHandoff;
   private runner: TurnRunner;
   private asides: SideQuestions;
+  private queue: ChatQueue;
   private control = threadControl();
   private disposing = false;
   /** What a deep review or an Ultraplan does after a turn ends; closing waits for it. */
@@ -112,7 +113,7 @@ export class ProjectChats {
     if (unread.length) void this.storage.save(chat).catch(() => {});
     if (turn) this.reviewStep(chat.id, turn);
     void this.storage.updateSummary(chat).catch(() => {});
-    void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+    void this.control(chat.id, () => this.queue.drain(chat.id)).catch(() => {});
   }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
@@ -268,6 +269,19 @@ export class ProjectChats {
       this.worktrees,
       this.runner,
       (event) => this.emit(event),
+    );
+    this.queue = new ChatQueue(
+      this.storage,
+      this.active,
+      this.schedule,
+      this.sharing,
+      this.control,
+      (event) => this.emit(event),
+      {
+        sendNow: (id, input) => this.sendNow(id, input),
+        councilBusy: (chat) => this.councilBusy(chat),
+        closing: () => this.disposing,
+      },
     );
   }
   /**
@@ -671,167 +685,16 @@ export class ProjectChats {
         }
         return;
       }
-      const chat = await this.storage.load(id);
-      if (
-        chat.messages.some((m) => m.id === input.id) ||
-        chat.queue?.some((q) => q.input.id === input.id)
-      )
-        return;
-      if ((chat.queue?.length ?? 0) >= 20)
-        throw new Error("This thread already has 20 queued messages.");
-      if (
-        Buffer.byteLength(JSON.stringify(chat.queue ?? [])) +
-          Buffer.byteLength(JSON.stringify(input)) >
-        8 * 1024 * 1024
-      )
-        throw new Error(
-          "The message queue is full. Send or remove queued attachments first.",
-        );
-      input = {
-        ...input,
-        parentId: input.parentId
-          ? replyRoot(chat.messages, input.parentId).id
-          : undefined,
-      };
-      (chat.queue ??= []).push({ input, created: Date.now() });
-      await this.storage.save(chat);
-      if (input.delivery === "steer") await this.steerQueued(chat, input.id);
+      return this.queue.add(id, input);
     });
   }
-  private async drain(id: string) {
-    if (this.disposing || this.active.has(id)) return;
-    const chat = await this.storage.load(id);
-    if (this.councilBusy(chat)) return;
-    const next = chat.queue?.[0];
-    if (!next || chat.queuePaused) return;
-    try {
-      await this.sendNow(id, next.input);
-      chat.queue = chat.queue!.filter((q) => q.input.id !== next.input.id);
-      await this.storage.save(chat);
-      if (!this.active.has(id)) await this.drain(id);
-    } catch (e) {
-      next.error = e instanceof Error ? e.message : String(e);
-      chat.queuePaused = true;
-      await this.storage.save(chat);
-    }
-  }
-  /**
-   * Steers the running answer with a queued message. When it cannot steer
-   * (different agent, model or mode, a selection, not started yet), the
-   * message moves to the front and goes out as soon as the answer finishes.
-   */
-  private async steerQueued(chat: ProjectChat, messageId: string) {
-    const next = chat.queue?.find((q) => q.input.id === messageId),
-      active = this.active.get(chat.id);
-    if (!next) throw new Error("Queued message not found.");
-    delete next.error;
-    chat.queue = [next, ...chat.queue!.filter((q) => q !== next)];
-    chat.queuePaused = false;
-    if (!active) {
-      await this.storage.save(chat);
-      return this.drain(chat.id);
-    }
-    const asked = agentAsked(next.input),
-      prior = active.input,
-      running = prior && agentAsked(prior)?.provider;
-    if (
-      !asked ||
-      !prior ||
-      asked.provider !== running ||
-      !active.steer ||
-      next.input.parentId !== prior.parentId ||
-      next.input.runtimeMode !== prior.runtimeMode ||
-      next.input.interactionMode !== prior.interactionMode ||
-      JSON.stringify(next.input.choice) !== JSON.stringify(prior.choice) ||
-      next.input.contextWindow !== prior.contextWindow ||
-      (chat.shared && next.input.images?.length) ||
-      next.input.selection ||
-      /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
-      /^\s*\//.test(asked.question)
-    )
-      return this.storage.save(chat);
-    const images = next.input.images?.length
-      ? await this.storage.saveImages(chat.id, next.input.images)
-      : [];
-    const message: ChatMessage = {
-      id: next.input.id,
-      steered: true,
-      unread: true,
-      role: "user",
-      body: next.input.body,
-      provider: asked.provider,
-      status: "complete",
-      created: Date.now(),
-      version: 1,
-      ...(images.length ? { images } : {}),
-      ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
-      ...(chat.shared ? { pending: true } : {}),
-    };
-    // In the thread before the agent hears it: Codex can say it read the
-    // steer in the same breath as accepting it, and its answer continues
-    // below this message only if it's there to find.
-    chat.messages.push(message);
-    try {
-      await active.steer(
-        asked.question +
-          (next.input.viewing
-            ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
-            : ""),
-        next.input.id,
-        images.map((image) => ({
-          path: this.storage.imagePath(chat.id, image),
-          mimeType: image.mimeType,
-        })),
-      );
-    } catch {
-      chat.messages.splice(chat.messages.indexOf(message), 1);
-      // Sent later as its own turn, which saves its images again.
-      await Promise.all(
-        images.map((image) =>
-          rm(this.storage.imagePath(chat.id, image), { force: true }),
-        ),
-      );
-      return this.storage.save(chat);
-    }
-    chat.queue = chat.queue!.filter((q) => q !== next);
-    await this.storage.save(chat);
-    this.emit({ chatId: chat.id, message });
-    if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
-  }
-  async queueAction(
+  queueAction(
     id: string,
     action: "remove" | "steer" | "move",
     messageId: string,
     index = 0,
   ) {
-    const sendNow = await this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      const chat = await this.storage.load(id);
-      const scheduled = chat.scheduled?.find((s) => s.input.id === messageId);
-      if (scheduled && action !== "move") {
-        chat.scheduled = chat.scheduled!.filter((s) => s !== scheduled);
-        await this.schedule.save(chat);
-        return action === "steer" ? scheduled : undefined;
-      }
-      if (action === "steer") {
-        await this.steerQueued(chat, messageId);
-        return;
-      }
-      if (action === "remove")
-        chat.queue = chat.queue?.filter((q) => q.input.id !== messageId);
-      else {
-        const moving = chat.queue?.find((q) => q.input.id === messageId);
-        if (!moving) throw new Error("Queued message not found.");
-        const rest = chat.queue!.filter((q) => q !== moving);
-        rest.splice(Math.min(index, rest.length), 0, moving);
-        chat.queue = rest;
-      }
-      await this.storage.save(chat);
-      await this.drain(id);
-    });
-    // Outside the control above, since send takes its own turn.
-    if (sendNow)
-      await this.schedule.dispatch(id, { ...sendNow, error: undefined });
+    return this.queue.action(id, action, messageId, index);
   }
   resume(id: string, settings?: ResumeSettings) {
     return this.control(id, async () => {
