@@ -115,6 +115,13 @@ import {
   saveDraftImages,
   type DraftImage,
 } from "../lib/draft-images";
+import {
+  attachedImages,
+  dataUrlBytes,
+  nextImageNumber,
+  numberImages,
+} from "../lib/image-refs";
+import { useImagePills } from "../lib/image-pills";
 import { readDraft, useDraft } from "../lib/drafts";
 import { useStableCallback } from "../lib/useStableCallback";
 import { flattenSketch, type Sketch } from "../lib/sketch";
@@ -370,6 +377,21 @@ export function ProjectComposer({
   const imageQueue = useRef<Promise<DraftImage[]>>(Promise.resolve([]));
   const [sketching, setSketching] = useState<string>();
   const sketchHistories = useRef(new Map<string, SketchHistory>());
+  const imagePills = useImagePills();
+  // A screenshot goes with the message while its pill is in the draft.
+  const attached = useMemo(
+    () => attachedImages(draft, images),
+    [draft, images],
+  );
+  const imageChips = useMemo(
+    () =>
+      images.flatMap(({ n, name, dataUrl }) =>
+        n === undefined
+          ? []
+          : [{ n, name, src: dataUrl, bytes: dataUrlBytes(dataUrl) }],
+      ),
+    [images],
+  );
   // Paste pills live in the draft text; their cards mirror them in order.
   const pastes = useMemo(() => pastedTexts(draft), [draft]);
   const [viewingPaste, setViewingPaste] = useState<number>();
@@ -943,7 +965,10 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
     disabled: busy,
   });
-  async function addImages(files: File[]) {
+  async function addImages(
+    files: File[],
+    point?: { left: number; top: number },
+  ) {
     if (!files.length) return;
     if (shared) {
       setImageError(
@@ -957,13 +982,23 @@ export function ProjectComposer({
     setImageError(undefined);
     try {
       const existing = await imageQueue.current;
-      if (existing.length + files.length > 3)
+      const kept = attachedImages(draft, existing);
+      if (kept.length + files.length > 3)
         throw new Error("Attach up to three screenshots per message.");
-      const prepared = await Promise.all(files.map(prepareScreenshot));
-      const next = [...existing, ...prepared];
+      const first = nextImageNumber(draft, existing);
+      // Without pills a screenshot has no number, so it always goes along.
+      const prepared = (await Promise.all(files.map(prepareScreenshot))).map(
+        (image, i) => (imagePills ? { ...image, n: first + i } : image),
+      );
+      // Screenshots whose pills were deleted make room here, not on undo.
+      const next = [...kept, ...prepared];
       await saveDraftImages(draftKey, next);
       imageQueue.current = Promise.resolve(next);
       setImages(next);
+      promptInput.current?.insertImages(
+        prepared.flatMap((image) => image.n ?? []),
+        point,
+      );
     } catch (error) {
       setImageError(
         error instanceof Error ? error.message : "Could not attach screenshot.",
@@ -977,7 +1012,7 @@ export function ProjectComposer({
   function addFiles(files: File[], point?: { left: number; top: number }) {
     const others = files.filter((file) => !isScreenshot(file));
     if (others.length) insertPaths(others, point);
-    void addImages(files.filter(isScreenshot));
+    void addImages(files.filter(isScreenshot), point);
   }
   function insertPaths(files: File[], point?: { left: number; top: number }) {
     if (shared) {
@@ -995,7 +1030,8 @@ export function ProjectComposer({
     setImageError(undefined);
     promptInput.current?.insertFiles(paths, point);
   }
-  function removeImage(id: string) {
+  function removeImage({ id, n }: DraftImage) {
+    if (n !== undefined) promptInput.current?.removeImage(n);
     const next = images.filter((image) => image.id !== id);
     setImages(next);
     imageQueue.current = saveDraftImages(draftKey, next)
@@ -1032,7 +1068,7 @@ export function ProjectComposer({
   }
   const sendDisabled =
     busy ||
-    (!draft.trim() && !images.length && !allowEmpty) ||
+    (!draft.trim() && !attached.length && !allowEmpty) ||
     // A note to the thread has no agent to show a screenshot to.
     (recipient === "message" && !draft.trim()) ||
     preparing ||
@@ -1117,12 +1153,13 @@ export function ProjectComposer({
     }
     if (busy || commands.interceptSend()) return;
     if (sendDisabled || sending.current) return;
-    const body = draft.trim();
+    const outgoingImages = numberImages(draft.trim(), images);
+    const body = outgoingImages.text;
     sending.current = true;
     try {
-      let attached: DraftImage[];
+      let flattened: DraftImage[];
       try {
-        attached = await Promise.all(images.map(flattenSketch));
+        flattened = await Promise.all(outgoingImages.images.map(flattenSketch));
       } catch {
         setImageError("Could not apply the drawing to the screenshot.");
         return;
@@ -1165,9 +1202,9 @@ export function ProjectComposer({
           runtimeMode,
           interactionMode: councilOn ? "plan" : interactionMode,
           ...(councilOn ? { ultraplan: council } : {}),
-          ...(attached.length
+          ...(flattened.length
             ? {
-                images: attached.map(({ name, mimeType, dataUrl }) => ({
+                images: flattened.map(({ name, mimeType, dataUrl }) => ({
                   name,
                   mimeType,
                   dataUrl,
@@ -1332,9 +1369,9 @@ export function ProjectComposer({
       >
         {councilOn && <UltraplanRing key={spark} />}
         {attachment}
-        {(images.length > 0 || pastes.length > 0) && (
+        {(attached.length > 0 || pastes.length > 0) && (
           <div className="composer-images" aria-label="Attachments">
-            {images.map((image) => (
+            {attached.map((image) => (
               <CopyImageMenu
                 className="composer-image"
                 key={image.id}
@@ -1357,7 +1394,7 @@ export function ProjectComposer({
                   className="composer-image-remove"
                   disabled={preparing}
                   aria-label={`Remove ${image.name}`}
-                  onClick={() => removeImage(image.id)}
+                  onClick={() => removeImage(image)}
                 >
                   <X size={13} />
                 </button>
@@ -1395,6 +1432,10 @@ export function ProjectComposer({
           onChange={onDraft}
           onCursor={commands.setCursor}
           onOpenPaste={setViewingPaste}
+          images={imageChips}
+          onOpenImage={(n) =>
+            setSketching(images.find((image) => image.n === n)?.id)
+          }
           placeholder={
             recipient === "message"
               ? "Leave a note or message your colleague…"
@@ -1565,7 +1606,7 @@ export function ProjectComposer({
               )}
             </button>
           )}
-          {(!running || !!draft.trim() || !!images.length) && (
+          {(!running || !!draft.trim() || !!attached.length) && (
             <SendLaterMenu
               disabled={sendDisabled}
               onPick={(at) => void send(false, at)}

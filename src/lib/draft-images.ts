@@ -5,6 +5,8 @@ export interface DraftImage {
   name: string;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   dataUrl: string;
+  /** Its `[Image #n]` token in the draft; see image-refs. */
+  n?: number;
   /** Ink drawn over the screenshot, burned in only when the message is sent. */
   sketch?: Sketch;
 }

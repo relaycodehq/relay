@@ -52,6 +52,7 @@ import {
   useAppearance,
 } from "../lib/appearance";
 import { setCacheHeat, useCacheHeat } from "../lib/cache-heat";
+import { setImagePills, useImagePills } from "../lib/image-pills";
 import {
   ComposerToolbarReset,
   ComposerToolbarSettings,
@@ -587,6 +588,7 @@ export function Settings({
   const dictationModel = useDictationModel();
   const appearance = useAppearance();
   const cacheHeat = useCacheHeat();
+  const imagePills = useImagePills();
   const sidebarAutoHide = useSidebarAutoHide();
   const sendKey = useSendKey();
   // Plugins that are off leave no trace in the rest of Settings.
@@ -745,6 +747,22 @@ export function Settings({
       block: true,
       accessory: () => <ComposerToolbarReset />,
       render: () => <ComposerToolbarSettings />,
+    },
+    {
+      id: "image-pills",
+      category: "appearance",
+      title: "Screenshots in the message",
+      description:
+        "A pasted or dropped screenshot also goes into the text as a pill, which the agent reads as [Image #1]. Off keeps screenshots above the message only.",
+      keywords:
+        "screenshot image picture paste drop attach pill chip inline thumbnail composer message",
+      render: () => (
+        <Switch
+          label="Put screenshots in the message"
+          checked={imagePills}
+          onChange={setImagePills}
+        />
+      ),
     },
     {
       id: "cache-heat",

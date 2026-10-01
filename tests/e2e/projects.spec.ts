@@ -449,9 +449,20 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       );
     }, screenshotPng);
     await expect(page.getByLabel("Attachments")).toBeVisible();
+    // The screenshot also sits in the text, where the agent reads it as [Image #1].
+    const imagePill = page.locator(".composer-image-chip");
+    await expect(imagePill).toHaveText(/^screen\.png\s*\d+ B$/);
     await page.reload();
     await expect(page.getByLabel("Attachments")).toBeVisible();
-    await page.getByLabel("Message project").fill("Explain this project");
+    await expect(imagePill.locator("img")).toBeVisible();
+    // Typing over the whole draft would drop the pill, and the screenshot with it.
+    await page.getByLabel("Message project").focus();
+    await page.keyboard.press("End");
+    await page.keyboard.type("Explain this project");
+    await screenshot(page.locator(".project-composer"), {
+      path: "test-results/screenshots/58-image-pill.png",
+      animations: "disabled",
+    });
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
@@ -467,6 +478,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByRole("button", { name: "Open screen.png" }),
     ).toBeVisible();
+    await expect(page.locator(".project-message.user").last()).toContainText(
+      "[Image #1] Explain this project",
+    );
     await expect
       .poll(() =>
         page

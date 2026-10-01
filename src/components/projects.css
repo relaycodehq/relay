@@ -1859,6 +1859,31 @@ details.agent-step > .agent-step-heading:hover {
   mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/%3E%3Cpath d="M14 2v4a2 2 0 0 0 2 2h4"/%3E%3C/svg%3E')
     center/contain no-repeat;
 }
+/* A screenshot's place in the message: the file tag with a thumbnail. */
+.composer-image-chip {
+  cursor: pointer;
+}
+.composer-image-chip-thumb {
+  flex: none;
+  width: 18px;
+  height: 13px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.composer-image-chip-size {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.composer-image-chip.missing {
+  color: var(--muted);
+  cursor: default;
+}
+.composer-image-chip.missing .composer-image-chip-thumb {
+  box-shadow: none;
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+}
 /* A quoted passage from the conversation: one short line, × on hover. */
 .composer-quote-chip {
   display: inline-flex;
