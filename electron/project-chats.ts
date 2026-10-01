@@ -1,6 +1,7 @@
 import { keyedQueue } from "./keyed-queue";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { turnPrompt } from "./turn-prompt";
+import { withTimeout } from "./timeout";
 import {
   AnswerRecorder,
   settleActivities,
@@ -107,11 +108,15 @@ import { resolveTurnModel } from "../shared/turn-model";
 /** A turn that's about to run, with the means to stop it and answer its requests. */
 function newActive(input: ProjectChatSend): ActiveChat {
   const abort = new AbortController();
+  let end!: () => void;
+  const ended = new Promise<void>((resolve) => (end = resolve));
   return {
     started: Date.now(),
     abort,
     input,
     requests: new AgentRequests(abort.signal),
+    ended,
+    end,
   };
 }
 
@@ -206,6 +211,9 @@ interface ActiveChat {
   job?: Promise<unknown>;
   input?: ProjectChatSend;
   steer?: AgentControl["steer"];
+  /** Settles once the turn gives the thread back; see `release`. */
+  ended: Promise<void>;
+  end: () => void;
 }
 type AgentControl = Parameters<NonNullable<AgentOptions["onControl"]>>[0];
 /** An answer the app closed on, with what it had written so far. */
@@ -272,8 +280,7 @@ export class ProjectChats {
     active: ActiveChat,
     turn?: { request?: string; answer?: string },
   ) {
-    active.requests.close();
-    this.active.delete(chat.id);
+    this.release(chat.id, active);
     // A steer the agent never confirmed reading still went to it; stop waiting.
     const unread = chat.messages.filter((m) => m.unread);
     for (const m of unread) {
@@ -285,6 +292,20 @@ export class ProjectChats {
     if (turn) this.reviewStep(chat.id, turn);
     void this.updateSummary(chat).catch(() => {});
     void this.control(chat.id, () => this.drain(chat.id)).catch(() => {});
+  }
+  /** Claims the thread's one running turn. */
+  private claim(id: string, input: ProjectChatSend) {
+    if (this.active.has(id))
+      throw new Error("This chat already has a running answer.");
+    const active = newActive(input);
+    this.active.set(id, active);
+    return active;
+  }
+  /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
+  private release(id: string, active: ActiveChat) {
+    active.requests.close();
+    if (this.active.get(id) === active) this.active.delete(id);
+    active.end();
   }
   private reviewStep(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
@@ -888,8 +909,7 @@ export class ProjectChats {
         agentSession(chat, outgoing.provider).thread
       ) {
         const provider = outgoing.provider;
-        const active = newActive(this.sessionInput(chat, provider));
-        this.active.set(id, active);
+        const active = this.claim(id, this.sessionInput(chat, provider));
         try {
           await this.handoff(
             chat,
@@ -901,8 +921,7 @@ export class ProjectChats {
             computer,
           );
         } finally {
-          active.requests.close();
-          this.active.delete(id);
+          this.release(id, active);
         }
       }
       await commitEverything(root, `Hand off to ${computer}`);
@@ -916,15 +935,27 @@ export class ProjectChats {
   }
   /** Stops the thread's answer and side questions, and waits until they have. */
   private async halt(id: string) {
-    const mine = () =>
-      [...this.sides.keys()].filter((key) => key.startsWith(`${id}:`));
-    this.active.get(id)?.abort.abort();
-    for (const key of mine()) this.sides.get(key)?.abort.abort();
-    const until = Date.now() + 60_000;
-    while ((this.active.has(id) || mine().length) && Date.now() < until)
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    if (this.active.has(id))
-      throw new Error("The agent didn't stop in time. Try again.");
+    const deadline = Date.now() + 60_000;
+    // An agent can start a turn of its own meanwhile; that one stops too.
+    for (;;) {
+      const active = this.active.get(id);
+      const sides = [...this.sides]
+        .filter(([key]) => key.startsWith(`${id}:`))
+        .map(([, side]) => side);
+      if (!active && !sides.length) return;
+      active?.abort.abort();
+      for (const side of sides) side.abort.abort();
+      try {
+        await withTimeout(
+          Promise.allSettled([active?.ended, ...sides.map((s) => s.job)]),
+          Math.max(0, deadline - Date.now()),
+          "The agent didn't stop in time. Try again.",
+        );
+      } catch (e) {
+        if (this.active.has(id)) throw e;
+        return;
+      }
+    }
   }
   /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
@@ -1635,10 +1666,7 @@ export class ProjectChats {
     });
   }
   private async sendNow(id: string, input: ProjectChatSend) {
-    if (this.active.has(id))
-      throw new Error("This chat already has a running answer.");
-    const active = newActive(input);
-    this.active.set(id, active);
+    const active = this.claim(id, input);
     try {
       const chat = await this.load(id);
       assertHere(chat);
@@ -1647,7 +1675,7 @@ export class ProjectChats {
       const root = await this.chatRoot(chat, input.body);
       if (chat.shared) await this.sync(id);
       if (chat.messages.some((m) => m.id === input.id)) {
-        this.active.delete(id);
+        this.release(id, active);
         return;
       }
       const mention = agentMention(input.body);
@@ -1737,7 +1765,7 @@ export class ProjectChats {
       this.emit({ chatId: id, message: user });
       if (chat.shared) await this.deliver(chat).catch(() => {});
       if (!mention) {
-        this.active.delete(id);
+        this.release(id, active);
         return;
       }
       // The message is in. A handoff note can take minutes; the answer
@@ -1751,7 +1779,7 @@ export class ProjectChats {
         evidence,
       });
     } catch (e) {
-      this.active.delete(id);
+      this.release(id, active);
       throw e;
     }
   }
@@ -1860,8 +1888,7 @@ export class ProjectChats {
       });
     } catch (e) {
       // The send already went through, so the thread shows the failure.
-      active.requests.close();
-      this.active.delete(id);
+      this.release(id, active);
       const failed: ChatMessage = {
         id: randomUUID(),
         role: "assistant",
@@ -2171,10 +2198,7 @@ export class ProjectChats {
     prompt: string,
   ) {
     if (this.disposing) throw new Error("Relay is closing.");
-    if (this.active.has(chat.id))
-      throw new Error("This chat already has a running answer.");
-    const active = newActive(input);
-    this.active.set(chat.id, active);
+    const active = this.claim(chat.id, input);
     const message = streamingAnswer(input.provider);
     try {
       const root = await this.projects.root(chat.projectId);
@@ -2185,7 +2209,7 @@ export class ProjectChats {
       this.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {
-      this.active.delete(chat.id);
+      this.release(chat.id, active);
       throw e;
     }
   }
@@ -2362,9 +2386,8 @@ export class ProjectChats {
           `${agentName(provider)} compacts without custom instructions.`,
         );
       const input = this.sessionInput(chat, provider, parentId);
-      const active = newActive(input);
+      const active = this.claim(id, input);
       const { abort } = active;
-      this.active.set(id, active);
       const message = streamingAnswer(provider, {
         compaction: true,
         ...(parentId ? { parentId } : {}),
@@ -2373,7 +2396,7 @@ export class ProjectChats {
       try {
         await this.save(chat);
       } catch (e) {
-        this.active.delete(id);
+        this.release(id, active);
         throw e;
       }
       this.emit({ chatId: id, message });
@@ -3223,6 +3246,10 @@ export class ProjectChats {
       for (const timer of this.timers.values()) clearTimeout(timer);
       for (const a of this.sides.values()) a.abort.abort();
       for (const a of this.titleJobs.values()) a.abort.abort();
+      // What was stopped writes its last state before the store goes to disk.
+      await Promise.allSettled(
+        [...this.sides.values(), ...this.titleJobs.values()].map((a) => a.job),
+      );
       await Promise.allSettled(
         [...this.active.keys()].map((id) => {
           const chat = this.cache.get(id);
