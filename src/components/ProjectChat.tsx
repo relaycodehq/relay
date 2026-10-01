@@ -79,8 +79,9 @@ import { useMessageActions } from "../lib/useMessageActions";
 import { useThreadWrites } from "../lib/useThreadWrites";
 import { useComposerAttachments } from "../lib/useComposerAttachments";
 import { useAgentSwitch } from "../lib/useAgentSwitch";
+import { useSessionCommands } from "../lib/useSessionCommands";
 import { SideQuestion } from "./SideQuestion";
-import { ContextWindowMeter, latestContext } from "./ContextWindowMeter";
+import { ContextWindowMeter } from "./ContextWindowMeter";
 import { ProjectPullPicker } from "./ProjectPullPicker";
 import { ProjectHeadlinePicker } from "./ProjectHeadlinePicker";
 import { ScratchpadWord } from "./ScratchpadWord";
@@ -115,12 +116,7 @@ import {
   DeepReviewSetup,
 } from "./DeepReview";
 import { UltraplanCouncil } from "./Ultraplan";
-import {
-  agentMentionPattern,
-  agentName,
-  agentProviders,
-  agents as agentInfo,
-} from "../../shared/agents";
+import { agentMentionPattern, agentName } from "../../shared/agents";
 /** A queued message's text, with its attachments counted rather than shown. */
 function QueuedBody({ input }: { input: ProjectChatSend }) {
   const code = parseCodeReferences(input.body);
@@ -275,11 +271,16 @@ export function ProjectChat({
   // The agent whose run covers the conversation, as a side thread.
   const [agentView, setAgentView] = useState<string | null>(null);
   const sendKey = useSendKey();
-  const context = latestContext(shown);
-  const compacting = shown.some(
-    (m) => m.compaction && m.status === "streaming",
-  );
-  const [showContext, setShowContext] = useState(0);
+  const { context, compacting, showContext, compact, runCommand } =
+    useSessionCommands({
+      chat,
+      shown,
+      root: root?.id ?? null,
+      running,
+      writes,
+      refetch: history.refetch,
+      onCommand,
+    });
   const agentSwitch = useAgentSwitch(contextAgent(shown, root?.id)),
     confirmSwitch = agentSwitch.confirm;
   const {
@@ -302,38 +303,6 @@ export function ProjectChat({
     onCreated,
     onSent: () => followAnswer(),
   });
-  function compact(instructions?: string) {
-    if (!chat) return;
-    setError(undefined);
-    void api
-      .compactProjectChat(chat.id, root?.id ?? null, instructions)
-      .then(() => history.refetch())
-      .catch(setError);
-  }
-  // Session commands need this thread; the rest belong to the workspace.
-  function runCommand(command: RelayCommand, args: string): boolean | string {
-    if (command === "compact") {
-      if (!chat || !context) return "There is no agent session to compact yet.";
-      if (running || busy || compacting)
-        return "Wait for the current answer before compacting.";
-      if (args && !agentInfo[context.provider].compactInstructions)
-        return `${agentName(context.provider)} compacts without custom instructions.`;
-      compact(args || undefined);
-      return true;
-    }
-    // With a question and an agent picked, the composer sends it itself.
-    if (command === "btw")
-      return args
-        ? `Pick ${agentProviders.map(agentName).join(" or ")} to ask a side question.`
-        : "Type your question after /btw.";
-    if (command === "context") {
-      if (!chat || !context)
-        return "Context usage appears after the first answer.";
-      setShowContext((n) => n + 1);
-      return true;
-    }
-    return onCommand(command, args);
-  }
   const draftKey = threadDraftKey(id, root?.id);
   const onDraft = (v: string, key = draftKey) => writeDraft(key, v);
   useLayoutEffect(() => {
