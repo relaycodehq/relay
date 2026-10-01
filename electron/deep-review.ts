@@ -23,6 +23,7 @@ import {
   startSlots,
   unfinishedSlots,
 } from "./council";
+import { settleFixes, startFixing } from "./deep-review/fixes";
 import { leadPrompt, requestText, reviewerTask } from "./deep-review/prompts";
 import { resolveScope, type PullInfo } from "./deep-review/scope";
 
@@ -142,13 +143,7 @@ export class DeepReviews {
 
   /** A fix request marks its findings as being fixed; called before it's saved. */
   sent(chat: ProjectChat, input: ProjectChatSend) {
-    const state = chat.deepReview;
-    const known = new Set(state?.report?.findings.map((f) => f.id));
-    const ids = (input.fixes ?? []).filter((id) => known.has(id));
-    if (!state || !ids.length) return;
-    state.statuses ??= {};
-    for (const id of ids) state.statuses[id] = "fixing";
-    (state.fixing ??= {})[input.id] = ids;
+    startFixing(chat.deepReview, input);
   }
 
   async setFinding(
@@ -184,16 +179,8 @@ export class DeepReviews {
     const answer = turn.answer
       ? chat.messages.find((m) => m.id === turn.answer)
       : undefined;
-    let changed: string | undefined;
-    const fixes = turn.request ? state.fixing?.[turn.request] : undefined;
-    if (fixes) {
-      const fixed = answer?.status === "complete";
-      for (const id of fixes)
-        if (state.statuses?.[id] === "fixing")
-          state.statuses[id] = fixed ? "fixed" : "open";
-      delete state.fixing![turn.request!];
-      changed = state.report?.messageId;
-    }
+    const fix = settleFixes(state, turn.request, answer?.status === "complete");
+    let changed = fix ? state.report?.messageId : undefined;
     // Only the lead's first answer settles the review. Another answer while
     // it's stopped, like a question asked meanwhile, leaves it resumable.
     if (
