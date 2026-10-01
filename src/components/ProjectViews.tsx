@@ -14,6 +14,7 @@ import { useRequests, type RequestChannel } from "../lib/request-channel";
 import type { ChecksController } from "../lib/useProjectChecks";
 import { ancestors } from "../lib/file-tree";
 import { useExpanded } from "../lib/useFileTree";
+import type { Viewing } from "../lib/useThreadView";
 import { FileTree } from "./FileTree";
 import { FolderView, ImageFile, OtherFile, RevealButtons } from "./FileViews";
 import { PaneResizer } from "./PaneResizer";
@@ -23,8 +24,6 @@ import type { CodeReference } from "../../shared/code-references";
 import { ErrorBox, Loading } from "./ui";
 import type { PaneSlots } from "./WorkspacePanes";
 const LocalFileEditor = lazy(() => import("./LocalFileEditor"));
-
-type Viewing = { path: string | null; viewed: number; total: number };
 
 /**
  * Uncommitted work in the folder the thread works in (the checkout, or its
