@@ -25,7 +25,7 @@ import {
   RotateCw,
   X,
 } from "lucide-react";
-import type { LocalFile, Pull } from "../../shared/types";
+import type { Pull } from "../../shared/types";
 import { api } from "../lib/api";
 import { matches, useShortcutLabel } from "../lib/shortcuts";
 import { useTheme } from "../lib/useTheme";
@@ -33,7 +33,8 @@ import { useSyntaxThemes } from "../lib/appearance";
 import { StyledDiffCodeView } from "../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "./ui";
 import { useFileDiff } from "../lib/useFileDiff";
-import { useHoldNavigation } from "../lib/navigation-lock";
+import { useLocalFile, type LocalProject } from "../lib/useLocalFile";
+import { useSaveShortcut } from "../lib/useSaveShortcut";
 import { indentedNewline } from "../lib/newline-indent";
 import { checkStatus } from "../lib/editor-checks";
 import { useBufferChecks } from "../lib/useBufferChecks";
@@ -68,8 +69,7 @@ export default function LocalFileEditor({
 }: {
   checks: ChecksController;
   pull?: Pull;
-  /** `plain`: a folder without Git, so no HEAD to compare with or blame. */
-  project?: { id: string; head: string; plain?: boolean };
+  project?: LocalProject;
   inline?: boolean;
   path: string;
   line?: number;
@@ -79,17 +79,19 @@ export default function LocalFileEditor({
 }) {
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
-  const [source, setSource] = useState<LocalFile>();
-  const [error, setError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
-  const [needsFolder, setNeedsFolder] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [confirmation, setConfirmation] = useState<"close" | "reload" | null>(
-    null,
-  );
-  const [bufferText, setBufferText] = useState<string>();
+  const file = useLocalFile(project, pull, path, onClose);
+  const {
+    source,
+    error,
+    loading,
+    needsFolder,
+    dirty,
+    saving,
+    saved,
+    confirmation,
+    revision,
+    buffer: bufferText,
+  } = file;
   // Inline, the editor reads like a plain file with change bars; the
   // side-by-side comparison with HEAD is one click away.
   const plain = !!project?.plain;
@@ -105,7 +107,6 @@ export default function LocalFileEditor({
     projectId: project!.id,
     head: { sha: source?.head ?? project!.head },
   };
-  const revision = pull?.head.sha ?? source?.head ?? project!.head;
   const compared = useFileDiff(
     useMemo(
       () =>
@@ -127,7 +128,6 @@ export default function LocalFileEditor({
     ),
   );
   const diff = compared.diff;
-  useHoldNavigation(dirty || saving);
   const blame = useLineBlame(
     target,
     plain
@@ -184,16 +184,17 @@ export default function LocalFileEditor({
     path,
     bufferText,
     bufferHash,
-    setError,
+    file.setError,
   );
   const markersRef = useRef(markers);
   markersRef.current = markers;
-  const text = useRef("");
-  const baseline = useRef("");
-  const version = useRef("");
-  const savingRef = useRef(false);
   const live = useRef(true);
-  const loadGeneration = useRef(0);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
   const focusedDiff = useRef<FileDiffMetadata | undefined>(undefined);
   useEffect(() => {
@@ -214,48 +215,6 @@ export default function LocalFileEditor({
     }),
     [diff, line],
   );
-  const snapshotDirty = () => text.current !== baseline.current;
-
-  const load = async (link = false) => {
-    const generation = ++loadGeneration.current;
-    const isCurrent = () =>
-      live.current && generation === loadGeneration.current;
-    setLoading(true);
-    setError(undefined);
-    try {
-      const folder =
-        project ||
-        (link ? await api.linkFolder(pull!) : await api.folder(pull!));
-      if (!isCurrent()) return;
-      if (!folder) {
-        setNeedsFolder(true);
-        return;
-      }
-      setNeedsFolder(false);
-      const file = project
-        ? await api.projectFile(project.id, path)
-        : await api.readLocalFile(pull!, revision, path);
-      if (!isCurrent()) return;
-      text.current = baseline.current = file.contents;
-      setBufferText(file.contents);
-      version.current = file.version;
-      setDirty(false);
-      setSaved(false);
-      setSource(file);
-    } catch (error) {
-      if (isCurrent()) setError(error);
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  };
-  useEffect(() => {
-    live.current = true;
-    void load();
-    return () => {
-      live.current = false;
-      loadGeneration.current++;
-    };
-  }, []);
   const items = useMemo<CodeViewDiffItem[]>(
     () =>
       diff
@@ -271,73 +230,15 @@ export default function LocalFileEditor({
         : [],
     [diff],
   );
-  const requestClose = () => {
-    if (savingRef.current) return;
-    if (snapshotDirty()) setConfirmation("close");
-    else onClose();
-  };
-  const save = async (close = false) => {
-    if (!source || !snapshotDirty() || savingRef.current || loading) return;
-    savingRef.current = true;
-    setSaving(true);
-    setError(undefined);
-    const contents = text.current;
-    try {
-      const result = await (project
-        ? api.saveProjectFile(
-            project.id,
-            path,
-            source.head,
-            version.current,
-            contents,
-          )
-        : api.saveLocalFile(pull!, revision, path, version.current, contents));
-      if (!live.current) return;
-      version.current = result.version;
-      baseline.current = contents;
-      setDirty(snapshotDirty());
-      setSaved(true);
-      setConfirmation(null);
-      if (close && !snapshotDirty()) onClose();
-    } catch (error) {
-      if (live.current) setError(error);
-    } finally {
-      savingRef.current = false;
-      if (live.current) setSaving(false);
-    }
-  };
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!snapshotDirty() && !savingRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, []);
   const saveKeys = useShortcutLabel("save");
-  const saveNow = useRef(save);
-  saveNow.current = save;
-  // Not useShortcut: saving works while typing, inside the editor's own
-  // dialog, and before anything else hears the keys.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (matches("save", event)) {
-        event.preventDefault();
-        event.stopPropagation();
-        void saveNow.current();
-      }
-    };
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
-  }, []);
+  useSaveShortcut(file.save);
   const large = (source?.contents.split("\n").length ?? 0) > 5000;
   return (
     <EditorFrame
       inline={inline}
       title={`Edit locally · ${path.split("/").pop()}`}
       className="local-editor-modal"
-      onClose={requestClose}
+      onClose={file.requestClose}
     >
       {symbols.overlay}
       {inline && (
@@ -362,9 +263,7 @@ export default function LocalFileEditor({
           <IconButton
             label="Reload local file"
             disabled={saving || loading}
-            onClick={() =>
-              snapshotDirty() ? setConfirmation("reload") : void load()
-            }
+            onClick={file.requestReload}
           >
             <RotateCw size={15} />
           </IconButton>
@@ -383,14 +282,14 @@ export default function LocalFileEditor({
             aria-label="Save locally"
             title={`Save to the local folder${saveKeys && ` (${saveKeys})`}`}
             disabled={!dirty || saving || loading}
-            onClick={() => void save()}
+            onClick={() => void file.save()}
           >
             Save
           </button>
           <IconButton
             label="Close file"
             disabled={saving}
-            onClick={requestClose}
+            onClick={file.requestClose}
           >
             <X size={15} />
           </IconButton>
@@ -420,15 +319,11 @@ export default function LocalFileEditor({
               : "Save to the local folder, or discard this editing session."}
           </span>
           <div>
-            <button onClick={() => setConfirmation(null)}>Keep editing</button>
+            <button onClick={file.keepEditing}>Keep editing</button>
             <button
               className="danger subtle"
               disabled={saving}
-              onClick={() => {
-                setConfirmation(null);
-                if (confirmation === "close") onClose();
-                else void load();
-              }}
+              onClick={file.discard}
             >
               {confirmation === "close"
                 ? "Discard edits"
@@ -438,7 +333,7 @@ export default function LocalFileEditor({
               <button
                 className="primary"
                 disabled={saving}
-                onClick={() => void save(true)}
+                onClick={() => void file.save(true)}
               >
                 Save and close
               </button>
@@ -457,12 +352,12 @@ export default function LocalFileEditor({
                   Link this repository to your local checkout to edit its files.
                 </p>
               )}
-              <button onClick={() => void load(true)}>
+              <button onClick={() => void file.load(true)}>
                 <FolderGit2 size={15} />{" "}
                 {needsFolder ? "Link local folder" : "Choose another folder"}
               </button>
               {!needsFolder && (
-                <button onClick={() => void load()}>Retry</button>
+                <button onClick={() => void file.load()}>Retry</button>
               )}
             </>
           )}
@@ -563,12 +458,7 @@ export default function LocalFileEditor({
                   scrollPastEnd
                   items={items}
                   editorOptions={editorOptions}
-                  onItemEditChange={(event) => {
-                    text.current = event.file.contents;
-                    setBufferText(event.file.contents);
-                    setDirty(snapshotDirty());
-                    setSaved(false);
-                  }}
+                  onItemEditChange={(event) => file.edit(event.file.contents)}
                   onItemEditComplete={() => "reject"}
                   unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-diff], [data-file] {opacity:1 !important;} [data-code] {tab-size:2;}`}
                   options={{
@@ -610,19 +500,17 @@ export default function LocalFileEditor({
               <IconButton
                 label="Reload local file"
                 disabled={saving || loading}
-                onClick={() =>
-                  snapshotDirty() ? setConfirmation("reload") : void load()
-                }
+                onClick={file.requestReload}
               >
                 <RotateCw size={16} />
               </IconButton>
-              <button onClick={requestClose} disabled={saving}>
+              <button onClick={file.requestClose} disabled={saving}>
                 Done
               </button>
               <button
                 className="primary"
                 disabled={!dirty || saving || loading}
-                onClick={() => void save()}
+                onClick={() => void file.save()}
               >
                 <Save size={14} /> Save locally
               </button>
