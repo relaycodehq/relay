@@ -212,10 +212,12 @@ test("shares a private project chat, gates invitations, keeps token streaming lo
         exact: true,
       }),
     ).toBeVisible();
+    // The thread's title runs beside its answer, in a folder of its own.
     const calls = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")
-      .map((l) => JSON.parse(l));
+      .map((l) => JSON.parse(l))
+      .filter((c) => !/relay-helper-/.test(c.cwd));
     expect(calls.filter((c) => c.turn)).toHaveLength(1);
     expect(calls.find((c) => c.turn).cwd).toBe(repos[0]);
     await bob
