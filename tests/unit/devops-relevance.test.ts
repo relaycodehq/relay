@@ -116,3 +116,46 @@ it("gives up after three busy answers and names a refused key", async () => {
     askSystemOne(async () => json({}, 401), "sk-or", "jev-latest", {}, {}),
   ).rejects.toThrow("OpenRouter rejected the API key.");
 });
+
+it.fails(
+  "keeps answers when switching between your items and the team's",
+  async () => {
+    const asked: string[] = [];
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      const { questions } = JSON.parse(String(init!.body)) as {
+        questions: Record<string, unknown>;
+      };
+      asked.push(...Object.keys(questions));
+      return json({
+        answers: Object.fromEntries(
+          Object.keys(questions).map((k) => [k, { type: "noul", noul: 0.5 }]),
+        ),
+      });
+    });
+    const filter = new RelevanceFilter(fetch, async () => "sk-or");
+    const project = { id: "p1", path: "/work/relay", name: "relay" } as Project;
+    const item = (id: number) =>
+      toWorkItem(
+        "https://dev.azure.com/org",
+        id,
+        {
+          "System.Title": `Item ${id}`,
+          "System.WorkItemType": "Task",
+          "System.AreaPath": "Software",
+          "System.TeamProject": "Software",
+        },
+        new Set(),
+      );
+    const mine = [item(1), item(2)];
+    const team = [item(2), item(3)];
+    const settings = defaultDevOpsSettings.filter;
+
+    await filter.filter(settings, project, mine);
+    await filter.filter(settings, project, team);
+    expect(await filter.filter(settings, project, mine)).toEqual({
+      1: 0.5,
+      2: 0.5,
+    });
+    expect(asked).toEqual(["wi_1", "wi_2", "wi_3"]);
+  },
+);
