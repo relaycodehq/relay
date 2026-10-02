@@ -195,10 +195,14 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
-    const calls = (await readFile(capture, "utf8"))
+    const all = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
+    // The title is asked for beside the first answer, in a folder of its own.
+    const helper = (c: { cwd: string }) => /relay-helper-/.test(c.cwd);
+    expect(all.filter((c) => c.thread && helper(c))).toHaveLength(1);
+    const calls = all.filter((c) => !helper(c));
     expect(calls.filter((c) => c.thread).map((c) => c.method)).toEqual([
       "thread/start",
       "thread/resume",

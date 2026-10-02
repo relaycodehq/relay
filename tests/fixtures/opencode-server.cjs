@@ -45,6 +45,32 @@ async function turn(sessionID, text) {
   const firstParts = [];
   session.messages.push({ info: first, parts: firstParts });
   emit("message.updated", { sessionID, info: first });
+  // Relay names a thread from its first message as it's sent.
+  if (text.startsWith("Generate a short title")) {
+    const part = {
+      id: id("prt"),
+      messageID: first.id,
+      sessionID,
+      type: "text",
+      text: "",
+    };
+    firstParts.push(part);
+    emit("message.part.updated", { sessionID, part });
+    await tick();
+    part.text = '{"title":"Notes file"}';
+    emit("message.part.delta", {
+      sessionID,
+      messageID: first.id,
+      partID: part.id,
+      field: "text",
+      delta: part.text,
+    });
+    first.time.completed = Date.now();
+    busy.delete(sessionID);
+    emit("session.status", { sessionID, status: { type: "idle" } });
+    emit("session.idle", { sessionID });
+    return;
+  }
   if (text.includes("abort")) {
     session.onAbort = () => {
       first.error = {

@@ -115,9 +115,9 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
     await expect(page.getByText("Wrote notes.md.")).toBeVisible();
     const answer = page.getByRole("article", { name: "opencode answer" });
     await expect(answer.locator("header strong")).toHaveText("OpenCode");
-    // The thread is named after the request, not the agent mention.
+    // OpenCode names the thread itself, from the request alone.
     await expect(
-      page.getByRole("button", { name: /^Write notes\.md/ }).first(),
+      page.getByRole("button", { name: /^Notes file/ }).first(),
     ).toBeVisible();
     await screenshot(page, { path: "test-results/opencode-answer.png" });
 
@@ -125,9 +125,15 @@ test("talks to OpenCode from the composer: picks its model, answers its ask, kee
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(
-      calls.find((c) => c.path.endsWith("/prompt_async"))?.body,
-    ).toMatchObject({
+    const prompts = calls.filter((c) => c.path.endsWith("/prompt_async"));
+    const titling = prompts.filter((c) =>
+      c.body.parts[0].text.startsWith("Generate a short title"),
+    );
+    expect(titling).toHaveLength(1);
+    expect(titling[0].directory).toMatch(/relay-helper-/);
+    expect(titling[0].body.parts[0].text).toContain("Write notes.md");
+    expect(titling[0].body.parts[0].text).not.toContain('"answer"');
+    expect(prompts.find((c) => !titling.includes(c))?.body).toMatchObject({
       model: { providerID: "zen", modelID: "pickle" },
       variant: "high",
     });
