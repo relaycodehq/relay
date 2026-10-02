@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatSummary } from "../../shared/projects";
+import { writeGate } from "./write-gate";
 
 export type ThreadHandle = ReturnType<typeof useThreadHandle>;
 
 /**
  * Which thread the hooks that change it work on, and the gate their writes
  * go through one at a time: a message, a queue edit, a review or council
- * start. While one is out `busy` holds the others off; one that fails shows
- * as the thread's `error`, where other failures show too.
+ * start. While one is out the others don't start, and `busy` says so to the
+ * UI; one that fails shows as the thread's `error`, where other failures show too.
  */
 export function useThreadHandle(
   chat: ChatSummary | undefined,
@@ -21,21 +22,10 @@ export function useThreadHandle(
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  /** Resolves to whether `work` went through; while another is out it doesn't start. */
-  async function run(work: () => Promise<unknown>) {
-    if (busy) return false;
-    setBusy(true);
-    setError(undefined);
-    try {
-      await work();
-      return true;
-    } catch (e) {
-      setError(e);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Held outside render state, so writes started before a re-render see each other.
+  const [gate] = useState(() =>
+    writeGate({ onBusy: setBusy, onError: setError }),
+  );
   return {
     chat,
     id,
@@ -44,7 +34,9 @@ export function useThreadHandle(
     busy,
     error,
     setError,
-    run,
+    run: gate.run,
+    /** Takes the gate before asking the user something, so no other write starts meanwhile. */
+    reserve: gate.reserve,
     /** The project's thread list shows what changed in the thread. */
     listChanged: () =>
       qc.invalidateQueries({ queryKey: ["project-chats", projectId] }),
