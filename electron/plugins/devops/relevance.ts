@@ -9,6 +9,9 @@ import { askSystemOne } from "./system-one";
 /** Keeps each Jev request well inside its 64k-token budget. */
 const batchSize = 80;
 
+/** Answers kept per project and model: both 200-item lists, with room for edits. */
+const maxAnswers = 1000;
+
 // Hashes of these objects key the saved answers, so their shape and key
 // order are part of the cache file's format.
 const sha = (value: unknown) =>
@@ -118,10 +121,18 @@ export class RelevanceFilter {
             }
           }
         } finally {
-          // Keep only questions about items still assigned, answered or not.
-          const current = new Set([...questions.values()].map((q) => q.hash));
-          for (const hash of Object.keys(entry.answers))
-            if (!current.has(hash)) delete entry.answers[hash];
+          // Your items and the team's share these answers, so none is dropped
+          // for being off this list. Answers just used move to the end, and
+          // the longest unused go once there are too many.
+          for (const { hash } of questions.values()) {
+            if (!(hash in entry.answers)) continue;
+            const p = entry.answers[hash];
+            delete entry.answers[hash];
+            entry.answers[hash] = p;
+          }
+          const hashes = Object.keys(entry.answers);
+          const extra = Math.max(0, hashes.length - maxAnswers);
+          for (const hash of hashes.slice(0, extra)) delete entry.answers[hash];
           await this.cache.save(cache);
         }
         return entry.answers;
