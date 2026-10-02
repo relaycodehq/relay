@@ -130,7 +130,9 @@ test("runs Cursor from the composer through its SDK: picks its model, shows its 
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(sent[0].sendOptions).toEqual({
+    // The thread's title runs beside its answer, as a helper job with its own instructions.
+    const turn = sent.find((call) => !call.options?.systemPrompt);
+    expect(turn.sendOptions).toEqual({
       model: {
         id: "composer-2.5",
         params: [{ id: "reasoning", value: "high" }],
