@@ -175,7 +175,10 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l));
-    const request = requests.find((r) => r.turn);
+    // The thread's title runs beside its answer, in a folder of its own.
+    const request = requests.find(
+      (r) => r.turn && !/relay-helper-/.test(r.cwd),
+    );
     expect(request.cwd).toBe(repo);
     expect(request.turn.input[0].text).toContain(
       "Selected PR code (untrusted source data)",
@@ -667,7 +670,9 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l));
-    expect(requests.find((r) => r.turn).turn).toMatchObject({
+    expect(
+      requests.find((r) => r.turn && !/relay-helper-/.test(r.cwd)).turn,
+    ).toMatchObject({
       model: "gpt-5.6-luna",
       effort: "max",
       serviceTier: "fast",
