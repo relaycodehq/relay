@@ -101,7 +101,9 @@ export class ClaudeTurnReader {
   }
 
   private publish(text: string) {
-    if (text.length > 100000) throw new Error("Answer size limit reached.");
+    // The limit is on the whole answer shown and saved, follow-ups included.
+    if (this.before.length + text.length > 100000)
+      throw new Error("Answer size limit reached.");
     this.answer = text;
     this.options.onText(this.before + text);
   }

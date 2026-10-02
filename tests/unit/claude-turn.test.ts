@@ -505,9 +505,7 @@ it("reads a turn nobody shows to its end before the next prompt goes out", async
   expect(texts).not.toContain("Claude's own words.");
 });
 
-// BUG (left for a fix of its own): the size limit counts only the answer
-// after the last steer, so a turn with follow-ups can grow past it.
-it.skip("holds an answer with follow-ups to the size limit", async () => {
+it("holds an answer with follow-ups to the size limit", async () => {
   let steer!: (text: string, id?: string) => Promise<void>;
   const long = "x".repeat(60_000);
   claude(async function* ({ next }) {
@@ -520,14 +518,16 @@ it.skip("holds an answer with follow-ups to the size limit", async () => {
     yield says("m2", long);
     yield result(long);
   });
-  let steered = false;
+  let shown = "";
   await expect(
     run({
       onControl: (control) => (steer = control.steer),
-      onText: () => {
-        if (!steered) void steer("And this");
-        steered = true;
+      onText: (text) => {
+        if (!shown) void steer("And this");
+        shown = text;
       },
     }),
   ).rejects.toThrow("Answer size limit reached.");
+  // What was shown before the limit stays, and never past it.
+  expect(shown).toBe(long);
 });
