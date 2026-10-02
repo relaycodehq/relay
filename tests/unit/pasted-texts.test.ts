@@ -101,6 +101,7 @@ describe("pasted texts", () => {
   });
   it("names a thread after its text, or the paste when nothing was typed", () => {
     expect(promptTitle(message("@claude Fix it", ...pastes))).toBe("Fix it");
+    expect(promptTitle("@opencode Write notes.md")).toBe("Write notes.md");
     expect(promptTitle(message("@claude", ...pastes))).toBe("TypeError: boom");
     expect(promptTitle(`@claude ${message("", ...pastes)}`)).toBe(
       "TypeError: boom",
