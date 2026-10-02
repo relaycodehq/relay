@@ -108,7 +108,8 @@ it("gives up after three busy answers and names a refused key", async () => {
   );
   const asked = askSystemOne(busy, "sk-or", "jev-latest", {}, {});
   const failed = expect(asked).rejects.toThrow("Filter failed: Rate limited");
-  await vi.advanceTimersByTimeAsync(3500);
+  // Waits 500ms and 1s between tries, and none after the last.
+  await vi.advanceTimersByTimeAsync(1500);
   await failed;
   expect(busy).toHaveBeenCalledTimes(3);
 
