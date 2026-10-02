@@ -120,11 +120,16 @@ export async function runClaudeProject(
     if (!options.compact)
       options.onControl?.({
         steer: async (text, id, steerImages) => {
-          if (!reader.steerable || options.signal.aborted)
-            throw new Error(
-              "This turn has finished. Send the queued message as a new turn.",
-            );
+          const refuseIfFinished = () => {
+            if (!reader.steerable || options.signal.aborted)
+              throw new Error(
+                "This turn has finished. Send the queued message as a new turn.",
+              );
+          };
+          refuseIfFinished();
           const attached = await claudeImages(steerImages);
+          // The turn may have ended while the screenshots were read.
+          refuseIfFinished();
           const uuid = randomUUID();
           reader.track(uuid, id);
           // "next" folds the message into the running turn at its next step.
