@@ -27,7 +27,7 @@ export async function askSystemOne(
     } catch {
       throw new Error("OpenRouter could not be reached.");
     }
-    if (res.status !== 429 && res.status !== 529) break;
+    if ((res.status !== 429 && res.status !== 529) || attempt === 2) break;
     await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
   }
   if (!res!.ok) {
