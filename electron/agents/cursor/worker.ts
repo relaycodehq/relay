@@ -233,12 +233,6 @@ function forward(run: string, update: any) {
 async function start(params: CursorRun): Promise<CursorRunResult> {
   const model = await modelSelection(params);
   const agent = await agentFor(params, model);
-  // Told at once, so an interrupted first turn still leaves a thread that can resume.
-  write({
-    event: "update",
-    run: params.run,
-    update: { type: "agent", agentId: agent.agentId },
-  });
   const message = params.images.length
     ? {
         text: params.prompt,
@@ -248,10 +242,26 @@ async function start(params: CursorRun): Promise<CursorRunResult> {
         })),
       }
     : params.prompt;
-  const run = await agent.send(message as string, {
-    ...(model ? { model } : {}),
-    mode: params.mode,
-    onDelta: ({ update }) => forward(params.run, update),
+  const run = await agent
+    .send(message as string, {
+      ...(model ? { model } : {}),
+      mode: params.mode,
+      onDelta: ({ update }) => forward(params.run, update),
+    })
+    .catch((error) => {
+      // A new agent nobody was told about can't be resumed: let it go.
+      if (agent.agentId !== params.agentId) {
+        open.delete(agent.agentId);
+        agent.close();
+      }
+      throw error;
+    });
+  // Told once the turn runs, so an interrupted first turn still leaves a thread
+  // that can resume, and one the SDK refused to start (no sandbox here) leaves none.
+  write({
+    event: "update",
+    run: params.run,
+    update: { type: "agent", agentId: agent.agentId },
   });
   runs.set(params.run, run);
   try {

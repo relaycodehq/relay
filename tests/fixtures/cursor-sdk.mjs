@@ -65,11 +65,25 @@ class FakeAgent {
       images: typeof message === "string" ? 0 : message.images.length,
       prompt,
     });
+    // Like the real SDK where its sandbox helper can't run, e.g. Linux without user namespaces.
+    if (
+      process.env.CURSOR_FAKE_NO_SANDBOX &&
+      this.options.local?.sandboxOptions?.enabled
+    )
+      throw named(
+        "ConfigurationError",
+        "Local SDK sandboxing was requested, but sandboxing is not supported in this environment. Disable local.sandboxOptions.enabled or remove ~/.cursor/sandbox.json to run without sandboxing.",
+      );
     const say = (update) => sendOptions.onDelta({ update });
     const run = new Run(undefined);
     run.wait = async () => {
       if (/\[\[auth\]\]/.test(prompt))
         throw named("AuthenticationError", "The API key was rejected.");
+      if (/\[\[apikey\]\]/.test(prompt))
+        throw named(
+          "ConfigurationError",
+          "The MCP server docs needs an API key in its settings.",
+        );
       if (/\[\[slow\]\]/.test(prompt)) {
         await new Promise((resolve) => {
           run.wake = resolve;

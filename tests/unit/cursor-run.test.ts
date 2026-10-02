@@ -240,6 +240,18 @@ describe("a Cursor turn", () => {
     );
   });
 
+  it("points at Settings when Cursor rejects the key", async () => {
+    await expect(runCursor(turn("[[auth]]").options)).rejects.toThrow(
+      /isn't signed in.*Settings/,
+    );
+  });
+
+  it("passes on Cursor's own words when an error only sounds like signing in", async () => {
+    await expect(runCursor(turn("[[apikey]]").options)).rejects.toThrow(
+      "The MCP server docs needs an API key in its settings.",
+    );
+  });
+
   it("won't compact by hand, since Cursor summarizes on its own", async () => {
     await expect(
       runCursor(turn("x", { compact: true }).options),
@@ -358,5 +370,61 @@ describe("Cursor's models", () => {
     });
     expect(models.find((m) => m.id === "auto")?.efforts).toEqual([]);
     expect(await cursorDefaults()).toEqual({ model: "auto", effort: "" });
+  });
+});
+
+// Last in the file: Relay remembers for the rest of the process that Cursor can't sandbox.
+describe("where Cursor can't sandbox", () => {
+  beforeEach(() => {
+    process.env.CURSOR_FAKE_NO_SANDBOX = "1";
+  });
+  afterEach(() => {
+    delete process.env.CURSOR_FAKE_NO_SANDBOX;
+  });
+
+  it("goes on read-only without the sandbox, with the same tools, and says so", async () => {
+    const { seen, options } = turn("say hello", { readOnly: true });
+    expect(await runCursor(options)).toBe("Hello");
+    const [refused, sent] = await asked();
+    expect(refused.options.local.sandboxOptions).toEqual({ enabled: true });
+    expect(sent.options.local.sandboxOptions).toBeUndefined();
+    expect(sent.options.tools).toEqual(cursorPolicy({ readOnly: true }).tools);
+    expect(seen.commentary.get("cursor-sandbox")).toMatch(
+      /can't sandbox.*read-only tools/,
+    );
+    // Only the agent that answered is the thread's.
+    expect(seen.ids).toEqual([sent.agent]);
+    expect(seen.text.at(-1)).toBe("Hello");
+  });
+
+  it("remembers it, so the next read-only turn and helper job skip the refusal", async () => {
+    const { seen, options } = turn("say hello", { readOnly: true });
+    expect(await runCursor(options)).toBe("Hello");
+    await runCursor(
+      turn("Name this thread", {
+        helper: { instructions: "Title only." },
+        session: undefined,
+      }).options,
+    );
+    const sent = await asked();
+    expect(sent).toHaveLength(2);
+    for (const { options } of sent)
+      expect(options.local.sandboxOptions).toBeUndefined();
+    expect(seen.commentary.get("cursor-sandbox")).toMatch(/can't sandbox/);
+  });
+
+  it("won't drop the sandbox from a turn that may edit, and says why it can't run", async () => {
+    const { seen, options } = turn("say hello", {
+      runtimeMode: "approval-required",
+    });
+    const failed = runCursor(options);
+    await expect(failed).rejects.toThrow(
+      /can't sandbox on this system.*Supervised or Auto-accept edits/,
+    );
+    await expect(failed).rejects.not.toThrow(/signed in/);
+    const sent = await asked();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].options.local.sandboxOptions).toEqual({ enabled: true });
+    expect(seen.ids).toEqual([]);
   });
 });

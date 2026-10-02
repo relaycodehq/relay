@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { withTimeout } from "../../timeout";
 import type { AgentOptions } from "../types";
 import {
   cursorActivity,
@@ -52,18 +53,49 @@ export function cursorPolicy(
   }
 }
 
+const signInFirst =
+  "Cursor isn't signed in. Sign in under Settings → Agents, then send again.";
+const noSandbox =
+  "Cursor can't sandbox on this system (its sandbox needs features this OS doesn't allow), so it can't run in Supervised or Auto-accept edits. Switch to Auto or Full access, or use another agent.";
+
+/** The SDK's refusal to start a sandboxed turn where it can't sandbox, e.g. Linux without user namespaces. */
+const sandboxRefused = (error: unknown) =>
+  error instanceof CursorError &&
+  error.name === "ConfigurationError" &&
+  error.message.includes("sandboxing is not supported in this environment");
+
+/** Set once the SDK refused to sandbox; that doesn't change while Relay runs. */
+let cannotSandbox = false;
+
 /** Says what to do about an error the worker reported, where there's something to do. */
-function explainCursorError(error: unknown): Error {
+async function explainCursorError(
+  error: unknown,
+  connection: CursorConnection,
+): Promise<Error> {
+  if (!(error instanceof CursorError))
+    return error instanceof Error ? error : new Error(String(error));
+  if (sandboxRefused(error)) return new Error(noSandbox);
+  if (error.name === "AuthenticationError") return new Error(signInFirst);
+  // Sounds like a sign-in problem: only say so when Cursor agrees.
   if (
-    error instanceof CursorError &&
-    (error.name === "AuthenticationError" ||
-      error.name === "ConfigurationError" ||
-      /api key|log ?in|sign ?in/i.test(error.message))
+    /api key|log ?in|sign ?in/i.test(error.message) &&
+    (await signedOut(connection))
   )
-    return new Error(
-      "Cursor isn't signed in. Sign in under Settings → Agents, then send again.",
+    return new Error(signInFirst);
+  return error;
+}
+
+async function signedOut(connection: CursorConnection) {
+  try {
+    const auth = await withTimeout(
+      connection.request("auth.status", {}),
+      10_000,
+      "Cursor didn't say who is signed in.",
     );
-  return error instanceof Error ? error : new Error(String(error));
+    return auth.status === "logged-out";
+  } catch {
+    return false;
+  }
 }
 
 /** Runs one turn on a Cursor agent, starting or resuming it in the thread's worker. */
@@ -156,11 +188,31 @@ export async function runCursor(options: AgentOptions): Promise<string> {
   };
   signal.addEventListener("abort", abort, { once: true });
 
+  // Without tools that change anything, a turn needs no sandbox to stay safe.
+  const mayGoUnsandboxed = !!(options.helper || options.readOnly);
+  const unsandboxed = (params: CursorRun): CursorRun => {
+    if (!options.helper)
+      options.onCommentary?.(
+        "cursor-sandbox",
+        "Cursor can't sandbox on this system, so it runs with read-only tools only.",
+      );
+    return { ...params, sandbox: false };
+  };
+  const send = (params: CursorRun) => {
+    const id = connection.reserve();
+    connection.keep({ agentId: options.session?.id, run: { run, id } });
+    const reply = connection.request("run", params, id);
+    void reply.catch(() => {});
+    return reply;
+  };
+
   try {
     connection.mark("start");
     let reply: Promise<CursorRunResult>;
+    let params: CursorRun | undefined;
     if (adopted) {
       reply = connection.wait(adopted.id) as Promise<CursorRunResult>;
+      void reply.catch(() => {});
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
     } else {
@@ -177,7 +229,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       );
       signal.throwIfAborted();
       const prompt = await expandCursorCommand(options.prompt, options.cwd);
-      const params: CursorRun = {
+      params = {
         run,
         agentId: helper ? undefined : options.session?.id,
         cwd: options.cwd,
@@ -196,11 +248,10 @@ export async function runCursor(options: AgentOptions): Promise<string> {
             }
           : { ...cursorPolicy(options), ambient: true }),
       };
-      const id = connection.reserve();
-      connection.keep({ agentId: options.session?.id, run: { run, id } });
-      reply = connection.request("run", params, id);
+      if (params.sandbox && cannotSandbox && mayGoUnsandboxed)
+        params = unsandboxed(params);
+      reply = send(params);
     }
-    void reply.catch(() => {});
     options.onControl?.({
       steer: async (text, id, images) => {
         if (signal.aborted || connection.closed)
@@ -235,13 +286,32 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         { once: true },
       );
     });
-    const result = await Promise.race([reply, cancelled]).catch((error) => {
-      throw explainCursorError(error);
-    });
+    let result: CursorRunResult;
+    try {
+      result = await Promise.race([reply, cancelled]);
+    } catch (error) {
+      if (
+        !params?.sandbox ||
+        !mayGoUnsandboxed ||
+        !sandboxRefused(error) ||
+        signal.aborted
+      )
+        throw await explainCursorError(error, connection);
+      // Refused before the turn began; the worker names an agent only once one runs.
+      cannotSandbox = true;
+      turn.reset();
+      params = unsandboxed(params);
+      result = await Promise.race([send(params), cancelled]).catch(
+        async (error) => {
+          throw await explainCursorError(error, connection);
+        },
+      );
+    }
     if (result.status === "cancelled") throw new Error("Cancelled by you.");
     if (result.status === "error")
-      throw explainCursorError(
+      throw await explainCursorError(
         new CursorError("Error", result.error || "Cursor failed to answer."),
+        connection,
       );
     if (result.agentId !== agentId) await options.session?.onId(result.agentId);
     const answer = turn.answer() || result.text;
