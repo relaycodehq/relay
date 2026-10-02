@@ -1,4 +1,4 @@
-import { it, expect, describe, beforeEach, afterEach } from "vitest";
+import { it, expect, describe, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,8 +9,18 @@ import {
   outgoing,
   type RoomDelivery,
 } from "../../electron/rooms/deliveries";
+import { RoomAnswers } from "../../electron/rooms/answers";
 import type { RoomAccess } from "../../electron/rooms/access";
 import type { RoomConnections } from "../../electron/rooms/connections";
+import type { RoomRequest } from "../../electron/rooms/transport";
+import { defaultAISettings } from "../../shared/settings";
+
+const agent = vi.hoisted(() => ({
+  run: (_options: any) => Promise.resolve(""),
+}));
+vi.mock("../../electron/agents", () => ({
+  agentRuntime: () => ({ run: (options: any) => agent.run(options) }),
+}));
 
 const delivery = (id: string, over: Partial<RoomDelivery> = {}) => ({
   key: "project",
@@ -116,4 +126,81 @@ describe("RoomDeliveries.flush", () => {
     expect(calls).toBe(1);
     expect(store.get().roomDeliveries?.a.body).toBe("Newer");
   });
+});
+
+describe("RoomAnswers delivering a finished answer", () => {
+  let root: string, store: Store;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "relay-answers-"));
+    store = new Store(root);
+    await store.load();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function finishWhileHeartbeatSends() {
+    const patches: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const request = (async (_server, path, _token, method, body: any) => {
+      if (path.endsWith("/topic")) return [];
+      if (path.endsWith("/runs"))
+        return { message: { id: "answer" }, started: true };
+      if (method === "PATCH") {
+        patches.push(`${body.status} ${body.body}`);
+        if (body.status === "running") await held;
+      }
+    }) as RoomRequest;
+    const connections = {
+      get: async () => ({ server: "https://rooms.test", token: "t" }),
+    } as unknown as RoomConnections;
+    const access = { ensure: async () => {} } as unknown as RoomAccess;
+    const deliveries: RoomDeliveries = new RoomDeliveries(
+      store,
+      request,
+      connections,
+      access,
+      (id) => answers.running(id),
+    );
+    const answers = new RoomAnswers(request, deliveries);
+    let finish!: (text: string) => void;
+    agent.run = (options) => {
+      options.onText("Half");
+      return new Promise((r) => (finish = r));
+    };
+    const c = { key: "project", dir: "/repo" } as any;
+    await answers.ask(c, {
+      connection: { server: "https://rooms.test", token: "t" },
+      roomId: "room",
+      request: { id: "question" },
+      input: { id: "question", choice: defaultAISettings.questions },
+      mention: { provider: "codex", question: "Why?" },
+      pull: { html_url: "https://gitea.test/pr", title: "PR" },
+      context: { head: "a", base: "b" },
+      local: { dirty: false, head: "a" },
+    } as any);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(() => expect(patches).toEqual(["running "]));
+    finish("Final");
+    await answers.halt();
+    expect(store.get().roomDeliveries?.answer.status).toBe("completed");
+    release();
+
+    // No poll follows: the room panel is closed.
+    await vi.waitFor(() =>
+      expect(patches).toEqual(["running ", "completed Final"]),
+    );
+    await vi.waitFor(() =>
+      expect(store.get().roomDeliveries ?? {}).toEqual({}),
+    );
+  }
+  // Fails until a flush asked for mid-flush runs once more.
+  it.fails(
+    "sends the final answer when it finishes while a heartbeat's send is still in flight",
+    finishWhileHeartbeatSends,
+  );
 });
