@@ -39,6 +39,8 @@ export function deliveryPatch(value: RoomDelivery) {
  * showing the sender their own partial answer before the room has it. */
 export class RoomDeliveries {
   private flushing = new Set<string>();
+  /** Projects asked to flush while one was running; it goes once more after. */
+  private again = new Set<string>();
   constructor(
     private store: Store,
     private request: RoomRequest,
@@ -54,39 +56,48 @@ export class RoomDeliveries {
     });
   }
   async flush(c: ProjectRoomContext) {
-    if (this.flushing.has(c.key)) return;
+    if (this.flushing.has(c.key)) {
+      // The running flush may have read the outbox before this save.
+      this.again.add(c.key);
+      return;
+    }
     this.flushing.add(c.key);
     try {
-      const connection = await this.connections.get(c);
-      if (!connection) return;
-      await this.access.ensure(c, connection);
-      for (const [id, pending] of Object.entries(
-        this.store.get().roomDeliveries ?? {},
-      )) {
-        if (pending.key !== c.key) continue;
-        const value = outgoing(pending, this.running(id));
-        try {
-          await this.request(
-            connection.server,
-            `/v1/rooms/${value.roomId}/messages/${id}`,
-            connection.token,
-            "PATCH",
-            deliveryPatch(value),
-          );
-        } catch {
-          // Kept for the next flush; one refused answer must not hold back the rest.
-          continue;
-        }
-        if (value.status === "running") continue;
-        await this.store.update((s) => {
-          if (
-            JSON.stringify(s.roomDeliveries?.[id]) === JSON.stringify(pending)
-          )
-            delete s.roomDeliveries![id];
-        });
-      }
+      do {
+        this.again.delete(c.key);
+        await this.send(c);
+      } while (this.again.has(c.key));
     } finally {
       this.flushing.delete(c.key);
+      this.again.delete(c.key);
+    }
+  }
+  private async send(c: ProjectRoomContext) {
+    const connection = await this.connections.get(c);
+    if (!connection) return;
+    await this.access.ensure(c, connection);
+    for (const [id, pending] of Object.entries(
+      this.store.get().roomDeliveries ?? {},
+    )) {
+      if (pending.key !== c.key) continue;
+      const value = outgoing(pending, this.running(id));
+      try {
+        await this.request(
+          connection.server,
+          `/v1/rooms/${value.roomId}/messages/${id}`,
+          connection.token,
+          "PATCH",
+          deliveryPatch(value),
+        );
+      } catch {
+        // Kept for the next flush; one refused answer must not hold back the rest.
+        continue;
+      }
+      if (value.status === "running") continue;
+      await this.store.update((s) => {
+        if (JSON.stringify(s.roomDeliveries?.[id]) === JSON.stringify(pending))
+          delete s.roomDeliveries![id];
+      });
     }
   }
   /** Completed answers are shared; this sender's locally checkpointed partial

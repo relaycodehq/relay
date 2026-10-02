@@ -113,18 +113,24 @@ describe("RoomDeliveries.flush", () => {
     ]);
   });
 
-  it("keeps an answer saved again while it was being sent, and runs one flush per project at a time", async () => {
+  it("keeps an answer saved again while it was being sent, and sends it after, one flush per project at a time", async () => {
     await store.update((s) => {
       s.roomDeliveries = { a: delivery("a") };
     });
-    let calls = 0;
-    const deliveries = outbox(async () => {
-      calls++;
-      await deliveries.save("a", () => delivery("a", { body: "Newer" }));
+    const sent: string[] = [];
+    let open = 0,
+      most = 0;
+    const deliveries = outbox(async (_path, body) => {
+      most = Math.max(most, ++open);
+      sent.push(body.body);
+      if (sent.length === 1)
+        await deliveries.save("a", () => delivery("a", { body: "Newer" }));
+      open--;
     });
     await Promise.all([deliveries.flush(c), deliveries.flush(c)]);
-    expect(calls).toBe(1);
-    expect(store.get().roomDeliveries?.a.body).toBe("Newer");
+    expect(most).toBe(1);
+    expect(sent).toEqual(["Answer", "Newer"]);
+    expect(store.get().roomDeliveries).toEqual({});
   });
 });
 
@@ -198,8 +204,7 @@ describe("RoomAnswers delivering a finished answer", () => {
       expect(store.get().roomDeliveries ?? {}).toEqual({}),
     );
   }
-  // Fails until a flush asked for mid-flush runs once more.
-  it.fails(
+  it(
     "sends the final answer when it finishes while a heartbeat's send is still in flight",
     finishWhileHeartbeatSends,
   );
