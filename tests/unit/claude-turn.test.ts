@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { runClaudeProject } from "../../electron/rooms/claude-project";
@@ -207,6 +210,46 @@ it("answers a steer below it once Claude reads it", async () => {
   await expect(steer("Late", "msg-3")).rejects.toThrow(
     "This turn has finished. Send the queued message as a new turn.",
   );
+});
+
+it("turns a steer away when the turn ends while its screenshot is read", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "claude-turn-"));
+  const shot = join(dir, "shot.png");
+  await writeFile(shot, "png");
+  let steering: Promise<string> | undefined;
+  const late: Sent[] = [];
+  claude(async function* ({ next }) {
+    const prompt = await next();
+    yield lifecycle(prompt.uuid, "started");
+    yield says("m1", "Done.");
+    yield result("Done.");
+    late.push(await next());
+  });
+  const { log, callbacks } = recorder();
+  try {
+    await expect(
+      run({
+        ...callbacks,
+        onControl: (control) => {
+          steering = control
+            .steer("And this", "msg-2", [{ path: shot, mimeType: "image/png" }])
+            .then(
+              () => "sent",
+              (e: Error) => e.message,
+            );
+        },
+      }),
+    ).resolves.toBe("Done.");
+    // Turned away, it stays queued and goes out as a turn of its own.
+    expect(await steering).toBe(
+      "This turn has finished. Send the queued message as a new turn.",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(late).toEqual([]);
+    expect(log).not.toContain("steered msg-2");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 it("follows a steer the CLI doesn't report into the turn Claude runs for it", async () => {
