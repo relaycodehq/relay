@@ -10,6 +10,7 @@ import type {
 } from "../../../shared/projects";
 import type { QueueDrop } from "./chat-queue";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../../lib/send-key";
+import "./queued-messages.css";
 
 /** A queued message's text, with its attachments counted rather than shown. */
 function QueuedBody({ input }: { input: ProjectChatSend }) {

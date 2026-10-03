@@ -12,6 +12,7 @@ import {
 } from "./prompt/usePromptHandle";
 import { useComboboxRole, usePromptSync } from "./prompt/usePromptSync";
 import { ImagePeek } from "../images/ImagePeek";
+import "./prompt/prompt-input.css";
 export type { SkillPick } from "./prompt/edits";
 export type { ImageChip, PromptInputHandle };
 

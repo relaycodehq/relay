@@ -7,7 +7,7 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowUp, Paperclip } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/agents/composer-model-picker.css";
 import "./dictation.css";
 import { initAppearance, setMode, useAppearance } from "../../src/lib/appearance";

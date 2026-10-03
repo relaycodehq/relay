@@ -6,6 +6,7 @@ import type { CreatedPullRequest } from "../../../shared/pull-request-create";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
+import "./create-pull.css";
 /** A PR of the current branch of `where`: the checkout's, or a thread's worktree's. */
 export function CreatePullSheet({
   where,

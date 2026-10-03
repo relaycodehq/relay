@@ -30,6 +30,7 @@ import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
 import { RichText, Spinner } from "../../ui/ui";
 import { pilledImages, UserText, type SentImage } from "./UserText";
+import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
     key: `${chatId}:${image.id}`,

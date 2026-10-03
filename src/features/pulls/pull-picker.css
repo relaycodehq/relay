@@ -1,0 +1,151 @@
+/* The new thread's pull request picker: its trigger and searchable popup. */
+.project-pull-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.project-pull-trigger:hover,
+.project-pull-trigger[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+.project-pull-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-pull-positioner {
+  z-index: 150;
+  max-width: calc(100vw - 24px);
+}
+.project-pull-popup {
+  display: flex;
+  flex-direction: column;
+  width: 370px;
+  max-width: calc(100vw - 24px);
+  max-height: min(420px, var(--available-height));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 40px -16px #0008;
+  outline: none;
+}
+.project-pull-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 11px;
+  padding: 8px 3px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.project-pull-search:focus-within {
+  border-bottom-color: var(--accent);
+}
+.project-pull-search input,
+.project-pull-search input:focus-visible {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 0;
+}
+.project-pull-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
+}
+.project-pull-states {
+  display: flex;
+  gap: 3px;
+}
+.project-pull-states button,
+.project-pull-refresh {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.project-pull-states button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.project-pull-states button:hover,
+.project-pull-refresh:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.project-pull-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.project-pull-scroll {
+  min-height: 0;
+  flex: 1;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 7px 7px;
+}
+.project-pull-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 9px 10px;
+  outline: none;
+}
+.project-pull-row:hover,
+.project-pull-row[data-highlighted] {
+  background: var(--hover);
+}
+.project-pull-row-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.project-pull-row-detail {
+  font-size: 11px;
+  color: var(--muted);
+}
+.project-pull-status,
+.project-pull-more {
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.project-pull-status button,
+.project-pull-more {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+.project-pull-more {
+  width: 100%;
+  text-align: left;
+}
+.project-pull-more:hover {
+  background: var(--hover);
+}

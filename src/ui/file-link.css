@@ -1,0 +1,47 @@
+/* T3 Code's file chip: a faintly tinted pill whose metrics are in em, so it
+   sits the same in 14px answers and 12px trace notes. */
+.chat-file-link {
+  --chip-accent: oklch(0.62 0.11 215);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.33em;
+  max-width: 100%;
+  height: 1.41em;
+  padding: 0 0.5em;
+  border: 1px solid color-mix(in oklab, var(--chip-accent) 34%, var(--border));
+  border-radius: 0.5em;
+  background: color-mix(in oklab, var(--chip-accent) 11%, transparent);
+  color: color-mix(in oklab, var(--chip-accent) 22%, var(--text));
+  font: inherit;
+  font-size: 0.86em;
+  font-weight: 500;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+.chat-file-link:hover {
+  border-color: color-mix(in oklab, var(--chip-accent) 48%, var(--border));
+  background: color-mix(in oklab, var(--chip-accent) 17%, transparent);
+}
+.chat-file-link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.file-entry-icon {
+  flex: none;
+  width: 1.17em;
+  height: 1.17em;
+  color: light-dark(var(--file-icon-light), var(--file-icon-dark));
+}
+.chat-file-link > svg.lucide {
+  color: var(--muted);
+}
+.chat-file-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

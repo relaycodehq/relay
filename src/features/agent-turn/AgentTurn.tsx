@@ -41,6 +41,7 @@ import {
 } from "../../../shared/agent-trace";
 import { RichText, Spinner } from "../../ui/ui";
 import "./agent-trace.css";
+import "./agent-turn.css";
 
 function WorkingTimer({ started }: { started: number }) {
   const [now, setNow] = useState(Date.now());

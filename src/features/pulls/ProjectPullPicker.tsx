@@ -8,6 +8,7 @@ import { ChevronDown, GitPullRequest, RefreshCw, Search } from "lucide-react";
 import type { Project } from "../../../shared/projects";
 import type { PullRef } from "../../../shared/types";
 import { api } from "../../lib/api";
+import "./pull-picker.css";
 
 type PullState = "open" | "closed" | "all";
 

@@ -5,6 +5,7 @@ import { Combobox } from "@base-ui/react/combobox";
 import { Check, Search } from "lucide-react";
 import { ProjectBadge } from "./ProjectBadge";
 import type { Project } from "../../../shared/projects";
+import "./projects.css";
 
 export function ProjectSearch({
   projects,

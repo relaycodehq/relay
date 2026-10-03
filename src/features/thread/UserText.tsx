@@ -12,6 +12,7 @@ import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { PastedTextPill } from "../composer/PastedTextCard";
 import { RichText } from "../../ui/ui";
+import "../composer/prompt/prompt-input.css";
 
 export interface SentImage {
   image: ChatImage;

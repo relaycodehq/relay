@@ -34,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/agents/composer-model-picker.css";
 import "../../src/features/thread/code-references.css";
 import "../../src/features/changes/changed-files.css";

@@ -1,3 +1,5 @@
+import "./scratchpad-word.css";
+
 /** "Scratchpad" written out in pen, then underlined with a quick scribble. */
 export function ScratchpadWord() {
   return (

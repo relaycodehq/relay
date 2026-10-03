@@ -6,7 +6,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "./remote-work.css";
 import { initAppearance } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";

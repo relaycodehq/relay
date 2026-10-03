@@ -28,6 +28,7 @@ import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
+import "../changes/branch-picker.css";
 
 /** What goes out with the main conversation's next message besides its text. */
 function AttachedContext({

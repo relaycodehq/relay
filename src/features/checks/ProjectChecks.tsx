@@ -15,6 +15,7 @@ import {
   type ProjectDiagnostic,
 } from "../../../shared/checks";
 import { ErrorBox, Modal } from "../../ui/ui";
+import "./checks.css";
 function DiagnosticIcon({
   severity,
 }: {

@@ -20,6 +20,7 @@ import {
 } from "./review-setups";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { timeAgo } from "../../ui/ui";
+import "../projects/projects.css";
 
 type Name = (agent: ReviewAgent | LeadAgent) => string;
 

@@ -27,6 +27,7 @@ import { CiStatusIcon } from "./CiStatus";
 import { ProjectBadge } from "../features/projects/ProjectBadge";
 import { RelayMark } from "../ui/RelayMark";
 import { PaneToggles } from "../ui/WorkspacePanes";
+import "./titlebar.css";
 
 /** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
 export function TitlebarBrand({

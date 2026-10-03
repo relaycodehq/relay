@@ -14,7 +14,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { ChevronLeft, ChevronRight, RotateCw, Zap } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/agents/composer-model-picker.css";
 import "../../src/features/quick-switch/quick-switch.css";
 import "../_shared/quick-switch.css";

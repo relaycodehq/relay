@@ -17,7 +17,7 @@ import {
   Settings2,
 } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/sidebar/sidebar.css";
 import "../../src/features/changes/changed-files.css";
 import "../../src/app/ci-status.css";

@@ -8,7 +8,7 @@ import { StrictMode, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../../src/styles.css";
-import "../../../src/app/projects.css";
+import "../../_shared/app-styles";
 import "../../../src/features/sidebar/sidebar.css";
 import "../../../src/ui/workspace-panes.css";
 import "../../../src/features/changes/working-tree.css";

@@ -1,0 +1,22 @@
+/* The titlebar's compact checks button: error and warning counts, no label. */
+.checks-button.compact {
+  height: 28px;
+  padding: 0 8px;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.checks-button.compact .diagnostic-icon.clean {
+  color: var(--ci-pass);
+}
+.checks-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.checks-count.error {
+  color: var(--ci-fail);
+}
+.checks-count.warning {
+  color: var(--ci-run);
+}

@@ -4,6 +4,7 @@ import type { ComposerDraft } from "./useComposerDraft";
 import { CopyImageMenu } from "../images/CopyImageMenu";
 import { SketchOverlay } from "../images/ImageSketch";
 import { PastedTextCard } from "./PastedTextCard";
+import "../images/image-tiles.css";
 
 /** The draft's screenshots and long pastes, as cards above the input. */
 export function ComposerAttachmentStrip({

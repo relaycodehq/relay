@@ -847,16 +847,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.font-picker-popup {
-  width: 300px;
-}
 .typography-prompt {
-  min-height: 0;
-  max-height: none;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
 }
 .typography-terminal {
   margin: 0;

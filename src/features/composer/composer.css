@@ -1,0 +1,204 @@
+/* The composer: its box, toolbar row, send and stop, and the / menu.
+   Settings and deep review borrow .composer-tools as a plain control row. */
+.project-composer {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--toolbar);
+  overflow: hidden;
+  box-shadow: 0 5px 18px #00000006;
+}
+.composer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px 12px;
+}
+.composer-tools > .primary {
+  border-radius: 7px;
+  padding: 7px;
+}
+.thread-compose-wrap {
+  width: 100%;
+  max-width: var(--thread-width);
+  margin: 0 auto;
+}
+.thread-context-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 10px;
+  flex-wrap: wrap;
+}
+.thread-context-controls button {
+  font-size: 11px;
+  background: transparent;
+  padding: 5px 9px;
+  gap: 6px;
+  border: 1px solid transparent;
+  color: var(--muted);
+}
+.thread-context-controls .selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.thread-context-controls .thread-review-action {
+  color: var(--accent);
+  padding-right: 2px;
+}
+.composer-image-error {
+  margin: 8px 16px 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+.composer-tools .send-message {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--send);
+  color: var(--send-foreground);
+}
+/* T3 Code ComposerCommandMenu: single-line labels, descriptions and source badges. */
+.composer-command-menu {
+  position: fixed;
+  z-index: 350;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px #0002;
+  padding: 7px;
+  scrollbar-width: thin;
+}
+.composer-command-menu button {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 9px;
+}
+.composer-command-menu button.selected {
+  background: var(--hover);
+}
+.composer-command-menu strong {
+  min-width: 0;
+  max-width: 45%;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.composer-command-menu strong,
+.composer-command-menu small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-command-menu small {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.composer-command-menu em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.composer-command-menu em svg {
+  flex: none;
+}
+.composer-command-menu p {
+  margin: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 650px) {
+  .composer-command-menu button {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+  .composer-command-menu strong {
+    max-width: 55%;
+    flex-shrink: 1;
+  }
+}
+.project-composer .composer-stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  padding: 0;
+  border: 0;
+  background: #ed3949;
+  color: #fff;
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 16%),
+    0 1px 2px rgb(237 57 73 / 24%);
+  transition:
+    background 150ms,
+    box-shadow 150ms,
+    transform 150ms;
+}
+.project-composer .composer-stop:hover {
+  background: #f34a58;
+}
+.project-composer .composer-stop:active {
+  transform: scale(0.96);
+}
+/* Armed by one Escape; the second one stops. */
+.project-composer .composer-stop[data-armed] {
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 16%),
+    0 0 0 3px rgb(237 57 73 / 28%);
+}
+.composer-stop-esc {
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  animation: composer-stop-esc-in 120ms ease-out;
+}
+@keyframes composer-stop-esc-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+.composer-tools .send-message:hover {
+  background: color-mix(in srgb, var(--send) 88%, #fff);
+}
+.composer-interaction.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.composer-plan-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}

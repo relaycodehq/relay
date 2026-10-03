@@ -5,7 +5,7 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowUp, ImagePlus, X } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/settings/settings.css";
 import { initAppearance } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";

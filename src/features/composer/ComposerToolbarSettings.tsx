@@ -26,6 +26,7 @@ import {
 import { ComposerToolbar } from "./ComposerToolbar";
 import { useSampleControls } from "./ComposerToolbarSample";
 import "./composer-toolbar.css";
+import "./composer.css";
 
 /**
  * The composer as chats show it, whose controls drag along the bar. The gap

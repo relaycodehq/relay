@@ -6,6 +6,7 @@ import { api } from "../../lib/api";
 import { parseWorkspaceId } from "../../../shared/workspaces";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
+import "./create-pull.css";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
 export function MergeSheet({

@@ -1,0 +1,67 @@
+/* Screenshot thumbnails, attached in the composer and sent in a message. */
+.composer-images,
+.message-images {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.composer-images {
+  padding: 12px 16px 0;
+}
+.composer-image,
+.message-image {
+  position: relative;
+  width: 94px;
+  height: 74px;
+  /* Stronger than --border: screenshots are mostly as dark as the thread. */
+  border: 1px solid color-mix(in srgb, var(--text) 24%, transparent);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--hover);
+}
+.composer-image img,
+.message-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.composer-image-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.composer-image-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  border-radius: 5px;
+  background: var(--toolbar);
+}
+.message-images {
+  margin-top: 9px;
+}
+.message-image button {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.message-image .copy-image-trigger {
+  height: 100%;
+}
+.message-image span {
+  display: block;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+  text-align: left;
+}

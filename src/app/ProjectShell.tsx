@@ -63,7 +63,7 @@ import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
 import { ThreadChanges, ThreadFiles, ThreadHistory } from "./ThreadPanes";
 import { ErrorBox, IconButton, Loading, Modal } from "../ui/ui";
 import { Pane } from "../ui/WorkspacePanes";
-import "./projects.css";
+import "./shell.css";
 const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {

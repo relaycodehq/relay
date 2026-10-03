@@ -1,0 +1,102 @@
+/* The branch control under the composer and its picker. The worktree and
+   subagent controls borrow the trigger's look. */
+.composer-branch-trigger {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 80%;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+.composer-branch-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-branch-trigger:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.composer-branch-sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.composer-branch-sync span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.composer-branch-sync:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.composer-branch-sync:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.composer-branch-error {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+  font-size: 12px;
+}
+.branch-picker-popup {
+  width: min(430px, calc(100vw - 32px));
+}
+.branch-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.branch-picker-row > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.branch-picker-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.branch-picker-row[data-highlighted],
+.branch-picker-row[data-current] {
+  background: var(--hover);
+}
+.branch-picker-row[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.branch-picker-hint,
+.branch-picker-error {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.branch-picker-error {
+  color: var(--danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

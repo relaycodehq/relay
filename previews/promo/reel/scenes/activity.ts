@@ -6,7 +6,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import "../../../../src/app/projects.css";
+import "../../../_shared/app-styles";
 import "../../../../src/features/sidebar/sidebar.css";
 import { clamp, easeOut, settle, span } from "../math";
 import { Panel } from "../stage";

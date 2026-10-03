@@ -1,0 +1,101 @@
+/* Messages sent while a turn runs, waiting under the thread for their turn. */
+.chat-queue {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.queued-message {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  max-width: 80%;
+  min-width: 150px;
+  color: var(--text);
+  position: relative;
+}
+/* Dragging reorders the queue: insertion line above or below the target. */
+.queued-message[draggable="true"] {
+  cursor: grab;
+}
+.queued-message[draggable="true"]:active {
+  cursor: grabbing;
+}
+.queued-message.dragging {
+  opacity: 0.4;
+}
+.queued-message.drop-before::before,
+.queued-message.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.queued-message.drop-before::before {
+  top: -7px;
+}
+.queued-message.drop-after::after {
+  bottom: -7px;
+}
+.queued-message > p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.queued-message footer {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 6px;
+}
+.queued-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.queued-status.error {
+  color: var(--danger);
+}
+.queued-message small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.queued-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+.queued-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+.queued-actions button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.chat-queue-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.chat-queue-hint kbd {
+  font: inherit;
+  color: var(--text);
+}

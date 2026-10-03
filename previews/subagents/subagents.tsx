@@ -25,7 +25,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/agents/composer-model-picker.css";
 import "../_shared/deep-review.css";
 import "./subagents.css";

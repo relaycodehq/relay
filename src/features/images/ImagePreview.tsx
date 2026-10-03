@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { CopyImageMenu } from "./CopyImageMenu";
+import "./image-tiles.css";
 
 /** An image in the thread, fetched as a data URL the first time something shows it. */
 export interface PreviewImage {

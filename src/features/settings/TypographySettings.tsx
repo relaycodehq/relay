@@ -23,6 +23,7 @@ import {
 } from "../../ui/SettingsCard";
 import { ThemeCodePreview } from "./ThemeCodePreview";
 import { mac } from "../../lib/mod-key";
+import "../composer/prompt/prompt-input.css";
 
 function SizeSelect({
   label,

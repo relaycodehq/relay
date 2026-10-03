@@ -6,6 +6,7 @@ import { FolderPlus } from "lucide-react";
 import { ProjectRibbon } from "./ProjectRibbon";
 import { ProjectSearch } from "./ProjectSearch";
 import type { Project } from "../../../shared/projects";
+import "./projects.css";
 
 export function ProjectHeadlinePicker({
   project,

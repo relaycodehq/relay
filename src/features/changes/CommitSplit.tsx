@@ -10,6 +10,7 @@ import { useAISettings } from "../agents/useAISettings";
 import { ErrorBox, FileEntryIcon, Modal, Spinner } from "../../ui/ui";
 import "./changed-files.css";
 import "./commit-split.css";
+import "./create-pull.css";
 
 interface Draft {
   message: string;

@@ -1,0 +1,201 @@
+/* The window's titlebar: the brand column, the breadcrumbs with the editable
+   thread title, and the header strip on the right. */
+.project-titlebar {
+  height: 52px;
+  min-height: 52px;
+  display: flex;
+  gap: 14px;
+  padding: 0 14px 0 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.project-titlebar > .traffic-space {
+  width: 68px;
+  flex-shrink: 0;
+}
+.platform-linux .project-titlebar > .traffic-space,
+.platform-win32 .project-titlebar > .traffic-space {
+  display: none;
+}
+.project-window-title {
+  flex: initial;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 12px;
+}
+.project-window-title span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.project-titlebar [hidden] {
+  display: none !important;
+}
+/* Clear of the window controls Windows and Linux draw over the top right. */
+.platform-linux .project-titlebar,
+.platform-win32 .project-titlebar {
+  padding-right: 150px;
+}
+.project-titlebar-brand {
+  width: var(--sidebar-width, 250px);
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-edge);
+}
+.project-titlebar-brand .traffic-space {
+  width: 66px;
+  flex-shrink: 0;
+}
+.platform-linux .project-titlebar-brand .traffic-space,
+.platform-win32 .project-titlebar-brand .traffic-space {
+  display: none;
+}
+/* Only the last crumb gives way. Clipping the whole title would shave the CI
+   badge's hover square and dot, and squash the badge when space runs out. */
+.project-window-title > * {
+  flex-shrink: 0;
+}
+.project-window-title > :last-child {
+  flex-shrink: 1;
+  min-width: 0;
+}
+/* The letter badge keeps the sidebar's look under the title's span rules. */
+.project-window-title .sb-project-badge {
+  color: hsl(var(--hue) 55% 96%);
+  font-size: 9.5px;
+}
+.project-window-title strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  /* Drag regions swallow hover and double-clicks. */
+  -webkit-app-region: no-drag;
+  cursor: default;
+}
+.thread-title-edit.icon-button {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+}
+.thread-title:hover .thread-title-edit,
+.thread-title-edit:focus-visible {
+  opacity: 1;
+}
+.thread-title-input {
+  min-width: 0;
+  max-width: 100%;
+  height: 22px;
+  margin: 0 -5px;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 5px;
+  outline: none;
+  background: var(--accent-soft);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+}
+.thread-title-input:focus-visible {
+  outline: none;
+}
+.breadcrumb-slash {
+  opacity: 0.5;
+}
+/* Title and controls share what the brand column leaves. The controls never
+   shrink, so the title clips first, and their labels give way in steps
+   (data-fit, below) before it gets too short to read. */
+.project-titlebar-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.thread-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+.thread-header-actions > * {
+  flex-shrink: 0;
+}
+.thread-header-actions > button {
+  font-size: 11px;
+  background: transparent;
+  padding: 6px 9px;
+}
+/* Hand-off, the pane toggles and the terminal as one strip. */
+.header-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--toolbar);
+}
+.header-strip > .pane-toggles {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.header-strip-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border);
+}
+/* Set by useHeaderFit as the title runs out of room. Hidden labels stay
+   readable to screen readers. */
+.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
+  .pane-toggle:not(.active),
+.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle {
+  padding: 5px 7px;
+}
+.project-titlebar-main:is([data-fit="1"], [data-fit="2"], [data-fit="3"])
+  .pane-toggle:not(.active)
+  .pane-toggle-label,
+.project-titlebar-main:is([data-fit="2"], [data-fit="3"]) .pane-toggle-label,
+.project-titlebar-main[data-fit="3"] .git-actions-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 1200px) {
+  .thread-header-actions > button {
+    padding: 5px;
+  }
+}
+/* With the sidebar collapsed the brand joins the titlebar instead of
+   reserving a sidebar-coloured column. */
+.project-titlebar.sidebar-collapsed .project-titlebar-brand {
+  width: auto;
+  background: transparent;
+  border-right: 0;
+}

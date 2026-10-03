@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ArrowUp, ImagePlus } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/composer/pasted-texts.css";
 import "../../src/features/settings/settings.css";
 import "./image-pill-looks.css";

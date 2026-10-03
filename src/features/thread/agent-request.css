@@ -1,0 +1,201 @@
+/* An agent waiting on you: a permission request or a question with options. */
+.agent-request {
+  width: min(100%, var(--thread-width));
+  align-self: center;
+  margin: 0 auto 12px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px #0000000a;
+  font-size: 13px;
+}
+.agent-request header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.agent-request header svg {
+  color: var(--accent);
+  flex: none;
+}
+.agent-request header small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent-request pre {
+  max-height: 80px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--code-font-size, 12px) / 1.6 var(--font-mono);
+  padding: 10px;
+  margin-top: 10px;
+  background: var(--toolbar);
+  border-radius: 8px;
+}
+.agent-request footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.agent-request fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.agent-request legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.agent-request fieldset > input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--toolbar);
+  color: var(--text);
+  font-size: 13px;
+}
+.agent-request fieldset > input::placeholder {
+  color: var(--muted);
+}
+.agent-request fieldset > input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.agent-question-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  border-radius: 6px;
+}
+.agent-question-heading:hover {
+  background: transparent;
+  color: var(--text);
+}
+.agent-question-topic {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.agent-question-heading small {
+  margin-left: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.agent-question-heading > svg {
+  flex: none;
+  opacity: 0.7;
+}
+.agent-question-options {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.agent-question-option {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.45;
+  transition:
+    background-color 0.1s,
+    border-color 0.1s;
+}
+.agent-question-option:hover {
+  background: var(--toolbar);
+  border-color: color-mix(in srgb, var(--border) 40%, var(--muted));
+}
+.agent-question-option[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.agent-question-option:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.agent-question-option-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+.agent-question-option-key kbd {
+  font: 11px/1 var(--font-mono);
+  color: inherit;
+}
+.agent-question-option[aria-pressed="true"] .agent-question-option-key {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+}
+.agent-question-option-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+}
+.agent-question-option-text small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.agent-question-hint {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent-request [role="alert"] {
+  color: #e7777d;
+}
+.agent-request footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+}

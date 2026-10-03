@@ -1,0 +1,15 @@
+/* The sign-in page, trimmed to fit a dialog. */
+.modal.project-signin {
+  width: min(650px, 90vw);
+  max-width: 650px;
+}
+.project-signin .welcome-sidebar {
+  display: none;
+}
+.project-signin .welcome-main {
+  width: 100%;
+  min-height: 0;
+}
+.project-signin .welcome-main > .titlebar {
+  display: none;
+}

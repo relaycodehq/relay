@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import type { SignInFlow } from "./useSignIn";
 import { SignIn } from "./SignIn";
 import { Modal } from "../../ui/ui";
+import "./sign-in-dialog.css";
 
 /** The Gitea sign-in form, which also waits out the Keychain's saved login. */
 export function SignInDialog({

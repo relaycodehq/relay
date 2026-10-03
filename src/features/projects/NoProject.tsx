@@ -1,4 +1,5 @@
 import { FolderGit2, FolderPlus } from "lucide-react";
+import "./projects.css";
 
 /** The main area before any project is added. */
 export function NoProject({

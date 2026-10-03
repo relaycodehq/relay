@@ -20,7 +20,7 @@ import {
   PanelLeft,
 } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/ui/workspace-panes.css";
 import "../../src/features/changes/git-actions.css";
 import "../../src/app/ci-status.css";

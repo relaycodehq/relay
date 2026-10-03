@@ -1,0 +1,226 @@
+/* The prompt editor and its pills: skills, files, screenshots and quotes.
+   Sent messages show the same pills. */
+.composer-prompt-input {
+  width: 100%;
+  min-height: 104px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 18px 20px 9px;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-prompt, inherit);
+  font-size: var(--prompt-font-size, 13px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.composer-prompt-input:focus-visible {
+  outline: none;
+}
+.composer-prompt-input p {
+  margin: 0;
+}
+.composer-prompt-input:has(
+    > p:only-child > br.ProseMirror-trailingBreak:only-child
+  )::before {
+  content: attr(data-placeholder);
+  pointer-events: none;
+  color: var(--muted);
+  float: left;
+  height: 0;
+}
+.composer-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 6px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.composer-skill-chip > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-skill-chip.ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+}
+.composer-skill-icon {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: transparent;
+  background: var(--accent);
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M12 3 3 8v9l9 5 9-5V8L12 3ZM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5"/%3E%3C/svg%3E')
+    center/contain no-repeat;
+}
+/* A file by path: the skill tag's shape, in the text's own colour. */
+.composer-file-chip {
+  border-color: var(--border);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  font-weight: 400;
+}
+.composer-file-chip.ProseMirror-selectednode {
+  outline-color: var(--muted);
+}
+.composer-file-icon {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: var(--muted);
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/%3E%3Cpath d="M14 2v4a2 2 0 0 0 2 2h4"/%3E%3C/svg%3E')
+    center/contain no-repeat;
+}
+/* A screenshot's place in the message: the file tag around a thumbnail big
+   enough to recognise. A paste is just the picture; its name says nothing. */
+.composer-image-chip {
+  gap: 6px;
+  padding: 2px 7px 2px 2px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.composer-image-chip.pasted {
+  padding-right: 2px;
+}
+.composer-image-chip-thumb {
+  flex: none;
+  width: 36px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.composer-image-chip.missing {
+  color: var(--muted);
+  cursor: default;
+}
+.composer-image-chip.missing .composer-image-chip-thumb {
+  box-shadow: none;
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+}
+/* Inside a selection the whole pill is outlined, instead of the browser
+   tinting its picture and label in patches. */
+.composer-image-chip::selection,
+.composer-image-chip ::selection {
+  background: transparent;
+}
+.composer-image-chip.in-selection,
+.composer-image-chip.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+/* Hovering a pill grows its picture out of it, like a colour swatch. */
+.image-chip-peek {
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 24%, transparent),
+    0 12px 30px -12px #0009;
+  outline: none;
+  pointer-events: none;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 120ms ease,
+    transform 140ms ease;
+}
+.image-chip-peek[data-starting-style],
+.image-chip-peek[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.3);
+}
+.image-chip-peek img {
+  display: block;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: 240px;
+}
+/* The same pill in a sent message, as a button that opens the viewer. */
+.message-image-chip {
+  font: inherit;
+  transition: background-color 0.12s;
+}
+.message-image-chip:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+/* A quoted passage from the conversation: one short line, × on hover. */
+.composer-quote-chip {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  max-width: 100%;
+  margin-right: 4px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: default;
+  transition: background-color 0.12s;
+}
+.composer-quote-chip:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.composer-quote-chip.ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+/* TipTap sets non-editable spans to wrap; the pill stays a single line. */
+.composer-quote-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-quote-remove {
+  flex: none;
+  width: 0;
+  height: 14px;
+  margin-right: 0;
+  opacity: 0;
+  overflow: hidden;
+  background: currentColor;
+  cursor: pointer;
+  mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M18 6 6 18M6 6l12 12"/%3E%3C/svg%3E')
+    center/11px no-repeat;
+  transition:
+    width 0.12s ease,
+    margin-right 0.12s ease,
+    opacity 0.12s ease;
+}
+.composer-quote-chip:hover .composer-quote-remove {
+  width: 14px;
+  margin-right: 5px;
+  opacity: 0.8;
+}
+.composer-quote-chip .composer-quote-remove:hover {
+  opacity: 1;
+}
+/* The whole passage, shown above a hovered pill. */
+.composer-quote-tooltip {
+  position: fixed;
+  z-index: 350;
+  max-width: min(440px, calc(100vw - 24px));
+  max-height: 40vh;
+  overflow: hidden;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 24px #0002;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}

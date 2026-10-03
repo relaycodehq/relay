@@ -12,6 +12,7 @@ import type { ThreadWorktree } from "./useThreadWorktree";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import { Modal } from "../../ui/ui";
 import "../changes/worktrees.css";
+import "../changes/branch-picker.css";
 
 /** The composer's workspace slot: where an unsent thread will work, then where it does. */
 export function WorkspaceControl({

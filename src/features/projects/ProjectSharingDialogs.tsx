@@ -6,6 +6,7 @@ import type { Account } from "../../../shared/types";
 import { parseRoomInvitation } from "../../../shared/rooms";
 import { api } from "../../lib/api";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
+import "./projects.css";
 export function ShareConversation({
   chat,
   project,

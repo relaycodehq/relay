@@ -1,6 +1,7 @@
 import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
 import { memo, type ReactNode } from "react";
+import "./composer-select.css";
 
 export interface ComposerSelectProps<T extends string> {
   label: string;

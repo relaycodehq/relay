@@ -1,0 +1,267 @@
+/* Picking a project: the empty state, the new thread's headline picker with
+   its ribbon, and the new-thread dialog. The branch, font and review-setup
+   pickers borrow the headline popup's look. */
+.project-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  background: var(--surface);
+}
+.project-empty > svg {
+  color: var(--accent);
+}
+.project-empty h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 10px;
+}
+.project-empty p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.shared-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shared-chat-list button {
+  justify-content: flex-start;
+  text-align: left;
+}
+.thread-introduction .headline-project-trigger {
+  display: inline-flex;
+  align-items: baseline;
+  position: relative;
+  max-width: min(55vw, 440px);
+  white-space: nowrap;
+  vertical-align: baseline;
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+.thread-introduction .headline-project-trigger:hover {
+  background-color: transparent;
+  color: var(--text);
+}
+.thread-introduction .headline-project-trigger:focus-visible {
+  border-radius: 3px;
+}
+.headline-project-positioner {
+  z-index: 150;
+  max-width: calc(100vw - 24px);
+}
+.headline-project-popup {
+  display: flex;
+  flex-direction: column;
+  width: 370px;
+  max-width: calc(100vw - 24px);
+  max-height: min(410px, var(--available-height));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 40px -16px #0008;
+}
+.headline-project-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 11px;
+  padding: 8px 3px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.headline-project-search:focus-within {
+  border-bottom-color: var(--accent);
+}
+.headline-project-search input,
+.headline-project-search input:focus-visible {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 5px 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.headline-project-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px 7px;
+}
+.headline-project-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.headline-project-row[data-highlighted] {
+  background: var(--hover);
+}
+.headline-project-row > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.headline-project-row-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.headline-project-row-label strong,
+.headline-project-row-label small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.headline-project-row-label strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.headline-project-row-label small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.headline-project-empty {
+  padding: 13px 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.headline-project-add {
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 11px 15px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.headline-project-add:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.modal.new-thread-picker {
+  width: 420px;
+  padding: 0;
+  overflow: hidden;
+}
+.modal.new-thread-picker[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: min(480px, calc(100vh - 80px));
+}
+.new-thread-picker .modal-heading {
+  margin: 0;
+  padding: 14px 13px 4px 16px;
+}
+.new-thread-picker .modal-heading h2 {
+  font-size: 14px;
+}
+.headline-project-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-name-ribbon {
+  position: absolute;
+  left: -0.3em;
+  bottom: 0;
+  width: calc(100% + 0.6em);
+  height: 13px;
+  pointer-events: none;
+  overflow: visible;
+  animation: project-ribbon-reveal 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  /* Grows out of the headline's own ink into the theme accent. */
+  --ribbon-light: var(--text);
+  --ribbon-mid: color-mix(in srgb, var(--accent) 55%, var(--text));
+  --ribbon-back: color-mix(in srgb, var(--accent) 67%, black);
+}
+.ribbon-stop-light {
+  stop-color: var(--ribbon-light);
+}
+.ribbon-stop-mid {
+  stop-color: var(--ribbon-mid);
+}
+.ribbon-stop-end {
+  stop-color: var(--accent);
+}
+.ribbon-stop-back {
+  stop-color: var(--ribbon-back);
+}
+.project-ribbon-wave {
+  transform-origin: center;
+  animation: project-ribbon-drift 7s ease-in-out;
+}
+/* One pass of light, then still: the new-thread screen is where a prompt
+   gets written, and a loop there repaints for as long as it stays open. */
+.project-ribbon-sheen {
+  animation: project-ribbon-sheen 7s ease-in-out;
+}
+.headline-project-trigger:hover
+  :is(.project-ribbon-wave, .project-ribbon-sheen) {
+  animation-iteration-count: infinite;
+}
+@keyframes project-ribbon-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+@keyframes project-ribbon-drift {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(1px) scaleY(0.83);
+  }
+}
+@keyframes project-ribbon-sheen {
+  0%,
+  15% {
+    transform: translateX(0);
+  }
+  65%,
+  100% {
+    transform: translateX(340px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-name-ribbon,
+  .project-ribbon-wave,
+  .project-ribbon-sheen {
+    animation: none;
+  }
+  .project-ribbon-sheen {
+    display: none;
+  }
+}

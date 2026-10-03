@@ -9,6 +9,8 @@ import {
   type FontFamily,
 } from "./local-fonts";
 import { fontStack } from "../../lib/typography";
+import "../projects/projects.css";
+import "../changes/branch-picker.css";
 
 const LIMIT = 150;
 
@@ -91,7 +93,7 @@ export function FontPicker({
             collisionPadding={12}
           >
             <Popover.Popup
-              className="headline-project-popup font-picker-popup"
+              className="headline-project-popup"
               aria-label={label}
               initialFocus={input}
             >

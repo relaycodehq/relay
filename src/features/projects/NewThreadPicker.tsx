@@ -4,6 +4,7 @@ import { FolderPlus } from "lucide-react";
 import { Modal } from "../../ui/ui";
 import { ProjectSearch } from "./ProjectSearch";
 import type { ChatSummary, Project } from "../../../shared/projects";
+import "./projects.css";
 
 /**
  * Asks which project a new thread belongs in, starting on the one in view so

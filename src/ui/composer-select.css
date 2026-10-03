@@ -1,0 +1,26 @@
+/* ComposerSelect's popup: rows with a label and a description under it. */
+.composer-runtime-popup {
+  min-width: 256px;
+}
+.composer-runtime-popup .composer-select-item {
+  padding: 8px 10px;
+}
+.composer-option-content {
+  display: grid;
+  gap: 2px;
+}
+.composer-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.composer-option-content small {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  white-space: normal;
+}
+.composer-option-label svg {
+  color: var(--muted);
+  flex: none;
+}

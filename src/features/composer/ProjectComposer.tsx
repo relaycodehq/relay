@@ -45,6 +45,7 @@ import {
 } from "../deep-review/council/Ultraplan";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
+import "./composer.css";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;

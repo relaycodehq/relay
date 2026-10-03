@@ -12,6 +12,7 @@ import { workingTreeKey } from "../../lib/working-tree-key";
 import { CommitFileList } from "./CommitFileList";
 import { ErrorBox, IconButton, Modal, Spinner } from "../../ui/ui";
 import "./commit-sheet.css";
+import "./create-pull.css";
 
 /** Where git's own tools start wrapping or cutting a subject. */
 const SUBJECT_LIMIT = 72;

@@ -25,6 +25,8 @@ import {
   isGitMissing,
   type WorkingTree,
 } from "../../../shared/working-tree";
+import "../projects/projects.css";
+import "./branch-picker.css";
 export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   projectId,
   branch,

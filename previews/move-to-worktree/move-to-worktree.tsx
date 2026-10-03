@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/ui/workspace-panes.css";
 import "../../src/features/agents/composer-model-picker.css";
 import { initAppearance } from "../../src/lib/appearance";

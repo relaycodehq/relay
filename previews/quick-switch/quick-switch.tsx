@@ -12,7 +12,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { ChevronLeft, ChevronRight, GripVertical, Plus, X, Zap } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/settings/settings.css";
 import "../../src/features/agents/composer-model-picker.css";
 import "../_shared/quick-switch.css";

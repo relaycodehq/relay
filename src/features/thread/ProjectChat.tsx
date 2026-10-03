@@ -60,6 +60,7 @@ import {
 import { ErrorBox } from "../../ui/ui";
 import { WorkItemCards } from "../plugins/WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
+import "./thread.css";
 
 /** What the thread's messages ask the shell's panes to show. */
 export interface ThreadOpens {

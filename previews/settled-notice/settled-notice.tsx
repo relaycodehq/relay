@@ -6,7 +6,7 @@ import { StrictMode, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowUp, Check, CheckCheck, Moon, Sun } from "lucide-react";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "./settled-notice.css";
 import { initAppearance, setMode } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";

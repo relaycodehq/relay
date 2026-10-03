@@ -189,6 +189,9 @@ small {
 .muted {
   color: var(--muted);
 }
+.spacer {
+  flex: 1;
+}
 .primary {
   background: var(--accent);
   color: #fff;

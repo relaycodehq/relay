@@ -5,7 +5,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import { initAppearance } from "../../src/lib/appearance";
 import { initTypography } from "../../src/lib/typography";
 import { CommitSheet } from "../../src/features/changes/CommitSheet";

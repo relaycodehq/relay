@@ -284,3 +284,31 @@
   display: flex;
   flex-direction: column;
 }
+/* The editor inside the Files pane, without the standalone editor's chrome. */
+.project-inline-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.project-inline-editor .local-editor-surface {
+  flex: 1;
+  min-height: 0;
+}
+.project-inline-editor .local-editor-path {
+  padding: 10px 14px;
+}
+.project-inline-editor .local-editor-footer {
+  padding: 8px;
+}
+.project-inline-editor .editor-shortcuts {
+  display: none;
+}
+.project-inline-editor .local-editor-note {
+  display: none;
+}
+.project-editor-empty {
+  flex: 1;
+}

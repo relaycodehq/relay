@@ -7,6 +7,7 @@ import type {
   AgentResponse,
   AgentDecision,
 } from "../../../shared/agent-modes";
+import "./agent-request.css";
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
   acceptForSession: "Always allow this session",

@@ -21,6 +21,7 @@ import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
 import { modelName, type SubagentRun } from "../../../shared/subagents";
 import "./subagents.css";
+import "../changes/branch-picker.css";
 
 /** A call's icon by its kind. */
 export const activityIcons = {

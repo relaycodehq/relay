@@ -38,6 +38,7 @@ import {
   fileIcon,
   parentSuffixes,
 } from "../lib/file-icons";
+import "./file-link.css";
 /**
  * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
  * or in a menu they open, bubble up here and are left to them.

@@ -4,7 +4,7 @@ import "../_shared/desktop-stub";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../../src/styles.css";
-import "../../src/app/projects.css";
+import "../_shared/app-styles";
 import "../../src/features/agents/composer-model-picker.css";
 import "../_shared/quick-switch.css";
 import { initAppearance } from "../../src/lib/appearance";
