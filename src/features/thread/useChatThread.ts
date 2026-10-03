@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   applyChatPatch,
   knownOf,
+  replyRoots,
   type ChatMessage,
   type ChatSummary,
   type ProjectChat as ProjectChatData,
@@ -11,7 +12,6 @@ import { api } from "../../lib/api";
 import {
   conversation,
   replyCounts,
-  replyRoots,
   sideThreads,
   withUpdates,
 } from "./chat-thread";

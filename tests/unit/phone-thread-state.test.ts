@@ -5,6 +5,8 @@ import {
   keepNewer,
   mainMessages,
   MissingMessage,
+  replyCounts,
+  sideConversation,
   type Thread,
 } from "../../mobile/src/remote/chat-state";
 import type { ChatMessage } from "../../shared/projects";
@@ -67,11 +69,12 @@ it("places a new message in thread order", () => {
   ).toEqual(["1", "2", "3"]);
 });
 
+const reply = (id: string, parentId: string): ChatMessage => ({
+  ...message(id, id, 1),
+  parentId,
+});
+
 it("keeps replies whose root fell out of the window in the main list", () => {
-  const reply = (id: string, parentId: string): ChatMessage => ({
-    ...message(id, id, 1),
-    parentId,
-  });
   const messages = [
     message("q", "q", 1),
     reply("a", "gone"),
@@ -80,4 +83,25 @@ it("keeps replies whose root fell out of the window in the main list", () => {
     reply("r", "q"),
   ];
   expect(mainMessages(messages).map((m) => m.id)).toEqual(["q", "a"]);
+});
+
+it("files a whole chain whose start is gone under its first surviving message", () => {
+  const messages = [
+    message("q", "q", 1),
+    reply("a", "gone"),
+    reply("b", "a"),
+    reply("c", "b"),
+    reply("r", "q"),
+  ];
+  expect(sideConversation(messages, "a").map((m) => m.id)).toEqual([
+    "a",
+    "b",
+    "c",
+  ]);
+  expect(replyCounts(messages)).toEqual(
+    new Map([
+      ["a", 2],
+      ["q", 1],
+    ]),
+  );
 });

@@ -2,11 +2,10 @@ import { expect, it } from "vitest";
 import {
   conversation,
   replyCounts,
-  replyRoots,
   sideThreads,
   withUpdates,
 } from "./chat-thread";
-import type { ChatMessage } from "../../../shared/projects";
+import { replyRoots, type ChatMessage } from "../../../shared/projects";
 
 const message = (
   id: string,
@@ -72,12 +71,25 @@ it("opens a reply chain whose first message is gone from what's left of it", () 
     message("c", { parentId: "b" }),
   ];
   const roots = replyRoots(messages);
-  expect(roots).toEqual(
-    new Map([
-      ["b", "gone"],
-      ["c", "b"],
-    ]),
-  );
+  expect(roots).toEqual(new Map([["c", "b"]]));
   expect(ids(conversation(messages, roots, undefined))).toEqual(["b"]);
   expect(ids(conversation(messages, roots, "b"))).toEqual(["b", "c"]);
+});
+
+it("keeps every reply of a chain whose start is gone under its first surviving message", () => {
+  const messages = [
+    message("a", { parentId: "gone", created: 1 }),
+    message("b", { parentId: "a", created: 2 }),
+    message("c", { parentId: "b", created: 3 }),
+  ];
+  const roots = replyRoots(messages);
+  expect(roots).toEqual(
+    new Map([
+      ["b", "a"],
+      ["c", "a"],
+    ]),
+  );
+  expect(replyCounts(roots)).toEqual(new Map([["a", 2]]));
+  expect(ids(conversation(messages, roots, undefined))).toEqual(["a"]);
+  expect(ids(conversation(messages, roots, "a"))).toEqual(["a", "b", "c"]);
 });

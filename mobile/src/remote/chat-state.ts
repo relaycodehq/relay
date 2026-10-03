@@ -1,4 +1,4 @@
-import { applyChatPatch, mainConversation, threadOrder, type ChatMessage } from "../../../shared/projects";
+import { applyChatPatch, chainRoot, mainConversation, replyRoots, threadOrder, type ChatMessage } from "../../../shared/projects";
 import type { RemoteChat } from "../../../shared/remote";
 
 export { knownOf, MissingMessage } from "../../../shared/projects";
@@ -43,36 +43,20 @@ export function keepNewer(fetched: Thread, held: Thread | undefined): Thread {
 /** The main conversation: every message but replies, with `/btw` questions in line. */
 export const mainMessages = mainConversation;
 
-/**
- * The message a reply chain starts from; replying to a reply joins its root.
- * Unlike shared/projects' replyRoot, a missing parent or a loop ends the
- * chain where it breaks instead of throwing.
- */
-export function rootOf(messages: ChatMessage[], message: ChatMessage): ChatMessage {
-  const byId = new Map(messages.map((m) => [m.id, m]));
-  const seen = new Set<string>();
-  let current = message;
-  while (current.parentId && !seen.has(current.id)) {
-    seen.add(current.id);
-    const parent = byId.get(current.parentId);
-    if (!parent) break;
-    current = parent;
-  }
-  return current;
-}
+/** The message a reply chain starts from; replying to a reply joins its root. */
+export const rootOf = (messages: ChatMessage[], message: ChatMessage) =>
+  chainRoot(new Map(messages.map((m) => [m.id, m])), message);
 
 /** A side conversation: its root, then the replies under it in order. */
 export function sideConversation(messages: ChatMessage[], rootId: string) {
-  return messages.filter((m) => m.id === rootId || (m.parentId && rootOf(messages, m).id === rootId));
+  const roots = replyRoots(messages);
+  return messages.filter((m) => m.id === rootId || roots.get(m.id) === rootId);
 }
 
 /** How many replies each root has. */
 export function replyCounts(messages: ChatMessage[]) {
   const counts = new Map<string, number>();
-  for (const m of messages)
-    if (m.parentId) {
-      const root = rootOf(messages, m).id;
-      counts.set(root, (counts.get(root) ?? 0) + 1);
-    }
+  for (const root of replyRoots(messages).values())
+    counts.set(root, (counts.get(root) ?? 0) + 1);
   return counts;
 }

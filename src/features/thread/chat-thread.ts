@@ -1,6 +1,5 @@
 import {
   mainConversation,
-  replyRoot,
   threadOrder,
   type ChatMessage,
 } from "../../../shared/projects";
@@ -22,20 +21,6 @@ export function withUpdates(
     if (!byId.has(m.id) || byId.get(m.id)!.version <= m.version)
       byId.set(m.id, m);
   return [...byId.values()].sort(threadOrder);
-}
-
-/** Each reply's side conversation, by the message it starts from. A broken
- * chain keeps the reply under its direct parent. */
-export function replyRoots(messages: ChatMessage[]) {
-  const roots = new Map<string, string>();
-  for (const m of messages)
-    if (m.parentId)
-      try {
-        roots.set(m.id, replyRoot(messages, m.id).id);
-      } catch {
-        roots.set(m.id, m.parentId);
-      }
-  return roots;
 }
 
 export function replyCounts(roots: Map<string, string>) {

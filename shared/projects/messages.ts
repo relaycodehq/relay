@@ -154,3 +154,34 @@ export function mainConversation(messages: ChatMessage[]) {
   const ids = new Set(messages.map((m) => m.id));
   return messages.filter((m) => !m.parentId || !ids.has(m.parentId));
 }
+
+/** The message a reply chain starts from. Unlike replyRoot, a missing parent
+ * or a loop ends the chain where it breaks instead of throwing. */
+export function chainRoot(
+  byId: Map<string, ChatMessage>,
+  message: ChatMessage,
+): ChatMessage {
+  const seen = new Set<string>();
+  let current = message;
+  while (current.parentId && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current;
+}
+
+/** Each reply's side conversation, by the message it starts from. A chain whose
+ * start is gone begins at its first message that is left, which stays in the
+ * main conversation and so has no entry itself. */
+export function replyRoots(messages: ChatMessage[]) {
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const roots = new Map<string, string>();
+  for (const m of messages) {
+    if (!m.parentId) continue;
+    const root = chainRoot(byId, m);
+    if (root !== m) roots.set(m.id, root.id);
+  }
+  return roots;
+}
