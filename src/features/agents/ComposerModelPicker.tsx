@@ -153,6 +153,9 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   /** The section shown in a grouped agent's list; "" shows them all. */
   const [group, setGroup] = useState("");
   const [favorites, setFavorites] = useState(() => readList(favoritesKey));
+  // Favorites lead the list in the order they had when the picker opened,
+  // so starring a row doesn't move it out from under the pointer.
+  const [pinned, setPinned] = useState(favorites);
   const [customs, setCustoms] = useState(readCustoms);
   const search = useRef<HTMLInputElement>(null);
   const [usage, setUsage] = useState<
@@ -214,11 +217,15 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     .filter((m) => allowDefault || m.provider === "message" || m.id)
     .filter((m) => {
       if (category === "favorites") return favorites.includes(modelKey(m));
-      return m.provider === category && (!m.legacy || legacy || query.trim());
+      return (
+        m.provider === category &&
+        (!m.legacy || legacy || query.trim() || pinned.includes(modelKey(m)))
+      );
     })
     .map((m, index) => ({
       model: m,
       index,
+      pinned: pinned.includes(modelKey(m)),
       score: scoreModelPickerSearch(
         {
           driverKind: m.provider,
@@ -226,7 +233,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
           name: m.name,
           shortName: m.id,
           subProvider: [m.group, m.description].filter(Boolean).join(" "),
-          isFavorite: favorites.includes(modelKey(m)),
+          isFavorite: pinned.includes(modelKey(m)),
         },
         query,
       ),
@@ -251,13 +258,18 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     : [];
   const rows = matching
     .filter((r) => !grouped || !group || r.model.group === group)
-    .sort((a, b) =>
-      query.trim()
-        ? a.score! - b.score! || a.index - b.index
-        : Number(!!a.model.legacy) - Number(!!b.model.legacy) ||
-          a.index - b.index,
+    .sort(
+      (a, b) =>
+        Number(b.pinned) - Number(a.pinned) ||
+        (query.trim()
+          ? a.score! - b.score!
+          : Number(!!a.model.legacy) - Number(!!b.model.legacy)) ||
+        a.index - b.index,
     )
     .map((r) => r.model);
+  const firstLegacy = query.trim()
+    ? -1
+    : rows.findIndex((m) => m.legacy && !pinned.includes(modelKey(m)));
   const customId = query.trim();
   if (
     category !== "favorites" &&
@@ -317,6 +329,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   useEffect(() => {
     if (!openSignal) return;
     setOpen(true);
+    setPinned(favorites);
     onOpen?.();
     setCategory(provider);
     openGroup(provider);
@@ -375,6 +388,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
+          setPinned(favorites);
           onOpen?.();
           setCategory(provider);
           openGroup(provider);
@@ -533,7 +547,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                             favorite = favorites.includes(key);
                           return (
                             <Fragment key={key}>
-                              {!query.trim() && m.legacy && legacyToggle}
+                              {index === firstLegacy && legacyToggle}
                               <Combobox.Item
                                 // A default that knows its model shows it like any other row.
                                 data-default={
