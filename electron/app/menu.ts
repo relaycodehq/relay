@@ -1,4 +1,4 @@
-import { Menu, type MenuItemConstructorOptions } from "electron";
+import { app, Menu, shell, type MenuItemConstructorOptions } from "electron";
 import {
   accelerator,
   command,
@@ -84,6 +84,15 @@ export function setApplicationMenu(
         ],
       },
       { role: "windowMenu" },
+      {
+        role: "help",
+        submenu: [
+          {
+            label: "Show Logs",
+            click: () => void shell.openPath(app.getPath("logs")),
+          },
+        ],
+      },
     ]),
   );
 }

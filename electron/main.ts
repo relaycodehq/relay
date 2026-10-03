@@ -14,6 +14,7 @@ import { GiteaLogin, seal, unseal } from "./app/login";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
+import { startLog } from "./app/log";
 import { Quit } from "./app/quit";
 import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
@@ -61,6 +62,9 @@ import { flushGitOperations } from "./git/working-tree";
 app.setName("Relay Experimental");
 if (!process.env.RELAY_TEST_DATA)
   app.setPath("userData", join(app.getPath("appData"), "Relay Experimental"));
+// One place on every platform, beside the rest of Relay's data.
+app.setAppLogsPath(join(app.getPath("userData"), "logs"));
+startLog(app.getPath("logs"), app.getVersion());
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
