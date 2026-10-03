@@ -21,7 +21,7 @@ export interface LimitResumeHost {
  * thread's last input carries on exactly that answer. A side question
  * beside it doesn't count.
  */
-export function stillLast(chat: ProjectChat, message: ChatMessage) {
+function stillLast(chat: ProjectChat, message: ChatMessage) {
   const branch = message.parentId ?? undefined;
   const conversation = chat.messages.filter(
     (m) => (m.parentId ?? undefined) === branch && !m.side,

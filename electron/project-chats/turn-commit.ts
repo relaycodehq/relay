@@ -4,7 +4,7 @@ import { headOf } from "../git/bundles";
 const commitCommand = /\bgit\b[^\n;&|]*\scommit\b/;
 
 /** Each folder's checked-out commit; undefined where there's none. */
-export const headsOf = (roots: string[]) =>
+const headsOf = (roots: string[]) =>
   Promise.all(roots.map((root) => headOf(root).catch(() => undefined)));
 
 /**
