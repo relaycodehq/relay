@@ -34,6 +34,13 @@ export interface ChatSentTo {
   conflicts?: string[];
 }
 
+/** A handoff the user took back without the other computer's say; it can't return anymore. */
+export interface ChatAbandonedHandoff {
+  id: string;
+  computer: string;
+  at: number;
+}
+
 /** On the computer that took a thread over: where it came from. */
 export interface ChatCameFrom {
   id: string;
@@ -248,8 +255,13 @@ export interface ComputersApi {
   handoffViews(): Promise<Record<string, HandoffView>>;
   /** `park` brings it back even if its work clashes, left at its handoff ref. */
   bringBackThread(chatId: string, park?: boolean): Promise<void>;
-  /** Keeps a thread whose handoff failed here; refused once the other side has it. */
+  /** Keeps a thread whose handoff failed here; refused unless the other side says it never got it. */
   keepThreadHere(chatId: string): Promise<void>;
+  /**
+   * Unlocks a thread that's away, as it was when it left, without the other
+   * computer. What was done there stays there; it is told when it can be.
+   */
+  abandonHandoff(chatId: string): Promise<void>;
   /** Has a paired computer update Relay and restart; it reconnects by itself. */
   updateComputer(id: string): Promise<UpdateState>;
 }

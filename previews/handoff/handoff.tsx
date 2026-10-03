@@ -232,6 +232,7 @@ Object.assign(window.relay as Partial<Api>, {
     current = "sending";
   },
   keepThreadHere: async () => {},
+  abandonHandoff: async () => {},
   pairComputer: async () => [mini, pi],
   forgetComputer: async () => [mini],
   phoneRemoteState: async () => accept,

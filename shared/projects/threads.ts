@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type { AgentProvider } from "../agents";
 import type { ReviewerTask } from "../deep-review";
-import type { ChatCameFrom, ChatSentTo } from "../handoff";
+import type {
+  ChatAbandonedHandoff,
+  ChatCameFrom,
+  ChatSentTo,
+} from "../handoff";
 import type { ThinkerTask } from "../ultraplan";
 import { refSchema } from "../validation";
 import type { AgentWorktree, ChatWorktree } from "./worktrees";
@@ -70,6 +74,8 @@ export interface ChatSummary {
   sentTo?: ChatSentTo;
   /** Taken over from another computer. */
   cameFrom?: ChatCameFrom;
+  /** Handoffs of this thread taken back without the computer that had it. */
+  abandonedHandoffs?: ChatAbandonedHandoff[];
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
   /** The answer a usage limit stopped, resumed once the limit lifts; see limit-resume. */

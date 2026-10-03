@@ -33,6 +33,9 @@ export function computerHandlers(ctx: ApiContext) {
     keepThreadHere: takes([idSchema], (chatId) =>
       handoffs().sender.keepHere(chatId),
     ),
+    abandonHandoff: takes([idSchema], (chatId) =>
+      handoffs().sender.abandon(chatId),
+    ),
     updateComputer: takes([idSchema], (id) => handoffs().sender.update(id)),
   } satisfies Handlers;
 }

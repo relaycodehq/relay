@@ -441,6 +441,9 @@ export class ProjectChats {
   ) {
     return this.handoffs.updateSentTo(id, handoffId, change);
   }
+  abandonHandoff(id: string, handoffId: string) {
+    return this.handoffs.abandon(id, handoffId);
+  }
   leave(id: string, computer: string, since = 0) {
     return this.handoffs.leave(id, computer, since);
   }

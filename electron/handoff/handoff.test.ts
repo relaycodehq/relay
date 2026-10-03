@@ -857,3 +857,49 @@ it("won't keep a handoff here when the other computer did take the thread", asyn
     mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
   ).toHaveLength(1);
 }, 60000);
+
+it("takes a thread back without the computer that has it, as it was when it left", async () => {
+  const { laptop, mini, sender, thread, here, there } =
+    await awayWithChangelog();
+  const left = await laptop.chats.get(thread.id);
+  const { id, computer } = left.sentTo!;
+  await writeFile(join(there, "CHANGELOG.md"), "- 1.1 only there\n");
+  await expect(
+    laptop.chats.send(thread.id, input("@codex Carry on")),
+  ).rejects.toThrow(/This thread is on /);
+
+  await sender.abandon(thread.id);
+
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo).toBeUndefined();
+  expect(after.abandonedHandoffs).toEqual([
+    { id, computer, at: expect.any(Number) },
+  ]);
+  expect(after.messages).toEqual(left.messages);
+  expect(await sender.view(thread.id)).toBeNull();
+  expect(await readFile(join(here, "CHANGELOG.md"), "utf8")).toBe(
+    "- 1.0 First\n",
+  );
+  // Nothing of what happened there comes along.
+  expect(await readFile(join(there, "CHANGELOG.md"), "utf8")).toBe(
+    "- 1.1 only there\n",
+  );
+  expect(
+    mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
+  ).toHaveLength(1);
+  await expect(sender.bringBack(thread.id)).rejects.toThrow(/already here/);
+  await laptop.chats.send(thread.id, input("@codex Carry on here"));
+  await finished(laptop.chats, thread.id, left.messages.length + 2);
+  // Abandoning a thread that's here changes nothing.
+  await sender.abandon(thread.id);
+  expect((await laptop.chats.get(thread.id)).abandonedHandoffs).toHaveLength(1);
+}, 60000);
+
+it("takes a handoff back that never finished sending", async () => {
+  const { laptop, sender, thread } = await stuckSending();
+  const { id } = (await laptop.chats.get(thread.id)).sentTo!;
+  await sender.abandon(thread.id);
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo).toBeUndefined();
+  expect(after.abandonedHandoffs?.map((a) => a.id)).toEqual([id]);
+}, 30000);

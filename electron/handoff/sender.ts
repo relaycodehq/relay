@@ -317,6 +317,21 @@ export class Handoffs {
     }
     await this.chats.updateSentTo(chatId, sentTo.id, null);
   }
+  /**
+   * Takes the thread back without the computer that has it, for when that
+   * one can't give it back. The thread unlocks here as it left; whatever was
+   * done there stays there.
+   */
+  async abandon(chatId: string) {
+    const sentTo = this.summary(chatId).sentTo;
+    if (!sentTo) return;
+    if (sentTo.state === "returning" && this.jobs.has(chatId))
+      throw new Error(
+        `It's being brought back from ${sentTo.computer} right now. If that fails, you can take it back without ${sentTo.computer}.`,
+      );
+    await this.chats.abandonHandoff(chatId, sentTo.id);
+    this.statuses.delete(sentTo.id);
+  }
   async view(chatId: string): Promise<HandoffView | null> {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) return null;
@@ -346,12 +361,20 @@ export class Handoffs {
       .finally(() => this.jobs.delete(chatId));
     this.jobs.set(chatId, running);
   }
+  /** Whether the thread is still on this handoff, rather than taken back. */
+  private onHandoff(chatId: string, id: string) {
+    return (
+      this.store.get().chats?.find((c) => c.id === chatId)?.sentTo?.id === id
+    );
+  }
   /** Stop, note and commit here, then the thread and its code across. */
   private async send(chatId: string, id: string, computerId: string) {
     const folder = join(this.dir, id);
     try {
+      if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
       const { chat, root, tip } = await this.chats.leave(chatId, name);
+      if (!this.onHandoff(chatId, id)) return;
       const worktree = chat.worktree!;
       const input = chat.lastInput;
       if (!input)

@@ -270,6 +270,7 @@ const methods = [
   "handoffViews",
   "bringBackThread",
   "keepThreadHere",
+  "abandonHandoff",
   "updateComputer",
 ] as const satisfies readonly ApiMethod[];
 // Fails to compile, naming the method, when the Api gains one this list lacks.

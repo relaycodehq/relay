@@ -185,6 +185,26 @@ export class ComputerHandoff {
     await this.core.storage.persist(chat);
   }
   /**
+   * Unlocks a thread that's away, as it was when it left plus anything
+   * already handed back, and notes which handoff that was so it can't come
+   * back later. False when it wasn't away on that handoff.
+   */
+  abandon(id: string, handoffId: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      const { sentTo } = chat;
+      if (sentTo?.id !== handoffId) return false;
+      chat.abandonedHandoffs = [
+        ...(chat.abandonedHandoffs ?? []),
+        { id: sentTo.id, computer: sentTo.computer, at: Date.now() },
+      ];
+      delete chat.sentTo;
+      chat.updated = Date.now();
+      await this.core.storage.persist(chat);
+      return true;
+    });
+  }
+  /**
    * The thread leaves for `computer`: its agent stops and is waited for,
    * writes a handoff note in its own session, and everything in the worktree
    * is committed. `since` limits the note to turns from that message on,
