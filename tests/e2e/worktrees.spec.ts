@@ -393,7 +393,10 @@ test("a project-folder thread moves into its own worktree mid-conversation and i
     await send("and again");
     await expect(page.getByText("The cache guard prevents")).toHaveCount(2);
     seen = await records();
-    expect(seen.filter((r) => r.turn).length).toBe(3);
+    // The thread's title runs beside its first answer, in a folder of its own.
+    expect(
+      seen.filter((r) => r.turn && !/relay-helper-/.test(r.cwd)),
+    ).toHaveLength(3);
     expect(seen.filter(told)).toHaveLength(1);
     await screenshot(page, { path: "test-results/worktree-moved.png" });
   } finally {
