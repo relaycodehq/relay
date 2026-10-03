@@ -1,4 +1,4 @@
-import { applyChatPatch, threadOrder, type ChatMessage } from "../../../shared/projects";
+import { applyChatPatch, mainConversation, threadOrder, type ChatMessage } from "../../../shared/projects";
 import type { RemoteChat } from "../../../shared/remote";
 
 export { knownOf, MissingMessage } from "../../../shared/projects";
@@ -41,8 +41,7 @@ export function keepNewer(fetched: Thread, held: Thread | undefined): Thread {
 }
 
 /** The main conversation: every message but replies, with `/btw` questions in line. */
-export const mainMessages = (messages: ChatMessage[]) =>
-  messages.filter((m) => !m.parentId);
+export const mainMessages = mainConversation;
 
 /**
  * The message a reply chain starts from; replying to a reply joins its root.

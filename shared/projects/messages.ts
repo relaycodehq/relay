@@ -147,3 +147,10 @@ export function replyRoot(messages: ChatMessage[], id: string): ChatMessage {
     throw new Error("Reply target is missing from this conversation.");
   return current;
 }
+
+/** The main conversation: everything but replies. A reply whose parent is gone
+ * (the phone only holds the latest messages) shows here rather than nowhere. */
+export function mainConversation(messages: ChatMessage[]) {
+  const ids = new Set(messages.map((m) => m.id));
+  return messages.filter((m) => !m.parentId || !ids.has(m.parentId));
+}

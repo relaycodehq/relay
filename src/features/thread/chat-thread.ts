@@ -1,4 +1,5 @@
 import {
+  mainConversation,
   replyRoot,
   threadOrder,
   type ChatMessage,
@@ -64,17 +65,12 @@ export function sideThreads(
   return threads;
 }
 
-/** The side conversation from `rootId`, or else the main one. A reply whose
- * parent is gone shows in the main one rather than nowhere. */
+/** The side conversation from `rootId`, or else the main one. */
 export function conversation(
   messages: ChatMessage[],
   roots: Map<string, string>,
   rootId: string | undefined,
 ) {
-  const ids = new Set(messages.map((m) => m.id));
-  return messages.filter((m) =>
-    rootId
-      ? m.id === rootId || roots.get(m.id) === rootId
-      : !m.parentId || !ids.has(m.parentId),
-  );
+  if (!rootId) return mainConversation(messages);
+  return messages.filter((m) => m.id === rootId || roots.get(m.id) === rootId);
 }

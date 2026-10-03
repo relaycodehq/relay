@@ -3,6 +3,7 @@ import {
   applyMessage,
   applyPatch,
   keepNewer,
+  mainMessages,
   MissingMessage,
   type Thread,
 } from "../../mobile/src/remote/chat-state";
@@ -64,4 +65,19 @@ it("places a new message in thread order", () => {
   expect(
     applyMessage(thread, message("b", "2", 1, 2)).messages.map((m) => m.body),
   ).toEqual(["1", "2", "3"]);
+});
+
+it("keeps replies whose root fell out of the window in the main list", () => {
+  const reply = (id: string, parentId: string): ChatMessage => ({
+    ...message(id, id, 1),
+    parentId,
+  });
+  const messages = [
+    message("q", "q", 1),
+    reply("a", "gone"),
+    reply("b", "a"),
+    reply("c", "b"),
+    reply("r", "q"),
+  ];
+  expect(mainMessages(messages).map((m) => m.id)).toEqual(["q", "a"]);
 });
