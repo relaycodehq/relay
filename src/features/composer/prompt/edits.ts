@@ -8,7 +8,7 @@ import {
   pasteNodes,
   spacedTags,
 } from "../prompt-pills";
-import { positionAt } from "../prompt-text";
+import { positionAt, promptText } from "../prompt-text";
 
 type Point = { left: number; top: number };
 
@@ -137,4 +137,27 @@ export function inlinePaste(editor: Editor, index: number) {
     ),
   );
   editor.commands.focus();
+}
+
+/** Where the caret, or the selection, starts and ends in the draft's text. */
+export function caretOffsets(editor: Editor) {
+  const { doc, selection } = editor.state;
+  return {
+    start: promptText(doc, selection.from).length,
+    end: promptText(doc, selection.to).length,
+  };
+}
+
+/**
+ * Puts `content` in place of the whole draft, as one undo step, with the
+ * caret at its end; says what the draft's text and caret are then.
+ */
+export function replaceDraft(editor: Editor, content: JSONContent) {
+  asOneStep(editor, () =>
+    editor.chain().setContent(content).focus("end").run(),
+  );
+  return {
+    text: promptText(editor.state.doc),
+    caret: caretOffsets(editor).start,
+  };
 }

@@ -21,6 +21,7 @@ import { useComposerDraft } from "./useComposerDraft";
 import { sendTarget, useComposerSend } from "./useComposerSend";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
+import { usePromptHistory } from "./usePromptHistory";
 import { useQuickSwitchHud } from "./useQuickSwitchHud";
 import { useSettingCommands } from "./useSettingCommands";
 import { useStopKeys } from "./useStopKeys";
@@ -89,6 +90,7 @@ export function ProjectComposer({
   threadCost,
   attachment,
   placeholder,
+  sent,
   onSend,
   onStop,
   onCommand,
@@ -112,6 +114,8 @@ export function ProjectComposer({
   /** What goes with the message besides its text; `complete` when that alone is a message. */
   attachment?: { view: ReactNode; complete: boolean };
   placeholder?: string;
+  /** What was sent in the conversation, newest first, for ↑ to bring back. */
+  sent?: () => string[];
   onSend: (
     value: ComposedSend,
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
@@ -140,6 +144,7 @@ export function ProjectComposer({
   const catalogs = useModelCatalogs(projectId);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, shared, promptInput);
+  const recall = usePromptHistory(promptInput, sent);
   const runs = useAgentRuns(composer, catalogs, draft.dropMention);
   const accounts = useThreadAccounts(conversation.chatId, conversation.accounts);
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
@@ -279,8 +284,14 @@ export function ProjectComposer({
           aria-autocomplete={commands.visible ? "list" : undefined}
           onBlur={commands.dismiss}
           value={draft.text}
-          onChange={draft.set}
-          onCursor={commands.setCursor}
+          onChange={(value) => {
+            draft.set(value);
+            recall.edited(value);
+          }}
+          onCursor={(at) => {
+            commands.setCursor(at);
+            recall.moved(at);
+          }}
           onOpenPaste={setViewingPaste}
           images={draft.chips}
           onOpenImage={(n) =>
@@ -295,6 +306,8 @@ export function ProjectComposer({
                   : "Ask about the code, plan a change, or build something…"))
           }
           onKeyDownCapture={(e) => {
+            // A recalled message takes ↑/↓ even from a menu it opened.
+            if (recall.keyDown(e, draft.text)) return;
             if (commands.onKeyDown(e)) return;
             const step = effortStep(e);
             if (step) {

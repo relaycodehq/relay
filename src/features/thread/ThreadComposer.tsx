@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import { useCallback, useRef, type ReactNode, type Ref } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch, X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
@@ -22,6 +22,7 @@ import {
   ProjectComposer,
   type ComposerHandle,
 } from "../composer/ProjectComposer";
+import { sentHistory } from "../composer/prompt-history";
 import { SubagentsIndicator } from "../agent-turn/Subagents";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
@@ -168,6 +169,10 @@ export function ThreadComposer({
   // A side thread doesn't wait for the main answer, nor queue behind it.
   const waiting = root?.side ? false : running || reviewing || planning;
   const held = busy || !!chat?.sentTo || !!chat?.cameFrom?.returnedAt;
+  // Read on ↑ only, so streaming answers don't rebuild it.
+  const shownNow = useRef(shown);
+  shownNow.current = shown;
+  const sent = useCallback(() => sentHistory(shownNow.current), []);
   const placeholder =
     (chat && awayPlaceholder(chat)) ??
     (root?.side
@@ -292,6 +297,7 @@ export function ThreadComposer({
           : undefined
       }
       placeholder={placeholder}
+      sent={sent}
       onSend={onSend}
       onStop={() => {
         if (chat) void api.cancelProjectChat(chat.id).catch(setError);

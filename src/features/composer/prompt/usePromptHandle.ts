@@ -6,6 +6,7 @@ import type { DraftEditor } from "../useComposerDraft";
 import type { DraftPills } from "../useDraftPills";
 import { beginDictation, endDictation, updateDictation } from "./dictation";
 import {
+  caretOffsets,
   inlinePaste,
   insertPaste,
   insertQuote,
@@ -13,6 +14,7 @@ import {
   insertTags,
   removeImage,
   removePaste,
+  replaceDraft,
   replaceText,
   type SkillPick,
 } from "./edits";
@@ -27,6 +29,10 @@ export interface PromptInputHandle extends DraftEditor {
   inlinePaste: (index: number) => void;
   /** Where dictated words go: live at the caret, greyed while they may still change. */
   dictation: DictationTarget;
+  /** The selection's ends in the draft's text; equal for a bare caret. */
+  caret: () => { start: number; end: number } | undefined;
+  /** Shows `text` as the whole draft, caret at its end; what the draft and caret are then. */
+  replace: (text: string) => { text: string; caret: number } | undefined;
 }
 
 /** What the composer may do to the draft in the editor, besides typing. */
@@ -79,6 +85,9 @@ export function usePromptHandle(
       inlinePaste(index) {
         if (editor) inlinePaste(editor, index);
       },
+      caret: () => (editor ? caretOffsets(editor) : undefined),
+      replace: (text) =>
+        editor ? replaceDraft(editor, pills.content(text)) : undefined,
       dictation: {
         begin: () => editor?.isDestroyed === false && beginDictation(editor),
         update: (settled, tentative) =>
