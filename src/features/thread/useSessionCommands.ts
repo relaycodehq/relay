@@ -14,7 +14,7 @@ export type SessionCommands = ReturnType<typeof useSessionCommands>;
  * the workspace go on to `onCommand`.
  */
 export function useSessionCommands({
-  handle: { chat, busy, setError, refetch },
+  handle: { chat, busy, run, refetch },
   shown,
   root,
   running,
@@ -36,11 +36,11 @@ export function useSessionCommands({
   const [showContext, setShowContext] = useState(0);
   function compact(instructions?: string) {
     if (!chat) return;
-    setError(undefined);
-    void api
-      .compactProjectChat(chat.id, root?.id ?? null, instructions)
-      .then(() => refetch())
-      .catch(setError);
+    // Through the write gate, so a double click or a send racing it waits its turn.
+    void run(async () => {
+      await api.compactProjectChat(chat.id, root?.id ?? null, instructions);
+      await refetch();
+    });
   }
   // Session commands need this thread; the rest belong to the workspace.
   function runCommand(command: RelayCommand, args: string): boolean | string {
