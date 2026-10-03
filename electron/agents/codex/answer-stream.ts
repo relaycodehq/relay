@@ -1,5 +1,16 @@
 import { answerLimitError } from "../turn-kit";
 
+/** The fields of an item or delta notification the answer is built from. */
+interface AnswerParams {
+  delta?: string;
+  itemId?: string | null;
+  item?: {
+    id?: string | null;
+    type?: string;
+    phase?: string | null;
+    text?: string | null;
+  };
+}
 /** T3 Code's turn timeline separates commentary, work and the terminal answer.
  * Codex message phases are optional, so an unphased last message is provisional
  * until the next message or turn completion establishes the terminal message. */
@@ -14,7 +25,7 @@ export class CodexAnswerStream {
     private onText: (text: string) => void,
     private onCommentary: (id: string, text: string | null) => void,
   ) {}
-  update(method: string, params: any) {
+  update(method: string, params: AnswerParams) {
     if (
       method !== "item/started" &&
       method !== "item/agentMessage/delta" &&

@@ -89,9 +89,13 @@ export const codexModels = memoWhileStamp(
     withAppServer(homedir(), "listing models", async (wire) => {
       // Signed out, Codex still lists the few models built into it. Kept, that
       // list would outlast signing in; failing lets the picker ask again.
-      const { account, requiresOpenaiAuth } = await wire.request(
+      const { account, requiresOpenaiAuth } = await wire.call(
         "account/read",
         {},
+        z.object({
+          account: z.unknown(),
+          requiresOpenaiAuth: z.boolean().nullish(),
+        }),
       );
       if (!account && requiresOpenaiAuth)
         throw new Error("Sign in to Codex to list its models.");

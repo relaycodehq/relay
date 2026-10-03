@@ -5,9 +5,13 @@ import * as Effect from "effect/Effect";
 import * as Sink from "effect/Sink";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
+import type { z } from "zod";
 import { makeCodexAppServerPatchedProtocol } from "../../vendor/t3code/codex/protocol";
+import { parseCodexResponse } from "./codex-schemas";
 export interface CodexTransport {
-  request(method: string, params: unknown): Promise<any>;
+  request(method: string, params: unknown): Promise<unknown>;
+  /** A request whose answer must match `schema`; one that doesn't throws, naming the method. */
+  call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T>;
   notify(method: string, params?: unknown): Promise<void>;
 }
 // The vendor handles framing/decoding. This boundary only caps an unfinished frame
@@ -101,13 +105,16 @@ export async function withCodexTransport<T>(
     return yield* Effect.tryPromise({
       try: async () => {
         try {
+          const request = (method: string, params: unknown) =>
+            Effect.runPromise(
+              protocol
+                .request(method, params)
+                .pipe(Effect.timeout("20 seconds")),
+            );
           return await run({
-            request: (method, params) =>
-              Effect.runPromise(
-                protocol
-                  .request(method, params)
-                  .pipe(Effect.timeout("20 seconds")),
-              ),
+            request,
+            call: async (method, params, schema) =>
+              parseCodexResponse(method, schema, await request(method, params)),
             notify: (method, params) =>
               Effect.runPromise(protocol.notify(method, params)),
           });
