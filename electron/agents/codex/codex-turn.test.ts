@@ -148,3 +148,44 @@ it("ignores notifications it doesn't read, and fields it doesn't know", async ()
   });
   expect(await answer).toBe("Done.");
 });
+
+it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {
+  const failing = (error: Wire) => ({
+    method: "turn/completed",
+    params: {
+      threadId: "thread",
+      turn: { id: "turn", status: "failed", error },
+    },
+  });
+  await expect(
+    (
+      await ask({
+        ending: failing({
+          message: "token refresh failed",
+          codexErrorInfo: "unauthorized",
+        }),
+      })
+    ).answer,
+  ).rejects.toMatchObject({ kind: "signedOut", provider: "codex" });
+  const limit = await (
+    await ask({
+      ending: failing({
+        message: "You've hit your usage limit.",
+        codexErrorInfo: "usageLimitExceeded",
+      }),
+    })
+  ).answer.catch((e) => e);
+  expect(limit).toMatchObject({ kind: "usageLimit", provider: "codex" });
+  expect(limit.resetsAt).toBeUndefined();
+  // Anything else Codex says stays its own words.
+  await expect(
+    (
+      await ask({
+        ending: failing({
+          message: "The model is overloaded.",
+          codexErrorInfo: "serverOverloaded",
+        }),
+      })
+    ).answer,
+  ).rejects.toThrow("The model is overloaded.");
+});

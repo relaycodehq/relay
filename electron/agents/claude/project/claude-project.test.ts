@@ -9,8 +9,7 @@ import {
   wakeupTime,
 } from "./index";
 import { ClaudeWork } from "./pending";
-import { ClaudeSignedOutError } from "../claude-sign-in";
-import { UsageLimitError } from "../../usage-limit";
+import { AgentError } from "../../errors";
 import type { AgentActivity, ContextUsage } from "../../../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
@@ -152,7 +151,10 @@ it("tells an expired login apart from other failed turns", async () => {
     { ...result(""), is_error: true },
   ];
   claude(failed("authentication_failed"));
-  await expect(run()).rejects.toBeInstanceOf(ClaudeSignedOutError);
+  await expect(run()).rejects.toMatchObject({
+    kind: "signedOut",
+    provider: "claude",
+  });
   claude(failed());
   await expect(run()).rejects.toThrow("Claude could not complete this turn.");
 });
@@ -174,8 +176,9 @@ it("tells a spent plan apart, with when it lifts, and lets extra usage carry the
     result("You've hit your limit · resets 3pm"),
   ]);
   const refused = await run().catch((e) => e);
-  expect(refused).toBeInstanceOf(UsageLimitError);
+  expect(refused).toBeInstanceOf(AgentError);
   expect(refused).toMatchObject({
+    kind: "usageLimit",
     provider: "claude",
     resetsAt: resetsAt * 1000,
   });
@@ -210,11 +213,11 @@ it("does not read an overloaded turn as a spent plan while extra usage carries t
   ];
   claude(failed(limit("allowed")));
   const overloaded = await run().catch((e) => e);
-  expect(overloaded).not.toBeInstanceOf(UsageLimitError);
+  expect(overloaded).not.toBeInstanceOf(AgentError);
   expect(overloaded.message).toBe("Claude could not complete this turn.");
   // Without extra usage the same failure is the plan's refusal.
   claude(failed(limit()));
-  await expect(run()).rejects.toBeInstanceOf(UsageLimitError);
+  await expect(run()).rejects.toMatchObject({ kind: "usageLimit" });
 });
 
 it("lists the background work and wake-ups Claude leaves running", async () => {

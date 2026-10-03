@@ -1,18 +1,6 @@
 import { reportsUsage, type AgentProvider } from "../../shared/agents";
 import { readProviderUsage } from "./provider-usage";
 
-/** The agent's plan ran out; `resetsAt` (ms) is when it lifts, if the agent said. */
-export class UsageLimitError extends Error {
-  constructor(
-    readonly provider: AgentProvider,
-    message: string,
-    readonly resetsAt?: number,
-  ) {
-    super(message);
-    this.name = "UsageLimitError";
-  }
-}
-
 /** Agents report reset times in seconds or milliseconds; Relay keeps ms. */
 export function resetMs(at: number | null | undefined): number | undefined {
   if (at == null || !Number.isFinite(at) || at <= 0) return;

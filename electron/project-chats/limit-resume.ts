@@ -3,7 +3,8 @@ import type {
   LimitResume,
   ProjectChat,
 } from "../../shared/projects";
-import { usageResetsAt, type UsageLimitError } from "../agents/usage-limit";
+import type { AgentError } from "../agents/errors";
+import { usageResetsAt } from "../agents/usage-limit";
 import type { ChatCore } from "./core";
 
 /** Resumes this long after the limit lifts, in case the provider's clock runs behind. */
@@ -56,7 +57,7 @@ export class LimitResumes {
   }
 
   /** A usage limit stopped the answer `messageId`; plans its resume. */
-  async stopped(chatId: string, messageId: string, limit: UsageLimitError) {
+  async stopped(chatId: string, messageId: string, limit: AgentError) {
     const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     // A reviewer's or thinker's thread is its council's to carry on.

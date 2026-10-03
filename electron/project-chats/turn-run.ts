@@ -12,8 +12,7 @@ import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
 import { AnswerRecorder } from "./answer-recorder";
 import { turnRules, type ChatTurn } from "./chat-turn";
-import { ClaudeSignedOutError } from "../agents/claude/claude-sign-in";
-import { UsageLimitError } from "../agents/usage-limit";
+import { isAgentError, type AgentError } from "../agents/errors";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { commitWatch } from "./turn-commit";
@@ -77,7 +76,7 @@ export class TurnRunner {
     private limited: (
       chatId: string,
       messageId: string,
-      limit: UsageLimitError,
+      limit: AgentError,
     ) => void,
   ) {}
 
@@ -144,7 +143,7 @@ export class TurnRunner {
     );
     let point: string | undefined,
       committed = false,
-      limit: UsageLimitError | undefined;
+      limit: AgentError | undefined;
     try {
       const options = {
         onControl: (control: AgentControl) => {
@@ -275,14 +274,14 @@ export class TurnRunner {
       if (abort.signal.aborted) delete failed.error;
       else {
         failed.error = e instanceof Error ? e.message : String(e);
-        if (e instanceof ClaudeSignedOutError) {
-          failed.signIn = "claude";
-          // The running CLI keeps the rejected login; the next turn starts one
-          // that reads the new sign-in, resuming the same conversation.
+        if (isAgentError(e, "signedOut")) {
+          failed.signIn = e.provider;
+          // The running agent keeps the rejected login; the next turn starts
+          // one that reads the new sign-in, resuming the same conversation.
           await agentRuntime(provider).closeSession(sessionKey);
         }
         // A handoff note, side question or catch-up isn't the answer to carry on.
-        if (e instanceof UsageLimitError && rules.plansResume) limit = e;
+        if (isAgentError(e, "usageLimit") && rules.plansResume) limit = e;
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
         if (fork) {

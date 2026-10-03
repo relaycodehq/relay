@@ -7,8 +7,7 @@ import {
   answeredFindings,
   reportedFindings,
 } from "../../../../shared/deep-review";
-import { ClaudeSignedOutError } from "../claude-sign-in";
-import { resetMs, UsageLimitError } from "../../usage-limit";
+import { ClaudeFailureWatch } from "../claude-failure";
 import type { ClaudeRunOptions } from "./config";
 import { answerLimitError } from "../../turn-kit";
 import { ContextMeter } from "./context";
@@ -41,14 +40,7 @@ export class ClaudeTurnReader {
   private commentary = new Set<string>();
   // Findings `/code-review` reported to its tool rather than in its answer.
   private reported?: string;
-  // The CLI can end a turn it couldn't authenticate as a plain error result.
-  private signedOut = false;
-  // A request the plan's limit refused.
-  private limited = false;
-  // The plan's limit reported spent, lifting at `resetsAt` (seconds) if known.
-  // Extra usage can still carry the request, so this alone fails nothing, and
-  // while it does every turn sees this, whatever else made one fail.
-  private rejected?: { resetsAt?: number; overage: boolean };
+  private failures = new ClaudeFailureWatch();
   // After a compact boundary, the next synthetic user message is the summary.
   private compacted?: string;
   private rows: ToolRows;
@@ -99,17 +91,7 @@ export class ClaudeTurnReader {
           ? content
           : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
     }
-    if (message.type === "rate_limit_event") {
-      const info = message.rate_limit_info;
-      if (info.status === "rejected")
-        this.rejected = {
-          resetsAt: info.resetsAt,
-          overage:
-            !!(info.isUsingOverage || info.overageInUse) ||
-            info.overageStatus === "allowed" ||
-            info.overageStatus === "allowed_warning",
-        };
-    }
+    this.failures.see(message);
     if (message.type === "assistant") this.said(message);
     if (message.type === "user" && Array.isArray(message.message.content))
       this.rows.results(message.message.content, message.parent_tool_use_id);
@@ -182,12 +164,6 @@ export class ClaudeTurnReader {
 
   private said(message: SDKAssistantMessage) {
     const parent = message.parent_tool_use_id;
-    if (message.error === "authentication_failed") this.signedOut = true;
-    if (
-      (message.error === "rate_limit" || message.error === "billing_error") &&
-      !parent
-    )
-      this.limited = true;
     if (!parent) {
       // The newest entry of the main conversation is where a fork continues.
       this.options.session?.onPoint?.(message.uuid);
@@ -230,21 +206,9 @@ export class ClaudeTurnReader {
       return "more";
     this.steerable = false;
     const failed = message.is_error || message.subtype !== "success";
-    // A refused request can still end in a "successful" result whose answer
-    // is the limit notice, so the refusal decides. With extra usage carrying
-    // turns the plan is rejected throughout, so a failure says nothing of it.
-    const refused =
-      this.limited || (failed && this.rejected?.overage === false);
-    if (!this.signedOut && refused)
-      throw new UsageLimitError(
-        "claude",
-        "Claude hit its usage limit.",
-        resetMs(this.rejected?.resetsAt),
-      );
-    if (failed)
-      throw this.signedOut
-        ? new ClaudeSignedOutError()
-        : new Error("Claude could not complete this turn.");
+    const stopped = this.failures.failure(failed);
+    if (stopped) throw stopped;
+    if (failed) throw new Error("Claude could not complete this turn.");
     this.meter.finished(message.modelUsage);
     if (this.options.compact) return { answer: this.compacted ?? "" };
     const plan = this.session.plan;

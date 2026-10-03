@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { latestReset, resetMs, UsageLimitError } from "../usage-limit";
+import { signedOutError, usageLimitError } from "../errors";
+import { latestReset, resetMs } from "../usage-limit";
 
 const windowSchema = z
   .object({ usedPercent: z.number(), resetsAt: z.number().nullish() })
@@ -33,11 +34,14 @@ export function codexFailure(
 ) {
   const parsed = turnErrorSchema.safeParse(error);
   const message = (parsed.success && parsed.data.message) || undefined;
-  return parsed.success && parsed.data.codexErrorInfo === "usageLimitExceeded"
-    ? new UsageLimitError(
-        "codex",
-        message ?? "Codex hit its usage limit.",
-        spentUntil,
-      )
-    : new Error(message ?? fallback);
+  const info = parsed.success ? parsed.data.codexErrorInfo : undefined;
+  if (info === "usageLimitExceeded")
+    return usageLimitError(
+      "codex",
+      message ?? "Codex hit its usage limit.",
+      spentUntil,
+    );
+  // Codex names a rejected login itself; its own words say where, not what to do.
+  if (info === "unauthorized") return signedOutError("codex");
+  return new Error(message ?? fallback);
 }

@@ -610,37 +610,50 @@ if (args.includes("--permission-prompt-tool")) {
       // The plan runs out mid-turn: Codex says when the window lifts, in
       // seconds, then fails the turn. Only the request itself, not history
       // a later prompt repeats.
-      if (said.split("\n")[0].includes("fixture usage limit")) {
+      const asked = said.split("\n")[0];
+      const failTurn = (error, before) =>
         setTimeout(() => {
-          send({
-            method: "account/rateLimits/updated",
-            params: {
-              rateLimits: {
-                primary: {
-                  usedPercent: 100,
-                  windowDurationMins: 300,
-                  resetsAt: Math.floor(Date.now() / 1000) + 600,
-                },
-                secondary: null,
-              },
-            },
-          });
+          if (before) send(before);
           send({
             method: "turn/completed",
             params: {
               threadId: "fixture-thread",
-              turn: {
-                id: "fixture-turn",
-                status: "failed",
-                error: {
-                  message: "You've hit your usage limit.",
-                  codexErrorInfo: "usageLimitExceeded",
-                  additionalDetails: null,
-                },
-              },
+              turn: { id: "fixture-turn", status: "failed", error },
             },
           });
         }, turnMs);
+      if (asked.includes("fixture usage limit")) {
+        failTurn(
+          {
+            message: "You've hit your usage limit.",
+            codexErrorInfo: "usageLimitExceeded",
+            additionalDetails: null,
+          },
+          asked.includes("fixture usage limit without reset")
+            ? undefined
+            : {
+                method: "account/rateLimits/updated",
+                params: {
+                  rateLimits: {
+                    primary: {
+                      usedPercent: 100,
+                      windowDurationMins: 300,
+                      resetsAt: Math.floor(Date.now() / 1000) + 600,
+                    },
+                    secondary: null,
+                  },
+                },
+              },
+        );
+        return;
+      }
+      // Codex's login expired or was revoked.
+      if (asked.includes("fixture codex signed out")) {
+        failTurn({
+          message: "Your access token could not be refreshed.",
+          codexErrorInfo: "unauthorized",
+          additionalDetails: null,
+        });
         return;
       }
       const echo = said.indexOf("fixture echo:");

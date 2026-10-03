@@ -1,13 +1,5 @@
 import { findExecutable } from "../../platform/executables";
 
-/** Claude rejected the account's login: it expired, or was revoked elsewhere. */
-export class ClaudeSignedOutError extends Error {
-  constructor() {
-    super("Claude is signed out. Sign in again, then resume the answer.");
-    this.name = "ClaudeSignedOutError";
-  }
-}
-
 /**
  * The line that signs the same `claude` Relay runs back in. Typed into the
  * thread's shell for the user to run: the login stays Anthropic's own flow

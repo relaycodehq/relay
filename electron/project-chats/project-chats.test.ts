@@ -1679,6 +1679,39 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
 }, 30000);
 
+it("fails a turn whose agent is signed out with that agent's sign-in offered, and plans no resume", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture codex signed out"));
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
+    },
+    { timeout: 8000 },
+  );
+  const failed = (await chats.get(chat.id)).messages.at(-1)!;
+  expect(failed).toMatchObject({
+    signIn: "codex",
+    error: "Codex is signed out. Sign in again, then resume the answer.",
+  });
+  expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+});
+
+it("plans no resume for a usage limit that says nothing of when it lifts", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture usage limit without reset"));
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("failed");
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 8000 },
+  );
+  const failed = (await chats.get(chat.id)).messages.at(-1)!;
+  expect(failed).toMatchObject({ error: "You've hit your usage limit." });
+  expect(failed.signIn).toBeUndefined();
+  expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+}, 20000);
+
 it("drops the planned resume when the thread moves on, and resumes nothing it no longer fits", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit"));
