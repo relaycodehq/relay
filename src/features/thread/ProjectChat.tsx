@@ -58,6 +58,7 @@ import {
   type ScopeChoice,
 } from "./ThreadScope";
 import { ErrorBox } from "../../ui/ui";
+import { RunCommand } from "../../ui/CodeBlock";
 import { WorkItemCards } from "../plugins/WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
 import "./thread.css";
@@ -195,6 +196,8 @@ export function ProjectChat({
     ...opens,
   });
   const { openChanges, openFile } = actions;
+  // Commands in answers go to the thread's own terminal, so a draft has none.
+  const runCommand = chat ? actions.runInTerminal : null;
   // A first message scheduled with Send later still shows, to send or take back.
   const isEmpty =
     !messages.length &&
@@ -266,17 +269,21 @@ export function ProjectChat({
         onBack={root ? () => setRootId(null) : undefined}
       />
       {!isEmpty && (
-        <ThreadMessages
-          handle={handle}
-          projectPath={project.path}
-          thread={thread}
-          view={view}
-          councils={councils}
-          actions={actions}
-          queue={queue}
-          worktree={worktree}
-          onResume={() => void resume(() => composer.current?.agentSettings())}
-        />
+        <RunCommand.Provider value={runCommand}>
+          <ThreadMessages
+            handle={handle}
+            projectPath={project.path}
+            thread={thread}
+            view={view}
+            councils={councils}
+            actions={actions}
+            queue={queue}
+            worktree={worktree}
+            onResume={() =>
+              void resume(() => composer.current?.agentSettings())
+            }
+          />
+        </RunCommand.Provider>
       )}
       <SelectionQuote
         container={scroll}
@@ -370,16 +377,18 @@ export function ProjectChat({
         />
       )}
       {chat && agentView && (
-        <SubagentThread
-          chatId={chat.id}
-          runs={background.agents}
-          openId={agentView}
-          projectRoot={folder}
-          onSelect={setAgentView}
-          onClose={() => setAgentView(null)}
-          onOpenFile={openFile}
-          onChanges={openChanges}
-        />
+        <RunCommand.Provider value={runCommand}>
+          <SubagentThread
+            chatId={chat.id}
+            runs={background.agents}
+            openId={agentView}
+            projectRoot={folder}
+            onSelect={setAgentView}
+            onClose={() => setAgentView(null)}
+            onOpenFile={openFile}
+            onChanges={openChanges}
+          />
+        </RunCommand.Provider>
       )}
     </section>
   );

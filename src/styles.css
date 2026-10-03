@@ -1005,7 +1005,8 @@ small {
   margin-top: -30px;
 }
 .markdown-quote-copy,
-.markdown-code-copy {
+.markdown-code-copy,
+.inline-command-run {
   display: grid;
   place-items: center;
   width: 24px;
@@ -1030,12 +1031,40 @@ small {
 .markdown-quote:hover > .markdown-quote-copy,
 .markdown-quote-copy:focus-visible,
 .markdown-code:hover .markdown-code-copy,
-.markdown-code-copy:focus-visible {
+.markdown-code-copy:focus-visible,
+.inline-command:hover > .inline-command-run,
+.inline-command-run:focus-visible {
   opacity: 1;
 }
 .markdown-quote-copy:hover,
-.markdown-code-copy:hover {
+.markdown-code-copy:hover,
+.inline-command-run:hover {
   color: var(--text);
+}
+/* ▶ over the end of inline code that is a command; it shows on hover without
+   moving the text around it, and above the line so it hides none of the
+   words being read. */
+.inline-command {
+  position: relative;
+}
+.inline-command-run {
+  position: absolute;
+  right: -4px;
+  bottom: calc(100% + 2px);
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+/* Bridges the gap to the code, so moving up to it keeps it shown. */
+.inline-command-run::before {
+  content: "";
+  position: absolute;
+  inset: -2px -2px -6px -2px;
+}
+.inline-command:hover > .inline-command-run,
+.inline-command-run:focus-visible {
+  pointer-events: auto;
 }
 .markdown ul,
 .markdown ol {

@@ -1,13 +1,19 @@
 import {
+  createContext,
   memo,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import type { ThemedToken } from "@pierre/diffs";
-import { Check, Copy } from "lucide-react";
+import { Check, ClipboardCheck, Copy, Play } from "lucide-react";
+import { api } from "../lib/api";
+import { blockCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 
 // Tokenizing runs on the main thread; past this a block stays plain.
@@ -58,13 +64,85 @@ export function tokenStyle(token: ThemedToken): CSSProperties | undefined {
   };
 }
 
+/**
+ * Types a command into the thread's terminal for the user to run; false when
+ * it couldn't. Only a thread on the desktop offers it.
+ */
+export const RunCommand = createContext<
+  ((command: string) => Promise<boolean>) | null
+>(null);
+
+/** ▶ beside a command: types it at the terminal's prompt, never presses Enter. */
+function RunCommandButton({
+  command,
+  className,
+}: {
+  command: string;
+  className: string;
+}) {
+  const run = useContext(RunCommand);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  if (!run) return null;
+  const label = copied
+    ? "The terminal couldn't take it, so it's copied instead"
+    : command.includes("\n")
+      ? "Paste into terminal"
+      : "Type in terminal";
+  return (
+    <button
+      type="button"
+      className={className}
+      title={label}
+      aria-label={label}
+      onClick={() =>
+        void run(command).then((typed) => {
+          // A busy shell, or one that would run each line on its own.
+          if (!typed)
+            void api.writeClipboard(command).then(
+              () => setCopied(true),
+              () => {},
+            );
+        })
+      }
+    >
+      {copied ? <ClipboardCheck size={13} /> : <Play size={12} />}
+    </button>
+  );
+}
+
+/** Inline code that is a command, with ▶ on hover in a thread that has a terminal. */
+export function InlineCommand({
+  command,
+  children,
+}: {
+  command: string;
+  children: ReactNode;
+}) {
+  const run = useContext(RunCommand);
+  if (!run) return <code>{children}</code>;
+  return (
+    <span className="inline-command">
+      <code>{children}</code>
+      <RunCommandButton command={command} className="inline-command-run" />
+    </span>
+  );
+}
+
 /** A fenced code block, coloured with the active syntax theme when its language is known. */
 export const CodeBlock = memo(function CodeBlock({
   code,
   lang,
+  closed = true,
 }: {
   code: string;
   lang?: string;
+  /** False while the fence is still streaming in: nothing is offered for half a block. */
+  closed?: boolean;
 }) {
   const theme = useSyncExternalStore(
     subscribeSyntaxTheme,
@@ -74,6 +152,10 @@ export const CodeBlock = memo(function CodeBlock({
   const [highlighted, setHighlighted] = useState<Highlighted | null>(null);
   const lastRun = useRef(0);
   const [copied, copy] = useCopy();
+  const command = useMemo(
+    () => (closed ? blockCommand(code, lang) : null),
+    [code, lang, closed],
+  );
   const enabled = !!lang && !!theme && code.length <= MAX_HIGHLIGHT_LENGTH;
   useEffect(() => {
     if (!enabled || !lang || !theme) return;
@@ -108,11 +190,14 @@ export const CodeBlock = memo(function CodeBlock({
     code.startsWith(highlighted.code)
       ? highlighted
       : null;
-  // The button sits outside <pre> so it stays put when long lines scroll,
-  // and sticks to the top of a block taller than the thread.
+  // The buttons sit outside <pre> so they stay put when long lines scroll,
+  // and stick to the top of a block taller than the thread.
   return (
     <div className="markdown-code">
       <div className="markdown-code-tools">
+        {command && (
+          <RunCommandButton command={command} className="markdown-code-copy" />
+        )}
         <button
           type="button"
           className="markdown-code-copy"

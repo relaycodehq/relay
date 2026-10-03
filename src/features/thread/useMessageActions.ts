@@ -13,7 +13,7 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { forkThreadSettings } from "../agents/composer-settings";
-import { prefillSignIn } from "../terminal/thread-terminals";
+import { prefillCommand, prefillSignIn } from "../terminal/thread-terminals";
 import { signInCursor } from "../updates/agent-updates";
 import { signInOffer } from "./sign-in-offer";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
@@ -58,6 +58,12 @@ export function useMessageActions({
       return true;
     },
     [projectId, chatId],
+  );
+  /** Types a command from an answer at the thread's terminal prompt; false when it couldn't. */
+  const runInTerminal = useStableCallback((command: string) =>
+    chatId
+      ? prefillCommand(projectId, chatId, command)
+      : Promise.resolve(false),
   );
   const openReply = useStableCallback((m: ChatMessage) =>
     onOpenReply(rootOf(messages, m).id),
@@ -117,6 +123,7 @@ export function useMessageActions({
   );
   return {
     signIn,
+    runInTerminal,
     openReply,
     forkThread,
     openChanges,

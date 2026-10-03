@@ -67,6 +67,10 @@ export function terminalHandlers(ctx: ApiContext) {
         return !!command && threadTerminals.prefill(key, command);
       },
     ),
+    prefillTerminal: takes(
+      [terminalKeySchema, z.string().min(1).max(16_384)],
+      (key, text) => threadTerminals.prefill(key, text),
+    ),
     resizeTerminal: takes(
       [
         terminalKeySchema,

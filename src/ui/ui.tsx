@@ -23,11 +23,13 @@ import Markdown, {
   type UrlTransform,
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Position } from "unist";
 import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
 import { api } from "../lib/api";
 import { looksLikeColor } from "../lib/color-value";
+import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
-import { CodeBlock } from "./CodeBlock";
+import { CodeBlock, InlineCommand } from "./CodeBlock";
 import { ColorCode } from "./ColorCode";
 import {
   projectFileLink,
@@ -194,6 +196,36 @@ function markdownCodeLanguage(node: unknown): string | undefined {
     .map(String)
     .find((name) => name.startsWith("language-"));
   return match?.slice("language-".length).toLowerCase() || undefined;
+}
+/**
+ * Whether a fenced block in `source` has its closing fence yet; until it
+ * does, the answer is still streaming it in. An indented block has none.
+ */
+export function fenceClosed(source: string, position?: Position): boolean {
+  const start = position?.start.offset,
+    end = position?.end.offset;
+  if (start === undefined || end === undefined) return true;
+  // Inside a quote every line carries its `>`.
+  const lines = source
+    .slice(start, end)
+    .split("\n")
+    .map((line) => line.replace(/^[\s>]*/, "").trimEnd());
+  const opening = /^(`{3,}|~{3,})/.exec(lines[0] ?? "")?.[1];
+  if (!opening) return true;
+  const closing = new RegExp(`^${opening[0]}{${opening.length},}$`);
+  return lines.length > 1 && closing.test(lines[lines.length - 1]!);
+}
+/** What the block being rendered was parsed from, for its fences to check. */
+const MarkdownSource = createContext("");
+function MarkdownFence({ node }: { node?: { position?: Position } }) {
+  const source = useContext(MarkdownSource);
+  return (
+    <CodeBlock
+      code={markdownNodeText(node).replace(/\n$/, "")}
+      lang={markdownCodeLanguage(node)}
+      closed={fenceClosed(source, node?.position)}
+    />
+  );
 }
 const MIN_TABLE_COLUMN_WIDTH = 60;
 // Columns size themselves until the first drag; after that the table switches to
@@ -415,13 +447,15 @@ const MarkdownBlock = memo(function MarkdownBlock({
     [],
   );
   return (
-    <Markdown
-      remarkPlugins={remarkPlugins}
-      components={components}
-      urlTransform={urlTransform}
-    >
-      {text}
-    </Markdown>
+    <MarkdownSource.Provider value={text}>
+      <Markdown
+        remarkPlugins={remarkPlugins}
+        components={components}
+        urlTransform={urlTransform}
+      >
+        {text}
+      </Markdown>
+    </MarkdownSource.Provider>
   );
 });
 export const RichText = memo(function RichText({
@@ -458,12 +492,7 @@ export const RichText = memo(function RichText({
           />
         </th>
       ),
-      pre: ({ node }) => (
-        <CodeBlock
-          code={markdownNodeText(node).replace(/\n$/, "")}
-          lang={markdownCodeLanguage(node)}
-        />
-      ),
+      pre: ({ node }) => <MarkdownFence node={node} />,
       a: ({ href, children }) => {
         const target =
           projectRoot && linksFiles && href
@@ -498,11 +527,14 @@ export const RichText = memo(function RichText({
           !className && projectRoot && linksFiles && !value.includes("\n")
             ? projectFileLink(value, projectRoot, true)
             : null;
+        const command = className ? null : inlineCommand(value);
         return target ? (
           <FileLinkChip
             target={target}
             onOpen={(target) => openFile.current?.(target)}
           />
+        ) : command ? (
+          <InlineCommand command={command}>{children}</InlineCommand>
         ) : (
           <code className={className}>{children}</code>
         );

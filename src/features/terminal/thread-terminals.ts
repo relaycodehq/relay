@@ -245,18 +245,41 @@ export function terminalFor(projectId: string, chatId: string | null) {
  * Opens the thread's terminal with the agent's sign-in command typed at the
  * prompt, for the user to run. False when a command holds the shell.
  */
-export async function prefillSignIn(
+export function prefillSignIn(
   projectId: string,
   chatId: string,
   provider: AgentProvider,
+) {
+  return typeAtPrompt(projectId, chatId, (key) =>
+    api.prefillSignIn(key, provider),
+  );
+}
+
+/**
+ * Opens the thread's terminal with `command` typed at the prompt, for the
+ * user to look over and run. False when a command holds the shell, or the
+ * shell can't take a command of several lines without running each.
+ */
+export function prefillCommand(
+  projectId: string,
+  chatId: string,
+  command: string,
+) {
+  return typeAtPrompt(projectId, chatId, (key) =>
+    api.prefillTerminal(key, command),
+  );
+}
+
+async function typeAtPrompt(
+  projectId: string,
+  chatId: string,
+  type: (key: string) => Promise<boolean>,
 ) {
   const terminal = terminalFor(projectId, chatId);
   terminal.focusOnShow = true;
   setTerminalOpen(terminal.key, true);
   if (!(await terminal.running())) return false;
-  const typed = await api
-    .prefillSignIn(terminal.key, provider)
-    .catch(() => false);
+  const typed = await type(terminal.key).catch(() => false);
   terminal.term.focus();
   return typed;
 }

@@ -30,6 +30,10 @@ interface Session {
   /** The shell's own name, to tell its prompt from a command running in it. */
   shell: string;
   lastOutput: number;
+  /** The shell asked for pasted text to come wrapped, so newlines in it don't run. */
+  bracketedPaste: boolean;
+  /** The end of the last output, in case the mode switch was split across two. */
+  outputTail: string;
 }
 
 function shell(): [string, string[]] {
@@ -116,6 +120,8 @@ class ThreadTerminals {
       paused: false,
       shell: basename(file).toLowerCase(),
       lastOutput: Date.now(),
+      bracketedPaste: false,
+      outputTail: "",
     };
     this.sessions.set(key, created);
     projectTasks.trackTerminal(proc.pid, chatOf(key));
@@ -137,15 +143,22 @@ class ThreadTerminals {
 
   /**
    * Types `text` at the shell's prompt without running it. False when a
-   * command holds the shell, which would read the text instead.
+   * command holds the shell, which would read the text instead, or when the
+   * text has several lines and the shell can't take them as one paste: each
+   * newline would run the line before it.
    */
   async prefill(key: string, text: string) {
     const session = this.sessions.get(key);
     if (!session) return false;
     // A shell that just started may still be printing its prompt; typing
-    // before it's ready can land ahead of it. Wait for it to go quiet.
+    // before it's ready lands ahead of it. Wait for it to go quiet, and for
+    // zsh, whose startup can pause longer than that, until its line editor
+    // has switched bracketed paste on, which it does at every prompt.
     const deadline = Date.now() + 5000;
-    while (Date.now() - session.lastOutput < 300 && Date.now() < deadline)
+    const ready = () =>
+      Date.now() - session.lastOutput >= 300 &&
+      (session.shell !== "zsh" || session.bracketedPaste);
+    while (!ready() && Date.now() < deadline)
       await new Promise((resolve) => setTimeout(resolve, 100));
     if (this.sessions.get(key) !== session || session.exitCode !== undefined)
       return false;
@@ -157,8 +170,17 @@ class ThreadTerminals {
         session.shell
     )
       return false;
+    // Nothing in it may act as a key or end the paste early.
+    const typed = text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
+    if (!typed.trim()) return false;
+    if (typed.includes("\n") && !session.bracketedPaste) return false;
+    // A paste the way a terminal sends one: Return for newlines, and wrapped
+    // so the shell reads it as text rather than keys to act on.
+    const input = session.bracketedPaste
+      ? `\x1b[200~${typed.replace(/\n/g, "\r")}\x1b[201~`
+      : typed.replace(/\t/g, " ");
     // Ctrl+U first clears whatever was half-typed at the prompt.
-    session.pty.write(process.platform === "win32" ? text : `\x15${text}`);
+    session.pty.write(process.platform === "win32" ? input : `\x15${input}`);
     return true;
   }
 
@@ -218,6 +240,11 @@ class ThreadTerminals {
 
   private output(session: Session, data: string) {
     session.lastOutput = Date.now();
+    const seen = session.outputTail + data;
+    const on = seen.lastIndexOf("\x1b[?2004h"),
+      off = seen.lastIndexOf("\x1b[?2004l");
+    if (on !== off) session.bracketedPaste = on > off;
+    session.outputTail = seen.slice(-7);
     session.backlog.push(data);
     session.backlogSize += data.length;
     while (session.backlogSize > backlogLimit && session.backlog.length > 1) {

@@ -29,6 +29,11 @@ export interface TerminalApi {
    * command holds the shell, or the agent signs in through Relay.
    */
   prefillSignIn(key: string, provider: AgentProvider): Promise<boolean>;
+  /**
+   * Types a command at the shell's prompt for the user to run; false when a
+   * command holds the shell, or the shell can't take several lines as one.
+   */
+  prefillTerminal(key: string, text: string): Promise<boolean>;
   resizeTerminal(key: string, cols: number, rows: number): Promise<void>;
   ackTerminal(key: string, bytes: number): Promise<void>;
   /** Hands the draft's shell to the thread its first message started. */

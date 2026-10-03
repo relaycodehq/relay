@@ -73,6 +73,7 @@ const methods = [
   "openTerminal",
   "writeTerminal",
   "prefillSignIn",
+  "prefillTerminal",
   "resizeTerminal",
   "ackTerminal",
   "adoptTerminal",
