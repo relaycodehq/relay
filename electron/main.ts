@@ -1,4 +1,4 @@
-import { app, dialog, net } from "electron";
+import { app, dialog, net, powerMonitor } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { roomProtocol } from "../shared/rooms";
@@ -15,6 +15,7 @@ import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
 import { Quit } from "./app/quit";
+import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
 import { BlameService } from "./git/blame";
 import { Ci } from "./ci";
@@ -370,6 +371,7 @@ app
     // Agent sessions that kept running through a restart come back before the window does.
     await chats.reattach();
     chats.armWakeups();
+    rearmOnWake(powerMonitor, () => chats.armWakeups());
     updater.start();
     // Tests' stand-in agents only answer what a test expects of them.
     if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
