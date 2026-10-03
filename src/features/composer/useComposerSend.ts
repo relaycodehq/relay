@@ -3,7 +3,7 @@ import type { AgentProvider } from "../../../shared/agents";
 import { relayCommand } from "../../../shared/commands";
 import {
   buildSend,
-  implementPlan,
+  planGoAhead,
   type ComposedSend,
 } from "../../../shared/compose-send";
 import { draftRecipient, type Recipient } from "../../../shared/recipient";
@@ -161,15 +161,14 @@ export function useComposerSend({
       if (!runs.codex || sending.current) return;
       sending.current = true;
       try {
-        const accepted = await onSend(
-          buildSend(
-            { ...runs.sendSettings(planner)!, interactionMode: "default" },
-            implementPlan(planner),
-          ),
+        const { send, nextSettings } = planGoAhead(
+          runs.sendSettings(planner)!,
+          planner,
         );
+        const accepted = await onSend(send);
         if (accepted) {
-          state.setProvider(planner);
-          state.setInteractionMode("default");
+          state.setProvider(nextSettings.to);
+          state.setInteractionMode(nextSettings.interactionMode);
           state.setUltraplan(false);
         }
       } finally {

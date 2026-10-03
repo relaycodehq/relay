@@ -70,6 +70,8 @@ export type CommandResult = boolean | string;
 export interface ComposerHandle {
   /** Puts a queued message's text back to edit, after anything already typed. */
   restore(text: string): void;
+  /** `settings` on agent `to`, with the model this composer kept for it. */
+  settingsOn(to: AgentProvider): RemoteSettings;
 }
 
 /** The desktop's composer on a phone: the message, then agent, model, mode and Plan under it. */
@@ -115,6 +117,7 @@ export const Composer = forwardRef<
   const items = dismissed === text ? null : commandItems(text, provider, commands);
   useImperativeHandle(ref, () => ({
     restore: (restored) => setText((old) => [old.trim(), restored.trim()].filter(Boolean).join("\n\n")),
+    settingsOn: (to) => switched(settings, to),
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
   const picks = useRef<Partial<Record<AgentProvider, ModelChoice & { contextWindow?: "200k" }>>>({});

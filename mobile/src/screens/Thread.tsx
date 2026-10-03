@@ -39,7 +39,7 @@ import {
 import {
   composeSend,
   desktopNewThreadSettings,
-  implementPlan,
+  remotePlanGoAhead,
   withoutMention,
 } from "../../../shared/remote-compose";
 import { diffHref, workspaceId } from "../remote/links";
@@ -644,19 +644,18 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           <Button
             label="Implement plan"
             primary
-            onPress={() =>
-              void send({
-                body: implementPlan(planProvider),
-                settings: {
-                  ...settings,
-                  provider: planProvider,
-                  interactionMode: "default",
-                },
-                images: [],
-              }).catch((e) =>
-                Alert.alert("Couldn't send it", String(e?.message ?? e)),
-              )
-            }
+            onPress={() => {
+              // On the planner's own model, as the composer would switch to it.
+              const on = composer.current?.settingsOn(planProvider) ?? settings;
+              const { send: message, nextSettings } = remotePlanGoAhead(on, planProvider, randomUUID());
+              remote
+                .desktop("sendProjectChat", id, { ...message, ...(rootId ? { parentId: rootId } : {}) })
+                .then(() => {
+                  setSettings(nextSettings);
+                  return reload();
+                })
+                .catch((e) => Alert.alert("Couldn't send it", String(e?.message ?? e)));
+            }}
           />
         </View>
       )}

@@ -3,6 +3,7 @@ import {
   composeSend,
   desktopNewThreadSettings,
   newThreadSettings,
+  remotePlanGoAhead,
   withComposerChange,
   withRememberedModel,
   switchAgent,
@@ -158,4 +159,33 @@ it("puts /model on the model's agent, as the desktop does", () => {
       catalogs,
     ).choice,
   ).toEqual({ model: "gpt-7", fast: true, reasoningEffort: "high" });
+});
+
+it("goes ahead with a plan from the phone in Build, and leaves the composer there", () => {
+  const planning = {
+    ...switchAgent(newThreadSettings(defaultAISettings), "claude"),
+    interactionMode: "plan" as const,
+  };
+  const { send, nextSettings } = remotePlanGoAhead(planning, "claude", id);
+  expect(send).toMatchObject({ id, to: "claude", interactionMode: "default" });
+  expect(projectChatSendSchema.parse(send)).toEqual(send);
+  expect(nextSettings).toEqual({ ...planning, interactionMode: "default" });
+});
+
+it("hands a plan from a phone composer on Codex to Claude on Claude's Default, not Codex's model", () => {
+  const codex = {
+    ...newThreadSettings(defaultAISettings, "codex"),
+    choice: { model: "gpt-5.5", fast: true, reasoningEffort: "high" as const },
+    interactionMode: "plan" as const,
+  };
+  const { send, nextSettings } = remotePlanGoAhead(codex, "claude", id);
+  expect(send).toMatchObject({
+    to: "claude",
+    choice: { model: "", fast: false, reasoningEffort: "" },
+  });
+  expect(nextSettings).toMatchObject({
+    provider: "claude",
+    choice: { model: "", fast: false, reasoningEffort: "" },
+    interactionMode: "default",
+  });
 });

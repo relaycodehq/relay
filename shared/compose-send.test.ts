@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { buildSend, type SendSettings } from "./compose-send";
+import { buildSend, planGoAhead, type SendSettings } from "./compose-send";
 import { recipient } from "./recipient";
 
 const claude: SendSettings = {
@@ -53,4 +53,46 @@ it("sends a message that names another agent to it, on its Default model", () =>
     choice: { model: "", reasoningEffort: "", fast: false },
   });
   expect(sent).not.toHaveProperty("contextWindow");
+});
+
+it("goes ahead with a plan in Build, on the planner's own model and context window", () => {
+  const { send, nextSettings } = planGoAhead(
+    { ...claude, interactionMode: "plan" },
+    "claude",
+  );
+  expect(send).toMatchObject({
+    body: "@claude Implement the plan from your previous response.",
+    to: "claude",
+    interactionMode: "default",
+    choice: { model: "opus", reasoningEffort: "high", fast: false },
+    contextWindow: "200k",
+  });
+  expect(nextSettings).toEqual({
+    ...claude,
+    interactionMode: "default",
+  });
+});
+
+it("hands a plan to its planner on that agent's Default when the composer is on another", () => {
+  const codex: SendSettings = {
+    to: "codex",
+    choice: { model: "gpt-5.5", reasoningEffort: "high", fast: true },
+    runtimeMode: "approval-required",
+    interactionMode: "plan",
+  };
+  const { send, nextSettings } = planGoAhead(codex, "claude");
+  expect(send).toMatchObject({
+    to: "claude",
+    provider: "claude",
+    interactionMode: "default",
+    runtimeMode: "approval-required",
+    choice: { model: "", reasoningEffort: "", fast: false },
+  });
+  expect(send).not.toHaveProperty("contextWindow");
+  expect(nextSettings).toEqual({
+    to: "claude",
+    choice: { model: "", reasoningEffort: "", fast: false },
+    runtimeMode: "approval-required",
+    interactionMode: "default",
+  });
 });

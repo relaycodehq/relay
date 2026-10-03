@@ -1,5 +1,5 @@
 import { agentMentionPattern, type AgentProvider } from "./agents";
-import { buildSend } from "./compose-send";
+import { buildSend, planGoAhead } from "./compose-send";
 import {
   modelEfforts,
   type ComposerChange,
@@ -13,8 +13,6 @@ import type { NewThreadModels } from "./new-thread-models";
 
 export const withoutMention = (body: string) =>
   body.replace(agentMentionPattern, "");
-
-export { implementPlan } from "./compose-send";
 
 /**
  * A new thread's composer, as the desktop starts one: the default agent,
@@ -148,6 +146,24 @@ export function withComposerChange(
     case "fast":
       return { ...settings, choice: { ...choice, fast: change.fast } };
   }
+}
+
+/**
+ * The go-ahead for the plan `planner` proposed, as the phone sends it, and the
+ * settings its composer keeps afterwards: on that agent, in Build.
+ */
+export function remotePlanGoAhead(
+  settings: RemoteSettings,
+  planner: AgentProvider,
+  id: string,
+): { send: ProjectChatSend; nextSettings: RemoteSettings } {
+  const { provider, ...rest } = settings;
+  const { send, nextSettings } = planGoAhead(
+    { to: provider, ...rest },
+    planner,
+  );
+  const { to, ...next } = nextSettings;
+  return { send: { id, ...send }, nextSettings: { provider: to, ...next } };
 }
 
 export interface SendExtras {

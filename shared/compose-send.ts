@@ -87,3 +87,37 @@ export function buildSend(
 /** What a composer sends to carry out a proposed plan. */
 export const implementPlan = (provider: AgentProvider) =>
   `@${provider} Implement the plan from your previous response.`;
+
+/**
+ * The go-ahead for the plan `planner` proposed, and the settings a composer
+ * keeps afterwards: on that agent, in Build. A composer on another agent
+ * hands over to the planner on its Default model, since the model it holds
+ * belongs to the other one.
+ */
+export function planGoAhead(
+  settings: SendSettings,
+  planner: AgentProvider,
+): {
+  send: ComposedSend;
+  nextSettings: SendSettings & { to: AgentProvider };
+} {
+  const { contextWindow, ...rest } = settings;
+  const byDefault: ModelChoice = {
+    model: "",
+    reasoningEffort: "",
+    fast: false,
+  };
+  const onPlanner: Omit<SendSettings, "to"> =
+    settings.to === planner
+      ? { ...rest, ...(contextWindow ? { contextWindow } : {}) }
+      : { ...rest, choice: byDefault };
+  const nextSettings = {
+    ...onPlanner,
+    to: planner,
+    interactionMode: "default" as const,
+  };
+  return {
+    send: buildSend(nextSettings, implementPlan(planner)),
+    nextSettings,
+  };
+}
