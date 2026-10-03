@@ -461,11 +461,16 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     }
     options.onControl?.({
       steer: async (text, id, steerImages) => {
-        if (settled || signal.aborted)
-          throw new Error(
-            "This turn has finished. Send the queued message as a new turn.",
-          );
+        const refuseIfFinished = () => {
+          if (settled || signal.aborted)
+            throw new Error(
+              "This turn has finished. Send the queued message as a new turn.",
+            );
+        };
+        refuseIfFinished();
         const attached = await imageParts(steerImages);
+        // The turn may have ended while the screenshots were read.
+        refuseIfFinished();
         steers.push({ id, after: Date.now() });
         await call("POST", `/session/${sessionID}/prompt_async`, {
           agent,

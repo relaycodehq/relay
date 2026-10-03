@@ -1,5 +1,5 @@
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { findExecutable } from "../../platform/executables";
@@ -14,6 +14,21 @@ vi.mock("../../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../../platform/executables")>()),
   findExecutable: vi.fn(),
 }));
+const held = vi.hoisted(() => ({
+  path: "",
+  release: undefined as Promise<void> | undefined,
+}));
+// Holds back the read of one file, so a test can end a turn while it is read.
+vi.mock("node:fs/promises", async (actual) => {
+  const fs = await actual<typeof import("node:fs/promises")>();
+  return {
+    ...fs,
+    readFile: (async (path: string, ...rest: unknown[]) => {
+      if (path === held.path) await held.release;
+      return (fs.readFile as (...a: unknown[]) => unknown)(path, ...rest);
+    }) as typeof fs.readFile,
+  };
+});
 
 let root: string;
 beforeEach(async () => {
@@ -152,6 +167,40 @@ it("resumes its session, and a fork starts after the answer it was cut at", asyn
   // The first message of the resumed turn is where the fork cuts.
   expect(cut.body.messageID).toMatch(/^msg_/);
   expect(cut.body.messageID).not.toBe(first.seen.point);
+});
+
+it("turns a steer away when the turn ends while its screenshot is read", async () => {
+  const shot = join(root, "shot.png");
+  await writeFile(shot, "png");
+  held.path = shot;
+  let open!: () => void;
+  held.release = new Promise((resolve) => (open = resolve));
+  let steering: Promise<string> | undefined;
+  const { run } = turn("Write notes.md", {
+    onControl: (control) => {
+      steering = control
+        .steer("And this", "msg-2", [{ path: shot, mimeType: "image/png" }])
+        .then(
+          () => "sent",
+          (e: Error) => e.message,
+        );
+    },
+  });
+  try {
+    await run;
+    open();
+    // Turned away, it stays queued and goes out as a turn of its own.
+    expect(await steering).toBe(
+      "This turn has finished. Send the queued message as a new turn.",
+    );
+    const prompts = (await captured()).filter((c) =>
+      c.path.endsWith("/prompt_async"),
+    );
+    expect(prompts).toHaveLength(1);
+  } finally {
+    open();
+    held.path = "";
+  }
 });
 
 it("stops when aborted", async () => {
