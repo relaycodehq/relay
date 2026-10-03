@@ -82,11 +82,17 @@ export class GitHub {
   private token?: Promise<string | null>;
   /** Unchanged answers come back as 304s, which don't count against the rate limit. */
   private cache = new Map<string, { etag: string; data: unknown }>();
+  /** The token the cache was filled under; a private repo's answer must not outlive its login. */
+  private cacheToken: string | null = null;
   private failedJobs = new Map<string, string | undefined>();
   constructor(private fetchRequest: FetchRequest) {}
 
   private async get<T>(path: string): Promise<T> {
     const token = await (this.token ??= ghToken());
+    if (token !== this.cacheToken) {
+      this.cache.clear();
+      this.cacheToken = token;
+    }
     const cached = this.cache.get(path);
     const response = await this.fetchRequest(API + path, {
       headers: {
@@ -103,8 +109,13 @@ export class GitHub {
     if (response.status === 304 && cached) return cached.data as T;
     if (!response.ok) {
       await response.body?.cancel();
-      // Picks up a fresh `gh auth login` on the next poll.
-      if (response.status === 401) this.token = undefined;
+      // Picks up a fresh `gh auth login` on the next poll, including one made
+      // after a tokenless request hit a private repo or the anonymous limit.
+      if (
+        response.status === 401 ||
+        (!token && [403, 404, 429].includes(response.status))
+      )
+        this.token = undefined;
       throw new Error(
         response.status === 401
           ? "GitHub rejected the gh login. Run `gh auth login` again."
