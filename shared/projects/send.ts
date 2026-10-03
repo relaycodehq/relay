@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { interactionModeSchema, runtimeModeSchema } from "../agent-modes";
 import { agentProviderSchema } from "../agents";
+import { accountIdSchema } from "../agent-accounts";
 import { lineQuestionSchema } from "../questions";
 import { idSchema } from "../rooms";
 import { aiSettingsSchema } from "../settings";
@@ -28,6 +29,8 @@ export const projectChatSendSchema = z
     choice: aiSettingsSchema.shape.questions,
     /** Claude on a 200k window; left out, the CLI picks (1M on most models). */
     contextWindow: z.literal("200k").optional(),
+    /** The account a new thread's agent starts on; a thread keeps its own after. */
+    account: accountIdSchema.optional(),
     /**
      * The agent `choice` is for. A note still names one: desktops before
      * `recipientBridge` require it.

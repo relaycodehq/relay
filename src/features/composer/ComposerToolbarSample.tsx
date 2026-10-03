@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mic, Paperclip, Zap } from "lucide-react";
+import { ChevronDown, Mic, Paperclip, UserRound, Zap } from "lucide-react";
 import type { AgentProvider } from "../../../shared/agents";
 import { useAISettings } from "../agents/useAISettings";
 import { useCatalogs } from "../agents/useCatalogs";
@@ -8,7 +8,7 @@ import { ComposerSelect } from "../../ui/ComposerSelect";
 import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
 import { InteractionModeMenu, RuntimeModeSelect } from "./ComposerModeControls";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
-import { UsageDial } from "./UsageRing";
+import { UsageDial } from "../agents/UsageDial";
 import type { ToolbarControls } from "./ComposerToolbar";
 
 const noop = () => {};
@@ -89,6 +89,13 @@ export function useSampleControls(): ToolbarControls {
     ),
     mode: (
       <InteractionModeMenu interactionMode="default" onInteractionMode={noop} />
+    ),
+    account: (
+      <button type="button" className="composer-control">
+        <UserRound size={13} />
+        Work
+        <ChevronDown size={12} />
+      </button>
     ),
     attach: (
       <button type="button" className="composer-control">

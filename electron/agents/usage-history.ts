@@ -10,8 +10,8 @@ import {
   type UsageSample,
 } from "../../shared/usage-history";
 
-type Provider = ProviderUsage["provider"];
-type History = Partial<Record<Provider, UsageSample[]>>;
+/** By provider for its usual sign-in, `provider:account` for another account. */
+type History = Partial<Record<string, UsageSample[]>>;
 
 let path: string | null = null;
 let history: Promise<History> | null = null;
@@ -32,10 +32,11 @@ function load(): Promise<History> {
 /** Adds this reading to the record and returns the learned working hours. */
 export async function recordUsage(
   usage: ProviderUsage,
+  key: string = usage.provider,
 ): Promise<ActiveHours | null> {
   if (!path) return null;
   const all = await load();
-  const before = all[usage.provider] ?? [];
+  const before = all[key] ?? [];
   const find = (kind: "session" | "weekly") =>
     usage.windows.find((w) => w.kind === kind)?.usedPercent ?? null;
   const samples = usage.windows.length
@@ -46,7 +47,7 @@ export async function recordUsage(
       })
     : before;
   if (samples !== before) {
-    all[usage.provider] = samples;
+    all[key] = samples;
     const file = path;
     const text = JSON.stringify(all);
     writing = writing

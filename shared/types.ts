@@ -292,11 +292,50 @@ export interface Api
     provider: AgentProvider,
     model: import("./new-thread-models").NewThreadModel,
   ): Promise<void>;
-  /** `force` skips the cached reading, for an explicit refresh. */
+  /** `force` skips the cached reading, for an explicit refresh; `account` is the usual sign-in when left out. */
   providerUsage(
     provider: UsageProvider,
     force?: boolean,
+    account?: string,
   ): Promise<ProviderUsage>;
+  /** Claude Code and Codex accounts; see shared/agent-accounts. */
+  agentAccounts(): Promise<import("./agent-accounts").AgentAccountsState>;
+  /** Opens the CLI's browser sign-in for a new account; it's listed once that finishes. */
+  addAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    label: string,
+  ): Promise<void>;
+  signInAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+  ): Promise<void>;
+  cancelAgentAccountSignIn(): Promise<void>;
+  renameAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+    label: string,
+  ): Promise<void>;
+  removeAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+  ): Promise<void>;
+  moveAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+    by: -1 | 1,
+  ): Promise<void>;
+  /** The account new threads start on. */
+  useAgentAccount(
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+  ): Promise<void>;
+  setAccountAutoSwitch(on: boolean): Promise<void>;
+  /** Runs the thread's `provider` on another account from its next turn. */
+  setThreadAccount(
+    chatId: string,
+    provider: import("./agent-accounts").AccountProvider,
+    id: string,
+  ): Promise<import("./projects").ChatSummary>;
   /** Credit on the OpenRouter key OpenCode runs on; `force` skips the cache. */
   openRouterCredit(
     force?: boolean,
@@ -442,6 +481,9 @@ export interface Api
   signInCursor(): Promise<AgentVersions>;
   signOutCursor(): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
+  onAgentAccounts(
+    callback: (state: import("./agent-accounts").AgentAccountsState) => void,
+  ): () => void;
   /** Syncs native chrome and the dock icon with the in-app theme. */
   applyAppearance(appearance: {
     mode: "system" | "light" | "dark";

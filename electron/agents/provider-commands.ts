@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { memoByKey, memoWhileStamp } from "../util/memo";
 import { terminate } from "../platform/terminate";
+import { runAccount } from "./accounts";
 import {
   findExecutable,
   installStamp,
@@ -161,6 +162,8 @@ async function withAppServer<T>(
 ): Promise<T> {
   const child = spawnExecutable(await findExecutable("codex"), ["app-server"], {
     cwd,
+    // The account in use's models and settings.
+    env: (await runAccount("codex")).env,
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stderr.resume();

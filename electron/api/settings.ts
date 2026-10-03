@@ -10,6 +10,7 @@ import {
 } from "../../shared/agents";
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
+import { accountIdSchema } from "../../shared/agent-accounts";
 import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
@@ -132,8 +133,8 @@ export function settingsHandlers(ctx: ApiContext) {
       (provider, model) => saveNewThreadModel(store, provider, model),
     ),
     providerUsage: takes(
-      [usageProviderSchema, z.boolean().optional()],
-      (provider, force) => readProviderUsage(provider, force),
+      [usageProviderSchema, z.boolean().optional(), accountIdSchema.optional()],
+      (provider, force, account) => readProviderUsage(provider, force, account),
     ),
     openRouterCredit: takes([z.boolean().optional()], (force) =>
       readOpenRouterCredit(force),

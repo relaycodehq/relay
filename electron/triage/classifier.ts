@@ -5,6 +5,7 @@ import {
   type HelperProvider,
   type ModelChoice,
 } from "../../shared/settings";
+import { runAccount } from "../agents/accounts";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -184,9 +185,10 @@ async function classifyWithClaude(
   cwd: string,
   signal: AbortSignal,
 ): Promise<{ output: unknown; usage: TriageUsage }> {
-  const [{ query }, executable] = await Promise.all([
+  const [{ query }, executable, account] = await Promise.all([
     claudeSdk(),
     findExecutable("claude"),
+    runAccount("claude"),
   ]);
   const { model, effort } = claudeArgs(choice);
   const controller = new AbortController();
@@ -212,6 +214,7 @@ async function classifyWithClaude(
     options: {
       cwd,
       pathToClaudeCodeExecutable: executable,
+      env: account.env,
       abortController: controller,
       systemPrompt,
       tools: [],
@@ -404,7 +407,7 @@ export async function classifyChanges(
     const executable = await findExecutable("codex");
     // Use Codex's signed-in account. Do not pass unrelated application credentials to it.
     const env = Object.fromEntries(
-      Object.entries(process.env).filter(
+      Object.entries((await runAccount("codex")).env).filter(
         ([k]) => !/TOKEN|SECRET|PASSWORD|API_KEY|ELECTRON_RUN_AS_NODE/i.test(k),
       ),
     );

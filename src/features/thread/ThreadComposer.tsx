@@ -213,6 +213,8 @@ export function ThreadComposer({
             ? shown.at(-1)?.provider
             : undefined,
         ultraplan: !root && !chat?.shared && scope.kind !== "review",
+        chatId: chat?.id,
+        accounts: chat?.accounts,
       }}
       context={
         <>

@@ -1,4 +1,6 @@
 import { dirname, join } from "node:path";
+import type { AccountProvider } from "../../shared/agent-accounts";
+import { accountFor } from "../agents/accounts";
 import { randomUUID } from "node:crypto";
 import type { AgentResponse } from "../../shared/agent-modes";
 import {
@@ -344,6 +346,15 @@ export class ProjectChats {
     chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
     delete chat.markedUnread;
     await this.storage.save(chat);
+  }
+  /** Runs `provider` on another account here, from the thread's next turn. */
+  async setAccount(id: string, provider: AccountProvider, account: string) {
+    if (accountFor(provider, account) !== account)
+      throw new Error("That account is gone.");
+    const chat = await this.storage.load(id);
+    chat.accounts = { ...chat.accounts, [provider]: account };
+    await this.storage.save(chat);
+    return chatSummary(chat);
   }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);

@@ -1,0 +1,417 @@
+/* Preview layout */
+.acc-stage {
+  display: grid;
+  grid-template-columns: minmax(520px, 680px) minmax(420px, 560px);
+  gap: 28px;
+  align-items: start;
+  padding: 14px 24px 40px;
+  overflow: auto;
+}
+.acc-caption {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.acc-pane-thread {
+  position: sticky;
+  top: 0;
+}
+.preview-bar .preview-button {
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* Settings */
+.acc-settings {
+  display: grid !important;
+  gap: 12px;
+}
+.acc-settings .settings-card + .settings-card {
+  margin-top: 0;
+}
+.acc-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.acc-provider .provider-glyph {
+  width: 15px;
+  height: 15px;
+}
+.acc-provider b {
+  font-weight: 550;
+}
+.acc-provider-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.acc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 29px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.acc-row:last-child {
+  border-bottom: 0;
+}
+.acc-row[data-several] {
+  grid-template-columns: auto minmax(0, 1fr) 29px;
+  padding-left: 8px;
+}
+/* The whole line picks the account, not just its radio. */
+.acc-pick-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 10px 8px;
+  margin: 2px 0;
+  border-radius: 8px;
+}
+.acc-row[data-several] .acc-pick-main {
+  grid-template-columns: auto minmax(0, 1fr) 200px;
+  gap: 12px 14px;
+  cursor: pointer;
+}
+.acc-row[data-several]:not([data-in-use]) .acc-pick-main:hover {
+  background: var(--hover);
+}
+.acc-pick-radio {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.acc-row[data-in-use] {
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.acc-row[data-spent] .acc-name {
+  color: var(--muted);
+}
+.acc-in-use {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.acc-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.acc-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.acc-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.acc-quiet {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.acc-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-rename {
+  width: 160px;
+  padding: 2px 6px !important;
+  font-size: 13px !important;
+  border-radius: 5px !important;
+}
+.acc-more {
+  width: 26px;
+  height: 26px;
+}
+.acc-order {
+  display: grid;
+}
+.acc-order .icon-button {
+  width: 20px;
+  height: 16px;
+  border-radius: 4px;
+}
+.acc-order .icon-button:disabled {
+  opacity: 0.25;
+  background: transparent;
+  cursor: default;
+}
+.acc-card-note {
+  margin: 0;
+  padding: 8px 16px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.acc-danger {
+  color: var(--danger);
+}
+.acc-danger[data-disabled] {
+  opacity: 0.4;
+}
+.acc-menu {
+  min-width: 190px;
+}
+
+/* Adding an account */
+.acc-add-link {
+  gap: 5px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.acc-add-link:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.acc-adding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.acc-adding input {
+  width: 150px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+.acc-adding button {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.acc-adding b {
+  color: var(--text);
+  font-weight: 500;
+}
+.acc-adding code {
+  font-size: 11px;
+}
+.spin-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  border-top-color: transparent;
+  animation: spin 0.9s linear infinite;
+}
+
+/* Meters */
+.acc-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.acc-bar {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  --bar: var(--accent);
+}
+.acc-bar[data-pace="warn"] {
+  --bar: #e3a23a;
+}
+.acc-bar[data-pace="hot"],
+.acc-bar[data-pace="spent"] {
+  --bar: #ef6a5a;
+}
+.acc-bar-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.acc-bar-left {
+  color: var(--text);
+}
+.acc-bar[data-pace="spent"] .acc-bar-left {
+  color: var(--bar);
+}
+.acc-bar-track {
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  overflow: hidden;
+}
+.acc-bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar);
+}
+.acc-bar small {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Thread */
+.acc-thread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 18px 0 14px;
+}
+.acc-messages {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.acc-messages p {
+  margin: 0;
+}
+.acc-user {
+  justify-self: end;
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--selected);
+}
+.acc-system {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-composer {
+  margin: 0 12px;
+}
+.acc-input {
+  padding: 14px 16px 6px;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.acc-composer .composer-tools {
+  padding: 4px 8px 8px;
+}
+.acc-spacer {
+  flex: 1;
+}
+
+/* The composer's account control */
+.acc-picker-popup {
+  min-width: 250px;
+}
+.acc-picker-item {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+}
+.acc-picker-text {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+.acc-picker-text b {
+  font-weight: 500;
+  font-size: 12.5px;
+}
+.acc-picker-text small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.acc-picker-bars {
+  padding: 6px 10px 8px;
+}
+
+/* Model picker footer: accounts as tabs over the meters */
+.model-picker-popup.acc-model-popup {
+  height: auto;
+}
+.acc-model-popup .model-picker-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.acc-model-popup .model-picker-list {
+  height: 300px;
+}
+.acc-model-popup .model-picker-search input {
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+.acc-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+.acc-footer .usage-footer {
+  border-top: 0;
+  padding-top: 4px;
+}
+.acc-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+}
+.acc-tabs button {
+  gap: 5px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.acc-tabs button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.acc-tabs button[aria-checked="true"] {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 500;
+}
+.acc-tabs .usage-ring-dial {
+  width: 14px;
+  height: 14px;
+}
+.acc-tabs small {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The dial's colours live on the composer trigger; dials elsewhere need them too. */
+.acc-tabs,
+.acc-picker-popup {
+  --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  --usage-ring-session: var(--accent);
+}
+
+@media (max-width: 1180px) {
+  .acc-stage {
+    grid-template-columns: minmax(0, 680px);
+  }
+  .acc-pane-thread {
+    position: static;
+  }
+}
+.acc-caption-gap {
+  margin-top: 28px;
+}

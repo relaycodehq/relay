@@ -16,7 +16,9 @@ import {
 } from "../../shared/provider-usage";
 import { readClaudeUsage } from "./claude/project";
 import type { UsageProvider } from "../../shared/agents";
+import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { recordUsage } from "./usage-history";
+import { profileDir } from "./accounts/profiles";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -45,52 +47,59 @@ type Credential = {
   }) => Promise<void>;
 };
 
-const cache = new Map<UsageProvider, { at: number; value: ProviderUsage }>();
-const pending = new Map<UsageProvider, Promise<ProviderUsage>>();
+/** By `provider:account`. */
+const cache = new Map<string, { at: number; value: ProviderUsage }>();
+const pending = new Map<string, Promise<ProviderUsage>>();
 const allowedServices = new Set<string>();
 
 /** How to read each agent's usage, and how long a reading holds. */
 const readers: Record<
   UsageProvider,
-  { load: () => Promise<ProviderUsage>; ttl?: number }
+  { load: (account: string) => Promise<ProviderUsage>; ttl?: number }
 > = {
   claude: { load: loadClaude, ttl: CLAUDE_TTL },
   codex: { load: loadCodex },
 };
 
+/** The limits of one of the agent's accounts; its usual sign-in when left out. */
 export function readProviderUsage(
   provider: UsageProvider,
   force = false,
+  account = SYSTEM_ACCOUNT,
 ): Promise<ProviderUsage> {
-  const hit = cache.get(provider);
+  const key = `${provider}:${account}`;
+  const hit = cache.get(key);
   const ttl =
     readers[provider].ttl ??
     (hit?.value.windows.length ? SUCCESS_TTL : EMPTY_TTL);
   if (!force && hit && Date.now() - hit.at < ttl) {
     return Promise.resolve(hit.value);
   }
-  const existing = pending.get(provider);
+  const existing = pending.get(key);
   if (existing) return existing;
   const task = readers[provider]
-    .load()
+    .load(account)
     .catch((): ProviderUsage => ({
       provider,
       windows: [],
       message: "Couldn't read usage",
     }))
     .then(async (value) => {
-      const activeHours = await recordUsage(value).catch(() => null);
+      const activeHours = await recordUsage(
+        value,
+        account === SYSTEM_ACCOUNT ? provider : key,
+      ).catch(() => null);
       const parsed = providerUsageSchema.parse({ ...value, activeHours });
-      cache.set(provider, { at: Date.now(), value: parsed });
+      cache.set(key, { at: Date.now(), value: parsed });
       return parsed;
     })
-    .finally(() => pending.delete(provider));
-  pending.set(provider, task);
+    .finally(() => pending.delete(key));
+  pending.set(key, task);
   return task;
 }
 
-async function loadClaude(): Promise<ProviderUsage> {
-  const usage = await readClaudeUsage();
+async function loadClaude(account: string): Promise<ProviderUsage> {
+  const usage = await readClaudeUsage(account);
   if (!usage) {
     return { provider: "claude", windows: [], message: "Sign in with claude" };
   }
@@ -102,16 +111,21 @@ async function loadClaude(): Promise<ProviderUsage> {
   };
 }
 
-async function loadCodex(): Promise<ProviderUsage> {
+async function loadCodex(account: string): Promise<ProviderUsage> {
+  const system = account === SYSTEM_ACCOUNT;
+  // Another account's sign-in is only ever in its own folder.
+  const paths = system
+    ? codexAuthPaths()
+    : [join(profileDir("codex", account), "auth.json")];
   const files = (
-    await Promise.all(codexAuthPaths().map((path) => readCodexFile(path)))
+    await Promise.all(paths.map((path) => readCodexFile(path)))
   ).filter((item): item is Credential => item != null);
-  const keychain = await readCodexKeychain();
+  const keychain = system ? await readCodexKeychain() : null;
   const credentials = dedupe(
     [...files, keychain].filter((item): item is Credential => item != null),
   );
   if (!credentials.length) {
-    const apiKey = await codexHasApiKeyOnly();
+    const apiKey = await codexHasApiKeyOnly(paths);
     return {
       provider: "codex",
       windows: [],
@@ -245,8 +259,8 @@ async function readCodexKeychain() {
     : null;
 }
 
-async function codexHasApiKeyOnly() {
-  for (const path of codexAuthPaths()) {
+async function codexHasApiKeyOnly(paths: string[]) {
+  for (const path of paths) {
     const root = asRecord(parseJson((await readText(path)) ?? ""));
     const key = stringField(root, "OPENAI_API_KEY");
     const tokens = asRecord(root?.tokens);

@@ -62,6 +62,8 @@ interface State {
   agentPaths?: Partial<
     Record<import("../../shared/agents").AgentProvider, string>
   >;
+  /** Extra Claude Code and Codex sign-ins; see agents/accounts. */
+  agentAccounts?: import("../../shared/agent-accounts").StoredAccounts;
   /** Source control hosts turned off, and the `gh` linked in Settings. */
   sourceControl?: import("../../shared/source-control").SourceControlSettings;
   version: 1;

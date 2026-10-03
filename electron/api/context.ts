@@ -26,6 +26,7 @@ import type { RoomService } from "../rooms/service";
 import type { Store } from "../app/store";
 import type { TriageService } from "../triage/service";
 import type { Updater } from "../app/updater";
+import type { AgentAccounts } from "../agents/accounts";
 
 export interface Services {
   store: Store;
@@ -51,6 +52,7 @@ export interface Services {
   updater: Updater;
   dictation: Dictation;
   agentUpdates: AgentUpdates;
+  agentAccounts: AgentAccounts;
 }
 
 /** What a method's promise resolves to in the page. */

@@ -7,12 +7,14 @@ import type { Entry } from "../../agent-host/protocol";
 import { z } from "zod";
 import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { threadStartedSchema, type CodexThreadStarted } from "./codex-schemas";
+import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
 export const codexMetaSchema = z
   .object({
     provider: z.literal("codex"),
     started: threadStartedSchema.optional(),
+    account: z.string().optional(),
   })
   .loose();
 type CodexMeta = z.infer<typeof codexMetaSchema>;
@@ -23,6 +25,8 @@ class CodexConnection {
   readonly ready: Promise<CodexTransport>;
   readonly done: Promise<void>;
   started?: CodexThreadStarted;
+  /** The account its app server signed in as; see agents/accounts. */
+  account?: string;
   busy = false;
   closed = false;
   onNotification?: (method: string, params: unknown) => void;
@@ -87,6 +91,7 @@ class CodexConnection {
       this.child.hosted.keep({
         provider: "codex",
         started,
+        account: this.account,
       } satisfies CodexMeta);
   }
   /** Marks a turn in the host's log, so a restart knows one was running. */
@@ -118,34 +123,40 @@ const sessions = new HostedSessions<CodexConnection>({
   kind: "process",
   close: (connection) => connection.close(),
 });
-export function acquireCodexConnection(
+export async function acquireCodexConnection(
   key: string | undefined,
   executable: string,
   args: string[],
   cwd: string,
+  account: { id: string; env: Record<string, string> },
 ) {
+  // Another account needs an app server signed in as it; the thread resumes there.
+  const live = key ? sessions.get(key) : undefined;
+  if (live && !live.busy && (live.account ?? SYSTEM_ACCOUNT) !== account.id)
+    await sessions.close(key!);
   // A thread's session runs in the host; rooms and helper jobs end with their turn.
-  return sessions.acquire(
-    key,
-    async () =>
-      new CodexConnection(() =>
-        sessions.spawn(
-          key,
-          { provider: "codex" } satisfies CodexMeta,
-          {
-            ...executableCommand(executable, args),
+  return sessions.acquire(key, async () => {
+    const connection = new CodexConnection(() =>
+      sessions.spawn(
+        key,
+        { provider: "codex", account: account.id } satisfies CodexMeta,
+        {
+          ...executableCommand(executable, args),
+          cwd,
+          env: account.env,
+          group: false,
+        },
+        () =>
+          spawnExecutable(executable, args, {
             cwd,
-            env: { ...process.env } as Record<string, string>,
-            group: false,
-          },
-          () =>
-            spawnExecutable(executable, args, {
-              cwd,
-              stdio: ["pipe", "pipe", "pipe"],
-            }) as ChildProcessWithoutNullStreams,
-        ),
+            env: account.env,
+            stdio: ["pipe", "pipe", "pipe"],
+          }) as ChildProcessWithoutNullStreams,
       ),
-  );
+    );
+    connection.account = account.id;
+    return connection;
+  });
 }
 export function closeCodexConnection(key: string) {
   return sessions.close(key);
@@ -166,6 +177,7 @@ export function reattachCodexSessions(owns: (key: string) => boolean) {
     );
     const connection = new CodexConnection(async () => child);
     connection.started = meta.started;
+    connection.account = meta.account;
     if (!info.open) child.release();
     return connection;
   });

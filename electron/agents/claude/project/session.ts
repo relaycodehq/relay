@@ -12,6 +12,7 @@ import {
   runtimeModeSchema,
 } from "../../../../shared/agent-modes";
 import { reasoningEffortSchema } from "../../../../shared/settings";
+import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
@@ -35,6 +36,7 @@ export const hostedMetaSchema = z
         runtimeMode: runtimeModeSchema.optional(),
         interactionMode: interactionModeSchema.optional(),
         readOnly: z.boolean().optional(),
+        account: z.string().optional(),
         choice: z
           .object({
             model: z.string(),
@@ -51,6 +53,8 @@ type HostedMeta = z.infer<typeof hostedMetaSchema>;
 /** A thread's Claude Code session, kept between its turns. */
 export type ClaudeSession = {
   options: ClaudeRunOptions;
+  /** The account its Claude Code signed in as; see agents/accounts. */
+  account?: string;
   signature: string;
   /** Launched in full access: only then can it switch into it later. */
   skipsPermissions: boolean;
@@ -118,6 +122,8 @@ export async function retune(
   const mode = claudePermissionMode(options);
   if (
     options.cwd !== before.cwd ||
+    (options.account ?? SYSTEM_ACCOUNT) !==
+      (session.account ?? SYSTEM_ACCOUNT) ||
     options.contextWindow !== before.contextWindow ||
     (mode === "bypassPermissions" && !session.skipsPermissions)
   )
@@ -161,6 +167,7 @@ export function newSession(
 ): ClaudeSession {
   return {
     options,
+    account: options.account,
     signature,
     skipsPermissions: options.runtimeMode === "full-access",
     input: new AsyncQueue<SDKUserMessage>(),
@@ -234,6 +241,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       readOnly: options.readOnly,
+      account: options.account,
       choice: options.choice,
     },
   };
@@ -300,6 +308,7 @@ function restoreSession(
     },
     signature: meta.signature,
     skipsPermissions: meta.skipsPermissions,
+    account: meta.options.account,
     frames: new ClaudeFrames(),
     controller: new AbortController(),
     plan: "",

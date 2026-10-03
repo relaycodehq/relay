@@ -51,9 +51,20 @@ describe("parseToolbar", () => {
     expect(layout.slots).toHaveLength(defaultToolbar.slots.length);
     expect(new Set(layout.slots)).toEqual(new Set(defaultToolbar.slots));
     // The saved order holds; new ones join beside their default neighbour.
-    expect(layout.slots.slice(0, 3)).toEqual(["mic", "model", "effort"]);
-    // The model can't be hidden, and the gap isn't a control.
-    expect(layout.hidden).toEqual(["attach"]);
+    expect(layout.slots.slice(0, 4)).toEqual([
+      "mic",
+      "model",
+      "account",
+      "effort",
+    ]);
+    // The model can't be hidden, and the gap isn't a control. The account
+    // control is new to this layout, and starts hidden as the default has it.
+    expect(layout.hidden).toEqual(["attach", "account"]);
+  });
+
+  it("keeps a control shown that a saved layout already shows", () => {
+    const layout = parseToolbar({ slots: defaultToolbar.slots, hidden: [] });
+    expect(layout.hidden).toEqual([]);
   });
 
   it("reads garbage as the default", () => {
@@ -64,16 +75,16 @@ describe("parseToolbar", () => {
 it("placing a hidden control shows it", () => {
   const hidden = hideItem(defaultToolbar, "usage");
   const placed = placeSlot(hidden, "usage", "model", true);
-  expect(placed.hidden).toEqual([]);
+  expect(placed.hidden).toEqual(["account"]);
   expect(placed.slots.slice(0, 2)).toEqual(["model", "usage"]);
 });
 
 it("a move that changes nothing is the same layout", () => {
   // Dragover fires every few milliseconds; Settings renders only on a change.
-  expect(placeSlot(defaultToolbar, "model", "effort", false)).toBe(
+  expect(placeSlot(defaultToolbar, "effort", "context", false)).toBe(
     defaultToolbar,
   );
-  expect(placeSlot(defaultToolbar, "effort", "model", true)).toBe(
+  expect(placeSlot(defaultToolbar, "context", "effort", true)).toBe(
     defaultToolbar,
   );
 });
@@ -92,7 +103,7 @@ describe("the old usage ring switch", () => {
 
   it("keeps the ring hidden for someone who had turned it off", async () => {
     const { hidden } = (await load({ "relay-usage-ring": "off" }))();
-    expect(hidden).toEqual(["usage"]);
+    expect(hidden).toEqual(["account", "usage"]);
   });
 
   it("no longer applies once a layout is saved", async () => {
@@ -101,6 +112,6 @@ describe("the old usage ring switch", () => {
       "relay-usage-ring": "off",
       "relay-composer-toolbar": layout,
     });
-    expect(read().hidden).toEqual([]);
+    expect(read().hidden).toEqual(["account"]);
   });
 });

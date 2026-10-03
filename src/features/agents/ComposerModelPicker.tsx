@@ -1,5 +1,12 @@
 // Adapted from T3 Code's chat model picker. See THIRD_PARTY_NOTICES.md.
-import { Fragment, memo, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { Toolbar } from "@base-ui/react/toolbar";
@@ -110,6 +117,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   container,
   openSignal,
   defaultNames,
+  account,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -129,6 +137,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   openSignal?: number;
   /** The model each agent's Default runs, where known. */
   defaultNames?: Partial<Record<AgentProvider, string>>;
+  /**
+   * The thread's account for each agent, whose usage the footer shows, and
+   * a footer of its own where there are several to switch between.
+   */
+  account?: {
+    of: (provider: UsageProvider) => string | undefined;
+    footer: (provider: UsageProvider, now: number) => ReactNode;
+  };
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -275,7 +291,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     let cancel = false;
     for (const provider of usageProviders) {
       void api
-        .providerUsage(provider)
+        .providerUsage(provider, false, account?.of(provider))
         .then((value) => {
           if (!cancel) setUsage((prev) => ({ ...prev, [provider]: value }));
         })
@@ -614,9 +630,10 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   </div>
                 </Combobox.Root>
               </div>
-              {reportsUsage(category) && (
-                <UsageMeters usage={usage[category]} now={now} />
-              )}
+              {reportsUsage(category) &&
+                (account?.footer(category, now) ?? (
+                  <UsageMeters usage={usage[category]} now={now} />
+                ))}
               {category === "message" && (
                 <p className="model-picker-note">
                   Send a message without running an agent.

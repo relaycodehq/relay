@@ -5,6 +5,7 @@ import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable } from "../../../platform/executables";
 import { claudeDefaultsFrom } from "../../../../shared/agent-defaults";
 import { AsyncQueue } from "../../../util/async-queue";
+import { runAccount } from "../../accounts";
 import type { AgentOptions } from "../../types";
 
 export async function sdk(): Promise<
@@ -37,9 +38,11 @@ export async function withProbe<T>(
   options: Partial<Options>,
   work: (stream: ClaudeStream) => Promise<T>,
 ): Promise<T> {
-  const [{ query }, executable] = await Promise.all([
+  const [{ query }, executable, account] = await Promise.all([
     sdk(),
     findExecutable("claude"),
+    // Models and defaults are the account in use's, unless told whose.
+    options.env ? undefined : runAccount("claude"),
   ]);
   const input: ClaudeInput = new AsyncQueue();
   const stream = query({
@@ -48,6 +51,7 @@ export async function withProbe<T>(
       pathToClaudeCodeExecutable: executable,
       strictMcpConfig: true,
       mcpServers: {},
+      env: account?.env,
       ...options,
     },
   });

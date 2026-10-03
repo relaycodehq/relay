@@ -1,5 +1,6 @@
 import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentOptions } from "../../types";
+import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 import { chromeArgs } from "./sdk";
 
 export type ClaudeRunOptions = AgentOptions & {
@@ -33,13 +34,18 @@ export const sessionSignature = (options: ClaudeRunOptions) =>
     options.model,
     options.effort,
     options.contextWindow,
+    // The usual sign-in adds nothing, so sessions from before accounts match.
+    ...(options.account && options.account !== SYSTEM_ACCOUNT
+      ? [options.account]
+      : []),
   ]);
 
-/** What a thread's Claude Code session starts with. */
+/** What a thread's Claude Code session starts with; `env` signs in its account. */
 export function sessionConfig(
   options: ClaudeRunOptions,
   executable: string,
   skipsPermissions: boolean,
+  env: Record<string, string>,
 ): Options {
   return {
     cwd: options.cwd,
@@ -69,9 +75,10 @@ export function sessionConfig(
     strictMcpConfig: true,
     mcpServers: {},
     extraArgs: chromeArgs,
-    ...(options.contextWindow === "200k"
-      ? { env: { ...process.env, CLAUDE_CODE_DISABLE_1M_CONTEXT: "1" } }
-      : {}),
+    env:
+      options.contextWindow === "200k"
+        ? { ...env, CLAUDE_CODE_DISABLE_1M_CONTEXT: "1" }
+        : env,
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort
       ? { effort: options.effort as NonNullable<Options["effort"]> }

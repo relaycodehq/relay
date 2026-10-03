@@ -13,12 +13,13 @@ export function latestReset(times: (number | null | undefined)[]) {
   return known.length ? Math.max(...known) : undefined;
 }
 
-/** When the provider's spent window lifts, read fresh from its usage meters. */
+/** When the account's spent window lifts, read fresh from its usage meters. */
 export async function usageResetsAt(
   provider: AgentProvider,
+  account?: string,
 ): Promise<number | undefined> {
   if (!reportsUsage(provider)) return;
-  const { windows } = await readProviderUsage(provider, true);
+  const { windows } = await readProviderUsage(provider, true, account);
   return latestReset(
     windows.filter((w) => w.usedPercent >= 99.5).map((w) => w.resetsAt),
   );

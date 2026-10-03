@@ -12,6 +12,7 @@ import {
   type AISettingsDraft,
 } from "../useAISettingsDraft";
 import { AgentVersionSettings } from "../../updates/AgentUpdates";
+import { AccountsSettings } from "../../accounts/AccountsSettings";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { ModelField } from "../../agents/ModelField";
 import { QuickSwitchSettings } from "../../quick-switch/QuickSwitchSettings";
@@ -40,6 +41,17 @@ export function useModelEntries(
         "default agent new thread grouping line questions commit split message reasoning effort fast mode model codex claude opencode cursor ai",
       block: true,
       render: () => <AIModelsCard ai={ai} timesheets={timesheets} />,
+    },
+    {
+      id: "agent-accounts",
+      category: "models",
+      title: "Accounts",
+      description:
+        "Sign in to more than one Claude Code or Codex account. Each keeps its own sign-in folder; your usual one stays where the CLI put it.",
+      keywords:
+        "account accounts sign in login switch work personal subscription limit usage claude codex email plan profile",
+      block: true,
+      render: () => <AccountsSettings onError={setError} />,
     },
     {
       id: "quick-switch",

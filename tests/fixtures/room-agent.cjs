@@ -42,7 +42,15 @@ function record(data) {
   if (capture)
     fs.appendFileSync(
       capture,
-      JSON.stringify({ cwd: process.cwd(), pid: process.pid, args, ...data }) +
+      JSON.stringify({
+        cwd: process.cwd(),
+        pid: process.pid,
+        args,
+        // Which account's folder it ran with; see electron/agents/accounts.
+        claudeConfig: process.env.CLAUDE_CONFIG_DIR,
+        codexHome: process.env.CODEX_HOME,
+        ...data,
+      }) +
         "\n",
     );
 }

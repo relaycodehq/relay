@@ -52,6 +52,8 @@ import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
 import { keepUsageHistory } from "./agents/usage-history";
+import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
+import { readProviderUsage } from "./agents/provider-usage";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
 // The name is also the instance lock and the OS credential namespace; set it before
@@ -210,6 +212,13 @@ app
     }
     setGitPath(loaded.get().gitPath ?? null);
     setLinkedAgents(loaded.get().agentPaths ?? {});
+    setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
+    // Before anything starts an agent: runs ask it which account they use.
+    const agentAccounts = new AgentAccounts(
+      loaded,
+      (state) => window.send("relay:agent-accounts", state),
+      (provider, account) => readProviderUsage(provider, true, account),
+    );
     applyLinkedTools(loaded);
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});
@@ -322,6 +331,7 @@ app
       updater,
       dictation,
       agentUpdates,
+      agentAccounts,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

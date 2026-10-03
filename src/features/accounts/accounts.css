@@ -1,0 +1,312 @@
+/* Settings → AI models → Accounts */
+.accounts-settings {
+  display: grid;
+  gap: 12px;
+}
+.accounts-settings .settings-card + .settings-card {
+  margin-top: 0;
+}
+.accounts-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px 6px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.accounts-provider .provider-glyph {
+  width: 15px;
+  height: 15px;
+}
+.accounts-provider b {
+  font-weight: 550;
+}
+.accounts-provider-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.accounts-add {
+  gap: 5px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.accounts-add:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.accounts-adding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.accounts-adding b {
+  color: var(--text);
+  font-weight: 500;
+}
+.accounts-adding input {
+  width: 150px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.accounts-adding button {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.accounts-error {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+.accounts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 29px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.accounts-row:last-child {
+  border-bottom: 0;
+}
+.accounts-row[data-several] {
+  grid-template-columns: auto minmax(0, 1fr) 29px;
+}
+.accounts-row[data-in-use] {
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.accounts-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 10px 8px;
+  margin: 2px 0;
+  border-radius: 8px;
+}
+.accounts-row[data-several] .accounts-pick {
+  grid-template-columns: auto minmax(0, 1fr) 200px;
+  gap: 12px 14px;
+  cursor: pointer;
+}
+.accounts-row[data-several]:not([data-in-use]) .accounts-pick:hover {
+  background: var(--hover);
+}
+.accounts-pick input[type="radio"] {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.accounts-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.accounts-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.accounts-title b {
+  font-weight: 500;
+}
+.accounts-row[data-out] .accounts-title b {
+  color: var(--muted);
+}
+.accounts-in-use {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.accounts-quiet {
+  font-size: 11px;
+  color: var(--muted);
+}
+.accounts-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.accounts-rename {
+  width: 160px;
+  padding: 2px 6px;
+  font-size: 13px;
+  border-radius: 5px;
+}
+.accounts-order {
+  display: grid;
+}
+.accounts-order .icon-button {
+  width: 20px;
+  height: 16px;
+  border-radius: 4px;
+}
+.accounts-order .icon-button:disabled {
+  opacity: 0.25;
+  background: transparent;
+  cursor: default;
+}
+.accounts-more {
+  width: 26px;
+  height: 26px;
+}
+.accounts-menu {
+  min-width: 190px;
+}
+.accounts-danger {
+  color: var(--danger);
+}
+.accounts-note {
+  margin: 0;
+  padding: 8px 16px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+/* An account's limits as two thin bars */
+.account-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.account-bars-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+.account-bar {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  --bar: var(--accent);
+}
+.account-bar[data-pace="warn"] {
+  --bar: #e3a23a;
+}
+.account-bar[data-pace="hot"],
+.account-bar[data-pace="spent"] {
+  --bar: #ef6a5a;
+}
+.account-bar-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.account-bar-left {
+  color: var(--text);
+}
+.account-bar[data-pace="spent"] .account-bar-left {
+  color: var(--bar);
+}
+.account-bar-track {
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  overflow: hidden;
+}
+.account-bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar);
+}
+.account-bar small {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* The model picker's footer: the thread's accounts over the meters */
+.account-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-top: 1px solid var(--border);
+}
+.account-tabs + .usage-footer {
+  border-top: 0;
+  padding-top: 4px;
+}
+.account-tabs button {
+  gap: 5px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.account-tabs button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.account-tabs button[aria-checked="true"] {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 500;
+}
+.account-tabs small {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.account-tabs .usage-ring-dial,
+.account-menu .usage-ring-dial {
+  width: 14px;
+  height: 14px;
+}
+/* The dial's colours live on the composer's usage trigger. */
+.account-tabs,
+.account-menu {
+  --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  --usage-ring-session: var(--accent);
+}
+
+/* The composer's account control, when the toolbar shows it */
+.account-menu {
+  min-width: 240px;
+}
+.account-menu .composer-select-item {
+  justify-content: flex-start;
+  gap: 10px;
+}
+.account-menu-text {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+.account-menu-text b {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.account-menu-text small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.account-menu-bars {
+  padding: 6px 10px 8px;
+}

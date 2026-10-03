@@ -1,3 +1,4 @@
+import { pinnedAccount } from "../../shared/agent-accounts";
 import type {
   ChatMessage,
   ProjectChat,
@@ -132,6 +133,7 @@ export class SideQuestions {
         thread: agentSession(chat, answer.provider).thread!,
         cwd,
         choice: input.choice,
+        account: pinnedAccount(chat.accounts, answer.provider),
         question,
         history,
         signal: abort.signal,

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { findExecutable } from "../../../platform/executables";
+import { runAccount } from "../../accounts";
 import {
   sessionConfig,
   sessionSignature,
@@ -29,6 +30,9 @@ export async function runClaudeProject(
 ): Promise<string> {
   const executable = await findExecutable("claude");
   options.signal.throwIfAborted();
+  // Another account is another session: its Claude Code signs in elsewhere.
+  const account = await runAccount("claude", options.account);
+  options = { ...options, account: account.id };
   const key = options.session?.key;
   const signature = sessionSignature(options);
   let session = key ? sessions.get(key) : undefined;
@@ -76,6 +80,7 @@ export async function runClaudeProject(
         options,
         executable,
         holder.skipsPermissions,
+        account.env,
       );
       holder.turn = turn;
       await startSession(holder, config, key);

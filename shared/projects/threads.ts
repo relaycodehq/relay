@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentProvider } from "../agents";
+import type { AccountProvider } from "../agent-accounts";
 import type { ReviewerTask } from "../deep-review";
 import type {
   ChatAbandonedHandoff,
@@ -40,6 +41,8 @@ export interface ChatSummary {
   provider?: AgentProvider;
   /** The agent holding the main conversation's context; see shared/recipient. */
   contextAgent?: AgentProvider;
+  /** The account each agent runs on here, pinned on its first turn; see shared/agent-accounts. */
+  accounts?: Partial<Record<AccountProvider, string>>;
   /** No messages yet; absent on summaries saved before this field existed. */
   empty?: boolean;
   /** Settled until a newer update; see shared/chat-activity. */

@@ -9,7 +9,7 @@ import {
   type UsageMeter,
 } from "../../../shared/provider-usage";
 import { api } from "../../lib/api";
-import { RING_RADIUS } from "../agents/ContextWindowMeter";
+import { UsageDial } from "../agents/UsageDial";
 import "../agents/composer-model-picker.css";
 import { agentName, type UsageProvider } from "../../../shared/agents";
 
@@ -44,23 +44,17 @@ export function ringState(
   return { meters, pace, label };
 }
 
-// Outer ring is the week, inner ring the session, so the two limits read at
-// a glance and the icon differs from the single-ring context meter. A pixel
-// larger than the context meter's so the button matches the send button's
-// height with the same padding around the rings.
-const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
-  weekly: { radius: RING_RADIUS + 1 },
-  session: { radius: 5 },
-};
-
 /**
  * A double ring in the composer with the signed-in provider's session and
  * weekly limits. Hovering shows each one in full.
  */
 export const UsageRing = memo(function UsageRing({
   provider,
+  account,
 }: {
   provider: UsageProvider;
+  /** Whose limits: the thread's account; the usual sign-in when left out. */
+  account?: string;
 }) {
   const [usage, setUsage] = useState<ProviderUsage>();
   const [now, setNow] = useState(() => Date.now());
@@ -71,7 +65,7 @@ export const UsageRing = memo(function UsageRing({
     setUsage(undefined);
     const load = (force = false) =>
       api
-        .providerUsage(provider, force)
+        .providerUsage(provider, force, account)
         .then((value) => {
           if (cancel) return;
           setUsage(value);
@@ -90,7 +84,7 @@ export const UsageRing = memo(function UsageRing({
       clearInterval(refresh);
       clearInterval(tick);
     };
-  }, [provider]);
+  }, [provider, account]);
   const refresh = () => {
     if (refreshing || !loadRef.current) return;
     setRefreshing(true);
@@ -156,45 +150,6 @@ export const UsageRing = memo(function UsageRing({
     </Popover.Root>
   );
 });
-
-/** The two rings on their own, as the trigger and Settings' sample draw them. */
-export function UsageDial({
-  meters,
-}: {
-  meters: Pick<UsageMeter, "kind" | "leftPercent" | "pace">[];
-}) {
-  return (
-    <svg
-      className="usage-ring-dial"
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      aria-hidden
-    >
-      {(["weekly", "session"] as const).map((kind) => {
-        const { radius } = RINGS[kind];
-        const circumference = 2 * Math.PI * radius;
-        const meter = meters.find((m) => m.kind === kind);
-        // Full while the limit is untouched, draining as it's used.
-        const left = meter?.leftPercent ?? 0;
-        return (
-          <g key={kind} className="usage-ring" data-kind={kind}>
-            <circle className="usage-ring-track" cx="10" cy="10" r={radius} />
-            <circle
-              className="usage-ring-fill"
-              data-pace={meter?.pace ?? "ok"}
-              cx="10"
-              cy="10"
-              r={radius}
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - left / 100)}
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function UsageRow({ meter }: { meter: UsageMeter }) {
   const hot = meter.pace === "hot" || meter.pace === "spent";

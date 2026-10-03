@@ -28,6 +28,8 @@ export interface AgentOptions {
   cwd: string;
   prompt: string;
   choice: ModelChoice;
+  /** The Claude Code or Codex account to run on; left out, the one in use. */
+  account?: string;
   /** Claude on a 200k window; left out, the CLI picks. Other agents ignore it. */
   contextWindow?: "200k";
   signal: AbortSignal;
@@ -101,6 +103,8 @@ export interface AgentRuntime {
     thread: string;
     cwd: string;
     choice: ModelChoice;
+    /** The thread's account; left out, the one in use. */
+    account?: string;
     question: string;
     history: { question: string; response: string }[];
     signal: AbortSignal;

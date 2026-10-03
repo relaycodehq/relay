@@ -45,6 +45,9 @@ import {
 } from "../deep-review/council/Ultraplan";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
+import { useThreadAccounts } from "../accounts/useThreadAccounts";
+import { AccountControl, AccountUsageFooter } from "../accounts/AccountSwitch";
+import type { AccountProvider } from "../../../shared/agent-accounts";
 import "./composer.css";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
@@ -71,6 +74,9 @@ export interface ComposerConversation {
   planner?: AgentProvider;
   /** It can plan with a council first; see shared/ultraplan. */
   ultraplan?: boolean;
+  /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
+  chatId?: string;
+  accounts?: Partial<Record<AccountProvider, string>>;
 }
 export function ProjectComposer({
   ref,
@@ -135,6 +141,7 @@ export function ProjectComposer({
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, shared, promptInput);
   const runs = useAgentRuns(composer, catalogs, draft.dropMention);
+  const accounts = useThreadAccounts(conversation.chatId, conversation.accounts);
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
   const [spark, setSpark] = useState(0);
   const input = useRef<HTMLElement>(null);
@@ -198,7 +205,11 @@ export function ProjectComposer({
     conversation,
     complete: !!attachment?.complete,
     intercept: commands.interceptSend,
-    onSend,
+    // A new thread's agent starts on the account picked here.
+    onSend: (value, dispatch) => {
+      const account = accounts.of(value.to ?? value.provider);
+      return onSend(account ? { ...value, account } : value, dispatch);
+    },
   });
   return (
     <div className="thread-compose-wrap">
@@ -342,7 +353,20 @@ export function ProjectComposer({
                   openSignal={settingCommands.pickerSignal}
                   onSelect={runs.select}
                   defaultNames={catalogs.defaultNames}
+                  account={{
+                    of: accounts.of,
+                    footer: (provider, now) => (
+                      <AccountUsageFooter
+                        provider={provider}
+                        accounts={accounts}
+                        now={now}
+                      />
+                    ),
+                  }}
                 />
+              ),
+              account: accounts.several(to) && (
+                <AccountControl provider={to} accounts={accounts} />
               ),
               effort: to !== "message" && runs.offersEffort(to) && (
                 <ComposerEffortControl
@@ -384,7 +408,7 @@ export function ProjectComposer({
                 </button>
               ),
               usage: reportsUsage(to) ? (
-                <UsageRing provider={to} />
+                <UsageRing provider={to} account={accounts.of(to)} />
               ) : (
                 runsOnOpenRouter && (
                   <OpenRouterCreditButton threadCost={threadCost} />

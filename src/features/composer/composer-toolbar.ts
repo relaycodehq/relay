@@ -3,6 +3,7 @@ import { persistedStore } from "../../lib/persisted-store";
 /** The composer's controls that can move or hide; Stop and Send stay last. */
 export const toolbarItems = [
   "model",
+  "account",
   "effort",
   "context",
   "access",
@@ -24,6 +25,7 @@ export interface ToolbarLayout {
 export const defaultToolbar: ToolbarLayout = {
   slots: [
     "model",
+    "account",
     "effort",
     "context",
     "access",
@@ -33,11 +35,13 @@ export const defaultToolbar: ToolbarLayout = {
     "usage",
     "mic",
   ],
-  hidden: [],
+  // The model picker's footer switches accounts too; this is for those who want it in view.
+  hidden: ["account"],
 };
 
 export const toolbarNames: Record<ToolbarItem, string> = {
   model: "Model",
+  account: "Account",
   effort: "Effort",
   context: "Context meter",
   access: "Access",
@@ -52,6 +56,7 @@ export const canHide = (item: ToolbarItem) => item !== "model";
 /** Labelled controls get a divider between them; bare icon buttons don't. */
 const divided = new Set<ToolbarSlot>([
   "model",
+  "account",
   "effort",
   "context",
   "access",
@@ -125,7 +130,7 @@ export const showItem = (
     : layout;
 
 export const isDefaultToolbar = (layout: ToolbarLayout) =>
-  layout.hidden.length === 0 &&
+  [...layout.hidden].sort().join() === [...defaultToolbar.hidden].sort().join() &&
   layout.slots.join() === defaultToolbar.slots.join();
 
 const isSlot = (value: unknown): value is ToolbarSlot =>
@@ -133,18 +138,26 @@ const isSlot = (value: unknown): value is ToolbarSlot =>
 
 /**
  * A saved layout made whole: unknown slots dropped, and slots it lacks, like
- * a control added since, put back beside their default neighbour.
+ * a control added since, put back beside their default neighbour, hidden if
+ * the default hides them.
  */
 export function parseToolbar(saved: unknown): ToolbarLayout {
   const value = saved as Partial<Record<keyof ToolbarLayout, unknown>> | null;
   const listed = Array.isArray(value?.slots) ? value.slots : [];
   const slots = [...new Set(listed.filter(isSlot))];
+  const added: ToolbarSlot[] = [];
   defaultToolbar.slots.forEach((slot, i) => {
     if (slots.includes(slot)) return;
     const before = defaultToolbar.slots[i - 1];
     slots.splice(before ? slots.indexOf(before) + 1 : 0, 0, slot);
+    added.push(slot);
   });
-  const hidden = Array.isArray(value?.hidden) ? value.hidden : [];
+  const hidden = [
+    ...(Array.isArray(value?.hidden) ? value.hidden : []),
+    ...added.filter((slot) =>
+      (defaultToolbar.hidden as ToolbarSlot[]).includes(slot),
+    ),
+  ];
   return {
     slots,
     hidden: [...new Set(hidden.filter(isSlot))].filter(
@@ -167,7 +180,7 @@ const store = persistedStore<ToolbarLayout>(
   (saved) => {
     if (saved !== null) return parseToolbar(JSON.parse(saved));
     return usageWasOff()
-      ? { ...defaultToolbar, hidden: ["usage"] }
+      ? { ...defaultToolbar, hidden: [...defaultToolbar.hidden, "usage"] }
       : defaultToolbar;
   },
   (layout) => JSON.stringify(layout),

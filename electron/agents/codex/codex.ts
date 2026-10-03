@@ -3,6 +3,7 @@ import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
 import { findExecutable } from "../../platform/executables";
+import { runAccount } from "../accounts";
 import { codexModelArgs } from "../../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "../activity";
@@ -47,6 +48,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         : codexPolicy(options.runtimeMode)
       : undefined;
   const sessionKey = policy ? options.session?.key : undefined;
+  const account = await runAccount("codex", options.account);
   const connection = await acquireCodexConnection(
     sessionKey,
     executable,
@@ -76,6 +78,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         : []),
     ],
     options.cwd,
+    account,
   );
   let wire: CodexTransport | undefined,
     threadId = "",

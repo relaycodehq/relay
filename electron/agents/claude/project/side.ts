@@ -1,4 +1,5 @@
 import { findExecutable } from "../../../platform/executables";
+import { runAccount } from "../../accounts";
 import { AsyncQueue } from "../../../util/async-queue";
 import { sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
 import { sessions } from "./session";
@@ -22,6 +23,7 @@ export async function askClaudeSide(options: {
   thread: string;
   cwd: string;
   model: string;
+  account?: string;
   question: string;
   history: SideExchange[];
   signal: AbortSignal;
@@ -37,9 +39,10 @@ export async function askClaudeSide(options: {
   };
   const live = sessions.get(options.key);
   if (live && !live.frames.ended) return ask(live.stream);
-  const [{ query }, executable] = await Promise.all([
+  const [{ query }, executable, { env }] = await Promise.all([
     sdk(),
     findExecutable("claude"),
+    runAccount("claude", options.account),
   ]);
   options.signal.throwIfAborted();
   // No prompt ever goes in: the session only loads to answer beside it.
@@ -50,6 +53,7 @@ export async function askClaudeSide(options: {
       cwd: options.cwd,
       pathToClaudeCodeExecutable: executable,
       resume: options.thread,
+      env,
       persistSession: false,
       settingSources: ["user", "project", "local"],
       strictMcpConfig: true,

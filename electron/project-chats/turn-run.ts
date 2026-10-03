@@ -10,6 +10,8 @@ import type {
 import { resolveTurnModel } from "../../shared/turn-model";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
+import { accountFor, accountLabel } from "../agents/accounts";
+import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
@@ -111,6 +113,13 @@ export class TurnRunner {
     );
     this.core.sessions.add(sessionKey);
     const provider = message.provider;
+    // A thread keeps the account it started on, and the one a limit moved it
+    // to; the composer's pick only says where a thread's first turn goes.
+    const account = hasAccounts(provider)
+      ? accountFor(provider, chat.accounts?.[provider] ?? input.account)
+      : undefined;
+    if (account && hasAccounts(provider) && chat.accounts?.[provider] !== account)
+      chat.accounts = { ...chat.accounts, [provider]: account };
     if (rules.showsModel)
       void turnModel(provider, input, root).then((model) =>
         answer.setModel(model),
@@ -170,6 +179,7 @@ export class TurnRunner {
               : undefined,
           ),
         choice: input.choice,
+        account,
         signal: abort.signal,
         onText: (body: string) => answer.text(body),
         onPlan: (body: string) => answer.plan(body),
@@ -276,7 +286,16 @@ export class TurnRunner {
       if (abort.signal.aborted) delete failed.error;
       else {
         failed.error = e instanceof Error ? e.message : String(e);
-        if (isAgentError(e, "signedOut")) {
+        if (
+          isAgentError(e, "signedOut") &&
+          account &&
+          account !== SYSTEM_ACCOUNT &&
+          hasAccounts(provider)
+        ) {
+          // The terminal's login would sign in the usual account, not this one.
+          failed.error = `${accountLabel(provider, account)} is signed out. Sign it in again in Settings → AI models → Accounts, then resume the answer.`;
+          await agentRuntime(provider).closeSession(sessionKey);
+        } else if (isAgentError(e, "signedOut")) {
           failed.signIn = e.provider;
           // The running agent keeps the rejected login; the next turn starts
           // one that reads the new sign-in, resuming the same conversation.

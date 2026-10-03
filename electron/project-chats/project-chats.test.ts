@@ -22,6 +22,8 @@ import {
   type ChatSummary,
 } from "../../shared/projects";
 import { ChatSummaryFeed } from "./chat-summaries";
+import { AgentAccounts, accountFor } from "../agents/accounts";
+import { prepareProfile, setProfilesRoot } from "../agents/accounts/profiles";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
@@ -1710,6 +1712,60 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
     { timeout: 15000 },
   );
   expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+}, 30000);
+
+it("carries an answer a usage limit stopped on with the next account at once, and keeps the thread on it", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  vi.stubEnv("CODEX_HOME", join(root, "codex-home"));
+  setProfilesRoot(join(root, "agent-accounts"));
+  await store.update((s) => {
+    s.agentAccounts = {
+      accounts: [
+        { provider: "codex", id: "default", label: "Personal" },
+        { provider: "codex", id: "work", label: "Work" },
+      ],
+    };
+  });
+  const work = await prepareProfile("codex", "work");
+  await writeFile(
+    join(work, "auth.json"),
+    JSON.stringify({ tokens: { access_token: "work-token" } }),
+  );
+  const room = async (provider: "claude" | "codex") => ({
+    provider,
+    message: null,
+    windows: [],
+  });
+  new AgentAccounts(store, () => {}, room);
+  try {
+    const chat = await chats.create(projectId, { kind: "project" });
+    await chats.send(chat.id, input("@codex fixture usage limit"));
+    await vi.waitFor(
+      async () => {
+        const after = await chats.get(chat.id);
+        expect(after.messages.at(-1)?.status).toBe("complete");
+        expect(
+          after.messages.filter((m) => m.role === "user").map((m) => m.body),
+        ).toEqual([
+          "@codex fixture usage limit",
+          expect.stringMatching(/^@codex Continue from where/),
+        ]);
+      },
+      { timeout: 15000 },
+    );
+    const after = await chats.get(chat.id);
+    expect(after.messages.find((m) => m.status === "failed")).toMatchObject({
+      accountMove: { provider: "codex", from: "Personal", to: "Work" },
+    });
+    expect(after.accounts).toEqual({ codex: "work" });
+    expect(after.limitResume).toBeUndefined();
+    // New threads start on it too.
+    expect(accountFor("codex")).toBe("work");
+  } finally {
+    await store.update((s) => {
+      delete s.agentAccounts;
+    });
+  }
 }, 30000);
 
 it("fails a turn whose agent is signed out with that agent's sign-in offered, and plans no resume", async () => {
