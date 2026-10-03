@@ -2362,6 +2362,28 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     },
   ]);
 });
+it("fails a /btw question outright when its folder is gone, instead of leaving an answer streaming", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const claude = (body: string) => ({
+    ...input(body),
+    provider: "claude" as const,
+  });
+  await chats.send(chat.id, claude("@claude fixture wait for steer"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).sessions?.claude?.thread).toBeTruthy(),
+    { timeout: 6000 },
+  );
+  vi.spyOn(projects, "root").mockRejectedValue(new Error("Folder is gone."));
+  const before = (await chats.get(chat.id)).messages.length;
+  await expect(
+    chats.send(chat.id, {
+      ...claude("@claude where is the cache guard?"),
+      side: true as const,
+    }),
+  ).rejects.toThrow("Folder is gone.");
+  expect((await chats.get(chat.id)).messages).toHaveLength(before);
+});
 it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from the main session", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));

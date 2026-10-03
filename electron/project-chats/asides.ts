@@ -49,6 +49,9 @@ export class SideQuestions {
           ? `${agentName(provider)} is still starting on this thread. Ask again in a moment.`
           : `${agentName(provider)} hasn't worked in this thread yet. Ask it something first.`,
       );
+    // Before anything is saved, so a folder that is gone fails the question
+    // instead of leaving its answer streaming.
+    const cwd = await this.worktrees.root(chat);
     const fromSession = !!agentRuntime(provider).askSide;
     // Asking from the session takes text only; a fork gets images like any turn.
     if (fromSession && input.images?.length)
@@ -79,8 +82,16 @@ export class SideQuestions {
     const abort = new AbortController();
     const job = (
       fromSession
-        ? this.fromSession(chat, answer, earlier, asked.question, input, abort)
-        : this.inFork(chat, answer, earlier, asked.question, input, abort)
+        ? this.fromSession(
+            chat,
+            answer,
+            earlier,
+            asked.question,
+            input,
+            cwd,
+            abort,
+          )
+        : this.inFork(chat, answer, earlier, asked.question, input, cwd, abort)
     ).finally(() => {
       this.core.active.sideDone(key);
       // The side answer moved `updated`, as any finished answer does.
@@ -95,6 +106,7 @@ export class SideQuestions {
     earlier: ChatMessage[],
     question: string,
     input: ProjectChatSend,
+    cwd: string,
     abort: AbortController,
   ) {
     // Each question with the answer it got, for the follow-up to build on.
@@ -111,7 +123,6 @@ export class SideQuestions {
           ]
         : [];
     });
-    const cwd = await this.worktrees.root(chat);
     void turnModel(answer.provider, input, cwd).then((resolved) => {
       answer.model = resolved;
     });
@@ -144,6 +155,7 @@ export class SideQuestions {
     earlier: ChatMessage[],
     question: string,
     input: ProjectChatSend,
+    cwd: string,
     abort: AbortController,
   ) {
     // A thread whose fork was lost starts a new one and hears itself as text.
@@ -154,7 +166,7 @@ export class SideQuestions {
     await this.runner.run(
       chat,
       answer,
-      await this.worktrees.root(chat),
+      cwd,
       prompt,
       { ...input, parentId: answer.parentId },
       abort,
