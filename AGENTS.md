@@ -1,5 +1,35 @@
 # Working on Relay
 
+## Where code goes
+
+- **Group by feature, not by kind.** A feature's components, hooks, CSS and
+  helpers live together in `src/features/<name>/`, and its unit test sits next
+  to the file it covers as `<file>.test.ts`. There is no `components/` or
+  `hooks/` folder; don't bring one back.
+- **`src/app/` is the shell** (titlebar, navigation, what is on screen),
+  **`src/ui/` is building blocks that know no feature**, **`src/lib/` is
+  helpers that know no feature.** `lib/` and `ui/` never import from
+  `features/` or `app/`, and features never import from `app/`. A hook only
+  one feature uses belongs in that feature, not in `lib/`.
+- **Nothing loose in `electron/`.** Only `main.ts` and `preload.ts` sit at the
+  top; everything else goes in the folder of what it is about (`git/`,
+  `project-chats/`, `agents/`, `platform/`, `util/` and so on). A folder's
+  public face is its `index.ts`.
+- **`shared/` is what the desktop, the phone and the server all read.** It
+  imports nothing from `src/`, `electron/` or `server/` and uses neither DOM
+  nor Node globals.
+- **Start a new folder when a feature has about four files of its own**;
+  until then it lives in the feature it grew out of.
+- **Move files with `node scripts/move-files.mjs <mapping.json> --dry`**, which
+  rewrites imports, mocks, worker URLs, CSS and HTML references. Leave
+  `tests/fixtures`, the `vendor/` folders and the build entry points in
+  `scripts/build-electron.mjs` where they are.
+- **Check types with `npm run typecheck`.** The renderer, the main process,
+  the preload script and the tests are separate projects, so `src/` can't
+  reach for Node and `electron/` can't reach for the DOM. A bare
+  `tsc --noEmit` checks nothing and passes.
+- `tests/unit/layout.test.ts` fails when one of these rules is broken.
+
 ## Showing options
 
 - **Show visual choices as working UI in the browser.** When asked for ideas
