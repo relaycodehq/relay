@@ -11,10 +11,18 @@ import {
   type ReactNode,
 } from "react";
 import type { ThemedToken } from "@pierre/diffs";
-import { Check, ClipboardCheck, Copy, Play } from "lucide-react";
+import {
+  Check,
+  ClipboardCheck,
+  Code as CodeIcon,
+  Copy,
+  Play,
+  Workflow,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { blockCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
+import { MermaidDiagram } from "./MermaidDiagram";
 
 // Tokenizing runs on the main thread; past this a block stays plain.
 const MAX_HIGHLIGHT_LENGTH = 40_000;
@@ -152,6 +160,9 @@ export const CodeBlock = memo(function CodeBlock({
   const [highlighted, setHighlighted] = useState<Highlighted | null>(null);
   const lastRun = useRef(0);
   const [copied, copy] = useCopy();
+  const [showSource, setShowSource] = useState(false);
+  const [diagramError, setDiagramError] = useState<string>();
+  const diagram = lang === "mermaid" && closed && !diagramError;
   const command = useMemo(
     () => (closed ? blockCommand(code, lang) : null),
     [code, lang, closed],
@@ -190,6 +201,29 @@ export const CodeBlock = memo(function CodeBlock({
     code.startsWith(highlighted.code)
       ? highlighted
       : null;
+  const source = (
+    <pre>
+      <code className={lang ? `language-${lang}` : undefined}>
+        {usable ? (
+          <>
+            {usable.lines.map((line, index) => (
+              <span key={index}>
+                {index > 0 && "\n"}
+                {line.map((token, i) => (
+                  <span key={i} style={tokenStyle(token)}>
+                    {token.content}
+                  </span>
+                ))}
+              </span>
+            ))}
+            {code.slice(usable.code.length)}
+          </>
+        ) : (
+          code
+        )}
+      </code>
+    </pre>
+  );
   // The buttons sit outside <pre> so they stay put when long lines scroll,
   // and stick to the top of a block taller than the thread.
   return (
@@ -197,6 +231,17 @@ export const CodeBlock = memo(function CodeBlock({
       <div className="markdown-code-tools">
         {command && (
           <RunCommandButton command={command} className="markdown-code-copy" />
+        )}
+        {diagram && (
+          <button
+            type="button"
+            className="markdown-code-copy"
+            title={showSource ? "Show diagram" : "Show source"}
+            aria-label={showSource ? "Show diagram" : "Show source"}
+            onClick={() => setShowSource((shown) => !shown)}
+          >
+            {showSource ? <Workflow size={13} /> : <CodeIcon size={13} />}
+          </button>
         )}
         <button
           type="button"
@@ -208,27 +253,20 @@ export const CodeBlock = memo(function CodeBlock({
           {copied ? <Check size={13} /> : <Copy size={13} />}
         </button>
       </div>
-      <pre>
-        <code className={lang ? `language-${lang}` : undefined}>
-          {usable ? (
-            <>
-              {usable.lines.map((line, index) => (
-                <span key={index}>
-                  {index > 0 && "\n"}
-                  {line.map((token, i) => (
-                    <span key={i} style={tokenStyle(token)}>
-                      {token.content}
-                    </span>
-                  ))}
-                </span>
-              ))}
-              {code.slice(usable.code.length)}
-            </>
-          ) : (
-            code
-          )}
-        </code>
-      </pre>
+      {diagram && !showSource ? (
+        <MermaidDiagram
+          code={code}
+          pending={source}
+          onError={setDiagramError}
+        />
+      ) : (
+        source
+      )}
+      {diagramError && (
+        <small className="markdown-code-error">
+          Couldn't draw this diagram: {diagramError}
+        </small>
+      )}
     </div>
   );
 });

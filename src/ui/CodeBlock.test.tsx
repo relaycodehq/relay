@@ -45,3 +45,14 @@ it("puts ▶ beside inline code that is a command, and only there", () => {
     "Run <code>npm test</code>.",
   );
 });
+
+it("draws a mermaid block only once it's closed, keeping its source until then", () => {
+  const streaming = inThread("```mermaid\ngraph TD\n  A --> B");
+  expect(streaming).not.toContain('aria-label="Show source"');
+  expect(streaming).toContain("A --&gt; B");
+  const closed = inThread("```mermaid\ngraph TD\n  A --> B\n```");
+  expect(closed).toContain('aria-label="Show source"');
+  expect(closed).toContain('aria-label="Copy code"');
+  // The source stands in until the diagram is drawn in the page.
+  expect(closed).toContain("A --&gt; B");
+});

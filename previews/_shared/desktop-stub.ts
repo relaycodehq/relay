@@ -70,6 +70,7 @@ const stub: Partial<Api> = {
     releaseNotesFrom(await (await fetch(releasesApi)).json()),
   // No repository icons in a preview; the letter badge stands in.
   projectIcon: async () => null,
+  writeClipboard: (text) => navigator.clipboard.writeText(text),
   providerUsage: async (provider) => ({
     provider,
     message: null,

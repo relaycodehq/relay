@@ -1041,6 +1041,26 @@ small {
 .inline-command-run:hover {
   color: var(--text);
 }
+.markdown-code-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.markdown-diagram {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 16px 12px;
+  background: var(--inbox);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.markdown-diagram > svg {
+  flex: none;
+  max-width: 100%;
+  height: auto;
+}
 /* ▶ over the end of inline code that is a command; it shows on hover without
    moving the text around it, and above the line so it hides none of the
    words being read. */
