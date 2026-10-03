@@ -1,22 +1,53 @@
 #!/usr/bin/env node
 // Moves files according to a mapping and rewrites every relative reference so
 // it still points at the same file, then reports what a human has to look at.
+// Reusable for any future reshuffle: write the mapping, dry-run, read the
+// report, apply, commit.
 //
 //   node scripts/move-files.mjs <mapping.json> [--dry] [--force]
 //
-// The mapping is { "old/path.ts": "new/path.ts", ... }, repo-root-relative,
-// file to file. The script never calls git and never stages anything.
+//   --dry    print the report and write nothing (exit 1 if something would break)
+//   --force  apply even when some reference would not resolve afterwards
 //
-// References it understands: import/export ... from, side-effect imports,
-// import("..."), require("..."), require.resolve, import.meta.resolve,
-// typeof import("..."), vi/jest .mock/.doMock/.importActual/..., new URL(...,
-// import.meta.url), /// <reference path>, CSS @import and url(...), HTML
-// src/href/poster attributes (relative and root-absolute). Vite query
-// suffixes (?worker, ?raw, ...) and #fragments are kept.
+// The mapping is { "old/path.ts": "new/path.ts", ... }: repo-root-relative,
+// file to file (list every file of a folder you want moved; the script moves
+// no folders). It is checked first: sources must exist, targets must be free
+// or themselves moving, no two files may share a target (swaps and cycles are
+// fine). It runs from the checkout it sits in, never calls git and never
+// stages anything. Commit or stash other work first so the diff is only the
+// move.
+//
+// Rewrites, in the moved files' new homes and in every file that points at a
+// moved one (src, electron, shared, server, tests, previews, scripts,
+// mobile/src and the root-level .ts, .html and .js files):
+//   import/export ... from, side-effect imports, import("..."), require("..."),
+//   require.resolve, import.meta.resolve, typeof import("..."), vi/jest
+//   .mock/.doMock/.importActual/..., new URL(..., import.meta.url),
+//   /// <reference path>, CSS @import and url(...), HTML src/href/poster
+//   (relative and root-absolute). Vite query suffixes (?worker, ?raw, ...) and
+//   #fragments are kept. Specifiers into build output that isn't on disk
+//   (dist-*, anything top-level in .gitignore) keep pointing at the same place.
 //
 // Resolution mirrors the bundler (exact file, extensions, a written .js that
 // is really a .ts, dir/index.*) and the author's style is kept: extension
-// written or omitted, index elided or not, quotes, "./" prefix.
+// written or omitted, index elided or not, quotes, "./" prefix. A specifier
+// is only shortened to a directory form ("." ".." "x/") when the directory's
+// index is the file it reaches; "." never stands in for a sibling x.ts.
+//
+// Only reports, never rewrites (the "String mentions" part of the report):
+//   - full old paths in strings, comments, docs, configs and scripts
+//     (package.json scripts, workflows, README, prose),
+//   - relative path strings that aren't imports but reach a moved file,
+//   - directories that files moved out of,
+//   - bare file names that may mean a moved file (weakest signal).
+// Those can be a live reference, or sample text in a fixture or a mock UI;
+// only a person can tell. Also listed: specifiers that were already broken
+// before the move and left alone, and the "UNRESOLVED AFTER THE MOVE" section,
+// which must be empty (otherwise nothing is touched unless --force).
+//
+// After applying, run the type check and the tests, and look at what the
+// mentions list points at. Not understood: path strings built at runtime,
+// tsconfig/package.json "include"/"files" globs and the like.
 
 import {
   mkdirSync,
@@ -265,16 +296,22 @@ const JS_SWAPS = {
   ".jsx": [".tsx"],
 };
 
-/** Resolve a repo-relative path like a bundler: { file, via } or null. */
-function resolveFile(p, exists) {
+/**
+ * Resolve a repo-relative path like a bundler: { file, via } or null.
+ * dirOnly is for specifiers that name a directory ("." ".." "x/" "x/.."):
+ * only dir/index.* can answer those, never a sibling file x.ts.
+ */
+function resolveFile(p, exists, dirOnly = false) {
   if (!p || p.startsWith("..") || p === ".") return null;
-  if (exists(p)) return { file: p, via: "exact" };
-  for (const e of EXTS) if (exists(p + e)) return { file: p + e, via: "ext" };
-  const written = path.extname(p);
-  if (JS_SWAPS[written]) {
-    const stem = p.slice(0, -written.length);
-    for (const e of JS_SWAPS[written])
-      if (exists(stem + e)) return { file: stem + e, via: "jsswap" };
+  if (!dirOnly) {
+    if (exists(p)) return { file: p, via: "exact" };
+    for (const e of EXTS) if (exists(p + e)) return { file: p + e, via: "ext" };
+    const written = path.extname(p);
+    if (JS_SWAPS[written]) {
+      const stem = p.slice(0, -written.length);
+      for (const e of JS_SWAPS[written])
+        if (exists(stem + e)) return { file: stem + e, via: "jsswap" };
+    }
   }
   for (const e of EXTS)
     if (exists(`${p}/index${e}`))
@@ -300,13 +337,24 @@ function resolveRef(fromFile, ref, exists) {
     ? norm(base.replace(/^\/+/, ""))
     : path.join(path.dirname(fromFile), base);
   const lexical = joined.length > 1 ? joined.replace(/\/+$/, "") : joined;
-  return { lexical, result: resolveFile(lexical, exists) };
+  const dirOnly = /(?:^|\/)\.{1,2}$|\/$/.test(base);
+  return { lexical, result: resolveFile(lexical, exists, dirOnly) };
 }
 
-function relSpec(fromDir, target, ref, trailingSlash) {
+/**
+ * Where target sits from fromDir, written as a specifier. isDirectory says
+ * target really is a directory; otherwise it is a file's extensionless path,
+ * and when that comes out as "." or "..", which would name a directory, it
+ * is spelled through its parent instead ("../projects", not "..").
+ */
+function relSpec(fromDir, target, ref, trailingSlash, isDirectory = true) {
   if (ref.rootAbsolute)
     return "/" + target + (trailingSlash && target ? "/" : "");
   let rel = path.relative(fromDir || ".", target || ".");
+  if (!isDirectory && (rel === "" || path.basename(rel) === "..")) {
+    const up = path.relative(fromDir || ".", path.dirname(target));
+    rel = path.join(up, path.basename(target));
+  }
   if (rel === "") rel = ".";
   if (!rel.startsWith(".") && ref.dotPrefix !== false) rel = "./" + rel;
   if (trailingSlash && !rel.endsWith("/")) rel += "/";
@@ -358,6 +406,7 @@ function buildSpec(oldFrom, newFrom, ref, found) {
       c,
       ref,
       newIsIndex && c === dirForm() && trailing,
+      c === dirForm(),
     );
     const check = resolveRef(
       newFrom,
