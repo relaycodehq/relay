@@ -1,18 +1,19 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { describeCycle, findCycles, importsOf } from "./layout-graph";
 
 // The folder rules from AGENTS.md ("Where code goes"), checked so they hold
 // without anyone remembering them.
 
 const root = resolve(__dirname, "../..");
 
-function sources(folder: string): string[] {
+function sources(folder: string, kind = /\.(ts|tsx)$/): string[] {
   return readdirSync(join(root, folder), {
     recursive: true,
     withFileTypes: true,
   })
-    .filter((entry) => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))
+    .filter((entry) => entry.isFile() && kind.test(entry.name))
     .map((entry) => relative(root, join(entry.parentPath, entry.name)));
 }
 
@@ -32,6 +33,28 @@ function reaches(folder: string, banned: string[]): string[] {
   }
   return found;
 }
+
+/** Folder cycles in `group` as `a → b → a` with an example import per step. */
+function cyclesIn(group: string, valuesOnly: boolean) {
+  const files = sources(group, /\.(tsx?|mjs|js)$/).map((path) => ({
+    path,
+    text: readFileSync(join(root, path), "utf8"),
+  }));
+  return findCycles(files, group, { valuesOnly });
+}
+
+// Cycles between top-level folders of electron/ that exist today, each as the
+// sorted folders tangled together. Value imports only: the persisted `Store`
+// type links most folders on purpose. The test fails on a cycle that isn't
+// listed and on a listed one that is gone, so whoever breaks one deletes its
+// entry here.
+const knownElectronCycles: string[][] = [
+  // git reads agents for helper runs, agents start rooms' Codex, rooms check
+  // out through git and ask pull-requests' questions, which read git.
+  ["agents", "git", "pull-requests", "rooms"],
+  // A handed-off chat is read through handoff/git and sent through project-chats.
+  ["handoff", "project-chats"],
+];
 
 describe("source layout", () => {
   it("keeps src/lib and src/ui free of features and the shell", () => {
@@ -61,5 +84,67 @@ describe("source layout", () => {
       "preload.ts",
     ]);
     expect(loose("src")).toEqual(["main.tsx", "styles.css"]);
+  });
+
+  it("keeps features from importing each other in a circle", () => {
+    // Type imports count here: across features they are still a dependency.
+    expect(cyclesIn("src/features", false).map(describeCycle)).toEqual([]);
+  });
+
+  it("keeps main-process folders from importing each other in a circle", () => {
+    const found = cyclesIn("electron", true);
+    const known = new Set(knownElectronCycles.map((folders) => folders.join()));
+    const present = new Set(found.map(({ folders }) => folders.join()));
+    expect([
+      ...found
+        .filter(({ folders }) => !known.has(folders.join()))
+        .map(
+          (cycle) =>
+            `new cycle between ${cycle.folders.join(", ")}:\n${describeCycle(cycle)}`,
+        ),
+      ...knownElectronCycles
+        .filter((folders) => !present.has(folders.join()))
+        .map(
+          (folders) =>
+            `knownElectronCycles lists [${folders.join(", ")}], but no cycle has exactly those folders any more: delete or update the entry`,
+        ),
+    ]).toEqual([]);
+  });
+
+  it("reads multi-line, type-only and dynamic imports", () => {
+    expect(
+      importsOf(`
+import {
+  a,
+  type B,
+} from "./multi";
+import { type A, type B } from "./types";
+import type { C } from "./type";
+import D, { type E } from "./default";
+export * from "./star";
+export type { F } from "./reexport-type";
+import "./side.css";
+const lazy = () => import("./lazy");
+const later = import(
+  "./later"
+).then((m) => m);
+let t: import("./shape").Shape;
+type Sdk = typeof import("./sdk");
+// import { z } from "./comment";
+const text = "import x from './string'";
+`),
+    ).toEqual([
+      { specifier: "./multi", type: false },
+      { specifier: "./types", type: true },
+      { specifier: "./type", type: true },
+      { specifier: "./default", type: false },
+      { specifier: "./star", type: false },
+      { specifier: "./reexport-type", type: true },
+      { specifier: "./side.css", type: false },
+      { specifier: "./lazy", type: false },
+      { specifier: "./later", type: false },
+      { specifier: "./shape", type: true },
+      { specifier: "./sdk", type: true },
+    ]);
   });
 });

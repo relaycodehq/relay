@@ -28,7 +28,9 @@
   the preload script and the tests are separate projects, so `src/` can't
   reach for Node and `electron/` can't reach for the DOM. A bare
   `tsc --noEmit` checks nothing and passes.
-- `tests/unit/layout.test.ts` fails when one of these rules is broken.
+- `tests/unit/layout.test.ts` fails when one of these rules is broken, or when
+  features, or the folders of `electron/`, import each other in a circle (the
+  known `electron/` ones are listed there; delete an entry when you break one).
 
 ## Showing options
 
