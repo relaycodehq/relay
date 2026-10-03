@@ -114,4 +114,18 @@ describe("redactSecrets", () => {
     });
     expect(message.body).toContain(github);
   });
+
+  it("cuts the shared copy of a body to what the server keeps, marked as cut", () => {
+    const shared = publicMessage({
+      id: "m",
+      role: "assistant",
+      provider: "claude",
+      status: "complete",
+      body: "a".repeat(150_000),
+      created: 1,
+      version: 1,
+    });
+    expect(shared.body).toHaveLength(100_000);
+    expect(shared.body.endsWith("… (truncated)")).toBe(true);
+  });
 });

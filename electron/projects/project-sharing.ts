@@ -9,6 +9,7 @@ import type {
 } from "../../shared/projects";
 import { roomInvitation, parseRoomInvitation } from "../../shared/rooms";
 import { redacted } from "../../shared/redact-secrets";
+import { truncated } from "../../shared/truncate";
 type SharedPage = {
   conversation: {
     id: string;
@@ -20,6 +21,8 @@ type SharedPage = {
   next: number;
   more: boolean;
 };
+/** The most characters the server keeps of a shared message. */
+const SHARED_BODY_CHARACTERS = 100_000;
 export const publicMessage = ({
   id,
   role,
@@ -33,7 +36,7 @@ export const publicMessage = ({
 }: ChatMessage) => ({
   id,
   role,
-  body: redacted(body),
+  body: truncated(redacted(body), SHARED_BODY_CHARACTERS),
   status,
   created,
   provider,

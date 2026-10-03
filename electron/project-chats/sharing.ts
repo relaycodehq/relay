@@ -1,12 +1,18 @@
-import type { ProjectChat } from "../../shared/projects";
+import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type { ProjectSharing } from "../projects/project-sharing";
 import type { ChatCore } from "./core";
+import { HttpStatusError } from "../../shared/http";
 import { chatSummary } from "./storage";
 
 export interface SharingHost {
   /** Pulls the thread's shared messages and reads it back. */
   sync(id: string): Promise<unknown>;
 }
+
+/** The statuses with which the server turns a message down for good: invalid
+ * (an over-long body, a provider an older server doesn't know), refused
+ * (a reply target it lacks, other contents under the same id) or too large. */
+const REFUSED = new Set([400, 409, 413]);
 
 /** Threads shared with others through the project's rooms server. */
 export class ChatSharing {
@@ -17,27 +23,40 @@ export class ChatSharing {
     private host: SharingHost,
   ) {}
 
-  /** Sends the thread's messages that haven't reached the server yet. */
+  /** Sends the thread's messages that haven't reached the server yet, one by
+   * one so a message the server refuses for good holds back none after it.
+   * That one stays local, like a handoff note. Any other failure stops here
+   * and is thrown, to try again from this message. */
   async deliver(chat: ProjectChat) {
-    const pending = chat.messages.filter(
+    for (const message of chat.messages.filter(
       (m) => m.pending && m.status !== "streaming",
-    );
-    if (!pending.length) return;
-    const result = await this.remote!.send(chat, pending);
-    for (const remote of result) {
-      const local = chat.messages.find((m) => m.id === remote.id);
-      if (local) {
-        Object.assign(local, {
-          author: remote.author,
-          authorId: remote.authorId,
-          seq: remote.seq,
-          pending: false,
-        });
-        local.version++;
-        this.core.emit({ chatId: chat.id, message: structuredClone(local) });
+    )) {
+      let sent: ChatMessage | undefined;
+      try {
+        sent = (await this.remote!.send(chat, [this.linked(chat, message)]))[0];
+      } catch (error) {
+        if (!(error instanceof HttpStatusError && REFUSED.has(error.status)))
+          throw error;
       }
+      Object.assign(message, {
+        pending: false,
+        ...(sent && {
+          author: sent.author,
+          authorId: sent.authorId,
+          seq: sent.seq,
+        }),
+      });
+      message.version++;
+      this.core.emit({ chatId: chat.id, message: structuredClone(message) });
+      await this.core.storage.save(chat);
     }
-    await this.core.storage.save(chat);
+  }
+
+  /** A reply to a message that was never shared, like a handoff note, goes without its parent link. */
+  private linked(chat: ProjectChat, message: ChatMessage): ChatMessage {
+    if (!message.parentId) return message;
+    const parent = chat.messages.find((m) => m.id === message.parentId);
+    return parent?.seq ? message : { ...message, parentId: null };
   }
 
   async info(id: string) {
@@ -78,7 +97,13 @@ export class ChatSharing {
       const chat = await this.core.storage.load(id);
       if (!chat.shared) return;
       if (!this.remote) throw new Error("Sharing is unavailable.");
-      await this.deliver(chat);
+      // Others' messages arrive even when ours can't leave.
+      let undelivered: unknown;
+      try {
+        await this.deliver(chat);
+      } catch (error) {
+        undelivered = error;
+      }
       let changed = false;
       for (let page = 0; page < 10; page++) {
         const result = await this.remote.poll(chat, chat.sharedCursor ?? 0);
@@ -114,6 +139,7 @@ export class ChatSharing {
         chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
         await this.core.storage.persist(chat);
       }
+      if (undelivered) throw undelivered;
     })();
     this.syncing.set(id, job);
     try {

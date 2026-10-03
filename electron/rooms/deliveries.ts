@@ -2,6 +2,7 @@ import type { Store } from "../app/store";
 import type { RoomDelivery } from "../app/store-types";
 import type { RoomConnection, RoomMessage, RoomPage } from "../../shared/rooms";
 import { refusedForGood } from "../../shared/http";
+import { truncated } from "../../shared/truncate";
 import { redacted } from "../../shared/redact-secrets";
 import type { ProjectRoomContext, RoomAccess } from "./access";
 import type { RoomConnections } from "./connections";
@@ -23,17 +24,14 @@ export function outgoing(pending: RoomDelivery, running: boolean) {
 
 /** The most characters the server keeps of an answer. */
 const BODY_CHARACTERS = 100_000;
-const CUT = "\n\n… (truncated)";
-
-const fitted = (body: string) =>
-  body.length > BODY_CHARACTERS
-    ? body.slice(0, BODY_CHARACTERS - CUT.length) + CUT
-    : body;
 
 export function deliveryPatch(value: RoomDelivery) {
   const error = value.error && redacted(value.error).slice(0, 1000);
   return {
-    body: value.status === "running" ? "" : fitted(redacted(value.body)),
+    body:
+      value.status === "running"
+        ? ""
+        : truncated(redacted(value.body), BODY_CHARACTERS),
     status: value.status,
     error,
   };
