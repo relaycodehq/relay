@@ -1,7 +1,7 @@
-import { applyChatPatch, chainRoot, mainConversation, replyRoots, threadOrder, type ChatMessage } from "../../../shared/projects";
+import { applyChatPatch, mainConversation, replyRoots, threadOrder, type ChatMessage } from "../../../shared/projects";
 import type { RemoteChat } from "../../../shared/remote";
 
-export { knownOf, MissingMessage } from "../../../shared/projects";
+export { knownOf, MissingMessage, rootOf } from "../../../shared/projects";
 
 /** A thread as the phone holds it: every message in full. */
 export interface Thread extends Omit<RemoteChat, "messages"> {
@@ -42,10 +42,6 @@ export function keepNewer(fetched: Thread, held: Thread | undefined): Thread {
 
 /** The main conversation: every message but replies, with `/btw` questions in line. */
 export const mainMessages = mainConversation;
-
-/** The message a reply chain starts from; replying to a reply joins its root. */
-export const rootOf = (messages: ChatMessage[], message: ChatMessage) =>
-  chainRoot(new Map(messages.map((m) => [m.id, m])), message);
 
 /** A side conversation: its root, then the replies under it in order. */
 export function sideConversation(messages: ChatMessage[], rootId: string) {

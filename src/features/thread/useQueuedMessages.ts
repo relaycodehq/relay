@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  replyRoot,
+  rootOf,
   type ChatMessage,
   type ProjectChat as ProjectChatData,
   type ProjectChatSend,
@@ -61,9 +61,10 @@ export function useQueuedMessages({
   async function returnToComposer(input: ProjectChatSend) {
     if (!chat) return;
     await run(async () => {
-      const parent = input.parentId
-        ? replyRoot(messages, input.parentId).id
-        : null;
+      const from = messages.find((m) => m.id === input.parentId);
+      const parent = from
+        ? rootOf(messages, from).id
+        : (input.parentId ?? null);
       const key = threadDraftKey(id, parent);
       const old = readDraft(key);
       const back = returnedDraft(

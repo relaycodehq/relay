@@ -6,7 +6,7 @@ import {
   type ProjectFileLink,
 } from "../../../shared/project-file-links";
 import {
-  replyRoot,
+  rootOf,
   type ChatMessage,
   type ChatSummary,
   type WorktreeStatus,
@@ -53,7 +53,7 @@ export function useMessageActions({
     [projectId, chatId],
   );
   const openReply = useStableCallback((m: ChatMessage) =>
-    onOpenReply(replyRoot(messages, m.id).id),
+    onOpenReply(rootOf(messages, m).id),
   );
   const forkThread = useStableCallback(async (m: ChatMessage) => {
     if (!chatId) return;

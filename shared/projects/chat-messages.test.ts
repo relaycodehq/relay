@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   replyRoot,
+  rootOf,
   turnImages,
   type AgentActivity,
   type ChatMessage,
@@ -85,4 +86,22 @@ it("refuses a reply chain that is broken or loops", () => {
   expect(() => replyRoot(messages, "nope")).toThrow("missing");
   expect(() => replyRoot(messages, "c")).toThrow("missing");
   expect(() => replyRoot(messages, "x")).toThrow("Invalid reply chain.");
+});
+
+it("finds where a reply chain starts even when its first message is gone", () => {
+  const messages = [
+    message("a", { parentId: "gone" }),
+    message("b", { parentId: "a" }),
+    message("c", { parentId: "b" }),
+    message("x", { parentId: "y" }),
+    message("y", { parentId: "x" }),
+  ];
+  const root = (id: string) =>
+    rootOf(
+      messages,
+      messages.find((m) => m.id === id)!,
+    ).id;
+  expect(root("c")).toBe("a");
+  expect(root("a")).toBe("a");
+  expect(root("x")).toBe("x");
 });

@@ -172,6 +172,10 @@ export function chainRoot(
   return current;
 }
 
+/** `chainRoot` for a message among `messages`. */
+export const rootOf = (messages: ChatMessage[], message: ChatMessage) =>
+  chainRoot(new Map(messages.map((m) => [m.id, m])), message);
+
 /** Each reply's side conversation, by the message it starts from. A chain whose
  * start is gone begins at its first message that is left, which stays in the
  * main conversation and so has no entry itself. */
