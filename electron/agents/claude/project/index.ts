@@ -7,6 +7,7 @@ export {
   claudeAgentRun,
   claudeAgents,
   claudePending,
+  readClaudeContext,
   stopClaudeAgent,
   stopClaudeTask,
 } from "./live";

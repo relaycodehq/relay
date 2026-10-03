@@ -1,7 +1,14 @@
 import type {
   ModelUsage,
   SDKAssistantMessage,
+  SDKControlGetContextUsageResponse,
 } from "@anthropic-ai/claude-agent-sdk";
+import {
+  categoryKind,
+  contextSourceLabel,
+  type ContextItem,
+  type ContextReport,
+} from "../../../../shared/context-report";
 import type { ContextUsage, PromptCache } from "../../../../shared/projects";
 import type { ClaudeRunOptions } from "./config";
 import type { ClaudeSession } from "./session";
@@ -118,4 +125,49 @@ export function claudeContextTokens(usage: unknown): number {
     count("cache_read_input_tokens") +
     count("output_tokens")
   );
+}
+
+/** Claude Code's live /context counts, in the shape its markdown reads into. */
+export function claudeContextReport(
+  usage: SDKControlGetContextUsageResponse,
+): ContextReport {
+  const items = <T>(
+    list: T[] | undefined,
+    pick: (item: T) => ContextItem,
+  ): ContextItem[] => (list ?? []).map(pick).filter((item) => item.tokens > 0);
+  return {
+    model: usage.model,
+    totalTokens: usage.totalTokens,
+    maxTokens: usage.rawMaxTokens || usage.maxTokens,
+    ...(usage.isAutoCompactEnabled && usage.autoCompactThreshold
+      ? { compactsAt: usage.autoCompactThreshold }
+      : {}),
+    categories: usage.categories
+      .filter((c) => c.tokens > 0)
+      .map((c) => ({
+        name: c.name,
+        tokens: c.tokens,
+        kind: categoryKind(c.name, c.kind, c.isDeferred),
+      })),
+    memoryFiles: items(usage.memoryFiles, (f) => ({
+      name: f.path,
+      source: f.type,
+      tokens: f.tokens,
+    })),
+    mcpTools: items(usage.mcpTools, (t) => ({
+      name: t.name,
+      source: t.serverName,
+      tokens: t.tokens,
+    })),
+    agents: items(usage.agents, (a) => ({
+      name: a.agentType,
+      source: contextSourceLabel(a.source),
+      tokens: a.tokens,
+    })),
+    skills: items(usage.skills?.skillFrontmatter, (s) => ({
+      name: s.name,
+      source: contextSourceLabel(s.source),
+      tokens: s.tokens,
+    })),
+  };
 }

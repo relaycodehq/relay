@@ -15,6 +15,7 @@ const methods = [
   "projectChatPresence",
   "stopProjectChatPending",
   "projectChatAgents",
+  "projectChatContext",
   "projectChatAgent",
   "stopProjectChatAgent",
   "resolveStoppedWork",

@@ -11,6 +11,7 @@ import {
   localImagePath,
 } from "../../../shared/answer-images";
 import { parseCodeReferences } from "../../../shared/code-references";
+import { parseContextReport } from "../../../shared/context-report";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import {
   turnImages,
@@ -20,6 +21,7 @@ import {
 import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
+import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { CompactionRow } from "./CompactionRow";
@@ -230,6 +232,26 @@ export const Message = memo(function Message({
     [chatId, m.id, projectRoot],
   );
   const viewingIndex = images.findIndex((image) => image.key === viewing);
+  // Claude's `/context` tables read as a breakdown; unknown shapes stay markdown.
+  const contextReport = useMemo(
+    () =>
+      m.role === "assistant" &&
+      m.provider === "claude" &&
+      m.status === "complete"
+        ? parseContextReport(m.body)
+        : null,
+    [m.role, m.provider, m.status, m.body],
+  );
+  const answer = text?.trim() && m.role === "assistant" && (
+    <RichText
+      text={text}
+      projectRoot={projectRoot}
+      onOpenFile={onOpenFile}
+      inlineCode={inlineCode}
+      // Main only reads an image once the saved answer names it.
+      image={m.status === "streaming" ? hiddenImage : answerImage}
+    />
+  );
   if (m.handoff)
     return (
       <HandoffRow
@@ -315,15 +337,10 @@ export const Message = memo(function Message({
       {text?.trim() ? (
         m.role === "user" ? (
           <UserText text={text} images={sentImages} onOpenImage={setViewing} />
+        ) : contextReport ? (
+          <ContextReportCard report={contextReport} raw={answer} />
         ) : (
-          <RichText
-            text={text}
-            projectRoot={projectRoot}
-            onOpenFile={onOpenFile}
-            inlineCode={inlineCode}
-            // Main only reads an image once the saved answer names it.
-            image={m.status === "streaming" ? hiddenImage : answerImage}
-          />
+          answer
         )
       ) : null}
       {after}

@@ -1,8 +1,9 @@
-import { useCallback, useRef, type ReactNode, type Ref } from "react";
+import { useCallback, useMemo, useRef, type ReactNode, type Ref } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GitBranch, X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { ComposedSend } from "../../../shared/compose-send";
+import { latestContextReport } from "../../../shared/context-report";
 import type { ChatScope, Project } from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
@@ -168,6 +169,18 @@ export function ThreadComposer({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
 }) {
   const qc = useQueryClient();
+  const savedReport = useMemo(() => latestContextReport(shown), [shown]);
+  const chatId = chat?.id;
+  const counter = useMemo(
+    () =>
+      chatId
+        ? {
+            key: `${chatId}:${root?.id ?? ""}`,
+            count: () => api.projectChatContext(chatId, root?.id ?? null),
+          }
+        : undefined,
+    [chatId, root?.id],
+  );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
   // A side thread doesn't wait for the main answer, nor queue behind it.
@@ -287,6 +300,8 @@ export function ThreadComposer({
             compacting={compacting}
             compactDisabled={running || busy}
             openSignal={showContext}
+            counter={counter}
+            savedReport={savedReport}
             onCompact={() => compact()}
           />
         )

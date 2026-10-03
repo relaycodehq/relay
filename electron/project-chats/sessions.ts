@@ -13,6 +13,7 @@ import {
   claudeAgents,
   claudePending,
   onClaudePending,
+  readClaudeContext,
   stopClaudeAgent,
 } from "../agents/claude/project";
 import type { Store } from "../app/store";
@@ -207,6 +208,11 @@ export class ProviderSessions {
       if (run) return run;
     }
     return null;
+  }
+  /** What fills the window of Claude's live session on the thread, or on one side conversation. */
+  contextReport(chatId: string, parentId?: string) {
+    const key = this.key(chatId, parentId);
+    return this.keys.has(key) ? readClaudeContext(key) : Promise.resolve(null);
   }
   async stopSubagent(chatId: string, agentId: string) {
     const key = this.of(chatId).find((k) => claudeAgentRun(k, agentId));

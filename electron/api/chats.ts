@@ -106,6 +106,9 @@ export function chatHandlers(ctx: ApiContext) {
       projectChats.stopPending(id, pendingId),
     ),
     projectChatAgents: takes([idSchema], (id) => projectChats.agents(id)),
+    projectChatContext: takes([idSchema, optional(idSchema)], (id, parentId) =>
+      projectChats.contextReport(id, parentId),
+    ),
     projectChatAgent: takes([idSchema, agentIdSchema], (id, agentId) =>
       projectChats.agentRun(id, agentId),
     ),

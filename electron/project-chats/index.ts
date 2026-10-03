@@ -330,6 +330,9 @@ export class ProjectChats {
   agents(id: string) {
     return this.sessions.subagents(id);
   }
+  contextReport(id: string, parentId?: string) {
+    return this.sessions.contextReport(id, parentId);
+  }
   agentRun(id: string, agentId: string) {
     return this.sessions.subagentRun(id, agentId);
   }

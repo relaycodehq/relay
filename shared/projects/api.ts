@@ -10,6 +10,7 @@ import type {
 } from "../checks";
 import type { CiStatus } from "../ci";
 import type { ProviderCommand } from "../commands";
+import type { ContextReport } from "../context-report";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type {
   DeepReviewStart,
@@ -141,6 +142,11 @@ export interface ProjectChatApi {
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   /** The subagents Claude started in the thread's live sessions. */
   projectChatAgents(id: string): Promise<SubagentRun[]>;
+  /** What fills the window of Claude's live session, counted as /context does; null without one. */
+  projectChatContext(
+    id: string,
+    parentId?: string | null,
+  ): Promise<ContextReport | null>;
   /** One agent's whole run; null once its session is gone. */
   projectChatAgent(id: string, agentId: string): Promise<SubagentDetail | null>;
   /** Stops one agent; Claude hears it was stopped. */

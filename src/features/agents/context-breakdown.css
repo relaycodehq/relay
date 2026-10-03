@@ -1,0 +1,198 @@
+/* Categorical slots, checked for colour-blind separation on both surfaces. */
+.context-breakdown {
+  --context-1: #2a78d6;
+  --context-2: #eb6834;
+  --context-3: #1baf7a;
+  --context-4: #eda100;
+  --context-5: #e87ba4;
+  --context-6: #008300;
+  --context-7: #4a3aa7;
+  display: grid;
+  gap: 3px;
+}
+:root[data-theme="dark"] .context-breakdown {
+  --context-1: #3987e5;
+  --context-2: #d95926;
+  --context-3: #199e70;
+  --context-4: #c98500;
+  --context-5: #d55181;
+  --context-7: #9085e9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .context-breakdown {
+    --context-1: #3987e5;
+    --context-2: #d95926;
+    --context-3: #199e70;
+    --context-4: #c98500;
+    --context-5: #d55181;
+    --context-7: #9085e9;
+  }
+}
+.context-meter-popup:has(.context-breakdown, .context-counting) {
+  width: 264px;
+}
+/* Edge to edge, like the cache meter's divider. */
+.context-meter-popup .context-breakdown,
+.context-counting {
+  margin: 12px -5px 0;
+  padding: 11px 12px 0;
+  border-top: 1px solid var(--border);
+}
+.context-counting {
+  color: var(--muted);
+  font-size: 11px;
+}
+.context-stack {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 5px;
+  margin: 5px 0 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
+}
+.context-stack > span {
+  min-width: 2px;
+  height: 100%;
+}
+.context-stack > span:first-child {
+  border-radius: 99px 0 0 99px;
+}
+.context-stack-buffer {
+  margin-left: auto;
+  border-radius: 0 99px 99px 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 70%, transparent) 0 1.5px,
+    transparent 1.5px 3.5px
+  );
+}
+.context-stack-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+}
+.context-legend,
+.context-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.context-legend li,
+.context-items li,
+.context-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.context-legend li > span:nth-of-type(1),
+.context-items li > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.context-legend li > span:last-child,
+.context-items li > span:last-child,
+.context-section > summary > span:last-child {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.context-legend i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.context-legend i.context-stack-buffer {
+  margin: 0;
+}
+.context-legend-free {
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.context-deferred {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.context-sections {
+  margin-top: 6px;
+  display: grid;
+}
+.context-section > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 3px 0;
+  font-size: 11px;
+}
+.context-section > summary::-webkit-details-marker {
+  display: none;
+}
+.context-section > summary::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border: 3.5px solid transparent;
+  border-left: 4px solid var(--muted);
+  border-right: 0;
+  transition: transform 120ms ease;
+}
+.context-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+.context-section > summary > span:first-child {
+  flex: 1;
+}
+.context-items {
+  padding: 0 0 4px 11px;
+}
+.context-items-rest {
+  color: var(--muted);
+}
+.context-report-card {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+/* Claude's own tables need the answer's full width. */
+.context-report-card[data-raw] {
+  max-width: none;
+  padding: 0;
+  border: 0;
+}
+.context-report-card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.context-report-card > header .muted {
+  font-weight: 400;
+}
+.context-report-raw {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.context-report-raw:hover {
+  color: var(--text);
+}

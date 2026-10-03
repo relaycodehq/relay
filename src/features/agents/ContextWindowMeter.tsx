@@ -13,14 +13,15 @@ import {
   useCacheHeatHidden,
 } from "./cache-heat";
 import { agentName } from "../../../shared/agents";
+import { ContextBreakdown } from "./ContextBreakdown";
+import { formatTokens } from "./tokens";
+import {
+  useContextReport,
+  type ContextCounter,
+  type DatedReport,
+} from "./useContextReport";
 
-export function formatTokens(value: number) {
-  if (value < 1_000) return `${Math.round(value)}`;
-  if (value < 10_000)
-    return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  if (value < 1_000_000) return `${Math.round(value / 1_000)}k`;
-  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-}
+export { formatTokens };
 
 /** Same thresholds the provider usage meters use for their warning colours. */
 export function contextPace(percent: number) {
@@ -303,6 +304,8 @@ export function ContextWindowMeter({
   compactDisabled,
   onCompact,
   openSignal,
+  counter,
+  savedReport,
 }: {
   /** Right-clicking puts the fire or ice out for this chat. */
   chatId?: string;
@@ -313,6 +316,10 @@ export function ContextWindowMeter({
   onCompact: () => void;
   /** Opens the details whenever this changes, e.g. from a /context command. */
   openSignal?: number;
+  /** Asked on opening the details, for Claude's breakdown of its window. */
+  counter?: ContextCounter;
+  /** Claude's latest /context answer in the thread, shown when its session can't count. */
+  savedReport?: DatedReport;
 }) {
   const percent = usage.maxTokens
     ? Math.min(100, (usage.usedTokens / usage.maxTokens) * 100)
@@ -350,6 +357,14 @@ export function ContextWindowMeter({
   const shown = decoration(worn);
   const heatLabel =
     heat === "fire" ? "fresh" : heat === "warm" ? "warm" : "cold";
+  // Only Claude reports what fills its window.
+  const claude = provider === "claude";
+  const breakdown = useContextReport({
+    counter: claude ? counter : undefined,
+    version: usage.usedTokens,
+    open,
+    saved: claude ? savedReport : undefined,
+  });
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
@@ -439,6 +454,22 @@ export function ContextWindowMeter({
                 </div>
               )}
             </div>
+            {breakdown.shown ? (
+              <ContextBreakdown
+                report={breakdown.shown.report}
+                note={
+                  breakdown.live
+                    ? undefined
+                    : `as of ${formatClock(breakdown.shown.at, now)}`
+                }
+              />
+            ) : (
+              breakdown.counting && (
+                <p className="context-counting" role="status">
+                  Counting what's in the window…
+                </p>
+              )
+            )}
             {cache && heat && (
               <CacheMeter cache={cache} heat={heat} now={now} />
             )}
