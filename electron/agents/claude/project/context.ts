@@ -2,7 +2,7 @@ import type {
   ModelUsage,
   SDKAssistantMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { ContextUsage, PromptCache } from "../../../shared/projects";
+import type { ContextUsage, PromptCache } from "../../../../shared/projects";
 import type { ClaudeRunOptions } from "./config";
 import type { ClaudeSession } from "./session";
 

@@ -9,7 +9,7 @@ import Markdown from "react-markdown";
 import type { Plugin } from "unified";
 import type { Root } from "mdast";
 import { createIncrementalMarkdownPlugin } from "../../src/vendor/t3code/markdown-incremental";
-import { withCodexTransport } from "../../electron/rooms/codex-transport";
+import { withCodexTransport } from "../../electron/agents/codex/codex-transport";
 
 function wire() {
   const stdin = new PassThrough(),

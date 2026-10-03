@@ -1,10 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { terminate } from "../platform/terminate";
-import { executableCommand, spawnExecutable } from "../platform/executables";
+import { terminate } from "../../platform/terminate";
+import { executableCommand, spawnExecutable } from "../../platform/executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
-import { HostedChild } from "../agent-host/child";
-import type { Entry } from "../agent-host/protocol";
-import { HostedSessions } from "../agents/hosted-sessions";
+import { HostedChild } from "../../agent-host/child";
+import type { Entry } from "../../agent-host/protocol";
+import { HostedSessions } from "../hosted-sessions";
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
 type CodexMeta = { provider: "codex"; started?: any };

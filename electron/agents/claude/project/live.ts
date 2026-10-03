@@ -1,5 +1,5 @@
-import type { ChatPending } from "../../../shared/projects";
-import type { SubagentDetail, SubagentRun } from "../../../shared/subagents";
+import type { ChatPending } from "../../../../shared/projects";
+import type { SubagentDetail, SubagentRun } from "../../../../shared/subagents";
 import { sessions } from "./session";
 
 /** What Claude left running that will start its next turn, while its session lives. */

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { codexContextUsage } from "../../electron/rooms/codex";
+import { codexContextUsage } from "../../electron/agents/codex/codex";
 import {
   claudeCacheTtl,
   claudeContextTokens,
-} from "../../electron/rooms/claude-project";
+} from "../../electron/agents/claude/project";
 import {
   cacheHeat,
   contextPace,

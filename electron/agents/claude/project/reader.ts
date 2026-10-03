@@ -6,7 +6,7 @@ import type {
 import {
   answeredFindings,
   reportedFindings,
-} from "../../../shared/deep-review";
+} from "../../../../shared/deep-review";
 import { ClaudeSignedOutError } from "../claude-sign-in";
 import type { ClaudeRunOptions } from "./config";
 import { ContextMeter } from "./context";

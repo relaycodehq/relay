@@ -2,11 +2,11 @@ import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { findExecutable } from "../platform/executables";
+import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
-import { fakeCli } from "../../tests/fixtures/fake-cli";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
+import { fakeCli } from "../../../tests/fixtures/fake-cli";
+vi.mock("../../platform/executables", async (actual) => ({
+  ...(await actual<typeof import("../../platform/executables")>()),
   findExecutable: vi.fn(),
 }));
 

@@ -1,5 +1,5 @@
 import type { SDKControlGetUsageResponse } from "@anthropic-ai/claude-agent-sdk";
-import { withTimeout } from "../../util/timeout";
+import { withTimeout } from "../../../util/timeout";
 import { withProbe, type ClaudeStream } from "./sdk";
 import { sessions } from "./session";
 

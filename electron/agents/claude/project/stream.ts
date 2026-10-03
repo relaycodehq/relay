@@ -1,7 +1,7 @@
 // Who reads a session's stream: the turn Relay is running, a turn Claude
 // started by itself, or nobody, between turns.
-import { AsyncQueue } from "../../util/async-queue";
-import type { HookFrame } from "../../agent-host/protocol";
+import { AsyncQueue } from "../../../util/async-queue";
+import type { HookFrame } from "../../../agent-host/protocol";
 import type { SDKMessage } from "./sdk";
 import type { ClaudeSession } from "./session";
 import { pendingChanged } from "./pending";

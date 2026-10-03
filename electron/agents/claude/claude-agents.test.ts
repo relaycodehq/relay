@@ -6,15 +6,15 @@ import {
   claudeAgents,
   runClaudeProject,
   stopClaudeAgent,
-} from "./claude-project";
+} from "./project";
 import {
   modelName,
   runningBatch,
   type SubagentRun,
-} from "../../shared/subagents";
+} from "../../../shared/subagents";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
-vi.mock("../platform/executables", () => ({
+vi.mock("../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
 

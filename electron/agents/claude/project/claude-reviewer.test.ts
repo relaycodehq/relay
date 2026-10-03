@@ -1,9 +1,9 @@
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { runClaudeProject } from "./claude-project";
+import { runClaudeProject } from "./index";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
-vi.mock("../platform/executables", () => ({
+vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
 

@@ -11,7 +11,7 @@ import {
 import {
   withCodexTransport,
   type CodexTransport,
-} from "../rooms/codex-transport";
+} from "./codex/codex-transport";
 import {
   modelSchema,
   reasoningEffortSchema,

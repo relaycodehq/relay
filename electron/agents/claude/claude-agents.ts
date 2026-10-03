@@ -3,13 +3,13 @@
 // going. Agents run in the background by default and outlive the turn that
 // started them, so the session feeds this every frame, between turns too.
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentTrace } from "../../shared/projects";
+import type { AgentTrace } from "../../../shared/projects";
 import type {
   SubagentDetail,
   SubagentRun,
   SubagentStatus,
-} from "../../shared/subagents";
-import { claudeActivity } from "./activity";
+} from "../../../shared/subagents";
+import { claudeActivity } from "../activity";
 
 /**
  * How sure an ending is. The task's own word beats the Agent call's result,

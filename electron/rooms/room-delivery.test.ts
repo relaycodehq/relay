@@ -15,10 +15,10 @@ import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
 import { sendRoomSchema } from "../../shared/rooms";
 import { defaultAISettings } from "../../shared/settings";
-import { runCodex } from "./codex";
+import { runCodex } from "../agents/codex/codex";
 import type { Gitea } from "../pull-requests/gitea";
 
-vi.mock("./codex", () => ({ runCodex: vi.fn() }));
+vi.mock("../agents/codex/codex", () => ({ runCodex: vi.fn() }));
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
   findExecutable: vi.fn(async () => "/test/codex"),

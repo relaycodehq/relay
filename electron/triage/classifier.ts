@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable, spawnExecutable } from "../platform/executables";
-import { sdk as claudeSdk } from "../rooms/claude-project";
+import { sdk as claudeSdk } from "../agents/claude/project";
 import { agentName } from "../../shared/agents";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
 import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";

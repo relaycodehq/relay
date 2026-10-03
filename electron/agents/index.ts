@@ -1,11 +1,11 @@
 import type { AgentProvider } from "../../shared/agents";
 import { claudeArgs } from "../../shared/settings";
-import { runCodex } from "../rooms/codex";
+import { runCodex } from "./codex/codex";
 import {
   closeCodexConnection,
   reattachCodexSessions,
-} from "../rooms/codex-connection";
-import { runClaude } from "../rooms/claude";
+} from "./codex/codex-connection";
+import { runClaude } from "./claude/claude";
 import {
   askClaudeSide,
   claudeDefaults,
@@ -13,7 +13,7 @@ import {
   listClaudeCommands,
   listClaudeModels,
   reattachClaudeSessions,
-} from "../rooms/claude-project";
+} from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { presentSkill } from "./skill-presentation";
 import { runOpenCode } from "./opencode/run";

@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { AgentRequests } from "./agent-requests";
-import { codexRequest } from "../rooms/codex-requests";
+import { codexRequest } from "../agents/codex/codex-requests";
 import { savedRuntimeMode } from "../../shared/agent-modes";
 
 it("migrates saved choices without upgrading existing read-only/edit drafts to Full access", () => {

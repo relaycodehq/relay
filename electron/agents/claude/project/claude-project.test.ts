@@ -7,14 +7,14 @@ import {
   runClaudeProject,
   stopClaudeTask,
   wakeupTime,
-} from "./claude-project";
-import { ClaudeWork } from "./claude-project/pending";
-import { ClaudeSignedOutError } from "./claude-sign-in";
-import type { AgentActivity, ContextUsage } from "../../shared/projects";
+} from "./index";
+import { ClaudeWork } from "./pending";
+import { ClaudeSignedOutError } from "../claude-sign-in";
+import type { AgentActivity, ContextUsage } from "../../../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 let claudeInstall = "1.0.0";
-vi.mock("../platform/executables", () => ({
+vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
   installStamp: async (path: string) => `${path} ${claudeInstall}`,
 }));

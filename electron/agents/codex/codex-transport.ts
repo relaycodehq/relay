@@ -1,11 +1,11 @@
 import * as PlatformError from "effect/PlatformError";
-import { CodexAppServerRequestError } from "../vendor/t3code/codex/errors";
+import { CodexAppServerRequestError } from "../../vendor/t3code/codex/errors";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import * as Effect from "effect/Effect";
 import * as Sink from "effect/Sink";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
-import { makeCodexAppServerPatchedProtocol } from "../vendor/t3code/codex/protocol";
+import { makeCodexAppServerPatchedProtocol } from "../../vendor/t3code/codex/protocol";
 export interface CodexTransport {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params?: unknown): Promise<void>;

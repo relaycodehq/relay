@@ -1,4 +1,4 @@
-import type { ChatPending } from "../../../shared/projects";
+import type { ChatPending } from "../../../../shared/projects";
 
 type Task = Extract<ChatPending, { kind: "task" }>;
 type Wakeup = Extract<ChatPending, { kind: "wakeup" }>;

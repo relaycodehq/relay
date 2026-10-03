@@ -12,7 +12,7 @@ import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
 import { AnswerRecorder } from "./answer-recorder";
 import { turnRules, type ChatTurn } from "./chat-turn";
-import { ClaudeSignedOutError } from "../rooms/claude-sign-in";
+import { ClaudeSignedOutError } from "../agents/claude/claude-sign-in";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { commitWatch } from "./turn-commit";

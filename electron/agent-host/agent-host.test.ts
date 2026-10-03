@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentHosts, type HostedQuery } from "./client";
-import { codexReplay } from "../rooms/codex-connection";
+import { codexReplay } from "../agents/codex/codex-connection";
 
 // A Claude Code stand-in that asks to run a command before it answers, and
 // says what it was told. It logs its pid so the test can see it end.

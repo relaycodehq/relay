@@ -17,13 +17,13 @@ import { ProjectChats } from "../project-chats";
 import { ProjectSharing } from "./project-sharing";
 import { RoomService } from "../rooms/service";
 import { Gitea } from "../pull-requests/gitea";
-import { runCodex } from "../rooms/codex";
+import { runCodex } from "../agents/codex/codex";
 import { RoomsDatabase, token } from "../../server/database";
 import { createRoomsServer } from "../../server/http";
 import { GiteaRepositoryVerifier } from "../../server/repository-access";
 import { fixtureServer } from "../../tests/fixtures/gitea";
 import { defaultAISettings } from "../../shared/settings";
-vi.mock("../rooms/codex", () => ({ runCodex: vi.fn() }));
+vi.mock("../agents/codex/codex", () => ({ runCodex: vi.fn() }));
 it("shares private history, streams only to the requester, runs each participant’s agent locally, and recovers final delivery after restart", async () => {
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-shared-chat-")),

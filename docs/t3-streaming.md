@@ -27,10 +27,10 @@ update avoids shipping a moving main branch into users' desktop apps.
 Do not edit `src/vendor/t3code/markdown-incremental.ts` or
 `electron/vendor/t3code/**`. Formatting ignores them; tests verify their hashes.
 
-- `electron/rooms/codex-transport.ts`: adapts Node subprocess streams to T3's
+- `electron/agents/codex/codex-transport.ts`: adapts Node subprocess streams to T3's
   protocol; enforces response size limits and request timeouts. Native approval and question requests pass to the local request broker.
-- `electron/rooms/codex-connection.ts`: keeps the native process alive between turns so native session approval rules survive. Stop and app disposal close it.
-- `electron/rooms/codex.ts`: executable lookup, permissions, model settings,
+- `electron/agents/codex/codex-connection.ts`: keeps the native process alive between turns so native session approval rules survive. Stop and app disposal close it.
+- `electron/agents/codex/codex.ts`: executable lookup, permissions, model settings,
   session resume, cancellation, and normalized text updates.
 - `electron/project-chats/index.ts`: local history, restart recovery, coalesced IPC
   delivery and persistence. These are Relay responsibilities.

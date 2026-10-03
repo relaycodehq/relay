@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
-import { claudePending } from "../rooms/claude-project";
+import { claudePending } from "../agents/claude/project";
 import type { ChatPending } from "../../shared/projects";
 import { defaultAISettings } from "../../shared/settings";
 
-vi.mock("../rooms/claude-project", async (actual) => ({
-  ...(await actual<typeof import("../rooms/claude-project")>()),
+vi.mock("../agents/claude/project", async (actual) => ({
+  ...(await actual<typeof import("../agents/claude/project")>()),
   claudePending: vi.fn(() => []),
   closeClaudeSession: vi.fn(),
 }));

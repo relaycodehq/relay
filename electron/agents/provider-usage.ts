@@ -14,7 +14,7 @@ import {
   type ProviderUsage,
   type UsageWindow,
 } from "../../shared/provider-usage";
-import { readClaudeUsage } from "../rooms/claude-project";
+import { readClaudeUsage } from "./claude/project";
 import type { UsageProvider } from "../../shared/agents";
 import { recordUsage } from "./usage-history";
 

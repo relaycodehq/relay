@@ -2,7 +2,7 @@ import type {
   AskAgentRequest,
   AgentDecision,
   AgentQuestion,
-} from "../../shared/agent-modes";
+} from "../../../shared/agent-modes";
 /** Translate native requests; never accept permissions invented by the renderer. */
 export async function codexRequest(
   method: string,

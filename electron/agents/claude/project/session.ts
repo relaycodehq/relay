@@ -4,10 +4,10 @@ import type {
   Options,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { FoundSession, HostedQuery } from "../../agent-host/client";
-import { HostedSessions, inAgentHost } from "../../agents/hosted-sessions";
-import { AsyncQueue } from "../../util/async-queue";
-import { settingsEffort } from "../../../shared/agent-defaults";
+import type { FoundSession, HostedQuery } from "../../../agent-host/client";
+import { HostedSessions, inAgentHost } from "../../hosted-sessions";
+import { AsyncQueue } from "../../../util/async-queue";
+import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
 import { claudePermissionMode, type ClaudeRunOptions } from "./config";
 import { ClaudeWork } from "./pending";

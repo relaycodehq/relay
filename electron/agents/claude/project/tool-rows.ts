@@ -2,8 +2,8 @@ import type {
   SDKTaskProgressMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentActivity } from "../../../shared/projects";
-import { claudeActivity, claudeEditedPaths } from "../activity";
+import type { AgentActivity } from "../../../../shared/projects";
+import { claudeActivity, claudeEditedPaths } from "../../activity";
 import type { ClaudeRunOptions } from "./config";
 
 type Results = Exclude<SDKUserMessage["message"]["content"], string>;

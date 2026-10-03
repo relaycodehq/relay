@@ -1,9 +1,9 @@
-import { findExecutable, installStamp } from "../../platform/executables";
-import { memoByKey, memoWhileStamp } from "../../util/memo";
-import { withTimeout } from "../../util/timeout";
-import type { ClaudeModel } from "../../../shared/settings";
-import type { ClaudeDefaults } from "../../../shared/agent-defaults";
-import type { ProviderCommand } from "../../../shared/commands";
+import { findExecutable, installStamp } from "../../../platform/executables";
+import { memoByKey, memoWhileStamp } from "../../../util/memo";
+import { withTimeout } from "../../../util/timeout";
+import type { ClaudeModel } from "../../../../shared/settings";
+import type { ClaudeDefaults } from "../../../../shared/agent-defaults";
+import type { ProviderCommand } from "../../../../shared/commands";
 import { chromeArgs, readSettings, withProbe } from "./sdk";
 
 /**

@@ -1,5 +1,5 @@
 import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentOptions } from "../../agents/types";
+import type { AgentOptions } from "../../types";
 import { chromeArgs } from "./sdk";
 
 export type ClaudeRunOptions = AgentOptions & {

@@ -3,11 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { runClaudeProject } from "./claude-project";
-import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
+import { runClaudeProject } from "./index";
+import type {
+  AgentRequest,
+  AgentResponse,
+} from "../../../../shared/agent-modes";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
-vi.mock("../platform/executables", () => ({
+vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
 

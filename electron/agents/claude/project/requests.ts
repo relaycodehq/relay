@@ -1,6 +1,6 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import type { HostedHandlers } from "../../agent-host/client";
-import type { AgentQuestion } from "../../../shared/agent-modes";
+import type { HostedHandlers } from "../../../agent-host/client";
+import type { AgentQuestion } from "../../../../shared/agent-modes";
 import type { ClaudeRunOptions } from "./config";
 
 /** The session a request comes from, as answering it needs. */

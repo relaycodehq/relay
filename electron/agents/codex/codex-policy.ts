@@ -1,4 +1,4 @@
-import type { RuntimeMode } from "../../shared/agent-modes";
+import type { RuntimeMode } from "../../../shared/agent-modes";
 // Adapted from T3 Code CodexSessionRuntime.ts (MIT).
 export function codexPolicy(mode: RuntimeMode) {
   switch (mode) {

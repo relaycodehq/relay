@@ -48,7 +48,7 @@ await build({
 
 // The Claude SDK is ESM. Bundle it separately so import.meta and native imports retain their semantics.
 await build({
-  entryPoints: ["electron/rooms/claude-sdk.ts"],
+  entryPoints: ["electron/agents/claude/claude-sdk.ts"],
   bundle: true,
   platform: "node",
   target: "node22",

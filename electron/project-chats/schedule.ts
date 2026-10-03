@@ -6,7 +6,7 @@ import type {
   StoppedWork,
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
-import { stopClaudeTask } from "../rooms/claude-project";
+import { stopClaudeTask } from "../agents/claude/project";
 import type { ChatCore } from "./core";
 import { sessionInput } from "./sessions";
 import { nextSend } from "./storage";
