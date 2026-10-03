@@ -140,8 +140,15 @@ const untrackedLimit = 200,
 // The tree is polled every few seconds and untracked files rarely change
 // between polls, so their line counts are kept per checkout by size and mtime.
 const untrackedCache = new Map<string, Map<string, number>>();
+// A repository with no commits yet is compared with the empty tree.
+const trackedBase = async (root: string, head: string) =>
+  head || (await git(root, ["hash-object", "-t", "tree", "/dev/null"])).trim();
 /** Lines added and removed across the checkout against HEAD, untracked text files included. */
-async function lineCounts(root: string, changes: WorkingChange[]) {
+async function lineCounts(
+  root: string,
+  changes: WorkingChange[],
+  head: string,
+) {
   const untracked = changes
     .filter((c) => c.index === "?")
     .slice(0, untrackedLimit);
@@ -150,16 +157,18 @@ async function lineCounts(root: string, changes: WorkingChange[]) {
   const [diff, added] = await Promise.all([
     untracked.length === changes.length
       ? ""
-      : git(root, [
-          "diff",
-          "HEAD",
-          "--numstat",
-          "-z",
-          "--no-renames",
-          "--no-color",
-          "--no-ext-diff",
-          "--no-textconv",
-        ]),
+      : trackedBase(root, head).then((base) =>
+          git(root, [
+            "diff",
+            base,
+            "--numstat",
+            "-z",
+            "--no-renames",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+          ]),
+        ),
     Promise.all(
       untracked.map((c) => untrackedLines(join(root, c.path), previous, seen)),
     ),
@@ -200,7 +209,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   // This runs every few seconds and around every Git action, so reads that
   // don't depend on each other run together (status takes no index lock).
   const [headRaw, branchRaw, raw, upstream, operation] = await Promise.all([
-    git(root, ["rev-parse", "HEAD"]),
+    git(root, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => ""),
     git(root, ["branch", "--show-current"]),
     git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
     git(root, [
@@ -258,7 +267,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     upstream
       ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
       : "",
-    lineCounts(root, changes),
+    lineCounts(root, changes, head),
   ]);
   return {
     head,

@@ -115,6 +115,36 @@ it("commits chosen files that were deleted or renamed through the index", async 
   ).toEqual(["D\ta.txt", "R100\tc.txt\td.txt"]);
   expect(tree.changes.map((c) => c.path)).toEqual(["other.ts"]);
 });
+it("works in a repository with no commits yet, first commit included", async () => {
+  const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
+  try {
+    const run = (...args: string[]) =>
+      execFileSync("git", ["-C", fresh, ...args], { encoding: "utf8" }).trim();
+    run("init", "-q", "-b", "main");
+    run("config", "user.name", "Test");
+    run("config", "user.email", "test@example.invalid");
+    await writeFile(join(fresh, "first.ts"), "one\ntwo\n");
+    await writeFile(join(fresh, "staged.ts"), "x\n");
+    await writeFile(join(fresh, "left.ts"), "left\n");
+    run("add", "staged.ts");
+    let tree = await workingTree(fresh);
+    expect(tree.head).toBe("");
+    expect(tree.branch).toBe("main");
+    expect(tree.lines).toEqual({ additions: 4, deletions: 0 });
+    tree = await performGitAction(fresh, {
+      kind: "commit",
+      revision: tree.revision,
+      message: "First",
+      paths: ["first.ts", "staged.ts"],
+    });
+    expect(
+      run("show", "--name-status", "--format=", "HEAD").split("\n").sort(),
+    ).toEqual(["A\tfirst.ts", "A\tstaged.ts"]);
+    expect(tree.changes.map((c) => c.path)).toEqual(["left.ts"]);
+  } finally {
+    await rm(fresh, { recursive: true, force: true });
+  }
+});
 it("handles literal odd filenames, renames, deletion and untracked files", async () => {
   const name = ":(glob)* weird\nfile.ts";
   await writeFile(join(root, name), "new\n");
