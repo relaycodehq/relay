@@ -70,18 +70,20 @@ export function useComposerSend({
   const [sendAfterDictation, setSendAfterDictation] = useState<{
     steer: boolean;
     sendAt?: number;
+    after?: () => void;
   } | null>(null);
   useEffect(() => {
     if (!sendAfterDictation) return;
     setSendAfterDictation(null);
-    void send(sendAfterDictation.steer, sendAfterDictation.sendAt);
+    const { steer, sendAt, after } = sendAfterDictation;
+    void send(steer, sendAt, after);
   }, [sendAfterDictation]);
-  /** `sendAt` holds the message until then (Send later). */
-  async function send(steer = false, sendAt?: number) {
+  /** `sendAt` holds the message until then (Send later); `after` runs once it is in. */
+  async function send(steer = false, sendAt?: number, after?: () => void) {
     const now = dictationSnapshot();
     if (now.owner === dictation && now.phase !== "idle") {
       void stopDictation().then((finished) => {
-        if (finished) setSendAfterDictation({ steer, sendAt });
+        if (finished) setSendAfterDictation({ steer, sendAt, after });
       });
       return;
     }
@@ -99,6 +101,7 @@ export function useComposerSend({
           outgoing.dispatch,
         );
         if (!sent) outgoing.restore();
+        else after?.();
       } finally {
         sending.current = false;
       }
@@ -145,7 +148,10 @@ export function useComposerSend({
           choice: runs.choiceFor(to)!,
           ...runs.contextFor(to),
         });
-      if (sent) await draft.forgetSent();
+      if (sent) {
+        await draft.forgetSent();
+        after?.();
+      }
     } finally {
       sending.current = false;
     }

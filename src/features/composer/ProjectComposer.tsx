@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -96,6 +97,7 @@ export function ProjectComposer({
   onStop,
   onCommand,
   onEditQueued,
+  onNextThread,
 }: {
   ref?: Ref<ComposerHandle>;
   projectId: string;
@@ -128,6 +130,8 @@ export function ProjectComposer({
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   /** Takes the newest queued message back into the composer; false when none waits. */
   onEditQueued?: () => boolean;
+  /** Opens a new thread in the project, once a message sent to go on there is in. */
+  onNextThread?: () => void;
 }) {
   const {
     shared,
@@ -149,6 +153,13 @@ export function ProjectComposer({
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, shared, promptInput);
   const recall = usePromptHistory(promptInput, sent);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const runs = useAgentRuns(composer, catalogs, draft.dropMention);
   const accounts = useThreadAccounts(conversation.chatId, conversation.accounts);
   /** Bumped each time Ultraplan is picked, to replay the ring's spin. */
@@ -320,6 +331,14 @@ export function ProjectComposer({
                 e.preventDefault();
                 return;
               }
+            }
+            if (!e.repeat && matches("send-new-thread", e)) {
+              e.preventDefault();
+              void sending.send(false, undefined, () => {
+                // Not if the thread was left while it sent.
+                if (mounted.current) onNextThread?.();
+              });
+              return;
             }
             const step = effortStep(e);
             if (step) {

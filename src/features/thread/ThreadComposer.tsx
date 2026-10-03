@@ -303,6 +303,8 @@ export function ThreadComposer({
       sent={sent}
       onSend={onSend}
       onEditQueued={onEditQueued}
+      // A thread not made yet opens itself once its first message is in.
+      onNextThread={chat ? () => void runCommand("new", "") : undefined}
       onStop={() => {
         if (chat) void api.cancelProjectChat(chat.id).catch(setError);
       }}

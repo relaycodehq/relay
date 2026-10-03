@@ -123,6 +123,21 @@ describe("recordCombo", () => {
       "invalid",
     );
   });
+  it("lets a command that sends take Enter, with a modifier held", () => {
+    expect(
+      recordCombo(
+        key("Enter", { meta: true, shift: true }),
+        "send-new-thread",
+        true,
+      ).kind,
+    ).toBe("combo");
+    expect(
+      recordCombo(key("Enter", { shift: true }), "send-new-thread", true).kind,
+    ).toBe("invalid");
+    expect(
+      recordCombo(key("Tab", { meta: true }), "send-new-thread", true).kind,
+    ).toBe("invalid");
+  });
   it("records a digit family by its modifiers", () => {
     expect(
       recordCombo(

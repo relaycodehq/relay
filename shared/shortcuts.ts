@@ -54,6 +54,8 @@ export interface ShortcutCommand {
   digits?: boolean;
   /** Handled by the app menu in the main process. */
   menu?: boolean;
+  /** It sends a message, so Enter with ⌘, ⌃ or ⌥ held may be its key. */
+  sends?: boolean;
   defaults: (mac: boolean) => KeyCombo[];
 }
 
@@ -183,6 +185,15 @@ const shortcutCommands = {
       "Tap to start and tap again to finish, or hold to talk and let go. Esc discards what you said.",
     keywords: "dictation voice speech microphone push to talk",
     defaults: (mac) => [combo(mac, mac ? "alt+Space" : "ctrl+Space")],
+  },
+  "send-new-thread": {
+    title: "Send, then start a new thread",
+    group: "Composer",
+    description:
+      "Sends as the send key does, queued while an answer runs, then opens a new thread in the project once the message is in.",
+    keywords: "send next another fresh",
+    sends: true,
+    defaults: one("mod+alt+Enter"),
   },
   "edit-queued": {
     title: "Edit the last queued message",
@@ -425,12 +436,17 @@ export function recordCombo(
   };
   const held = next.alt || next.ctrl || next.meta;
   const mods = mac ? "⌘, ⌃ or ⌥" : "Ctrl or Alt";
-  if (/^(Enter|NumpadEnter|Tab|Escape)$/.test(next.code))
+  const cmd = command(id);
+  if (
+    /^(Enter|NumpadEnter|Tab|Escape)$/.test(next.code) &&
+    !(cmd.sends && held && /Enter$/.test(next.code))
+  )
     return {
       kind: "invalid",
-      reason: "Enter, Tab and Esc keep their usual jobs. Try another key.",
+      reason: cmd.sends
+        ? `Tab and Esc keep their usual jobs, and Enter needs ${mods}. Try another key.`
+        : "Enter, Tab and Esc keep their usual jobs. Try another key.",
     };
-  const cmd = command(id);
   if (cmd.digits) {
     if (!isDigit(next.code) || !held)
       return {
