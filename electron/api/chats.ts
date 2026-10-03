@@ -95,7 +95,7 @@ export function chatHandlers(ctx: ApiContext) {
       (id, settings) => projectChats.resume(id, settings),
     ),
     compactProjectChat: takes(
-      [idSchema, optional(idSchema), z.string().trim().max(4000).optional()],
+      [idSchema, optional(idSchema), optional(z.string().trim().max(4000))],
       (id, parentId, instructions) =>
         projectChats.compact(id, parentId, instructions || undefined),
     ),
@@ -104,7 +104,7 @@ export function chatHandlers(ctx: ApiContext) {
         idSchema,
         z.enum(["remove", "steer", "move"]),
         idSchema,
-        z.number().int().min(0).max(20).optional(),
+        optional(z.number().int().min(0).max(20)),
       ],
       (id, action, messageId, index) =>
         projectChats.queueAction(id, action, messageId, index),
