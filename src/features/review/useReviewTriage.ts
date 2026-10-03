@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAnalyzing, notedPaths } from "../../../shared/triage";
 import type { Progress, Pull, PullRef } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { openGroups } from "./review-order";
+
+const NO_PATHS: string[] = [];
 
 /**
  * Grouping a PR's files by the change they make together: the analysis,
@@ -28,7 +30,15 @@ export function useReviewTriage(
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),
     [plain, setPlain] = useState(false),
-    [commentPaths, setCommentPaths] = useState<string[]>([]);
+    [reported, setReported] = useState<{ scope: string; paths: string[] }>();
+  // Reported with the PR and revision they are for, so what a comments hook
+  // reports on mounting alongside a switch isn't taken for the old one's.
+  const scope = JSON.stringify([selected, revision]);
+  const commentPaths = reported?.scope === scope ? reported.paths : NO_PATHS;
+  const setCommentPaths = useCallback(
+    (paths: string[]) => setReported({ scope, paths }),
+    [scope],
+  );
   const result =
     triage.data?.revision === revision ? triage.data.result : undefined;
   const groups = useMemo(
@@ -40,7 +50,6 @@ export function useReviewTriage(
     [result, commentPaths, progress.drafts, progress.marks, revision],
   );
   useEffect(() => {
-    setCommentPaths([]);
     setError(undefined);
   }, [revision, selected]);
   const start = async () => {
