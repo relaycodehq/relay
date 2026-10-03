@@ -79,6 +79,8 @@ class FakeAgent {
     run.wait = async () => {
       if (/\[\[auth\]\]/.test(prompt))
         throw named("AuthenticationError", "The API key was rejected.");
+      if (/\[\[ratelimit\]\]/.test(prompt))
+        throw named("RateLimitError", "You've hit your Cursor usage limit.");
       if (/\[\[apikey\]\]/.test(prompt))
         throw named(
           "ConfigurationError",

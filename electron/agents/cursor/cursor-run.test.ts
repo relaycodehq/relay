@@ -19,11 +19,7 @@ import {
   expect,
   it,
 } from "vitest";
-import {
-  forgetCursorModels,
-  cursorDefaults,
-  cursorModels,
-} from "./catalog";
+import { forgetCursorModels, cursorDefaults, cursorModels } from "./catalog";
 import { closeCursorConnection } from "./connection";
 import { cursorPolicy, runCursor } from "./run";
 import { configureCursor } from "./sdk";
@@ -145,9 +141,12 @@ describe("a Cursor turn", () => {
       turn("say hello", { session: { key, onId: async () => {} } }).options;
     try {
       await Promise.all([runCursor(thread("a")), runCursor(thread("b"))]);
-      const stores = (await asked()).map((sent) => sent.options.local.store.dir);
+      const stores = (await asked()).map(
+        (sent) => sent.options.local.store.dir,
+      );
       expect(new Set(stores).size).toBe(2);
-      for (const store of stores) expect(store).toContain(join("store", "threads"));
+      for (const store of stores)
+        expect(store).toContain(join("store", "threads"));
     } finally {
       await closeCursorConnection("a");
       await closeCursorConnection("b");
@@ -241,17 +240,31 @@ describe("a Cursor turn", () => {
     );
   });
 
-  it("points at Settings when Cursor isn't signed in", async () => {
+  it("points at Settings when Cursor isn't signed in, and says so as a sign-in error", async () => {
     process.env.CURSOR_FAKE_SIGNED_OUT = "1";
-    await expect(runCursor(turn("say hello").options)).rejects.toThrow(
-      /isn't signed in.*Settings/,
-    );
+    const error = await runCursor(turn("say hello").options).catch((e) => e);
+    expect(error.message).toMatch(/isn't signed in.*Settings/);
+    expect(error).toMatchObject({ kind: "signedOut", provider: "cursor" });
   });
 
   it("points at Settings when Cursor rejects the key", async () => {
-    await expect(runCursor(turn("[[auth]]").options)).rejects.toThrow(
-      /isn't signed in.*Settings/,
+    const error = await runCursor(turn("[[auth]]").options).catch((e) => e);
+    expect(error.message).toMatch(/isn't signed in.*Settings/);
+    expect(error).toMatchObject({ kind: "signedOut", provider: "cursor" });
+  });
+
+  it("says a rate or usage limit is one, keeping Cursor's reason and promising no reset", async () => {
+    const error = await runCursor(turn("[[ratelimit]]").options).catch(
+      (e) => e,
     );
+    expect(error).toMatchObject({ kind: "usageLimit", provider: "cursor" });
+    expect(error.message).toContain("You've hit your Cursor usage limit.");
+    expect(error.resetsAt).toBeUndefined();
+  });
+
+  it("leaves an error that only sounds like signing in as Cursor's own words", async () => {
+    const error = await runCursor(turn("[[apikey]]").options).catch((e) => e);
+    expect(error).not.toHaveProperty("kind");
   });
 
   it("passes on Cursor's own words when an error only sounds like signing in", async () => {

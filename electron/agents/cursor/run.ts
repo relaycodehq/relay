@@ -17,6 +17,7 @@ import {
 } from "./connection";
 import type { CursorRun, CursorRunResult, CursorUpdate } from "./protocol";
 import { currentSdk, ensureSdk } from "./sdk";
+import { signedOutError, usageLimitError } from "../errors";
 import { answerLimitError, guardSteer } from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
@@ -76,13 +77,20 @@ async function explainCursorError(
   if (!(error instanceof CursorError))
     return error instanceof Error ? error : new Error(String(error));
   if (sandboxRefused(error)) return new Error(noSandbox);
-  if (error.name === "AuthenticationError") return new Error(signInFirst);
+  if (error.name === "AuthenticationError")
+    return signedOutError("cursor", signInFirst);
+  // The SDK's 429: too many requests, or the plan's usage limit. It sends no reset time.
+  if (error.name === "RateLimitError")
+    return usageLimitError(
+      "cursor",
+      `Cursor hit a rate or usage limit: ${error.message.slice(0, 300)}`,
+    );
   // Sounds like a sign-in problem: only say so when Cursor agrees.
   if (
     /api key|log ?in|sign ?in/i.test(error.message) &&
     (await signedOut(connection))
   )
-    return new Error(signInFirst);
+    return signedOutError("cursor", signInFirst);
   return error;
 }
 
