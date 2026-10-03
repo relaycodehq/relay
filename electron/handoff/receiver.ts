@@ -28,7 +28,7 @@ import {
   fetchRemotes,
   hasCommit,
   repositoryNames,
-} from "./git";
+} from "../git/bundles";
 
 const partSchema = z.enum(["thread", "bundle"]);
 const base64 = z

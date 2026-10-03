@@ -28,7 +28,7 @@ import {
   hasCommit,
   landReturned,
   repositoryNames,
-} from "./git";
+} from "../git/bundles";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before bridge 10 answers a call it doesn't know. */

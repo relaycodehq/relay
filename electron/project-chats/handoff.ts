@@ -15,7 +15,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { readTurn } from "../../shared/agent-trace";
-import { commitEverything, headOf } from "../handoff/git";
+import { commitEverything, headOf } from "../git/bundles";
 import { worktreeExists } from "../git/worktrees";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";

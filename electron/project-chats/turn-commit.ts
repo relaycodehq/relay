@@ -1,4 +1,4 @@
-import { headOf } from "../handoff/git";
+import { headOf } from "../git/bundles";
 
 /** `git commit`, `git -C dir commit --amend`, one step of `git add -A && git commit`. */
 const commitCommand = /\bgit\b[^\n;&|]*\scommit\b/;
