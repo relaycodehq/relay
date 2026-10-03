@@ -18,82 +18,36 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { modelSchema } from "../../../shared/settings";
 import {
   agentName,
   agentProviders,
-  agents,
-  type AgentModel,
   type AgentProvider,
   reportsUsage,
-  usageProviders,
   type UsageProvider,
 } from "../../../shared/agents";
-import type { ProviderUsage } from "../../../shared/provider-usage";
 import {
   OpenAI,
   ClaudeAI,
   OpenCode,
 } from "../../vendor/t3code/model-picker/ProviderIcons";
-import { scoreModelPickerSearch } from "../../vendor/t3code/model-picker/modelPickerSearch";
-import { api } from "../../lib/api";
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
 import { UsageMeters } from "./UsageMeters";
+import {
+  isGrouped,
+  modelKey,
+  pickerCatalog,
+  pickerRows,
+  providerNames,
+  type AgentCatalog,
+  type Category,
+  type MessageProvider,
+  type PickerModel,
+} from "./model-picker-catalog";
+import { usePickerUsage } from "./usePickerUsage";
+import { useCustomModels, useFavoriteModels } from "./useStoredModels";
 import "./composer-model-picker.css";
 
-export type MessageProvider = AgentProvider | "message";
-type Category = MessageProvider | "favorites";
-type Model = {
-  provider: MessageProvider;
-  id: string;
-  name: string;
-  legacy?: boolean;
-  custom?: boolean;
-  description?: string;
-  /** Its section, e.g. the upstream provider an OpenCode model runs on. */
-  group?: string;
-};
-/** What the picker offers for one agent. */
-export interface AgentCatalog {
-  /** Listed by the agent; undefined while loading. */
-  models: AgentModel[] | undefined;
-  /** The model picked for it; "" is its Default. */
-  model: string;
-}
-const providerNames: Record<MessageProvider, string> = {
-  ...(Object.fromEntries(
-    agentProviders.map((p) => [p, agentName(p)]),
-  ) as Record<AgentProvider, string>),
-  message: "No agent",
-};
-/** Search scores from here per word come from fuzzy matches; see modelPickerSearch. */
-const fuzzyScore = 100;
-const searchWords = (query: string) =>
-  Math.max(1, query.trim().split(/\s+/).filter(Boolean).length);
-const modelKey = (m: Model) => JSON.stringify([m.provider, m.id]);
-const favoritesKey = "relay-model-favorites";
-const customsKey = (provider: AgentProvider) =>
-  `relay-custom-${provider}-models`;
-function readList(key: string): string[] {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(value)
-      ? value
-          .filter((v): v is string => typeof v === "string" && v.length <= 200)
-          .slice(0, 100)
-      : [];
-  } catch {
-    return [];
-  }
-}
-const readCustoms = () =>
-  Object.fromEntries(
-    agentProviders.map((p) => [
-      p,
-      readList(customsKey(p)).filter((id) => modelSchema.safeParse(id).success),
-    ]),
-  ) as Record<AgentProvider, string[]>;
 const providerIcons: Record<MessageProvider, typeof OpenAI> = {
   codex: OpenAI,
   claude: ClaudeAI,
@@ -152,55 +106,21 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const [legacy, setLegacy] = useState(false);
   /** The section shown in a grouped agent's list; "" shows them all. */
   const [group, setGroup] = useState("");
-  const [favorites, setFavorites] = useState(() => readList(favoritesKey));
+  const [favorites, setFavorites] = useFavoriteModels();
   // Favorites lead the list in the order they had when the picker opened,
   // so starring a row doesn't move it out from under the pointer.
   const [pinned, setPinned] = useState(favorites);
-  const [customs, setCustoms] = useState(readCustoms);
+  const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
-  const [usage, setUsage] = useState<
-    Partial<Record<UsageProvider, ProviderUsage>>
-  >({});
-  const [now, setNow] = useState(() => Date.now());
+  const { usage, now } = usePickerUsage(open, account?.of);
   const offered = (providers ?? agentProviders).filter((p) => catalogs[p]);
   const selectedKey = JSON.stringify([
     provider,
     provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
   ]);
-  const defaultName = (m: Model) =>
+  const defaultName = (m: PickerModel) =>
     m.provider !== "message" && !m.id ? defaultNames?.[m.provider] : undefined;
-  // Each agent's listed models sit above its Default, then ids it doesn't
-  // list: typed-in custom ones, and the pick itself.
-  const catalog: Model[] = [
-    ...offered.flatMap((p): Model[] => {
-      const listed = catalogs[p]!.models ?? [];
-      const unlisted = [...customs[p], catalogs[p]!.model].filter(
-        (id, i, all) =>
-          id && all.indexOf(id) === i && !listed.some((m) => m.id === id),
-      );
-      return [
-        ...listed.map((m) => ({
-          provider: p,
-          id: m.id,
-          name: m.name,
-          description: m.description,
-          legacy: m.legacy,
-          group: m.group,
-        })),
-        { provider: p, id: "", name: `${agentName(p)} default` },
-        ...unlisted.map((id) => ({
-          provider: p,
-          id,
-          name: id,
-          custom: customs[p].includes(id),
-        })),
-      ];
-    }),
-    { provider: "message", id: "", name: "Message only" },
-  ];
-  const legacyCount = catalog.filter(
-    (m) => m.provider === category && m.legacy,
-  ).length;
+  const catalog = pickerCatalog(offered, catalogs, customs);
   const current =
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
@@ -208,124 +128,24 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   const triggerName = currentDefault
     ? `Default (${currentDefault})`
     : current.name;
-  // An agent with hundreds of models from many providers lists them by provider.
-  const grouped =
-    category !== "favorites" &&
-    category !== "message" &&
-    agents[category].modelGroups;
-  const matching = catalog
-    .filter((m) => allowDefault || m.provider === "message" || m.id)
-    .filter((m) => {
-      if (category === "favorites") return favorites.includes(modelKey(m));
-      return (
-        m.provider === category &&
-        (!m.legacy || legacy || query.trim() || pinned.includes(modelKey(m)))
-      );
-    })
-    .map((m, index) => ({
-      model: m,
-      index,
-      pinned: pinned.includes(modelKey(m)),
-      score: scoreModelPickerSearch(
-        {
-          driverKind: m.provider,
-          providerDisplayName: providerNames[m.provider],
-          name: m.name,
-          shortName: m.id,
-          subProvider: [m.group, m.description].filter(Boolean).join(" "),
-          isFavorite: pinned.includes(modelKey(m)),
-        },
-        query,
-      ),
-    }))
-    // Among hundreds of models a fuzzy match is noise, and would skew the counts.
-    .filter(
-      (r) =>
-        r.score !== null &&
-        (!grouped || r.score < fuzzyScore * searchWords(query)),
-    );
-  const groups = grouped
-    ? [
-        ...new Set(
-          catalog.flatMap((m) =>
-            m.provider === category && m.group ? [m.group] : [],
-          ),
-        ),
-      ].map((name) => ({
-        name,
-        count: matching.filter((r) => r.model.group === name).length,
-      }))
-    : [];
-  const rows = matching
-    .filter((r) => !grouped || !group || r.model.group === group)
-    .sort(
-      (a, b) =>
-        Number(b.pinned) - Number(a.pinned) ||
-        (query.trim()
-          ? a.score! - b.score!
-          : Number(!!a.model.legacy) - Number(!!b.model.legacy)) ||
-        a.index - b.index,
-    )
-    .map((r) => r.model);
-  const firstLegacy = query.trim()
-    ? -1
-    : rows.findIndex((m) => m.legacy && !pinned.includes(modelKey(m)));
-  const customId = query.trim();
-  if (
-    category !== "favorites" &&
-    category !== "message" &&
-    rows.length === 0 &&
-    modelSchema.safeParse(customId).success
-  )
-    rows.push({
-      provider: category,
-      id: customId,
-      name: customId,
-      custom: true,
-    });
+  const grouped = isGrouped(category);
+  const { rows, groups, legacyCount, firstLegacy } = pickerRows(catalog, {
+    category,
+    query,
+    legacy,
+    group,
+    favorites,
+    pinned,
+    allowDefault,
+  });
 
-  function select(m: Model) {
+  function select(m: PickerModel) {
     const p = m.provider;
     if (m.custom && p !== "message" && !customs[p].includes(m.id))
       setCustoms((all) => ({ ...all, [p]: [...all[p], m.id].slice(-100) }));
     onSelect(m.provider, m.id);
     setOpen(false);
   }
-  useEffect(() => {
-    localStorage.setItem(favoritesKey, JSON.stringify(favorites));
-  }, [favorites]);
-  useEffect(() => {
-    for (const p of agentProviders)
-      localStorage.setItem(customsKey(p), JSON.stringify(customs[p]));
-  }, [customs]);
-  useEffect(() => {
-    if (!open) return;
-    let cancel = false;
-    for (const provider of usageProviders) {
-      void api
-        .providerUsage(provider, false, account?.of(provider))
-        .then((value) => {
-          if (!cancel) setUsage((prev) => ({ ...prev, [provider]: value }));
-        })
-        .catch(() => {
-          if (!cancel) {
-            setUsage((prev) => ({
-              ...prev,
-              [provider]: {
-                provider,
-                windows: [],
-                message: "Couldn't read usage",
-              },
-            }));
-          }
-        });
-    }
-    const tick = setInterval(() => setNow(Date.now()), 20_000);
-    return () => {
-      cancel = true;
-      clearInterval(tick);
-    };
-  }, [open]);
   useEffect(() => {
     if (!openSignal) return;
     setOpen(true);
@@ -338,7 +158,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     // Only a new signal opens the picker, not a changed provider.
   }, [openSignal]);
   /** What a row says under its name; nothing, for a plain model in its own section. */
-  const subtitle = (m: Model) =>
+  const subtitle = (m: PickerModel) =>
     m.custom && m.provider !== "message"
       ? `Custom ${agentName(m.provider)} model`
       : defaultName(m)

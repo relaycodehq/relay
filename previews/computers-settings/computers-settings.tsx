@@ -9,10 +9,8 @@ import "../../src/styles.css";
 import "../../src/features/settings/settings.css";
 import "./computers-settings.css";
 import { setMode } from "../../src/lib/appearance";
-import {
-  ComputersMap,
-  TakeThreadsOver,
-} from "../../src/features/handoff/ComputersSettings";
+import { ComputersMap } from "../../src/features/handoff/ComputersSettings";
+import { TakeThreadsOver } from "../../src/features/handoff/TakeThreadsOver";
 import type { ComputersOverview, PairedComputer } from "../../shared/handoff";
 import type { PhoneRemoteState } from "../../shared/remote";
 import type { Api } from "../../shared/types";

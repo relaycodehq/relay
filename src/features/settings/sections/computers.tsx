@@ -1,5 +1,6 @@
 import type { SettingEntry } from "../settings-search";
-import { ComputersMap, TakeThreadsOver } from "../../handoff/ComputersSettings";
+import { ComputersMap } from "../../handoff/ComputersSettings";
+import { TakeThreadsOver } from "../../handoff/TakeThreadsOver";
 
 export function computerEntries({
   onOpenChat,
