@@ -171,7 +171,7 @@ export class ComputerHandoff {
       if (this.councils.busy(chat))
         throw new Error("Wait for the council or review to finish first.");
       chat.sentTo = { ...sentTo, state: "sending" };
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
     });
   }
   /** Updates a thread's handoff while it's still `handoffId`; null ends it, keeping the thread here. */
@@ -186,7 +186,7 @@ export class ComputerHandoff {
       chat.sentTo = { ...chat.sentTo, ...change };
       if ("error" in change && !change.error) delete chat.sentTo.error;
     } else delete chat.sentTo;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
   /**
    * Unlocks a thread that's away, as it was when it left plus anything
@@ -204,7 +204,7 @@ export class ComputerHandoff {
       ];
       delete chat.sentTo;
       chat.updated = Date.now();
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       return true;
     });
   }
@@ -251,7 +251,7 @@ export class ComputerHandoff {
         }
       }
       await commitEverything(root, `Hand off to ${computer}`);
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       return {
         chat: structuredClone(chat),
         root,
@@ -378,7 +378,7 @@ export class ComputerHandoff {
         (out) => out.trim(),
         () => came.tip,
       );
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       return { chat: structuredClone(chat), root, tip };
     });
   }
@@ -423,15 +423,11 @@ export class ComputerHandoff {
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
     const chat = await this.core.storage.load(id);
-    if (
-      !chat.cameFrom ||
-      chat.cameFrom.returnedAt ||
-      chat.cameFrom.abandonedAt
-    )
+    if (!chat.cameFrom || chat.cameFrom.returnedAt || chat.cameFrom.abandonedAt)
       return;
     chat.cameFrom.returnedAt = Date.now();
     this.core.sessions.close(id);
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
   /**
    * The computer it came from took the thread back without this one. The
@@ -442,7 +438,7 @@ export class ComputerHandoff {
     const came = chat.cameFrom;
     if (!came || came.returnedAt || came.abandonedAt) return;
     came.abandonedAt = Date.now();
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
   /**
    * A thread back from another computer: what was written there joins the
@@ -480,7 +476,7 @@ export class ComputerHandoff {
       };
       delete chat.sentTo;
       chat.updated = Date.now();
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       for (const m of arrived)
         this.core.emit({ chatId: id, message: structuredClone(m) });
     });

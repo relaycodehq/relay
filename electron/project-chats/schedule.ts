@@ -109,7 +109,7 @@ export class ChatSchedule {
   /** Saves the thread after its scheduled messages changed, and re-arms the earliest. */
   async save(chat: ProjectChat) {
     if (!chat.scheduled?.length) delete chat.scheduled;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     this.armSend(chat.id, nextSend(chat.scheduled));
   }
 
@@ -157,7 +157,7 @@ export class ChatSchedule {
   private async dropWakeup(chat: ProjectChat, id: string) {
     chat.heldWakeups = chat.heldWakeups?.filter((w) => w.id !== id);
     if (!chat.heldWakeups?.length) delete chat.heldWakeups;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
 
   private async fireWakeup(chatId: string, id: string) {
@@ -229,7 +229,7 @@ export class ChatSchedule {
           at: now,
           items: [...(chat.stopped?.items ?? []), ...stopped].slice(-20),
         };
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
     }
   }
 
@@ -238,7 +238,7 @@ export class ChatSchedule {
     const stopped = chat.stopped;
     if (!stopped) return;
     delete chat.stopped;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     if (action === "dismiss") return;
     // Each conversation's Claude hears about the work it started.
     for (const parentId of new Set(stopped.items.map((i) => i.parentId))) {

@@ -488,7 +488,7 @@ it("leaves the thread and the disk as they were when a reviewer can't be created
 
 it.each([
   ["saving the review", "save"],
-  ["listing the review", "updateSummary"],
+  ["listing the review", "syncSummary"],
 ] as const)(
   "leaves the thread as it was when %s fails, so starting again works",
   async (_, method) => {
@@ -508,50 +508,6 @@ it.each([
         if (saved.id === chat.id) throw new Error("disk full");
         return original.call(this, saved);
       });
-
-    await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
-      "disk full",
-    );
-    failing.mockRestore();
-
-    const after = await chats.get(chat.id);
-    expect(after.deepReview).toBeUndefined();
-    expect(after.messages).toEqual([]);
-    expect(after.title).toBe(title);
-    expect(store.get().chats?.map((c) => c.id)).toEqual([chat.id]);
-    expect(await readdir(join(root, "chats"))).toEqual([`${chat.id}.json`]);
-
-    await chats.startDeepReview(chat.id, config());
-    expect((await chats.get(chat.id)).deepReview?.reviewers).toHaveLength(2);
-  },
-);
-
-it.each([
-  ["saving the review", () => vi.spyOn(ChatStorage.prototype, "save")],
-  [
-    "listing the review",
-    () => vi.spyOn(ChatStorage.prototype, "updateSummary"),
-  ],
-])(
-  "leaves the thread as it was when %s fails, so starting again works",
-  async (_, spy) => {
-    await writeFile(
-      join(repo, "src", "queue.ts"),
-      "export const queue = [1];\n",
-    );
-    const chat = await chats.create(projectId, { kind: "review" });
-    const before = await chats.get(chat.id);
-    const title = before.title;
-    const failing = spy().mockImplementation(async (saved: { id: string }) => {
-      if (saved.id === chat.id) throw new Error("disk full");
-    });
-    failing.mockImplementation(async function (
-      this: ChatStorage,
-      saved: { id: string },
-    ) {
-      if (saved.id === chat.id) throw new Error("disk full");
-      return failing.getMockImplementation() && undefined;
-    } as never);
 
     await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
       "disk full",

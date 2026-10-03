@@ -70,7 +70,7 @@ export class LimitResumes {
     await this.core.control(chatId, async () => {
       if (!stillLast(chat, message)) return;
       chat.limitResume = { messageId, provider: limit.provider, at };
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       this.arm(chatId, chat.limitResume);
     });
   }
@@ -83,7 +83,7 @@ export class LimitResumes {
       if (!plan) return;
       if (on) delete plan.off;
       else plan.off = true;
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       this.arm(chatId, plan);
     });
   }
@@ -124,14 +124,14 @@ export class LimitResumes {
       const unpause = go && !!chat.queue?.length && !!chat.queuePaused;
       delete chat.limitResume;
       if (unpause) delete chat.queuePaused;
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       if (!go) return;
       try {
         await this.host.resume(chatId);
       } catch (e) {
         if (unpause) {
           chat.queuePaused = true;
-          await this.core.storage.persist(chat);
+          await this.core.storage.save(chat);
         }
         throw e;
       }

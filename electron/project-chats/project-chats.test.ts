@@ -2581,6 +2581,32 @@ it("pushes the thread list as a turn runs, waits and ends, and as it's triaged",
   expect(sent.filter((s, i) => s === sent[i - 1])).toEqual([]);
 }, 15000);
 
+it("lists the answering agent while its answer streams, not once the turn ends", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+      "streaming",
+    ),
+  );
+  // The answer's first save had no summary write of its own to ride on.
+  await vi.waitFor(() =>
+    expect(chats.list(projectId)[0]).toMatchObject({
+      running: true,
+      provider: "codex",
+      contextAgent: "codex",
+    }),
+  );
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+}, 15000);
+
 it("forks from the latest finished answer when none is named, on that answer's agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const [body, count] of [

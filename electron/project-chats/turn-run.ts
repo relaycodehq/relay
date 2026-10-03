@@ -138,7 +138,7 @@ export class TurnRunner {
       async (worktrees) => {
         if (worktrees.length) chat.agentWorktrees = worktrees;
         else delete chat.agentWorktrees;
-        await this.core.storage.persist(chat);
+        await this.core.storage.save(chat);
       },
     );
     let point: string | undefined,
@@ -306,7 +306,8 @@ export class TurnRunner {
       chat.updated = ended.ended;
       if (committed) chat.committedAt = ended.ended;
       answer.end();
-      await this.core.storage.save(chat);
+      // The sidebar hears of the finished answer once the turn lets go of the thread.
+      await this.core.storage.save(chat, { holdSummary: true });
       if (limit) this.limited(chat.id, ended.id, limit);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (

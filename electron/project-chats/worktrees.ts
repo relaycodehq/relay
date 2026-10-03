@@ -40,7 +40,7 @@ export class ThreadWorktrees {
       promptTitle(prompt ?? chat.title),
       worktree,
     );
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     return chat.worktree.path!;
   }
 
@@ -136,7 +136,7 @@ export class ThreadWorktrees {
         worktree,
       );
       worktree.removedAt = Date.now();
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
     });
   }
 
@@ -222,7 +222,7 @@ export class ThreadWorktrees {
       };
       // Live sessions started in the project folder; resumed, they start in the worktree.
       this.core.sessions.close(id);
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       return chatSummary(chat);
     });
   }
@@ -275,7 +275,7 @@ export class ThreadWorktrees {
   async recordPull(id: string, pr: { number: number; url: string }) {
     const { chat, worktree } = await this.of(id);
     worktree.pr = pr;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
 
   /** The worktree's PR was merged on the Git host, though the checkout may still need a pull. */
@@ -283,6 +283,6 @@ export class ThreadWorktrees {
     const { chat, worktree } = await this.of(id);
     if (worktree.landed?.by === "pr") return;
     worktree.landed = { at: Date.now(), by: "pr" };
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
   }
 }

@@ -65,7 +65,7 @@ export class ChatSharing {
     if (!this.remote) throw new Error("Sharing is unavailable.");
     await this.remote.allow(chat.projectId);
     chat.shared = await this.remote.share(chat);
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     await this.host.sync(id);
     return chatSummary(chat);
   }
@@ -112,7 +112,7 @@ export class ChatSharing {
           ]),
         );
         chat.messages.sort((a, b) => place.get(a)! - place.get(b)! || 0);
-        await this.core.storage.persist(chat);
+        await this.core.storage.save(chat);
       }
     })();
     this.syncing.set(id, job);

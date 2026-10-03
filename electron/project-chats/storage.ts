@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import type {
   ChatImage,
   ChatMessage,
@@ -63,6 +64,12 @@ export function chatSummary({
   };
 }
 
+/** Whether two summaries read alike once saved, whatever order or undefined keys they hold. */
+function same(a: ChatSummary, b: ChatSummary) {
+  const plain = (summary: ChatSummary) => JSON.parse(JSON.stringify(summary));
+  return isDeepStrictEqual(plain(a), plain(b));
+}
+
 /**
  * The threads' files in Relay's data folder (`<id>.json` and their
  * screenshots under `images/<id>/`), the one cached copy of each, and their
@@ -105,11 +112,10 @@ export class ChatStorage {
           ) as ProjectChat;
           if (chat.id !== id)
             throw new Error("Saved chat identity does not match.");
-          const { interrupted, summaryChanged } = reviveChat(chat, (m) =>
+          const changed = reviveChat(chat, (m) =>
             this.resuming(chat.id, m.parentId ?? undefined),
           );
-          if (interrupted) await this.save(chat);
-          if (summaryChanged) await this.updateSummary(chat);
+          if (changed) await this.save(chat);
           this.cache.set(id, chat);
         })();
         this.loading.set(id, pending);
@@ -151,7 +157,13 @@ export class ChatStorage {
     this.summariesChanged(chat.projectId);
   }
 
-  async save(chat: ProjectChat) {
+  /**
+   * Writes the thread, and its sidebar summary when that reads differently
+   * now, so no caller has to remember which of its changes the sidebar shows.
+   * `holdSummary` leaves the summary for a later `syncSummary`, where it
+   * mustn't move yet.
+   */
+  async save(chat: ProjectChat, { holdSummary = false } = {}) {
     const value = JSON.stringify(chat),
       path = join(this.dir, chat.id + ".json");
     await this.writes(chat.id, async () => {
@@ -160,19 +172,17 @@ export class ChatStorage {
       await writeFile(tmp, value, { mode: 0o600 });
       await rename(tmp, path);
     });
+    if (!holdSummary) await this.syncSummary(chat);
   }
 
-  /** Saves the thread and refreshes its sidebar summary. */
-  async persist(chat: ProjectChat) {
-    await this.save(chat);
-    await this.updateSummary(chat);
-  }
-
-  async updateSummary(chat: ProjectChat) {
+  /** Brings the listed summary up to the thread, writing the store only if they differ. */
+  async syncSummary(chat: ProjectChat) {
+    const listed = this.store.get().chats?.find((c) => c.id === chat.id);
+    // A thread that isn't listed yet is `add`ed, or was taken back.
+    if (!listed || same(listed, chatSummary(chat))) return;
     await this.store.update((s) => {
       const index = s.chats!.findIndex((c) => c.id === chat.id);
       if (index >= 0) s.chats![index] = chatSummary(chat);
-      else s.chats!.push(chatSummary(chat));
     });
     this.summariesChanged(chat.projectId);
   }

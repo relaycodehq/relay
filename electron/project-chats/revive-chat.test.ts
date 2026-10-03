@@ -27,10 +27,7 @@ const thread = (fields: Partial<ProjectChat>): ProjectChat => ({
 it("leaves a thread saved in today's format alone", () => {
   const chat = thread({ messages: [message({ body: "Done." })] });
   const before = structuredClone(chat);
-  expect(reviveChat(chat, () => false)).toEqual({
-    interrupted: false,
-    summaryChanged: false,
-  });
+  expect(reviveChat(chat, () => false)).toBe(false);
   expect(chat).toEqual(before);
 });
 
@@ -38,8 +35,7 @@ it("fails an answer the app closed on, unless its session is still in that turn"
   const cut = message({ status: "streaming", body: "Half" });
   const live = message({ status: "streaming", parentId: "side" });
   const chat = thread({ messages: [cut, live] });
-  const { interrupted } = reviveChat(chat, (m) => m.parentId === "side");
-  expect(interrupted).toBe(true);
+  expect(reviveChat(chat, (m) => m.parentId === "side")).toBe(true);
   expect(cut).toMatchObject({ status: "failed", body: "Half", version: 2 });
   expect(cut.error).toMatch(/app closed/);
   expect(live.status).toBe("streaming");
@@ -54,7 +50,7 @@ it("pauses a queue that was waiting when Relay closed and moves old modes over",
     mode: "read-only",
   } as unknown as ProjectChat["lastInput"] & object;
   const chat = thread({ queue: [{ input, created: 1 }] });
-  expect(reviveChat(chat, () => false).interrupted).toBe(true);
+  expect(reviveChat(chat, () => false)).toBe(true);
   expect(chat.queuePaused).toBe(true);
   expect(input).toMatchObject({ interactionMode: "default" });
   expect(input.runtimeMode).toBeTruthy();
@@ -73,7 +69,7 @@ it("stops councils and reviews an earlier session left running, reopening findin
       cut: { status: "thinking" },
     } as unknown as ProjectChat["ultraplans"],
   });
-  expect(reviveChat(chat, () => false).interrupted).toBe(true);
+  expect(reviveChat(chat, () => false)).toBe(true);
   expect(chat.deepReview).toMatchObject({
     status: "failed",
     statuses: { a: "open", b: "fixed" },
@@ -110,10 +106,7 @@ it("drops worktrees no command of the thread made, and duplicate or unclaimed re
       { path: "/repo/theirs", at: 1 },
     ],
   });
-  expect(reviveChat(chat, () => false)).toEqual({
-    interrupted: true,
-    summaryChanged: true,
-  });
+  expect(reviveChat(chat, () => false)).toBe(true);
   expect(chat.agentWorktrees?.map((w) => w.path)).toEqual(["/repo/mine"]);
   expect(made.activity).toBeUndefined();
   expect(made.changes?.map((f) => f.path)).toEqual(["a.ts"]);

@@ -32,7 +32,7 @@ export class ThreadTitles {
     const chat = await this.core.storage.load(id);
     chat.title = title;
     chat.renamed = true;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     return chatSummary(chat);
   }
 
@@ -128,7 +128,7 @@ export class ThreadTitles {
     )
       return;
     chat.title = title;
-    await this.core.storage.persist(chat);
+    await this.core.storage.save(chat);
     this.core.emit({
       chatId: chat.id,
       message: structuredClone(message),
@@ -189,7 +189,7 @@ export class ThreadTitles {
     const fresh = await this.core.storage.load(id);
     fresh.title = title;
     delete fresh.renamed;
-    await this.core.storage.persist(fresh);
+    await this.core.storage.save(fresh);
     return chatSummary(fresh);
   }
 

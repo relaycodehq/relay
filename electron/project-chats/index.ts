@@ -301,7 +301,7 @@ export class ProjectChats {
       if (triage.kind === "unread") chat.markedUnread = true;
       else if (triage.enabled) delete chat.autoSettleOff;
       else chat.autoSettleOff = true;
-      await this.storage.persist(chat);
+      await this.storage.save(chat);
       return chatSummary(chat);
     }
     if (triage.kind === "archive") {
@@ -318,7 +318,7 @@ export class ProjectChats {
         );
       chat.archivedAt = now;
       await this.worktrees.dropLanded(chat, now);
-      await this.storage.persist(chat);
+      await this.storage.save(chat);
       return chatSummary(chat);
     }
     delete chat.snoozedAt;
@@ -333,7 +333,7 @@ export class ProjectChats {
       chat.snoozedAt = now;
       chat.snoozedUntil = triage.until;
     }
-    await this.storage.persist(chat);
+    await this.storage.save(chat);
     return chatSummary(chat);
   }
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
@@ -342,7 +342,7 @@ export class ProjectChats {
     if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
     chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
     delete chat.markedUnread;
-    await this.storage.persist(chat);
+    await this.storage.save(chat);
   }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);

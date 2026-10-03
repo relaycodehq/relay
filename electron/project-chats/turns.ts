@@ -89,7 +89,7 @@ export class ChatTurns {
     }
     if (unread.length) void this.core.storage.save(chat).catch(() => {});
     if (turn) this.councils.step(chat.id, turn);
-    void this.core.storage.updateSummary(chat).catch(() => {});
+    void this.core.storage.syncSummary(chat).catch(() => {});
     void this.core
       .control(chat.id, () => this.queue.drain(chat.id))
       .catch(() => {});
@@ -222,7 +222,7 @@ export class ChatTurns {
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       this.core.storage.keep(chat);
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: user });
       if (chat.messages.length === 1) this.titles.generate(chat, input.choice);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
@@ -590,7 +590,7 @@ export class ChatTurns {
       // Resume and later sends pick the lead's agent and settings up from here.
       chat.lastInput = input;
       chat.messages.push(message);
-      await this.core.storage.persist(chat);
+      await this.core.storage.save(chat);
       this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       this.reply(chat, active, message, root, prompt, input);
     } catch (e) {

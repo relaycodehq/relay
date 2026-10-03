@@ -18,7 +18,7 @@ export function interrupt(m: ChatMessage) {
  * Brings a thread read from disk up to date: older save formats, and what
  * an earlier session left running. `streams` keeps an answer streaming
  * whose session a restart left running. Says whether the thread needs
- * saving again, and whether its sidebar summary changed with it.
+ * saving again.
  */
 export function reviveChat(
   chat: ProjectChat,
@@ -38,13 +38,12 @@ export function reviveChat(
     }
   }
   if (chat.queue?.length) chat.queuePaused = true;
-  let summaryChanged = false;
   if (chat.agentWorktrees) {
     const own = ownAgentWorktrees(chat);
     if (own.length !== chat.agentWorktrees.length) {
       if (own.length) chat.agentWorktrees = own;
       else delete chat.agentWorktrees;
-      interrupted = summaryChanged = true;
+      interrupted = true;
     }
   }
   // A review whose agents ran in an earlier session can only be resumed,
@@ -88,5 +87,5 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  return { interrupted, summaryChanged };
+  return interrupted;
 }

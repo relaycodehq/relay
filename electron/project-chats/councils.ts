@@ -48,7 +48,6 @@ export class Councils {
       stop: (id) => this.core.active.get(id)?.abort.abort(),
       close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
-      summary: (chat) => this.core.storage.updateSummary(chat),
       discard: (chat) => this.core.storage.remove(chat),
     });
     this.ultraplans = new Ultraplans({

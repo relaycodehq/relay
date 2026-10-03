@@ -21,7 +21,7 @@ it("sends a message held for later that fell due while the computer slept once i
   } as unknown as ProjectChat;
   const core = {
     store: { get: () => ({ chats: [chat] }) },
-    storage: { load: async () => chat, persist: async () => {} },
+    storage: { load: async () => chat, save: async () => {} },
     control: threadControl(),
     closing: () => false,
   } as unknown as ChatCore;

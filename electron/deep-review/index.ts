@@ -48,7 +48,6 @@ export interface DeepReviewHost {
   close(chatId: string): void;
   /** Saves the thread and tells the renderer this message, and so the review, changed. */
   touch(chat: ProjectChat, messageId: string): Promise<void>;
-  summary(chat: ProjectChat): Promise<void>;
   /** Deletes a reviewer thread whose review never started. */
   discard(chat: ProjectChat): Promise<void>;
 }
@@ -119,16 +118,12 @@ export class DeepReviews {
     chat.branch = scope.branch ?? chat.branch;
     chat.deepReview = state;
     try {
-      // The review exists once it is saved; the summary goes first so a
-      // failed save never leaves the renderer showing a request that's gone.
-      await this.host.summary(chat);
       await this.host.touch(chat, request.id);
     } catch (error) {
       // The loaded thread is the cached one, so put it back as it was.
       chat.messages.splice(chat.messages.indexOf(request), 1);
       Object.assign(chat, before);
       delete chat.deepReview;
-      await this.host.summary(chat).catch(() => {});
       await Promise.allSettled(created.map((c) => this.host.discard(c)));
       throw error;
     }
