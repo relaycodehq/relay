@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { roomRequest, type Network } from "./transport";
+import { refusedForGood } from "../../shared/http";
 
 const reply = (status: number, body: unknown) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), {
@@ -88,5 +89,31 @@ describe("roomRequest", () => {
     await expect(request("https://rooms.test", "/a", "t")).rejects.toThrow(
       "The room server returned an invalid response.",
     );
+  });
+
+  it("carries the HTTP status on a refusal so callers can tell a final no from a passing one", async () => {
+    const { fetcher } = server(
+      reply(400, { error: "Too long." }),
+      reply(429, { error: "Slow down." }),
+      reply(404, "<html>gone</html>"),
+      reply(502, "<html>proxy</html>"),
+      reply(200, "<html>proxy</html>"),
+    );
+    const request = roomRequest(fetcher, async () => false);
+    const failure = async () =>
+      request("https://rooms.test", "/a", "t").catch((e) => e);
+    const tooLong = await failure();
+    expect(tooLong).toMatchObject({ status: 400 });
+    const limited = await failure();
+    expect(limited).toMatchObject({ status: 429 });
+    expect(refusedForGood(tooLong)).toBe(true);
+    expect(refusedForGood(limited)).toBe(false);
+    const gone = await failure();
+    expect(gone).toMatchObject({ status: 404 });
+    expect(await failure()).toMatchObject({ status: 502 });
+    const unreadable = await failure();
+    expect(unreadable).not.toHaveProperty("status");
+    expect(refusedForGood(gone)).toBe(true);
+    expect(refusedForGood(unreadable)).toBe(false);
   });
 });

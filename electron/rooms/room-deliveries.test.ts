@@ -13,6 +13,7 @@ import { RoomAnswers } from "./answers";
 import type { RoomAccess } from "./access";
 import type { RoomConnections } from "./connections";
 import type { RoomRequest } from "./transport";
+import { HttpStatusError } from "../../shared/http";
 import { defaultAISettings } from "../../shared/settings";
 
 const agent = vi.hoisted(() => ({
@@ -84,7 +85,7 @@ describe("RoomDeliveries.flush", () => {
   }
   const c = { key: "project" } as any;
 
-  it("sends this project's answers, drops the delivered ones and keeps running and refused ones", async () => {
+  it("sends this project's answers, drops the delivered ones and keeps running and ones that failed in passing", async () => {
     await store.update((s) => {
       s.roomDeliveries = {
         refused: delivery("refused"),
@@ -97,7 +98,7 @@ describe("RoomDeliveries.flush", () => {
     await outbox(
       async (path, body) => {
         sent.push(`${path} ${body.status}`);
-        if (path.endsWith("/refused")) throw new Error("Not found.");
+        if (path.endsWith("/refused")) throw new Error("Offline.");
       },
       new Set(["live"]),
     ).flush(c);
@@ -111,6 +112,56 @@ describe("RoomDeliveries.flush", () => {
       "live",
       "other",
     ]);
+  });
+
+  it("lets go of an answer the server refused for good, but keeps one refused in passing", async () => {
+    await store.update((s) => {
+      s.roomDeliveries = {
+        gone: delivery("gone"),
+        finished: delivery("finished"),
+        limited: delivery("limited"),
+        expired: delivery("expired"),
+        rest: delivery("rest"),
+      };
+    });
+    const refusals: Record<string, number> = {
+      gone: 404,
+      finished: 409,
+      limited: 429,
+      expired: 428,
+    };
+    const sent: string[] = [];
+    const deliveries = outbox(async (path) => {
+      const id = path.split("/").pop()!;
+      sent.push(id);
+      if (refusals[id]) throw new HttpStatusError("Refused.", refusals[id]);
+    });
+    await deliveries.flush(c);
+    expect(sent).toEqual(["gone", "finished", "limited", "expired", "rest"]);
+    expect(Object.keys(store.get().roomDeliveries!)).toEqual([
+      "limited",
+      "expired",
+    ]);
+    await deliveries.flush(c);
+    expect(sent.slice(5)).toEqual(["limited", "expired"]);
+  });
+
+  it("cuts an answer longer than the server keeps, marked as cut, instead of having it refused", async () => {
+    await store.update((s) => {
+      s.roomDeliveries = {
+        long: delivery("long", { body: "a".repeat(250_000) }),
+        exact: delivery("exact", { body: "b".repeat(100_000) }),
+      };
+    });
+    const bodies: Record<string, string> = {};
+    await outbox(async (path, body) => {
+      bodies[path.split("/").pop()!] = body.body;
+    }).flush(c);
+    expect(bodies.long).toHaveLength(100_000);
+    expect(bodies.long.endsWith("… (truncated)")).toBe(true);
+    expect(bodies.long.startsWith("aaaa")).toBe(true);
+    expect(bodies.exact).toBe("b".repeat(100_000));
+    expect(store.get().roomDeliveries).toEqual({});
   });
 
   it("keeps an answer saved again while it was being sent, and sends it after, one flush per project at a time", async () => {

@@ -1,4 +1,4 @@
-import { readBounded } from "../../shared/http";
+import { HttpStatusError, readBounded } from "../../shared/http";
 
 export type Network = (url: string, init?: RequestInit) => Promise<Response>;
 export type RoomRequest = <T>(
@@ -42,7 +42,10 @@ export function roomRequest(
     try {
       value = JSON.parse(text);
     } catch {
-      throw new Error("The room server returned an invalid response.");
+      const message = "The room server returned an invalid response.";
+      throw response.ok
+        ? new Error(message)
+        : new HttpStatusError(message, response.status);
     }
     if (
       response.status === 428 &&
@@ -52,10 +55,11 @@ export function roomRequest(
     )
       return request<T>(server, path, secret, method, body, false);
     if (!response.ok)
-      throw new Error(
+      throw new HttpStatusError(
         typeof value?.error === "string"
           ? value.error.slice(0, 1000)
           : `Room server returned ${response.status}.`,
+        response.status,
       );
     return value as T;
   };

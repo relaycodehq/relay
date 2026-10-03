@@ -1,6 +1,7 @@
 import type { Store } from "../app/store";
 import type { RoomDelivery } from "../app/store-types";
 import type { RoomConnection, RoomMessage, RoomPage } from "../../shared/rooms";
+import { refusedForGood } from "../../shared/http";
 import { redacted } from "../../shared/redact-secrets";
 import type { ProjectRoomContext, RoomAccess } from "./access";
 import type { RoomConnections } from "./connections";
@@ -20,11 +21,21 @@ export function outgoing(pending: RoomDelivery, running: boolean) {
   return value;
 }
 
+/** The most characters the server keeps of an answer. */
+const BODY_CHARACTERS = 100_000;
+const CUT = "\n\n… (truncated)";
+
+const fitted = (body: string) =>
+  body.length > BODY_CHARACTERS
+    ? body.slice(0, BODY_CHARACTERS - CUT.length) + CUT
+    : body;
+
 export function deliveryPatch(value: RoomDelivery) {
+  const error = value.error && redacted(value.error).slice(0, 1000);
   return {
-    body: value.status === "running" ? "" : redacted(value.body),
+    body: value.status === "running" ? "" : fitted(redacted(value.body)),
     status: value.status,
-    error: value.error && redacted(value.error),
+    error,
   };
 }
 
@@ -82,16 +93,22 @@ export class RoomDeliveries {
           "PATCH",
           deliveryPatch(value),
         );
-      } catch {
-        // Kept for the next flush; one refused answer must not hold back the rest.
+      } catch (error) {
+        // One refused answer must not hold back the rest. A passing failure is
+        // kept for the next flush; a final refusal would only be sent again
+        // on every poll, so the answer is let go.
+        if (refusedForGood(error)) await this.forget(id, pending);
         continue;
       }
-      if (value.status === "running") continue;
-      await this.store.update((s) => {
-        if (JSON.stringify(s.roomDeliveries?.[id]) === JSON.stringify(pending))
-          delete s.roomDeliveries![id];
-      });
+      if (value.status !== "running") await this.forget(id, pending);
     }
+  }
+  /** Unless the answer was saved again meanwhile, which still needs sending. */
+  private forget(id: string, sent: RoomDelivery) {
+    return this.store.update((s) => {
+      if (JSON.stringify(s.roomDeliveries?.[id]) === JSON.stringify(sent))
+        delete s.roomDeliveries![id];
+    });
   }
   /** Completed answers are shared; this sender's locally checkpointed partial
    * is overlaid only in its own desktop, never in a colleague's response. */
