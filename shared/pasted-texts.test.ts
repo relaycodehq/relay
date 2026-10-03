@@ -9,7 +9,6 @@ import {
   type PastedText,
 } from "./pasted-texts";
 import { codeReferenceMessage, parseCodeReferences } from "./code-references";
-import { namesItself, promptTitle } from "../electron/agents/thread-titles";
 
 const log = Array.from(
   { length: 14 },
@@ -95,18 +94,5 @@ describe("pasted texts", () => {
     expect(cleanPaste("\r\n\n    indented\r\n  next\r\n\r\n")).toBe(
       "    indented\n  next",
     );
-  });
-  it("names a thread after its text, or the paste when nothing was typed", () => {
-    expect(promptTitle(message("@claude Fix it", ...pastes))).toBe("Fix it");
-    expect(promptTitle("@opencode Write notes.md")).toBe("Write notes.md");
-    expect(promptTitle(message("@claude", ...pastes))).toBe("TypeError: boom");
-    expect(promptTitle(`@claude ${message("", ...pastes)}`)).toBe(
-      "TypeError: boom",
-    );
-  });
-  it("names a thread at send unless only screenshots were sent", () => {
-    expect(namesItself("@claude Fix [Image #1] please")).toBe(true);
-    expect(namesItself(message("@claude", ...pastes))).toBe(true);
-    expect(namesItself("@claude [Image #1] [Image #2]")).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../app/store";
 import { Projects } from "./projects";
 import { ProjectChats } from "../project-chats";
-import { ProjectSharing } from "./project-sharing";
+import { ProjectSharing, publicMessage } from "./project-sharing";
 import { RoomService } from "../rooms/service";
 import { Gitea } from "../pull-requests/gitea";
 import { runCodex } from "../agents/codex/codex";
@@ -281,4 +281,25 @@ it("accepts shared messages from every agent a thread can talk to", async () => 
         ],
       }).success,
     ).toBe(true);
+});
+
+it("redacts the shared copy of a message, not the local one", () => {
+  // Joined at runtime so secret scanners don't flag these fixtures in the repo.
+  const github = ["gh", "p_", "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"].join("");
+  const aws = ["AK", "IA", "Z7Q2XK4M9WPL3RTB"].join("");
+  const message = {
+    id: "m",
+    role: "assistant",
+    provider: "claude",
+    status: "failed",
+    body: `Use ${github} for the release.`,
+    error: `401 for ${aws}`,
+    created: 1,
+    version: 1,
+  } as const;
+  expect(publicMessage(message)).toMatchObject({
+    body: "Use [redacted GitHub token] for the release.",
+    error: "401 for [redacted AWS key]",
+  });
+  expect(message.body).toContain(github);
 });

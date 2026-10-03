@@ -17,11 +17,11 @@ function sources(folder: string, kind = /\.(ts|tsx)$/): string[] {
     .map((entry) => relative(root, join(entry.parentPath, entry.name)));
 }
 
-/** Relative imports of `folder`'s non-test files that land in one of `banned`. */
-function reaches(folder: string, banned: string[]): string[] {
+/** Relative imports of `folder`'s files, tests too if asked, that land in one of `banned`. */
+function reaches(folder: string, banned: string[], tests = false): string[] {
   const found: string[] = [];
   for (const file of sources(folder)) {
-    if (/\.test\.tsx?$/.test(file)) continue;
+    if (!tests && /\.test\.tsx?$/.test(file)) continue;
     const text = readFileSync(join(root, file), "utf8");
     for (const [, specifier] of text.matchAll(
       /(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/g,
@@ -62,7 +62,8 @@ describe("source layout", () => {
   it("keeps the renderer and the main process apart", () => {
     expect(reaches("src", ["electron", "server"])).toEqual([]);
     expect(reaches("electron", ["src"])).toEqual([]);
-    expect(reaches("shared", ["src", "electron", "server"])).toEqual([]);
+    // Its tests too: shared code is tested on its own, as the phone runs it.
+    expect(reaches("shared", ["src", "electron", "server"], true)).toEqual([]);
   });
 
   it("leaves only entry points loose in electron/ and src/", () => {

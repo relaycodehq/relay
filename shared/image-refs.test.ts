@@ -1,9 +1,4 @@
 import { expect, it } from "vitest";
-import { getSchema } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
-import { ImageTag } from "../src/features/composer/prompt/image-pill";
-import { promptContent } from "../src/features/composer/prompt-content";
-import { promptText } from "../src/features/composer/prompt-text";
 import {
   attachedImages,
   imagesAfter,
@@ -69,18 +64,6 @@ it("shortens long names in the middle, keeping the extension", () => {
   expect(shortImageName("Screenshot 2026-10-01 at 13.42.10.png")).toBe(
     "Screenshot 2026…2.10.png",
   );
-});
-
-it("turns image tokens into pills and back", () => {
-  const schema = getSchema([StarterKit, ImageTag]);
-  const draft = "hello [Image #1] and [Image #2]\nbye";
-  const doc = schema.nodeFromJSON(promptContent(draft, {}));
-  const pills: number[] = [];
-  doc.descendants((node) => {
-    if (node.type.name === "relayImage") pills.push(node.attrs.n);
-  });
-  expect(pills).toEqual([1, 2]);
-  expect(promptText(doc)).toBe(draft);
 });
 
 it("treats a message of only screenshot tokens as having no text", () => {

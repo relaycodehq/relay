@@ -109,4 +109,15 @@ describe("promptContent", () => {
     expect(pasteAt(restored, 0)?.node.attrs.n).toBe(2);
     expect(pasteAt(restored, 1)).toBeUndefined();
   });
+
+  it("restores image tokens as pills", () => {
+    const draft = "hello [Image #1] and [Image #2]\nbye";
+    const restored = schema.nodeFromJSON(promptContent(draft, {}));
+    const pills: number[] = [];
+    restored.descendants((node) => {
+      if (node.type.name === "relayImage") pills.push(node.attrs.n);
+    });
+    expect(pills).toEqual([1, 2]);
+    expect(promptText(restored)).toBe(draft);
+  });
 });

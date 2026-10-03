@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { redactSecrets } from "./redact-secrets";
-import { publicMessage } from "../electron/projects/project-sharing";
 
 // Joined at runtime so secret scanners don't flag these fixtures in the repo.
 const fake = (...parts: string[]) => parts.join("");
@@ -95,23 +94,5 @@ describe("redactSecrets", () => {
       "Open http://127.0.0.1:5177/previews/share.html and use Bearer tokens.",
     ].join("\n");
     expect(redactSecrets(text)).toEqual({ text, found: 0 });
-  });
-
-  it("redacts the shared copy of a message, not the local one", () => {
-    const message = {
-      id: "m",
-      role: "assistant",
-      provider: "claude",
-      status: "failed",
-      body: `Use ${github} for the release.`,
-      error: `401 for ${aws}`,
-      created: 1,
-      version: 1,
-    } as const;
-    expect(publicMessage(message)).toMatchObject({
-      body: "Use [redacted GitHub token] for the release.",
-      error: "401 for [redacted AWS key]",
-    });
-    expect(message.body).toContain(github);
   });
 });
