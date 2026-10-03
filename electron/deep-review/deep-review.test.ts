@@ -16,6 +16,7 @@ import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { ChatStorage } from "../project-chats/storage";
+import type { ProjectChat } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import {
@@ -483,6 +484,146 @@ it("leaves the thread and the disk as they were when a reviewer can't be created
 
   await chats.startDeepReview(chat.id, config());
   expect((await chats.get(chat.id)).deepReview?.reviewers).toHaveLength(2);
+});
+
+it.each([
+  ["saving the review", "save"],
+  ["listing the review", "updateSummary"],
+] as const)(
+  "leaves the thread as it was when %s fails, so starting again works",
+  async (_, method) => {
+    await writeFile(
+      join(repo, "src", "queue.ts"),
+      "export const queue = [1];\n",
+    );
+    const chat = await chats.create(projectId, { kind: "review" });
+    const title = (await chats.get(chat.id)).title;
+    const original = ChatStorage.prototype[method];
+    const failing = vi
+      .spyOn(ChatStorage.prototype, method)
+      .mockImplementation(async function (
+        this: ChatStorage,
+        saved: ProjectChat,
+      ) {
+        if (saved.id === chat.id) throw new Error("disk full");
+        return original.call(this, saved);
+      });
+
+    await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
+      "disk full",
+    );
+    failing.mockRestore();
+
+    const after = await chats.get(chat.id);
+    expect(after.deepReview).toBeUndefined();
+    expect(after.messages).toEqual([]);
+    expect(after.title).toBe(title);
+    expect(store.get().chats?.map((c) => c.id)).toEqual([chat.id]);
+    expect(await readdir(join(root, "chats"))).toEqual([`${chat.id}.json`]);
+
+    await chats.startDeepReview(chat.id, config());
+    expect((await chats.get(chat.id)).deepReview?.reviewers).toHaveLength(2);
+  },
+);
+
+it.each([
+  ["saving the review", () => vi.spyOn(ChatStorage.prototype, "save")],
+  [
+    "listing the review",
+    () => vi.spyOn(ChatStorage.prototype, "updateSummary"),
+  ],
+])(
+  "leaves the thread as it was when %s fails, so starting again works",
+  async (_, spy) => {
+    await writeFile(
+      join(repo, "src", "queue.ts"),
+      "export const queue = [1];\n",
+    );
+    const chat = await chats.create(projectId, { kind: "review" });
+    const before = await chats.get(chat.id);
+    const title = before.title;
+    const failing = spy().mockImplementation(async (saved: { id: string }) => {
+      if (saved.id === chat.id) throw new Error("disk full");
+    });
+    failing.mockImplementation(async function (
+      this: ChatStorage,
+      saved: { id: string },
+    ) {
+      if (saved.id === chat.id) throw new Error("disk full");
+      return failing.getMockImplementation() && undefined;
+    } as never);
+
+    await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
+      "disk full",
+    );
+    failing.mockRestore();
+
+    const after = await chats.get(chat.id);
+    expect(after.deepReview).toBeUndefined();
+    expect(after.messages).toEqual([]);
+    expect(after.title).toBe(title);
+    expect(store.get().chats?.map((c) => c.id)).toEqual([chat.id]);
+    expect(await readdir(join(root, "chats"))).toEqual([`${chat.id}.json`]);
+
+    await chats.startDeepReview(chat.id, config());
+    expect((await chats.get(chat.id)).deepReview?.reviewers).toHaveLength(2);
+  },
+);
+
+it("ends the review as failed and resumable when no reviewer can be started", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  const send = vi
+    .spyOn(ProjectChats.prototype, "send")
+    .mockRejectedValue(new Error("no agent"));
+
+  await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
+    "no agent",
+  );
+  send.mockRestore();
+
+  const failed = await chats.get(chat.id);
+  expect(failed.deepReview?.status).toBe("failed");
+  expect(failed.messages).toHaveLength(1);
+  await chats.resumeDeepReview(chat.id);
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 15000 },
+  );
+});
+
+it("ends the review as failed when it can't even tell that its reviewers failed to start", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  let unreadable = false;
+  const send = vi
+    .spyOn(ProjectChats.prototype, "send")
+    .mockImplementation(async () => {
+      unreadable = true;
+      throw new Error("no agent");
+    });
+  const load = ChatStorage.prototype.load;
+  const reading = vi
+    .spyOn(ChatStorage.prototype, "load")
+    .mockImplementation(async function (this: ChatStorage, id: string) {
+      if (unreadable && id === chat.id) throw new Error("unreadable");
+      return load.call(this, id);
+    });
+
+  await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
+    "no agent",
+  );
+  send.mockRestore();
+  reading.mockRestore();
+
+  expect((await chats.get(chat.id)).deepReview?.status).toBe("failed");
+  await chats.resumeDeepReview(chat.id);
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    { timeout: 15000 },
+  );
 });
 
 it("ends each reviewer's agent once it has reported", async () => {

@@ -108,13 +108,30 @@ export class DeepReviews {
       await Promise.allSettled(created.map((c) => this.host.discard(c)));
       throw error;
     }
+    const before = {
+      title: chat.title,
+      updated: chat.updated,
+      branch: chat.branch,
+    };
     chat.messages.push(request);
     chat.title = `Deep review · ${scope.label}`;
     chat.updated = Date.now();
     chat.branch = scope.branch ?? chat.branch;
     chat.deepReview = state;
-    await this.host.touch(chat, request.id);
-    await this.host.summary(chat);
+    try {
+      // The review exists once it is saved; the summary goes first so a
+      // failed save never leaves the renderer showing a request that's gone.
+      await this.host.summary(chat);
+      await this.host.touch(chat, request.id);
+    } catch (error) {
+      // The loaded thread is the cached one, so put it back as it was.
+      chat.messages.splice(chat.messages.indexOf(request), 1);
+      Object.assign(chat, before);
+      delete chat.deepReview;
+      await this.host.summary(chat).catch(() => {});
+      await Promise.allSettled(created.map((c) => this.host.discard(c)));
+      throw error;
+    }
     await this.sendReviewers(chat, [...state.reviewers.keys()]);
   }
 
@@ -218,6 +235,24 @@ export class DeepReviews {
   }
 
   private async sendReviewers(chat: ProjectChat, slots: number[]) {
+    const state = chat.deepReview!;
+    try {
+      await this.startReviewers(chat, slots);
+    } catch (error) {
+      // Nothing is running that would ever hand over to the lead, so leave
+      // the review where Resume picks it up.
+      if (
+        state.status === "reviewing" &&
+        !state.reviewers.some((r) => this.host.active(r.chatId))
+      ) {
+        state.status = "failed";
+        await this.host.touch(chat, state.request).catch(() => {});
+      }
+      throw error;
+    }
+  }
+
+  private async startReviewers(chat: ProjectChat, slots: number[]) {
     const state = chat.deepReview!;
     let diff: Promise<string> | undefined;
     await startSlots(
