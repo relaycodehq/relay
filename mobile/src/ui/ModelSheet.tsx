@@ -4,6 +4,7 @@ import { Check } from "lucide-react-native";
 import type { AgentDefaults, AgentModel, AgentProvider } from "../../../shared/agents";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ReasoningEffort } from "../../../shared/settings";
+import type { ModelCatalogs } from "../../../shared/composer-commands";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel } from "../remote/modes";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
@@ -18,12 +19,15 @@ export function ModelSheet({
   open,
   projectId,
   settings,
+  known,
   onChange,
   onClose,
 }: {
   open: boolean;
   projectId: string;
   settings: RemoteSettings;
+  /** Lists the composer already has, shown while the sheet asks again. */
+  known?: ModelCatalogs;
   /** Picking another agent here asks the composer to switch to it. */
   onChange: (settings: RemoteSettings, provider?: AgentProvider) => void;
   onClose: () => void;
@@ -51,7 +55,7 @@ export function ModelSheet({
         setError(e instanceof Error ? e.message : String(e));
       });
   }, [open, provider, projectId, models, remote]);
-  const list = models[provider];
+  const list = models[provider] ?? known?.[provider];
   const model = list?.find((m) => m.id === settings.choice.model);
   const fallback = defaults[provider];
   const fallbackName = fallback?.model

@@ -215,17 +215,35 @@ export const Composer = forwardRef<
   const switchTo = (next: RemoteSettings, to: AgentProvider) => onSettings(switched(next, to));
   // The desktop lists each agent's models once; one it couldn't list is asked again next time.
   const catalogs = useRef<ModelCatalogs>({});
-  useEffect(() => {
-    catalogs.current = {};
-  }, [desktop]);
+  // Kept in state too, so the toolbar can name the model once its list arrives.
+  const [listed, setListed] = useState<{ from: typeof desktop; lists: ModelCatalogs }>();
   const loadCatalogs = async (wanted: readonly AgentProvider[]) => {
     await Promise.all(
       wanted
         .filter((p) => !catalogs.current[p])
         .map((p) => desktop("agentModels", p).then((list) => void (catalogs.current[p] = list), () => {})),
     );
+    setListed({ from: desktop, lists: { ...catalogs.current } });
     return catalogs.current;
   };
+  useEffect(() => {
+    catalogs.current = {};
+  }, [desktop]);
+  useEffect(() => {
+    if (catalogs.current[provider]) return;
+    desktop("agentModels", provider).then(
+      (list) => {
+        catalogs.current[provider] = list;
+        setListed({ from: desktop, lists: { ...catalogs.current } });
+      },
+      () => {},
+    );
+  }, [desktop, provider]);
+  // Claude's ids are aliases ("opus"); the list carries the full name.
+  const models = listed?.from === desktop ? listed.lists[provider] : undefined;
+  const modelLabel = settings.choice.model
+    ? (models?.find((m) => m.id === settings.choice.model)?.name ?? settings.choice.model)
+    : "Default";
   /** The desktop's runCommand for a composer setting; with no value, its picker opens. */
   const setting = async (name: ComposerCommand, args: string): Promise<CommandResult> => {
     if (!args && name !== "plan" && name !== "fast") return setSheet(name === "permissions" ? "mode" : "model"), true;
@@ -387,7 +405,7 @@ export const Composer = forwardRef<
           <Tool label="Agent and model" onPress={() => setSheet("model")}>
             <ProviderIcon provider={provider} color={t.muted} size={13} />
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
-              {settings.choice.model || "Default"}
+              {modelLabel}
               {settings.choice.reasoningEffort ? ` · ${effortLabel(settings.choice.reasoningEffort)}` : ""}
               {provider === "codex" && settings.choice.fast ? " · Fast" : ""}
             </Text>
@@ -476,6 +494,7 @@ export const Composer = forwardRef<
         open={sheet === "model"}
         projectId={projectId}
         settings={settings}
+        known={listed?.from === desktop ? listed.lists : undefined}
         onClose={() => setSheet(undefined)}
         onChange={(next, to) => (to ? switchTo(next, to) : onSettings(next))}
       />
