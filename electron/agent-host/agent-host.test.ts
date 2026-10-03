@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentHosts, type HostedQuery } from "./client";
+import { HostedChild } from "./child";
 import { codexReplay } from "../agents/codex/codex-connection";
 
 // A Claude Code stand-in that asks to run a command before it answers, and
@@ -209,6 +210,33 @@ it("gives a process back after a restart with what it said meanwhile, and keeps 
   );
   back.write("again");
   await echoed;
+}, 20_000);
+
+it("reports a process that died while Relay was away as ended", async () => {
+  const first = hostsFor();
+  const running = await first.openProcess({
+    key: "server",
+    meta: { provider: "fixture" },
+    process: {
+      command: process.execPath,
+      args: ["-e", 'console.log("hi"); setTimeout(() => process.exit(3), 300)'],
+      cwd: root,
+      env: { ...process.env } as Record<string, string>,
+      group: false,
+    },
+  });
+  running.mark("start", { turn: "thread" });
+  first.detach();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+
+  const [found] = await hostsFor().discover();
+  expect(found.info.ended).toBe(true);
+  const child = new HostedChild(found.attachProcess());
+  const exited = new Promise<number | null>((resolve) =>
+    child.on("exit", resolve),
+  );
+  child.release();
+  expect(await exited).toBe(1);
 }, 20_000);
 
 it("replays a cut-off Codex turn without the last Relay's replies or answered questions", () => {

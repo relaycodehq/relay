@@ -50,6 +50,8 @@ export interface SessionInfo {
   split: number;
   /** A turn the client marked as started and never as ended. */
   open: boolean;
+  /** Its process or query is gone; the log is all that's left of it. */
+  ended?: boolean;
   /** Named turns started and never ended, with where each began. */
   turns?: Record<string, number>;
 }

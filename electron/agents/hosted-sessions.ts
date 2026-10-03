@@ -161,7 +161,8 @@ export class HostedSessions<Session> {
   /**
    * Takes back the sessions the agent host kept running while Relay
    * restarted. Those `take` makes nothing of, those under keys `owns`
-   * rejects, and a second one under a key, end.
+   * rejects, a second one under a key, and any whose process died while
+   * Relay was away, end.
    */
   async reattach(
     owns: (key: string) => boolean,
@@ -174,7 +175,10 @@ export class HostedSessions<Session> {
     )) {
       const { key, open } = found.info;
       const session =
-        owns(key) && !this.live.has(key) && !this.starting.has(key)
+        !found.info.ended &&
+        owns(key) &&
+        !this.live.has(key) &&
+        !this.starting.has(key)
           ? take(found)
           : undefined;
       if (!session) {

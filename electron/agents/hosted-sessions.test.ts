@@ -198,6 +198,11 @@ describe("HostedSessions", () => {
       kind: "process",
       meta: { provider: "codex", started: 1 },
     });
+    const died = found("died", {
+      kind: "process",
+      meta: { provider: "codex", started: 1 },
+      ended: true,
+    });
     const cursor = found("other", {
       kind: "process",
       meta: { provider: "cursor" },
@@ -210,6 +215,7 @@ describe("HostedSessions", () => {
         unusable,
         busy,
         twice,
+        died,
         cursor,
         claude,
       ],
@@ -226,7 +232,7 @@ describe("HostedSessions", () => {
     expect(back).toEqual([{ key: "kept", open: true }]);
     expect(sessions.get("kept")?.id).toBe(9);
     expect(sessions.get("busy")).toBe(live);
-    for (const ended of [notOurs, unusable, busy, twice])
+    for (const ended of [notOurs, unusable, busy, twice, died])
       expect(ended.close).toHaveBeenCalled();
     // Other agents take theirs back themselves.
     for (const left of [kept, cursor, claude])

@@ -38,6 +38,9 @@ export class HostedChild extends EventEmitter {
     hosted.read({
       replayed: (entries) => {
         for (const line of replay(entries)) this.out(line);
+        // The replay filters drop the end; a process gone meanwhile still exited.
+        const end = entries.find((e) => e.kind === "end");
+        if (end?.kind === "end") this.exit(end.failure);
       },
       entry: (entry) => {
         if (entry.kind === "line") this.out(entry.text);

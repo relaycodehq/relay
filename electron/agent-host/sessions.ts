@@ -74,6 +74,7 @@ export abstract class HostSession {
       ...(this.threadId ? { threadId: this.threadId } : {}),
       split: this.open ? this.start : this.end,
       open: this.open,
+      ...(this.ended ? { ended: true } : {}),
       turns: Object.fromEntries(this.turns),
     };
   }

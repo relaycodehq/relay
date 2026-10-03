@@ -632,7 +632,9 @@ export class HostedProcess {
   }
 
   entry(entry: Entry) {
-    if (entry.kind === "end") this.connection.forget(this.id);
+    // Mid-replay the endpoint stays: "attached" still has to find it.
+    if (entry.kind === "end" && !this.replaying)
+      this.connection.forget(this.id);
     if (this.replaying) this.replay.push(entry);
     else if (this.reader) this.reader.entry(entry);
     else this.live.push(entry);
@@ -640,6 +642,8 @@ export class HostedProcess {
 
   attached() {
     this.replaying = false;
+    if (this.replay.some((e) => e.kind === "end"))
+      this.connection.forget(this.id);
     this.reader?.replayed?.(this.replay.splice(0));
   }
 
