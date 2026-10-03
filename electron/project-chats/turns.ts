@@ -87,12 +87,17 @@ export class ChatTurns {
       m.version++;
       this.core.emit({ chatId: chat.id, message: structuredClone(m) });
     }
-    if (unread.length) void this.core.storage.save(chat).catch(() => {});
+    if (unread.length)
+      void this.core.storage
+        .save(chat)
+        .catch((e) => console.warn("Could not save the thread:", e));
     if (turn) this.councils.step(chat.id, turn);
-    void this.core.storage.syncSummary(chat).catch(() => {});
+    void this.core.storage
+      .syncSummary(chat)
+      .catch((e) => console.warn("Could not update the thread's summary:", e));
     void this.core
       .control(chat.id, () => this.queue.drain(chat.id))
-      .catch(() => {});
+      .catch((e) => console.warn("Could not send the queued messages:", e));
   }
   resume(id: string, settings?: ResumeSettings) {
     return this.core.control(id, () => this.resumeHeld(id, settings));
@@ -368,7 +373,9 @@ export class ChatTurns {
       };
       chat.messages.push(failed);
       if (chat.queue?.length) chat.queuePaused = true;
-      await this.core.storage.save(chat).catch(() => {});
+      await this.core.storage
+        .save(chat)
+        .catch((e) => console.warn("Could not save the failed send:", e));
       this.core.emit({ chatId: id, message: failed });
     }
   }
@@ -393,7 +400,8 @@ export class ChatTurns {
       .finally(() =>
         this.endRun(chat, active, { request: input.id, answer: answer.id }),
       );
-    void active.job.catch(() => {});
+    // The runner turns agent errors into a failed answer; what's left is a failed save.
+    void active.job.catch((e) => console.warn("Could not save the answer:", e));
   }
   /**
    * Asks the agent that answered last to brief the one taking over. Best effort:
@@ -574,7 +582,10 @@ export class ChatTurns {
             interrupt(m);
             failed = true;
           }
-        if (failed) await this.core.storage.save(chat).catch(() => {});
+        if (failed)
+          await this.core.storage
+            .save(chat)
+            .catch((e) => console.warn("Could not save the thread:", e));
       }
       console.warn("Could not pick a turn back up:", e);
     }
@@ -647,7 +658,9 @@ export class ChatTurns {
           kind: "compact",
         })
         .finally(() => this.endRun(chat, active));
-      void active.job.catch(() => {});
+      void active.job.catch((e) =>
+        console.warn("Could not save the compaction:", e),
+      );
     });
   }
 }

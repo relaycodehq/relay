@@ -96,7 +96,11 @@ export class SideQuestions {
     ).finally(() => {
       this.core.active.sideDone(key);
       // The side answer moved `updated`, as any finished answer does.
-      void this.core.storage.syncSummary(chat).catch(() => {});
+      void this.core.storage
+        .syncSummary(chat)
+        .catch((e) =>
+          console.warn("Could not update the thread's summary:", e),
+        );
     });
     this.core.active.runSide(key, abort, job);
     void job.catch(() => {});

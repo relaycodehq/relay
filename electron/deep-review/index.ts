@@ -241,7 +241,9 @@ export class DeepReviews {
         !state.reviewers.some((r) => this.host.active(r.chatId))
       ) {
         state.status = "failed";
-        await this.host.touch(chat, state.request).catch(() => {});
+        await this.host
+          .touch(chat, state.request)
+          .catch((e) => console.warn("Could not save the failed review:", e));
       }
       throw error;
     }

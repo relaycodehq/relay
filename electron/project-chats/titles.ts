@@ -38,7 +38,9 @@ export class ThreadTitles {
 
   /** A title the agent named the thread with as it answered. */
   heard(chat: ProjectChat, message: ChatMessage, title: string) {
-    const update = this.update(chat, message, title).catch(() => {});
+    const update = this.update(chat, message, title).catch((e) =>
+      console.warn("Could not save the thread's title:", e),
+    );
     this.updates.add(update);
     void update.finally(() => this.updates.delete(update));
   }
