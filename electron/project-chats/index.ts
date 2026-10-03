@@ -40,6 +40,7 @@ import type { ChatCore } from "./core";
 import { Councils } from "./councils";
 import { assertHere, ComputerHandoff } from "./handoff";
 import { ChatQueue } from "./queue";
+import { LimitResumes } from "./limit-resume";
 import { ChatSchedule } from "./schedule";
 import { ProviderSessions } from "./sessions";
 import { ChatSharing } from "./sharing";
@@ -60,6 +61,7 @@ export class ProjectChats {
   private sessions: ProviderSessions;
   private active: ActiveTurns;
   private schedule: ChatSchedule;
+  private limits: LimitResumes;
   private titles: ThreadTitles;
   private sharing: ChatSharing;
   private worktrees: ThreadWorktrees;
@@ -109,6 +111,9 @@ export class ProjectChats {
     });
     this.schedule = new ChatSchedule(core, {
       send: (id, input, fromRelay) => this.send(id, input, fromRelay),
+    });
+    this.limits = new LimitResumes(core, {
+      resume: (id) => this.resume(id),
     });
     this.titles = new ThreadTitles(core);
     this.sharing = new ChatSharing(core, sharing, {
@@ -160,7 +165,10 @@ export class ProjectChats {
       this.councils,
       this.queue,
       evidence,
-      { sync: (id) => this.sync(id) },
+      {
+        sync: (id) => this.sync(id),
+        ended: (id, messageId) => this.limits.ended(id, messageId),
+      },
     );
   }
   /**
@@ -272,9 +280,14 @@ export class ProjectChats {
   stopPending(id: string, pendingId: string) {
     return this.schedule.stopPending(id, pendingId);
   }
-  /** Arms the wake-ups kept when Relay last closed, and scheduled messages. */
+  /** Arms the wake-ups kept when Relay last closed, scheduled messages and resumes after a limit. */
   armWakeups() {
     this.schedule.armAll();
+    this.limits.armAll();
+  }
+  /** Turns off carrying on the answer a usage limit stopped, or back on. */
+  setLimitResume(id: string, on: boolean) {
+    return this.limits.set(id, on);
   }
   resolveStoppedWork(id: string, action: "resume" | "dismiss") {
     return this.schedule.resolveStopped(id, action);
@@ -668,6 +681,7 @@ export class ProjectChats {
     if (detach) {
       this.disposing = true;
       this.schedule.stop();
+      this.limits.stop();
       for (const a of this.active.allSides()) a.abort.abort();
       this.titles.abort();
       // What was stopped writes its last state before the store goes to disk.
@@ -692,6 +706,7 @@ export class ProjectChats {
         console.warn("Could not keep Claude's background work:", e),
       );
     this.schedule.stop();
+    this.limits.stop();
     this.disposing = true;
     for (const a of this.active.all()) a.abort.abort();
     for (const a of this.active.allSides()) a.abort.abort();

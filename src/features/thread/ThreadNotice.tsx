@@ -3,11 +3,16 @@ import { chatSettled } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { HandoffStrip, ReturnedStrip } from "../handoff/HandoffStrip";
-import { SettledStrip, StoppedStrip, WaitingStrip } from "./WaitingStrip";
+import {
+  LimitStrip,
+  SettledStrip,
+  StoppedStrip,
+  WaitingStrip,
+} from "./WaitingStrip";
 
 /** The strip on top of a thread's composer, the most pressing first: the
- * thread is on another computer or back from one, its agent left work
- * stopped or waiting, or the thread is settled. */
+ * thread is on another computer or back from one, a usage limit stopped its
+ * answer, its agent left work stopped or waiting, or the thread is settled. */
 export function ThreadNotice({
   chat,
   stopped,
@@ -47,6 +52,13 @@ export function ThreadNotice({
   if (chat.sentTo) return <HandoffStrip chat={chat} onError={onError} />;
   if (chat.cameFrom?.returnedAt)
     return <ReturnedStrip computer={chat.cameFrom.computer} />;
+  if (chat.limitResume && !chat.running)
+    return (
+      <LimitStrip
+        plan={chat.limitResume}
+        onSet={(on) => changeWork(() => api.setLimitResume(chat.id, on))}
+      />
+    );
   if (stopped?.length)
     return (
       <StoppedStrip

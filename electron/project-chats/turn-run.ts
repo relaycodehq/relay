@@ -13,6 +13,7 @@ import { agentRuntime } from "../agents";
 import { AnswerRecorder } from "./answer-recorder";
 import { turnRules, type ChatTurn } from "./chat-turn";
 import { ClaudeSignedOutError } from "../agents/claude/claude-sign-in";
+import { UsageLimitError } from "../agents/usage-limit";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { commitWatch } from "./turn-commit";
@@ -273,6 +274,8 @@ export class TurnRunner {
           // that reads the new sign-in, resuming the same conversation.
           await agentRuntime(provider).closeSession(sessionKey);
         }
+        if (e instanceof UsageLimitError)
+          failed.limit = e.resetsAt ? { resetsAt: e.resetsAt } : {};
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
         if (fork) {

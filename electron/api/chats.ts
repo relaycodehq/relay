@@ -116,6 +116,11 @@ export function chatHandlers(ctx: ApiContext) {
         idSchema.parse(args[0]),
         z.enum(["resume", "dismiss"]).parse(args[1]),
       ),
+    setLimitResume: (args) =>
+      projectChats.setLimitResume(
+        idSchema.parse(args[0]),
+        z.boolean().parse(args[1]),
+      ),
     stopProjectChatPending: (args) =>
       projectChats.stopPending(
         idSchema.parse(args[0]),

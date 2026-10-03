@@ -8,6 +8,7 @@ import {
   reportedFindings,
 } from "../../../../shared/deep-review";
 import { ClaudeSignedOutError } from "../claude-sign-in";
+import { resetMs, UsageLimitError } from "../../usage-limit";
 import type { ClaudeRunOptions } from "./config";
 import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
@@ -41,6 +42,11 @@ export class ClaudeTurnReader {
   private reported?: string;
   // The CLI can end a turn it couldn't authenticate as a plain error result.
   private signedOut = false;
+  // A request the plan's limit refused.
+  private limited = false;
+  // The plan's limit reported spent, lifting at `resetsAt` (seconds) if known.
+  // Extra usage can still carry the request, so this alone fails nothing.
+  private rejected?: { resetsAt?: number };
   // After a compact boundary, the next synthetic user message is the summary.
   private compacted?: string;
   private rows: ToolRows;
@@ -91,6 +97,11 @@ export class ClaudeTurnReader {
           ? content
           : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
     }
+    if (
+      message.type === "rate_limit_event" &&
+      message.rate_limit_info.status === "rejected"
+    )
+      this.rejected = { resetsAt: message.rate_limit_info.resetsAt };
     if (message.type === "assistant") this.said(message);
     if (message.type === "user" && Array.isArray(message.message.content))
       this.rows.results(message.message.content, message.parent_tool_use_id);
@@ -164,6 +175,7 @@ export class ClaudeTurnReader {
   private said(message: SDKAssistantMessage) {
     const parent = message.parent_tool_use_id;
     if (message.error === "authentication_failed") this.signedOut = true;
+    if (message.error === "rate_limit" && !parent) this.limited = true;
     if (!parent) {
       // The newest entry of the main conversation is where a fork continues.
       this.options.session?.onPoint?.(message.uuid);
@@ -205,7 +217,16 @@ export class ClaudeTurnReader {
     )
       return "more";
     this.steerable = false;
-    if (message.is_error || message.subtype !== "success")
+    const failed = message.is_error || message.subtype !== "success";
+    // A refused request can still end in a "successful" result whose answer
+    // is the limit notice, so the refusal decides.
+    if (!this.signedOut && (this.limited || (failed && this.rejected)))
+      throw new UsageLimitError(
+        "claude",
+        "Claude hit its usage limit.",
+        resetMs(this.rejected?.resetsAt),
+      );
+    if (failed)
       throw this.signedOut
         ? new ClaudeSignedOutError()
         : new Error("Claude could not complete this turn.");

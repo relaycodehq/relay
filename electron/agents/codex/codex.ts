@@ -9,6 +9,7 @@ import { codexActivity, codexEditedPaths } from "../activity";
 import { CodexAnswerStream } from "./answer-stream";
 import type { ContextUsage } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
+import { codexSpentUntil, UsageLimitError } from "../usage-limit";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -69,6 +70,16 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   let plan = "",
     // Codex hands a finished `/review` back as one item, not as an answer.
     review = "";
+  // When the spent window lifts, from Codex's latest word on the account's limits.
+  let spentUntil: number | undefined;
+  const failure = (error: any, fallback: string) =>
+    error?.codexErrorInfo === "usageLimitExceeded"
+      ? new UsageLimitError(
+          "codex",
+          error.message || "Codex hit its usage limit.",
+          spentUntil,
+        )
+      : new Error(error?.message ?? fallback);
   const fileChanges = new Map<string, unknown>();
   const stream = new CodexAnswerStream(options.onText, (id, text) =>
     options.onCommentary?.(id, text),
@@ -86,6 +97,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   };
   const notification = (method: string, p: any) => {
     if (settled || (p.threadId && threadId && p.threadId !== threadId)) return;
+    if (method === "account/rateLimits/updated")
+      spentUntil = codexSpentUntil(p.rateLimits) ?? spentUntil;
     if (method === "thread/tokenUsage/updated") {
       const usage = codexContextUsage(p.tokenUsage);
       if (usage) options.onContext?.(usage);
@@ -142,12 +155,10 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       finish(
         p.turn?.status === "completed"
           ? undefined
-          : new Error(
-              p.turn?.error?.message ?? "Codex did not finish this answer.",
-            ),
+          : failure(p.turn?.error, "Codex did not finish this answer."),
       );
     if (method === "error" && !p.willRetry)
-      finish(new Error(p.error?.message ?? "Codex failed to answer."));
+      finish(failure(p.error, "Codex failed to answer."));
   };
   let interruptTimeout: ReturnType<typeof setTimeout> | undefined;
   const abort = () => {

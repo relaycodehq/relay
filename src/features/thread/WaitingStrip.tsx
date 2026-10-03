@@ -5,9 +5,11 @@ import {
   CheckCheck,
   ChevronDown,
   CircleStop,
+  Hourglass,
   SquareTerminal,
 } from "lucide-react";
-import type { ChatPending } from "../../../shared/projects";
+import { agentName } from "../../../shared/agents";
+import type { ChatPending, LimitResume } from "../../../shared/projects";
 import { clock, summary, timing, wakeupTitle } from "../../../shared/waiting";
 import "../handoff/waiting-strip.css";
 
@@ -165,6 +167,66 @@ export function StoppedStrip({
         >
           Pick it back up
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** "14:30" today, "Mon 14:30" on another day: weekly limits lift days out. */
+function resetClock(at: number, now: number) {
+  const day = new Date(at);
+  return day.toDateString() === new Date(now).toDateString()
+    ? clock(at)
+    : `${day.toLocaleDateString([], { weekday: "short" })} ${clock(at)}`;
+}
+
+/** A usage limit stopped the answer; Relay carries it on once the limit lifts. */
+export function LimitStrip({
+  plan,
+  onSet,
+}: {
+  plan: LimitResume;
+  onSet: (on: boolean) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const now = useNow(30_000);
+  const due = plan.at <= now;
+  // Off with the limit lifted, Resume answer in the thread does the same.
+  if (plan.off && due) return null;
+  const set = (on: boolean) => {
+    setBusy(true);
+    onSet(on)
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="waiting-strip" role="status">
+      <div className="waiting-strip-head">
+        <Hourglass size={15} />
+        <span className="waiting-strip-text">
+          <b>{agentName(plan.provider)} hit its usage limit</b>
+          <span>
+            {plan.off
+              ? ` · resets ${resetClock(plan.at, now)}`
+              : due
+                ? " · resuming the answer"
+                : ` · resumes the answer at ${resetClock(plan.at, now)}`}
+          </span>
+        </span>
+        {plan.off ? (
+          <button
+            type="button"
+            className="primary-action"
+            disabled={busy}
+            onClick={() => set(true)}
+          >
+            Resume then
+          </button>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => set(false)}>
+            Don't resume
+          </button>
+        )}
       </div>
     </div>
   );

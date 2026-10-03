@@ -607,6 +607,42 @@ if (args.includes("--permission-prompt-tool")) {
       // Answers that link project files, for the chat's file links.
       // Relay's private note, when there is one, comes before the prompt.
       const said = m.params.input.filter((i) => i.type === "text").at(-1).text;
+      // The plan runs out mid-turn: Codex says when the window lifts, in
+      // seconds, then fails the turn. Only the request itself, not history
+      // a later prompt repeats.
+      if (said.split("\n")[0].includes("fixture usage limit")) {
+        setTimeout(() => {
+          send({
+            method: "account/rateLimits/updated",
+            params: {
+              rateLimits: {
+                primary: {
+                  usedPercent: 100,
+                  windowDurationMins: 300,
+                  resetsAt: Math.floor(Date.now() / 1000) + 600,
+                },
+                secondary: null,
+              },
+            },
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: {
+                id: "fixture-turn",
+                status: "failed",
+                error: {
+                  message: "You've hit your usage limit.",
+                  codexErrorInfo: "usageLimitExceeded",
+                  additionalDetails: null,
+                },
+              },
+            },
+          });
+        }, turnMs);
+        return;
+      }
       const echo = said.indexOf("fixture echo:");
       const answer =
         (echo >= 0 ? said.slice(echo + "fixture echo:".length).trim() : null) ??

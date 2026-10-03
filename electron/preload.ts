@@ -18,6 +18,7 @@ const methods = [
   "projectChatAgent",
   "stopProjectChatAgent",
   "resolveStoppedWork",
+  "setLimitResume",
   "projectChatShareInfo",
   "shareProjectChat",
   "syncProjectChat",

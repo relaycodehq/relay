@@ -10,6 +10,7 @@ import {
 } from "./index";
 import { ClaudeWork } from "./pending";
 import { ClaudeSignedOutError } from "../claude-sign-in";
+import { UsageLimitError } from "../../usage-limit";
 import type { AgentActivity, ContextUsage } from "../../../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
@@ -154,6 +155,38 @@ it("tells an expired login apart from other failed turns", async () => {
   await expect(run()).rejects.toBeInstanceOf(ClaudeSignedOutError);
   claude(failed());
   await expect(run()).rejects.toThrow("Claude could not complete this turn.");
+});
+
+it("tells a spent plan apart, with when it lifts, and lets extra usage carry the turn", async () => {
+  const resetsAt = Math.floor(Date.now() / 1000) + 3600;
+  const limit = (status: "rejected" | "allowed") => ({
+    type: "rate_limit_event",
+    rate_limit_info: { status, resetsAt, rateLimitType: "five_hour" },
+    uuid: "limit",
+    session_id,
+  });
+  // As the CLI ends a turn the plan refused: the notice can even come back
+  // as a "successful" result.
+  claude((uuid) => [
+    lifecycle(uuid, "started"),
+    limit("rejected"),
+    { ...answer("You've hit your limit · resets 3pm"), error: "rate_limit" },
+    result("You've hit your limit · resets 3pm"),
+  ]);
+  const refused = await run().catch((e) => e);
+  expect(refused).toBeInstanceOf(UsageLimitError);
+  expect(refused).toMatchObject({
+    provider: "claude",
+    resetsAt: resetsAt * 1000,
+  });
+  // Spent, but extra usage answered anyway.
+  claude((uuid) => [
+    lifecycle(uuid, "started"),
+    limit("rejected"),
+    answer("banana"),
+    result("banana"),
+  ]);
+  await expect(run()).resolves.toBe("banana");
 });
 
 it("lists the background work and wake-ups Claude leaves running", async () => {

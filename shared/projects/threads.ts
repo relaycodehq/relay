@@ -72,6 +72,8 @@ export interface ChatSummary {
   cameFrom?: ChatCameFrom;
   /** When the earliest message scheduled with Send later goes out. */
   nextSend?: number;
+  /** The answer a usage limit stopped, resumed once the limit lifts; see limit-resume. */
+  limitResume?: LimitResume;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
   reviewer?: ReviewerTask;
   /** An Ultraplan's thinker; its thread shows inside the council, never on its own. */
@@ -91,6 +93,14 @@ export interface HeldWakeup {
   at: number;
   /** The reply thread whose Claude session scheduled it. */
   parentId?: string;
+}
+export interface LimitResume {
+  messageId: string;
+  provider: AgentProvider;
+  /** When the limit lifts; Relay resumes shortly after. */
+  at: number;
+  /** Turned off for this answer; the thread still offers to turn it back on. */
+  off?: true;
 }
 /** `parentId` is the side conversation whose Claude session ran it. */
 export type StoppedWork = ChatPending & { parentId?: string };

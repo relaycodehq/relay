@@ -1629,6 +1629,97 @@ it("leaves a paused queue paused when Relay sends Claude's wake-up itself", asyn
   expect(after.queue?.map((q) => q.input.id)).toEqual([held.id]);
 }, 20000);
 
+/** Fires a thread's planned resume now instead of after the limit lifts. */
+const fireLimitResume = (id: string) =>
+  (
+    chats as unknown as { limits: { fire(id: string): Promise<void> } }
+  ).limits.fire(id);
+
+it("resumes an answer a usage limit stopped once the limit lifts, and picks its queue back up", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture usage limit"));
+  await chats.send(chat.id, input("@codex Queued meanwhile"));
+  await vi.waitFor(
+    () => expect(chats.list(projectId)[0].limitResume).toBeDefined(),
+    { timeout: 8000 },
+  );
+  const plan = chats.list(projectId)[0].limitResume!;
+  const stopped = await chats.get(chat.id);
+  const failed = stopped.messages.at(-1)!;
+  expect(failed).toMatchObject({
+    status: "failed",
+    error: "You've hit your usage limit.",
+    limit: { resetsAt: plan.at },
+  });
+  expect(plan).toMatchObject({ messageId: failed.id, provider: "codex" });
+  // Codex said seconds; the plan keeps milliseconds, ten minutes out.
+  expect(plan.at - Date.now()).toBeGreaterThan(9 * 60_000);
+  expect(plan.at - Date.now()).toBeLessThanOrEqual(10 * 60_000);
+  expect(stopped.queuePaused).toBe(true);
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  expect(chats.list(projectId)[0].limitResume).toEqual(plan);
+  await fireLimitResume(chat.id);
+  await vi.waitFor(
+    async () => {
+      const after = await chats.get(chat.id);
+      expect(
+        after.messages.filter((m) => m.role === "user").map((m) => m.body),
+      ).toEqual([
+        "@codex fixture usage limit",
+        expect.stringMatching(/^@codex Continue from where/),
+        "@codex Queued meanwhile",
+      ]);
+      expect(after.messages.at(-1)?.status).toBe("complete");
+    },
+    { timeout: 15000 },
+  );
+  expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+}, 30000);
+
+it("drops the planned resume when the thread moves on, and resumes nothing it no longer fits", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture usage limit"));
+  await vi.waitFor(
+    () => expect(chats.list(projectId)[0].limitResume).toBeDefined(),
+    { timeout: 8000 },
+  );
+  const plan = chats.list(projectId)[0].limitResume!;
+  await chats.setLimitResume(chat.id, false);
+  expect(chats.list(projectId)[0].limitResume?.off).toBe(true);
+  await chats.setLimitResume(chat.id, true);
+  expect(chats.list(projectId)[0].limitResume?.off).toBeUndefined();
+  await chats.send(chat.id, input("@codex Something else first"));
+  expect(chats.list(projectId)[0].limitResume).toBeUndefined();
+  await vi.waitFor(
+    async () => {
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      );
+      expect(chats.hasActiveProject(projectId)).toBe(false);
+    },
+    { timeout: 8000 },
+  );
+  // A plan left over from before, as a save from another build might hold.
+  await chats.dispose();
+  const file = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  saved.limitResume = plan;
+  await writeFile(file, JSON.stringify(saved));
+  chats = new ProjectChats(store, projects, join(root, "chats"), (e) =>
+    events.push(e),
+  );
+  const before = (await chats.get(chat.id)).messages.length;
+  await fireLimitResume(chat.id);
+  const after = await chats.get(chat.id);
+  expect(after.messages).toHaveLength(before);
+  expect(after.limitResume).toBeUndefined();
+  expect(chats.hasActiveProject(projectId)).toBe(false);
+}, 30000);
+
 it("holds a Send later message until its time, sends it now on request, and keeps it across restart", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const soon = input("Check the deploy.");
