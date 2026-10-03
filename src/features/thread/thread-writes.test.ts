@@ -4,6 +4,8 @@ import type { ChatSummary } from "../../../shared/projects";
 
 // No React renderer here: the hooks run as plain functions over a stand-in
 // for useState/useRef that keeps slots between "renders" the way React does.
+// That checks how the hooks share one gate, not React's scheduling or effects;
+// the gate itself is tested in write-gate.test.ts, the app end to end.
 const react = vi.hoisted(() => {
   let slots: unknown[] = [];
   let next = 0;
@@ -45,7 +47,6 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../../lib/api", () => ({ api }));
 
-const { writeGate } = await import("./write-gate");
 const { useThreadHandle } = await import("./useThreadHandle");
 const { useThreadSend } = await import("./useThreadSend");
 const { useQueuedMessages } = await import("./useQueuedMessages");
@@ -167,36 +168,5 @@ describe("a thread's writes", () => {
     const after = renderThread(undefined, null);
     expect(after.handle.busy).toBe(false);
     expect(after.handle.error).toBeInstanceOf(Error);
-  });
-});
-
-describe("the write gate", () => {
-  function gate() {
-    const busy: boolean[] = [];
-    return {
-      busy,
-      ...writeGate({ onBusy: (b) => busy.push(b), onError: () => {} }),
-    };
-  }
-
-  it("keeps the next holder's hold when a released write lets go again", async () => {
-    const g = gate();
-    const first = g.reserve()!;
-    first.release();
-    const second = g.reserve()!;
-    first.release();
-    expect(g.reserve()).toBeUndefined();
-    expect(await first.run(async () => {})).toBe(false);
-    expect(await second.run(async () => {})).toBe(true);
-    expect(g.busy).toEqual([true, false, true, false]);
-  });
-
-  it("runs a held write once", async () => {
-    const g = gate();
-    const write = g.reserve()!;
-    const work = vi.fn(async () => {});
-    expect(await write.run(work)).toBe(true);
-    expect(await write.run(work)).toBe(false);
-    expect(work).toHaveBeenCalledTimes(1);
   });
 });
