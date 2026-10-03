@@ -282,7 +282,7 @@ export class TurnRunner {
           await agentRuntime(provider).closeSession(sessionKey);
         }
         // A handoff note, side question or catch-up isn't the answer to carry on.
-        if (e instanceof UsageLimitError && turn.kind === "reply") limit = e;
+        if (e instanceof UsageLimitError && rules.plansResume) limit = e;
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
         if (fork) {

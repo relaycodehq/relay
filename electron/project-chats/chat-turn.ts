@@ -34,6 +34,14 @@ export function turnRules(turn: ChatTurn) {
     records: kind !== "compact" && kind !== "side",
     /** Picks the changes up from the snapshot taken before a restart. */
     resumesSnapshot: kind === "adopt" && !!turn.resumed,
+    /**
+     * A usage limit that stops the turn plans a resume. That carries on the
+     * user's last message, so a handoff note or a turn the agent started
+     * itself has nothing to resume.
+     */
+    plansResume:
+      kind === "reply" ||
+      (kind === "adopt" && !!turn.resumed && !turn.resumed.unprompted),
     /** Runs read-only in a fork of the main session. */
     side: kind === "side",
     /**
