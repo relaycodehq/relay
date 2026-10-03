@@ -185,7 +185,12 @@ export function HandoffStrip({
           <>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !data.online}
+              title={
+                data.online
+                  ? "Only works if the handoff never arrived"
+                  : `${sentTo.computer} has to be reachable to tell whether it got the thread`
+              }
               onClick={() => act(() => api.keepThreadHere(chat.id))}
             >
               Keep it here

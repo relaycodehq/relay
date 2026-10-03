@@ -286,7 +286,11 @@ export class Handoffs {
       this.back(chatId, sentTo.id, sentTo.computerId, park),
     );
   }
-  /** Gives up on a handoff that never arrived, keeping the thread here. */
+  /**
+   * Gives up on a handoff that never arrived, keeping the thread here. Only
+   * the other computer saying it has no such thread proves that; unreachable,
+   * it may have taken the thread with the answer lost on the way.
+   */
   async keepHere(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo) return;
@@ -294,14 +298,21 @@ export class Handoffs {
       throw new Error(
         `${sentTo.computer} has this thread. Bring it back instead.`,
       );
-    const status = await this.remote(sentTo, true).catch(() => undefined);
+    let status: HandoffRemoteStatus | null;
+    try {
+      status = await this.remote(sentTo, true);
+    } catch {
+      throw new Error(
+        `Can't tell whether ${sentTo.computer} got this thread, because it can't be reached. Try again once it's back, or take the thread back without ${sentTo.computer}.`,
+      );
+    }
     if (status) {
       await this.chats.updateSentTo(chatId, sentTo.id, {
         state: "away",
         error: undefined,
       });
       throw new Error(
-        `${sentTo.computer} got this thread after all. Bring it back instead.`,
+        `${sentTo.computer} got this thread after all. Bring it back instead, or take the thread back without ${sentTo.computer}.`,
       );
     }
     await this.chats.updateSentTo(chatId, sentTo.id, null);

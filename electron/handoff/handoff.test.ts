@@ -797,3 +797,63 @@ it("updates the other computer's Relay from here, and tells an older one apart",
     }),
   ).toBe(false);
 }, 30000);
+
+/** A worktree thread marked as handing off to the mini, with nothing sent: a handoff that got stuck. */
+async function stuckSending() {
+  const paired = await pairedComputers();
+  const { laptop, computers, computerId } = paired;
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  await laptop.chats.markHandoff(thread.id, {
+    id: randomUUID(),
+    computerId,
+    computer: computers.get(computerId).name,
+    at: Date.now(),
+  });
+  return { ...paired, thread };
+}
+
+it("keeps a stuck handoff here once the other computer says it never got the thread", async () => {
+  const { laptop, sender, thread } = await stuckSending();
+  await laptop.chats.updateSentTo(
+    thread.id,
+    (await laptop.chats.get(thread.id)).sentTo!.id,
+    { error: "The link dropped." },
+  );
+  await sender.keepHere(thread.id);
+  expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
+  await laptop.chats.send(thread.id, input("@codex Carry on here"));
+}, 30000);
+
+it("won't keep a handoff here while the other computer can't be asked", async () => {
+  const { laptop, sender, computers, thread } = await stuckSending();
+  computers.close();
+  await expect(sender.keepHere(thread.id)).rejects.toThrow(
+    /Can't tell whether .* got this thread.*take the thread back without/s,
+  );
+  expect((await laptop.chats.get(thread.id)).sentTo?.state).toBe("sending");
+}, 30000);
+
+it("won't keep a handoff here when the other computer did take the thread", async () => {
+  const { laptop, mini, sender, thread } = await awayWithChangelog(false);
+  const { id } = (await laptop.chats.get(thread.id)).sentTo!;
+  // The answer to `receiveHandoff` got lost, so the laptop still thinks it's sending.
+  await laptop.chats.updateSentTo(thread.id, id, {
+    state: "sending",
+    error: "The link dropped.",
+  });
+  await expect(sender.keepHere(thread.id)).rejects.toThrow(
+    /got this thread after all/,
+  );
+  expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+    state: "away",
+  });
+  expect(
+    mini.chats.list(mini.projectId).filter((c) => c.cameFrom),
+  ).toHaveLength(1);
+}, 60000);
