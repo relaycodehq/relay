@@ -20,6 +20,7 @@ import {
   protocolVersion,
   readLines,
   writeLine,
+  type AskName,
   type ClientMessage,
   type HostMessage,
   type HostRecord,
@@ -61,7 +62,7 @@ const limits = {
 
 type Ask = {
   session: string;
-  name: "canUseTool" | "hook";
+  name: AskName;
   args: unknown[];
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -137,7 +138,10 @@ function open(message: Extract<ClientMessage, { t: "open" }>) {
   } else {
     const running = new ClaudeSession(id, key, meta, host);
     running.attached = true;
-    running.launch(message.options, message.hooks, message.canUseTool);
+    running.launch(message.options, message.hooks, {
+      canUseTool: message.canUseTool,
+      onElicitation: !!message.onElicitation,
+    });
     session = running;
   }
   sessions.set(id, session);

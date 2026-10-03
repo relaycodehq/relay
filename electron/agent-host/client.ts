@@ -37,6 +37,10 @@ export interface HostedHandlers {
     input: Record<string, unknown>,
     context: Record<string, unknown> & { signal: AbortSignal },
   ) => Promise<unknown>;
+  onElicitation?: (
+    request: Record<string, unknown>,
+    context: { signal: AbortSignal },
+  ) => Promise<unknown>;
   hooks: Record<string, (input: unknown) => Promise<unknown>>;
 }
 
@@ -323,6 +327,7 @@ class HostConnection {
       options: request.options,
       hooks: request.hooks,
       canUseTool: !!request.handlers.canUseTool,
+      onElicitation: !!request.handlers.onElicitation,
     });
     return query;
   }
@@ -484,6 +489,14 @@ export class HostedQuery {
           ...context,
           signal: controller.signal,
         });
+      }
+      if (message.name === "onElicitation") {
+        if (!this.handlers.onElicitation)
+          throw new Error("This session answers no MCP requests.");
+        return this.handlers.onElicitation(
+          message.args[0] as Record<string, unknown>,
+          { signal: controller.signal },
+        );
       }
       const [event, input] = message.args as [string, unknown];
       return (await this.handlers.hooks[event]?.(input)) ?? {};

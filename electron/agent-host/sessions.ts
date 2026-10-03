@@ -12,6 +12,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   queryMethods,
+  type AskName,
   type Entry,
   type HookMode,
   type LogEntry,
@@ -30,7 +31,7 @@ export interface SessionHost {
   deliver(session: HostSession, entry: Entry): void;
   ask(
     session: HostSession,
-    name: "canUseTool" | "hook",
+    name: AskName,
     args: unknown[],
     options: { signal?: AbortSignal; timeout?: number; fallback?: unknown },
   ): Promise<unknown>;
@@ -157,7 +158,7 @@ export class ClaudeSession extends HostSession {
   launch(
     options: Record<string, unknown>,
     hooks: Record<string, HookMode>,
-    canUseTool: boolean,
+    asks: { canUseTool: boolean; onElicitation: boolean },
   ) {
     const matchers: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {};
     for (const [event, mode] of Object.entries(hooks) as [
@@ -186,7 +187,7 @@ export class ClaudeSession extends HostSession {
         ...(options as Options),
         abortController: this.controller,
         hooks: matchers,
-        ...(canUseTool
+        ...(asks.canUseTool
           ? {
               canUseTool: async (tool, input, { signal, ...context }) =>
                 (await this.host.ask(
@@ -198,6 +199,17 @@ export class ClaudeSession extends HostSession {
                     fallback: { behavior: "deny", message: "Cancelled." },
                   },
                 )) as Awaited<ReturnType<NonNullable<Options["canUseTool"]>>>,
+            }
+          : {}),
+        ...(asks.onElicitation
+          ? {
+              onElicitation: async (request, { signal }) =>
+                (await this.host.ask(this, "onElicitation", [request], {
+                  signal,
+                  fallback: { action: "cancel" },
+                })) as Awaited<
+                  ReturnType<NonNullable<Options["onElicitation"]>>
+                >,
             }
           : {}),
       },

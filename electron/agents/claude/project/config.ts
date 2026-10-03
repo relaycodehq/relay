@@ -72,8 +72,9 @@ export function sessionConfig(
     ...(options.readOnly
       ? { disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit"] }
       : {}),
-    strictMcpConfig: true,
-    mcpServers: {},
+    // A thread gets the MCP servers the terminal's `claude` would; a reviewer
+    // works unattended, so it keeps to none.
+    ...(options.readOnly ? { strictMcpConfig: true, mcpServers: {} } : {}),
     extraArgs: chromeArgs,
     env:
       options.contextWindow === "200k"

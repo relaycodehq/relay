@@ -79,6 +79,8 @@ export type ClientMessage =
       hooks: Record<string, HookMode>;
       /** Ask the client before every tool use. */
       canUseTool: boolean;
+      /** Ask the client what an MCP server asks of the user. */
+      onElicitation?: boolean;
       /** Run this instead of Claude: its lines are the log, pushes its input. */
       process?: ProcessSpec;
     }
@@ -110,11 +112,13 @@ export type HostMessage =
       t: "ask";
       id: number;
       session: string;
-      name: "canUseTool" | "hook";
+      name: AskName;
       args: unknown[];
     }
   | { t: "cancel"; id: number }
   | { t: "refused"; error: string };
+
+export type AskName = "canUseTool" | "onElicitation" | "hook";
 
 /** Frames the log also carries, typed as SDK messages so the session reads them in order. */
 export type HookFrame = { type: "relay_hook"; event: string; input: unknown };

@@ -138,13 +138,51 @@ export function sessionCallbacks(holder: Asker) {
       interrupt: response.decision === "cancel",
     };
   };
-  return { promptSubmit, canUseTool };
+  // MCP servers ask again on every call (Computer Use twice per action),
+  // so remembering a yes is the client's job.
+  const allowed = new Set<string>();
+  const onElicitation: NonNullable<Options["onElicitation"]> = async (
+    request,
+    { signal },
+  ) => {
+    await holder.ready?.promise;
+    const { readOnly, onRequest } = holder.options;
+    // An approval card answers yes or no, not a form or a sign-in page.
+    const fields = Object.keys(
+      (request.requestedSchema?.properties as object | undefined) ?? {},
+    );
+    if (readOnly || !onRequest || request.mode === "url" || fields.length)
+      return { action: "decline" };
+    const asked = `${request.serverName}\n${request.message}`;
+    if (allowed.has(asked)) return { action: "accept", content: {} };
+    const response = await onRequest(
+      {
+        kind: "approval",
+        title: request.title ?? request.message,
+        detail: `${request.title ? `${request.message}\n\n` : ""}Asked by the ${request.serverName} MCP server.`,
+        decisions: ["accept", "acceptForSession", "decline", "cancel"],
+      },
+      signal,
+    );
+    if (response.kind !== "approval") return { action: "decline" };
+    if (response.decision === "acceptForSession") allowed.add(asked);
+    return response.decision === "accept" ||
+      response.decision === "acceptForSession"
+      ? { action: "accept", content: {} }
+      : { action: response.decision };
+  };
+  return { promptSubmit, canUseTool, onElicitation };
 }
 export function hostedHandlers(holder: Asker): HostedHandlers {
-  const { promptSubmit, canUseTool } = sessionCallbacks(holder);
+  const { promptSubmit, canUseTool, onElicitation } = sessionCallbacks(holder);
   return {
     canUseTool: (tool, input, context) =>
       canUseTool(tool, input, context as Parameters<typeof canUseTool>[2]),
+    onElicitation: (request, context) =>
+      onElicitation(
+        request as unknown as Parameters<typeof onElicitation>[0],
+        context as Parameters<typeof onElicitation>[1],
+      ),
     hooks: { UserPromptSubmit: promptSubmit },
   };
 }

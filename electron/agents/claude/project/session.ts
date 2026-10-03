@@ -190,7 +190,8 @@ export async function startSession(
   const hosted = await openHosted(holder, config, key);
   if (hosted) useHosted(holder, hosted);
   else {
-    const { promptSubmit, canUseTool } = sessionCallbacks(holder);
+    const { promptSubmit, canUseTool, onElicitation } =
+      sessionCallbacks(holder);
     const { query } = await sdk();
     holder.stream = query({
       prompt: holder.input as ClaudeInput,
@@ -213,6 +214,7 @@ export async function startSession(
           UserPromptSubmit: [{ hooks: [promptSubmit] }],
         },
         canUseTool,
+        onElicitation,
       },
     });
   }
