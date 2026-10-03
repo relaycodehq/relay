@@ -21,7 +21,7 @@ import type { WorkItem } from "../../../shared/devops";
 import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { devopsKey, useDevOpsStatus } from "./plugins";
-import { relativeDate } from "../../ui/ui";
+import { relativeDate } from "../../lib/relative-date";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import "./work-items.css";
 

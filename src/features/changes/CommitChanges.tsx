@@ -4,7 +4,8 @@ import { X } from "lucide-react";
 import { api } from "../../lib/api";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
-import { ErrorBox, FileEntryIcon, IconButton, Loading } from "../../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./changed-files.css";
 

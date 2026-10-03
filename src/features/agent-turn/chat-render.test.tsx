@@ -3,7 +3,8 @@ vi.mock("../../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { markdownBlocks, RichText } from "../../ui/ui";
+import { markdownBlocks } from "../../lib/markdown-blocks";
+import { RichText } from "../../ui/RichText";
 import { AgentTurn } from "./AgentTurn";
 import type { ChatMessage } from "../../../shared/projects";
 

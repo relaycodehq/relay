@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorktreeMove } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
-import { ErrorBox, FileEntryIcon, Modal, Spinner } from "../../ui/ui";
+import { ErrorBox, Modal, Spinner } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./changed-files.css";
 import "./worktrees.css";
 

@@ -26,7 +26,7 @@ import { useCouncilFold } from "./useCouncilFold";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";
 import { CouncilHalted, CouncilToggle } from "./Council";
 import { CouncilMember } from "./CouncilMember";
-import { RichText } from "../../../ui/ui";
+import { RichText } from "../../../ui/RichText";
 import "../deep-review.css";
 import "./ultraplan.css";
 

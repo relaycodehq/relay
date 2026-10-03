@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { RunCommand } from "./CodeBlock";
-import { RichText } from "./ui";
+import { RichText } from "./RichText";
 
 const inThread = (text: string) =>
   renderToStaticMarkup(

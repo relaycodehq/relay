@@ -4,7 +4,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../lib/api";
 import { useUpdates } from "./updates";
 import { newerVersion, type ReleaseNote } from "../../../shared/updates";
-import { ErrorBox, IconButton, Loading, RichText } from "../../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import "./changelog.css";
 
 const shortDate = (iso: string) =>

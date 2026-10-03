@@ -18,7 +18,7 @@ import {
 } from "./pull-board";
 import { DiffStatLabel } from "../changes/DiffStatLabel";
 import { ProjectBadge } from "../projects/ProjectBadge";
-import { relativeDate } from "../../ui/ui";
+import { relativeDate } from "../../lib/relative-date";
 
 /** What the page knows beyond the PR itself. */
 export interface PullContext {

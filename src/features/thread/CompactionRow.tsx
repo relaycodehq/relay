@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { MessageAgentName } from "./MessageAgentName";
-import { RichText } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 
 /** The line where a session was compacted; its (i) shows the summary the agent kept. */
 export function CompactionRow({

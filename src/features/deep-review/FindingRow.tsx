@@ -6,7 +6,7 @@ import type {
 } from "../../../shared/deep-review";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { FileEntryIcon } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { PriorityTag, findingRowId } from "./PriorityTag";
 
 /** One finding: its tick, priority, title and status, who found it, and its files. */

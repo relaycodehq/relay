@@ -13,7 +13,8 @@ import { androidAppDownload } from "../../../shared/updates";
 import { phoneAppStatus } from "../../../shared/phone-app";
 import { useCopy } from "../../lib/useCopy";
 import { api } from "../../lib/api";
-import { ErrorBox, relativeDate } from "../../ui/ui";
+import { ErrorBox } from "../../ui/ui";
+import { relativeDate } from "../../lib/relative-date";
 import {
   SettingsCard,
   SettingsFooter,

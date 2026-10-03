@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ArrowLeft, Bot, X } from "lucide-react";
 import { AgentTurn } from "../../src/features/agent-turn/AgentTurn";
-import { RichText } from "../../src/ui/ui";
+import { RichText } from "../../src/ui/RichText";
 import { plural } from "../../shared/activity-labels";
 import { agentMessage, projectRoot, type AgentState } from "./subagents-data";
 import { StatusIcon, took } from "./subagents-hover";

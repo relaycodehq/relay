@@ -7,7 +7,7 @@ import "../../src/styles.css";
 import "../../src/features/agents/composer-model-picker.css";
 import { initAppearance } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";
-import { RichText } from "../../src/ui/ui";
+import { RichText } from "../../src/ui/RichText";
 
 initAppearance();
 initWindowFocus();

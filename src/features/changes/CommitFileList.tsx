@@ -4,7 +4,8 @@ import { parentOf } from "../../lib/file-tree";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { changeKind } from "../../../shared/working-tree";
 import { byFolder, changeLabels } from "./working-changes";
-import { FileEntryIcon, IconButton } from "../../ui/ui";
+import { IconButton } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 
 /**
  * The Commit sheet's files, each with a box to leave it out. Grouped under

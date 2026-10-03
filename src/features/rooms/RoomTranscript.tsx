@@ -3,7 +3,7 @@ import { clock } from "../../../shared/waiting";
 import { z } from "zod";
 import { ChevronDown, FileCode2, Reply, Square } from "lucide-react";
 import type { RoomMessage } from "../../../shared/rooms";
-import { RichText } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import { agentName } from "../../../shared/agents";
 
 const evidenceSchema = z.object({

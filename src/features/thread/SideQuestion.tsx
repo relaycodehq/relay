@@ -2,7 +2,7 @@ import { memo } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import type { SideThread } from "./chat-thread";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { RichText } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import { agentMentionPattern, agentName } from "../../../shared/agents";
 import { clock } from "../../../shared/waiting";
 

@@ -48,7 +48,8 @@ import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { ProjectHeadlinePicker } from "../../src/features/projects/ProjectHeadlinePicker";
 import { AgentTurn } from "../../src/features/agent-turn/AgentTurn";
 import { ChangedFilesCard } from "../../src/features/changes/ChangedFilesCard";
-import { FileEntryIcon, RichText } from "../../src/ui/ui";
+import { FileEntryIcon } from "../../src/ui/FileEntryIcon";
+import { RichText } from "../../src/ui/RichText";
 import type { ProjectFileLink } from "../../shared/project-file-links";
 import type {
   AgentActivity,

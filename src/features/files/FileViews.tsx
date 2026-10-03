@@ -17,7 +17,8 @@ import {
 import { api } from "../../lib/api";
 import { formatSize, joinPath } from "../../lib/file-tree";
 import { directoryKey } from "./useFileTree";
-import { ErrorBox, FileEntryIcon, IconButton, Loading } from "../../ui/ui";
+import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { EditorPath } from "./EditorPath";
 import { revealLabel } from "./FileTree";
 import "./file-browser.css";

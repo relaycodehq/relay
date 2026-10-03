@@ -30,7 +30,8 @@ import {
 import { directoryKey, useDirectories, type useExpanded } from "./useFileTree";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ContextMenuItem } from "../../ui/ContextMenuItem";
-import { ErrorBox, FileEntryIcon, IconButton, Modal } from "../../ui/ui";
+import { ErrorBox, IconButton, Modal } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./file-browser.css";
 import { mac } from "../../lib/mod-key";
 

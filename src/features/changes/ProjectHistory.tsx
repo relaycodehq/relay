@@ -7,7 +7,8 @@ import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { layoutGraph, type GraphRow } from "./commit-graph";
 import { CommitChanges } from "./CommitChanges";
-import { ErrorBox, Loading, relativeDate } from "../../ui/ui";
+import { ErrorBox, Loading } from "../../ui/ui";
+import { relativeDate } from "../../lib/relative-date";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import "./history.css";
 

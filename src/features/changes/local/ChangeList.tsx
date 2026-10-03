@@ -12,7 +12,7 @@ import {
   type ChangeSection,
   type SelectedChange,
 } from "../working-changes";
-import { FileEntryIcon } from "../../../ui/ui";
+import { FileEntryIcon } from "../../../ui/FileEntryIcon";
 import { LocalChangeMenu } from "../LocalChangeMenu";
 
 interface Props {

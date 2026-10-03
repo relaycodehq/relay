@@ -32,7 +32,9 @@ import { AgentTurn } from "../../../src/features/agent-turn/AgentTurn";
 import { ChangedFilesCard } from "../../../src/features/changes/ChangedFilesCard";
 import { WorkingDiff } from "../../../src/features/diff/WorkingDiff";
 import { RelayMark } from "../../../src/ui/RelayMark";
-import { FileEntryIcon, RichText, Spinner } from "../../../src/ui/ui";
+import { Spinner } from "../../../src/ui/ui";
+import { FileEntryIcon } from "../../../src/ui/FileEntryIcon";
+import { RichText } from "../../../src/ui/RichText";
 import type { AgentProvider } from "../../../shared/agents";
 import {
   buildTurn,

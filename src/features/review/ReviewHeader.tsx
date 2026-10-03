@@ -11,7 +11,8 @@ import type { Pull } from "../../../shared/types";
 import { api } from "../../lib/api";
 import type { ChecksController } from "../checks/useProjectChecks";
 import { ProjectChecksButton } from "../checks/ProjectChecks";
-import { IconButton, timeAgo } from "../../ui/ui";
+import { IconButton } from "../../ui/ui";
+import { timeAgo } from "../../lib/relative-date";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 

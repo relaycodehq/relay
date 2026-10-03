@@ -1,7 +1,8 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { FolderGit2, GitBranch } from "lucide-react";
 import type { Draft, LocalFolder, Pull } from "../../../shared/types";
-import { ErrorBox, Modal, RichText } from "../../ui/ui";
+import { ErrorBox, Modal } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 
 /** The review's draft comments; one opens its file, drafts from older revisions say so. */
 export function DraftsDialog({

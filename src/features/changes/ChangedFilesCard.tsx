@@ -16,7 +16,8 @@ import {
 import type { TurnFileChange } from "../../../shared/projects";
 import { buildTurnTree, sumStats, type TurnTreeNode } from "./turn-diff-tree";
 import { DiffStatLabel } from "./DiffStatLabel";
-import { FileEntryIcon, IconButton } from "../../ui/ui";
+import { IconButton } from "../../ui/ui";
+import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./changed-files.css";
 
 // Short lists read best open; longer ones start as folders, like T3.

@@ -9,7 +9,7 @@ import type { ProjectFileLink } from "../../../../shared/project-file-links";
 import { effortName, useAgentName } from "../useAgentName";
 import { useFollowEnd } from "./useFollowEnd";
 import { useMemberThread } from "./useMemberThread";
-import { RichText } from "../../../ui/ui";
+import { RichText } from "../../../ui/RichText";
 import { AgentTurn } from "../../agent-turn/AgentTurn";
 import { formatTokens } from "../../agents/ContextWindowMeter";
 import { ProviderIcon } from "../../agents/ComposerModelPicker";

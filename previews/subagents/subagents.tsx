@@ -33,7 +33,7 @@ import { initAppearance, setMode, useAppearance } from "../../src/lib/appearance
 import { initWindowFocus } from "../../src/lib/window-focus";
 import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { AgentTurn } from "../../src/features/agent-turn/AgentTurn";
-import { RichText } from "../../src/ui/ui";
+import { RichText } from "../../src/ui/RichText";
 import { CheckoutControl } from "../../src/features/thread/WorktreeControls";
 import type { AgentWorktree } from "../../shared/projects";
 import {

@@ -41,7 +41,8 @@ import {
   thinkingWord,
   turnHeading,
 } from "../../../shared/agent-trace";
-import { RichText, Spinner } from "../../ui/ui";
+import { Spinner } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import "./agent-trace.css";

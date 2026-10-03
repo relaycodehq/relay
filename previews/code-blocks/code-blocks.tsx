@@ -9,7 +9,7 @@ import "../../src/styles.css";
 import { initAppearance, setMode } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";
 import { RunCommand } from "../../src/ui/CodeBlock";
-import { RichText } from "../../src/ui/ui";
+import { RichText } from "../../src/ui/RichText";
 
 initAppearance();
 initWindowFocus();

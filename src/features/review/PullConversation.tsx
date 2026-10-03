@@ -6,7 +6,9 @@ import {
   conversationTimeline,
   reviewStateLabel,
 } from "./conversation-timeline";
-import { Avatar, ErrorBox, Loading, RichText, timeAgo } from "../../ui/ui";
+import { Avatar, ErrorBox, Loading } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
+import { timeAgo } from "../../lib/relative-date";
 
 /** The PR's description, reviews and comments in order, and a box to add one. */
 export function PullConversation({

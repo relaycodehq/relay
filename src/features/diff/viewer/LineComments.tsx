@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { MessageSquare, Terminal, Trash2 } from "lucide-react";
 import type { Draft, ReviewComment } from "../../../../shared/types";
-import { IconButton, RichText } from "../../../ui/ui";
+import { IconButton } from "../../../ui/ui";
+import { RichText } from "../../../ui/RichText";
 
 /** The box for a new line comment; its text is already a draft. */
 export function NewComment({

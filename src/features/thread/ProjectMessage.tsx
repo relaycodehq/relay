@@ -35,7 +35,8 @@ import {
 import { ImageViewer } from "../images/ImageViewer";
 import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
-import { RichText, Spinner } from "../../ui/ui";
+import { Spinner } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import { pilledImages, UserText, type SentImage } from "./UserText";
 import { signInOffer } from "./sign-in-offer";
 import "./thread.css";

@@ -15,7 +15,7 @@ import {
   type SubagentRun,
 } from "../../../shared/subagents";
 import { AgentTurn } from "./AgentTurn";
-import { RichText } from "../../ui/ui";
+import { RichText } from "../../ui/RichText";
 import { SubagentStatus, agentKind } from "./Subagents";
 import { POPUPS } from "../../lib/shortcuts";
 

@@ -19,7 +19,7 @@ import {
   type SavedReviewSetup,
 } from "./review-setups";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { timeAgo } from "../../ui/ui";
+import { timeAgo } from "../../lib/relative-date";
 import "../projects/projects.css";
 
 type Name = (agent: ReviewAgent | LeadAgent) => string;
