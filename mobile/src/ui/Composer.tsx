@@ -14,6 +14,9 @@ import { useDraft } from "../remote/drafts";
 import * as Haptics from "expo-haptics";
 import { ArrowUp, ChevronDown, ImagePlus, ListEnd, Square, X, Zap } from "lucide-react-native";
 import { placeDictation } from "../../../shared/dictation";
+import { numberImages } from "../../../shared/image-refs";
+import { returnedDraft } from "../../../shared/returned-draft";
+import type { TakenBack } from "../../../shared/remote-queued";
 import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
@@ -68,8 +71,12 @@ interface Live {
 export type CommandResult = boolean | string;
 
 export interface ComposerHandle {
-  /** Puts a queued message's text back to edit, after anything already typed. */
-  restore(text: string): void;
+  /**
+   * Puts a queued message back to edit, its text and screenshots after what's
+   * already there. Throws when they won't fit one message; returns a way to
+   * put the composer back as it was.
+   */
+  restore(back: Pick<TakenBack, "body" | "images">): () => void;
   /** `settings` on agent `to`, with the model this composer kept for it. */
   settingsOn(to: AgentProvider): RemoteSettings;
 }
@@ -106,6 +113,9 @@ export const Composer = forwardRef<
   const input = useRef<TextInput>(null);
   useDraft(draftKey, text, setText);
   const [images, setImages] = useState<Attachment[]>([]);
+  const held = useRef(images);
+  held.current = images;
+  const takenBackCount = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [sheet, setSheet] = useState<"model" | "mode" | "attach" | "later" | "usage">();
@@ -116,7 +126,35 @@ export const Composer = forwardRef<
   const { commands, loading, failed } = useProviderCommands(projectId, provider, wantsCommands);
   const items = dismissed === text ? null : commandItems(text, provider, commands);
   useImperativeHandle(ref, () => ({
-    restore: (restored) => setText((old) => [old.trim(), restored.trim()].filter(Boolean).join("\n\n")),
+    restore: (back) => {
+      const before = { text: typed.current, images: held.current };
+      const mine = before.images.map((i) => ({
+        name: i.name,
+        mimeType: i.mimeType,
+        dataUrl: i.dataUrl,
+        id: i.id ?? i.uri,
+        ...(i.n === undefined ? {} : { n: i.n }),
+      }));
+      const merged = returnedDraft(before.text, mine, back, true, () => `taken-back-${takenBackCount.current++}`);
+      setText(merged.body);
+      setImages(
+        merged.images.map(
+          (r) =>
+            before.images.find((i) => (i.id ?? i.uri) === r.id) ?? {
+              uri: r.dataUrl,
+              id: r.id,
+              name: r.name,
+              mimeType: r.mimeType,
+              dataUrl: r.dataUrl,
+              ...(r.n === undefined ? {} : { n: r.n }),
+            },
+        ),
+      );
+      return () => {
+        setText(before.text);
+        setImages(before.images);
+      };
+    },
     settingsOn: (to) => switched(settings, to),
   }));
   // Each agent keeps its own model while you switch between them, like the desktop's slots.
@@ -316,10 +354,12 @@ export const Composer = forwardRef<
     // it comes back if sending fails.
     setText("");
     try {
+      // Screenshots taken back with their tokens go out in token order, the tokens renumbered to match.
+      const numbered = numberImages(draft, images);
       await onSend({
-        body: draft,
+        body: numbered.text,
         settings,
-        images,
+        images: numbered.images,
         ...(sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {}),
       });
       setImages([]);
@@ -364,7 +404,7 @@ export const Composer = forwardRef<
         {images.length > 0 && (
           <ScrollView horizontal style={styles.thumbs} contentContainerStyle={styles.thumbsRow}>
             {images.map((image, i) => (
-              <View key={image.uri}>
+              <View key={image.id ?? image.uri}>
                 <Image source={{ uri: image.uri }} style={[styles.thumb, { borderColor: t.border }]} />
                 <Pressable
                   accessibilityRole="button"

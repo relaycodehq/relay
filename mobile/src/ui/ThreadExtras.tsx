@@ -14,6 +14,7 @@ import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
 import type { ChatPending } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
+import type { RemoteQueued } from "../../../shared/remote";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
@@ -155,13 +156,7 @@ export function StoppedStrip({
   );
 }
 
-type Waiting = {
-  id: string;
-  body: string;
-  images?: number;
-  error?: string;
-  at?: number;
-};
+type Waiting = RemoteQueued & { at?: number };
 
 /**
  * Messages waiting for their own turn, and those sent with Send later. Send

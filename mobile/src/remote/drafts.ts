@@ -26,7 +26,8 @@ export function useDraft(
     let live = true;
     void AsyncStorage.getItem(storageKey(key)).then((saved) => {
       if (!live) return;
-      if (saved) setText((typed) => typed || saved);
+      // Text put in before the saved draft arrived (a queued message taken back) goes after it.
+      if (saved) setText((typed) => [saved.trim(), typed.trim()].filter(Boolean).join("\n\n"));
       loaded.current = key;
     });
     return () => {

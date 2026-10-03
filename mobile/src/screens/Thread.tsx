@@ -15,13 +15,15 @@ import { randomUUID } from "expo-crypto";
 import * as Clipboard from "expo-clipboard";
 import { Ellipsis, RotateCcw } from "lucide-react-native";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
-import { remoteHistory, type RemoteSettings } from "../../../shared/remote";
+import { remoteHistory, type RemoteQueued, type RemoteSettings } from "../../../shared/remote";
+import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
+import { clearHandedBack, handBack, peekHandedBack } from "../remote/taken-back";
 import {
   arrived,
   deliver,
@@ -220,6 +222,38 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         e instanceof Error ? e.message : String(e),
       );
       return false;
+    }
+  };
+  const draftKey = rootId ? `${id}:${rootId}` : id;
+  // A queued reply taken back on the main screen arrives here, in its side conversation.
+  const [handedBack] = useState(() => peekHandedBack(draftKey));
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (!handedBack || arrived.current || !settings || !thread || !composer.current) return;
+    arrived.current = true;
+    clearHandedBack(draftKey);
+    void takeBack(handedBack.back, handedBack.messageId).catch(fail);
+  });
+  const fail = (e: unknown) =>
+    Alert.alert("Couldn't take it back", e instanceof Error ? e.message : String(e));
+  /** The composer gets the message before the queue loses it, so nothing is lost if either step fails. */
+  const takeBack = async (back: TakenBack, messageId: string) => {
+    const undo = composer.current?.restore(back);
+    if (!undo) throw new Error("The composer isn't ready yet.");
+    if (!(await queueAction("remove", messageId))) return undo();
+    if (back.settings) setSettings(back.settings);
+  };
+  const editQueued = async (item: RemoteQueued) => {
+    try {
+      // Only a desktop that sends `settings` can hand the screenshots over; older ones get the text alone.
+      const images = item.images && item.settings ? await remote.desktop("projectChatQueuedImages", id, item.id) : [];
+      const back = takenBack(item, images);
+      if (back.parentId && !rootId) {
+        handBack(`${id}:${back.parentId}`, { back, messageId: item.id });
+        router.push(`/chat/${id}/reply/${back.parentId}`);
+      } else await takeBack(back, item.id);
+    } catch (e) {
+      fail(e);
     }
   };
   /** Relay's workspace commands from the composer, as the desktop's thread runs them. */
@@ -547,11 +581,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                   onMove={async (messageId, index) =>
                     void (await queueAction("move", messageId, index))
                   }
-                  onEdit={async (item) => {
-                    // Out of the queue and back into the composer, as the desktop's ×.
-                    if (await queueAction("remove", item.id))
-                      composer.current?.restore(withoutMention(item.body));
-                  }}
+                  onEdit={editQueued}
                 />
               )}
             </View>
@@ -670,7 +700,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           disabled={remote.status !== "online"}
           context={latestContext(listed)?.usage}
           placeholder={rootId ? "Reply" : undefined}
-          draftKey={rootId ? `${id}:${rootId}` : id}
+          draftKey={draftKey}
           onSend={send}
           onStop={() =>
             act("Couldn't stop it", () =>

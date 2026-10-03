@@ -5,8 +5,12 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 export interface Attachment {
   uri: string;
   name: string;
-  mimeType: "image/jpeg";
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
   dataUrl: string;
+  /** A queued message's screenshot taken back: unique where `uri` is its whole data URL. */
+  id?: string;
+  /** Its `[Image #n]` token in the text; see shared/image-refs. Photos picked here have none. */
+  n?: number;
 }
 
 export const maxImages = 3;
