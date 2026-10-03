@@ -220,11 +220,9 @@ test("a worktree thread goes to another computer from its header and comes back 
     await expect(strip).toContainText(/finished|Working on/, {
       timeout: 60_000,
     });
-    await strip
-      .getByRole("button", { name: "Take it back without Mini" })
-      .click();
+    await strip.getByRole("button", { name: /^Take it back without / }).click();
     const confirm = laptop.page.getByRole("dialog", {
-      name: "Take it back without Mini?",
+      name: /^Take it back without .+\?$/,
     });
     await expect(confirm).toContainText("stays there, on its branch");
     await screenshot(laptop.page, {
