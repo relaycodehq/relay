@@ -45,8 +45,9 @@ export class ClaudeTurnReader {
   // A request the plan's limit refused.
   private limited = false;
   // The plan's limit reported spent, lifting at `resetsAt` (seconds) if known.
-  // Extra usage can still carry the request, so this alone fails nothing.
-  private rejected?: { resetsAt?: number };
+  // Extra usage can still carry the request, so this alone fails nothing, and
+  // while it does every turn sees this, whatever else made one fail.
+  private rejected?: { resetsAt?: number; overage: boolean };
   // After a compact boundary, the next synthetic user message is the summary.
   private compacted?: string;
   private rows: ToolRows;
@@ -97,11 +98,17 @@ export class ClaudeTurnReader {
           ? content
           : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
     }
-    if (
-      message.type === "rate_limit_event" &&
-      message.rate_limit_info.status === "rejected"
-    )
-      this.rejected = { resetsAt: message.rate_limit_info.resetsAt };
+    if (message.type === "rate_limit_event") {
+      const info = message.rate_limit_info;
+      if (info.status === "rejected")
+        this.rejected = {
+          resetsAt: info.resetsAt,
+          overage:
+            !!(info.isUsingOverage || info.overageInUse) ||
+            info.overageStatus === "allowed" ||
+            info.overageStatus === "allowed_warning",
+        };
+    }
     if (message.type === "assistant") this.said(message);
     if (message.type === "user" && Array.isArray(message.message.content))
       this.rows.results(message.message.content, message.parent_tool_use_id);
@@ -175,7 +182,11 @@ export class ClaudeTurnReader {
   private said(message: SDKAssistantMessage) {
     const parent = message.parent_tool_use_id;
     if (message.error === "authentication_failed") this.signedOut = true;
-    if (message.error === "rate_limit" && !parent) this.limited = true;
+    if (
+      (message.error === "rate_limit" || message.error === "billing_error") &&
+      !parent
+    )
+      this.limited = true;
     if (!parent) {
       // The newest entry of the main conversation is where a fork continues.
       this.options.session?.onPoint?.(message.uuid);
@@ -219,8 +230,11 @@ export class ClaudeTurnReader {
     this.steerable = false;
     const failed = message.is_error || message.subtype !== "success";
     // A refused request can still end in a "successful" result whose answer
-    // is the limit notice, so the refusal decides.
-    if (!this.signedOut && (this.limited || (failed && this.rejected)))
+    // is the limit notice, so the refusal decides. With extra usage carrying
+    // turns the plan is rejected throughout, so a failure says nothing of it.
+    const refused =
+      this.limited || (failed && this.rejected?.overage === false);
+    if (!this.signedOut && refused)
       throw new UsageLimitError(
         "claude",
         "Claude hit its usage limit.",

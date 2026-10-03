@@ -189,6 +189,34 @@ it("tells a spent plan apart, with when it lifts, and lets extra usage carry the
   await expect(run()).resolves.toBe("banana");
 });
 
+it("does not read an overloaded turn as a spent plan while extra usage carries the turns", async () => {
+  const resetsAt = Math.floor(Date.now() / 1000) + 3 * 86_400;
+  const limit = (overageStatus?: "allowed") => ({
+    type: "rate_limit_event",
+    rate_limit_info: {
+      status: "rejected",
+      resetsAt,
+      rateLimitType: "seven_day",
+      ...(overageStatus ? { overageStatus, isUsingOverage: true } : {}),
+    },
+    uuid: "limit",
+    session_id,
+  });
+  const failed = (event: object) => (uuid: string) => [
+    lifecycle(uuid, "started"),
+    event,
+    { ...answer("API Error: overloaded"), error: "overloaded" },
+    { ...result(""), is_error: true },
+  ];
+  claude(failed(limit("allowed")));
+  const overloaded = await run().catch((e) => e);
+  expect(overloaded).not.toBeInstanceOf(UsageLimitError);
+  expect(overloaded.message).toBe("Claude could not complete this turn.");
+  // Without extra usage the same failure is the plan's refusal.
+  claude(failed(limit()));
+  await expect(run()).rejects.toBeInstanceOf(UsageLimitError);
+});
+
 it("lists the background work and wake-ups Claude leaves running", async () => {
   const stopTask = vi.fn(async () => {});
   let finish!: () => void;
