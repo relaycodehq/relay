@@ -13,6 +13,7 @@ import {
 } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
+import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
@@ -97,6 +98,7 @@ export class ThreadWorktrees {
   /** An archived thread's worktree whose changes all reached the checkout has nothing left to keep. */
   async dropLanded(chat: ProjectChat, now: number) {
     if (!chat.worktree || !(await worktreeExists(chat.worktree))) return;
+    if (awaitsReturn(chat)) return;
     const status = await this.status(chat.id).catch(() => null);
     if (status && !status.files.length) {
       await removeWorktree(
@@ -119,6 +121,10 @@ export class ThreadWorktrees {
   remove(id: string) {
     return this.core.control(id, async () => {
       const { chat, worktree } = await this.of(id);
+      if (awaitsReturn(chat))
+        throw new Error(
+          `Hand this thread back first; ${chat.cameFrom!.computer} is waiting for it.`,
+        );
       await this.core.active.assertIdle(id);
       if (worktree.path) {
         threadTerminals.closeWithin(worktree.path);

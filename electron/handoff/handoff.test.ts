@@ -8,6 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -330,7 +331,7 @@ it("hands a worktree thread to the other computer and brings it back", async () 
 }, 60000);
 
 /** A worktree thread handed to the mini with CHANGELOG.md in it; the worktrees on both sides. */
-async function awayWithChangelog() {
+async function awayWithChangelog(changelog = true) {
   const paired = await pairedComputers();
   const { laptop, mini, sender, computerId } = paired;
   const thread = await laptop.chats.create(
@@ -341,7 +342,7 @@ async function awayWithChangelog() {
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);
   const here = (await laptop.chats.get(thread.id)).worktree!.path!;
-  await writeFile(join(here, "CHANGELOG.md"), "- 1.0 First\n");
+  if (changelog) await writeFile(join(here, "CHANGELOG.md"), "- 1.0 First\n");
   await sender.handOff(thread.id, computerId);
   await vi.waitFor(
     async () =>
@@ -505,6 +506,82 @@ it("brings replies written there back under the messages they answer", async () 
   expect(find(mainReply).parentId).toBe(mainAnswerId);
   expect(find(main).parentId ?? undefined).toBeUndefined();
 }, 90000);
+
+it("keeps the worktree of a thread that hasn't gone back, so it can still be handed back", async () => {
+  const { laptop, mini, sender, thread, there } =
+    await awayWithChangelog(false);
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  // Nothing changed there, which is when archiving usually drops the worktree.
+  await mini.chats.triage(arrived!.id, { kind: "archive" });
+  expect(
+    (await mini.chats.get(arrived!.id)).worktree!.removedAt,
+  ).toBeUndefined();
+  await expect(mini.chats.removeWorktree(arrived!.id)).rejects.toThrow(
+    /Hand this thread back first/,
+  );
+  expect(existsSync(there)).toBe(true);
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+    { timeout: 15000 },
+  );
+  // Back home, the copy there is just an archived thread again.
+  await vi.waitFor(async () =>
+    expect(
+      (await mini.chats.get(arrived!.id)).cameFrom?.returnedAt,
+    ).toBeTruthy(),
+  );
+  await mini.chats.removeWorktree(arrived!.id);
+  expect(existsSync(there)).toBe(false);
+}, 60000);
+
+it("hands a thread back whose worktree was deleted there, with the commits its branch kept", async () => {
+  const { laptop, mini, sender, thread, here, there } =
+    await awayWithChangelog(false);
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await writeFile(join(there, "NOTES.md"), "kept\n");
+  git(there, "add", "NOTES.md");
+  git(there, "commit", "-qm", "There: notes");
+  await writeFile(join(there, "LOST.md"), "never committed\n");
+  await rm(there, { recursive: true, force: true });
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+    { timeout: 15000 },
+  );
+  expect(await readFile(join(here, "NOTES.md"), "utf8")).toBe("kept\n");
+  expect(existsSync(join(here, "LOST.md"))).toBe(false);
+  expect((await laptop.chats.get(thread.id)).messages.length).toBeGreaterThan(
+    2,
+  );
+  await vi.waitFor(async () =>
+    expect(
+      (await mini.chats.get(arrived!.id)).cameFrom?.returnedAt,
+    ).toBeTruthy(),
+  );
+}, 60000);
+
+it("hands a thread back without files when its worktree and branch are both gone there", async () => {
+  const { laptop, mini, sender, thread, here, there } =
+    await awayWithChangelog(false);
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  const head = git(here, "rev-parse", "HEAD");
+  await rm(there, { recursive: true, force: true });
+  git(mini.clone, "worktree", "prune");
+  git(mini.clone, "branch", "-D", arrived!.worktree!.branch!);
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+    { timeout: 15000 },
+  );
+  expect(git(here, "rev-parse", "HEAD")).toBe(head);
+}, 60000);
 
 it("lets the computer it came from peek at what the turn there is doing", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();

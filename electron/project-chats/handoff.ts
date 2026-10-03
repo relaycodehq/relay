@@ -16,6 +16,7 @@ import type {
 } from "../../shared/projects";
 import { readTurn } from "../../shared/agent-trace";
 import { commitEverything, headOf } from "../git/bundles";
+import { git } from "../git/git";
 import { worktreeExists } from "../git/worktrees";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
@@ -31,6 +32,9 @@ function elsewhere(chat: ChatSummary) {
   if (chat.cameFrom?.returnedAt)
     return `This thread went back to ${chat.cameFrom.computer}; it continues there.`;
 }
+/** Handed over from another computer and not yet handed back, so that computer is waiting for it. */
+export const awaitsReturn = (chat: ChatSummary) =>
+  !!chat.cameFrom && !chat.cameFrom.returnedAt;
 export function assertHere(chat: ChatSummary) {
   const away = elsewhere(chat);
   if (away) throw new Error(away);
@@ -191,12 +195,7 @@ export class ComputerHandoff {
       const chat = await this.core.storage.load(id);
       if (!chat.worktree || !(await worktreeExists(chat.worktree)))
         throw new Error("The thread's worktree is gone.");
-      await this.core.active.halt(id);
-      if (chat.queue?.length || chat.scheduled?.length) {
-        delete chat.queue;
-        delete chat.scheduled;
-        this.schedule.armSend(id, undefined);
-      }
+      await this.stop(id, chat);
       const root = chat.worktree.path!;
       const latest = chat.messages.at(-1);
       const outgoing = chat.messages
@@ -235,6 +234,14 @@ export class ComputerHandoff {
         tip: await headOf(root),
       };
     });
+  }
+  private async stop(id: string, chat: ProjectChat) {
+    await this.core.active.halt(id);
+    if (chat.queue?.length || chat.scheduled?.length) {
+      delete chat.queue;
+      delete chat.scheduled;
+      this.schedule.armSend(id, undefined);
+    }
   }
   /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
@@ -300,13 +307,18 @@ export class ComputerHandoff {
     const came = summary?.cameFrom;
     if (!came || came.deviceId !== deviceId)
       throw new Error("This thread didn't come from that computer.");
-    const { chat, root, tip } = came.returnedAt
-      ? await this.core.storage.load(id).then(async (chat) => ({
-          chat,
-          root: chat.worktree!.path!,
-          tip: await headOf(chat.worktree!.path!),
-        }))
-      : await this.leave(id, came.computer, came.carried);
+    const here = await this.core.storage.load(id);
+    const { chat, root, tip } = !(
+      here.worktree && (await worktreeExists(here.worktree))
+    )
+      ? await this.withoutWorktree(id, came)
+      : came.returnedAt
+        ? {
+            chat: here,
+            root: here.worktree.path!,
+            tip: await headOf(here.worktree.path!),
+          }
+        : await this.leave(id, came.computer, came.carried);
     return {
       messages: pointingBack(
         portableMessages(chat.messages.slice(came.carried)),
@@ -317,6 +329,30 @@ export class ComputerHandoff {
       branch: chat.worktree!.branch!,
       since: came.tip,
     };
+  }
+  /**
+   * A thread whose worktree is gone, deleted outside Relay, still has its
+   * conversation to hand back, with the commits its branch kept; what was
+   * never committed went with the folder. The branch gone too, there is
+   * nothing to carry, and the commit it arrived at stands.
+   */
+  private withoutWorktree(id: string, came: ChatCameFrom) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      await this.stop(id, chat);
+      const root = await this.core.projects.root(chat.projectId);
+      const tip = await git(root, [
+        "rev-parse",
+        "-q",
+        "--verify",
+        `refs/heads/${chat.worktree!.branch}^{commit}`,
+      ]).then(
+        (out) => out.trim(),
+        () => came.tip,
+      );
+      await this.core.storage.persist(chat);
+      return { chat: structuredClone(chat), root, tip };
+    });
   }
   /**
    * How the main conversation's latest turn here goes: the start of the

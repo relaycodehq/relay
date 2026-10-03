@@ -350,9 +350,11 @@ export class HandoffReceiver {
     await writeFile(join(folder, "back-thread"), thread, { mode: 0o600 });
     const file = join(folder, "back-bundle");
     await rm(file, { force: true });
-    const bundle = await bundleBranch(back.root, back.branch, file, {
-      since: back.since,
-    });
+    const bundle =
+      back.tip !== back.since &&
+      (await bundleBranch(back.root, back.branch, file, {
+        since: back.since,
+      }));
     return {
       tip: back.tip,
       branch: back.branch,
