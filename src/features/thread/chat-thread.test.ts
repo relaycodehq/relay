@@ -1,10 +1,5 @@
 import { expect, it } from "vitest";
-import {
-  conversation,
-  replyCounts,
-  sideThreads,
-  withUpdates,
-} from "./chat-thread";
+import { conversation, replyCounts, sideThreads } from "./chat-thread";
 import { replyRoots, type ChatMessage } from "../../../shared/projects";
 
 const message = (
@@ -21,24 +16,6 @@ const message = (
   ...extra,
 });
 const ids = (messages: ChatMessage[]) => messages.map((m) => m.id);
-
-it("keeps the newer of a fetched and a streamed copy, unsequenced last", () => {
-  const merged = withUpdates(
-    [
-      message("b", { seq: 2, version: 3, body: "fetched" }),
-      message("a", { seq: 1, version: 1, body: "fetched" }),
-    ],
-    {
-      a: message("a", { seq: 1, version: 2, body: "streamed" }),
-      b: message("b", { seq: 2, version: 2, body: "stale" }),
-      // Just sent: no seq yet, so it goes after everything the thread ordered.
-      d: message("d", { created: 5 }),
-      c: message("c", { created: 1 }),
-    },
-  );
-  expect(ids(merged)).toEqual(["a", "b", "c", "d"]);
-  expect(merged.map((m) => m.body)).toEqual(["streamed", "fetched", "c", "d"]);
-});
 
 it("files replies to replies under the side question they started from", () => {
   const messages = [

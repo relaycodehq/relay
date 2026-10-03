@@ -1,45 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  applyChatPatch,
-  knownOf,
   replyRoots,
-  type ChatMessage,
+  threadOrder,
   type ChatSummary,
-  type ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
-import { api } from "../../lib/api";
-import {
-  conversation,
-  replyCounts,
-  sideThreads,
-  withUpdates,
-} from "./chat-thread";
+import { chatKey, fetchChat } from "../../lib/chat-events";
+import { conversation, replyCounts, sideThreads } from "./chat-thread";
 
 export type ChatThread = ReturnType<typeof useChatThread>;
 
-/** A thread's messages as fetched and streamed, and the conversation open in
- * it: the main one, or the side one from `rootId`. */
+/** A thread's messages as lib/chat-events keeps them, and the conversation
+ * open in it: the main one, or the side one from `rootId`. */
 export function useChatThread(
   chat: ChatSummary | undefined,
   rootId: string | null,
 ) {
   const qc = useQueryClient();
   const history = useQuery({
-    queryKey: ["project-chat", chat?.id],
-    queryFn: async () => {
-      // Long threads would otherwise cross IPC whole on every poll; only
-      // messages whose version moved come back in full.
-      const previous = qc.getQueryData<ProjectChatData>([
-        "project-chat",
-        chat!.id,
-      ]);
-      const known = knownOf(previous);
-      const patch = await (chat!.shared
-        ? api.syncProjectChat(chat!.id, known)
-        : api.projectChat(chat!.id, known));
-      return applyChatPatch(patch, previous);
-    },
+    queryKey: chatKey(chat?.id),
+    queryFn: () => fetchChat(qc, chat!.id, { shared: !!chat!.shared }),
     enabled: !!chat,
     // Events for a thread that isn't open are ignored, so a cached copy can
     // still say "streaming" after the answer ended; the patch is cheap.
@@ -52,19 +32,9 @@ export function useChatThread(
           ? 1000
           : false,
   });
-  const [updates, setUpdates] = useState<Record<string, ChatMessage>>({});
-  // The history itself refetches through lib/chat-events.
-  useEffect(
-    () =>
-      api.onProjectChat((e) => {
-        if (e.chatId === chat?.id)
-          setUpdates((old) => ({ ...old, [e.message.id]: e.message }));
-      }),
-    [chat?.id],
-  );
   const messages = useMemo(
-    () => withUpdates(history.data?.messages ?? [], updates),
-    [history.data, updates],
+    () => [...(history.data?.messages ?? [])].sort(threadOrder),
+    [history.data],
   );
   const root = messages.find((m) => m.id === rootId);
   const roots = useMemo(() => replyRoots(messages), [messages]);

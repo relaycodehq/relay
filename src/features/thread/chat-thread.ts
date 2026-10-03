@@ -1,26 +1,10 @@
-import {
-  mainConversation,
-  threadOrder,
-  type ChatMessage,
-} from "../../../shared/projects";
+import { mainConversation, type ChatMessage } from "../../../shared/projects";
 
 /** What a side question's thread holds, for the bar under it. */
 export interface SideThread {
   replies: number;
   last: number;
   answering: boolean;
-}
-
-/** The fetched messages with any newer streamed copies, in thread order. */
-export function withUpdates(
-  fetched: ChatMessage[],
-  updates: Record<string, ChatMessage>,
-) {
-  const byId = new Map(fetched.map((m) => [m.id, m]));
-  for (const m of Object.values(updates))
-    if (!byId.has(m.id) || byId.get(m.id)!.version <= m.version)
-      byId.set(m.id, m);
-  return [...byId.values()].sort(threadOrder);
 }
 
 export function replyCounts(roots: Map<string, string>) {
