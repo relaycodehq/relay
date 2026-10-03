@@ -104,6 +104,7 @@ const methods = [
   "revealAgentWorktree",
   "projectChat",
   "projectChatImage",
+  "projectChatQueuedImages",
   "projectChatReadImage",
   "revealProjectChatReadImage",
   "revealProjectTurnFile",

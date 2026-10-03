@@ -266,3 +266,68 @@ it("sends a thread's latest hundred messages, and older pages on request", async
   expect(await page(300)).toEqual(["m0", 250, 0]);
   await expect(page(5000)).rejects.toThrow();
 });
+
+it("tells a phone what a queued message needs to be taken back, but leaves its screenshots on the desktop", async () => {
+  const input = (id: string, over = {}) => ({
+    id,
+    body: "@claude look",
+    to: "claude" as const,
+    provider: "claude" as const,
+    choice: { model: "opus", fast: false, reasoningEffort: "high" },
+    runtimeMode: "approval-required" as const,
+    interactionMode: "default" as const,
+    ...over,
+  });
+  const shot = { name: "a.png", mimeType: "image/png", dataUrl: "data:x" };
+  const host = {
+    projects: async () => [],
+    projectPath: () => "/r",
+    chats: () => [],
+    chat: async () => ({
+      id: chatId,
+      projectId,
+      title: "Queued",
+      scope: { kind: "project" },
+      created: 1,
+      updated: 2,
+      messages: [],
+      queue: [
+        { input: input("a", { images: [shot], parentId: "root" }), created: 1 },
+      ],
+      scheduled: [{ input: input("b"), created: 1, at: 99 }],
+    }),
+    dispatch: async () => null,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const chat = (await new RemoteBridge(host, () => {}).handle("chat", [
+    chatId,
+  ])) as {
+    queue: Record<string, unknown>[];
+    scheduled: Record<string, unknown>[];
+  };
+  expect(chat.queue).toEqual([
+    {
+      id: "a",
+      body: "@claude look",
+      images: 1,
+      parentId: "root",
+      to: "claude",
+      settings: {
+        provider: "claude",
+        choice: { model: "opus", fast: false, reasoningEffort: "high" },
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+      },
+    },
+  ]);
+  expect(JSON.stringify(chat)).not.toContain("data:x");
+  expect(chat.scheduled[0]).toMatchObject({ id: "b", at: 99, to: "claude" });
+});
+
+it("lets a phone fetch a queued message's screenshots through the desktop", async () => {
+  const { b, dispatched } = bridge();
+  await b.handle("desktop", ["projectChatQueuedImages", [chatId, "a"]]);
+  expect(dispatched).toEqual([
+    { method: "projectChatQueuedImages", args: [chatId, "a"] },
+  ]);
+});

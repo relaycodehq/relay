@@ -1744,9 +1744,24 @@ it("holds a Send later message until its time, sends it now on request, and keep
   const now = input("Send me early."),
     dropped = input("Never mind.");
   await chats.send(chat.id, { ...now, sendAt: Date.now() + 3_600_000 });
-  await chats.send(chat.id, { ...dropped, sendAt: Date.now() + 3_600_000 });
+  const shot = {
+    name: "s.png",
+    mimeType: "image/png" as const,
+    dataUrl: "data:image/png;base64,AAAA",
+  };
+  await chats.send(chat.id, {
+    ...dropped,
+    images: [shot],
+    sendAt: Date.now() + 3_600_000,
+  });
+  // A phone takes a waiting message's screenshots before it takes the message out.
+  expect(await chats.queuedImages(chat.id, dropped.id)).toEqual([shot]);
+  expect(await chats.queuedImages(chat.id, now.id)).toEqual([]);
   await chats.queueAction(chat.id, "steer", now.id);
   await chats.queueAction(chat.id, "remove", dropped.id);
+  await expect(chats.queuedImages(chat.id, dropped.id)).rejects.toThrow(
+    "no longer waiting",
+  );
   saved = await chats.get(chat.id);
   expect(saved.messages.map((m) => m.id)).toEqual([soon.id, now.id]);
   expect(saved.scheduled).toBeUndefined();

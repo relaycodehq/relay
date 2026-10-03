@@ -501,6 +501,15 @@ export class ProjectChats {
   image(chatId: string, imageId: string) {
     return this.files.image(chatId, imageId);
   }
+  /** The screenshots of a queued or scheduled message; it is gone once it has been sent. */
+  async queuedImages(chatId: string, messageId: string) {
+    const chat = await this.storage.load(chatId);
+    const waiting = [...(chat.queue ?? []), ...(chat.scheduled ?? [])].find(
+      (q) => q.input.id === messageId,
+    );
+    if (!waiting) throw new Error("That message is no longer waiting.");
+    return structuredClone(waiting.input.images ?? []);
+  }
   turnImagePath(chatId: string, messageId: string, path: string) {
     return this.files.turnImagePath(chatId, messageId, path);
   }

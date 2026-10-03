@@ -28,6 +28,7 @@ import {
   type RemoteProjectIcon,
 } from "../../shared/remote";
 import { sentAgent } from "../../shared/recipient";
+import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/rooms";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SpeechService } from "./phone-dictation";
@@ -160,18 +161,10 @@ export class RemoteBridge {
           patch.worktree?.path && !patch.worktree.removedAt
             ? patch.worktree.path
             : this.host.projectPath(patch.projectId),
-        queue: (patch.queue ?? []).map((q) => ({
-          id: q.input.id,
-          body: q.input.body,
-          ...(q.input.images?.length ? { images: q.input.images.length } : {}),
-          ...(q.error ? { error: q.error } : {}),
-        })),
+        queue: (patch.queue ?? []).map(queuedForPhone),
         scheduled: (patch.scheduled ?? []).map((q) => ({
-          id: q.input.id,
-          body: q.input.body,
+          ...queuedForPhone(q),
           at: q.at,
-          ...(q.input.images?.length ? { images: q.input.images.length } : {}),
-          ...(q.error ? { error: q.error } : {}),
         })),
         ...(patch.worktree ? { worktree: patch.worktree } : {}),
         ...(patch.stopped ? { stopped: patch.stopped } : {}),

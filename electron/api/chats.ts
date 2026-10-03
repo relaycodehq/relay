@@ -135,6 +135,9 @@ export function chatHandlers(ctx: ApiContext) {
     projectChatImage: takes([idSchema, idSchema], (id, imageId) =>
       projectChats.image(id, imageId),
     ),
+    projectChatQueuedImages: takes([idSchema, idSchema], (id, messageId) =>
+      projectChats.queuedImages(id, messageId),
+    ),
     projectChatReadImage: takes(
       [idSchema, idSchema, imagePathSchema],
       (id, messageId, path) => projectChats.readImage(id, messageId, path),

@@ -204,6 +204,25 @@ export type RemoteSettings = Pick<
   "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
 >;
 
+/**
+ * A message waiting its turn. Everything past `images` is optional: older
+ * desktops leave it out, and a phone that doesn't know it ignores it.
+ */
+export interface RemoteQueued {
+  id: string;
+  body: string;
+  /** How many screenshots it holds; `projectChatQueuedImages` hands them over. */
+  images?: number;
+  /** Why a steer was refused; it holds the queue until dealt with. */
+  error?: string;
+  /** The side conversation it was sent in, by its root; left out for the main one. */
+  parentId?: string;
+  /** Who answers: an agent, or "message" for a note. */
+  to?: NonNullable<ProjectChatSend["to"]>;
+  /** What it goes out with, to put back in the composer when it's taken back. */
+  settings?: RemoteSettings;
+}
+
 /** A thread, with messages the phone already holds at the same version sent as ids. */
 export interface RemoteChat extends Pick<
   ProjectChatPatch,
@@ -223,16 +242,9 @@ export interface RemoteChat extends Pick<
   root?: string;
   /** Older messages left on the desktop; a phone gets the latest `remoteHistory`. */
   earlier: number;
-  /** `error`: why a steer was refused; it holds the queue until dealt with. */
-  queue: { id: string; body: string; images?: number; error?: string }[];
+  queue: RemoteQueued[];
   /** Sent with Send later, by when they go out. */
-  scheduled: {
-    id: string;
-    body: string;
-    at: number;
-    images?: number;
-    error?: string;
-  }[];
+  scheduled: (RemoteQueued & { at: number })[];
   settings?: RemoteSettings;
   /** The conversation the last message went to: the main one, or a reply's root. */
   lastParentId?: string | null;
@@ -289,6 +301,7 @@ export const phoneDesktopMethods = [
   "rewindProjectTurn",
   "projectChatImage",
   "projectChatReadImage",
+  "projectChatQueuedImages",
   "agentModels",
   "agentDefaults",
   "aiSettings",

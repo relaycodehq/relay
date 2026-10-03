@@ -146,6 +146,11 @@ export interface ProjectChatApi {
   /** Stops one agent; Claude hears it was stopped. */
   stopProjectChatAgent(id: string, agentId: string): Promise<void>;
   projectChatImage(id: string, imageId: string): Promise<string>;
+  /** The screenshots of a queued or scheduled message, to take it back with them. */
+  projectChatQueuedImages(
+    id: string,
+    messageId: string,
+  ): Promise<NonNullable<ProjectChatSend["images"]>>;
   /** An image file the agent read during the turn `messageId`, as a data URL. */
   projectChatReadImage(
     id: string,
