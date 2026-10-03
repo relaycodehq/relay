@@ -7,7 +7,7 @@ import { codexModelArgs } from "../../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "../activity";
 import { CodexAnswerStream } from "./answer-stream";
-import { ANSWER_LIMIT } from "../turn-kit";
+import { ANSWER_LIMIT, guardSteer } from "../turn-kit";
 import type { ContextUsage } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
 import { codexFailure, codexSpentUntil } from "./codex-limits";
@@ -207,28 +207,30 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     wire = transport;
     const steerable = () =>
       options.onControl?.({
-        steer: async (text, id, images) => {
-          if (settled || options.signal.aborted)
-            throw new Error(
-              "This turn has finished. Send the queued message as a new turn.",
-            );
-          // A room's sandbox lists the images it may read when it starts.
-          if (images?.length && !policy)
-            throw new Error("This turn can't take new images.");
-          await transport.request("turn/steer", {
-            threadId,
-            expectedTurnId: turnId,
-            input: [
-              ...(text ? [{ type: "text", text, text_elements: [] }] : []),
-              ...(images ?? []).map((image) => ({
-                type: "localImage",
-                path: image.path,
-              })),
-            ],
-            // Codex echoes it on the user message item once it reads the steer.
-            ...(id ? { clientUserMessageId: id } : {}),
-          });
-        },
+        steer: (text, id, images) =>
+          guardSteer(
+            () => !settled && !options.signal.aborted,
+            () => {
+              // A room's sandbox lists the images it may read when it starts.
+              if (images?.length && !policy)
+                throw new Error("This turn can't take new images.");
+            },
+            async () => {
+              await transport.request("turn/steer", {
+                threadId,
+                expectedTurnId: turnId,
+                input: [
+                  ...(text ? [{ type: "text", text, text_elements: [] }] : []),
+                  ...(images ?? []).map((image) => ({
+                    type: "localImage",
+                    path: image.path,
+                  })),
+                ],
+                // Codex echoes it on the user message item once it reads the steer.
+                ...(id ? { clientUserMessageId: id } : {}),
+              });
+            },
+          ),
       });
     const start = async () => {
       // A turn a restart cut off: the server picked up again holds what it said meanwhile.

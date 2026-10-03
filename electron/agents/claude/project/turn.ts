@@ -7,6 +7,7 @@ import {
 } from "./config";
 import { ClaudeTurnReader } from "./reader";
 import { claudeImages } from "./sdk";
+import { guardSteer } from "../../turn-kit";
 import {
   closeSession,
   newSession,
@@ -119,37 +120,32 @@ export async function runClaudeProject(
     }
     if (!options.compact)
       options.onControl?.({
-        steer: async (text, id, steerImages) => {
-          const refuseIfFinished = () => {
-            if (!reader.steerable || options.signal.aborted)
-              throw new Error(
-                "This turn has finished. Send the queued message as a new turn.",
-              );
-          };
-          refuseIfFinished();
-          const attached = await claudeImages(steerImages);
-          // The turn may have ended while the screenshots were read.
-          refuseIfFinished();
-          const uuid = randomUUID();
-          reader.track(uuid, id);
-          // "next" folds the message into the running turn at its next step.
-          session!.input.push({
-            type: "user",
-            uuid,
-            session_id: session!.threadId ?? "",
-            parent_tool_use_id: null,
-            message: {
-              role: "user",
-              content: attached.length
-                ? [
-                    ...(text ? [{ type: "text" as const, text }] : []),
-                    ...attached,
-                  ]
-                : text,
+        steer: (text, id, steerImages) =>
+          guardSteer(
+            () => reader.steerable && !options.signal.aborted,
+            () => claudeImages(steerImages),
+            (attached) => {
+              const uuid = randomUUID();
+              reader.track(uuid, id);
+              // "next" folds the message into the running turn at its next step.
+              session!.input.push({
+                type: "user",
+                uuid,
+                session_id: session!.threadId ?? "",
+                parent_tool_use_id: null,
+                message: {
+                  role: "user",
+                  content: attached.length
+                    ? [
+                        ...(text ? [{ type: "text" as const, text }] : []),
+                        ...attached,
+                      ]
+                    : text,
+                },
+                priority: "next",
+              });
             },
-            priority: "next",
-          });
-        },
+          ),
       });
     while (true) {
       const message = await session.frames.next();

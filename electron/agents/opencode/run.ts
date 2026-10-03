@@ -17,7 +17,7 @@ import {
 import { editedPaths, openCodeActivity, type ToolPart } from "./activity";
 import { openCodeModels, splitModel } from "./catalog";
 import { markOpenCodeTurn } from "./server";
-import { answerLimitError } from "../turn-kit";
+import { answerLimitError, guardSteer } from "../turn-kit";
 
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -462,25 +462,20 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       }
     }
     options.onControl?.({
-      steer: async (text, id, steerImages) => {
-        const refuseIfFinished = () => {
-          if (settled || signal.aborted)
-            throw new Error(
-              "This turn has finished. Send the queued message as a new turn.",
-            );
-        };
-        refuseIfFinished();
-        const attached = await imageParts(steerImages);
-        // The turn may have ended while the screenshots were read.
-        refuseIfFinished();
-        steers.push({ id, after: Date.now() });
-        await call("POST", `/session/${sessionID}/prompt_async`, {
-          agent,
-          ...(model ? { model } : {}),
-          ...(variant ? { variant } : {}),
-          parts: [...(text ? [{ type: "text", text }] : []), ...attached],
-        });
-      },
+      steer: (text, id, steerImages) =>
+        guardSteer(
+          () => !settled && !signal.aborted,
+          () => imageParts(steerImages),
+          async (attached) => {
+            steers.push({ id, after: Date.now() });
+            await call("POST", `/session/${sessionID}/prompt_async`, {
+              agent,
+              ...(model ? { model } : {}),
+              ...(variant ? { variant } : {}),
+              parts: [...(text ? [{ type: "text", text }] : []), ...attached],
+            });
+          },
+        ),
     });
     if (signal.aborted) abort();
     const text = await result;

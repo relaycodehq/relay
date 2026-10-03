@@ -17,7 +17,7 @@ import {
 } from "./connection";
 import type { CursorRun, CursorRunResult, CursorUpdate } from "./protocol";
 import { currentSdk, ensureSdk } from "./sdk";
-import { answerLimitError } from "../turn-kit";
+import { answerLimitError, guardSteer } from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
@@ -265,23 +265,25 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       reply = send(params);
     }
     options.onControl?.({
-      steer: async (text, id, images) => {
-        if (signal.aborted || connection.closed)
-          throw new Error(
-            "This turn has finished. Send the queued message as a new turn.",
-          );
-        if (images?.length)
-          throw new Error(
-            "Cursor can't take images while it works. Send the queued message as a new turn.",
-          );
-        steers.push(id);
-        try {
-          await connection.request("steer", { run, text });
-        } catch (error) {
-          steers.pop();
-          throw error;
-        }
-      },
+      steer: (text, id, images) =>
+        guardSteer(
+          () => !signal.aborted && !connection.closed,
+          () => {
+            if (images?.length)
+              throw new Error(
+                "Cursor can't take images while it works. Send the queued message as a new turn.",
+              );
+          },
+          async () => {
+            steers.push(id);
+            try {
+              await connection.request("steer", { run, text });
+            } catch (error) {
+              steers.pop();
+              throw error;
+            }
+          },
+        ),
     });
     if (signal.aborted) abort();
     // The worker reports the cancel; if it doesn't, stop waiting anyway.
