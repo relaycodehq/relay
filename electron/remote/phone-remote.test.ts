@@ -258,6 +258,48 @@ it("streams thread changes to the phone and cuts it off when removed", async () 
   expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
 });
 
+it("gives up on a quiet link at once, even when the socket never finishes closing", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  // A dead network: the close handshake never completes, so onclose never comes.
+  class Stuck extends WebSocket {
+    close() {}
+  }
+  const p = phone(
+    { link, device: "Pixel" },
+    { WebSocket: Stuck, staleMs: 500 },
+  );
+  await p.until("online");
+  // The desktop ticks every 15s, so it's silent for longer than staleMs.
+  await vi.waitFor(
+    () =>
+      expect(p.statuses.map((s) => s.status)).toEqual([
+        "connecting",
+        "online",
+        "offline",
+        "connecting",
+        "online",
+      ]),
+    { timeout: 4000 },
+  );
+});
+
+it("reconnects on coming back when the link went quiet meanwhile", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" }, { staleMs: 2000 });
+  await p.until("online");
+  // Just heard from: coming back keeps the link.
+  p.client.wake();
+  expect(p.client.status).toBe("online");
+
+  await new Promise((r) => setTimeout(r, 1100));
+  p.client.wake();
+  expect(p.client.status).toBe("connecting");
+  await p.until("online");
+  await p.client.call("overview");
+});
+
 it("only answers the allowlisted calls, and only after pairing", async () => {
   const { remote } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;

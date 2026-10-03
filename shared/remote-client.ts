@@ -59,6 +59,8 @@ export class RemoteClient {
   private retry = 0;
   private retryTimer?: ReturnType<typeof setTimeout>;
   private watchdog?: ReturnType<typeof setTimeout>;
+  /** When the desktop was last heard from. */
+  private heard = 0;
   private preferred = 0;
   private attempt = 0;
   /** The connected desktop's bridge version; older desktops don't say. */
@@ -81,10 +83,20 @@ export class RemoteClient {
     this.drop("Disconnected.");
     this.setStatus("offline");
   }
-  /** Reconnects now instead of waiting out the backoff, e.g. when the app returns to the foreground. */
+  /**
+   * Reconnects now instead of waiting out the backoff, e.g. when the app
+   * returns to the foreground. A link that went quiet for more than a tick
+   * while the app was away is likely dead (Android drops sockets in the
+   * background without telling), so it reconnects rather than wait for the
+   * watchdog.
+   */
   wake() {
     if (this.closed || this.status === "denied") return;
-    if (this.status === "offline") {
+    const quiet =
+      this.status === "online" &&
+      Date.now() - this.heard > (this.options.staleMs ?? 40000) / 2;
+    if (this.status === "offline" || quiet) {
+      if (quiet) this.drop("Connection lost.");
       clearTimeout(this.retryTimer);
       this.retry = 0;
       void this.connect();
@@ -210,11 +222,7 @@ export class RemoteClient {
       socket.onerror = () => fail(new Error(`Can't reach ${this.name}.`));
       socket.onclose = () => {
         if (!settled) return fail(new Error(`Can't reach ${this.name}.`));
-        if (this.socket !== socket) return;
-        this.drop("Connection lost.");
-        if (this.closed || this.status === "denied") return;
-        this.setStatus("offline", "Connection lost.");
-        this.scheduleRetry();
+        if (this.socket === socket) this.lost();
       };
       socket.onmessage = (message) => {
         if (typeof message.data !== "string") return socket.close();
@@ -292,10 +300,19 @@ export class RemoteClient {
       this.setStatus("denied", frame.reason);
     }
   }
+  private lost() {
+    this.drop("Connection lost.");
+    if (this.closed || this.status === "denied") return;
+    this.setStatus("offline", "Connection lost.");
+    this.scheduleRetry();
+  }
   private keepAlive(socket: WebSocket) {
+    this.heard = Date.now();
     clearTimeout(this.watchdog);
+    // Gone at once: a polite close over a dead network can take Android a
+    // minute, all the while showing the phone as connected.
     this.watchdog = setTimeout(() => {
-      if (this.socket === socket) socket.close();
+      if (this.socket === socket) this.lost();
     }, this.options.staleMs ?? 40000);
   }
   private sendFrame(frame: ClientFrame) {
