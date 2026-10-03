@@ -113,7 +113,7 @@ export class ProjectChats {
       send: (id, input, fromRelay) => this.send(id, input, fromRelay),
     });
     this.limits = new LimitResumes(core, {
-      resume: (id) => this.resume(id),
+      resume: (id) => this.turns.resumeHeld(id),
     });
     this.titles = new ThreadTitles(core);
     this.sharing = new ChatSharing(core, sharing, {

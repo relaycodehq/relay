@@ -90,31 +90,33 @@ export class ChatTurns {
       .catch(() => {});
   }
   resume(id: string, settings?: ResumeSettings) {
-    return this.core.control(id, async () => {
-      if (this.core.closing()) throw new Error("Relay is closing.");
-      const chat = await this.core.storage.load(id);
-      assertHere(chat);
-      if (this.core.active.has(id))
-        throw new Error("This thread is already running.");
-      if (!chat.lastInput)
-        throw new Error(
-          "Send a follow-up message to continue this conversation.",
-        );
-      // Picking another agent before resuming hands the work to it.
-      const provider = settings?.provider ?? sentAgent(chat.lastInput);
-      await this.sendNow(id, {
-        ...chat.lastInput,
-        ...(settings && { contextWindow: undefined }),
-        ...settings,
-        id: randomUUID(),
-        to: provider,
-        body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
-        images: undefined,
-        selection: undefined,
-        delivery: undefined,
-        // Carrying on doesn't call another council.
-        ultraplan: undefined,
-      });
+    return this.core.control(id, () => this.resumeHeld(id, settings));
+  }
+  /** Resume for a job that already holds the thread's control. */
+  async resumeHeld(id: string, settings?: ResumeSettings) {
+    if (this.core.closing()) throw new Error("Relay is closing.");
+    const chat = await this.core.storage.load(id);
+    assertHere(chat);
+    if (this.core.active.has(id))
+      throw new Error("This thread is already running.");
+    if (!chat.lastInput)
+      throw new Error(
+        "Send a follow-up message to continue this conversation.",
+      );
+    // Picking another agent before resuming hands the work to it.
+    const provider = settings?.provider ?? sentAgent(chat.lastInput);
+    await this.sendNow(id, {
+      ...chat.lastInput,
+      ...(settings && { contextWindow: undefined }),
+      ...settings,
+      id: randomUUID(),
+      to: provider,
+      body: `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
+      images: undefined,
+      selection: undefined,
+      delivery: undefined,
+      // Carrying on doesn't call another council.
+      ultraplan: undefined,
     });
   }
   async sendNow(id: string, input: ProjectChatSend) {

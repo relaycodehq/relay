@@ -53,3 +53,38 @@ it("fires a plan that fell due while the computer slept once it is armed again",
   await vi.advanceTimersByTimeAsync(15_000);
   expect(resume).toHaveBeenCalledWith("chat");
 });
+
+it("resumes nothing when a message landed in the thread before its resume got its turn", async () => {
+  chat = stopped(-MINUTE);
+  const { limits, resume } = planner();
+  const core = (limits as unknown as { core: ChatCore }).core;
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  const held = core.control("chat", () => gate);
+  // Queued behind whatever holds the thread, ahead of the resume.
+  const sent = core.control("chat", async () => {
+    chat.messages.push({ id: "s", role: "user" } as never);
+    delete chat.limitResume;
+  });
+  const fired = (limits as unknown as { fire(id: string): Promise<void> }).fire(
+    "chat",
+  );
+  open();
+  await Promise.all([held, sent, fired]);
+  expect(resume).not.toHaveBeenCalled();
+  expect(chat.queuePaused).toBe(true);
+});
+
+it("puts the pause back on the queue when carrying on fails to start", async () => {
+  chat = stopped(-MINUTE);
+  const { limits } = planner(
+    vi.fn(async () => {
+      throw new Error("Relay is closing.");
+    }),
+  );
+  await expect(
+    (limits as unknown as { fire(id: string): Promise<void> }).fire("chat"),
+  ).rejects.toThrow("Relay is closing.");
+  expect(chat.queuePaused).toBe(true);
+  expect(chat.limitResume).toBeUndefined();
+});

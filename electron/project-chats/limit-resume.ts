@@ -12,7 +12,7 @@ const GRACE = 60_000;
 const LONGEST = 8 * 86_400_000;
 
 export interface LimitResumeHost {
-  /** Carries the thread's last answer on, as Resume answer does. */
+  /** Carries the thread's last answer on, as Resume answer does, from a job holding the thread's control. */
   resume(id: string): Promise<void>;
 }
 
@@ -108,29 +108,32 @@ export class LimitResumes {
   private async fire(chatId: string) {
     this.timers.delete(chatId);
     if (this.core.closing()) return;
-    const chat = await this.core.storage.load(chatId);
-    const plan = chat.limitResume;
-    if (!plan || plan.off) return;
-    const message = chat.messages.find((m) => m.id === plan.messageId);
-    const go =
-      !!message && !chat.archivedAt && !chat.sentTo && stillLast(chat, message);
-    // The limit paused the queue behind the answer; carrying on picks it up.
-    const unpause = go && !!chat.queue?.length && !!chat.queuePaused;
+    // Decided inside the thread's job: a send queued ahead of it has landed.
     await this.core.control(chatId, async () => {
+      const chat = await this.core.storage.load(chatId);
+      const plan = chat.limitResume;
+      if (!plan || plan.off) return;
+      const message = chat.messages.find((m) => m.id === plan.messageId);
+      const go =
+        !!message &&
+        !chat.archivedAt &&
+        !chat.sentTo &&
+        stillLast(chat, message);
+      // The limit paused the queue behind the answer; carrying on picks it up.
+      const unpause = go && !!chat.queue?.length && !!chat.queuePaused;
       delete chat.limitResume;
       if (unpause) delete chat.queuePaused;
       await this.core.storage.persist(chat);
-    });
-    if (!go) return;
-    try {
-      await this.host.resume(chatId);
-    } catch (e) {
-      if (unpause)
-        await this.core.control(chatId, async () => {
+      if (!go) return;
+      try {
+        await this.host.resume(chatId);
+      } catch (e) {
+        if (unpause) {
           chat.queuePaused = true;
           await this.core.storage.persist(chat);
-        });
-      throw e;
-    }
+        }
+        throw e;
+      }
+    });
   }
 }
