@@ -413,6 +413,30 @@
 .context-compaction[data-status="failed"] {
   color: var(--danger);
 }
+/* Where the messages you haven't seen start: the compaction row's shape in
+   the unread dot's colour, so it doesn't read as another compaction. Read, it
+   fades and keeps its height until the thread is opened again; under reduced
+   motion the global rule drops the transition and it goes at once. */
+.unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  transition: opacity 0.6s ease;
+}
+.unread-divider::before,
+.unread-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.unread-divider[data-read] {
+  opacity: 0;
+}
 /* Pulled in toward the text; the rules on either side keep their gap. */
 .compact-summary-trigger {
   display: inline-flex;

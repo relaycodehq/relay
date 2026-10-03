@@ -1,4 +1,4 @@
-import type { ChatSummary, ChatTriageState } from "./projects";
+import type { ChatMessage, ChatSummary, ChatTriageState } from "./projects";
 
 // Activity triage follows T3 Code's settle/snooze model (thread-settled.ts):
 // settling and snoozing are overlays on an open thread, and newer activity
@@ -230,14 +230,49 @@ export function snoozePresets(now: Date): SnoozePreset[] {
 }
 
 /**
- * Whether a thread moved since it was read: on this device (`seen`, by id),
- * anywhere (`seenAt`), or before this device first looked (`since`).
+ * How far a thread has been read: on this device (`seen`, by id), anywhere
+ * (`seenAt`), or before this device first looked (`since`).
  */
+export const readUpTo = (
+  chat: Pick<ChatSummary, "id" | "seenAt">,
+  since: number,
+  seen: Record<string, number>,
+) => Math.max(since, seen[chat.id] ?? 0, chat.seenAt ?? 0);
+
+/** Whether a thread moved since it was read; see readUpTo. */
 export const movedSinceSeen = (
   chat: Pick<ChatSummary, "id" | "updated" | "seenAt">,
   since: number,
   seen: Record<string, number>,
-) => chat.updated > Math.max(since, seen[chat.id] ?? 0, chat.seenAt ?? 0);
+) => chat.updated > readUpTo(chat, since, seen);
+
+/** A stretch the open thread went unwatched: from where it was read up to, to when you came back. */
+export interface AwayWindow {
+  from: number;
+  to: number;
+}
+
+/**
+ * Where a thread's "New" divider goes: above the first message that started
+ * or finished while you were away, which `since` says when you'd read up to.
+ * A message that started and ended while you watched is not new, even below
+ * the divider. Your own messages and Relay's notes about the session (a
+ * compaction, a reload) are never what's new. None when nothing is new, or
+ * when the divider would sit above the first message and so separate nothing.
+ */
+export function unreadStart(
+  messages: (Pick<ChatMessage, "id" | "created" | "ended"> &
+    Partial<Pick<ChatMessage, "role" | "author" | "compaction" | "reload">>)[],
+  away: AwayWindow[],
+): { id: string; since: number } | undefined {
+  const during = (at: number | undefined) =>
+    at === undefined ? undefined : away.find((w) => at > w.from && at <= w.to);
+  for (const [index, m] of messages.entries()) {
+    if ((m.role === "user" && !m.author) || m.compaction || m.reload) continue;
+    const gap = during(m.created) ?? during(m.ended);
+    if (gap) return index ? { id: m.id, since: gap.from } : undefined;
+  }
+}
 
 /** Send later's quick choices, on the desktop and the phone. */
 export function sendLaterPresets(now: Date): { label: string; at: number }[] {

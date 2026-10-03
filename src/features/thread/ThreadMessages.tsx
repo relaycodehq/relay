@@ -1,9 +1,11 @@
 import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
+import { unreadStart } from "../../../shared/chat-activity";
 import type {
   ChatMessage,
   ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
+import { useArrival } from "./arrival";
 import type { ChatThread } from "./useChatThread";
 import type { Councils } from "./useCouncils";
 import type { ThreadMessageActions } from "./useMessageActions";
@@ -20,6 +22,7 @@ import {
 import { Message } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { SideQuestion } from "./SideQuestion";
+import { UnreadDivider } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded } from "./WorktreeControls";
@@ -61,7 +64,7 @@ export function ThreadMessages({
     sideThreads,
     leadAnswered,
   },
-  view: { scroll, column, onScroll, visible, earlier, showEarlier },
+  view: { scroll, column, onScroll, visible, earlier, showEarlier, dockHeight },
   councils: {
     review,
     plans,
@@ -104,6 +107,11 @@ export function ThreadMessages({
         : undefined,
     [chat?.id, review?.report],
   );
+  const arrival = useArrival(chat?.id);
+  const unread = useMemo(
+    () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
+    [arrival, root, listed],
+  );
   return (
     <div className="project-messages" ref={scroll} onScroll={onScroll}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}
@@ -121,7 +129,17 @@ export function ThreadMessages({
             Earlier messages
           </button>
         )}
-        {listed.slice(-visible).map((m) =>
+        {listed.slice(-visible).flatMap((m) => [
+          m.id === unread?.id && (
+            <UnreadDivider
+              key="unread-divider"
+              chatId={arrival!.chatId}
+              since={unread.since}
+              read={arrival!.read}
+              scroll={scroll}
+              bottomInset={dockHeight}
+            />
+          ),
           m.side ? (
             <SideQuestion
               key={m.id}
@@ -196,7 +214,7 @@ export function ThreadMessages({
                 : {})}
             />
           ),
-        )}
+        ])}
         {!root && worktree.status && (
           <WorktreeLanded status={worktree.status} />
         )}

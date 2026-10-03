@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { movedSinceSeen } from "../../../shared/chat-activity";
+import { movedSinceSeen, readUpTo } from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
 import { readJson, writeJson } from "../../lib/persisted-store";
 import { useWindowFocused } from "../../lib/window-focus";
+import { clearArrival, noteArrival } from "../thread/arrival";
 
 /**
  * Last time each thread was open here; drives the unread dot. The open thread
@@ -27,14 +28,28 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
   const current = chats.find((c) => c.id === chatId);
   /** The thread last read here; marking it unread while it's open holds until it's opened again. */
   const opened = useRef<string | undefined>(undefined);
+  const wasFocused = useRef(focused);
   useEffect(() => {
+    const refocused = focused && !wasFocused.current;
+    wasFocused.current = focused;
     if (!current) {
       opened.current = undefined;
+      clearArrival();
       return;
     }
     if (!focused) return;
     const reopened = opened.current !== current.id;
     opened.current = current.id;
+    // Before it's marked read below: the thread's "New" divider goes where
+    // you had read up to.
+    noteArrival({
+      chatId: current.id,
+      readTo: readUpTo(current, since, seen),
+      updated: current.updated,
+      now: Date.now(),
+      opened: reopened,
+      refocused,
+    });
     if (
       !(current.markedUnread && reopened) &&
       (seen[current.id] ?? 0) >= current.updated

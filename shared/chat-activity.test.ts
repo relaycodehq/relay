@@ -10,6 +10,7 @@ import {
   sentLabel,
   settledSince,
   snoozePresets,
+  unreadStart,
   wakeLabel,
 } from "./chat-activity";
 import type { ChatSummary } from "./projects";
@@ -267,5 +268,57 @@ describe("auto-settle", () => {
     expect(
       settledSince(chat({ updated: 1_000, unsettledAt: 5_000 }), 30 * day, 3),
     ).toBeUndefined();
+  });
+});
+
+describe("unread divider", () => {
+  const m = (id: string, created: number, ended?: number) => ({
+    id,
+    created,
+    ended,
+  });
+
+  it("goes above the first message that started or finished while you were away", () => {
+    // You sent at 100 and read to 110; the answer started while you watched
+    // but finished after you left, and another started on its own after.
+    const thread = [m("ask", 100), m("a1", 105, 200), m("a2", 300, 320)];
+    expect(unreadStart(thread, [{ from: 110, to: 400 }])).toEqual({
+      id: "a1",
+      since: 110,
+    });
+  });
+
+  it("leaves out answers that started and ended while you watched", () => {
+    const thread = [m("ask", 100), m("a1", 120, 150)];
+    expect(unreadStart(thread, [{ from: 110, to: 115 }])).toBeUndefined();
+  });
+
+  it("separates nothing when everything is new", () => {
+    expect(
+      unreadStart([m("ask", 100), m("a1", 105, 200)], [{ from: 50, to: 400 }]),
+    ).toBeUndefined();
+  });
+
+  it("never goes above your own message or a note about the session", () => {
+    const thread = [
+      m("ask", 100, 100),
+      { ...m("more", 200, 200), role: "user" as const },
+      { ...m("reloaded", 210, 210), reload: { skills: [] } as never },
+      m("a1", 220, 300),
+    ];
+    expect(unreadStart(thread, [{ from: 150, to: 400 }])).toEqual({
+      id: "a1",
+      since: 150,
+    });
+  });
+
+  it("takes the earliest stretch away that has something new in it", () => {
+    const thread = [m("ask", 100), m("a1", 120, 150), m("a2", 300, 320)];
+    expect(
+      unreadStart(thread, [
+        { from: 110, to: 115 },
+        { from: 160, to: 400 },
+      ]),
+    ).toEqual({ id: "a2", since: 160 });
   });
 });

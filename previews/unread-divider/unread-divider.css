@@ -1,0 +1,178 @@
+/* Where unread starts in a thread. Nothing here loops; the only motion is a
+   fade and a short slide, on opacity and transform. */
+
+/* Preview chrome, not part of the design. */
+.ud-bar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+.ud-bar-button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.ud-bar-button:disabled {
+  opacity: 0.5;
+}
+.ud-note {
+  flex-basis: 100%;
+}
+.ud-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.ud-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 248px;
+  flex: none;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+}
+.ud-sb-project {
+  padding: 6px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+.ud-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* A: the compaction row's shape, in the unread dot's colour so it doesn't
+   read as another "Context compacted". */
+.unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  transition: opacity 0.6s ease;
+}
+.unread-divider::before,
+.unread-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+/* Read (seen for 4 s, or Mark read): it fades but keeps its height, so the
+   pinned thread under it doesn't move. It's gone the next time you open it.
+   Under reduced motion the global rule drops the transition, so it simply
+   disappears at the same moment. */
+.unread-divider[data-read] {
+  opacity: 0;
+}
+
+/* B: a rail in the gutter beside everything unread, and the first new
+   message's header says since when. Both sit outside the flow: arriving,
+   marking read and leaving move nothing. */
+.unread-run {
+  position: relative;
+}
+.unread-run::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  left: -16px;
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  transition: opacity 0.4s ease;
+}
+.unread-run > .project-message:first-child > header > strong {
+  order: -2;
+}
+.unread-run > .project-message:first-child > header::after {
+  content: var(--unread-label);
+  order: -1;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 400;
+  transition: opacity 0.4s ease;
+}
+.unread-run[data-read]::before,
+.unread-run[data-read] > .project-message:first-child > header::after {
+  opacity: 0;
+}
+
+/* B's jump line: under the thread's header while the start of the unread
+   part is out of view. */
+.unread-jump {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  padding: 0 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.unread-jump[data-shown] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.unread-jump-inner {
+  display: flex;
+  align-items: center;
+  max-width: var(--thread-width);
+  height: 32px;
+  margin: 0 auto;
+  font-size: 11.5px;
+}
+.unread-jump-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+}
+.unread-jump-go > svg {
+  color: var(--accent);
+}
+.unread-jump-go:hover > span:first-of-type {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.unread-jump .text-button {
+  padding: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.unread-jump .text-button:hover {
+  color: var(--text);
+}
+
+/* The app's composer is a contenteditable; the preview's textarea matches it. */
+.project-composer textarea.composer-prompt-input {
+  display: block;
+  resize: none;
+  font: inherit;
+  color: var(--text);
+}
+.project-composer textarea.composer-prompt-input::placeholder {
+  color: var(--muted);
+}
