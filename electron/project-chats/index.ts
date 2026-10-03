@@ -732,6 +732,8 @@ export class ProjectChats {
     await Promise.allSettled(this.titles.running());
     await Promise.allSettled(this.titles.writing());
     await Promise.allSettled(this.control.pending());
+    // An answer still being set up starts its agent only once it is aborted.
+    await Promise.allSettled(this.turns.starting());
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled(this.active.all().map((a) => a.job));
     await Promise.allSettled(this.councils.stepping());

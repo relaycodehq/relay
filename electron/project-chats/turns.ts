@@ -50,6 +50,8 @@ export interface TurnsHost {
  * compacting, carrying on after a stop or a restart.
  */
 export class ChatTurns {
+  /** Sends whose message is in and whose answer hasn't started its agent yet. */
+  private starts = new Set<Promise<unknown>>();
   constructor(
     private core: ChatCore,
     private worktrees: ThreadWorktrees,
@@ -64,6 +66,9 @@ export class ChatTurns {
     private host: TurnsHost,
   ) {}
 
+  starting() {
+    return [...this.starts];
+  }
   /**
    * Ends a run. The finished answer moved `updated`, so the sidebar summary
    * catches up, but only once the thread no longer counts as active; then a
@@ -227,7 +232,7 @@ export class ChatTurns {
       }
       // The message is in. A handoff note can take minutes; the answer
       // starts after it without holding up the send.
-      void this.start(chat, active, input, {
+      const starting = this.start(chat, active, input, {
         asked,
         parent,
         root,
@@ -235,6 +240,8 @@ export class ChatTurns {
         skills,
         evidence,
       });
+      this.starts.add(starting);
+      void starting.finally(() => this.starts.delete(starting));
     } catch (e) {
       this.core.active.release(id, active);
       throw e;
