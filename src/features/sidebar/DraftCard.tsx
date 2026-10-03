@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, SquarePen } from "lucide-react";
-import { loadDraftScope, useDraft, type ActivityDraft } from "../composer/drafts";
+import {
+  loadDraftScope,
+  useDraft,
+  type ActivityDraft,
+} from "../composer/drafts";
 import { ProjectBadge } from "../projects/ProjectBadge";
 import { rowKeys } from "../../ui/ui";
 import { sendDraft } from "../composer/draft-send";

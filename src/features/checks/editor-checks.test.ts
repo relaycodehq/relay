@@ -1,5 +1,8 @@
 import { expect, it } from "vitest";
-import type { ProjectCheckState, ProjectDiagnostic } from "../../../shared/checks";
+import type {
+  ProjectCheckState,
+  ProjectDiagnostic,
+} from "../../../shared/checks";
 import { checkStatus, problemMarkers } from "./editor-checks";
 
 const counts = { errors: 0, warnings: 0, suggestions: 0 };

@@ -31,8 +31,7 @@ const sweep = async (
   threads: Record<string, string[]>,
   during?: () => void,
 ) => {
-  const { sweepThreadStorage } =
-    await import("./thread-storage-sweep");
+  const { sweepThreadStorage } = await import("./thread-storage-sweep");
   await sweepThreadStorage({
     projects: async () => Object.keys(threads).map((id) => ({ id })),
     projectChats: async (projectId) => {
@@ -128,8 +127,7 @@ it("keeps keys written while the threads were being read", async () => {
 
 it("drops nothing when a thread list can't be read", async () => {
   seed(threadKeys("gone"));
-  const { sweepThreadStorage } =
-    await import("./thread-storage-sweep");
+  const { sweepThreadStorage } = await import("./thread-storage-sweep");
   await expect(
     sweepThreadStorage({
       projects: async () => [{ id: "p1" }],
@@ -142,8 +140,7 @@ it("drops nothing when a thread list can't be read", async () => {
 });
 
 it("sweeps once a launch", async () => {
-  const { sweepThreadStorage } =
-    await import("./thread-storage-sweep");
+  const { sweepThreadStorage } = await import("./thread-storage-sweep");
   const source = { projects: vi.fn(async () => []), projectChats: vi.fn() };
   await sweepThreadStorage(source);
   await sweepThreadStorage(source);

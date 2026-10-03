@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  clampView,
-  fitScale,
-  stepScale,
-  zoomTo,
-} from "./image-zoom";
+import { clampView, fitScale, stepScale, zoomTo } from "./image-zoom";
 
 const stage = { width: 1000, height: 800 };
 const screenshot = { width: 2880, height: 1800 };

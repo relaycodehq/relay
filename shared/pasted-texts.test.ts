@@ -8,10 +8,7 @@ import {
   replacePastedTexts,
   type PastedText,
 } from "./pasted-texts";
-import {
-  codeReferenceMessage,
-  parseCodeReferences,
-} from "./code-references";
+import { codeReferenceMessage, parseCodeReferences } from "./code-references";
 import { namesItself, promptTitle } from "../electron/agents/thread-titles";
 
 const log = Array.from(

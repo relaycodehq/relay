@@ -1,6 +1,9 @@
 import { useEffect, useState, type RefObject } from "react";
 import type { ChangeArea, WorkingTree } from "../../../shared/working-tree";
-import { linksTo, type ProjectFileLink } from "../../../shared/project-file-links";
+import {
+  linksTo,
+  type ProjectFileLink,
+} from "../../../shared/project-file-links";
 import { useRequests, type RequestChannel } from "../../lib/request-channel";
 import {
   revealArea,

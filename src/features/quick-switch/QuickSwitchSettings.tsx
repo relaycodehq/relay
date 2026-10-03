@@ -27,7 +27,12 @@ import {
 import { ComposerModelPicker } from "../agents/ComposerModelPicker";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { QuickSwitchHud } from "./QuickSwitchHud";
-import { Segmented, SettingsCard, SettingsRow, Switch } from "../../ui/SettingsCard";
+import {
+  Segmented,
+  SettingsCard,
+  SettingsRow,
+  Switch,
+} from "../../ui/SettingsCard";
 
 const styleNames: Record<QuickSwitchStyle, string> = {
   drum: "Drum",

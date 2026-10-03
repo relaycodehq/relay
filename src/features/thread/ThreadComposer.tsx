@@ -18,7 +18,10 @@ import type { ThreadWorktree } from "./useThreadWorktree";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
-import { ProjectComposer, type ComposerHandle } from "../composer/ProjectComposer";
+import {
+  ProjectComposer,
+  type ComposerHandle,
+} from "../composer/ProjectComposer";
 import { SubagentsIndicator } from "../agent-turn/Subagents";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";

@@ -25,7 +25,11 @@ import {
   remoteUrl,
   repoOf,
 } from "../git/repository";
-import { readWorkingFile, decodeText, writeWorkingFile } from "../git/working-files";
+import {
+  readWorkingFile,
+  decodeText,
+  writeWorkingFile,
+} from "../git/working-files";
 function repositoryFromRemote(
   raw: string,
   server: string,

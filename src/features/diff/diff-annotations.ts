@@ -1,6 +1,11 @@
 import type { DiffLineAnnotation } from "@pierre/diffs";
 import type { ProjectDiagnostic } from "../../../shared/checks";
-import type { Draft, LineMark, ReviewComment, Side } from "../../../shared/types";
+import type {
+  Draft,
+  LineMark,
+  ReviewComment,
+  Side,
+} from "../../../shared/types";
 
 /** What sits under one line of a PR file's diff. */
 export interface LineNotes {

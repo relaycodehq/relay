@@ -13,11 +13,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RoomsDatabase, token } from "../../server/database";
 import { SharedWorkspace } from "../../server/workspace";
-import {
-  LiveSync,
-  LiveSyncs,
-  type SyncTransport,
-} from "./live-sync";
+import { LiveSync, LiveSyncs, type SyncTransport } from "./live-sync";
 vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 let dir: string,
   a: string,

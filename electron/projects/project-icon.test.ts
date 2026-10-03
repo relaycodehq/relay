@@ -9,11 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  findProjectIcon,
-  iconHref,
-  imageInfo,
-} from "./project-icon";
+import { findProjectIcon, iconHref, imageInfo } from "./project-icon";
 
 let root: string, outside: string;
 const put = async (path: string, contents: string | Buffer) => {

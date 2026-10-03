@@ -1,9 +1,5 @@
 import { expect, it } from "vitest";
-import {
-  linksTo,
-  matchLink,
-  projectFileLink,
-} from "./project-file-links";
+import { linksTo, matchLink, projectFileLink } from "./project-file-links";
 const root = "/Users/test/workspace";
 it("resolves T3-style markdown and inline file references into the linked project", () => {
   expect(projectFileLink("src/app/main.ts:42", root)).toEqual({

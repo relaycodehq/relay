@@ -15,10 +15,7 @@ import {
   writeLine,
   type SessionInfo,
 } from "../agent-host/protocol";
-import {
-  hostAgents,
-  HostedSessions,
-} from "./hosted-sessions";
+import { hostAgents, HostedSessions } from "./hosted-sessions";
 import { AsyncQueue } from "../util/async-queue";
 
 afterEach(() => {

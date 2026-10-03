@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { linksTo, type ProjectFileLink } from "../../../shared/project-file-links";
+import {
+  linksTo,
+  type ProjectFileLink,
+} from "../../../shared/project-file-links";
 import { useRequests, type RequestChannel } from "../../lib/request-channel";
 import type { ReviewFiles } from "./useReviewFiles";
 import type { ReviewTriage } from "./useReviewTriage";

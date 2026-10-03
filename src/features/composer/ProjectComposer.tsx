@@ -39,7 +39,10 @@ import { DictationButton } from "../dictation/DictationButton";
 import { SketchEditor } from "../images/ImageSketch";
 import { PastedTextDialog } from "./PastedTextCard";
 import { QuickSwitchHud } from "../quick-switch/QuickSwitchHud";
-import { UltraplanCouncilRow, UltraplanRing } from "../deep-review/council/Ultraplan";
+import {
+  UltraplanCouncilRow,
+  UltraplanRing,
+} from "../deep-review/council/Ultraplan";
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
 export interface ComposerHandle {

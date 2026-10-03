@@ -12,10 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { Gitea } from "./gitea";
-import {
-  PullRequestCreation,
-  branchPulls,
-} from "./pull-request-create";
+import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import type { CreatePullRequest } from "../../shared/pull-request-create";
 let root: string,
   remote: string,

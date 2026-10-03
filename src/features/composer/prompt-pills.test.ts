@@ -3,11 +3,7 @@ import { getSchema, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorState } from "@tiptap/pm/state";
 import { ImageTag } from "./prompt/image-pill";
-import {
-  FileTag,
-  Paste,
-  Quote,
-} from "./prompt/pills";
+import { FileTag, Paste, Quote } from "./prompt/pills";
 import { promptContent } from "./prompt-content";
 import {
   deleteImagePills,

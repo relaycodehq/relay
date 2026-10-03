@@ -26,7 +26,11 @@ import {
 } from "../../lib/imported-themes";
 import { kindOf } from "../../lib/vscode-theme";
 import { clearedColors, themeById, type ThemeKind } from "../../lib/themes";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../../ui/SettingsCard";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+} from "../../ui/SettingsCard";
 import { ErrorBox, IconButton, Spinner } from "../../ui/ui";
 
 const downloads = new Intl.NumberFormat("en", { notation: "compact" });

@@ -1,7 +1,10 @@
 import type { RefObject } from "react";
 import { ArrowLeft, Search, X } from "lucide-react";
 import { PaneResizer } from "../../../ui/PaneResizer";
-import { SIDEBAR_WIDTH, type SettingsCategory } from "../../../lib/settings-page";
+import {
+  SIDEBAR_WIDTH,
+  type SettingsCategory,
+} from "../../../lib/settings-page";
 import type { SettingEntry } from "../settings-search";
 import { categories } from "./categories";
 

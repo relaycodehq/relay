@@ -5,7 +5,11 @@ import {
 import { pastesAfter } from "../../../shared/pasted-texts";
 import type { ProjectChatSend } from "../../../shared/projects";
 import type { DraftImage } from "../images/draft-images";
-import { attachedImages, imagesAfter, nextImageNumber } from "../images/image-refs";
+import {
+  attachedImages,
+  imagesAfter,
+  nextImageNumber,
+} from "../images/image-refs";
 
 /** Where a dragged queued message is dropped: before or after another. */
 export type QueueDrop = { id: string; where: "before" | "after" };

@@ -1,11 +1,6 @@
 import { expect, it } from "vitest";
 import type { ChatMessage } from "./projects";
-import {
-  agentAsked,
-  contextAgent,
-  recipient,
-  sentAgent,
-} from "./recipient";
+import { agentAsked, contextAgent, recipient, sentAgent } from "./recipient";
 
 it("reads who answers a message from before `to` off its leading mention", () => {
   // An older phone typed @claude on a Codex composer: Claude answers, as ever.

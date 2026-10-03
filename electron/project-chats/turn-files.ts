@@ -1,7 +1,12 @@
 import { isAbsolute, join } from "node:path";
 import { turnImages } from "../../shared/projects";
 import { answerImagePaths } from "../../shared/answer-images";
-import { dropRevert, redoRevert, revertTurn, turnDiff } from "../git/turn-changes";
+import {
+  dropRevert,
+  redoRevert,
+  revertTurn,
+  turnDiff,
+} from "../git/turn-changes";
 import { worktreeExists } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import { imageFileData } from "./images";

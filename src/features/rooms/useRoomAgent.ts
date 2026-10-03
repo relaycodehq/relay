@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { codexQuestionChoice, defaultAISettings } from "../../../shared/settings";
+import {
+  codexQuestionChoice,
+  defaultAISettings,
+} from "../../../shared/settings";
 import { api } from "../../lib/api";
 import { useStoredState } from "../../lib/persisted-store";
 

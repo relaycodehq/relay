@@ -4,7 +4,11 @@ import {
   type TeaLogin,
   type TeaSetup,
 } from "../../shared/source-control";
-import { findExecutable, runExecutable, spawnExecutable } from "../platform/executables";
+import {
+  findExecutable,
+  runExecutable,
+  spawnExecutable,
+} from "../platform/executables";
 import { cliFields, plain, probeCli, probeTimeout as timeout } from "./clis";
 
 /** The `tea` CLI and the servers it is logged in to. */

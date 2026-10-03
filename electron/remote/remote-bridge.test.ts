@@ -1,10 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import {
-  RemoteBridge,
-  toRemoteDiff,
-  type RemoteHost,
-} from "./bridge";
+import { RemoteBridge, toRemoteDiff, type RemoteHost } from "./bridge";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { RemoteDiff, RemoteEvent } from "../../shared/remote";
 

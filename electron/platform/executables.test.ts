@@ -5,11 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./shell-path", () => ({ pathReady: async () => {} }));
 
-import {
-  findExecutable,
-  setLinkedAgents,
-  setLinkedTools,
-} from "./executables";
+import { findExecutable, setLinkedAgents, setLinkedTools } from "./executables";
 
 const posix = process.platform !== "win32";
 let root: string;

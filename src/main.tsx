@@ -3,10 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./ui/ui";
 import ProjectShell from "./app/ProjectShell";
-import {
-  drawsWindowControls,
-  WindowControls,
-} from "./app/WindowControls";
+import { drawsWindowControls, WindowControls } from "./app/WindowControls";
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";

@@ -14,11 +14,7 @@ import {
   Undo2,
 } from "lucide-react";
 import type { TurnFileChange } from "../../../shared/projects";
-import {
-  buildTurnTree,
-  sumStats,
-  type TurnTreeNode,
-} from "./turn-diff-tree";
+import { buildTurnTree, sumStats, type TurnTreeNode } from "./turn-diff-tree";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { FileEntryIcon, IconButton } from "../../ui/ui";
 import "./changed-files.css";

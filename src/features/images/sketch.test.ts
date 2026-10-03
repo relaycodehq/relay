@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  blurShape,
-  recognizeShape,
-  snapLine,
-  type Point,
-} from "./sketch";
+import { blurShape, recognizeShape, snapLine, type Point } from "./sketch";
 
 const circle = (cx: number, cy: number, r: number): Point[] =>
   Array.from({ length: 80 }, (_, i) => {

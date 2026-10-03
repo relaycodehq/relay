@@ -16,7 +16,10 @@ const option = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i < 0 ? fallback : args[i + 1];
 };
-const url = option("url", "http://127.0.0.1:5177/previews/promo/teaser/?capture");
+const url = option(
+  "url",
+  "http://127.0.0.1:5177/previews/promo/teaser/?capture",
+);
 const scale = Number(option("scale", "1"));
 const fps = Number(option("fps", "60"));
 const stills = option("stills");

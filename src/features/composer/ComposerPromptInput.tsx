@@ -5,18 +5,12 @@ import { useDraftPills } from "./useDraftPills";
 import type { ImageChip } from "./prompt/image-pill";
 import { QuoteTooltip, useQuoteTip } from "./prompt/QuoteTip";
 import { useImagePeek } from "./prompt/useImagePeek";
-import {
-  usePromptEditor,
-  type PromptEvents,
-} from "./prompt/usePromptEditor";
+import { usePromptEditor, type PromptEvents } from "./prompt/usePromptEditor";
 import {
   usePromptHandle,
   type PromptInputHandle,
 } from "./prompt/usePromptHandle";
-import {
-  useComboboxRole,
-  usePromptSync,
-} from "./prompt/usePromptSync";
+import { useComboboxRole, usePromptSync } from "./prompt/usePromptSync";
 import { ImagePeek } from "../images/ImagePeek";
 export type { SkillPick } from "./prompt/edits";
 export type { ImageChip, PromptInputHandle };

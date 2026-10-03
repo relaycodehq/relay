@@ -3,7 +3,11 @@ import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { Project } from "../../shared/projects";
 import { api } from "../lib/api";
 import { sendDraft } from "../features/composer/draft-send";
-import { clearDraftScope, freshNewThread, writeDraft } from "../features/composer/drafts";
+import {
+  clearDraftScope,
+  freshNewThread,
+  writeDraft,
+} from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { threadDraftKey } from "../lib/thread-storage";
 import type { ShellNavigation } from "./useShellNavigation";

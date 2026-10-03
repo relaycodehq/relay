@@ -2,11 +2,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChangedFilesCard } from "./ChangedFilesCard";
-import {
-  buildTurnTree,
-  compactCount,
-  sumStats,
-} from "./turn-diff-tree";
+import { buildTurnTree, compactCount, sumStats } from "./turn-diff-tree";
 
 const files = [
   { path: "src/components/ui.tsx", additions: 40, deletions: 10 },

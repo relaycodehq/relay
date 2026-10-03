@@ -18,8 +18,7 @@ vi.mock("../../agents", () => ({
     },
   }),
 }));
-const { ClockifyPlugin } =
-  await import("./service");
+const { ClockifyPlugin } = await import("./service");
 
 const MIN = 60_000;
 const DAY = Date.parse("2026-09-30T08:00:00Z");

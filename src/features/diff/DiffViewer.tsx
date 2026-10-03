@@ -30,10 +30,7 @@ import { useLineComposer } from "./useLineComposer";
 import { labelDiffGapControls } from "./diffGapControls";
 import { SelectionToolbar } from "./viewer/SelectionToolbar";
 import { FileChecks } from "./viewer/FileChecks";
-import {
-  LineAnnotations,
-  type NoteActions,
-} from "./viewer/LineAnnotations";
+import { LineAnnotations, type NoteActions } from "./viewer/LineAnnotations";
 
 interface Props extends NoteActions {
   /** A project thread's workspace, where blame is read instead of the PR's linked folder. */

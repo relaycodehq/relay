@@ -1,9 +1,5 @@
 import { it, expect } from "vitest";
-import {
-  claudeActivity,
-  claudeEditedPaths,
-  codexActivity,
-} from "./activity";
+import { claudeActivity, claudeEditedPaths, codexActivity } from "./activity";
 import { publicMessage } from "../projects/project-sharing";
 it("caps a failed command's output and keeps its arguments out", () => {
   const activity = codexActivity("item/completed", {

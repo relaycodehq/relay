@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { Recipient } from "../../../shared/recipient";
-import { presetIndex, stepPreset, useQuickSwitch } from "../quick-switch/quick-switch";
+import {
+  presetIndex,
+  stepPreset,
+  useQuickSwitch,
+} from "../quick-switch/quick-switch";
 import type { AgentRuns } from "./useAgentRuns";
 
 /**

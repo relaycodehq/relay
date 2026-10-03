@@ -11,11 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  workingTree,
-  workingDiff,
-  performGitAction,
-} from "./working-tree";
+import { workingTree, workingDiff, performGitAction } from "./working-tree";
 import { revisionDiff } from "./turn-changes";
 let root: string, remote: string;
 const git = (...args: string[]) =>

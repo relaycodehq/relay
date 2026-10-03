@@ -16,7 +16,12 @@ import { ancestors } from "../lib/file-tree";
 import { useExpanded } from "../features/files/useFileTree";
 import type { Viewing } from "../features/thread/useThreadView";
 import { FileTree } from "../features/files/FileTree";
-import { FolderView, ImageFile, OtherFile, RevealButtons } from "../features/files/FileViews";
+import {
+  FolderView,
+  ImageFile,
+  OtherFile,
+  RevealButtons,
+} from "../features/files/FileViews";
 import { PaneResizer } from "../ui/PaneResizer";
 import { LocalChanges } from "../features/changes/LocalChanges";
 import { TurnChanges } from "../features/changes/TurnChanges";

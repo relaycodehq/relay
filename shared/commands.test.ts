@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  argumentTrigger,
-  commandTrigger,
-  relayCommand,
-} from "./commands";
+import { argumentTrigger, commandTrigger, relayCommand } from "./commands";
 
 describe("relay commands", () => {
   it("parses bare commands and arguments where a command takes them", () => {

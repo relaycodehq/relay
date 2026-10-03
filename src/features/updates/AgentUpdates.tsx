@@ -26,7 +26,11 @@ import {
   type AgentVersion,
 } from "../../../shared/agent-updates";
 import { agents, isCliProvider } from "../../../shared/agents";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../../ui/SettingsCard";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+} from "../../ui/SettingsCard";
 import { ErrorBox, Spinner } from "../../ui/ui";
 import "./agent-updates.css";
 

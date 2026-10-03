@@ -2,7 +2,11 @@ import { git } from "../git/git";
 import type { Projects } from "./projects";
 import type { RoomService } from "../rooms/service";
 import type { Gitea } from "../pull-requests/gitea";
-import type { ProjectChat, ChatMessage, ChatSummary } from "../../shared/projects";
+import type {
+  ProjectChat,
+  ChatMessage,
+  ChatSummary,
+} from "../../shared/projects";
 import { roomInvitation, parseRoomInvitation } from "../../shared/rooms";
 import { redacted } from "../../shared/redact-secrets";
 type SharedPage = {

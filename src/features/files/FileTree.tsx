@@ -21,12 +21,13 @@ import {
 } from "lucide-react";
 import { isEntryName } from "../../../shared/project-files";
 import { api } from "../../lib/api";
-import { joinPath, parentOf, treeRows, type TreeRow } from "../../lib/file-tree";
 import {
-  directoryKey,
-  useDirectories,
-  type useExpanded,
-} from "./useFileTree";
+  joinPath,
+  parentOf,
+  treeRows,
+  type TreeRow,
+} from "../../lib/file-tree";
+import { directoryKey, useDirectories, type useExpanded } from "./useFileTree";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ContextMenuItem } from "../../ui/ContextMenuItem";
 import { ErrorBox, FileEntryIcon, IconButton, Modal } from "../../ui/ui";

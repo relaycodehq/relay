@@ -3,7 +3,11 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { TextQuote } from "lucide-react";
 import { selectionQuote } from "../composer/composer-quotes";
-import { ariaShortcut, useShortcut, useShortcutLabel } from "../../lib/shortcuts";
+import {
+  ariaShortcut,
+  useShortcut,
+  useShortcutLabel,
+} from "../../lib/shortcuts";
 
 interface Offer {
   text: string;

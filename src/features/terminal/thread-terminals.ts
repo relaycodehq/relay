@@ -3,7 +3,10 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
-import { draftTerminalKey, type TerminalEvent } from "../../../shared/terminals";
+import {
+  draftTerminalKey,
+  type TerminalEvent,
+} from "../../../shared/terminals";
 import { api } from "../../lib/api";
 import { matches } from "../../lib/shortcuts";
 

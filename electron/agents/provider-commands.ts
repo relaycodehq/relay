@@ -3,7 +3,11 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { memoByKey, memoWhileStamp } from "../util/memo";
 import { terminate } from "../platform/terminate";
-import { findExecutable, installStamp, spawnExecutable } from "../platform/executables";
+import {
+  findExecutable,
+  installStamp,
+  spawnExecutable,
+} from "../platform/executables";
 import {
   withCodexTransport,
   type CodexTransport,

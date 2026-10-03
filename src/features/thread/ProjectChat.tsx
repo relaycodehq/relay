@@ -43,7 +43,10 @@ import { workingTreeKey } from "../../lib/working-tree-key";
 import { AgentRequestCard } from "./AgentRequestCard";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { DeepReviewSetup } from "../deep-review/DeepReview";
-import type { ComposerControls, ComposerHandle } from "../composer/ProjectComposer";
+import type {
+  ComposerControls,
+  ComposerHandle,
+} from "../composer/ProjectComposer";
 import { SelectionQuote } from "./SelectionQuote";
 import { SubagentThread } from "../agent-turn/SubagentThread";
 import { ThreadComposer } from "./ThreadComposer";

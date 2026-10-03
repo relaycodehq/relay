@@ -2,7 +2,11 @@
 // the state and agents on an Activity card.
 import { CalendarClock, CircleAlert } from "lucide-react";
 import { agentName } from "../../../shared/agents";
-import { elapsedLabel, shortAge, wakeLabel } from "../../../shared/chat-activity";
+import {
+  elapsedLabel,
+  shortAge,
+  wakeLabel,
+} from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { agentsSince } from "../../../shared/waiting";
 import { useNow } from "../../lib/useNow";

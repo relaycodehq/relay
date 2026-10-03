@@ -1,9 +1,5 @@
 import { expect, it } from "vitest";
-import {
-  findingStatus,
-  firstPicks,
-  fixAllLabel,
-} from "./finding-picks";
+import { findingStatus, firstPicks, fixAllLabel } from "./finding-picks";
 import type { Finding } from "../../../shared/deep-review";
 
 const finding = (id: string, priority: Finding["priority"]): Finding => ({

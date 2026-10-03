@@ -3,7 +3,11 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { SquarePen } from "lucide-react";
 import type { FilePair } from "../../../shared/types";
 import { PaneResizer } from "../../ui/PaneResizer";
-import { SplitDiffToggle, useSplitDiff, WorkingDiff } from "../diff/WorkingDiff";
+import {
+  SplitDiffToggle,
+  useSplitDiff,
+  WorkingDiff,
+} from "../diff/WorkingDiff";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 
 /** The resizable list of files a commit or turn changed, beside its diff. */

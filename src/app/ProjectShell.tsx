@@ -13,7 +13,10 @@ import { projectFor } from "../features/pulls/pull-board";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useShortcut } from "../lib/shortcuts";
 import { openThread } from "../lib/thread-storage";
-import { adoptDraftTerminal, terminalFor } from "../features/terminal/thread-terminals";
+import {
+  adoptDraftTerminal,
+  terminalFor,
+} from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
 import { useNewThreads } from "./useNewThreads";
 import { usePaneOpens } from "./usePaneOpens";
@@ -29,7 +32,10 @@ import { useThreadTerminal } from "./useThreadTerminal";
 import { NO_VIEWING, useThreadView } from "../features/thread/useThreadView";
 import { paneFrame, type PaneId } from "../lib/workspace-panes";
 import { PullsSurface } from "./PullsSurface";
-import { GitActions, type GitActionsHandle } from "../features/changes/GitActions";
+import {
+  GitActions,
+  type GitActionsHandle,
+} from "../features/changes/GitActions";
 import { HandoffButton } from "../features/handoff/HandoffButton";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";

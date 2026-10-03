@@ -1,4 +1,8 @@
-import { roomVerifier, roomClient, roomClone } from "../../tests/fixtures/room-access";
+import {
+  roomVerifier,
+  roomClient,
+  roomClone,
+} from "../../tests/fixtures/room-access";
 import { describe, it, expect } from "vitest";
 import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";

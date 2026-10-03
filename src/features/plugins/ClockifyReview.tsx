@@ -8,11 +8,7 @@ import {
   type ClockifyReview as Review,
 } from "../../../shared/clockify";
 import { api } from "../../lib/api";
-import {
-  clockifyKey,
-  projectColor,
-  useClockifyProjects,
-} from "./plugins";
+import { clockifyKey, projectColor, useClockifyProjects } from "./plugins";
 import { ErrorBox, Modal } from "../../ui/ui";
 import { ClockifyDay } from "./ClockifyDay";
 import { ClockifyEntry } from "./ClockifyEntry";

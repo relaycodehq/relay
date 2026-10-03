@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { CommitSplitPlan, SplitChange } from "../../../shared/commit-split";
+import type {
+  CommitSplitPlan,
+  SplitChange,
+} from "../../../shared/commit-split";
 import { choiceLabel } from "../../../shared/settings";
 import type { WorkingTree } from "../../../shared/working-tree";
 import { api } from "../../lib/api";

@@ -19,7 +19,12 @@ import {
   useDevOpsStatus,
   useTrackableProjects,
 } from "./plugins";
-import { Segmented, SettingsCard, SettingsRow, Switch } from "../../ui/SettingsCard";
+import {
+  Segmented,
+  SettingsCard,
+  SettingsRow,
+  Switch,
+} from "../../ui/SettingsCard";
 import { CliPathField, withCode } from "../../ui/ToolRow";
 import { ErrorBox } from "../../ui/ui";
 import {

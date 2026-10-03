@@ -2,7 +2,10 @@ import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { Reply } from "lucide-react";
 import { clock } from "../../../shared/waiting";
 import { agentMentionPattern, agentName } from "../../../shared/agents";
-import { answerImagePaths, localImagePath } from "../../../shared/answer-images";
+import {
+  answerImagePaths,
+  localImagePath,
+} from "../../../shared/answer-images";
 import { parseCodeReferences } from "../../../shared/code-references";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import {

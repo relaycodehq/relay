@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ChatSummary, ChatTriage, Project } from "../../../shared/projects";
+import type {
+  ChatSummary,
+  ChatTriage,
+  Project,
+} from "../../../shared/projects";
 import { nextAfterSettle, triaged } from "./activity";
 import { api } from "../../lib/api";
 import { errorMessage } from "./error-message";

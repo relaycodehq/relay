@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getSchema, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { ImageTag } from "./prompt/image-pill";
-import {
-  FileTag,
-  Paste,
-  Quote,
-  Skill,
-} from "./prompt/pills";
+import { FileTag, Paste, Quote, Skill } from "./prompt/pills";
 import { promptContent } from "./prompt-content";
 import { pasteAt } from "./prompt-pills";
 import { positionAt, promptText, serialize } from "./prompt-text";

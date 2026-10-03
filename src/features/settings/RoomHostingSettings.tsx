@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
-import { SettingsCard, SettingsFooter, SettingsRow } from "../../ui/SettingsCard";
+import {
+  SettingsCard,
+  SettingsFooter,
+  SettingsRow,
+} from "../../ui/SettingsCard";
 
 export function RoomHostingSettings() {
   const qc = useQueryClient();

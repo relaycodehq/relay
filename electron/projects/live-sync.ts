@@ -3,7 +3,11 @@ import { dirname, join } from "node:path";
 import { currentBranch, git, gitBytes } from "../git/git";
 import { digest } from "../util/hash";
 import { serializeRepo, ignoredPaths, gitOperation } from "../git/working-tree";
-import { decodeText, readWorkingFile, writeWorkingFile } from "../git/working-files";
+import {
+  decodeText,
+  readWorkingFile,
+  writeWorkingFile,
+} from "../git/working-files";
 import {
   syncManifestSchema,
   syncDocumentSchema,

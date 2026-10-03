@@ -1,4 +1,8 @@
-import { roomVerifier, roomClient, roomClone } from "../../tests/fixtures/room-access";
+import {
+  roomVerifier,
+  roomClient,
+  roomClone,
+} from "../../tests/fixtures/room-access";
 import { it, expect, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";

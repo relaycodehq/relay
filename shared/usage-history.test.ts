@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WEEK_MS, presentWindow } from "./provider-usage";
-import {
-  activeHours,
-  addSample,
-  type UsageSample,
-} from "./usage-history";
+import { activeHours, addSample, type UsageSample } from "./usage-history";
 
 // Local times, since working hours are learned per local hour of the day.
 const at = (day: number, hour: number, minute = 0) =>

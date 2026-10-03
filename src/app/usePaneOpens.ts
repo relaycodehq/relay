@@ -13,7 +13,11 @@ import { requestChannel } from "../lib/request-channel";
 import type { TurnDiffTarget } from "../features/changes/turn-diff";
 import type { ShellNavigation } from "./useShellNavigation";
 import type { ThreadFolder } from "./useThreadFolder";
-import { NO_VIEWING, type ChatContext, type ThreadView } from "../features/thread/useThreadView";
+import {
+  NO_VIEWING,
+  type ChatContext,
+  type ThreadView,
+} from "../features/thread/useThreadView";
 import type { PaneId } from "../lib/workspace-panes";
 
 export type PaneOpens = ReturnType<typeof usePaneOpens>;

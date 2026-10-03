@@ -1,8 +1,5 @@
 import { expect, it, vi } from "vitest";
-import {
-  AnswerRecorder,
-  streamingAnswer,
-} from "./answer-recorder";
+import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
 import type { AgentActivity, ProjectChat } from "../../shared/projects";
 
 const call = (id: string, parentId?: string): AgentActivity =>

@@ -10,7 +10,10 @@ import {
   releaseNotesFrom,
 } from "../../shared/updates";
 import { powershellScript } from "../../electron/pull-requests/local";
-import { findExecutable, spawnExecutable } from "../../electron/platform/executables";
+import {
+  findExecutable,
+  spawnExecutable,
+} from "../../electron/platform/executables";
 
 const run = promisify(execFile);
 const windows = process.platform === "win32";
