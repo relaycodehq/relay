@@ -1,18 +1,5 @@
 import type { AgentActivity } from "../../../shared/projects";
-
-/** A `tool` part of an OpenCode message, as `message.part.updated` carries it. */
-export interface ToolPart {
-  callID: string;
-  tool: string;
-  state: {
-    status: "pending" | "running" | "completed" | "error";
-    input?: Record<string, unknown>;
-    output?: string;
-    error?: string;
-    title?: string;
-    metadata?: Record<string, unknown>;
-  };
-}
+import type { ToolPart } from "./events";
 
 /** OpenCode's tools that write files, by the input field that names the file. */
 const fileTools: Record<string, string> = {
@@ -58,7 +45,11 @@ export function openCodeActivity(part: ToolPart): AgentActivity | undefined {
         typeof state.metadata?.output === "string"
           ? state.metadata.output
           : state.output;
-      return call("command", text("command"), output || state.error);
+      return call(
+        "command",
+        text("command"),
+        (output || state.error) ?? undefined,
+      );
     }
     case "read":
       return call("read", text("filePath"));

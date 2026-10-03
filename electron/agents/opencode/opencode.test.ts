@@ -1,4 +1,4 @@
-import { it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -126,6 +126,37 @@ it("runs a turn: commentary before a tool, the ask, the edit and the answer", as
   });
   expect(calls.find((c) => c.path.startsWith("/permission/")).body).toEqual({
     reply: "once",
+  });
+});
+
+describe("what OpenCode sends", () => {
+  const quirky = (quirk: string, prompt = "Write notes.md") => {
+    vi.stubEnv("RELAY_OPENCODE_QUIRK", quirk);
+    return turn(prompt);
+  };
+
+  it("fails the turn naming the field when a message part arrives without its message", async () => {
+    // It used to end as a complete answer with an empty body.
+    await expect(quirky("part-without-messageID").run).rejects.toThrow(
+      /OpenCode sent an unexpected message\.part\.updated event \(part\.messageID/,
+    );
+  });
+
+  it("fails the turn when a text delta has no text", async () => {
+    await expect(quirky("delta-without-text").run).rejects.toThrow(
+      /unexpected message\.part\.delta event \(delta/,
+    );
+  });
+
+  it("fails the turn when the stored messages have no ids", async () => {
+    await expect(quirky("message-without-id").run).rejects.toThrow(
+      /unexpected session message list response \(0\.info\.id/,
+    );
+  });
+
+  it("ignores events and part types it doesn't read, and fields it doesn't know", async () => {
+    const { run } = quirky("newer");
+    expect(await run).toBe("Wrote notes.md.");
   });
 });
 

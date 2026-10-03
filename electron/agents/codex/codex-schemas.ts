@@ -1,13 +1,5 @@
 import { z } from "zod";
-
-/** A field Codex may leave out or null, or send as something this Relay can't use: the same as absent. */
-const lenient = <T extends z.ZodType>(schema: T) =>
-  schema.nullish().catch(undefined);
-
-const named = (issue: z.core.$ZodIssue, skip = 0) => {
-  const path = issue.path.slice(skip).join(".");
-  return `${path ? `${path}: ` : ""}${issue.message}`;
-};
+import { lenient, named } from "../schema-kit";
 
 /** Only the fields Relay reads are listed; whatever else Codex adds passes through. */
 export const threadStartedSchema = z

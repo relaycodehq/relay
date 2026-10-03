@@ -9,7 +9,8 @@ import {
 import { terminate } from "../../platform/terminate";
 import type { AgentHosts, HostedProcess } from "../../agent-host/client";
 import type { Entry } from "../../agent-host/protocol";
-import { foundSessions, inAgentHost } from "../hosted-sessions";
+import { z } from "zod";
+import { foundSessions, inAgentHost, savedMeta } from "../hosted-sessions";
 
 /** A running `opencode serve`, reached over HTTP with Basic auth. */
 export interface OpenCodeServer {
@@ -27,11 +28,14 @@ let child: ChildProcess | undefined;
 /** The server the agent host runs, when it does: it outlives a restart of Relay. */
 let hosted: HostedProcess | undefined;
 /** What the hosted server keeps for the next Relay: where it listens, and its password. */
-type OpenCodeMeta = {
-  provider: "opencode";
-  password: string;
-  url?: string;
-};
+const openCodeMetaSchema = z
+  .object({
+    provider: z.literal("opencode"),
+    password: z.string(),
+    url: z.string().optional(),
+  })
+  .loose();
+type OpenCodeMeta = z.infer<typeof openCodeMetaSchema>;
 
 /**
  * One server for all of Relay: requests name the directory they work in, and
@@ -252,11 +256,11 @@ export async function reattachOpenCodeServer(
 ): Promise<{ key: string; open: boolean }[]> {
   const back: { key: string; open: boolean }[] = [];
   for (const found of await foundSessions("opencode", "process")) {
-    const meta = found.info.meta as OpenCodeMeta;
-    const auth = basic(meta.password ?? "");
+    const meta = savedMeta(found, openCodeMetaSchema);
+    const auth = basic(meta?.password ?? "");
     const health =
-      !server && meta.url ? await healthOf(meta.url, auth) : undefined;
-    if (!health || !meta.url) {
+      !server && meta?.url ? await healthOf(meta.url, auth) : undefined;
+    if (!meta?.url || !health) {
       found.close();
       continue;
     }

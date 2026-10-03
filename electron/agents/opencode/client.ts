@@ -49,10 +49,10 @@ async function text(response: IncomingMessage) {
   return body;
 }
 
-/** An event from OpenCode's bus, e.g. `message.part.updated`. */
+/** An event from OpenCode's bus, e.g. `message.part.updated`; `events.ts` says what is in one. */
 export interface OpenCodeEvent {
   type: string;
-  properties: Record<string, any>;
+  properties: unknown;
 }
 type Listener = (event: OpenCodeEvent) => void;
 
@@ -179,6 +179,20 @@ async function read(body: IncomingMessage) {
   } catch {}
 }
 
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+/** The session an event is about, wherever its type keeps that. */
+function sessionOf(properties: unknown) {
+  const id = [
+    field(properties, "sessionID"),
+    field(field(properties, "info"), "sessionID"),
+    field(field(properties, "part"), "sessionID"),
+  ].find((value) => typeof value === "string");
+  return id as string | undefined;
+}
+
 function dispatch(data: string) {
   let event: OpenCodeEvent;
   try {
@@ -188,11 +202,8 @@ function dispatch(data: string) {
     return;
   }
   if (typeof event?.type !== "string") return;
-  const sessionID =
-    event.properties?.sessionID ??
-    event.properties?.info?.sessionID ??
-    event.properties?.part?.sessionID;
-  if (typeof sessionID !== "string") return;
+  const sessionID = sessionOf(event.properties);
+  if (!sessionID) return;
   for (const listener of [...(listeners.get(sessionID) ?? [])]) {
     try {
       listener(event);

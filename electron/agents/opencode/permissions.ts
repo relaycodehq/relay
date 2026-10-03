@@ -3,6 +3,7 @@ import type {
   AskAgentRequest,
   RuntimeMode,
 } from "../../../shared/agent-modes";
+import type { PermissionRequest, QuestionRequest } from "./events";
 
 type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRule = {
@@ -92,13 +93,6 @@ export function permissionRules(
   ];
 }
 
-/** What OpenCode asks before running a tool; see its `PermissionRequest`. */
-export interface PermissionRequest {
-  id: string;
-  permission: string;
-  patterns: string[];
-  metadata?: Record<string, unknown>;
-}
 /**
  * Asks the user about one permission and answers OpenCode with `once` or
  * `reject`. Accepting for the whole session isn't offered: OpenCode keeps an
@@ -112,7 +106,7 @@ export async function askPermission(
   const metadata = request.metadata ?? {};
   const text = (key: string) =>
     typeof metadata[key] === "string" ? (metadata[key] as string) : "";
-  const patterns = request.patterns.filter(Boolean).join("\n");
+  const patterns = (request.patterns ?? []).filter(Boolean).join("\n");
   const [title, detail] =
     request.permission === "bash"
       ? ["Run this command?", text("command") || patterns]
@@ -137,16 +131,6 @@ export async function askPermission(
   return response.decision === "accept" ? "once" : "reject";
 }
 
-/** A question from OpenCode's `question` tool; see its `QuestionRequest`. */
-export interface QuestionRequest {
-  id: string;
-  questions: {
-    question: string;
-    header: string;
-    options: { label: string; description: string }[];
-    multiple?: boolean;
-  }[];
-}
 /** Asks the user; OpenCode takes the chosen labels, question by question. */
 export async function askQuestions(
   request: QuestionRequest,
@@ -161,12 +145,12 @@ export async function askQuestions(
       title: "OpenCode needs your input",
       questions: request.questions.map((q, index) => ({
         id: String(index),
-        header: q.header,
+        header: q.header ?? "",
         question: q.question,
         multiple: !!q.multiple,
         options: q.options.map((o) => ({
           label: o.label,
-          description: o.description,
+          description: o.description ?? "",
         })),
       })),
     },

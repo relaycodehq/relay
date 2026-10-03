@@ -25,6 +25,8 @@ const emit = (type, properties) => {
   const frame = `data: ${JSON.stringify({ payload: { type, properties } })}\n\n`;
   for (const client of clients) client.write(frame);
 };
+/** RELAY_OPENCODE_QUIRK makes the server say something a newer or broken OpenCode might. */
+const quirk = process.env.RELAY_OPENCODE_QUIRK;
 const tick = () => new Promise((r) => setTimeout(r, 5));
 
 async function turn(sessionID, text) {
@@ -91,7 +93,20 @@ async function turn(sessionID, text) {
     text: "",
   };
   firstParts.push(note);
-  emit("message.part.updated", { sessionID, part: note });
+  if (quirk === "newer") {
+    emit("session.shiny", { sessionID, news: true });
+    emit("message.part.updated", {
+      sessionID,
+      part: { id: id("prt"), messageID: first.id, type: "hologram", rays: 3 },
+    });
+    emit("message.part.updated", {
+      sessionID,
+      part: { ...note, extra: { nested: 1 }, synthetic: null },
+    });
+  } else if (quirk === "part-without-messageID") {
+    const { messageID, ...orphan } = note;
+    emit("message.part.updated", { sessionID, part: orphan });
+  } else emit("message.part.updated", { sessionID, part: note });
   for (const delta of ["Let me ", "check."]) {
     await tick();
     note.text += delta;
@@ -100,7 +115,7 @@ async function turn(sessionID, text) {
       messageID: first.id,
       partID: note.id,
       field: "text",
-      delta,
+      ...(quirk === "delta-without-text" ? {} : { delta }),
     });
   }
   const tool = {
@@ -305,7 +320,14 @@ const server = http.createServer(async (req, res) => {
     });
   }
   if ((m = /^\/session\/([^/]+)\/message$/.exec(path)))
-    return send(200, sessions.get(m[1])?.messages ?? []);
+    return send(
+      200,
+      (sessions.get(m[1])?.messages ?? []).map((message) =>
+        quirk === "message-without-id"
+          ? { ...message, info: { ...message.info, id: undefined } }
+          : message,
+      ),
+    );
   if ((m = /^\/session\/([^/]+)\/fork$/.exec(path))) {
     const source = sessions.get(m[1]);
     const cut = json?.messageID

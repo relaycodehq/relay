@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { z } from "zod";
 import type { AgentOptions } from "../types";
 import type { ContextUsage } from "../../../shared/projects";
 import {
@@ -7,14 +8,23 @@ import {
   subscribe,
   type OpenCodeEvent,
 } from "./client";
+import { askPermission, askQuestions, permissionRules } from "./permissions";
 import {
-  askPermission,
-  askQuestions,
-  permissionRules,
-  type PermissionRequest,
-  type QuestionRequest,
-} from "./permissions";
-import { editedPaths, openCodeActivity, type ToolPart } from "./activity";
+  commandListSchema,
+  messageListSchema,
+  OpenCodeShapeError,
+  parseOpenCodeEvent,
+  parseOpenCodePart,
+  parseOpenCodeResponse,
+  permissionListSchema,
+  questionListSchema,
+  readFailure,
+  sessionCreatedSchema,
+  sessionSchema,
+  sessionStatusSchema,
+  type OpenCodePart,
+} from "./events";
+import { editedPaths, openCodeActivity } from "./activity";
 import { openCodeModels, splitModel } from "./catalog";
 import { markOpenCodeTurn } from "./server";
 import { answerLimitError, guardSteer } from "../turn-kit";
@@ -22,6 +32,21 @@ import { answerLimitError, guardSteer } from "../turn-kit";
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
 const commandPattern = /^\/([a-zA-Z0-9_.:-]+)(?:\s+([\s\S]*))?$/;
+
+/** A request to OpenCode for the directory a turn works in; what comes back is checked by `ask`. */
+type Call = (
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+) => Promise<unknown>;
+/** Asks for `path` and checks the answer against `schema`. */
+const fetched = <T>(
+  call: Call,
+  what: string,
+  schema: z.ZodType<T>,
+  path: string,
+) =>
+  call("GET", path).then((value) => parseOpenCodeResponse(what, schema, value));
 
 function instructions(options: AgentOptions) {
   if (options.helper) return options.helper.instructions;
@@ -45,11 +70,8 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     options.onRequest && options.runtimeMode && !options.readOnly && !title
       ? options.onRequest
       : undefined;
-  const call = <T = any>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
-    path: string,
-    body?: unknown,
-  ) => openCode<T>(method, path, { directory, body });
+  const call: Call = (method, path, body) =>
+    openCode<unknown>(method, path, { directory, body });
 
   // Rooms, titles and helper jobs leave nothing behind.
   const ephemeral = !options.session;
@@ -128,21 +150,21 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     }
     publish();
   };
-  const report = (tokens: any) => {
-    if (!tokens || typeof tokens !== "object") return;
-    const cache = tokens.cache ?? {};
+  const report = (
+    tokens: Extract<OpenCodePart, { type: "step-finish" }>["tokens"],
+  ) => {
+    if (!tokens) return;
+    const { cache } = tokens;
     const used =
-      typeof tokens.total === "number" && tokens.total > 0
+      tokens.total && tokens.total > 0
         ? tokens.total
         : [
             tokens.input,
             tokens.output,
             tokens.reasoning,
-            cache.read,
-            cache.write,
-          ]
-            .filter((n) => typeof n === "number")
-            .reduce((a, b) => a + b, 0);
+            cache?.read,
+            cache?.write,
+          ].reduce((a: number, b) => a + (b ?? 0), 0);
     if (!used) return;
     const max = (listed ?? catalog.find((m) => m.id === lastModel))
       ?.contextWindow;
@@ -154,7 +176,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   };
   /** Each finished step's cost, so a repeated update only adds what changed. */
   const stepCosts = new Map<string, number>();
-  const charge = (part: { id: string; cost?: unknown }) => {
+  const charge = (part: { id: string; cost?: number | null }) => {
     if (typeof part.cost !== "number" || !Number.isFinite(part.cost)) return;
     const delta = part.cost - (stepCosts.get(part.id) ?? 0);
     stepCosts.set(part.id, part.cost);
@@ -163,33 +185,50 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   let lastModel = options.choice.model;
   let retrying = false;
 
-  const handle = (event: OpenCodeEvent) => {
+  /** Ends the turn on what OpenCode sent wrong; any other error is a bug here. */
+  const rejected = (error: unknown) => {
+    if (!(error instanceof OpenCodeShapeError)) throw error;
+    finish(error);
+  };
+
+  const handle = (raw: OpenCodeEvent) => {
     if (settled) return;
-    const p = event.properties;
+    let event;
+    try {
+      event = parseOpenCodeEvent(raw);
+    } catch (error) {
+      return rejected(error);
+    }
+    if (!event) return;
     switch (event.type) {
       case "relay.stream.lost":
-        finish(new Error(p.message ?? "Lost the connection to OpenCode."));
+        finish(
+          new Error(
+            event.properties.message ?? "Lost the connection to OpenCode.",
+          ),
+        );
         return;
-      case "session.status":
-        if (p.status?.type === "busy" || p.status?.type === "retry")
-          busy = true;
-        if (p.status?.type === "retry") {
+      case "session.status": {
+        const { status } = event.properties;
+        if (status.type === "busy" || status.type === "retry") busy = true;
+        if (status.type === "retry") {
           retrying = true;
           options.onCommentary?.(
             "opencode-retry",
-            `Retrying (attempt ${p.status.attempt}): ${String(p.status.message ?? "").slice(0, 500)}`,
+            `Retrying (attempt ${status.attempt}): ${(status.message ?? "").slice(0, 500)}`,
           );
         } else if (retrying) {
           retrying = false;
           options.onCommentary?.("opencode-retry", null);
         }
-        if (p.status?.type === "idle" && busy) void settle();
+        if (status.type === "idle" && busy) void settle();
         return;
+      }
       case "session.idle":
         if (busy) void settle();
         return;
       case "session.error": {
-        const error = p.error;
+        const error = readFailure(event.properties.error);
         if (error?.name === "MessageAbortedError") {
           finish(new Error("Cancelled by you."));
           return;
@@ -202,9 +241,9 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         return;
       }
       case "message.updated": {
-        const info = p.info;
-        if (info?.role !== "assistant" || messages.has(info.id)) {
-          if (info?.role === "assistant" && info.time?.completed)
+        const { info } = event.properties;
+        if (info.role !== "assistant" || messages.has(info.id)) {
+          if (info.role === "assistant" && info.time?.completed)
             lastMessage = info.id;
           return;
         }
@@ -212,7 +251,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         lastMessage = info.id;
         if (info.providerID && info.modelID)
           lastModel = `${info.providerID}/${info.modelID}`;
-        const read = steers.filter((s) => info.time?.created >= s.after);
+        const read = steers.filter((s) => (info.time?.created ?? 0) >= s.after);
         if (read.length) {
           steers.splice(0, read.length);
           // The rest of the turn continues below the steer, as a new answer.
@@ -226,41 +265,48 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         return;
       }
       case "message.part.updated": {
-        const part = p.part;
-        if (!part || !messages.has(part.messageID)) return;
+        const { part: seen } = event.properties;
+        // The user's own messages and other turns' are not read.
+        if (!messages.has(seen.messageID)) return;
+        let part;
+        try {
+          part = parseOpenCodePart(seen);
+        } catch (error) {
+          return rejected(error);
+        }
+        if (!part) return;
         if (part.type === "text" || part.type === "reasoning") {
           if (part.synthetic || part.ignored) return;
           const known = parts.get(part.id);
+          const body = part.text ?? known?.text ?? "";
           parts.set(part.id, {
             type: part.type,
-            text:
-              typeof part.text === "string" ? part.text : (known?.text ?? ""),
+            text: body,
             messageID: part.messageID,
           });
           if (part.type === "text") {
             if (!known) textOrder.push(part.id);
             if (commentary.has(part.id))
-              options.onCommentary?.(part.id, part.text.slice(0, 12000));
+              options.onCommentary?.(part.id, body.slice(0, 12000));
             publish();
           }
           return;
         }
         if (part.type === "tool") {
-          const tool = part as ToolPart;
           // Its first sighting, pending or already further along after a restart.
           if (!tools.has(part.id)) {
             tools.add(part.id);
             toCommentary();
           }
-          const activity = openCodeActivity(tool);
+          const activity = openCodeActivity(part);
           if (activity) options.onActivity?.(activity);
-          const paths = editedPaths(tool);
+          const paths = editedPaths(part);
           if (paths.length) options.onEdit?.(paths);
           return;
         }
-        if (part.type === "patch" && Array.isArray(part.files)) {
+        if (part.type === "patch" && part.files) {
           options.onEdit?.(
-            part.files.filter((f: unknown) => typeof f === "string"),
+            part.files.filter((f): f is string => typeof f === "string"),
           );
           return;
         }
@@ -271,18 +317,19 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         return;
       }
       case "message.part.delta": {
-        const part = parts.get(p.partID);
-        if (!part || p.field !== "text" || typeof p.delta !== "string") return;
-        part.text += p.delta;
+        const { partID, field, delta } = event.properties;
+        const part = parts.get(partID);
+        if (!part || field !== "text") return;
+        part.text += delta;
         if (part.type === "text") {
-          if (commentary.has(p.partID))
-            options.onCommentary?.(p.partID, part.text.slice(0, 12000));
+          if (commentary.has(partID))
+            options.onCommentary?.(partID, part.text.slice(0, 12000));
           else publish();
         }
         return;
       }
       case "permission.asked": {
-        const request = p as PermissionRequest;
+        const request = event.properties;
         void (async () => {
           const reply = ask
             ? await askPermission(request, ask, signal).catch(
@@ -296,7 +343,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         return;
       }
       case "question.asked": {
-        const request = p as QuestionRequest;
+        const request = event.properties;
         void (async () => {
           if (!ask) return call("POST", `/question/${request.id}/reject`, {});
           try {
@@ -317,23 +364,29 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   const settle = async () => {
     if (settled) return;
     try {
-      const last = await call<any[]>(
-        "GET",
+      const last = await fetched(
+        call,
+        "session message list",
+        messageListSchema,
         `/session/${sessionID}/message`,
       ).then((list) => list.filter((m) => m.info.role === "assistant").at(-1));
-      const error = last?.info?.error;
-      if (error?.name === "MessageAbortedError")
-        return finish(new Error("Cancelled by you."));
-      if (error)
+      if (last?.info.error) {
+        const error = readFailure(last.info.error);
+        if (error?.name === "MessageAbortedError")
+          return finish(new Error("Cancelled by you."));
         return finish(
-          new Error(error.data?.message ?? error.name ?? "OpenCode failed."),
+          new Error(error?.data?.message ?? error?.name ?? "OpenCode failed."),
         );
-      if (last?.info?.id) lastMessage = last.info.id;
+      }
+      if (last) lastMessage = last.info.id;
       // Events can go missing across a reconnect; the stored message has it all.
       if (last && messages.has(last.info.id)) {
-        for (const part of last.parts ?? [])
-          if (part.type === "text" && !part.synthetic && parts.has(part.id))
+        for (const seen of last.parts ?? []) {
+          if (seen.type !== "text" || !parts.has(seen.id)) continue;
+          const part = parseOpenCodePart(seen);
+          if (part?.type === "text" && !part.synthetic && part.text != null)
             parts.get(part.id)!.text = part.text;
+        }
         publish();
       }
       if (options.interactionMode === "plan" && answer.trim())
@@ -355,11 +408,13 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   // The event stream is the fast path; this notices a turn that ended unseen.
   const watchdog = setInterval(() => {
     if (settled || !busy) return;
-    void call<Record<string, { type: string }>>("GET", "/session/status")
+    void fetched(call, "session status", sessionStatusSchema, "/session/status")
       .then((status) => {
         if (!status[sessionID]) void settle();
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (error instanceof OpenCodeShapeError) finish(error);
+      });
   }, 5000);
   const deadline = options.runtimeMode
     ? undefined
@@ -378,7 +433,12 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
    * answers after the last prompt, and the questions still waiting.
    */
   const pickUp = async () => {
-    const list = await call<any[]>("GET", `/session/${sessionID}/message`);
+    const list = await fetched(
+      call,
+      "session message list",
+      messageListSchema,
+      `/session/${sessionID}/message`,
+    );
     let prompt = -1;
     list.forEach((m, i) => {
       if (m.info.role === "user") prompt = i;
@@ -389,17 +449,33 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       for (const part of m.parts ?? [])
         handle({ type: "message.part.updated", properties: { part } });
     }
-    for (const [path, type] of [
-      ["/permission", "permission.asked"],
-      ["/question", "question.asked"],
-    ])
-      for (const request of await call<any[]>("GET", path).catch(() => []))
-        if (request?.sessionID === sessionID)
-          handle({ type, properties: request });
-    const status = await call<Record<string, { type: string }>>(
-      "GET",
-      "/session/status",
-    ).catch(() => ({}) as Record<string, { type: string }>);
+    // An OpenCode without these lists, or one that can't answer, has none waiting.
+    const waiting = <T extends { sessionID?: string | null }>(
+      path: string,
+      what: string,
+      schema: z.ZodType<T[]>,
+    ) =>
+      call("GET", path)
+        .catch(() => [])
+        .then((value) => parseOpenCodeResponse(what, schema, value))
+        .then((list) => list.filter((r) => r.sessionID === sessionID));
+    for (const request of await waiting(
+      "/permission",
+      "permission list",
+      permissionListSchema,
+    ))
+      handle({ type: "permission.asked", properties: request });
+    for (const request of await waiting(
+      "/question",
+      "question list",
+      questionListSchema,
+    ))
+      handle({ type: "question.asked", properties: request });
+    const status = parseOpenCodeResponse(
+      "session status",
+      sessionStatusSchema,
+      await call("GET", "/session/status").catch(() => ({})),
+    );
     const now = status[sessionID]?.type;
     if (now === "busy" || now === "retry") busy = true;
     else await settle();
@@ -432,9 +508,13 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       const command = commandPattern.exec(options.prompt.trim());
       const known =
         command &&
-        (await openCode<{ name: string }[]>("GET", "/command", { directory })
-          .then((list) => list.some((c) => c.name === command[1]))
-          .catch(() => false));
+        parseOpenCodeResponse(
+          "command list",
+          commandListSchema,
+          await openCode<unknown>("GET", "/command", { directory }).catch(
+            () => [],
+          ),
+        ).some((c) => c.name === command[1]);
       const images = await imageParts(options.images);
       signal.throwIfAborted();
       if (known && command) {
@@ -495,11 +575,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
 async function openSession(
   options: AgentOptions,
   permission: ReturnType<typeof permissionRules>,
-  call: <T = any>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
-    path: string,
-    body?: unknown,
-  ) => Promise<T>,
+  call: Call,
 ): Promise<string> {
   const session = options.session;
   if (session?.id) {
@@ -516,33 +592,47 @@ async function openSession(
     // Fork keeps the messages before the one it's given: the one after `at`.
     let messageID: string | undefined;
     if (at) {
-      const list = await call<any[]>("GET", `/session/${thread}/message`);
+      const list = await fetched(
+        call,
+        "session message list",
+        messageListSchema,
+        `/session/${thread}/message`,
+      );
       const index = list.findIndex((m) => m.info.id === at);
       if (index < 0) throw new Error("The fork point is gone from OpenCode.");
       messageID = list[index + 1]?.info.id;
     }
-    const forked = await call<{ id: string }>(
-      "POST",
-      `/session/${thread}/fork`,
-      messageID ? { messageID } : {},
+    const forked = parseOpenCodeResponse(
+      "forked session",
+      sessionCreatedSchema,
+      await call(
+        "POST",
+        `/session/${thread}/fork`,
+        messageID ? { messageID } : {},
+      ),
     );
     await call("PATCH", `/session/${forked.id}`, { permission });
     return forked.id;
   }
   // A title keeps OpenCode from spending a model call on naming the session.
-  const created = await call<{ id: string }>("POST", "/session", {
-    title: options.helper ? "Relay helper" : "Relay",
-    permission,
-  });
+  const created = parseOpenCodeResponse(
+    "new session",
+    sessionCreatedSchema,
+    await call("POST", "/session", {
+      title: options.helper ? "Relay helper" : "Relay",
+      permission,
+    }),
+  );
   return created.id;
 }
 
-async function sessionModel(
-  call: <T = any>(method: "GET", path: string) => Promise<T>,
-  sessionID: string,
-) {
-  const session = await call<any>("GET", `/session/${sessionID}`);
-  const model = session?.model;
+async function sessionModel(call: Call, sessionID: string) {
+  const { model } = await fetched(
+    call,
+    "session",
+    sessionSchema,
+    `/session/${sessionID}`,
+  );
   return model?.providerID && model?.id
     ? { providerID: model.providerID, modelID: model.id }
     : undefined;
