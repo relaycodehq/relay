@@ -114,6 +114,8 @@ export function useShellNavigation(
   }
   /** Opens a thread with the panes it had open when it was last on screen. */
   function openChat(id: string) {
+    // The turn and file the last thread showed don't carry over to another.
+    if (id !== chatId) view.clear();
     setChatId(id);
     panes.switchTo(id);
   }
