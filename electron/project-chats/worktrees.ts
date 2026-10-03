@@ -1,10 +1,15 @@
-import type { ProjectChat, WorktreeStatus } from "../../shared/projects";
+import type {
+  ChatWorktree,
+  ProjectChat,
+  WorktreeStatus,
+} from "../../shared/projects";
 import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
   createWorktree,
   moveIntoWorktree,
+  reattachWorktree,
   removeWorktree,
   uncommitted,
   worktreeChanges,
@@ -34,12 +39,14 @@ export class ThreadWorktrees {
     const worktree = chat.worktree;
     if (!worktree) return root;
     if (await worktreeExists(worktree)) return worktree.path!;
-    chat.worktree = await createWorktree(
-      root,
-      this.folder,
-      promptTitle(prompt ?? chat.title),
-      worktree,
-    );
+    chat.worktree =
+      (await reattachWorktree(root, worktree)) ??
+      (await createWorktree(
+        root,
+        this.folder,
+        promptTitle(prompt ?? chat.title),
+        worktree,
+      ));
     await this.core.storage.save(chat);
     return chat.worktree.path!;
   }
@@ -92,6 +99,7 @@ export class ThreadWorktrees {
       ...(merged ? { landed: { by: merged } } : {}),
       ...(worktree.pr ? { pr: worktree.pr } : {}),
       removed: !!worktree.path && !exists,
+      ...(worktree.cleanedUp && !exists ? { cleanedUp: true as const } : {}),
     };
   }
 
@@ -126,18 +134,47 @@ export class ThreadWorktrees {
           `Hand this thread back first; ${chat.cameFrom!.computer} is waiting for it.`,
         );
       await this.core.active.assertIdle(id);
-      if (worktree.path) {
-        threadTerminals.closeWithin(worktree.path);
-        await projectTasks.stopWithin(worktree.path);
-      }
-      await removeWorktree(
-        await this.core.projects.root(chat.projectId),
-        id,
-        worktree,
-      );
-      worktree.removedAt = Date.now();
-      await this.core.storage.save(chat);
+      await this.drop(chat, worktree);
     });
+  }
+
+  /**
+   * Removes a settled thread's worktree but keeps its branch, once `kept`,
+   * asked again in the thread's turn, finds nothing in the way. Returns why
+   * it stayed, if it did.
+   */
+  cleanUp(
+    id: string,
+    kept: (chat: ProjectChat) => Promise<string | undefined>,
+  ) {
+    return this.core.control(id, async () => {
+      const { chat, worktree } = await this.of(id);
+      const why = await kept(chat);
+      if (why) return why;
+      // Idle agent processes started in the folder; the next message resumes their sessions.
+      this.core.sessions.close(id);
+      await this.drop(chat, worktree, { keepBranch: true });
+    });
+  }
+
+  private async drop(
+    chat: ProjectChat,
+    worktree: ChatWorktree,
+    { keepBranch = false } = {},
+  ) {
+    if (worktree.path) {
+      threadTerminals.closeWithin(worktree.path);
+      await projectTasks.stopWithin(worktree.path);
+    }
+    await removeWorktree(
+      await this.core.projects.root(chat.projectId),
+      chat.id,
+      worktree,
+      { keepBranch },
+    );
+    worktree.removedAt = Date.now();
+    if (keepBranch) worktree.cleanedUp = true;
+    await this.core.storage.save(chat);
   }
 
   /** Why a checkout thread can't move into a worktree now, if it can't. */

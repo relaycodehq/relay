@@ -18,7 +18,18 @@ export interface ChatWorktree {
   pr?: { number: number; url: string };
   /** Removed; the next message makes a fresh one from the checkout. */
   removedAt?: number;
+  /**
+   * Removed by itself a while after the thread settled, with nothing
+   * uncommitted in it. Its branch stays, and the next message checks it out again.
+   */
+  cleanedUp?: true;
 }
+/**
+ * Days a settled thread keeps its worktree before Relay removes it; 0 as soon
+ * as nothing is going on in it, null never. Off until asked for: removing a
+ * folder also takes what Git ignores in it, like a hand-copied `.env`.
+ */
+export const DEFAULT_WORKTREE_CLEANUP_DAYS: number | null = null;
 export interface AgentWorktree {
   path: string;
   branch?: string;
@@ -36,6 +47,8 @@ export interface WorktreeStatus {
   landed?: { by: "merge" | "pr" };
   pr?: ChatWorktree["pr"];
   removed: boolean;
+  /** Removed after the thread settled, its branch kept; see `ChatWorktree.cleanedUp`. */
+  cleanedUp?: true;
 }
 /** Every uncommitted edit in the project folder, with the other threads whose turns changed each. */
 export interface WorktreeMove {

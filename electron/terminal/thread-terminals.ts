@@ -194,6 +194,15 @@ class ThreadTerminals {
         this.kill(session, true);
   }
 
+  /** A shell is still open in the folder. */
+  openWithin(path: string) {
+    return [...this.sessions.values()].some(
+      (session) =>
+        session.exitCode === undefined &&
+        (session.cwd === path || session.cwd.startsWith(path + sep)),
+    );
+  }
+
   /** The window reloaded: nothing draws output until it opens a terminal again. */
   detach() {
     this.attached = false;

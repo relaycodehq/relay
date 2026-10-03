@@ -15,12 +15,18 @@ import { join } from "node:path";
 import {
   createWorktree,
   moveIntoWorktree,
+  reattachWorktree,
   removeWorktree,
   worktreeChanges,
+  worktreeHoldsWork,
   type MadeWorktree,
 } from "./worktrees";
 import { mergeBranch, mergePlan } from "./branch-merge";
 import type { ChatWorktree } from "../../shared/projects";
+
+// A Git run from inside another repository's hook or bisect would act on that one.
+for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
+  delete process.env[name];
 
 let root: string;
 let dir: string;
@@ -212,4 +218,113 @@ it("moves a clean checkout's thread into a fresh worktree", async () => {
   const worktree = await moveIntoWorktree(root, dir, "Split the store", "c1");
   expect(await paths(worktree)).toEqual([]);
   expect(git(root, "status", "--porcelain")).toBe("");
+});
+
+const commitSea = async (path: string) => {
+  await writeFile(join(path, "c.ts"), "sea\n");
+  git(path, "add", "c.ts");
+  git(path, "commit", "-qm", "Sea");
+};
+
+it("keeps the branch when asked, with the commits on it", async () => {
+  const worktree = await made();
+  await commitSea(worktree.path);
+  const tip = git(worktree.path, "rev-parse", "HEAD");
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  expect(existsSync(worktree.path)).toBe(false);
+  expect(git(root, "rev-parse", worktree.branch)).toBe(tip);
+  expect(git(root, "worktree", "list", "--porcelain")).not.toContain(
+    worktree.path,
+  );
+});
+
+it("finds nothing to lose in a clean worktree whose commits are on its branch", async () => {
+  await writeFile(join(root, ".gitignore"), "dist\n");
+  git(root, "add", ".gitignore");
+  git(root, "commit", "-qm", "Ignore dist");
+  const worktree = await made();
+  await commitSea(worktree.path);
+  // Build output Git ignores is no reason to keep it.
+  await mkdir(join(worktree.path, "dist"));
+  await writeFile(join(worktree.path, "dist", "out.js"), "built\n");
+  expect(await worktreeHoldsWork(worktree.path)).toBeUndefined();
+});
+
+it("holds work that is uncommitted, untracked or on no branch", async () => {
+  const edited = await made();
+  await writeFile(join(edited.path, "a.ts"), "changed\n");
+  expect(await worktreeHoldsWork(edited.path)).toMatch(/uncommitted/);
+
+  const untracked = await createWorktree(root, dir, "Untracked");
+  await writeFile(join(untracked.path, "new.ts"), "new\n");
+  expect(await worktreeHoldsWork(untracked.path)).toMatch(/uncommitted/);
+
+  const detached = await createWorktree(root, dir, "Detached");
+  git(detached.path, "checkout", "-q", "--detach");
+  await commitSea(detached.path);
+  expect(await worktreeHoldsWork(detached.path)).toMatch(/no branch/);
+  // A branch holding that commit makes it safe again.
+  git(detached.path, "branch", "keep-me");
+  expect(await worktreeHoldsWork(detached.path)).toBeUndefined();
+});
+
+it("refuses the main checkout", async () => {
+  expect(await worktreeHoldsWork(root)).toMatch(/linked worktree/);
+});
+
+it("checks out a kept branch with commits again, at its old folder", async () => {
+  const worktree: ChatWorktree = await made();
+  await commitSea(worktree.path!);
+  worktree.pr = { number: 7, url: "https://example.invalid/pr/7" };
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  // The checkout moved on meanwhile.
+  await writeFile(join(root, "b.ts"), "bee\nmain\n");
+  git(root, "commit", "-qam", "Main moved");
+
+  const back = await reattachWorktree(root, {
+    ...worktree,
+    removedAt: 1,
+    cleanedUp: true,
+  });
+
+  expect(back).toEqual(worktree);
+  expect(await read(join(worktree.path!, "c.ts"))).toBe("sea\n");
+  expect(git(worktree.path!, "branch", "--show-current")).toBe(worktree.branch);
+  // Still counted from where it forked, so the thread's changes read as before.
+  expect(await paths(back!)).toEqual(["c.ts"]);
+});
+
+it("moves a kept branch with nothing of its own up to the checkout", async () => {
+  const worktree = await made();
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  await writeFile(join(root, "b.ts"), "bee\nmain\n");
+  git(root, "commit", "-qam", "Main moved");
+  const head = git(root, "rev-parse", "HEAD");
+
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+
+  expect(back).toEqual({
+    path: worktree.path,
+    branch: worktree.branch,
+    head,
+    start: head,
+    base: head,
+    from: "main",
+  });
+  expect(await read(join(worktree.path, "b.ts"))).toBe("bee\nmain\n");
+});
+
+it("leaves a new worktree to createWorktree when the branch is gone or the folder taken", async () => {
+  const worktree = await made();
+  await removeWorktree(root, randomUUID(), worktree);
+  expect(
+    await reattachWorktree(root, { ...worktree, removedAt: 1 }),
+  ).toBeUndefined();
+
+  const kept = await createWorktree(root, dir, "Kept");
+  await removeWorktree(root, randomUUID(), kept, { keepBranch: true });
+  await mkdir(kept.path);
+  expect(
+    await reattachWorktree(root, { ...kept, removedAt: 1 }),
+  ).toBeUndefined();
 });

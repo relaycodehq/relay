@@ -109,6 +109,16 @@ export function settingsHandlers(ctx: ApiContext) {
         return days;
       },
     ),
+    worktreeCleanupDays: () => ctx.projectChats.worktreeCleanupDays(),
+    saveWorktreeCleanupDays: takes(
+      [z.number().int().min(0).max(90).nullable()],
+      async (days) => {
+        await store.update((s) => {
+          s.worktreeCleanupDays = days;
+        });
+        return days;
+      },
+    ),
     saveSidebarView: takes([z.enum(["threads", "activity"])], async (view) => {
       await store.update((s) => {
         s.sidebarView = view;

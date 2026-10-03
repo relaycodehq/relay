@@ -8,6 +8,7 @@ import {
   elapsedLabel,
   shortAge,
   sentLabel,
+  settledSince,
   snoozePresets,
   wakeLabel,
 } from "./chat-activity";
@@ -240,5 +241,31 @@ describe("auto-settle", () => {
         3,
       ),
     ).toBe(6_000);
+  });
+
+  it("says when a thread moved to Settled, not the day its work stopped", () => {
+    // By hand: the moment it was settled, as long as nothing newer happened.
+    expect(settledSince(chat({ settledAt: 6_000 }), 10_000, 3)).toBe(6_000);
+    expect(
+      settledSince(chat({ settledAt: 6_000, updated: 7_000 }), 10_000, null),
+    ).toBeUndefined();
+    // Quiet for three days: settled at the end of the third, though the shelf shows the first.
+    expect(settledSince(quiet, 1_000 + 5 * day, 3)).toBe(1_000 + 3 * day);
+    expect(settledSince(quiet, 1_000 + 2 * day, 3)).toBeUndefined();
+    expect(
+      settledSince(
+        chat({ updated: 1_000, worktree: { landed: { at: 2_000, by: "pr" } } }),
+        3_000,
+        3,
+      ),
+    ).toBe(2_000);
+    const committed = chat({ updated: 2_000, committedAt: 2_000 });
+    expect(settledSince(committed, 2_000 + COMMIT_QUIET_MS, 3, true)).toBe(
+      2_000 + COMMIT_QUIET_MS,
+    );
+    // Moved back by hand: not settled until something newer happens.
+    expect(
+      settledSince(chat({ updated: 1_000, unsettledAt: 5_000 }), 30 * day, 3),
+    ).toBeUndefined();
   });
 });

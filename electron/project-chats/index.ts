@@ -8,6 +8,7 @@ import {
   DEFAULT_AUTO_SETTLE_DAYS,
   sameTriageState,
   setTriageState,
+  settledSince,
   triageState,
 } from "../../shared/chat-activity";
 import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
@@ -28,9 +29,13 @@ import type {
   ProjectChat,
   ProjectChatPatch,
   ProjectChatSend,
+  ProjectSettings,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import {
+  DEFAULT_WORKTREE_CLEANUP_DAYS,
+  replyRoot,
+} from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { sentAgent } from "../../shared/recipient";
 import { agentRuntimes } from "../agents";
@@ -55,6 +60,7 @@ import { TurnFiles } from "./turn-files";
 import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
 import { ThreadWorktrees } from "./worktrees";
+import { WorktreeCleanup, type CleanupCandidate } from "./worktree-cleanup";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -70,6 +76,7 @@ export class ProjectChats {
   private titles: ThreadTitles;
   private sharing: ChatSharing;
   private worktrees: ThreadWorktrees;
+  private cleanup: WorktreeCleanup;
   private files: TurnFiles;
   private handoffs: ComputerHandoff;
   private runner: TurnRunner;
@@ -128,6 +135,12 @@ export class ProjectChats {
       core,
       join(dirname(dir), "worktrees"),
       this.councils,
+    );
+    this.cleanup = new WorktreeCleanup(
+      core,
+      this.worktrees,
+      this.councils,
+      () => this.cleanupCandidates(),
     );
     this.files = new TurnFiles(core, this.worktrees);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
@@ -193,8 +206,33 @@ export class ProjectChats {
     const days = this.store.get().autoSettleDays;
     return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
   }
+  worktreeCleanupDays(): number | null {
+    const days = this.store.get().worktreeCleanupDays;
+    return days === undefined ? DEFAULT_WORKTREE_CLEANUP_DAYS : days;
+  }
+  /** How the project's threads settle by themselves, its own settings first. */
+  private settling(settings: ProjectSettings | undefined) {
+    return {
+      days:
+        settings?.autoSettleDays !== undefined
+          ? settings.autoSettleDays
+          : this.autoSettleDays(),
+      onCommit: !!settings?.settleOnCommit,
+    };
+  }
   list(projectId: string): ChatSummary[] {
     const { settings } = this.projects.get(projectId);
+    const now = Date.now();
+    const { days, onCommit } = this.settling(settings);
+    return this.live(projectId).map((listed) => {
+      const settledAt = autoSettledAt(listed, now, days, onCommit);
+      return settledAt
+        ? { ...listed, settledAt, autoSettled: true as const }
+        : listed;
+    });
+  }
+  /** The project's threads as saved, with what runs or waits in each now. */
+  private live(projectId: string): ChatSummary[] {
     const chats = (this.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
@@ -207,11 +245,6 @@ export class ProjectChats {
     }
     // Once for the list: it is read on every change to any of its threads.
     const live = this.sessions.pending();
-    const now = Date.now();
-    const autoSettleDays =
-      settings?.autoSettleDays !== undefined
-        ? settings.autoSettleDays
-        : this.autoSettleDays();
     return chats
       .filter((c) => !c.reviewer && !c.thinker)
       .sort((a, b) => b.updated - a.updated)
@@ -237,31 +270,61 @@ export class ProjectChats {
             at: w.at,
           })),
         ];
-        const listed: ChatSummary =
-          active || pending.length
-            ? {
-                ...c,
-                ...(active
-                  ? {
-                      running: true,
-                      runningSince: active.started,
-                      runningAgents: running,
-                      waiting: active.requests.list().length > 0,
-                    }
-                  : {}),
-                ...(pending.length ? { pending } : {}),
-              }
-            : c;
-        const settledAt = autoSettledAt(
-          listed,
-          now,
-          autoSettleDays,
-          settings?.settleOnCommit,
-        );
-        return settledAt
-          ? { ...listed, settledAt, autoSettled: true as const }
-          : listed;
+        return active || pending.length
+          ? {
+              ...c,
+              ...(active
+                ? {
+                    running: true,
+                    runningSince: active.started,
+                    runningAgents: running,
+                    waiting: active.requests.list().length > 0,
+                  }
+                : {}),
+              ...(pending.length ? { pending } : {}),
+            }
+          : c;
       });
+  }
+  /** Threads with a worktree on disk, each with when it settled and how long it keeps the worktree after. */
+  private cleanupCandidates(): CleanupCandidate[] {
+    const onDisk = (c: ChatSummary) =>
+      !!c.worktree?.path && !c.worktree.removedAt;
+    const projectIds = new Set(
+      (this.store.get().chats ?? []).filter(onDisk).map((c) => c.projectId),
+    );
+    const now = Date.now();
+    return [...projectIds].flatMap((projectId) => {
+      let project;
+      try {
+        project = this.projects.get(projectId);
+      } catch {
+        return [];
+      }
+      const { settings } = project;
+      const { days, onCommit } = this.settling(settings);
+      const keepDays =
+        settings?.worktreeCleanupDays !== undefined
+          ? settings.worktreeCleanupDays
+          : this.worktreeCleanupDays();
+      return this.live(projectId)
+        .filter(onDisk)
+        .map((chat) => ({
+          chat,
+          settledSince: settledSince(chat, now, days, onCommit),
+          days: keepDays,
+          checkout: project.path,
+        }));
+    });
+  }
+  /**
+   * Removes the worktrees of threads settled long enough, where nothing is
+   * at work and nothing would be lost; their branches stay.
+   */
+  cleanUpWorktrees() {
+    return this.cleanup
+      .sweep()
+      .catch((e) => console.warn("Could not clean up worktrees:", e));
   }
   /** The subagents Claude started in a thread, its side conversations' too. */
   agents(id: string) {
@@ -606,7 +669,9 @@ export class ProjectChats {
   working() {
     return this.active.size;
   }
+  /** Asked for by the window showing the thread, every few seconds while it does. */
   worktreeStatus(id: string) {
+    this.cleanup.shown(id);
     return this.worktrees.status(id);
   }
   worktreeDiff(id: string, path: string) {

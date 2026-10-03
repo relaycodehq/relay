@@ -291,13 +291,21 @@ export function WorktreeMenu({
       <span
         className="composer-branch-trigger workspace-trigger static"
         title={
-          status?.removed
-            ? "The next message makes a new worktree from the project folder"
-            : "Made with the first message"
+          status?.cleanedUp
+            ? `Removed a while after the thread settled. ${status.branch ?? "Its branch"} stays; the next message checks it out in a worktree again`
+            : status?.removed
+              ? "The next message makes a new worktree from the project folder"
+              : "Made with the first message"
         }
       >
         <FolderGit2 size={13} />
-        <span>{status?.removed ? "Worktree removed" : "Worktree"}</span>
+        <span>
+          {status?.cleanedUp
+            ? "Worktree cleaned up"
+            : status?.removed
+              ? "Worktree removed"
+              : "Worktree"}
+        </span>
       </span>
     );
   const files = status.files.length;

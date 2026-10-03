@@ -41,6 +41,8 @@ export const projectSettingsSchema = z
     autoSettleDays: z.number().int().min(1).max(90).nullable().optional(),
     /** Its threads settle once a turn ends with the agent's own commit. */
     settleOnCommit: z.literal(true).optional(),
+    /** Days after settling before its threads' worktrees are removed; null never. */
+    worktreeCleanupDays: z.number().int().min(0).max(90).nullable().optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;

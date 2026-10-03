@@ -75,6 +75,31 @@ export function autoSettledAt(
   days: number | null,
   onCommit = false,
 ): number | undefined {
+  return autoSettle(chat, now, days, onCommit)?.at;
+}
+
+/**
+ * When a thread moved to Settled, by hand or by itself; undefined while it
+ * isn't settled. Unlike the shelf's backdated `settledAt`, this is the moment
+ * it settled, so waiting a set time after settling starts there.
+ */
+export function settledSince(
+  chat: AutoSettled,
+  now: number,
+  days: number | null,
+  onCommit = false,
+): number | undefined {
+  if (chatSettled(chat)) return chat.settledAt;
+  return autoSettle(chat, now, days, onCommit)?.since;
+}
+
+/** `at` is what the shelf orders by; `since` is when the thread moved there. */
+function autoSettle(
+  chat: AutoSettled,
+  now: number,
+  days: number | null,
+  onCommit: boolean,
+): { at: number; since: number } | undefined {
   if (
     (days == null && !onCommit) ||
     chat.archivedAt ||
@@ -97,12 +122,14 @@ export function autoSettledAt(
     chat.committedAt >= chat.updated &&
     now - chat.committedAt >= COMMIT_QUIET_MS
   )
-    return chat.committedAt;
+    return { at: chat.committedAt, since: chat.committedAt + COMMIT_QUIET_MS };
   if (days == null) return undefined;
   const merged = chat.worktree?.landed?.at;
-  if (merged && merged > chat.updated) return merged;
+  if (merged && merged > chat.updated) return { at: merged, since: merged };
   // Backdated to the last activity, so the shelf orders by when work stopped.
-  if (now - chat.updated >= days * 86_400_000) return chat.updated;
+  const quiet = days * 86_400_000;
+  if (now - chat.updated >= quiet)
+    return { at: chat.updated, since: chat.updated + quiet };
   return undefined;
 }
 

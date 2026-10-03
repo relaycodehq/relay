@@ -28,6 +28,8 @@ interface State {
   sidebarView?: import("../../shared/types").SidebarView;
   /** Days without activity before a thread settles; null never, unset the default. */
   autoSettleDays?: number | null;
+  /** Days after settling before a thread's worktree is removed; null never, unset the default. */
+  worktreeCleanupDays?: number | null;
   chats?: import("../../shared/projects").ChatSummary[];
   roomHosting?: string;
   roomConnections?: Record<string, string>;

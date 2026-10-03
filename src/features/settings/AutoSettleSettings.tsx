@@ -2,6 +2,7 @@ import { useSavedSetting } from "./useSavedSetting";
 import { api } from "../../lib/api";
 import { SettingsSelect } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
+import { cleanupChoices, cleanupLabel } from "../projects/ProjectSettings";
 
 const choices = [
   { value: "off", label: "Never" },
@@ -34,6 +35,37 @@ export function AutoSettleSelect() {
           ...(choices.some((c) => c.value === value)
             ? []
             : [{ value, label: `After ${value} days` }]),
+        ]}
+        onChange={(next) => days.set(next === "off" ? null : Number(next))}
+      />
+      {days.error && <ErrorBox error={days.error} />}
+    </>
+  );
+}
+
+/** How long a settled thread keeps its worktree before Relay removes it. */
+export function WorktreeCleanupSelect() {
+  const days = useSavedSetting(
+    {
+      queryKey: ["worktree-cleanup-days"],
+      queryFn: () => api.worktreeCleanupDays(),
+    },
+    (days) => api.saveWorktreeCleanupDays(days),
+    ["worktree-cleanup-days"],
+  );
+  const current = days.value;
+  if (current === undefined) return null;
+  const value = current === null ? "off" : String(current);
+  return (
+    <>
+      <SettingsSelect<string>
+        label="Remove settled threads' worktrees"
+        value={value}
+        options={[
+          ...cleanupChoices,
+          ...(cleanupChoices.some((c) => c.value === value)
+            ? []
+            : [{ value, label: cleanupLabel(current) }]),
         ]}
         onChange={(next) => days.set(next === "off" ? null : Number(next))}
       />

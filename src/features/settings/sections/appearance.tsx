@@ -18,7 +18,7 @@ import { useSavedSetting } from "../useSavedSetting";
 import type { SettingEntry } from "../settings-search";
 import { ErrorBox } from "../../../ui/ui";
 import { Switch } from "../../../ui/SettingsCard";
-import { AutoSettleSelect } from "../AutoSettleSettings";
+import { AutoSettleSelect, WorktreeCleanupSelect } from "../AutoSettleSettings";
 import {
   ComposerToolbarReset,
   ComposerToolbarSettings,
@@ -190,6 +190,16 @@ export function useAppearanceEntries(): SettingEntry[] {
       keywords:
         "settle settled auto automatic inactive quiet days merged pull request activity sidebar done",
       render: () => <AutoSettleSelect />,
+    },
+    {
+      id: "worktree-cleanup",
+      category: "appearance",
+      title: "Remove settled threads' worktrees",
+      description:
+        "Free the disk a settled thread's worktree takes, once it has been settled this long. Its branch stays, and writing in the thread again checks the branch out in a new worktree. A worktree with uncommitted changes, or with something running in it, stays. A project can set its own under Projects.",
+      keywords:
+        "worktree cleanup clean remove delete disk space settled branch folder prune",
+      render: () => <WorktreeCleanupSelect />,
     },
     {
       id: "sidebar-auto-hide",

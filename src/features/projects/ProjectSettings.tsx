@@ -247,6 +247,63 @@ export function ProjectAutoSettleSelect({ project }: { project: Project }) {
   );
 }
 
+export const cleanupChoices = [
+  { value: "off", label: "Never" },
+  { value: "0", label: "Once it settles" },
+  { value: "1", label: "A day after it settles" },
+  { value: "3", label: "3 days after it settles" },
+  { value: "7", label: "A week after it settles" },
+  { value: "14", label: "2 weeks after it settles" },
+  { value: "30", label: "30 days after it settles" },
+];
+export const cleanupLabel = (days: number | null) =>
+  cleanupChoices.find((c) => c.value === (days === null ? "off" : String(days)))
+    ?.label ?? `${days} days after it settles`;
+
+export function ProjectWorktreeCleanupSelect({
+  project,
+}: {
+  project: Project;
+}) {
+  const days = useProjectSetting(project, "worktreeCleanupDays");
+  const appDays = useQuery({
+    queryKey: ["worktree-cleanup-days"],
+    queryFn: () => api.worktreeCleanupDays(),
+  });
+  const own = days.value;
+  const value = own === undefined ? "app" : own === null ? "off" : String(own);
+  return (
+    <>
+      <div className="composer-tools model-field">
+        <ComposerSelect
+          label="Remove settled threads' worktrees"
+          value={value}
+          options={[
+            {
+              value: "app",
+              label:
+                appDays.data === undefined
+                  ? "Like the app"
+                  : `Like the app (${cleanupLabel(appDays.data).toLowerCase()})`,
+            },
+            ...cleanupChoices,
+            ...(own === undefined ||
+            cleanupChoices.some((c) => c.value === value)
+              ? []
+              : [{ value, label: cleanupLabel(own) }]),
+          ]}
+          onChange={(next) =>
+            days.change(
+              next === "app" ? undefined : next === "off" ? null : +next,
+            )
+          }
+        />
+      </div>
+      {!!days.error && <ErrorBox error={days.error} />}
+    </>
+  );
+}
+
 export function ProjectCommitSettleSwitch({ project }: { project: Project }) {
   const commit = useProjectSetting(project, "settleOnCommit");
   return (

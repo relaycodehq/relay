@@ -73,17 +73,7 @@ export async function createWorktree(
   name: string,
   previous?: ChatWorktree,
 ): Promise<MadeWorktree> {
-  const head = await git(root, [
-    "rev-parse",
-    "-q",
-    "--verify",
-    "HEAD^{commit}",
-  ]).then(
-    (s) => s.trim(),
-    () => {
-      throw new Error("Make a first commit before working in a worktree.");
-    },
-  );
+  const head = await checkoutHead(root);
   const from = (await git(root, ["branch", "--show-current"])).trim();
   const folder = join(dir, slug(basename(root)));
   await mkdir(folder, { recursive: true });
@@ -357,11 +347,102 @@ export const worktreeDiff = async (worktree: ChatWorktree, path: string) =>
     path,
   );
 
-/** Removes the worktree and its branch, keeping a snapshot of what it held. */
+/**
+ * What removing the worktree would lose that Git couldn't give back, if
+ * anything: edits not committed, files Git doesn't track yet (ignored ones
+ * aside), or commits no branch, tag or remote branch holds, like ones made on
+ * a detached HEAD. Refuses a folder that isn't a linked worktree.
+ */
+export async function worktreeHoldsWork(path: string) {
+  // A main checkout keeps a `.git` folder; a linked worktree only a file pointing to it.
+  if (!(await lstat(join(path, ".git")).catch(() => null))?.isFile())
+    return "it isn't a linked worktree";
+  if (await git(path, ["status", "--porcelain", "--untracked-files=normal"]))
+    return "it has uncommitted changes";
+  const stray = await git(path, [
+    "rev-list",
+    "-n1",
+    "HEAD",
+    "--not",
+    "--branches",
+    "--tags",
+    "--remotes",
+  ]);
+  if (stray.trim()) return "it has commits on no branch";
+}
+
+/**
+ * Brings back a worktree removed with its branch kept, at its old folder:
+ * the branch as it was when it holds commits the checkout lacks, so the
+ * thread carries on where it stopped; otherwise the branch moves up to the
+ * checkout's commit, like a fresh worktree. Undefined when it can't: the
+ * branch is gone, its folder is taken, or it's checked out elsewhere.
+ */
+export async function reattachWorktree(
+  root: string,
+  previous: ChatWorktree,
+): Promise<ChatWorktree | undefined> {
+  const { path, branch } = previous;
+  if (!path || branch !== `relay/${basename(path)}` || (await exists(path)))
+    return undefined;
+  const kept = await git(root, [
+    "rev-parse",
+    "-q",
+    "--verify",
+    `refs/heads/${branch}^{commit}`,
+  ]).then(
+    () => true,
+    () => false,
+  );
+  if (!kept) return undefined;
+  const head = await checkoutHead(root);
+  const ahead = Number(
+    await git(root, ["rev-list", "--count", `${head}..refs/heads/${branch}`]),
+  );
+  await git(root, ["worktree", "prune"]).catch(() => {});
+  try {
+    if (ahead) await git(root, ["worktree", "add", "-q", path, branch], 120000);
+    // Everything on it is in the checkout's commit, so moving it loses nothing.
+    else
+      await git(
+        root,
+        ["worktree", "add", "-q", "-B", branch, path, head],
+        120000,
+      );
+  } catch {
+    return undefined;
+  }
+  await linkModules(root, path);
+  const { removedAt: _removed, cleanedUp: _cleaned, ...rest } = previous;
+  if (ahead) return rest;
+  const from = (await git(root, ["branch", "--show-current"])).trim();
+  return {
+    path,
+    branch,
+    head,
+    start: head,
+    base: head,
+    ...(from ? { from } : {}),
+  };
+}
+
+const checkoutHead = (root: string) =>
+  git(root, ["rev-parse", "-q", "--verify", "HEAD^{commit}"]).then(
+    (s) => s.trim(),
+    () => {
+      throw new Error("Make a first commit before working in a worktree.");
+    },
+  );
+
+/**
+ * Removes the worktree, keeping a snapshot of what it held, and its branch
+ * too unless `keepBranch`.
+ */
 export async function removeWorktree(
   root: string,
   chatId: string,
   worktree: ChatWorktree,
+  { keepBranch = false } = {},
 ) {
   if (worktree.path && (await exists(worktree.path))) {
     const tree = await snapshotTree(worktree.path).catch(() => null);
@@ -381,6 +462,6 @@ export async function removeWorktree(
       },
     );
   }
-  if (worktree.branch)
+  if (worktree.branch && !keepBranch)
     await git(root, ["branch", "-D", worktree.branch]).catch(() => {});
 }

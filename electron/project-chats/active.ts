@@ -145,6 +145,10 @@ export class ActiveTurns {
   sideRunning(key: string) {
     return this.sides.has(key);
   }
+  /** A side question is being answered in the thread. */
+  hasSide(id: string) {
+    return [...this.sides.keys()].some((key) => key.startsWith(`${id}:`));
+  }
   /** A side question's answer, running until `job` settles. */
   runSide(key: string, abort: AbortController, job: Promise<unknown>) {
     this.sides.set(key, { abort, job });

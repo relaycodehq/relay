@@ -7,6 +7,7 @@ import {
   ProjectNameField,
   ProjectPicker,
   ProjectWorkspaceSelect,
+  ProjectWorktreeCleanupSelect,
   useSettingsProjects,
 } from "../../projects/ProjectSettings";
 
@@ -86,5 +87,20 @@ export function useProjectEntries(
       keywords: "settle settled auto commit git done finished trigger agent",
       render: () => <ProjectCommitSettleSwitch project={project} />,
     },
+    ...(project.plain
+      ? []
+      : [
+          {
+            id: "project-worktree-cleanup",
+            category: "projects",
+            section: "Worktrees",
+            title: "Remove settled threads' worktrees",
+            description:
+              "Once this project's thread has been settled this long, its worktree goes and its branch stays. A worktree with uncommitted changes, or with something running in it, stays.",
+            keywords:
+              "worktree cleanup clean remove delete disk space settled branch folder prune",
+            render: () => <ProjectWorktreeCleanupSelect project={project} />,
+          } satisfies SettingEntry,
+        ]),
   ];
 }

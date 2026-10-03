@@ -191,6 +191,8 @@ const methods = [
   "saveKeepAwake",
   "autoSettleDays",
   "saveAutoSettleDays",
+  "worktreeCleanupDays",
+  "saveWorktreeCleanupDays",
   "saveSidebarView",
   "newThreadAgent",
   "saveNewThreadAgent",

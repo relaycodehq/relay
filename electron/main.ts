@@ -355,7 +355,10 @@ app
     setInterval(() => {
       chats.summariesChanged();
       void pullMerges.sweep();
+      void chats.cleanUpWorktrees();
     }, 5 * 60_000).unref();
+    // Not right at launch: the thread the window opens on first says it's shown.
+    setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
     const handoffDir = join(app.getPath("userData"), "handoffs");
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {
