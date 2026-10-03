@@ -71,6 +71,8 @@ export function useThreadActions({
     patch(c, (entry) => triaged(entry, action, Date.now()));
     try {
       await api.triageProjectChat(c.id, action);
+    } catch (e) {
+      failed(e);
     } finally {
       refresh(c);
     }
@@ -155,7 +157,7 @@ export function useThreadActions({
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "triage":
-          return void triage(c, action.triage).catch(failed);
+          return void triage(c, action.triage);
       }
     },
   };
