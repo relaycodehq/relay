@@ -46,7 +46,11 @@ it("shares private history, streams only to the requester, runs each participant
   const peers: any[] = [];
   let finish!: (s: string) => void;
   let askApproval = true;
+  const turns = () =>
+    vi.mocked(runCodex).mock.calls.filter(([options]) => !options.helper);
   vi.mocked(runCodex).mockImplementation(async (options) => {
+    // The thread-title helper runs beside the agent's turn; it neither asks nor streams.
+    if (options.helper) return "";
     await options.session?.onId("local-session-" + options.cwd);
     options.onText("Private streamed partial");
     if (askApproval) {
@@ -167,7 +171,7 @@ it("shares private history, streams only to the requester, runs each participant
         (m: any) => m.role === "assistant",
       ),
     ).toBe(false);
-    expect(vi.mocked(runCodex).mock.calls[0][0].cwd).toBe(alice.dir);
+    expect(turns()[0][0].cwd).toBe(alice.dir);
     const pending = (await alice.chats.get(chat.id)).requests[0];
     expect(pending.title).toBe("Private local approval");
     const remote = await bob.chats.sync(chat.id);
@@ -209,15 +213,13 @@ it("shares private history, streams only to the requester, runs each participant
       author: "Alice",
       status: "complete",
     });
-    expect(runCodex).toHaveBeenCalledTimes(1);
+    expect(turns()).toHaveLength(1);
     await bob.chats.send(chat.id, {
       ...send("@codex What about the edge case?"),
       parentId: delivered.messages[0].id,
     });
     // The agent starts once Relay has snapshotted the checkout for the turn.
-    await vi.waitFor(() =>
-      expect(vi.mocked(runCodex).mock.calls[1]?.[0].cwd).toBe(bob.dir),
-    );
+    await vi.waitFor(() => expect(turns()[1]?.[0].cwd).toBe(bob.dir));
     await vi.waitFor(() =>
       expect(
         bob.events.some(
