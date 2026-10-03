@@ -7,7 +7,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { agentProviders } from "../../../shared/agents";
+import { agentProviders, agents } from "../../../shared/agents";
 import { effortLabels, type ReasoningEffort } from "../../../shared/settings";
 import { useCatalogs } from "../agents/useCatalogs";
 import { useQuickKeysLabel } from "./effort-shortcut";
@@ -164,7 +164,7 @@ export function QuickSwitchSettings() {
                       provider: next,
                       model,
                       reasoningEffort: keep ? p.reasoningEffort : "",
-                      fast: next === "codex" && p.fast,
+                      fast: agents[next].fast && p.fast,
                     });
                   }}
                 />
@@ -187,7 +187,7 @@ export function QuickSwitchSettings() {
                     />
                   </>
                 )}
-                {p.provider === "codex" && (
+                {agents[p.provider].fast && (
                   <button
                     type="button"
                     className="composer-control composer-fast"

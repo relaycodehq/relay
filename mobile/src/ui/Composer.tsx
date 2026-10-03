@@ -452,7 +452,7 @@ export const Composer = forwardRef<
             <Text numberOfLines={1} style={[styles.toolText, { color: t.muted }]}>
               {modelLabel}
               {settings.choice.reasoningEffort ? ` · ${effortLabel(settings.choice.reasoningEffort)}` : ""}
-              {provider === "codex" && settings.choice.fast ? " · Fast" : ""}
+              {agents[provider].fast && settings.choice.fast ? " · Fast" : ""}
             </Text>
             <ChevronDown size={12} color={t.faint} />
           </Tool>

@@ -2,6 +2,7 @@ import { persistedStore } from "../../lib/persisted-store";
 import { z } from "zod";
 import {
   agentName,
+  agents,
   agentProviderSchema,
   type AgentProvider,
 } from "../../../shared/agents";
@@ -32,7 +33,7 @@ const presetSchema = z.object({
   /** "" runs the agent's default model. */
   model: z.string().trim().max(160),
   reasoningEffort: reasoningEffortSchema,
-  /** Codex's Fast service tier. */
+  /** The Fast service tier, for agents that have one. */
   fast: z.boolean().catch(false),
 });
 export type QuickPreset = z.infer<typeof presetSchema>;
@@ -90,7 +91,7 @@ export const quickItems = (
       ? (modelsOf(p.provider)?.find((m) => m.id === p.model)?.name ?? p.model)
       : `${agentName(p.provider)} default`,
     effort: p.reasoningEffort ? effortLabels[p.reasoningEffort] : "Default",
-    fast: p.provider === "codex" && p.fast,
+    fast: agents[p.provider].fast && p.fast,
   }));
 
 /** What the composer runs now, in a preset's terms. */
@@ -118,7 +119,7 @@ export function presetIndex(
     (p) =>
       sameModel(p, run) &&
       p.reasoningEffort === run.reasoningEffort &&
-      (p.provider !== "codex" || p.fast === run.fast),
+      (!agents[p.provider].fast || p.fast === run.fast),
   );
   if (exact >= 0) return exact;
   if (presets[last] && sameModel(presets[last], run)) return last;

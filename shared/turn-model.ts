@@ -1,4 +1,9 @@
-import type { AgentDefaults, AgentModel, AgentProvider } from "./agents";
+import {
+  agents,
+  type AgentDefaults,
+  type AgentModel,
+  type AgentProvider,
+} from "./agents";
 import type { InteractionMode } from "./agent-modes";
 import {
   claudeArgs,
@@ -18,7 +23,7 @@ export interface TurnModel {
   /** "" when Default's level is unknown. */
   effort: ReasoningEffort;
   effortByDefault?: boolean;
-  /** Codex's Fast service tier. */
+  /** The Fast service tier, for agents that have one. */
   fast?: boolean;
   /** Claude's context window, when the thread picked one. */
   window?: "200k" | "1M";
@@ -55,7 +60,7 @@ export function resolveTurnModel(
     ...(picked ? {} : { byDefault: true }),
     effort,
     ...(chosen ? {} : { effortByDefault: true }),
-    ...(provider === "codex" && input.choice.fast ? { fast: true } : {}),
+    ...(agents[provider].fast && input.choice.fast ? { fast: true } : {}),
     ...(claude && input.contextWindow === "200k"
       ? { window: "200k" as const }
       : claude && claudeContextWindow(picked) === "1m"
