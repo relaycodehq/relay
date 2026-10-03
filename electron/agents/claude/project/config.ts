@@ -10,8 +10,11 @@ export type ClaudeRunOptions = AgentOptions & {
 };
 
 export function claudePermissionMode(
-  options: Pick<AgentOptions, "runtimeMode" | "interactionMode">,
+  options: Pick<AgentOptions, "runtimeMode" | "interactionMode" | "readOnly">,
 ): PermissionMode {
+  // Only "default" always asks canUseTool, which is what holds a reviewer back
+  // from Bash; the other modes can approve a call without it.
+  if (options.readOnly) return "default";
   if (options.interactionMode === "plan") return "plan";
   return {
     "approval-required": "default",
