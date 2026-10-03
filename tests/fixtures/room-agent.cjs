@@ -1009,11 +1009,20 @@ if (args.includes("--permission-prompt-tool")) {
       }
     } else if (m.method === "turn/interrupt") {
       record({ interrupt: m.params });
-      send({ id: m.id, result: {} });
-      send({
-        method: "turn/completed",
-        params: { threadId: "fixture-thread", turn: { status: "interrupted" } },
-      });
+      // Real agents take a while to wind down after being stopped.
+      setTimeout(
+        () => {
+          send({ id: m.id, result: {} });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { status: "interrupted" },
+            },
+          });
+        },
+        Number(process.env.RELAY_FIXTURE_STOP_DELAY ?? 0),
+      );
     } else
       send({
         id: m.id,

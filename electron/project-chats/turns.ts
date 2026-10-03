@@ -102,6 +102,7 @@ export class ChatTurns {
     if (this.core.closing()) throw new Error("Relay is closing.");
     const chat = await this.core.storage.load(id);
     assertHere(chat);
+    await this.core.active.finished(id);
     if (this.core.active.has(id))
       throw new Error("This thread is already running.");
     if (!chat.lastInput)
@@ -602,6 +603,7 @@ export class ChatTurns {
   compact(id: string, parentId?: string, instructions?: string) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
+      await this.core.active.finished(id);
       if (this.core.active.has(id))
         throw new Error("Wait for the current answer before compacting.");
       const chat = await this.core.storage.load(id);

@@ -100,6 +100,8 @@ export class TurnRunner {
       (m) => this.core.emit({ chatId: chat.id, message: m }),
       () => void this.core.storage.save(chat).catch(() => abort.abort()),
     );
+    const stop = () => answer.stop();
+    abort.signal.addEventListener("abort", stop, { once: true });
     const branch = input.parentId ?? undefined;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const attached = chat.messages.find((m) => m.id === input.id)?.images ?? [];
@@ -242,7 +244,7 @@ export class TurnRunner {
           ...options,
           contextWindow: input.contextWindow,
         });
-        answer.message.body = body;
+        if (!answer.stopped) answer.message.body = body;
       } finally {
         // Before the status changes: a finished answer means a settled checkout.
         if (before) {
@@ -292,6 +294,7 @@ export class TurnRunner {
       }
       if (rules.pausesQueue(failed)) chat.queuePaused = true;
     } finally {
+      abort.signal.removeEventListener("abort", stop);
       const owner = this.core.active.get(chat.id);
       if (owner?.abort === abort) owner.finishing = true;
       const ended = answer.message;
@@ -300,7 +303,8 @@ export class TurnRunner {
           sessionFor(chat, provider, branch).through = ended.id;
         if (turn.kind === "reply") turn.briefed?.();
       }
-      ended.ended = Date.now();
+      // A stopped answer ended when it was stopped, not when its agent let go.
+      ended.ended = answer.stopped ? (ended.ended ?? Date.now()) : Date.now();
       // A finished answer is new activity: it reorders the thread and wakes
       // a snoozed or settled one.
       chat.updated = ended.ended;

@@ -47,6 +47,8 @@ export class AnswerRecorder {
   private flush: ReturnType<typeof setTimeout> | null = null;
   private checkpoint: ReturnType<typeof setTimeout> | null = null;
   private model?: TurnModel;
+  /** Stopped by the user; see `stop`. */
+  stopped = false;
   constructor(
     private chat: ProjectChat,
     public message: ChatMessage,
@@ -66,10 +68,12 @@ export class AnswerRecorder {
     }, 1000);
   }
   text(body: string) {
+    if (this.stopped) return;
     this.message.body = body;
     this.changed();
   }
   plan(body: string) {
+    if (this.stopped) return;
     this.message.proposedPlan = true;
     this.text(body);
   }
@@ -88,6 +92,7 @@ export class AnswerRecorder {
     this.changed();
   }
   activity(activity: AgentActivity) {
+    if (this.stopped) return;
     const trace = (this.message.trace ??= []);
     const index = trace.findIndex((a) => a.id === activity.id);
     const entry = { kind: "activity" as const, id: activity.id, activity };
@@ -103,6 +108,7 @@ export class AnswerRecorder {
     this.changed();
   }
   commentary(id: string, text: string | null) {
+    if (this.stopped) return;
     const trace = (this.message.trace ??= []);
     const index = trace.findIndex((a) => a.id === id);
     if (text === null) {
@@ -123,6 +129,7 @@ export class AnswerRecorder {
    * it, so the answer to it doesn't stream into the reply above.
    */
   continueBelow(steerId: string) {
+    if (this.stopped) return;
     const { chat } = this;
     const steer = chat.messages.find((m) => m.id === steerId);
     if (!steer) return;
@@ -148,6 +155,18 @@ export class AnswerRecorder {
     chat.messages.splice(chat.messages.indexOf(steer) + 1, 0, this.message);
     this.publish();
     this.changed();
+  }
+  /**
+   * The user stopped the turn: the answer shows as stopped now, as it stands,
+   * rather than once the agent has wound down. What the agent still writes
+   * meanwhile is dropped; `end` later adds what the turn changed.
+   */
+  stop() {
+    if (this.stopped || this.message.status !== "streaming") return;
+    this.stopped = true;
+    this.message.status = "cancelled";
+    this.message.ended = Date.now();
+    this.end();
   }
   /** The turn ended with the message's status: what still ran ends with it, and the window hears it now. */
   end() {

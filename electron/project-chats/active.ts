@@ -18,6 +18,8 @@ export interface ActiveChat {
   ended: Promise<void>;
   /** The answer is written; the turn only saves before giving the thread back. */
   finishing?: boolean;
+  /** Stopped: the answer already shows it, while the agent winds down. */
+  stopping?: boolean;
   end: () => void;
 }
 
@@ -77,6 +79,15 @@ export class ActiveTurns {
     return active;
   }
 
+  /** Stops the thread's answer; the thread reads as idle while the agent winds down. */
+  stop(id: string) {
+    const active = this.turns.get(id);
+    if (!active) return;
+    active.stopping = true;
+    active.abort.abort();
+    this.changed(id);
+  }
+
   /** Gives the thread back: the turn asks nothing more, and `halt` stops waiting. */
   release(id: string, active: ActiveChat) {
     active.requests.close();
@@ -86,13 +97,18 @@ export class ActiveTurns {
   }
 
   /**
-   * A turn whose answer shows as finished still saves before it gives the
-   * thread back; whatever the user does next waits for that, not refuses.
+   * A turn whose answer shows as finished or stopped still winds down before
+   * it gives the thread back; whatever the user does next waits for that,
+   * not refuses. An agent can take a few seconds to stop.
    */
   async finished(id: string) {
     const active = this.turns.get(id);
-    if (active?.finishing)
-      await withTimeout(active.ended, 10_000, "").catch(() => {});
+    if (active?.finishing || active?.stopping)
+      await withTimeout(
+        active.ended,
+        active.stopping ? 30_000 : 10_000,
+        "",
+      ).catch(() => {});
   }
 
   async assertIdle(id: string) {

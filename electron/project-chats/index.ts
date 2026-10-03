@@ -214,7 +214,8 @@ export class ProjectChats {
         const crew = [
           this.active.get(c.id),
           ...(helpers.get(c.id) ?? []).sort((a, b) => a.started - b.started),
-        ].filter((a): a is ActiveChat => !!a);
+          // A stopped answer reads as stopped while its agent winds down.
+        ].filter((a): a is ActiveChat => !!a && !a.stopping);
         const active = crew[0];
         const running = [
           ...new Set(
@@ -539,6 +540,9 @@ export class ProjectChats {
           return this.asides.ask(chat, input);
       }
       if (input.sendAt) return this.schedule.add(id, input);
+      // Sent right after a stop: it waits for the agent to let go, rather
+      // than queueing behind the answer the stop paused the queue for.
+      await this.active.finished(id);
       if (
         !this.active.has(id) &&
         !this.councils.busy(await this.storage.load(id))
@@ -687,7 +691,7 @@ export class ProjectChats {
   async cancel(id: string) {
     const chat = this.storage.cached(id);
     if (chat) chat.queuePaused = true;
-    this.active.get(id)?.abort.abort();
+    this.active.stop(id);
     if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }

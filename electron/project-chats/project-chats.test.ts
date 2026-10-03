@@ -1484,6 +1484,39 @@ it("steers an active Codex turn with a screenshot", async () => {
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
 });
 
+it("shows a stop at once and sends the next message once the agent lets go", async () => {
+  vi.stubEnv("RELAY_FIXTURE_STOP_DELAY", "1500");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+        "cache guard",
+      ),
+    { timeout: 6000 },
+  );
+  const answerId = (await chats.get(chat.id)).messages.at(-1)!.id;
+  const stoppedAt = Date.now();
+  await chats.cancel(chat.id);
+  const shown = events.filter((e) => e.message.id === answerId).at(-1)?.message;
+  expect(shown?.status).toBe("cancelled");
+  expect(Date.now() - stoppedAt).toBeLessThan(500);
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.running,
+  ).toBeUndefined();
+  // The agent is still winding down; the next message waits for it.
+  expect(chats.hasActiveProject(projectId)).toBe(true);
+  const next = input("@codex carry on");
+  await chats.send(chat.id, next);
+  expect(Date.now() - stoppedAt).toBeGreaterThanOrEqual(1400);
+  const saved = await chats.get(chat.id);
+  expect(saved.queue ?? []).toHaveLength(0);
+  expect(saved.messages.find((m) => m.id === answerId)?.status).toBe(
+    "cancelled",
+  );
+  expect(saved.messages.some((m) => m.id === next.id)).toBe(true);
+}, 15000);
+
 it("resumes a stopped answer with the agent picked since", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
