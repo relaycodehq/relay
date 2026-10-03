@@ -43,18 +43,11 @@ function cyclesIn(group: string, valuesOnly: boolean) {
   return findCycles(files, group, { valuesOnly });
 }
 
-// Cycles between top-level folders of electron/ that exist today, each as the
-// sorted folders tangled together. Value imports only: the persisted `Store`
-// type links most folders on purpose. The test fails on a cycle that isn't
-// listed and on a listed one that is gone, so whoever breaks one deletes its
-// entry here.
-const knownElectronCycles: string[][] = [
-  // git reads agents for helper runs, agents start rooms' Codex, rooms check
-  // out through git and ask pull-requests' questions, which read git.
-  ["agents", "git", "pull-requests", "rooms"],
-  // A handed-off chat is read through handoff/git and sent through project-chats.
-  ["handoff", "project-chats"],
-];
+// Cycles between top-level folders of electron/ that are tolerated for now,
+// each as the sorted folders tangled together; none today. Value imports only:
+// the persisted `Store` type links most folders on purpose. The test fails on a
+// cycle that isn't listed and on a listed one that is gone.
+const knownElectronCycles: string[][] = [];
 
 describe("source layout", () => {
   it("keeps src/lib and src/ui free of features and the shell", () => {
