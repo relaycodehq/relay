@@ -92,7 +92,8 @@ export const Composer = forwardRef<
     running: boolean;
     disabled?: boolean;
     context?: ContextUsage;
-    onSend: (message: Outgoing) => Promise<void>;
+    /** Resolves `false` when the message wasn't sent, to keep the draft. */
+    onSend: (message: Outgoing) => Promise<void | false>;
     onStop?: () => void;
     /** Relay's workspace commands: /changes, /files, /new, /clear, /compact. */
     onCommand?: (name: RelayCommand, args: string) => CommandResult | Promise<CommandResult>;
@@ -356,13 +357,14 @@ export const Composer = forwardRef<
     try {
       // Screenshots taken back with their tokens go out in token order, the tokens renumbered to match.
       const numbered = numberImages(draft, images);
-      await onSend({
+      const sent = await onSend({
         body: numbered.text,
         settings,
         images: numbered.images,
         ...(sendAt ? { sendAt } : running ? { delivery: delivery ?? "queue" } : {}),
       });
-      setImages([]);
+      if (sent === false) setText((typed) => typed || draft);
+      else setImages([]);
     } catch (e) {
       setText((typed) => typed || draft);
       setError(e instanceof Error ? e.message : String(e));

@@ -166,6 +166,22 @@ export function remotePlanGoAhead(
   return { send: { id, ...send }, nextSettings: { provider: to, ...next } };
 }
 
+/**
+ * What a conversation's composer opens on. `last` is the thread's latest
+ * send, which a side reply may have made; when it went to another
+ * conversation than this one, the agent holding this one's context answers
+ * next, not whichever agent that reply used.
+ */
+export function conversationSettings(
+  last: RemoteSettings,
+  lastParentId: string | null | undefined,
+  rootId: string | undefined,
+  holder: AgentProvider | undefined,
+): RemoteSettings {
+  const elsewhere = (lastParentId ?? null) !== (rootId ?? null);
+  return elsewhere && holder ? switchAgent(last, holder) : last;
+}
+
 export interface SendExtras {
   id: string;
   /** A reply, or a message in a side conversation, by its root. */

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   composeSend,
+  conversationSettings,
   desktopNewThreadSettings,
   newThreadSettings,
   remotePlanGoAhead,
@@ -188,4 +189,27 @@ it("hands a plan from a phone composer on Codex to Claude on Claude's Default, n
     choice: { model: "", fast: false, reasoningEffort: "" },
     interactionMode: "default",
   });
+});
+
+it("opens the main conversation on the agent holding it when a side reply was the last send", () => {
+  const codex = newThreadSettings(defaultAISettings, "codex");
+  const claudeReply = {
+    ...switchAgent(codex, "claude"),
+    choice: { model: "opus", fast: false, reasoningEffort: "high" as const },
+  };
+  // Last send was a reply under "r1"; the main conversation is Codex's.
+  expect(conversationSettings(claudeReply, "r1", undefined, "codex")).toEqual(
+    switchAgent(claudeReply, "codex"),
+  );
+  // The reply's own conversation keeps what it last sent.
+  expect(conversationSettings(claudeReply, "r1", "r1", "codex")).toBe(
+    claudeReply,
+  );
+  // A main send, or a conversation nobody has answered in, stays as it was.
+  expect(conversationSettings(claudeReply, null, undefined, "codex")).toBe(
+    claudeReply,
+  );
+  expect(conversationSettings(claudeReply, "r1", undefined, undefined)).toBe(
+    claudeReply,
+  );
 });

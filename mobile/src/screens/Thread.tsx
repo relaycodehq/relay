@@ -20,6 +20,7 @@ import { takenBack, type TakenBack } from "../../../shared/remote-queued";
 import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
+import { contextAgent } from "../../../shared/recipient";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
@@ -40,10 +41,12 @@ import {
 } from "../remote/chat-state";
 import {
   composeSend,
+  conversationSettings,
   desktopNewThreadSettings,
   remotePlanGoAhead,
   withoutMention,
 } from "../../../shared/remote-compose";
+import { confirmAgentSwitch } from "../remote/agent-switch";
 import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";
@@ -79,21 +82,6 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   >();
   const [acting, setActing] = useState<ChatMessage>();
   const composer = useRef<ComposerHandle>(null);
-  // Starts from what the thread last sent, as the desktop's composer does;
-  // before its first message, as a new thread would.
-  const loaded = !!thread;
-  const lastSent = thread?.settings;
-  useEffect(() => {
-    if (!loaded || settings) return;
-    if (lastSent) return setSettings(lastSent);
-    let live = true;
-    void desktopNewThreadSettings(remote.desktop).then(
-      (s) => live && setSettings((current) => current ?? s),
-    );
-    return () => {
-      live = false;
-    };
-  }, [loaded, lastSent, settings, remote.desktop]);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
   // Sent from here and not in the thread yet: shown at once, in their place.
   const outbox = useOutbox(id);
@@ -115,6 +103,26 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   useEffect(() => {
     if (fetchSent) void reload();
   }, [fetchSent, reload]);
+  // The agent holding this conversation's context, which a send to another one takes over from.
+  const holder = useMemo(() => contextAgent(listed, rootId), [listed, rootId]);
+  // Starts from what the thread last sent, as the desktop's composer does,
+  // but on the agent holding this conversation when that send was a reply
+  // elsewhere; before its first message, as a new thread would.
+  const loaded = !!thread;
+  const lastSent = thread?.settings;
+  const lastParentId = thread?.lastParentId;
+  useEffect(() => {
+    if (!loaded || settings) return;
+    if (lastSent)
+      return setSettings(conversationSettings(lastSent, lastParentId, rootId, holder));
+    let live = true;
+    void desktopNewThreadSettings(remote.desktop).then(
+      (s) => live && setSettings((current) => current ?? s),
+    );
+    return () => {
+      live = false;
+    };
+  }, [loaded, lastSent, lastParentId, rootId, holder, settings, remote.desktop]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
   const counts = useMemo(() => replyCounts(all), [all]);
@@ -227,10 +235,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const draftKey = rootId ? `${id}:${rootId}` : id;
   // A queued reply taken back on the main screen arrives here, in its side conversation.
   const [handedBack] = useState(() => peekHandedBack(draftKey));
-  const arrived = useRef(false);
+  const tookBack = useRef(false);
   useEffect(() => {
-    if (!handedBack || arrived.current || !settings || !thread || !composer.current) return;
-    arrived.current = true;
+    if (!handedBack || tookBack.current || !settings || !thread || !composer.current) return;
+    tookBack.current = true;
     clearHandedBack(draftKey);
     void takeBack(handedBack.back, handedBack.messageId).catch(fail);
   });
@@ -302,6 +310,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   }: Outgoing) => {
     // `/btw` asks beside the conversation, as in the desktop's composer.
     const side = !rootId && /^\/btw\s/i.test(body);
+    if (!side && !(await confirmAgentSwitch(using.provider, holder))) return false;
     const message = composeSend(
       using,
       side ? body.replace(/^\/btw\s+/i, "") : body,
@@ -542,8 +551,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() =>
-                    act("Couldn't resume", () =>
-                      remote.desktop(
+                    act("Couldn't resume", async () => {
+                      if (!(await confirmAgentSwitch(settings?.provider, holder))) return;
+                      await remote.desktop(
                         "resumeProjectChat",
                         id,
                         settings && {
@@ -555,8 +565,8 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                             ? { contextWindow: settings.contextWindow }
                             : {}),
                         },
-                      ),
-                    )
+                      );
+                    })
                   }
                   style={styles.resume}
                 >
@@ -650,7 +660,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         onRetry={(o) => retry(remote.desktop, o.send.id)}
         onEdit={(o) => {
           drop(o.send.id);
-          composer.current?.restore(withoutMention(o.send.body));
+          composer.current?.restore({
+            body: withoutMention(o.send.body),
+            images: o.send.images ?? [],
+          });
         }}
       />
       {request && (

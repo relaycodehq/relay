@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AgentProvider } from "../../../shared/projects";
+import { takesOver } from "../../../shared/recipient";
 import { agentSwitchNoticeHidden } from "../composer/agent-switch-notice";
 
 /** Taking over from the agent holding the thread's context loses its session: say so first. */
@@ -12,9 +13,8 @@ export function useAgentSwitch(active: AgentProvider | undefined) {
   /** Resolves to whether to go on with `to`; asks only when it takes over. */
   async function confirm(to: AgentProvider | undefined) {
     return (
-      !to ||
+      !takesOver(to, active) ||
       !active ||
-      to === active ||
       agentSwitchNoticeHidden() ||
       new Promise<boolean>((resolve) =>
         setAsking({ from: active, to, resolve }),

@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import type { ChatMessage } from "./projects";
-import { agentAsked, contextAgent, recipient, sentAgent } from "./recipient";
+import {
+  agentAsked,
+  contextAgent,
+  recipient,
+  sentAgent,
+  takesOver,
+} from "./recipient";
 
 it("reads who answers a message from before `to` off its leading mention", () => {
   // An older phone typed @claude on a Codex composer: Claude answers, as ever.
@@ -61,4 +67,12 @@ it("finds the agent holding the context past compactions, handoff notes and a si
   // A side conversation counts only its own answers.
   expect(contextAgent([root], root.id)).toBeUndefined();
   expect(contextAgent([root, message("claude")], root.id)).toBe("claude");
+});
+
+it("takes over only when another agent is asked while one holds the context", () => {
+  expect(takesOver("claude", "codex")).toBe(true);
+  expect(takesOver("codex", "codex")).toBe(false);
+  expect(takesOver("message", "codex")).toBe(false);
+  expect(takesOver("claude", undefined)).toBe(false);
+  expect(takesOver(undefined, "codex")).toBe(false);
 });

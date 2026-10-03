@@ -1,6 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { ChatSummary } from "../../../shared/projects";
-import { draftRecipient, threadContextAgent } from "../../../shared/recipient";
+import {
+  draftRecipient,
+  takesOver,
+  threadContextAgent,
+} from "../../../shared/recipient";
 import { buildSend } from "../../../shared/compose-send";
 import { codexQuestionChoice, supportedChoice } from "../../../shared/settings";
 import { agentSwitchNoticeHidden } from "./agent-switch-notice";
@@ -68,13 +72,7 @@ export async function sendDraft(
     holder ?? ai.threadProvider,
   );
   const recipient = draftRecipient(text, provider);
-  if (
-    holder &&
-    recipient !== "message" &&
-    recipient !== holder &&
-    !agentSwitchNoticeHidden()
-  )
-    return null;
+  if (takesOver(recipient, holder) && !agentSwitchNoticeHidden()) return null;
   const selected = supportedChoice(
     settings.choice ?? codexQuestionChoice(ai),
     await codexModels(qc),

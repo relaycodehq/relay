@@ -58,6 +58,16 @@ export const contextAgent = (
         m.id !== rootId,
     )?.provider;
 
+/**
+ * Whether sending to `to` makes another agent take over from `holder`, the
+ * one holding the context. A note, an unheld context or the holder itself
+ * takes nothing over.
+ */
+export const takesOver = (
+  to: Recipient | undefined,
+  holder: AgentProvider | undefined,
+): to is AgentProvider => !!to && to !== "message" && !!holder && to !== holder;
+
 /** A thread's main `contextAgent`; summaries saved before it was kept have only their latest answer's. */
 export const threadContextAgent = (
   chat: Pick<ChatSummary, "contextAgent" | "provider">,
