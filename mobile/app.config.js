@@ -13,5 +13,5 @@ module.exports = ({ config }) => ({
     ...config.android,
     versionCode: Number(process.env.RELAY_VERSION_CODE ?? 1),
   },
-  plugins: [...config.plugins, "./plugins/release-signing"],
+  plugins: [...config.plugins, "./plugins/release-signing", "./plugins/fold-config-changes"],
 });

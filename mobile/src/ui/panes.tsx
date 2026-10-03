@@ -7,7 +7,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import {
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+} from "react-native";
 import { router, useFocusEffect, type Href } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,11 +29,17 @@ export function useWide() {
 
 /**
  * Phones stay upright; an unfolded foldable or a tablet turns freely, as a
- * locked app gets boxed into the middle of a big screen.
+ * locked app gets boxed into the middle of a big screen. It goes by the
+ * screen, not the window: unfolding with the lock still on boxes the window
+ * to phone width, which would keep it locked.
  */
 export function useOrientationPolicy() {
-  const { width, height } = useWindowDimensions();
-  const phone = Math.min(width, height) < paneBreakpoint;
+  const [screen, setScreen] = useState(() => Dimensions.get("screen"));
+  useEffect(() => {
+    const sub = Dimensions.addEventListener("change", (d) => setScreen(d.screen));
+    return () => sub.remove();
+  }, []);
+  const phone = Math.min(screen.width, screen.height) < paneBreakpoint;
   useEffect(() => {
     void (
       phone
