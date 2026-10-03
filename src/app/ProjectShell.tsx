@@ -108,6 +108,10 @@ export default function ProjectShell() {
     prs.openInProject,
     setError,
   );
+  async function openCreated(c: ChatSummary) {
+    await chats.refetch();
+    nav.setChatId(c.id);
+  }
   const starts = useNewThreads(
     nav,
     projects,
@@ -349,9 +353,9 @@ export default function ProjectShell() {
                   onStartThread={starts.start}
                   onCreated={async (c) => {
                     if (!c.worktree) adoptDraftTerminal(project.id, c.id);
-                    await chats.refetch();
-                    nav.setChatId(c.id);
+                    await openCreated(c);
                   }}
+                  onForked={openCreated}
                   onSwitchProject={(next) => navigate(next, undefined, true)}
                   onAddProject={() => void starts.addProject()}
                 />

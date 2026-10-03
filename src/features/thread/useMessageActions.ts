@@ -30,7 +30,7 @@ export function useMessageActions({
   messages,
   worktree,
   onOpenReply,
-  onCreated,
+  onForked,
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
@@ -40,7 +40,7 @@ export function useMessageActions({
   worktree?: WorktreeStatus;
   /** Opens the side conversation that starts at `rootId`. */
   onOpenReply: (rootId: string) => void;
-  onCreated: (c: ChatSummary) => Promise<void>;
+  onForked: (c: ChatSummary) => Promise<void>;
   onOpenCode: (mode: "changes" | "files") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
@@ -61,7 +61,7 @@ export function useMessageActions({
     try {
       const forked = await api.forkProjectChat(chatId, m.id);
       forkThreadSettings(chatId, forked.id, m.provider);
-      await onCreated(forked);
+      await onForked(forked);
     } catch (e) {
       setError(e);
     }

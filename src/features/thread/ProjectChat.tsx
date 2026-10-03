@@ -80,6 +80,7 @@ export function ProjectChat({
   onContextUsed,
   onShare,
   onCreated,
+  onForked,
   scopes,
   onSwitchProject,
   onAddProject,
@@ -104,7 +105,10 @@ export function ProjectChat({
   };
   onContextUsed: () => void;
   onShare: () => void;
+  /** The unsent thread was made by its first write. */
   onCreated: (c: ChatSummary) => Promise<void>;
+  /** A fork of the open thread was made. */
+  onForked: (c: ChatSummary) => Promise<void>;
   scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
@@ -187,7 +191,7 @@ export function ProjectChat({
     messages,
     worktree: worktree.status,
     onOpenReply: setRootId,
-    onCreated,
+    onForked,
     ...opens,
   });
   const { openChanges, openFile } = actions;
