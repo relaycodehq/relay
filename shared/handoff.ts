@@ -56,6 +56,8 @@ export interface ChatCameFrom {
   returnedAt?: number;
   /** The note written for the last hand-back, while nothing came after it. */
   backNote?: string;
+  /** The computer it came from took the thread back without this one; its work here stays here. */
+  abandonedAt?: number;
 }
 
 /**

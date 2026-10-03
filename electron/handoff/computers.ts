@@ -147,12 +147,17 @@ export class Computers {
     }
     throw new Error(`Can't reach ${name}. Is it on, and on Tailscale?`);
   }
-  async setUnacknowledged(id: string, ids: string[]) {
+  /** The handoff ids whose word to this computer didn't get through yet. */
+  async setPending(
+    id: string,
+    kind: "unacknowledged" | "abandoned",
+    ids: string[],
+  ) {
     await this.store.update((s) => {
       const computer = s.computers?.find((c) => c.id === id);
       if (!computer) return;
-      if (ids.length) computer.unacknowledged = ids;
-      else delete computer.unacknowledged;
+      if (ids.length) computer[kind] = ids;
+      else delete computer[kind];
     });
   }
   private drop(id: string) {

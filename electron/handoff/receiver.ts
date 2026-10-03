@@ -155,6 +155,8 @@ export class HandoffReceiver {
           partSchema.parse(args[1]),
           z.number().int().min(0).parse(args[2]),
         );
+      case "handoffAbandoned":
+        return this.abandoned(idSchema.parse(args[0]), device.id);
       case "handedBack": {
         const id = idSchema.parse(args[0]);
         const chat = this.mine(id, device.id);
@@ -298,6 +300,15 @@ export class HandoffReceiver {
       `No project here has ${repositories[0]}. Clone it and add it to Relay first.`,
     );
   }
+  /** The sender took the thread back: whatever came is released, whatever's still coming is dropped. */
+  private async abandoned(id: string, deviceId: string) {
+    // An arrival under way finishes first, so it's the one that's released.
+    await this.receiving.get(id)?.catch(() => undefined);
+    const chat = this.host.chats.handedOver(id);
+    if (chat?.cameFrom?.deviceId === deviceId)
+      await this.host.chats.handoffAbandoned(chat.id);
+    await rm(join(this.host.dir, id), { recursive: true, force: true });
+  }
   private mine(id: string, deviceId: string) {
     const chat = this.host.chats.handedOver(id);
     if (!chat || chat.cameFrom?.deviceId !== deviceId)
@@ -307,6 +318,8 @@ export class HandoffReceiver {
   private async status(ids: string[]) {
     const result: Record<string, HandoffRemoteStatus | null> = {};
     for (const id of ids) {
+      // Asked mid-arrival, "no such thread" would be a lie a moment later.
+      await this.receiving.get(id)?.catch(() => undefined);
       const found = this.host.chats.handedOver(id);
       const live =
         found &&

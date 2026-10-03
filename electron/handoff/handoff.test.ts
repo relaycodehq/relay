@@ -19,6 +19,7 @@ import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
+import { awaitsReturn } from "../project-chats/handoff";
 import { remoteBridgeVersion } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import type { UpdateState } from "../../shared/updates";
@@ -903,3 +904,124 @@ it("takes a handoff back that never finished sending", async () => {
   expect(after.sentTo).toBeUndefined();
   expect(after.abandonedHandoffs?.map((a) => a.id)).toEqual([id]);
 }, 30000);
+
+it("tells the other computer a thread was taken back, so its copy is no longer owed and can't be handed back", async () => {
+  const { laptop, mini, sender, computers, computerId, thread, there } =
+    await awayWithChangelog(false);
+  const { id } = (await laptop.chats.get(thread.id)).sentTo!;
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  expect(awaitsReturn(arrived!)).toBe(true);
+  await expect(mini.chats.removeWorktree(arrived!.id)).rejects.toThrow(
+    /Hand this thread back first/,
+  );
+
+  await sender.abandon(thread.id);
+  await vi.waitFor(async () =>
+    expect(
+      (await mini.chats.get(arrived!.id)).cameFrom?.abandonedAt,
+    ).toBeTruthy(),
+  );
+  expect(awaitsReturn(await mini.chats.get(arrived!.id))).toBe(false);
+  expect(computers.get(computerId).abandoned).toBeUndefined();
+
+  // Asked for it anyway, the other computer refuses and keeps its work.
+  const client = await computers.connected(computerId);
+  await expect(client.call("handBack", id)).rejects.toThrow(
+    /took this thread back without this computer/,
+  );
+  await expect(client.call("handedBack", id)).resolves.toBeFalsy();
+  expect(
+    (await mini.chats.get(arrived!.id)).cameFrom?.returnedAt,
+  ).toBeUndefined();
+
+  // Its copy carries on as a thread of its own, and its worktree goes like any other.
+  await mini.chats.send(arrived!.id, input("@codex Carry on on the mini"));
+  await finished(mini.chats, arrived!.id);
+  await mini.chats.removeWorktree(arrived!.id);
+  expect(existsSync(there)).toBe(false);
+}, 60000);
+
+it("tells a computer that was offline when the thread was taken back once it's online again", async () => {
+  const { laptop, mini, sender, computers, computerId, thread } =
+    await awayWithChangelog(false);
+  const { id } = (await laptop.chats.get(thread.id)).sentTo!;
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  // The mini drops off the network.
+  computers.close();
+
+  await sender.abandon(thread.id);
+  expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
+  await vi.waitFor(() =>
+    expect(computers.get(computerId).abandoned).toEqual([id]),
+  );
+  expect(
+    (await mini.chats.get(arrived!.id)).cameFrom?.abandonedAt,
+  ).toBeUndefined();
+
+  await computers.start();
+  await vi.waitFor(
+    async () =>
+      expect(
+        (await mini.chats.get(arrived!.id)).cameFrom?.abandonedAt,
+      ).toBeTruthy(),
+    { timeout: 30000 },
+  );
+  await vi.waitFor(() =>
+    expect(computers.get(computerId).abandoned).toBeUndefined(),
+  );
+}, 90000);
+
+it("drops a notice the other computer is too old to understand instead of sending it forever", async () => {
+  const { laptop, sender, computers, computerId, thread } =
+    await awayWithChangelog(false);
+  const client = await computers.connected(computerId);
+  vi.spyOn(client, "call").mockImplementation((async (method: string) => {
+    if (method === "handoffAbandoned")
+      throw new Error("Computers can't do that.");
+  }) as never);
+  await sender.abandon(thread.id);
+  await vi.waitFor(() =>
+    expect(computers.get(computerId).abandoned).toBeUndefined(),
+  );
+  expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
+}, 60000);
+
+it("leaves nothing owed on the other computer when the thread is taken back mid-transfer", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  const client = await computers.connected(computerId);
+  const real = client.call.bind(client) as (
+    ...a: unknown[]
+  ) => Promise<unknown>;
+  let arrival: Promise<unknown> | undefined;
+  vi.spyOn(client, "call").mockImplementation((async (
+    method: string,
+    ...args: unknown[]
+  ) => {
+    // The user gives up just as the last call goes out, and the mini hears it first.
+    if (method === "receiveHandoff") {
+      await sender.abandon(thread.id);
+      await vi.waitFor(() =>
+        expect(computers.get(computerId).abandoned).toBeUndefined(),
+      );
+      return (arrival = real(method, ...args));
+    }
+    return real(method, ...args);
+  }) as never);
+
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(() => expect(arrival).toBeDefined());
+  // Its upload was dropped with the notice, so there's nothing to take over.
+  await expect(arrival).rejects.toThrow();
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo).toBeUndefined();
+  expect(after.abandonedHandoffs).toHaveLength(1);
+  expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
+}, 60000);

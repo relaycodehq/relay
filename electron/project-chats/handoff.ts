@@ -34,7 +34,7 @@ function elsewhere(chat: ChatSummary) {
 }
 /** Handed over from another computer and not yet handed back, so that computer is waiting for it. */
 export const awaitsReturn = (chat: ChatSummary) =>
-  !!chat.cameFrom && !chat.cameFrom.returnedAt;
+  !!chat.cameFrom && !chat.cameFrom.returnedAt && !chat.cameFrom.abandonedAt;
 export function assertHere(chat: ChatSummary) {
   const away = elsewhere(chat);
   if (away) throw new Error(away);
@@ -142,6 +142,10 @@ export class ComputerHandoff {
       if (this.core.closing()) throw new Error("Relay is closing.");
       const chat = await this.core.storage.load(id);
       assertHere(chat);
+      if (chat.cameFrom?.abandonedAt)
+        throw new Error(
+          `${chat.cameFrom.computer} took this thread back, so it can't move on from here.`,
+        );
       if (chat.cameFrom)
         throw new Error(
           `This thread came from ${chat.cameFrom.computer}. Bring it back there instead.`,
@@ -327,6 +331,10 @@ export class ComputerHandoff {
     const came = summary?.cameFrom;
     if (!came || came.deviceId !== deviceId)
       throw new Error("This thread didn't come from that computer.");
+    if (came.abandonedAt)
+      throw new Error(
+        `${came.computer} took this thread back without this computer, so it can't be handed back. Its work stays here.`,
+      );
     const here = await this.core.storage.load(id);
     const { chat, root, tip } = !(
       here.worktree && (await worktreeExists(here.worktree))
@@ -415,9 +423,25 @@ export class ComputerHandoff {
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
     const chat = await this.core.storage.load(id);
-    if (!chat.cameFrom || chat.cameFrom.returnedAt) return;
+    if (
+      !chat.cameFrom ||
+      chat.cameFrom.returnedAt ||
+      chat.cameFrom.abandonedAt
+    )
+      return;
     chat.cameFrom.returnedAt = Date.now();
     this.core.sessions.close(id);
+    await this.core.storage.persist(chat);
+  }
+  /**
+   * The computer it came from took the thread back without this one. The
+   * copy is no longer owed to it: it carries on here as a thread of its own.
+   */
+  async abandoned(id: string) {
+    const chat = await this.core.storage.load(id);
+    const came = chat.cameFrom;
+    if (!came || came.returnedAt || came.abandonedAt) return;
+    came.abandonedAt = Date.now();
     await this.core.storage.persist(chat);
   }
   /**

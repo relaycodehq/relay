@@ -395,6 +395,8 @@ export interface RemoteApi {
   ): Promise<string>;
   /** The thread arrived back; the copy here stays still. */
   handedBack(id: string): Promise<void>;
+  /** The sender took the thread back without this computer; its copy here is no longer owed. Missing before this was added; callers ignore the refusal. */
+  handoffAbandoned(id: string): Promise<void>;
   /** This Relay's version, its bridge's and its update; missing before bridge 10. */
   computerInfo(): Promise<ComputerInfo>;
   /** Checks for Relay's latest release, downloads it and restarts into it. */
@@ -424,6 +426,7 @@ export const remoteMethods = [
   "handBack",
   "handoffDownload",
   "handedBack",
+  "handoffAbandoned",
   "computerInfo",
   "updateNow",
 ] as const satisfies readonly RemoteMethod[];
@@ -436,6 +439,7 @@ export const computerMethods = [
   "handBack",
   "handoffDownload",
   "handedBack",
+  "handoffAbandoned",
   "computerInfo",
   "updateNow",
 ] as const satisfies readonly RemoteMethod[];

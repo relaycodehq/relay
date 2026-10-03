@@ -42,7 +42,8 @@ export function AbandonDialog({
       </p>
       <p>
         Whatever was done on {computer} since stays there, on its branch, and
-        won't come back by itself.
+        won't come back by itself. {computer} is told as soon as it can be
+        reached.
       </p>
       {!!error && <ErrorBox error={error} />}
       <div className="modal-actions">

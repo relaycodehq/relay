@@ -239,6 +239,18 @@ test("a worktree thread goes to another computer from its header and comes back 
     await screenshot(laptop.page, {
       path: "test-results/handoff-abandoned.png",
     });
+
+    // The mini hears it and stops owing the thread: its newest copy says so.
+    await mini.page.reload();
+    await mini.page
+      .getByRole("button", { name: "Cache guard behavior" })
+      .first()
+      .click();
+    const released = mini.page.getByText(/took the thread back/);
+    await expect(released).toBeVisible({ timeout: 30_000 });
+    await screenshot(mini.page, {
+      path: "test-results/handoff-abandoned-there.png",
+    });
   } finally {
     for (const app of apps) await app.close().catch(() => {});
     await rm(root, { recursive: true, force: true, maxRetries: 10 });

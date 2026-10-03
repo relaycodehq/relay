@@ -2,7 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { chatSettled } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { HandoffStrip, ReturnedStrip } from "../handoff/HandoffStrip";
+import {
+  AbandonedStrip,
+  HandoffStrip,
+  ReturnedStrip,
+} from "../handoff/HandoffStrip";
 import {
   LimitStrip,
   SettledStrip,
@@ -77,5 +81,10 @@ export function ThreadNotice({
         }
       />
     );
-  return chatSettled(chat) && <SettledStrip onUnsettle={unsettle} />;
+  if (chatSettled(chat)) return <SettledStrip onUnsettle={unsettle} />;
+  return (
+    chat.cameFrom?.abandonedAt && (
+      <AbandonedStrip computer={chat.cameFrom.computer} />
+    )
+  );
 }

@@ -34,6 +34,9 @@ import {
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before bridge 10 answers a call it doesn't know. */
 const unknownCall = "Phones can't do that.";
+/** A call a Relay doesn't know: from before bridge 10, or before the call was added. */
+const unsupportedCall = (e: unknown) =>
+  message(e) === unknownCall || message(e) === "Computers can't do that.";
 
 /**
  * Handing this computer's threads to the paired ones and bringing them back.
@@ -42,6 +45,7 @@ const unknownCall = "Phones can't do that.";
  */
 export class Handoffs {
   private jobs = new Map<string, Promise<void>>();
+  private telling: Promise<unknown> = Promise.resolve();
   private statuses = new Map<
     string,
     { at: number; status: HandoffRemoteStatus | null }
@@ -56,7 +60,10 @@ export class Handoffs {
     /** Scratch space for bundles on their way, a folder per handoff. */
     private dir: string,
   ) {
-    computers.onOnline((id) => void this.acknowledge(id));
+    computers.onOnline((id) => {
+      void this.acknowledge(id);
+      void this.notifyAbandoned(id);
+    });
   }
   private summary(chatId: string): ChatSummary {
     const chat = this.store.get().chats?.find((c) => c.id === chatId);
@@ -329,8 +336,10 @@ export class Handoffs {
       throw new Error(
         `It's being brought back from ${sentTo.computer} right now. If that fails, you can take it back without ${sentTo.computer}.`,
       );
-    await this.chats.abandonHandoff(chatId, sentTo.id);
+    if (!(await this.chats.abandonHandoff(chatId, sentTo.id))) return;
     this.statuses.delete(sentTo.id);
+    await this.saveAbandoned(sentTo.computerId, sentTo.id);
+    void this.notifyAbandoned(sentTo.computerId);
   }
   async view(chatId: string): Promise<HandoffView | null> {
     const sentTo = this.summary(chatId).sentTo;
@@ -360,6 +369,13 @@ export class Handoffs {
       .catch((e) => console.warn("Handoff:", e))
       .finally(() => this.jobs.delete(chatId));
     this.jobs.set(chatId, running);
+  }
+  /** Keeps the notice for the computer until it has heard, even across a restart. */
+  private async saveAbandoned(computerId: string, id: string) {
+    const known = this.computers.get(computerId).abandoned ?? [];
+    await this.computers.setPending(computerId, "abandoned", [
+      ...new Set([...known, id]),
+    ]);
   }
   /** Whether the thread is still on this handoff, rather than taken back. */
   private onHandoff(chatId: string, id: string) {
@@ -497,27 +513,55 @@ export class Handoffs {
     }
   }
   /** Tells the other computer its copies came back, including any it missed. */
-  private async acknowledge(computerId: string, id?: string) {
-    let computer;
-    try {
-      computer = this.computers.get(computerId);
-    } catch {
-      return;
-    }
-    const ids = [
-      ...new Set([...(computer.unacknowledged ?? []), ...(id ? [id] : [])]),
-    ];
-    if (!ids.length) return;
-    const left: string[] = [];
-    for (const each of ids) {
+  private acknowledge(computerId: string, id?: string) {
+    return this.tell(computerId, "unacknowledged", id);
+  }
+  /** Tells the other computer a thread was taken back without it, including any it missed. */
+  private notifyAbandoned(computerId: string, id?: string) {
+    return this.tell(computerId, "abandoned", id);
+  }
+  /**
+   * Says `kind` of word about `id` and every one still waiting to be said to
+   * the computer. What doesn't get through stays saved for when it's online;
+   * a Relay too old to know the call is a lost cause, so that's let go.
+   */
+  private tell(
+    computerId: string,
+    kind: "unacknowledged" | "abandoned",
+    id?: string,
+  ) {
+    const run = async () => {
+      let computer;
       try {
-        const client = await this.computers.connected(computerId);
-        await client.call("handedBack", each);
+        computer = this.computers.get(computerId);
       } catch {
-        left.push(each);
+        return;
       }
-    }
-    await this.computers.setUnacknowledged(computerId, left);
+      const ids = [
+        ...new Set([...(computer[kind] ?? []), ...(id ? [id] : [])]),
+      ];
+      if (!ids.length) return;
+      const method = kind === "abandoned" ? "handoffAbandoned" : "handedBack";
+      const left: string[] = [];
+      let client: RemoteClient | undefined;
+      try {
+        client = await this.computers.connected(computerId);
+      } catch {
+        left.push(...ids);
+      }
+      for (const each of client ? ids : []) {
+        try {
+          await client!.call(method, each);
+        } catch (e) {
+          if (!unsupportedCall(e)) left.push(each);
+        }
+      }
+      await this.computers.setPending(computerId, kind, left);
+    };
+    // One at a time, so a later run can't write over what an earlier one saved.
+    const next = this.telling.then(run, run);
+    this.telling = next.catch(() => undefined);
+    return next;
   }
 }
 

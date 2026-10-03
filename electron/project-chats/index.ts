@@ -467,6 +467,9 @@ export class ProjectChats {
   handedBack(id: string) {
     return this.handoffs.handedBack(id);
   }
+  handoffAbandoned(id: string) {
+    return this.handoffs.abandoned(id);
+  }
   returned(id: string, handoffId: string, messages: ChatMessage[]) {
     return this.handoffs.returned(id, handoffId, messages);
   }

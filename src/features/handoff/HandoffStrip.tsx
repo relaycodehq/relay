@@ -268,6 +268,21 @@ export function HandoffStrip({
   );
 }
 
+/** A copy whose original was taken back without it: nothing is owed anymore, and its work stays here. */
+export function AbandonedStrip({ computer }: { computer: string }) {
+  return (
+    <div className="waiting-strip settled" role="status">
+      <div className="waiting-strip-head">
+        <MonitorCheck size={15} />
+        <span className="waiting-strip-text">
+          <b>{computer} took the thread back</b>
+          <span> · this copy stays here, with its work on its branch</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** A copy that went back to the computer it came from. */
 export function ReturnedStrip({ computer }: { computer: string }) {
   return (

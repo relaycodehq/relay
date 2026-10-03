@@ -47,4 +47,6 @@ export interface SavedComputer {
   token: string;
   /** Hand-backs whose last word didn't reach it yet; said again when it's online. */
   unacknowledged?: string[];
+  /** Handoffs taken back without it whose notice didn't reach it yet; said again when it's online. */
+  abandoned?: string[];
 }
