@@ -35,15 +35,15 @@ export function SidebarFooter({
         </span>
         {!account && <span>Connect Gitea</span>}
       </button>
+      <UpdateButton />
+      <CheckUpdatesButton />
+      <AgentUpdateButton onDetails={() => onSettings("models")} />
       <ClockifyTimer
         projectId={projectId}
         projectName={projectName}
         chatId={chatId}
         onSetUp={() => onSettings("plugins")}
       />
-      <UpdateButton />
-      <CheckUpdatesButton />
-      <AgentUpdateButton onDetails={() => onSettings("models")} />
       <IconButton label="Open settings" onClick={() => onSettings()}>
         <Settings2 size={15} />
       </IconButton>
