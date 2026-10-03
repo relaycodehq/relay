@@ -37,6 +37,9 @@ export const relayCommands = [
   { name: "fast", description: "Toggle Codex Fast mode", args: "[on|off]" },
 ] as const;
 export type RelayCommand = (typeof relayCommands)[number]["name"];
+/** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */
+export const asideNeedsAnswer =
+  "Ask the agent something first, then ask on the side.";
 /**
  * Commands the composer applies to its own settings. They also work in the
  * middle of a message, and take only their own text out of it.

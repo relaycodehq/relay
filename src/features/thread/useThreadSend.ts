@@ -6,6 +6,7 @@ import type {
   ResumeSettings,
 } from "../../../shared/projects";
 import { agentAsked, recipient } from "../../../shared/recipient";
+import { asideNeedsAnswer } from "../../../shared/commands";
 import { api } from "../../lib/api";
 import { startThreadSettings } from "../agents/composer-settings";
 import { withAttachments } from "../composer/draft-attachments";
@@ -90,9 +91,7 @@ export function useThreadSend({
     dispatch?: () => void,
   ) {
     if (!chat) {
-      setError(
-        new Error("Ask the agent something first, then ask on the side."),
-      );
+      setError(new Error(asideNeedsAnswer));
       return false;
     }
     dispatch?.();

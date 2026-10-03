@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { randomUUID } from "expo-crypto";
+import { asideNeedsAnswer, relayCommand } from "../../../shared/commands";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
@@ -94,7 +95,8 @@ export default function NewThread() {
       saveNewThread(s);
     });
   }, [desktop, status]);
-  const start = async ({ body, settings: using, images }: Outgoing) => {
+  const start = async ({ body, settings: using, images, sendAt }: Outgoing) => {
+    if (relayCommand(body)?.name === "btw") throw new Error(asideNeedsAnswer);
     const where =
       projectId ??
       (picked === "scratch"
@@ -114,6 +116,7 @@ export default function NewThread() {
       chat.id,
       composeSend(using, body, {
         id: randomUUID(),
+        ...(sendAt ? { sendAt } : {}),
         images: images.map(({ name, mimeType, dataUrl }) => ({
           name,
           mimeType,
