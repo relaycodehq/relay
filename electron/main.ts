@@ -30,8 +30,10 @@ import { linuxPasswordStore } from "./platform/linux-password-store";
 import { LiveSyncs } from "./projects/live-sync";
 import { ProjectChats } from "./project-chats";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
+import { PullMerges } from "./project-chats/pull-merges";
 import { ProjectSharing } from "./projects/project-sharing";
 import { Projects } from "./projects/projects";
+import { mergedPulls } from "./pull-requests/merged";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { questionContext } from "./pull-requests/questions";
 import { PhoneAppFiles } from "./remote/phone-app";
@@ -250,6 +252,24 @@ app
       },
     );
     projectChats = chats;
+    const pullMerges = new PullMerges({
+      chats: () => loaded.get().chats ?? [],
+      repository: async (projectId) => {
+        const client = login.client;
+        return client
+          ? projects.linked(projectId, client).catch(() => null)
+          : null;
+      },
+      mergedAmong: (repo, numbers, signal) =>
+        mergedPulls(login.require(), repo, numbers, signal),
+      merged: (repo, number) =>
+        login
+          .require()
+          .pull({ ...repo, number })
+          .then((pull) => !!pull.merged),
+      record: (id) => chats.pullMerged(id),
+      online: () => net.isOnline(),
+    });
     const clockify = new ClockifyPlugin({
       store: loaded,
       secrets: new PluginSecrets(loaded, seal, unseal),
@@ -283,6 +303,7 @@ app
       store: loaded,
       projects,
       projectChats: chats,
+      pullMerges,
       rooms: roomService,
       devops,
       clockify,
@@ -315,9 +336,16 @@ app
     // Settings, phone access and the power source change without a thread noticing.
     setInterval(() => void keepAwake.refresh(), 15_000).unref();
     // Whether a PR thread's review began reads with the account.
-    login.changed = () => chats.summariesChanged();
-    // A quiet thread settles itself as days pass; the feed sends only what changed.
-    setInterval(() => chats.summariesChanged(), 5 * 60_000).unref();
+    login.changed = () => {
+      chats.summariesChanged();
+      void pullMerges.sweep();
+    };
+    // A quiet thread settles itself as days pass, and one whose PR merged when
+    // the host says so; the feed sends only what changed.
+    setInterval(() => {
+      chats.summariesChanged();
+      void pullMerges.sweep();
+    }, 5 * 60_000).unref();
     const handoffDir = join(app.getPath("userData"), "handoffs");
     const computers = new Computers(loaded, seal, unseal);
     handoffs = {

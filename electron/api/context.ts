@@ -16,6 +16,7 @@ import type { ClockifyPlugin } from "../plugins/clockify/service";
 import type { Dictation } from "../dictation/service";
 import type { LiveSyncs } from "../projects/live-sync";
 import type { ProjectChats } from "../project-chats";
+import type { PullMerges } from "../project-chats/pull-merges";
 import type { Place, Projects } from "../projects/projects";
 import type { PullRequestCreation } from "../pull-requests/pull-request-create";
 import type { PhoneRemote } from "../remote/phone-remote";
@@ -30,6 +31,7 @@ export interface Services {
   store: Store;
   projects: Projects;
   projectChats: ProjectChats;
+  pullMerges: PullMerges;
   rooms: RoomService;
   devops: DevOps;
   clockify: ClockifyPlugin;

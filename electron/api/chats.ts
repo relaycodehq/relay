@@ -29,27 +29,7 @@ const imagePathSchema = z.string().min(1).max(500);
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
-  const { store, projects, projectChats, login, requireClient } = ctx;
-  /** Whether a worktree thread's PR was merged on Gitea; asked at most once a minute. */
-  const pullChecks = new Map<string, { at: number; merged: boolean }>();
-  async function pullMerged(chatId: string, number: number) {
-    const seen = pullChecks.get(chatId);
-    if (seen && Date.now() - seen.at < 60000) return seen.merged;
-    const projectId = store
-      .get()
-      .chats?.find((c) => c.id === chatId)?.projectId;
-    if (!projectId || !login.client) return false;
-    const gitea = login.client;
-    const merged = await projects
-      .linked(projectId, gitea)
-      .then((repo) => gitea.pull({ ...repo, number }))
-      .then(
-        (pull) => !!pull.merged,
-        () => false,
-      );
-    pullChecks.set(chatId, { at: Date.now(), merged });
-    return merged;
-  }
+  const { store, projectChats, pullMerges, requireClient } = ctx;
   return {
     projectChats: takes([idSchema], (id) => ctx.listChats(id)),
     createProjectChat: takes(
@@ -176,11 +156,12 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     projectWorktree: takes([idSchema], async (chatId) => {
       const status = await projectChats.worktreeStatus(chatId);
-      if (status.pr && !status.landed && login.client)
-        if (await pullMerged(chatId, status.pr.number)) {
-          await projectChats.pullMerged(chatId);
-          return projectChats.worktreeStatus(chatId);
-        }
+      if (
+        status.pr &&
+        !status.landed &&
+        (await pullMerges.check(chatId, status.pr.number))
+      )
+        return projectChats.worktreeStatus(chatId);
       return status;
     }),
     projectWorktreeDiff: takes([idSchema, workingPathSchema], (chatId, path) =>
