@@ -1,4 +1,5 @@
 import { agentMentionPattern, type AgentProvider } from "./agents";
+import { onModel, windowFor } from "./model-fit";
 import { buildSend, planGoAhead } from "./compose-send";
 import {
   modelEfforts,
@@ -8,7 +9,7 @@ import {
 import type { ProjectChatSend } from "./projects";
 import type { RemoteSettings } from "./remote";
 import type { RemoteClient } from "./remote-client";
-import { claudeContextWindow, type AISettings } from "./settings";
+import type { AISettings } from "./settings";
 import type { NewThreadModels } from "./new-thread-models";
 
 export const withoutMention = (body: string) =>
@@ -115,23 +116,15 @@ export function withComposerChange(
     case "model": {
       const { provider, model } = change;
       const { contextWindow, ...on } = switchTo(settings, provider);
-      // As on the desktop: an effort the model lacks goes back to Default,
-      // and a model with 1M built in drops the 200k window.
-      const effort = on.choice.reasoningEffort;
       return {
         ...on,
-        choice: {
-          ...on.choice,
+        choice: onModel(
+          provider,
+          on.choice,
           model,
-          reasoningEffort: modelEfforts(provider, model, catalogs).includes(
-            effort,
-          )
-            ? effort
-            : "",
-        },
-        ...(contextWindow && claudeContextWindow(model) !== "1m"
-          ? { contextWindow }
-          : {}),
+          modelEfforts(provider, model, catalogs),
+        ),
+        ...windowFor(provider, model, contextWindow),
       };
     }
     case "effort":

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { recipient } from "./recipient";
 import { agentProviderSchema, type AgentProvider } from "./agents";
+import { windowFor } from "./model-fit";
 import { projectChatSendSchema, type ProjectChatSend } from "./projects";
 
 /** The model an agent last ran with; a model of "" is its Default. */
@@ -30,9 +31,7 @@ export function sentModel(
     send.provider,
     {
       choice: send.choice,
-      ...(send.provider === "claude" && send.contextWindow
-        ? { contextWindow: send.contextWindow }
-        : {}),
+      ...windowFor(send.provider, send.choice.model, send.contextWindow),
     },
   ];
 }

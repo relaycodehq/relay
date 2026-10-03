@@ -8,6 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 import { agentProviders, agents } from "../../../shared/agents";
+import { onModel } from "../../../shared/model-fit";
 import { effortLabels, type ReasoningEffort } from "../../../shared/settings";
 import { useCatalogs } from "../agents/useCatalogs";
 import { useQuickKeysLabel } from "./effort-shortcut";
@@ -156,15 +157,14 @@ export function QuickSwitchSettings() {
                   onOpen={catalogs.refresh}
                   onSelect={(next, model) => {
                     if (next === "message") return;
-                    // Like the composer, an effort the new model lacks falls back to default.
-                    const keep = catalogs
-                      .effortsOf(next, model)
-                      .includes(p.reasoningEffort);
                     update(i, {
                       provider: next,
-                      model,
-                      reasoningEffort: keep ? p.reasoningEffort : "",
-                      fast: agents[next].fast && p.fast,
+                      ...onModel(
+                        next,
+                        p,
+                        model,
+                        catalogs.effortsOf(next, model),
+                      ),
                     });
                   }}
                 />

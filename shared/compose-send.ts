@@ -1,7 +1,8 @@
-import { agentMentionPattern, agents, type AgentProvider } from "./agents";
+import { agentMentionPattern, type AgentProvider } from "./agents";
+import { fastFor, windowFor } from "./model-fit";
 import type { ProjectChatSend } from "./projects";
 import { draftRecipient, type Recipient } from "./recipient";
-import { claudeContextWindow, type ModelChoice } from "./settings";
+import type { ModelChoice } from "./settings";
 import type { UltraplanKind } from "./ultraplan";
 
 /** A message as a composer hands it on, before it gets its id. */
@@ -45,26 +46,11 @@ export function buildSend(
     ? settings.choice
     : { model: "", reasoningEffort: "", fast: false };
   const contextWindow = picked ? settings.contextWindow : undefined;
-  const { council, running, sendAt } = options;
-  // Agents without Fast send it off; a model with 1M built in asks for nothing.
-  const fast = to === "message" || agents[to].fast ? choice.fast : false;
-  const window =
-    to === "claude" &&
-    contextWindow &&
-    claudeContextWindow(choice.model) !== "1m"
-      ? { contextWindow }
-      : {};
+  const { council } = options;
+  // A note to people keeps the choice as picked; nobody runs it.
+  const fast = to === "message" ? choice.fast : fastFor(to, choice.fast);
   return {
-    ...(sendAt
-      ? { sendAt }
-      : running
-        ? {
-            delivery:
-              running.steer && !council
-                ? ("steer" as const)
-                : ("queue" as const),
-          }
-        : {}),
+    ...whenSent(options),
     // Desktops before `to` read who answers from the mention, so it stays.
     body:
       to === "message" || agentMentionPattern.test(body)
@@ -74,7 +60,7 @@ export function buildSend(
     // Older desktops require an agent even on a note, which none answers.
     provider: to === "message" ? "codex" : to,
     choice: { ...choice, fast },
-    ...window,
+    ...windowFor(to, choice.model, contextWindow),
     runtimeMode,
     interactionMode: council ? "plan" : interactionMode,
     ...(council ? { ultraplan: council } : {}),
@@ -82,6 +68,20 @@ export function buildSend(
     ...(options.parentId ? { parentId: options.parentId } : {}),
     ...(options.images?.length ? { images: options.images } : {}),
   };
+}
+
+/**
+ * When the message goes: at `sendAt`, or beside the running answer, steering
+ * it unless a council is starting, which waits in the queue.
+ */
+function whenSent({
+  sendAt,
+  running,
+  council,
+}: SendOptions): Pick<ComposedSend, "sendAt" | "delivery"> {
+  if (sendAt) return { sendAt };
+  if (!running) return {};
+  return { delivery: running.steer && !council ? "steer" : "queue" };
 }
 
 /** What a composer sends to carry out a proposed plan. */

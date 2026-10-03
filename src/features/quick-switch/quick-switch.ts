@@ -6,6 +6,7 @@ import {
   agentProviderSchema,
   type AgentProvider,
 } from "../../../shared/agents";
+import { fastFor } from "../../../shared/model-fit";
 import {
   effortLabels,
   reasoningEffortSchema,
@@ -91,7 +92,7 @@ export const quickItems = (
       ? (modelsOf(p.provider)?.find((m) => m.id === p.model)?.name ?? p.model)
       : `${agentName(p.provider)} default`,
     effort: p.reasoningEffort ? effortLabels[p.reasoningEffort] : "Default",
-    fast: agents[p.provider].fast && p.fast,
+    fast: fastFor(p.provider, p.fast),
   }));
 
 /** What the composer runs now, in a preset's terms. */

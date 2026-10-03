@@ -1,6 +1,5 @@
 import {
   agentProviders,
-  agents,
   isAgentProvider,
   type AgentModel,
   type AgentProvider,
@@ -9,8 +8,8 @@ import type {
   NewThreadModel,
   NewThreadModels,
 } from "../../../shared/new-thread-models";
+import { fastFor, fitModel, windowFor } from "../../../shared/model-fit";
 import {
-  claudeContextWindow,
   claudeEfforts,
   modelSchema,
   reasoningEffortSchema,
@@ -46,15 +45,6 @@ export const modelOf = (
   models: ComposerModels,
   provider: AgentProvider,
 ): NewThreadModel => models[provider] ?? blank;
-
-/** `model` with only what `provider` offers: Fast where it has it, the 200k window for Claude. */
-export const fitModel = (
-  provider: AgentProvider,
-  { choice, contextWindow }: NewThreadModel,
-): NewThreadModel => ({
-  choice: { ...choice, fast: agents[provider].fast && choice.fast },
-  ...(provider === "claude" && contextWindow ? { contextWindow } : {}),
-});
 
 export const withModel = (
   models: ComposerModels,
@@ -110,9 +100,7 @@ export const claudeOn = (
   reasoningEffort: ReasoningEffort,
 ): NewThreadModel => ({
   choice: { model, reasoningEffort, fast: false },
-  ...(current.contextWindow && claudeContextWindow(model) !== "1m"
-    ? { contextWindow: current.contextWindow }
-    : {}),
+  ...windowFor("claude", model, current.contextWindow),
 });
 
 /** The model and efforts an agent in `pickAgents` runs; "" is its Default. */
@@ -144,9 +132,9 @@ export function agentChoice(
   codex: ModelChoice = modelOf(models, "codex").choice,
 ): ModelChoice {
   const { choice } = modelOf(models, provider);
-  const fast = agents[provider].fast && choice.fast;
+  const fast = fastFor(provider, choice.fast);
   if (provider === "codex")
-    return { ...codex, fast: agents.codex.fast && codex.fast };
+    return { ...codex, fast: fastFor("codex", codex.fast) };
   if (provider === "claude") return { ...choice, fast };
   return { model: pick.model, reasoningEffort: pick.reasoningEffort, fast };
 }

@@ -10,6 +10,7 @@ import {
   helperProviders,
   type AgentProvider,
 } from "../../../shared/agents";
+import { onModel } from "../../../shared/model-fit";
 import { useCatalogs } from "./useCatalogs";
 import { ComposerModelPicker } from "./ComposerModelPicker";
 import { ComposerSelect } from "../../ui/ComposerSelect";
@@ -67,17 +68,8 @@ export function ModelField<P extends AgentProvider = AgentProvider>({
         onOpen={catalogs.refresh}
         onSelect={(next, model) => {
           if (next === "message") return;
-          const choice = { ...value, model };
-          // Like the composer, an effort the new model lacks falls back to default.
-          const keep = catalogs
-            .effortsOf(next, model)
-            .includes(choice.reasoningEffort);
           onChange(
-            {
-              ...choice,
-              reasoningEffort: keep ? choice.reasoningEffort : "",
-              fast: agents[next].fast && choice.fast,
-            },
+            onModel(next, value, model, catalogs.effortsOf(next, model)),
             next as P,
           );
         }}

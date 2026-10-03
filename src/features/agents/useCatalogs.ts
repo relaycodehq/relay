@@ -1,9 +1,5 @@
 import type { AgentProvider } from "../../../shared/agents";
-import {
-  claudeEffortsFor,
-  reasoningEffortsFor,
-  type ReasoningEffort,
-} from "../../../shared/settings";
+import { modelEfforts } from "../../../shared/composer-commands";
 import { useAgentPicks } from "./useAgentPicks";
 import { useClaudeModels } from "./useClaudeModels";
 import { useCodexModels } from "./useCodexModels";
@@ -19,13 +15,8 @@ export function useCatalogs() {
       : p === "claude"
         ? claude.models
         : picks.catalogs[p]?.models;
-  const effortsOf = (p: AgentProvider, model: string): ReasoningEffort[] =>
-    p === "codex"
-      ? reasoningEffortsFor(model, codex.models)
-      : p === "claude"
-        ? claudeEffortsFor(claude.models, model)
-        : (picks.catalogs[p]?.models?.find((m) => m.id === model)?.efforts ??
-          []);
+  const effortsOf = (p: AgentProvider, model: string) =>
+    modelEfforts(p, model, { [p]: modelsOf(p) });
   const refresh = () => {
     codex.refresh();
     claude.refresh();

@@ -1,9 +1,9 @@
 import {
-  agents,
   type AgentDefaults,
   type AgentModel,
   type AgentProvider,
 } from "./agents";
+import { fastFor } from "./model-fit";
 import type { InteractionMode } from "./agent-modes";
 import {
   claudeArgs,
@@ -60,7 +60,7 @@ export function resolveTurnModel(
     ...(picked ? {} : { byDefault: true }),
     effort,
     ...(chosen ? {} : { effortByDefault: true }),
-    ...(agents[provider].fast && input.choice.fast ? { fast: true } : {}),
+    ...(fastFor(provider, input.choice.fast) ? { fast: true } : {}),
     ...(claude && input.contextWindow === "200k"
       ? { window: "200k" as const }
       : claude && claudeContextWindow(picked) === "1m"
