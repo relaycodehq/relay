@@ -35,6 +35,9 @@ interface AgentPackage {
   native: { args: string[]; owns: (path: string) => boolean };
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const slashed = (path: string) => path.replaceAll("\\", "/").toLowerCase();
 
 const agentPackages: Record<CliProvider, AgentPackage> = {
@@ -457,7 +460,10 @@ export class AgentUpdates {
         },
       )
       .then((response) => (response.ok ? response.json() : undefined))
-      .then((tags) => (typeof tags?.[tag] === "string" ? tags[tag] : undefined))
+      .then((tags) => {
+        const latest = isRecord(tags) ? tags[tag] : undefined;
+        return typeof latest === "string" ? latest : undefined;
+      })
       .catch(() => undefined);
     this.latestCache.set(key, { at: Date.now(), version });
     return version as string | undefined;

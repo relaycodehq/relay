@@ -144,9 +144,11 @@ export class ClockifyClient {
       return "Clockify is rate limiting Relay. Try again in a minute.";
     const detail = await response
       .json()
-      .then((b: { message?: unknown }) =>
-        typeof b?.message === "string" ? b.message.slice(0, 200) : "",
-      )
+      .then((b) => {
+        const message =
+          typeof b === "object" && b && "message" in b ? b.message : undefined;
+        return typeof message === "string" ? message.slice(0, 200) : "";
+      })
       .catch(() => "");
     const safe = detail.split(this.token).join("[key]");
     return `Clockify answered ${response.status}${safe ? `: ${safe}` : "."}`;

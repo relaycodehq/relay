@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "tests",
+    "src/**/*.test.*",
+    "electron/**/*.test.*",
+    "shared/**/*.test.*",
+    "server/**/*.test.*"
+  ]
+}

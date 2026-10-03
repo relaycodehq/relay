@@ -17,7 +17,7 @@ export function sessionCallbacks(holder: Asker) {
     // Claude Code holds the prompt until this returns; a slow scan just skips the note.
     const note = await Promise.race([
       holder.options.context?.().catch(() => undefined),
-      new Promise<undefined>((r) => setTimeout(r, 3000)),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 3000)),
     ]);
     return note
       ? {

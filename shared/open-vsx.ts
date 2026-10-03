@@ -385,7 +385,7 @@ async function openZip(url: string, signal?: AbortSignal) {
       if (entry.method === 0) return body;
       if (entry.method !== 8)
         throw new Error(`${name} uses an unsupported compression.`);
-      const stream = new Blob([body as BlobPart])
+      const stream = new Blob([body])
         .stream()
         .pipeThrough(new DecompressionStream("deflate-raw"));
       return readCapped(stream, MAX_THEME_BYTES);
@@ -496,7 +496,7 @@ const timeout = (signal?: AbortSignal) =>
 async function readCapped(
   stream: ReadableStream<Uint8Array>,
   limit: number,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   let total = 0;
   const reader = stream.getReader();
