@@ -145,6 +145,77 @@ it("works in a repository with no commits yet, first commit included", async () 
     await rm(fresh, { recursive: true, force: true });
   }
 });
+it("unstages and discards staged files in a repository with no commits yet", async () => {
+  const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
+  try {
+    const run = (...args: string[]) =>
+      execFileSync("git", ["-C", fresh, ...args], { encoding: "utf8" }).trim();
+    run("init", "-q", "-b", "main");
+    await writeFile(join(fresh, "keep.ts"), "keep\n");
+    await writeFile(join(fresh, "drop.ts"), "drop\n");
+    await writeFile(join(fresh, "loose.ts"), "loose\n");
+    run("add", "keep.ts", "drop.ts");
+    const trashed: string[] = [];
+    const trash = async (file: string) => {
+      trashed.push(await readFile(file, "utf8"));
+    };
+    let tree = await workingTree(fresh);
+    tree = await performGitAction(fresh, {
+      kind: "unstage",
+      revision: tree.revision,
+      paths: ["keep.ts"],
+    });
+    expect(tree.changes.find((c) => c.path === "keep.ts")?.index).toBe("?");
+    run("add", "keep.ts");
+    tree = await workingTree(fresh);
+    tree = await performGitAction(
+      fresh,
+      {
+        kind: "discard",
+        revision: tree.revision,
+        paths: ["drop.ts"],
+        area: "staged",
+      },
+      trash,
+    );
+    expect(trashed).toEqual(["drop\n"]);
+    expect(tree.changes.map((c) => c.path)).toEqual(["keep.ts", "loose.ts"]);
+    expect(await readFile(join(fresh, "keep.ts"), "utf8")).toBe("keep\n");
+    await expect(readFile(join(fresh, "drop.ts"))).rejects.toThrow();
+  } finally {
+    await rm(fresh, { recursive: true, force: true });
+  }
+});
+it("loads and pulls an unborn branch whose upstream already has commits", async () => {
+  const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
+  try {
+    const run = (...args: string[]) =>
+      execFileSync("git", ["-C", fresh, ...args], { encoding: "utf8" }).trim();
+    run("init", "-q", "-b", "main");
+    run("remote", "add", "origin", remote);
+    git("push", "-q", "origin", "review:main");
+    run("fetch", "-q");
+    run("config", "branch.main.remote", "origin");
+    run("config", "branch.main.merge", "refs/heads/main");
+    let tree = await workingTree(fresh);
+    expect(tree).toMatchObject({
+      head: "",
+      upstream: "origin/main",
+      ahead: 0,
+      behind: 1,
+      outgoing: [],
+    });
+    tree = await performGitAction(fresh, {
+      kind: "pull",
+      revision: tree.revision,
+    });
+    expect(tree.head).not.toBe("");
+    expect(tree.behind).toBe(0);
+    expect(await readFile(join(fresh, "code.ts"), "utf8")).toContain("a = 1");
+  } finally {
+    await rm(fresh, { recursive: true, force: true });
+  }
+});
 it("handles literal odd filenames, renames, deletion and untracked files", async () => {
   const name = ":(glob)* weird\nfile.ts";
   await writeFile(join(root, name), "new\n");

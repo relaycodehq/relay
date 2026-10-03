@@ -256,15 +256,21 @@ export async function workingTree(root: string): Promise<WorkingTree> {
       }),
     ),
     pushDestination(root, branch),
-    upstream
-      ? git(root, [
-          "rev-list",
-          "--left-right",
-          "--count",
-          `${upstream}...HEAD`,
-        ]).then((out) => out.trim().split(/\s+/).map(Number))
-      : [0, 0],
-    upstream
+    !upstream
+      ? [0, 0]
+      : head
+        ? git(root, [
+            "rev-list",
+            "--left-right",
+            "--count",
+            `${upstream}...HEAD`,
+          ]).then((out) => out.trim().split(/\s+/).map(Number))
+        : // An unborn branch has nothing ahead, and everything upstream is behind.
+          git(root, ["rev-list", "--count", upstream]).then((out) => [
+            Number(out.trim()),
+            0,
+          ]),
+    upstream && head
       ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
       : "",
     lineCounts(root, changes, head),
@@ -391,14 +397,17 @@ export async function performGitAction(
         await git(
           root,
           staged
-            ? [
-                "restore",
-                "--source=HEAD",
-                "--staged",
-                "--worktree",
-                "--",
-                ...part,
-              ]
+            ? state.head
+              ? [
+                  "restore",
+                  "--source=HEAD",
+                  "--staged",
+                  "--worktree",
+                  "--",
+                  ...part,
+                ]
+              : // Nothing to restore from yet: every staged file is new.
+                ["rm", "-q", "-f", "--", ...part]
             : ["restore", "--worktree", "--", ...part],
         );
     } else if (action.kind === "ignore") {
@@ -458,17 +467,14 @@ export async function performGitAction(
         if (!state.upstream)
           throw new Error("This branch has no upstream to pull from.");
         await fetchUpstream(root, state.branch);
-        const [, ahead] = (
-          await git(root, [
-            "rev-list",
-            "--left-right",
-            "--count",
-            "@{upstream}...HEAD",
-          ])
-        )
-          .trim()
-          .split(/\s+/)
-          .map(Number);
+        // An unborn branch has nothing of its own to diverge with.
+        const ahead = state.head
+          ? Number(
+              (
+                await git(root, ["rev-list", "--count", "@{upstream}..HEAD"])
+              ).trim(),
+            )
+          : 0;
         if (ahead > 0)
           throw new Error(
             "This branch has diverged from its upstream. Rebase or merge it yourself first.",
