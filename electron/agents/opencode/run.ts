@@ -25,6 +25,7 @@ import {
   type OpenCodePart,
 } from "./events";
 import { editedPaths, openCodeActivity } from "./activity";
+import { openCodeFailure } from "./failure";
 import { openCodeModels, splitModel } from "./catalog";
 import { markOpenCodeTurn } from "./server";
 import { answerLimitError, guardSteer } from "../turn-kit";
@@ -233,11 +234,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
           finish(new Error("Cancelled by you."));
           return;
         }
-        finish(
-          new Error(
-            error?.data?.message ?? error?.name ?? "OpenCode failed to answer.",
-          ),
-        );
+        finish(openCodeFailure(error, "OpenCode failed to answer."));
         return;
       }
       case "message.updated": {
@@ -374,9 +371,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         const error = readFailure(last.info.error);
         if (error?.name === "MessageAbortedError")
           return finish(new Error("Cancelled by you."));
-        return finish(
-          new Error(error?.data?.message ?? error?.name ?? "OpenCode failed."),
-        );
+        return finish(openCodeFailure(error, "OpenCode failed."));
       }
       if (last) lastMessage = last.info.id;
       // Events can go missing across a reconnect; the stored message has it all.

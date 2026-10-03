@@ -13,7 +13,16 @@ const record = lenient(z.record(z.string(), z.unknown()));
 const failureSchema = z
   .object({
     name: text,
-    data: lenient(z.object({ message: text }).loose()),
+    data: lenient(
+      z
+        .object({
+          message: text,
+          providerID: text,
+          statusCode: count,
+          responseHeaders: lenient(z.record(z.string(), z.string())),
+        })
+        .loose(),
+    ),
   })
   .loose();
 /** A failure as OpenCode names it, or undefined for something that isn't one. */

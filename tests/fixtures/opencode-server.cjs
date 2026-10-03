@@ -73,6 +73,18 @@ async function turn(sessionID, text) {
     emit("session.idle", { sessionID });
     return;
   }
+  // A turn OpenCode ends in the failure JSON that follows: announced by
+  // session.error, or only left on the stored message for the session to read.
+  const failing = /fixture (stored )?error: (.*)$/m.exec(text);
+  if (failing) {
+    first.error = JSON.parse(failing[2]);
+    first.time.completed = Date.now();
+    if (!failing[1]) emit("session.error", { sessionID, error: first.error });
+    busy.delete(sessionID);
+    emit("session.status", { sessionID, status: { type: "idle" } });
+    emit("session.idle", { sessionID });
+    return;
+  }
   if (text.includes("abort")) {
     session.onAbort = () => {
       first.error = {

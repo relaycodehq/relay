@@ -248,6 +248,65 @@ it("stops when aborted", async () => {
   expect((await captured()).some((c) => c.path.endsWith("/abort"))).toBe(true);
 });
 
+/** What the turn ends in when OpenCode fails it with `error`, announced or only stored. */
+const failsWith = (error: object, stored = false) =>
+  turn(
+    `Write notes.md fixture ${stored ? "stored " : ""}error: ${JSON.stringify(error)}`,
+  ).run.catch((e) => e);
+const apiError = (statusCode: number, extra: object = {}) => ({
+  name: "APIError",
+  data: {
+    message: "Provider said no.",
+    statusCode,
+    isRetryable: false,
+    ...extra,
+  },
+});
+
+it("ends a turn OpenCode has no login for as signed out, naming the provider", async () => {
+  const auth = {
+    name: "ProviderAuthError",
+    data: { providerID: "openrouter", message: "Authentication failed" },
+  };
+  for (const stored of [false, true])
+    expect(await failsWith(auth, stored)).toMatchObject({
+      kind: "signedOut",
+      provider: "opencode",
+      message: expect.stringContaining("openrouter"),
+    });
+  expect(await failsWith(apiError(401))).toMatchObject({ kind: "signedOut" });
+  // A 403 can be the model or the region; it says nothing about the login.
+  expect(await failsWith(apiError(403))).not.toHaveProperty("kind");
+});
+
+it("ends a turn the provider refused for rate or credit as a usage limit, with a reset only when it says one", async () => {
+  const limited = await failsWith(
+    apiError(429, { responseHeaders: { "Retry-After": "120" } }),
+  );
+  expect(limited).toMatchObject({ kind: "usageLimit", provider: "opencode" });
+  expect(limited.message).toContain("Provider said no.");
+  expect(limited.resetsAt - Date.now()).toBeGreaterThan(110_000);
+  expect(limited.resetsAt - Date.now()).toBeLessThanOrEqual(120_000);
+  const spent = await failsWith(
+    apiError(402, { message: "Insufficient credits" }),
+    true,
+  );
+  expect(spent).toMatchObject({ kind: "usageLimit" });
+  expect(spent.message).toContain("Insufficient credits");
+  expect(spent.resetsAt).toBeUndefined();
+  expect((await failsWith(apiError(429))).resetsAt).toBeUndefined();
+});
+
+it("leaves any other failure as OpenCode's own words", async () => {
+  const error = await failsWith(apiError(500, { message: "Upstream broke." }));
+  expect(error).not.toHaveProperty("kind");
+  expect(error.message).toBe("Upstream broke.");
+  expect(await failsWith({ name: "UnknownError", data: {} })).toHaveProperty(
+    "message",
+    "UnknownError",
+  );
+});
+
 it("never strips bash from a session, which Zen's free models refuse", () => {
   const all = [
     ...runtimeModes.map((m) => permissionRules(m.value, {})),
