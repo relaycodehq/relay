@@ -67,16 +67,22 @@ export function useAgentRuns(
     next: (current: NewThreadModel) => NewThreadModel,
   ) =>
     setModels((all) => withModel(all, provider, next(modelOf(all, provider))));
+  const claudeError = catalogs.errorOf("claude");
   const picker = useMemo(
     () => ({
       codex: { models: codexModels, model: codex?.model ?? "" },
-      claude: { models: claudeModels, model: claudeListed?.id ?? claude.model },
+      claude: {
+        models: claudeModels,
+        model: claudeListed?.id ?? claude.model,
+        error: claudeError,
+      },
       ...Object.fromEntries(
         pickAgents.map((p) => [
           p,
           {
             models: catalogs.picks[p]?.models,
             model: models[p]?.choice.model ?? "",
+            error: catalogs.picks[p]?.error,
           },
         ]),
       ),
@@ -87,6 +93,7 @@ export function useAgentRuns(
       claudeModels,
       claudeListed?.id,
       claude.model,
+      claudeError,
       catalogs.picks,
       models,
     ],

@@ -50,6 +50,13 @@ export function useModelCatalogs(projectId: string) {
   return {
     claude,
     codex,
+    /** Why `provider` couldn't list its models; Codex falls back to a list of its own. */
+    errorOf: (p: AgentProvider) =>
+      p === "claude"
+        ? claudeCatalog.error
+        : p === "codex"
+          ? undefined
+          : agentPicks.catalogs[p]?.error,
     /** The catalogs of the agents in `pickAgents`; see features/agents/composer-models. */
     picks: agentPicks.catalogs,
     defaults,

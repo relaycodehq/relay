@@ -2,10 +2,13 @@ import { useQueries } from "@tanstack/react-query";
 import type { AgentModel, AgentProvider } from "../../../shared/agents";
 import { pickAgents } from "./composer-models";
 import { api } from "../../lib/api";
+import { errorMessage } from "../../lib/error-message";
 
 interface AgentPickCatalog {
   /** Undefined while loading; empty when the agent couldn't list any. */
   models: AgentModel[] | undefined;
+  /** Why it couldn't, as opposed to offering none. */
+  error?: string;
 }
 export const agentModelsQuery = (provider: AgentProvider) => ({
   queryKey: ["agent-models", provider],
@@ -22,7 +25,9 @@ export function useAgentPicks() {
   const catalogs = Object.fromEntries(
     pickAgents.map((provider, i) => [
       provider,
-      { models: models[i].isError ? [] : models[i].data },
+      models[i].isError
+        ? { models: [], error: errorMessage(models[i].error) }
+        : { models: models[i].data },
     ]),
   ) as Partial<Record<AgentProvider, AgentPickCatalog>>;
   return {

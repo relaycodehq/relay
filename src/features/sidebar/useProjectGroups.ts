@@ -13,7 +13,7 @@ import {
   type ProjectPlace,
 } from "../../../shared/project-folders";
 import { api } from "../../lib/api";
-import { errorMessage } from "./error-message";
+import { errorMessage } from "../../lib/error-message";
 import { groupKey } from "./useSidebarFolds";
 
 export type ProjectGroups = ReturnType<typeof useProjectGroups>;

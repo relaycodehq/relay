@@ -252,6 +252,11 @@
   margin: 0;
   border-top: 1px solid var(--border);
 }
+.model-picker-note .text-button {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+}
 .usage-footer {
   flex-shrink: 0;
   border-top: 1px solid var(--border);

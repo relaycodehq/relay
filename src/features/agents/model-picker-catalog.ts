@@ -26,6 +26,8 @@ export interface AgentCatalog {
   models: AgentModel[] | undefined;
   /** The model picked for it; "" is its Default. */
   model: string;
+  /** Why the agent couldn't list its models, as opposed to offering none. */
+  error?: string;
 }
 export const providerNames: Record<MessageProvider, string> = {
   ...(Object.fromEntries(

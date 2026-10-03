@@ -444,18 +444,35 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                       </Combobox.List>
                       {category !== "favorites" &&
                         category !== "message" &&
-                        !catalogs[category]?.models && (
-                          <p className="model-picker-note">
-                            Loading models from {agentName(category)}…
+                        (catalogs[category]?.error ? (
+                          <p className="model-picker-note" role="alert">
+                            Couldn't load models from {agentName(category)}:{" "}
+                            {catalogs[category].error}{" "}
+                            {onOpen && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                onClick={onOpen}
+                              >
+                                Try again
+                              </button>
+                            )}
+                          </p>
+                        ) : (
+                          !catalogs[category]?.models && (
+                            <p className="model-picker-note">
+                              Loading models from {agentName(category)}…
+                            </p>
+                          )
+                        ))}
+                      {rows.length === 0 &&
+                        !catalogs[category as AgentProvider]?.error && (
+                          <p className="model-picker-empty">
+                            {category === "favorites" && !query
+                              ? "Star models to keep them here."
+                              : "No matching models."}
                           </p>
                         )}
-                      {rows.length === 0 && (
-                        <p className="model-picker-empty">
-                          {category === "favorites" && !query
-                            ? "Star models to keep them here."
-                            : "No matching models."}
-                        </p>
-                      )}
                       {!query.trim() &&
                         !legacy &&
                         legacyCount > 0 &&
