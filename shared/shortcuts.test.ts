@@ -53,7 +53,7 @@ describe("default shortcuts", () => {
     });
     it(`leave the menu's and the OS's keys alone on ${platform}`, () => {
       const taken = all.filter(({ id, c }) =>
-        reservedCombos(mac).some(([r]) =>
+        reservedCombos(mac, command(id).outsideFields).some(([r]) =>
           overlaps(r, false, c, command(id).digits),
         ),
       );

@@ -64,6 +64,7 @@ import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
 import { ThreadChanges, ThreadFiles, ThreadHistory } from "./ThreadPanes";
 import { ErrorBox, IconButton, Loading, Modal } from "../ui/ui";
 import { Pane } from "../ui/WorkspacePanes";
+import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
 const NO_PROJECTS: Project[] = [];
 
@@ -83,6 +84,7 @@ export default function ProjectShell() {
   const composer = useRef<ComposerControls>(null);
   const [choosePR, setChoosePR] = useState(false);
   const [error, setError] = useState<unknown>();
+  useUndoShortcut(setError);
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);

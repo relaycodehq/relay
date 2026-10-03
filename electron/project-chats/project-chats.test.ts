@@ -16,6 +16,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
+import { triageState } from "../../shared/chat-activity";
 import {
   applyChatPatch,
   type ChatMessage,
@@ -2760,6 +2761,32 @@ it("marks a thread unread until it's read again", async () => {
   // Reading what was already read still clears the mark.
   await chats.markSeen(chat.id, 0);
   expect(chats.list(projectId)[0].markedUnread).toBeUndefined();
+});
+
+it("undoes a settle back to the snooze it cleared, but not once something newer moved the thread", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const until = Date.now() + 3_600_000;
+  const snoozed = await chats.triage(chat.id, { kind: "snooze", until });
+  const before = triageState(snoozed);
+  const settled = await chats.triage(chat.id, { kind: "settle" });
+  await chats.triage(chat.id, {
+    kind: "restore",
+    from: triageState(settled),
+    to: before,
+  });
+  expect(triageState(chats.list(projectId)[0])).toEqual(before);
+
+  const archived = await chats.triage(chat.id, { kind: "archive" });
+  // Unsettled from the phone, say, before the archive was undone.
+  await chats.triage(chat.id, { kind: "unsettle" });
+  await expect(
+    chats.triage(chat.id, {
+      kind: "restore",
+      from: triageState(archived),
+      to: before,
+    }),
+  ).rejects.toThrow("changed since");
+  expect(chats.list(projectId)[0].archivedAt).toBe(archived.archivedAt);
 });
 
 it("settles a quiet thread by itself until it's moved back by hand", async () => {

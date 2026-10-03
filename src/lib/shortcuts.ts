@@ -228,30 +228,49 @@ export const popupOpen = () => !!document.querySelector(POPUPS);
 
 /**
  * Calls `onFire` when `id`'s keys are pressed anywhere in the window, except
- * while a popup is open or an IME is composing. A plain-key (`bare`) command
- * only listens outside text fields. Held keys repeat only with `repeat`.
+ * while a popup is open or an IME is composing. A plain-key (`bare`) or
+ * `outsideFields` command only listens outside text fields, which keep the
+ * key, and the Edit menu its native job there. Held keys repeat only with
+ * `repeat`.
  */
 export function useShortcut(
   id: ShortcutId,
   enabled: boolean,
   onFire: () => void,
-  { repeat = false }: { repeat?: boolean } = {},
+  {
+    repeat = false,
+    inFields,
+  }: {
+    repeat?: boolean;
+    /** Lets an `outsideFields` command take this press in a text field after all. */
+    inFields?: () => boolean;
+  } = {},
 ) {
   const fire = useRef(onFire);
   fire.current = onFire;
+  const fieldsOk = useRef(inFields);
+  fieldsOk.current = inFields;
+  // A field acts on its own keys before they bubble up (the composer's editor
+  // takes ⌘Z even with nothing visible to undo), so a command that may take
+  // a press in a field hears it first and keeps it from the field.
+  const capture = !!inFields;
   useEffect(() => {
     if (!enabled) return;
-    const bare = !!command(id).bare;
+    const { bare, outsideFields } = command(id);
     const down = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || (e.repeat && !repeat)) return;
       if (!matches(id, e)) return;
-      if ((bare && isTypingTarget(e)) || popupOpen()) return;
+      const field = isTypingTarget(e);
+      if (bare && field) return;
+      if (outsideFields && field && !fieldsOk.current?.()) return;
+      if (popupOpen()) return;
       e.preventDefault();
+      if (capture && field) e.stopPropagation();
       fire.current();
     };
-    window.addEventListener("keydown", down);
-    return () => window.removeEventListener("keydown", down);
-  }, [id, enabled, repeat]);
+    window.addEventListener("keydown", down, capture);
+    return () => window.removeEventListener("keydown", down, capture);
+  }, [id, enabled, repeat, capture]);
 }
 
 /** Esc Esc and the like, which only a dedicated handler can tell apart. */
@@ -396,8 +415,8 @@ export function conflictOf(
   id: ShortcutId,
   combo: KeyCombo,
 ): Conflict | undefined {
-  const digits = command(id).digits;
-  const reserved = reservedCombos(mac).find(([r]) =>
+  const { digits, outsideFields } = command(id);
+  const reserved = reservedCombos(mac, outsideFields).find(([r]) =>
     overlaps(placed(r), false, combo, digits),
   );
   if (reserved) return { kind: "reserved", what: reserved[1] };

@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   ChatSummary,
   ChatTriage,
+  ChatTriageState,
   Project,
 } from "../../../shared/projects";
+import { triageState } from "../../../shared/chat-activity";
 import { nextAfterSettle, triaged } from "./activity";
 import { api } from "../../lib/api";
+import { undos } from "../../lib/undo";
 import { errorMessage } from "./error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
 
@@ -20,6 +23,9 @@ export type ThreadMenuAction =
   | { kind: "triage"; triage: ChatTriage };
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
+
+/** Settling, archiving and snoozing are what ⌘Z can take back. */
+const UNDOABLE = new Set<ChatTriage["kind"]>(["settle", "archive", "snooze"]);
 
 /**
  * What the sidebar does to a thread: opening, triage, naming and forking it.
@@ -67,25 +73,72 @@ export function useThreadActions({
         ? ["project-chats"]
         : ["project-chats", c.projectId],
     });
-  const triage = async (c: ChatSummary, action: ChatTriage) => {
+  /** Where the shell is by the time an undo runs. */
+  const latest = useRef({ chatId, open });
+  latest.current = { chatId, open };
+  /**
+   * Puts back the marks a thread had `before` the action that is `done`,
+   * then `back` to it if the action had moved away.
+   */
+  const restore = async (
+    c: ChatSummary,
+    before: ChatTriageState,
+    done: Promise<ChatSummary>,
+    back?: () => void,
+  ) => {
+    const action: ChatTriage = {
+      kind: "restore",
+      from: triageState(await done),
+      to: before,
+    };
     patch(c, (entry) => triaged(entry, action, Date.now()));
     try {
       await api.triageProjectChat(c.id, action);
+    } finally {
+      refresh(c);
+    }
+    back?.();
+  };
+  const apply = async (
+    c: ChatSummary,
+    action: ChatTriage,
+    back?: () => void,
+  ) => {
+    // Mark unread and auto-settle leave where the thread is alone, and with it any undo.
+    const moves = action.kind !== "unread" && action.kind !== "auto-settle";
+    const token = moves ? undos.claim([c.id]) : undefined;
+    const before = triageState(c);
+    patch(c, (entry) => triaged(entry, action, Date.now()));
+    const done = api.triageProjectChat(c.id, action);
+    if (token !== undefined && UNDOABLE.has(action.kind))
+      undos.offer(token, [c.id], () => restore(c, before, done, back));
+    try {
+      await done;
     } catch (e) {
+      if (token !== undefined) undos.drop(token);
       failed(e);
     } finally {
       refresh(c);
     }
   };
-  /** Settling the open thread moves on to its neighbour in activity, or a new thread. */
+  const triage = (c: ChatSummary, action: ChatTriage) => apply(c, action);
+  /**
+   * Settling the open thread moves on to its neighbour in activity, or a new
+   * thread; undoing it comes back unless you went elsewhere meanwhile.
+   */
   const settle = (c: ChatSummary) => {
+    let back: (() => void) | undefined;
     if (c.id === chatId) {
       const next = nextAfterSettle(active, c.id);
       const p = projects.get(c.projectId);
       if (next) open(next);
       else if (p) onNew(p);
+      if (next || p)
+        back = () => {
+          if (latest.current.chatId === next?.id) latest.current.open(c);
+        };
     }
-    void triage(c, { kind: "settle" });
+    void apply(c, { kind: "settle" }, back);
   };
   const rename = async (c: ChatSummary, title: string) => {
     patch(c, (entry) => ({ ...entry, title, renamed: true }));

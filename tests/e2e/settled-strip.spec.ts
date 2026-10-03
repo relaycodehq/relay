@@ -125,6 +125,13 @@ test("an opened settled thread shows the settled strip until it's unsettled or a
     await activeCard.hover();
     await activeCard.getByRole("button", { name: "Settle" }).click();
     await expect(activeCard).toHaveCount(0);
+    // Nothing pops up to say so; ⌘Z takes it back for a few seconds.
+    await expect(page.locator(".toast")).toHaveCount(0);
+    await page.keyboard.press("Meta+z");
+    await expect(activeCard).toBeVisible();
+    await activeCard.hover();
+    await activeCard.getByRole("button", { name: "Settle" }).click();
+    await expect(activeCard).toHaveCount(0);
     await openFromShelf();
     await expect(strip).toBeVisible();
 

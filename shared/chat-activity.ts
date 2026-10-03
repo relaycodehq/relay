@@ -1,4 +1,4 @@
-import type { ChatSummary } from "./projects";
+import type { ChatSummary, ChatTriageState } from "./projects";
 
 // Activity triage follows T3 Code's settle/snooze model (thread-settled.ts):
 // settling and snoozing are overlays on an open thread, and newer activity
@@ -104,6 +104,35 @@ export function autoSettledAt(
   // Backdated to the last activity, so the shelf orders by when work stopped.
   if (now - chat.updated >= days * 86_400_000) return chat.updated;
   return undefined;
+}
+
+const triageKeys = [
+  "settledAt",
+  "unsettledAt",
+  "snoozedAt",
+  "snoozedUntil",
+  "archivedAt",
+] as const;
+
+/** The marks triage set on `chat`; a settle worked out live isn't one. */
+export function triageState(
+  chat: ChatTriageState & Pick<ChatSummary, "autoSettled">,
+): ChatTriageState {
+  const state: ChatTriageState = {};
+  for (const key of triageKeys)
+    if (chat[key] != null && !(key === "settledAt" && chat.autoSettled))
+      state[key] = chat[key];
+  return state;
+}
+
+export const sameTriageState = (a: ChatTriageState, b: ChatTriageState) =>
+  triageKeys.every((key) => a[key] === b[key]);
+
+/** Gives `chat` exactly `state`'s marks, dropping the ones it had. */
+export function setTriageState(chat: ChatTriageState, state: ChatTriageState) {
+  for (const key of triageKeys)
+    if (state[key] == null) delete chat[key];
+    else chat[key] = state[key];
 }
 
 /** Only the latest settled threads stay in Activity; Projects lists them all. */

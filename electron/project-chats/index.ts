@@ -6,6 +6,9 @@ import type { AgentResponse } from "../../shared/agent-modes";
 import {
   autoSettledAt,
   DEFAULT_AUTO_SETTLE_DAYS,
+  sameTriageState,
+  setTriageState,
+  triageState,
 } from "../../shared/chat-activity";
 import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
 import type {
@@ -300,6 +303,15 @@ export class ProjectChats {
   async triage(id: string, triage: ChatTriage) {
     const chat = await this.storage.load(id);
     const now = Date.now();
+    if (triage.kind === "restore") {
+      if (!sameTriageState(triageState(chat), triage.from))
+        throw new Error(
+          "This thread changed since, so there's nothing to undo.",
+        );
+      setTriageState(chat, triage.to);
+      await this.storage.save(chat);
+      return chatSummary(chat);
+    }
     if (triage.kind === "unread" || triage.kind === "auto-settle") {
       if (triage.kind === "unread") chat.markedUnread = true;
       else if (triage.enabled) delete chat.autoSettleOff;

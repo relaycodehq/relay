@@ -130,6 +130,18 @@ export type ChatPending =
       /** When a one-shot wake-up fires. */
       at?: number;
     };
+const triageTime = z.number().int().positive().optional();
+/** A thread's settle, snooze and archive marks, the ones triage sets. */
+export const chatTriageStateSchema = z
+  .object({
+    settledAt: triageTime,
+    unsettledAt: triageTime,
+    snoozedAt: triageTime,
+    snoozedUntil: triageTime,
+    archivedAt: triageTime,
+  })
+  .strict();
+export type ChatTriageState = z.infer<typeof chatTriageStateSchema>;
 export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("settle") }).strict(),
   z.object({ kind: z.literal("unsettle") }).strict(),
@@ -143,5 +155,14 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("archive") }).strict(),
   z.object({ kind: z.literal("unread") }).strict(),
   z.object({ kind: z.literal("auto-settle"), enabled: z.boolean() }).strict(),
+  // Undo: puts `to` back only while the thread still holds `from`, what the
+  // undone action left, so it can't reverse anything done to it since.
+  z
+    .object({
+      kind: z.literal("restore"),
+      from: chatTriageStateSchema,
+      to: chatTriageStateSchema,
+    })
+    .strict(),
 ]);
 export type ChatTriage = z.infer<typeof chatTriageSchema>;

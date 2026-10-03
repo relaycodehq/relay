@@ -1,6 +1,7 @@
 // Activity's rules for the sidebar: how triage shows before the desktop has
 // it, where settling the open thread moves on to, and what the bell counts.
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
+import { setTriageState } from "../../../shared/chat-activity";
 
 /** `chat` as `action` leaves it, at `now`. */
 export function triaged(
@@ -15,6 +16,11 @@ export function triaged(
       return { ...chat, markedUnread: true };
     case "auto-settle":
       return { ...chat, autoSettleOff: action.enabled ? undefined : true };
+    case "restore": {
+      const next = { ...chat, autoSettled: undefined };
+      setTriageState(next, action.to);
+      return next;
+    }
     default:
       return {
         ...chat,

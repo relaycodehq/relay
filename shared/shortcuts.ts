@@ -45,6 +45,11 @@ export interface ShortcutCommand {
   keywords?: string;
   /** Plain keys are fine: it only listens outside text fields. */
   bare?: boolean;
+  /**
+   * Only listens outside text fields, so it may share the Edit menu's Undo
+   * and Redo keys, which do nothing out there.
+   */
+  outsideFields?: boolean;
   /** The binding holds modifiers; any digit 1–9 picks which. */
   digits?: boolean;
   /** Handled by the app menu in the main process. */
@@ -122,6 +127,15 @@ const shortcutCommands = {
     group: "Threads",
     keywords: "done hide triage",
     defaults: one("mod+KeyE"),
+  },
+  undo: {
+    title: "Undo settling, snoozing or archiving a thread",
+    group: "Threads",
+    description:
+      "For a few seconds after. In a text field the key keeps undoing typing.",
+    keywords: "revert restore unsettle wake unarchive triage",
+    outsideFields: true,
+    defaults: one("mod+KeyZ"),
   },
   stop: {
     title: "Stop the answer and pause queued messages",
@@ -301,8 +315,14 @@ export const menuAcceleratorsSchema = z.partialRecord(
     .max(MAX_BINDINGS),
 );
 
-/** Keys the app menu and the OS keep: Edit, Quit, Hide and the rest. */
-export function reservedCombos(mac: boolean): [KeyCombo, string][] {
+/**
+ * Keys the app menu and the OS keep: Edit, Quit, Hide and the rest. Undo and
+ * Redo act only in text fields, so they are free `outsideFields`.
+ */
+export function reservedCombos(
+  mac: boolean,
+  outsideFields = false,
+): [KeyCombo, string][] {
   const list: [string, string][] = mac
     ? [
         ["mod+KeyQ", "quits Relay"],
@@ -330,7 +350,9 @@ export function reservedCombos(mac: boolean): [KeyCombo, string][] {
         ["mod+KeyA", "is Select All"],
         ["alt+F4", "closes the window"],
       ];
-  return list.map(([spec, what]) => [combo(mac, spec), what]);
+  return list
+    .filter(([, what]) => !outsideFields || !/^is (Undo|Redo)$/.test(what))
+    .map(([spec, what]) => [combo(mac, spec), what]);
 }
 
 const modifiersEqual = (a: KeyCombo, b: KeyCombo) =>

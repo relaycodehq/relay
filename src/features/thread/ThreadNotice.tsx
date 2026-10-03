@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { chatSettled } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import { undos } from "../../lib/undo";
 import {
   AbandonedStrip,
   HandoffStrip,
@@ -42,6 +43,7 @@ export function ThreadNotice({
     }
   }
   const unsettle = async () => {
+    undos.claim([chat.id]);
     qc.setQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] }, (list) =>
       list?.map((c) => (c.id === chat.id ? { ...c, settledAt: undefined } : c)),
     );
