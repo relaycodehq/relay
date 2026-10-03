@@ -19,7 +19,13 @@ import { idSchema, presenceSchema } from "../../shared/rooms";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
-import type { ApiContext, Handlers } from "./context";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+/** A missing optional argument reaches the handler as undefined from the page and as null over the phone's JSON. */
+const optional = <T extends z.ZodType>(schema: T) =>
+  schema.nullish().transform((value) => value ?? undefined);
+const agentIdSchema = z.string().min(1).max(200);
+const imagePathSchema = z.string().min(1).max(500);
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
@@ -45,140 +51,127 @@ export function chatHandlers(ctx: ApiContext) {
     return merged;
   }
   return {
-    projectChats: (args) => ctx.listChats(idSchema.parse(args[0])),
-    createProjectChat: (args) =>
-      projectChats.create(
-        idSchema.parse(args[0]),
-        chatScopeSchema.parse(args[1]),
-        chatWorkspaceSchema.optional().parse(args[2] ?? undefined),
-      ),
-    projectChat: async (args) => {
-      const id = idSchema.parse(args[0]);
-      const chat =
-        args[1] == null
-          ? await projectChats.get(id)
-          : await projectChats.changes(id, knownMessagesSchema.parse(args[1]));
-      projectChats.ensureTitle(id);
-      return chat;
-    },
-    triageProjectChat: (args) =>
-      projectChats.triage(
-        idSchema.parse(args[0]),
-        chatTriageSchema.parse(args[1]),
-      ),
-    forkProjectChat: (args) =>
-      projectChats.fork(
-        idSchema.parse(args[0]),
-        idSchema.optional().parse(args[1] ?? undefined),
-      ),
-    regenerateProjectChatTitle: (args) =>
-      projectChats.regenerateTitle(idSchema.parse(args[0])),
-    renameProjectChat: (args) =>
-      projectChats.rename(idSchema.parse(args[0]), z.string().parse(args[1])),
-    markProjectChatSeen: (args) =>
-      projectChats.markSeen(
-        idSchema.parse(args[0]),
-        z.number().int().min(0).parse(args[1]),
-      ),
-    sendProjectChat: async (args) => {
-      const send = projectChatSendSchema.parse(args[1]);
-      const sent = await projectChats.send(idSchema.parse(args[0]), send);
-      await rememberSentModel(store, send);
-      return sent;
-    },
-    resumeProjectChat: (args) =>
-      projectChats.resume(
-        idSchema.parse(args[0]),
-        resumeSettingsSchema.optional().parse(args[1] ?? undefined),
-      ),
-    compactProjectChat: (args) =>
-      projectChats.compact(
-        idSchema.parse(args[0]),
-        args[1] == null ? undefined : idSchema.parse(args[1]),
-        z.string().trim().max(4000).optional().parse(args[2]) || undefined,
-      ),
-    projectChatQueueAction: (args) =>
-      projectChats.queueAction(
-        idSchema.parse(args[0]),
-        z.enum(["remove", "steer", "move"]).parse(args[1]),
-        idSchema.parse(args[2]),
-        z.number().int().min(0).max(20).optional().parse(args[3]),
-      ),
-    respondProjectChat: (args) =>
-      projectChats.respond(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        agentResponseSchema.parse(args[2]),
-      ),
-    cancelProjectChat: (args) => projectChats.cancel(idSchema.parse(args[0])),
-    resolveStoppedWork: (args) =>
-      projectChats.resolveStoppedWork(
-        idSchema.parse(args[0]),
-        z.enum(["resume", "dismiss"]).parse(args[1]),
-      ),
-    setLimitResume: (args) =>
-      projectChats.setLimitResume(
-        idSchema.parse(args[0]),
-        z.boolean().parse(args[1]),
-      ),
-    stopProjectChatPending: (args) =>
-      projectChats.stopPending(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      ),
-    projectChatAgents: (args) => projectChats.agents(idSchema.parse(args[0])),
-    projectChatAgent: (args) =>
-      projectChats.agentRun(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      ),
-    stopProjectChatAgent: (args) =>
-      projectChats.stopAgent(
-        idSchema.parse(args[0]),
-        z.string().min(1).max(200).parse(args[1]),
-      ),
-    projectChatImage: (args) =>
-      projectChats.image(idSchema.parse(args[0]), idSchema.parse(args[1])),
-    projectChatReadImage: (args) =>
-      projectChats.readImage(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        z.string().min(1).max(500).parse(args[2]),
-      ),
-    revealProjectChatReadImage: async (args) => {
-      shell.showItemInFolder(
-        await projectChats.turnImagePath(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          z.string().min(1).max(500).parse(args[2]),
-        ),
-      );
-    },
-    projectTurnDiff: (args) =>
-      projectChats.turnDiff(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      ),
-    revealProjectTurnFile: async (args) => {
-      const file = await projectChats.turnFilePath(
-        idSchema.parse(args[0]),
-        idSchema.nullable().parse(args[1]),
-        workingPathSchema.parse(args[2]),
-      );
-      if (!existsSync(file)) throw new Error("That file is gone from disk.");
-      shell.showItemInFolder(file);
-    },
-    rewindProjectTurn: (args) =>
-      projectChats.rewindTurn(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-        z.array(workingPathSchema).max(1000).nullable().parse(args[2]),
-        z.enum(["revert", "redo"]).parse(args[3]),
-        z.boolean().parse(args[4]),
-      ),
-    projectWorktree: async (args) => {
-      const chatId = idSchema.parse(args[0]);
+    projectChats: takes([idSchema], (id) => ctx.listChats(id)),
+    createProjectChat: takes(
+      [idSchema, chatScopeSchema, optional(chatWorkspaceSchema)],
+      (id, scope, workspace) => projectChats.create(id, scope, workspace),
+    ),
+    projectChat: takes(
+      [idSchema, optional(knownMessagesSchema)],
+      async (id, known) => {
+        const chat = known
+          ? await projectChats.changes(id, known)
+          : await projectChats.get(id);
+        projectChats.ensureTitle(id);
+        return chat;
+      },
+    ),
+    triageProjectChat: takes([idSchema, chatTriageSchema], (id, triage) =>
+      projectChats.triage(id, triage),
+    ),
+    forkProjectChat: takes([idSchema, optional(idSchema)], (id, messageId) =>
+      projectChats.fork(id, messageId),
+    ),
+    regenerateProjectChatTitle: takes([idSchema], (id) =>
+      projectChats.regenerateTitle(id),
+    ),
+    renameProjectChat: takes([idSchema, z.string()], (id, title) =>
+      projectChats.rename(id, title),
+    ),
+    markProjectChatSeen: takes(
+      [idSchema, z.number().int().min(0)],
+      (id, seenAt) => projectChats.markSeen(id, seenAt),
+    ),
+    sendProjectChat: takes(
+      [idSchema, projectChatSendSchema],
+      async (id, send) => {
+        const sent = await projectChats.send(id, send);
+        await rememberSentModel(store, send);
+        return sent;
+      },
+    ),
+    resumeProjectChat: takes(
+      [idSchema, optional(resumeSettingsSchema)],
+      (id, settings) => projectChats.resume(id, settings),
+    ),
+    compactProjectChat: takes(
+      [idSchema, optional(idSchema), z.string().trim().max(4000).optional()],
+      (id, parentId, instructions) =>
+        projectChats.compact(id, parentId, instructions || undefined),
+    ),
+    projectChatQueueAction: takes(
+      [
+        idSchema,
+        z.enum(["remove", "steer", "move"]),
+        idSchema,
+        z.number().int().min(0).max(20).optional(),
+      ],
+      (id, action, messageId, index) =>
+        projectChats.queueAction(id, action, messageId, index),
+    ),
+    respondProjectChat: takes(
+      [idSchema, idSchema, agentResponseSchema],
+      (id, requestId, response) =>
+        projectChats.respond(id, requestId, response),
+    ),
+    cancelProjectChat: takes([idSchema], (id) => projectChats.cancel(id)),
+    resolveStoppedWork: takes(
+      [idSchema, z.enum(["resume", "dismiss"])],
+      (id, action) => projectChats.resolveStoppedWork(id, action),
+    ),
+    setLimitResume: takes([idSchema, z.boolean()], (id, on) =>
+      projectChats.setLimitResume(id, on),
+    ),
+    stopProjectChatPending: takes([idSchema, agentIdSchema], (id, pendingId) =>
+      projectChats.stopPending(id, pendingId),
+    ),
+    projectChatAgents: takes([idSchema], (id) => projectChats.agents(id)),
+    projectChatAgent: takes([idSchema, agentIdSchema], (id, agentId) =>
+      projectChats.agentRun(id, agentId),
+    ),
+    stopProjectChatAgent: takes([idSchema, agentIdSchema], (id, agentId) =>
+      projectChats.stopAgent(id, agentId),
+    ),
+    projectChatImage: takes([idSchema, idSchema], (id, imageId) =>
+      projectChats.image(id, imageId),
+    ),
+    projectChatReadImage: takes(
+      [idSchema, idSchema, imagePathSchema],
+      (id, messageId, path) => projectChats.readImage(id, messageId, path),
+    ),
+    revealProjectChatReadImage: takes(
+      [idSchema, idSchema, imagePathSchema],
+      async (id, messageId, path) => {
+        shell.showItemInFolder(
+          await projectChats.turnImagePath(id, messageId, path),
+        );
+      },
+    ),
+    projectTurnDiff: takes(
+      [idSchema, idSchema, workingPathSchema],
+      (chatId, messageId, path) =>
+        projectChats.turnDiff(chatId, messageId, path),
+    ),
+    revealProjectTurnFile: takes(
+      [idSchema, idSchema.nullable(), workingPathSchema],
+      async (chatId, messageId, path) => {
+        const file = await projectChats.turnFilePath(chatId, messageId, path);
+        if (!existsSync(file)) throw new Error("That file is gone from disk.");
+        shell.showItemInFolder(file);
+      },
+    ),
+    rewindProjectTurn: takes(
+      [
+        idSchema,
+        idSchema,
+        z.array(workingPathSchema).max(1000).nullable(),
+        z.enum(["revert", "redo"]),
+        z.boolean(),
+      ],
+      (chatId, messageId, paths, mode, force) =>
+        projectChats.rewindTurn(chatId, messageId, paths, mode, force),
+    ),
+    projectWorktree: takes([idSchema], async (chatId) => {
       const status = await projectChats.worktreeStatus(chatId);
       if (status.pr && !status.landed && login.client)
         if (await pullMerged(chatId, status.pr.number)) {
@@ -186,86 +179,78 @@ export function chatHandlers(ctx: ApiContext) {
           return projectChats.worktreeStatus(chatId);
         }
       return status;
-    },
-    projectWorktreeDiff: (args) =>
-      projectChats.worktreeDiff(
-        idSchema.parse(args[0]),
-        workingPathSchema.parse(args[1]),
-      ),
-    removeProjectWorktree: (args) =>
-      projectChats.removeWorktree(idSchema.parse(args[0])),
-    projectWorktreeMove: (args) =>
-      projectChats.worktreeMovePreview(idSchema.parse(args[0])),
-    moveProjectChatToWorktree: (args) =>
-      projectChats.moveToWorktree(idSchema.parse(args[0])),
-    revealProjectWorktree: (args) =>
-      openPath(projectChats.worktreePath(idSchema.parse(args[0]))),
-    revealAgentWorktree: (args) =>
-      openPath(
-        projectChats.agentWorktreePath(
-          idSchema.parse(args[0]),
-          z.string().max(4096).parse(args[1]),
-        ),
-      ),
-    projectChatPresence: (args) =>
-      projectChats.presence(
-        idSchema.parse(args[0]),
-        presenceSchema.omit({ head: true }).nullable().parse(args[1]),
-      ),
-    projectChatShareInfo: (args) =>
-      projectChats.shareInfo(idSchema.parse(args[0])),
-    shareProjectChat: (args) => projectChats.share(idSchema.parse(args[0])),
-    syncProjectChat: (args) => {
-      const id = idSchema.parse(args[0]);
-      return args[1] == null
-        ? projectChats.sync(id)
-        : projectChats.syncChanges(id, knownMessagesSchema.parse(args[1]));
-    },
-    projectChatInvite: (args) => projectChats.invite(idSchema.parse(args[0])),
-    sharedProjectChats: (args) =>
-      projectChats.sharedList(idSchema.parse(args[0])),
-    openSharedProjectChat: (args) =>
-      projectChats.openShared(idSchema.parse(args[0]), idSchema.parse(args[1])),
-    joinProjectConversation: (args) =>
-      projectChats.join(
-        idSchema.parse(args[0]),
-        z.string().max(16384).parse(args[1]),
-      ),
-    startDeepReview: async (args) => {
-      const id = idSchema.parse(args[0]);
-      const config = deepReviewStartSchema.parse(args[1]);
-      // The forge knows which branch a pull request merges into.
-      const pull =
-        config.target.kind === "pr"
-          ? await requireClient().pull(config.target.ref)
-          : undefined;
-      return projectChats.startDeepReview(
-        id,
-        config,
-        pull && { number: pull.number, title: pull.title, base: pull.base.ref },
-      );
-    },
-    nameReviewSetup: (args) =>
-      nameReviewSetup(
-        reviewSetupSchema.parse(args[0]),
-        store.aiSettings(),
-        AbortSignal.timeout(60_000),
-      ),
-    resumeDeepReview: (args) =>
-      projectChats.resumeDeepReview(idSchema.parse(args[0])),
-    resumeUltraplan: (args) =>
-      projectChats.resumeUltraplan(
-        idSchema.parse(args[0]),
-        idSchema.parse(args[1]),
-      ),
-    setDeepReviewFinding: (args) =>
-      projectChats.setDeepReviewFinding(
-        idSchema.parse(args[0]),
-        z
-          .string()
-          .regex(/^F\d{1,3}$/)
-          .parse(args[1]),
-        z.enum(["open", "dismissed"]).parse(args[2]),
-      ),
+    }),
+    projectWorktreeDiff: takes([idSchema, workingPathSchema], (chatId, path) =>
+      projectChats.worktreeDiff(chatId, path),
+    ),
+    removeProjectWorktree: takes([idSchema], (chatId) =>
+      projectChats.removeWorktree(chatId),
+    ),
+    projectWorktreeMove: takes([idSchema], (chatId) =>
+      projectChats.worktreeMovePreview(chatId),
+    ),
+    moveProjectChatToWorktree: takes([idSchema], (chatId) =>
+      projectChats.moveToWorktree(chatId),
+    ),
+    revealProjectWorktree: takes([idSchema], (chatId) =>
+      openPath(projectChats.worktreePath(chatId)),
+    ),
+    revealAgentWorktree: takes(
+      [idSchema, z.string().max(4096)],
+      (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
+    ),
+    projectChatPresence: takes(
+      [idSchema, presenceSchema.omit({ head: true }).nullable()],
+      (id, value) => projectChats.presence(id, value),
+    ),
+    projectChatShareInfo: takes([idSchema], (id) => projectChats.shareInfo(id)),
+    shareProjectChat: takes([idSchema], (id) => projectChats.share(id)),
+    syncProjectChat: takes(
+      [idSchema, optional(knownMessagesSchema)],
+      (id, known) =>
+        known ? projectChats.syncChanges(id, known) : projectChats.sync(id),
+    ),
+    projectChatInvite: takes([idSchema], (id) => projectChats.invite(id)),
+    sharedProjectChats: takes([idSchema], (id) => projectChats.sharedList(id)),
+    openSharedProjectChat: takes([idSchema, idSchema], (projectId, roomId) =>
+      projectChats.openShared(projectId, roomId),
+    ),
+    joinProjectConversation: takes(
+      [idSchema, z.string().max(16384)],
+      (projectId, url) => projectChats.join(projectId, url),
+    ),
+    startDeepReview: takes(
+      [idSchema, deepReviewStartSchema],
+      async (id, config) => {
+        // The forge knows which branch a pull request merges into.
+        const pull =
+          config.target.kind === "pr"
+            ? await requireClient().pull(config.target.ref)
+            : undefined;
+        return projectChats.startDeepReview(
+          id,
+          config,
+          pull && {
+            number: pull.number,
+            title: pull.title,
+            base: pull.base.ref,
+          },
+        );
+      },
+    ),
+    nameReviewSetup: takes([reviewSetupSchema], (setup) =>
+      nameReviewSetup(setup, store.aiSettings(), AbortSignal.timeout(60_000)),
+    ),
+    resumeDeepReview: takes([idSchema], (id) =>
+      projectChats.resumeDeepReview(id),
+    ),
+    resumeUltraplan: takes([idSchema, idSchema], (id, request) =>
+      projectChats.resumeUltraplan(id, request),
+    ),
+    setDeepReviewFinding: takes(
+      [idSchema, z.string().regex(/^F\d{1,3}$/), z.enum(["open", "dismissed"])],
+      (id, findingId, status) =>
+        projectChats.setDeepReviewFinding(id, findingId, status),
+    ),
   } satisfies Handlers;
 }
