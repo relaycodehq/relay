@@ -176,13 +176,8 @@ export function sessionCallbacks(holder: Asker) {
 export function hostedHandlers(holder: Asker): HostedHandlers {
   const { promptSubmit, canUseTool, onElicitation } = sessionCallbacks(holder);
   return {
-    canUseTool: (tool, input, context) =>
-      canUseTool(tool, input, context as Parameters<typeof canUseTool>[2]),
-    onElicitation: (request, context) =>
-      onElicitation(
-        request as unknown as Parameters<typeof onElicitation>[0],
-        context as Parameters<typeof onElicitation>[1],
-      ),
+    canUseTool,
+    onElicitation,
     hooks: { UserPromptSubmit: promptSubmit },
   };
 }

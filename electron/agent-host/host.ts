@@ -20,7 +20,8 @@ import {
   protocolVersion,
   readLines,
   writeLine,
-  type AskName,
+  type AskMessage,
+  type Asks,
   type ClientMessage,
   type HostMessage,
   type HostRecord,
@@ -61,9 +62,8 @@ const limits = {
 };
 
 type Ask = {
-  session: string;
-  name: AskName;
-  args: unknown[];
+  message: AskMessage;
+  // The client's answer, as read off the socket.
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 };
@@ -87,8 +87,16 @@ const host: SessionHost = {
     // A hook can't wait for a Relay that isn't there; a permission can.
     if (options.timeout !== undefined && !(client && session.attached))
       return Promise.resolve(options.fallback);
-    return new Promise<unknown>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const id = nextAsk++;
+      // TypeScript can't tie `name` to `args` across the union; `ask`'s signature does.
+      const message = {
+        t: "ask",
+        id,
+        session: session.id,
+        name,
+        args,
+      } as AskMessage;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const settle = () => {
         asks.delete(id);
@@ -101,12 +109,10 @@ const host: SessionHost = {
         resolve(options.fallback);
       };
       asks.set(id, {
-        session: session.id,
-        name,
-        args,
+        message,
         resolve: (value) => {
           settle();
-          resolve(value);
+          resolve(value as Asks[typeof name]["answer"]);
         },
         reject: (error) => {
           settle();
@@ -117,11 +123,11 @@ const host: SessionHost = {
       options.signal?.addEventListener("abort", cancel, { once: true });
       if (options.timeout !== undefined)
         timer = setTimeout(cancel, options.timeout);
-      if (client && session.attached)
-        send({ t: "ask", id, session: session.id, name, args });
+      if (client && session.attached) send(message);
     });
   },
-  asking: (session) => [...asks.values()].some((a) => a.session === session.id),
+  asking: (session) =>
+    [...asks.values()].some((a) => a.message.session === session.id),
 };
 
 function open(message: Extract<ClientMessage, { t: "open" }>) {
@@ -154,7 +160,7 @@ function closeSession(id: string) {
   sessions.delete(id);
   session.close();
   for (const [askId, pending] of asks)
-    if (pending.session === id) {
+    if (pending.message.session === id) {
       asks.delete(askId);
       pending.resolve(undefined);
     }
@@ -194,15 +200,8 @@ function receive(socket: Socket, message: ClientMessage) {
       for (const entry of session.entries)
         send({ t: "entry", session: session.id, entry });
       send({ t: "attached", session: session.id });
-      for (const [id, pending] of asks)
-        if (pending.session === session.id)
-          send({
-            t: "ask",
-            id,
-            session: session.id,
-            name: pending.name,
-            args: pending.args,
-          });
+      for (const pending of asks.values())
+        if (pending.message.session === session.id) send(pending.message);
       return;
     }
     case "push":

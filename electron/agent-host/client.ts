@@ -11,6 +11,8 @@ import {
   protocolVersion,
   readLines,
   writeLine,
+  type AskMessage,
+  type Asks,
   type ClientMessage,
   type Entry,
   type HookFrame,
@@ -30,17 +32,19 @@ import { AsyncQueue } from "../util/async-queue";
  */
 const callLimit = 20_000;
 
+/** A question's arguments, its last one carrying the signal that withdraws it. */
+type WithSignal<T extends unknown[]> = T extends [...infer Head, infer Context]
+  ? [...Head, context: Context & { signal: AbortSignal }]
+  : never;
+
 /** What the host asks of Relay while a session runs. */
 export interface HostedHandlers {
   canUseTool?: (
-    tool: string,
-    input: Record<string, unknown>,
-    context: Record<string, unknown> & { signal: AbortSignal },
-  ) => Promise<unknown>;
+    ...args: WithSignal<Asks["canUseTool"]["args"]>
+  ) => Promise<Asks["canUseTool"]["answer"]>;
   onElicitation?: (
-    request: Record<string, unknown>,
-    context: { signal: AbortSignal },
-  ) => Promise<unknown>;
+    ...args: WithSignal<Asks["onElicitation"]["args"]>
+  ) => Promise<Asks["onElicitation"]["answer"]>;
   hooks: Record<string, (input: unknown) => Promise<unknown>>;
 }
 
@@ -473,16 +477,12 @@ export class HostedQuery {
     }
   }
 
-  ask(message: Extract<HostMessage, { t: "ask" }>) {
+  ask(message: AskMessage) {
     const controller = new AbortController();
     this.asking.set(message.id, controller);
     const run = async () => {
       if (message.name === "canUseTool") {
-        const [tool, input, context] = message.args as [
-          string,
-          Record<string, unknown>,
-          Record<string, unknown>,
-        ];
+        const [tool, input, context] = message.args;
         if (!this.handlers.canUseTool)
           throw new Error("This session asks no permissions.");
         return this.handlers.canUseTool(tool, input, {
@@ -493,12 +493,13 @@ export class HostedQuery {
       if (message.name === "onElicitation") {
         if (!this.handlers.onElicitation)
           throw new Error("This session answers no MCP requests.");
-        return this.handlers.onElicitation(
-          message.args[0] as Record<string, unknown>,
-          { signal: controller.signal },
-        );
+        const [request, context] = message.args;
+        return this.handlers.onElicitation(request, {
+          ...context,
+          signal: controller.signal,
+        });
       }
-      const [event, input] = message.args as [string, unknown];
+      const [event, input] = message.args;
       return (await this.handlers.hooks[event]?.(input)) ?? {};
     };
     void run().then(

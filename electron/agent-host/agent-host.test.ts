@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentHosts, type HostedQuery } from "./client";
 import { HostedChild } from "./child";
+import type { Asks } from "./protocol";
 import { codexReplay } from "../agents/codex/codex-connection";
 
 // A Claude Code stand-in that asks to run a command before it answers, and
@@ -88,7 +89,7 @@ const alive = (pid: number) => {
 };
 async function open(
   hosts: AgentHosts,
-  canUseTool: () => Promise<unknown>,
+  canUseTool: () => Promise<Asks["canUseTool"]["answer"]>,
   env: Record<string, string> = {},
 ) {
   log = join(root, `claude-${Date.now()}.log`);

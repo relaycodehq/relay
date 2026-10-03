@@ -1,6 +1,11 @@
 // The agent host keeps Claude sessions running while Relay itself restarts.
 // It speaks newline-delimited JSON over a local socket, one client at a time.
 import type { Socket } from "node:net";
+import type {
+  CanUseTool,
+  ElicitationRequest,
+  OnElicitation,
+} from "@anthropic-ai/claude-agent-sdk";
 
 /**
  * Bumped when either side can no longer read what the other sends. Additions
@@ -108,17 +113,39 @@ export type HostMessage =
   /** Everything logged so far was sent; what follows is live. */
   | { t: "attached"; session: string }
   | { t: "return"; id: number; value?: unknown; error?: string }
-  | {
-      t: "ask";
-      id: number;
-      session: string;
-      name: AskName;
-      args: unknown[];
-    }
+  | AskMessage
   | { t: "cancel"; id: number }
   | { t: "refused"; error: string };
 
-export type AskName = "canUseTool" | "onElicitation" | "hook";
+/** What the host asks Relay while a session runs: each question's arguments and the answer it waits for. */
+export interface Asks {
+  canUseTool: {
+    args: [
+      tool: string,
+      input: Record<string, unknown>,
+      context: Omit<Parameters<CanUseTool>[2], "signal">,
+    ];
+    answer: Awaited<ReturnType<CanUseTool>>;
+  };
+  onElicitation: {
+    args: [
+      request: ElicitationRequest,
+      context: Omit<Parameters<OnElicitation>[1], "signal">,
+    ];
+    answer: Awaited<ReturnType<OnElicitation>>;
+  };
+  hook: { args: [event: string, input: unknown]; answer: object };
+}
+export type AskName = keyof Asks;
+export type AskMessage = {
+  [N in AskName]: {
+    t: "ask";
+    id: number;
+    session: string;
+    name: N;
+    args: Asks[N]["args"];
+  };
+}[AskName];
 
 /** Frames the log also carries, typed as SDK messages so the session reads them in order. */
 export type HookFrame = { type: "relay_hook"; event: string; input: unknown };

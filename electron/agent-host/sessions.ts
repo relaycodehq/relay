@@ -13,6 +13,7 @@ import {
 import {
   queryMethods,
   type AskName,
+  type Asks,
   type Entry,
   type HookMode,
   type LogEntry,
@@ -29,12 +30,16 @@ const limits = { entries: 30_000, line: 8 << 20 };
 export interface SessionHost {
   /** Hands Relay an entry, if it's reading this session. */
   deliver(session: HostSession, entry: Entry): void;
-  ask(
+  ask<N extends AskName>(
     session: HostSession,
-    name: AskName,
-    args: unknown[],
-    options: { signal?: AbortSignal; timeout?: number; fallback?: unknown },
-  ): Promise<unknown>;
+    name: N,
+    args: Asks[N]["args"],
+    options: {
+      signal?: AbortSignal;
+      timeout?: number;
+      fallback: Asks[N]["answer"];
+    },
+  ): Promise<Asks[N]["answer"]>;
   /** Whether a question it asked still waits for Relay. */
   asking(session: HostSession): boolean;
 }
@@ -173,10 +178,13 @@ export class ClaudeSession extends HostSession {
                 this.append({ kind: "hook", event, input });
                 return {};
               }
-              return ((await this.host.ask(this, "hook", [event, input], {
-                timeout: mode.timeout,
-                fallback: {},
-              })) ?? {}) as object;
+              // The answer is JSON off the socket; the SDK needs an object.
+              return (
+                (await this.host.ask(this, "hook", [event, input], {
+                  timeout: mode.timeout,
+                  fallback: {},
+                })) ?? {}
+              );
             },
           ],
         },
@@ -189,27 +197,20 @@ export class ClaudeSession extends HostSession {
         hooks: matchers,
         ...(asks.canUseTool
           ? {
-              canUseTool: async (tool, input, { signal, ...context }) =>
-                (await this.host.ask(
-                  this,
-                  "canUseTool",
-                  [tool, input, context],
-                  {
-                    signal,
-                    fallback: { behavior: "deny", message: "Cancelled." },
-                  },
-                )) as Awaited<ReturnType<NonNullable<Options["canUseTool"]>>>,
+              canUseTool: (tool, input, { signal, ...context }) =>
+                this.host.ask(this, "canUseTool", [tool, input, context], {
+                  signal,
+                  fallback: { behavior: "deny", message: "Cancelled." },
+                }),
             }
           : {}),
         ...(asks.onElicitation
           ? {
-              onElicitation: async (request, { signal }) =>
-                (await this.host.ask(this, "onElicitation", [request], {
+              onElicitation: (request, { signal, ...context }) =>
+                this.host.ask(this, "onElicitation", [request, context], {
                   signal,
                   fallback: { action: "cancel" },
-                })) as Awaited<
-                  ReturnType<NonNullable<Options["onElicitation"]>>
-                >,
+                }),
             }
           : {}),
       },
