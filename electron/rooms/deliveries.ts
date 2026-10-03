@@ -1,19 +1,12 @@
 import type { Store } from "../app/store";
+import type { RoomDelivery } from "../app/store-types";
 import type { RoomConnection, RoomMessage, RoomPage } from "../../shared/rooms";
 import { redacted } from "../../shared/redact-secrets";
 import type { ProjectRoomContext, RoomAccess } from "./access";
 import type { RoomConnections } from "./connections";
 import type { RoomRequest } from "./transport";
 
-/** A local agent's answer, saved before it reaches the room server so it survives going offline or a restart. */
-export interface RoomDelivery {
-  key: string;
-  roomId: string;
-  id: string;
-  body: string;
-  status: "running" | "completed" | "failed" | "cancelled";
-  error: string | null;
-}
+export type { RoomDelivery };
 
 /** A saved answer as it should be sent. One still running but not on this
  * computer was cut off when the app closed. */

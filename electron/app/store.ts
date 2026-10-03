@@ -7,6 +7,11 @@ import {
   defaultAISettings,
   type StoredAISettings,
 } from "../../shared/settings";
+import type {
+  RemoteSettings,
+  RoomDelivery,
+  SavedComputer,
+} from "./store-types";
 interface State {
   roomAccessConsents?: Record<string, boolean>;
   projects?: import("../../shared/projects").Project[];
@@ -25,7 +30,7 @@ interface State {
   roomHosting?: string;
   roomConnections?: Record<string, string>;
   roomJoins?: Record<string, string>;
-  roomDeliveries?: Record<string, import("../rooms/deliveries").RoomDelivery>;
+  roomDeliveries?: Record<string, RoomDelivery>;
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../../shared/agents").AgentProvider;
@@ -46,9 +51,9 @@ interface State {
     day?: import("../../shared/clockify").ClockifyDay;
     review?: import("../../shared/clockify").ClockifyReview;
   };
-  phoneRemote?: import("../remote/devices").RemoteSettings;
+  phoneRemote?: RemoteSettings;
   /** Computers this one hands threads to; see handoff/computers. */
-  computers?: import("../handoff/computers").SavedComputer[];
+  computers?: SavedComputer[];
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;
   /** Agent CLIs linked in Settings; a missing one is found by searching. */

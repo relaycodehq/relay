@@ -1,5 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Store } from "../app/store";
+import type { RemoteDevice, RemoteSettings } from "../app/store-types";
 import {
   fromBase64Url,
   generateKeyPair,
@@ -11,25 +12,7 @@ import {
 import type { PhoneAppReport } from "../../shared/phone-app";
 import type { DeviceKind } from "../../shared/remote";
 
-interface RemoteDevice {
-  id: string;
-  name: string;
-  /** Unset for a phone. */
-  kind?: DeviceKind;
-  created: number;
-  lastSeen?: number;
-  /** SHA-256 of the device's token; the token itself only lives on the phone. */
-  tokenHash: string;
-  app?: PhoneAppReport;
-}
-export interface RemoteSettings {
-  enabled?: boolean;
-  /** The bridge's X25519 secret: sealed by the OS credential store, or `plain:` where there is none. */
-  key?: string;
-  devices?: RemoteDevice[];
-  /** The desktop's last theme, for phones that connect before its window draws. */
-  appearance?: import("../../shared/remote").PhoneAppearance;
-}
+export type { RemoteSettings };
 
 const pairingMs = 10 * 60_000;
 const maxDevices = 10;

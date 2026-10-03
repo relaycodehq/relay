@@ -4,21 +4,9 @@ import type { PairedComputer } from "../../shared/handoff";
 import { parsePairingUrl, type RemoteCredentials } from "../../shared/remote";
 import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
 import type { Store } from "../app/store";
+import type { SavedComputer } from "../app/store-types";
 
-/** A computer this one hands threads to, as the phone keeps its desktop. */
-export interface SavedComputer {
-  id: string;
-  name: string;
-  hosts: string[];
-  port: number;
-  /** Its bridge's public key, pinned. */
-  key: string;
-  deviceId: string;
-  /** This computer's token there: sealed by the OS credential store, or `plain:` where there is none. */
-  token: string;
-  /** Hand-backs whose last word didn't reach it yet; said again when it's online. */
-  unacknowledged?: string[];
-}
+export type { SavedComputer };
 
 export const computerName = () => hostname().replace(/\.local$/, "") || "Relay";
 
