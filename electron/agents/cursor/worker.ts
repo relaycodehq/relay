@@ -230,6 +230,15 @@ function forward(run: string, update: any) {
   }
 }
 
+/** Why a run ended in error: the SDK's message and, when it has one, its code. */
+function runFailure(error: unknown) {
+  const said = error as { message?: unknown; code?: unknown } | undefined;
+  return {
+    error: String(said?.message ?? error ?? "Cursor failed."),
+    ...(typeof said?.code === "string" ? { errorCode: said.code } : {}),
+  };
+}
+
 async function start(params: CursorRun): Promise<CursorRunResult> {
   const model = await modelSelection(params);
   const agent = await agentFor(params, model);
@@ -276,15 +285,7 @@ async function start(params: CursorRun): Promise<CursorRunResult> {
             ? "error"
             : "finished",
       text: typeof result.result === "string" ? result.result : "",
-      ...(result.status === "error"
-        ? {
-            error: String(
-              (result as { error?: { message?: string } }).error?.message ??
-                (result as { error?: unknown }).error ??
-                "Cursor failed.",
-            ),
-          }
-        : {}),
+      ...(result.status === "error" ? runFailure(result.error) : {}),
     };
   } finally {
     runs.delete(params.run);

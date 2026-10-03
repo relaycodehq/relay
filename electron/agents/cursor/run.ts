@@ -10,6 +10,7 @@ import {
   type CursorCall,
 } from "./activity";
 import { expandCursorCommand } from "./commands";
+import { cursorErrorName } from "./error-codes";
 import {
   acquireCursorConnection,
   CursorError,
@@ -332,7 +333,10 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     if (result.status === "cancelled") throw new Error("Cancelled by you.");
     if (result.status === "error")
       throw await explainCursorError(
-        new CursorError("Error", result.error || "Cursor failed to answer."),
+        new CursorError(
+          cursorErrorName(result.errorCode),
+          result.error || "Cursor failed to answer.",
+        ),
         connection,
       );
     if (result.agentId !== agentId) await options.session?.onId(result.agentId);

@@ -44,6 +44,8 @@ export interface CursorRunResult {
   status: "finished" | "error" | "cancelled";
   text: string;
   error?: string;
+  /** The SDK's code for why the run failed, when it gave one. */
+  errorCode?: string;
 }
 
 export interface CursorMethods {

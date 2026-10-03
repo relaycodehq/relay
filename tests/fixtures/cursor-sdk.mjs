@@ -119,6 +119,16 @@ class FakeAgent {
         say({ type: "text-delta", text: "part two" });
         return { status: "finished", result: "part one part two" };
       }
+      // A run that ends with status "error": the SDK's toRunError gives a message and a code.
+      const runCode = /\[\[runerror:(\w+)\]\]/.exec(prompt)?.[1];
+      if (runCode)
+        return {
+          status: "error",
+          error: {
+            message: "The run stopped.",
+            ...(runCode === "none" ? {} : { code: runCode }),
+          },
+        };
       if (/\[\[fail\]\]/.test(prompt))
         return { status: "error", error: { message: "The model is down." } };
       if (/\[\[plan\]\]/.test(prompt)) {

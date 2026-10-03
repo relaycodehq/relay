@@ -262,6 +262,50 @@ describe("a Cursor turn", () => {
     expect(error.resetsAt).toBeUndefined();
   });
 
+  it("says a run that ends in error with a sign-in code is a sign-in error", async () => {
+    for (const code of [
+      "NOT_LOGGED_IN",
+      "AUTH_TOKEN_EXPIRED",
+      "unauthenticated",
+    ]) {
+      const error = await runCursor(turn(`[[runerror:${code}]]`).options).catch(
+        (e) => e,
+      );
+      expect(error, code).toMatchObject({
+        kind: "signedOut",
+        provider: "cursor",
+      });
+    }
+  });
+
+  it("says a run that ends in error with a rate or usage limit code is one, keeping Cursor's reason", async () => {
+    for (const code of [
+      "PRO_USER_USAGE_LIMIT",
+      "RATE_LIMITED",
+      "resource_exhausted",
+    ]) {
+      const error = await runCursor(turn(`[[runerror:${code}]]`).options).catch(
+        (e) => e,
+      );
+      expect(error, code).toMatchObject({
+        kind: "usageLimit",
+        provider: "cursor",
+      });
+      expect(error.message).toContain("The run stopped.");
+      expect(error.resetsAt).toBeUndefined();
+    }
+  });
+
+  it("leaves a run that ends in error with another or no code as Cursor's own words", async () => {
+    for (const code of ["internal", "none"]) {
+      const error = await runCursor(turn(`[[runerror:${code}]]`).options).catch(
+        (e) => e,
+      );
+      expect(error, code).not.toHaveProperty("kind");
+      expect(error.message).toBe("The run stopped.");
+    }
+  });
+
   it("leaves an error that only sounds like signing in as Cursor's own words", async () => {
     const error = await runCursor(turn("[[apikey]]").options).catch((e) => e);
     expect(error).not.toHaveProperty("kind");
