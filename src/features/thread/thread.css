@@ -109,7 +109,10 @@
   align-items: center;
   gap: 4px;
   justify-content: flex-end;
-  margin-top: 10px;
+  /* Shown on hover only, so the row hangs into the answer's bottom padding
+     instead of adding a band of empty space before the next message. */
+  margin-top: 2px;
+  margin-bottom: -27px;
   margin-right: -5px;
   opacity: 0;
   transition: opacity 120ms;
@@ -520,6 +523,9 @@
 }
 .project-message.assistant:has(+ .side-question) > .message-actions[inert] {
   display: none;
+}
+.project-message.assistant:has(+ .side-question) > .message-actions {
+  margin-bottom: -6px;
 }
 .agent-sign-in {
   display: flex;
