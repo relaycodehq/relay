@@ -224,3 +224,14 @@
 .agent-step-open:hover {
   color: var(--text);
 }
+/* Its picture stands in for the file icon, sized like a colour swatch and
+   centred in the icon's slot so the label lines up with the rows around it. */
+.agent-step-thumb {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0 calc((14px - 0.95em) / 2);
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}

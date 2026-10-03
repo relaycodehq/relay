@@ -113,7 +113,7 @@ details.agent-step > .agent-step-heading:hover {
   padding: 8px 10px;
   border-radius: 5px;
 }
-.agent-step > button {
+.agent-step > button:not(.agent-step-heading) {
   margin: 0 0 8px 21px;
   font-size: 10px;
 }

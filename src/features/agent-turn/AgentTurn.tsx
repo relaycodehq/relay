@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import {
@@ -20,6 +21,7 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
+import { PreviewCard } from "@base-ui/react/preview-card";
 import {
   isImagePath,
   type AgentActivity,
@@ -40,6 +42,8 @@ import {
   turnHeading,
 } from "../../../shared/agent-trace";
 import { RichText, Spinner } from "../../ui/ui";
+import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
+import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -68,20 +72,64 @@ const Subagents = createContext({
   display: (text: string) => text,
 });
 
-/** Opens an image the turn read in the preview dialog; absent where there's none to open. */
-const OpenImage = createContext<((path: string) => void) | undefined>(
-  undefined,
-);
+/** The images the turn read, by path, and how to open one in the viewer. */
+export interface ReadImages {
+  find: (path: string) => PreviewImage | undefined;
+  open: (image: PreviewImage) => void;
+}
 
-/** The path of a finished read that can open in the image preview. */
+/** Absent where there's no viewer to open an image in. */
+const TurnImages = createContext<ReadImages | undefined>(undefined);
+
+/** A finished read of an image the viewer can open. */
 function useImageRead(a: AgentActivity) {
-  const open = useContext(OpenImage);
-  return open &&
+  const images = useContext(TurnImages);
+  const image =
+    images &&
     a.kind === "read" &&
     a.status === "complete" &&
     isImagePath(a.label)
-    ? () => open(a.label)
+      ? images.find(a.label)
+      : undefined;
+  return images && image
+    ? { image, open: () => images.open(image) }
     : undefined;
+}
+
+/** A read image's row icon: the picture itself, swatch-sized, until it loads the file icon. */
+function ReadIcon({ image }: { image: PreviewImage }) {
+  const { data: source } = useImageSource(image);
+  return source ? (
+    <img className="agent-step-thumb" src={source} alt="" />
+  ) : (
+    <FileText size={14} />
+  );
+}
+
+/** A read image's picture grown above its row, once it has loaded. */
+function ReadPeek({ image }: { image: PreviewImage }) {
+  const { data: source } = useImageSource(image);
+  return source ? <ImagePeek src={source} /> : null;
+}
+
+/** A row that grows its read image above it on hover, as a sent image's pill does. */
+function ImageReadPeek({
+  image,
+  trigger,
+  children,
+}: {
+  image?: PreviewImage;
+  trigger: ReactElement;
+  children: ReactNode;
+}) {
+  return (
+    <PreviewCard.Root>
+      <PreviewCard.Trigger delay={PEEK_DELAY} closeDelay={0} render={trigger}>
+        {children}
+      </PreviewCard.Trigger>
+      {image && <ReadPeek image={image} />}
+    </PreviewCard.Root>
+  );
 }
 
 /** A running agent's status after its name, dimmed so the name leads. */
@@ -127,10 +175,16 @@ function ToolRow({
   const Icon = icons[a.kind];
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
-  const openImage = useImageRead(a);
+  const read = useImageRead(a);
   const heading = (
     <>
-      {a.status === "running" ? <Spinner size={14} /> : <Icon size={14} />}
+      {a.status === "running" ? (
+        <Spinner size={14} />
+      ) : read ? (
+        <ReadIcon image={read.image} />
+      ) : (
+        <Icon size={14} />
+      )}
       <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
       <Progress activity={a} />
     </>
@@ -138,14 +192,19 @@ function ToolRow({
   if (!expandable)
     return (
       <div className={`agent-step ${a.status}`}>
-        {openImage ? (
-          <button
-            type="button"
-            className="agent-step-heading agent-step-open"
-            onClick={openImage}
+        {read ? (
+          <ImageReadPeek
+            image={read.image}
+            trigger={
+              <button
+                type="button"
+                className="agent-step-heading agent-step-open"
+                onClick={read.open}
+              />
+            }
           >
             {heading}
-          </button>
+          </ImageReadPeek>
         ) : (
           <div className="agent-step-heading">{heading}</div>
         )}
@@ -229,14 +288,14 @@ export function AgentTurn({
   projectRoot,
   onOpenFile,
   onChanges,
-  onOpenImage,
+  images,
   open,
 }: {
   message: ChatMessage;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
-  onOpenImage?: (path: string) => void;
+  images?: ReadImages;
   /** Stays open once it ends, where the run is what the reader came for. */
   open?: boolean;
 }) {
@@ -316,7 +375,7 @@ export function AgentTurn({
       </summary>
       {expanded && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
-          <OpenImage.Provider value={onOpenImage}>
+          <TurnImages.Provider value={images}>
             <div className="agent-trace" aria-label="Local agent activity">
               {groupTrace(shown).map((part, index, parts) =>
                 part.kind === "commentary" ? (
@@ -365,7 +424,7 @@ export function AgentTurn({
                 </div>
               )}
             </div>
-          </OpenImage.Provider>
+          </TurnImages.Provider>
         </Subagents.Provider>
       )}
     </details>
@@ -421,25 +480,30 @@ function OpenBatch({
   const calls = useContext(Subagents).calls.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
   // With nothing folded behind it, an image's row opens the image instead.
-  const openImage = useImageRead(head);
+  const read = useImageRead(head);
   return (
     <div className={`agent-batch ${head.status}`}>
-      <button
-        type="button"
-        className="agent-step-heading agent-batch-head"
-        aria-expanded={folded ? open : undefined}
-        disabled={!folded && !openImage}
-        onClick={folded ? () => setOpen(!open) : openImage}
+      <ImageReadPeek
+        image={read?.image}
+        trigger={
+          <button
+            type="button"
+            className="agent-step-heading agent-batch-head"
+            aria-expanded={folded ? open : undefined}
+            disabled={!folded && !read}
+            onClick={folded ? () => setOpen(!open) : read?.open}
+          />
+        }
       >
         <span className="agent-batch-row" title={display(head.label)}>
-          <Icon size={14} />
+          {read ? <ReadIcon image={read.image} /> : <Icon size={14} />}
           <span className={running ? "live-shine" : undefined}>
             {display(running ? liveLabel(head) : doneLabel(head))}
           </span>
           <Progress activity={head} />
         </span>
         {folded && <ChevronRight size={13} className="agent-batch-chevron" />}
-      </button>
+      </ImageReadPeek>
       {/* The live agent's own calls first; the batch's earlier calls fold behind it. */}
       {open && calls.length > 0 && (
         <SubagentRows calls={calls} onChanges={onChanges} />

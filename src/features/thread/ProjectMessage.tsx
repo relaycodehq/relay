@@ -294,11 +294,11 @@ export const Message = memo(function Message({
           projectRoot={projectRoot}
           onOpenFile={onOpenFile}
           onChanges={onChanges}
-          onOpenImage={
+          images={
             chatId
-              ? (path) => {
-                  const image = allImages.find((i) => i.path === path);
-                  if (image) setViewing(image.key);
+              ? {
+                  find: (path) => allImages.find((i) => i.path === path),
+                  open: (image) => setViewing(image.key),
                 }
               : undefined
           }
