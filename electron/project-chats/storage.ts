@@ -10,8 +10,8 @@ import type {
   ScheduledChatMessage,
 } from "../../shared/projects";
 import { contextAgent } from "../../shared/recipient";
-import { keyedQueue } from "../keyed-queue";
-import type { Store } from "../store";
+import { keyedQueue } from "../util/keyed-queue";
+import type { Store } from "../app/store";
 import { imageMimeType } from "./images";
 import { reviveChat } from "./revive";
 

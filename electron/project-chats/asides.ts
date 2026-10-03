@@ -8,7 +8,7 @@ import { agentName } from "../../shared/agents";
 import { agentAsked } from "../../shared/recipient";
 import { agentMention } from "../../shared/rooms";
 import { agentRuntime } from "../agents";
-import { streamingAnswer } from "../answer-recorder";
+import { streamingAnswer } from "./answer-recorder";
 import type { ChatCore } from "./core";
 import { agentSession } from "./sessions";
 import { turnModel, type TurnRunner } from "./turn-run";

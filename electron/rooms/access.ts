@@ -1,8 +1,8 @@
-import type { Gitea } from "../gitea";
-import type { Store } from "../store";
+import type { Gitea } from "../pull-requests/gitea";
+import type { Store } from "../app/store";
 import type { RoomConnection } from "../../shared/rooms";
 import type { PullRef } from "../../shared/types";
-import { inspectRepository } from "../repository";
+import { inspectRepository } from "../git/repository";
 import type { RoomRequest } from "./transport";
 export interface ProjectRoomContext {
   client: Gitea;

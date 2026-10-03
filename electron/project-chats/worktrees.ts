@@ -1,7 +1,7 @@
 import type { ProjectChat, WorktreeStatus } from "../../shared/projects";
-import { projectTasks } from "../tasks";
-import { threadTerminals } from "../thread-terminals";
-import { promptTitle } from "../thread-titles";
+import { projectTasks } from "../terminal/tasks";
+import { threadTerminals } from "../terminal/thread-terminals";
+import { promptTitle } from "../agents/thread-titles";
 import {
   createWorktree,
   moveIntoWorktree,
@@ -10,7 +10,7 @@ import {
   worktreeChanges,
   worktreeDiff,
   worktreeExists,
-} from "../worktrees";
+} from "../git/worktrees";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { chatSummary } from "./storage";

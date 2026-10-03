@@ -15,7 +15,7 @@ import {
 import type { ProjectChat } from "../../../shared/projects";
 import type { AISettings } from "../../../shared/settings";
 import { attributeTime } from "../../../shared/time-attribution";
-import type { Store } from "../../store";
+import type { Store } from "../../app/store";
 import type { PluginSecrets } from "../secrets";
 import { ClockifyClient, seconds, type Fetch } from "./client";
 import { blockEvidence, describeBlocks } from "./describe";

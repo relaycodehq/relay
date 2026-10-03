@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { findExecutable } from "../../executables";
+import { findExecutable } from "../../platform/executables";
 import {
   sessionConfig,
   sessionSignature,

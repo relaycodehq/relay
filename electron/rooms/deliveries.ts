@@ -1,4 +1,4 @@
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import type { RoomConnection, RoomMessage, RoomPage } from "../../shared/rooms";
 import { redacted } from "../../shared/redact-secrets";
 import type { ProjectRoomContext, RoomAccess } from "./access";

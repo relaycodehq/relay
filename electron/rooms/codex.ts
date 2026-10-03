@@ -2,7 +2,7 @@ import { dirname } from "node:path";
 import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
-import { findExecutable } from "../executables";
+import { findExecutable } from "../platform/executables";
 import { codexModelArgs } from "../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "./activity";

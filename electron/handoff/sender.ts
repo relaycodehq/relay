@@ -16,11 +16,11 @@ import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import { remoteBridgeVersion, type HandoffPart } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
-import { git } from "../git";
+import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
 import { portableMessages } from "../project-chats/handoff";
-import type { Projects } from "../projects";
-import type { Store } from "../store";
+import type { Projects } from "../projects/projects";
+import type { Store } from "../app/store";
 import { computerName, type Computers } from "./computers";
 import {
   bundleBranch,

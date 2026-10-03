@@ -19,13 +19,13 @@ import {
   deleteMergedBranch,
   mergeBranch,
   mergePlan,
-} from "../branch-merge";
-import { rebaseOnUpstream } from "../branch-rebase";
-import { branches, changeBranch } from "../branches";
-import { generateCommitMessage } from "../commit-messages";
-import { applyCommitSplit, planCommitSplit } from "../commit-split";
-import { commitDetail, commitDiff, commitLog } from "../history";
-import { performGitAction, workingDiff, workingTree } from "../working-tree";
+} from "../git/branch-merge";
+import { rebaseOnUpstream } from "../git/branch-rebase";
+import { branches, changeBranch } from "../git/branches";
+import { generateCommitMessage } from "../git/commit-messages";
+import { applyCommitSplit, planCommitSplit } from "../git/commit-split";
+import { commitDetail, commitDiff, commitLog } from "../git/history";
+import { performGitAction, workingDiff, workingTree } from "../git/working-tree";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const branchNameSchema = z.string().min(1).max(250);

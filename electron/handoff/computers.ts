@@ -3,7 +3,7 @@ import { hostname } from "node:os";
 import type { PairedComputer } from "../../shared/handoff";
 import { parsePairingUrl, type RemoteCredentials } from "../../shared/remote";
 import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 
 /** A computer this one hands threads to, as the phone keeps its desktop. */
 export interface SavedComputer {

@@ -1,4 +1,4 @@
-import { findExecutable } from "../executables";
+import { findExecutable } from "../platform/executables";
 
 /** Claude rejected the account's login: it expired, or was revoked elsewhere. */
 export class ClaudeSignedOutError extends Error {

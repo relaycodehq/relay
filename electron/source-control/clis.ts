@@ -10,8 +10,8 @@ import {
   linkedTool,
   runExecutable,
   setLinkedTools,
-} from "../executables";
-import type { Store } from "../store";
+} from "../platform/executables";
+import type { Store } from "../app/store";
 
 export const probeTimeout = 8000;
 

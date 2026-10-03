@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { DevOpsSettings } from "../../../shared/devops";
-import { findExecutable } from "../../executables";
+import { findExecutable } from "../../platform/executables";
 import type { Fetch } from "./client";
 
 const exec = promisify(execFile);

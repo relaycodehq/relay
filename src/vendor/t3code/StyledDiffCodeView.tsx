@@ -11,7 +11,7 @@ import {
 import { useCallback, useRef, useState, type Ref } from "react";
 
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "./diffRendering";
-import { DiffWorkerPoolProvider } from "../../components/DiffWorkerPoolProvider";
+import { DiffWorkerPoolProvider } from "../../features/diff/DiffWorkerPoolProvider";
 import { useTypography } from "../../lib/typography";
 
 const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}

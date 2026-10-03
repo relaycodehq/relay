@@ -11,10 +11,10 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
-import { terminate } from "../terminate";
-import { findExecutable } from "../executables";
-import { git } from "../git";
-import { inspectFolder } from "../repository";
+import { terminate } from "../platform/terminate";
+import { findExecutable } from "../platform/executables";
+import { git } from "../git/git";
+import { inspectFolder } from "../git/repository";
 import { configPath, detectProject } from "./detect";
 import {
   digestSchema,

@@ -8,14 +8,14 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
-import { watchAgentWorktrees } from "../agent-worktrees";
+import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
-import { AnswerRecorder } from "../answer-recorder";
-import { turnRules, type ChatTurn } from "../chat-turn";
+import { AnswerRecorder } from "./answer-recorder";
+import { turnRules, type ChatTurn } from "./chat-turn";
 import { ClaudeSignedOutError } from "../rooms/claude-sign-in";
-import { projectTasks } from "../tasks";
-import { finishTurn, resumeTurn, startTurn } from "../turn-changes";
-import { commitWatch } from "../turn-commit";
+import { projectTasks } from "../terminal/tasks";
+import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
+import { commitWatch } from "./turn-commit";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";

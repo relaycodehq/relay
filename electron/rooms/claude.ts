@@ -1,7 +1,7 @@
-import { terminate } from "../terminate";
+import { terminate } from "../platform/terminate";
 import { runClaudeProject, type ClaudeRunOptions } from "./claude-project";
 import { claudeImages } from "./claude-project/sdk";
-import { findExecutable, spawnExecutable } from "../executables";
+import { findExecutable, spawnExecutable } from "../platform/executables";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   if (options.runtimeMode && !options.helper) return runClaudeProject(options);
   const executable = await findExecutable("claude");

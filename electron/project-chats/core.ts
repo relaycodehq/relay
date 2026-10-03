@@ -1,6 +1,6 @@
 import type { ProjectChatEvent } from "../../shared/events";
-import type { Projects } from "../projects";
-import type { Store } from "../store";
+import type { Projects } from "../projects/projects";
+import type { Store } from "../app/store";
 import type { ActiveTurns } from "./active";
 import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";

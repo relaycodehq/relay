@@ -5,8 +5,8 @@ import {
   executableCommand,
   findExecutable,
   spawnExecutable,
-} from "../../executables";
-import { terminate } from "../../terminate";
+} from "../../platform/executables";
+import { terminate } from "../../platform/terminate";
 import type { AgentHosts, HostedProcess } from "../../agent-host/client";
 import type { Entry } from "../../agent-host/protocol";
 import { foundSessions, inAgentHost } from "../hosted-sessions";

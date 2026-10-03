@@ -20,7 +20,7 @@ import {
   type ProcessSpec,
   type SessionInfo,
 } from "./protocol";
-import { AsyncQueue } from "../async-queue";
+import { AsyncQueue } from "../util/async-queue";
 
 /**
  * How long a session's control call may take. Claude Code answers them at

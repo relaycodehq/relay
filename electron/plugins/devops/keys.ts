@@ -1,5 +1,5 @@
 import type { DevOpsSecrets } from "../../../shared/devops";
-import type { Store } from "../../store";
+import type { Store } from "../../app/store";
 
 export type Encrypt = (value: string) => Promise<string | null>;
 export type Decrypt = (value: string) => Promise<string>;

@@ -11,7 +11,7 @@ import type {
 } from "../../shared/deep-review";
 import type { ThinkerTask } from "../../shared/ultraplan";
 import { DeepReviews, type PullInfo } from "../deep-review";
-import { Ultraplans } from "../ultraplan";
+import { Ultraplans } from "./ultraplan";
 import type { ChatCore } from "./core";
 
 export interface CouncilHost {

@@ -10,7 +10,7 @@ import {
   formatDuration,
   formatTokens,
   nextCacheChange,
-} from "../../src/components/ContextWindowMeter";
+} from "../../src/features/agents/ContextWindowMeter";
 import { latestContext } from "../../shared/context-usage";
 import type { ChatMessage } from "../../shared/projects";
 

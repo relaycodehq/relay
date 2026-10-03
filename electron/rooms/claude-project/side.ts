@@ -1,5 +1,5 @@
-import { findExecutable } from "../../executables";
-import { AsyncQueue } from "../../async-queue";
+import { findExecutable } from "../../platform/executables";
+import { AsyncQueue } from "../../util/async-queue";
 import { sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
 import { sessions } from "./session";
 

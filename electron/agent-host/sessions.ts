@@ -18,8 +18,8 @@ import {
   type ProcessSpec,
   type SessionInfo,
 } from "./protocol";
-import { AsyncQueue } from "../async-queue";
-import { terminate } from "../terminate";
+import { AsyncQueue } from "../util/async-queue";
+import { terminate } from "../platform/terminate";
 
 /** Log sizes: past this, what a restart can't need goes first. */
 const limits = { entries: 30_000, line: 8 << 20 };

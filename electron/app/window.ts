@@ -8,7 +8,7 @@ import {
 } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { threadTerminals } from "../thread-terminals";
+import { threadTerminals } from "../terminal/thread-terminals";
 import type { RelayEvents } from "../../shared/events";
 
 const root = join(__dirname, "../dist/index.html");

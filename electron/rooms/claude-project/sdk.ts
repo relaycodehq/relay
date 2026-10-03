@@ -2,9 +2,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readFile } from "node:fs/promises";
 import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { findExecutable } from "../../executables";
+import { findExecutable } from "../../platform/executables";
 import { claudeDefaultsFrom } from "../../../shared/agent-defaults";
-import { AsyncQueue } from "../../async-queue";
+import { AsyncQueue } from "../../util/async-queue";
 import type { AgentOptions } from "../../agents/types";
 
 export async function sdk(): Promise<

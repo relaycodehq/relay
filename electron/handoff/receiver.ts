@@ -19,9 +19,9 @@ import {
 } from "../../shared/remote";
 import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/rooms";
-import { git } from "../git";
+import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
-import { adoptWorktree } from "../worktrees";
+import { adoptWorktree } from "../git/worktrees";
 import {
   bundleBranch,
   fetchBundle,

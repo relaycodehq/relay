@@ -1,6 +1,6 @@
 import { net, safeStorage } from "electron";
-import { Gitea } from "../gitea";
-import type { Store } from "../store";
+import { Gitea } from "../pull-requests/gitea";
+import type { Store } from "./store";
 
 /** Linux's basic_text backend stores plaintext; secrets then stay in memory. */
 const canEncrypt = async () =>

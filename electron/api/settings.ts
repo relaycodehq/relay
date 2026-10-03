@@ -12,13 +12,13 @@ import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
 import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
-import { saveNewThreadModel } from "../new-thread-models";
+import { saveNewThreadModel } from "../agents/new-thread-models";
 import { parseVersion } from "../../shared/agent-updates";
 import { signInCursor, signOutCursor } from "../agents/cursor/account";
-import { runExecutable, setLinkedAgents } from "../executables";
-import { gitInfo, gitVersion, setGitPath } from "../git";
-import { readProviderUsage } from "../provider-usage";
-import { readOpenRouterCredit } from "../openrouter-credit";
+import { runExecutable, setLinkedAgents } from "../platform/executables";
+import { gitInfo, gitVersion, setGitPath } from "../git/git";
+import { readProviderUsage } from "../agents/provider-usage";
+import { readOpenRouterCredit } from "../agents/openrouter-credit";
 import {
   linkCli,
   resolveCliPath,
@@ -30,7 +30,7 @@ import { clis } from "../source-control/clis";
 import { azureDevOps } from "../source-control/azure-devops";
 import { sourceControlKinds } from "../../shared/source-control";
 import { phoneAppearanceSchema } from "../remote/phone-remote";
-import { fetchReleaseNotes } from "../release-notes";
+import { fetchReleaseNotes } from "../app/release-notes";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);

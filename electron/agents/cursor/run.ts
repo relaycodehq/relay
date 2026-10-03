@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { withTimeout } from "../../timeout";
+import { withTimeout } from "../../util/timeout";
 import type { AgentOptions } from "../types";
 import {
   cursorActivity,

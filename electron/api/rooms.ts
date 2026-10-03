@@ -15,8 +15,8 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import type { PullRef } from "../../shared/types";
-import type { SyncWorkspace } from "../live-sync";
-import { validateRepo } from "../working-tree";
+import type { SyncWorkspace } from "../projects/live-sync";
+import { validateRepo } from "../git/working-tree";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const syncTargetSchema = z.union([

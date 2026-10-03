@@ -1,5 +1,5 @@
 import type { PluginId } from "../../shared/plugins";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 
 type Encrypt = (value: string) => Promise<string | null>;
 type Decrypt = (value: string) => Promise<string>;

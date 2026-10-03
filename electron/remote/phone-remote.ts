@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { z } from "zod";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import type { ProjectChatsEvent } from "../../shared/events";
 import { toBase64Url } from "../../shared/remote-crypto";
 import {

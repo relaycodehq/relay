@@ -11,7 +11,7 @@ import {
   type ReviewScope,
 } from "../../shared/deep-review";
 import { agentName, agents } from "../../shared/agents";
-import { memberLabel } from "../council";
+import { memberLabel } from "./council";
 
 const MAX_REPORT = 20000;
 

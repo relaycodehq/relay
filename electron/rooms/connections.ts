@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import {
   connectionSchema,
   projectSchema,

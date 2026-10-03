@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { z } from "zod";
 import type { PhoneTailnet } from "../../shared/remote";
-import { findExecutable } from "../executables";
+import { findExecutable } from "../platform/executables";
 
 /**
  * Finds this computer on Tailscale. Phone access listens only on the tailnet

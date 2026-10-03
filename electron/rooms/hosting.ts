@@ -1,4 +1,4 @@
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import { roomHostingSchema, type RoomHosting } from "../../shared/rooms";
 import type { RoomRequest } from "./transport";
 

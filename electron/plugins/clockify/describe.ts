@@ -1,5 +1,5 @@
 import { agentRuntime } from "../../agents";
-import { emptyCwd, unfence } from "../../helper-output";
+import { emptyCwd, unfence } from "../../agents/helper-output";
 import { helperFallbacks } from "../../../shared/agents";
 import type { ClockifyBlock } from "../../../shared/clockify";
 import type { ProjectChat } from "../../../shared/projects";

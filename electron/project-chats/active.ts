@@ -1,7 +1,7 @@
 import type { ProjectChatSend } from "../../shared/projects";
-import { AgentRequests } from "../agent-requests";
+import { AgentRequests } from "./agent-requests";
 import type { AgentOptions } from "../agents/types";
-import { withTimeout } from "../timeout";
+import { withTimeout } from "../util/timeout";
 
 export type AgentControl = Parameters<
   NonNullable<AgentOptions["onControl"]>

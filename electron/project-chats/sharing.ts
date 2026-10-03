@@ -1,5 +1,5 @@
 import type { ProjectChat } from "../../shared/projects";
-import type { ProjectSharing } from "../project-sharing";
+import type { ProjectSharing } from "../projects/project-sharing";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./storage";
 

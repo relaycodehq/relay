@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { Gitea } from "../gitea";
-import type { Store } from "../store";
+import type { Gitea } from "../pull-requests/gitea";
+import type { Store } from "../app/store";
 import type { ChangedFile, PullRef, Review, Page } from "../../shared/types";
 import { revisionOf } from "../../shared/types";
 import {

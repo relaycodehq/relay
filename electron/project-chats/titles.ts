@@ -10,7 +10,7 @@ import {
   namesItself,
   promptTitle,
   regenerateThreadTitle,
-} from "../thread-titles";
+} from "../agents/thread-titles";
 import type { ChatCore } from "./core";
 import { sessionInput } from "./sessions";
 import { chatSummary } from "./storage";

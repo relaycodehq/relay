@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { findExecutable } from "../executables";
-import { networkError } from "../network-errors";
+import { findExecutable } from "../platform/executables";
+import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
-import type { FetchRequest } from "../gitea";
+import type { FetchRequest } from "../pull-requests/gitea";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
 import { statusRuns, type CommitStatus } from "./statuses";

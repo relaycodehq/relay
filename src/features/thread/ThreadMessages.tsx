@@ -1,0 +1,233 @@
+import { Fragment, useMemo } from "react";
+import { RotateCcw } from "lucide-react";
+import type {
+  ChatMessage,
+  ProjectChat as ProjectChatData,
+} from "../../../shared/projects";
+import type { ChatThread } from "./useChatThread";
+import type { Councils } from "./useCouncils";
+import type { ThreadMessageActions } from "./useMessageActions";
+import type { QueuedMessageActions } from "./useQueuedMessages";
+import type { ThreadHandle } from "./useThreadHandle";
+import type { ThreadScroll } from "./useThreadScroll";
+import type { ThreadWorktree } from "./useThreadWorktree";
+import {
+  DeepReviewCouncil,
+  DeepReviewReport,
+  DeepReviewRequest,
+  findingCode,
+} from "../deep-review/DeepReview";
+import { Message } from "./ProjectMessage";
+import { QueuedMessages } from "./QueuedMessages";
+import { SideQuestion } from "./SideQuestion";
+import { ErrorBox, Loading } from "../../ui/ui";
+import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
+import { WorktreeLanded } from "./WorktreeControls";
+
+const isAnswer = (m: ChatMessage) =>
+  m.role === "assistant" && !m.compaction && !m.handoff;
+
+/** The open conversation's last answer was cut short, and the input it
+ * answered belongs to this conversation, so it can go again. */
+function resumable(
+  listed: ChatMessage[],
+  lastInput: ProjectChatData["lastInput"],
+  rootId: string | null,
+) {
+  const last = listed.filter(isAnswer).at(-1);
+  return (
+    !!last &&
+    ["cancelled", "failed"].includes(last.status) &&
+    !!lastInput &&
+    (lastInput.parentId ?? null) === rootId
+  );
+}
+
+/**
+ * The thread's scrolling view: its messages with their councils and side
+ * questions, then what's still to come, queued or ready to resume.
+ */
+export function ThreadMessages({
+  handle: { chat, busy },
+  projectPath,
+  thread: {
+    history,
+    messages,
+    root,
+    shown,
+    listed,
+    running,
+    replyCounts,
+    sideThreads,
+    leadAnswered,
+  },
+  view: { scroll, column, onScroll, visible, earlier, showEarlier },
+  councils: {
+    review,
+    plans,
+    fixFindings,
+    setFindingStatus,
+    resumeReview,
+    resumeUltraplan,
+  },
+  actions: {
+    signInToClaude,
+    openReply,
+    forkThread,
+    openChanges,
+    openFile,
+    openTurnDiff,
+    rewindTurn,
+  },
+  queue: { steer, move, returnToComposer },
+  worktree,
+  onResume,
+}: {
+  handle: ThreadHandle;
+  projectPath: string;
+  thread: ChatThread;
+  /** Where the view's refs and scroll handler land. */
+  view: ThreadScroll;
+  councils: Councils;
+  actions: ThreadMessageActions;
+  queue: QueuedMessageActions;
+  worktree: ThreadWorktree;
+  /** Sends the cut-short answer's input again. */
+  onResume: () => void;
+}) {
+  // Keyed on the report alone: a new renderer redraws the whole summary, and
+  // the review changes with every finding dismissed or fixed.
+  const reviewCode = useMemo(
+    () =>
+      chat && review?.report
+        ? findingCode(chat.id, review.report.findings)
+        : undefined,
+    [chat?.id, review?.report],
+  );
+  return (
+    <div className="project-messages" ref={scroll} onScroll={onScroll}>
+      {chat && history.isPending && <Loading text="Opening conversation…" />}
+      {history.error && (
+        <ErrorBox error={history.error} retry={() => void history.refetch()} />
+      )}
+      <div className="thread-message-column" ref={column}>
+        {root && (
+          <h2 className="reply-heading">
+            {root.side ? "Side question" : "Side conversation"}
+          </h2>
+        )}
+        {earlier && (
+          <button className="load-more" onClick={showEarlier}>
+            Earlier messages
+          </button>
+        )}
+        {listed.slice(-visible).map((m) =>
+          m.side ? (
+            <SideQuestion
+              key={m.id}
+              message={m}
+              thread={root ? undefined : sideThreads.get(m.id)}
+              onOpen={() => openReply(m)}
+            />
+          ) : review && m.id === review.request ? (
+            <Fragment key={m.id}>
+              <DeepReviewRequest message={m} state={review} />
+              <DeepReviewCouncil
+                state={review}
+                hasLead={leadAnswered}
+                busy={busy}
+                projectRoot={projectPath}
+                onOpenFile={openFile}
+                onResume={resumeReview}
+              />
+            </Fragment>
+          ) : (
+            <Message
+              key={m.id}
+              message={m}
+              chatId={chat?.id ?? ""}
+              onReply={openReply}
+              onFork={
+                chat?.scope.kind === "review" || root?.side
+                  ? undefined
+                  : forkThread
+              }
+              onChanges={openChanges}
+              onTurnDiff={openTurnDiff}
+              onRewind={rewindTurn}
+              projectRoot={worktree.folder}
+              onOpenFile={openFile}
+              replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
+              onSignIn={
+                m.signIn && m.id === listed.at(-1)?.id
+                  ? signInToClaude
+                  : undefined
+              }
+              {...(chat && review?.report?.messageId === m.id
+                ? {
+                    inlineCode: reviewCode,
+                    after: (
+                      <DeepReviewReport
+                        chatId={chat.id}
+                        state={review}
+                        // A fix asked for while the lead works would wait in the
+                        // queue, its findings still open to ask for again.
+                        busy={busy || running}
+                        onFix={(findings) => void fixFindings(findings)}
+                        onStatus={setFindingStatus}
+                        onOpenFile={openFile}
+                      />
+                    ),
+                  }
+                : {})}
+              {...(plans?.[m.id]
+                ? {
+                    after: (
+                      <UltraplanCouncil
+                        state={plans[m.id]!}
+                        brief={messages.find(
+                          (b) => b.id === plans[m.id]!.brief,
+                        )}
+                        busy={busy}
+                        projectRoot={worktree.folder}
+                        onOpenFile={openFile}
+                        onResume={() => resumeUltraplan(m.id)}
+                      />
+                    ),
+                  }
+                : {})}
+            />
+          ),
+        )}
+        {!root && worktree.status && (
+          <WorktreeLanded status={worktree.status} />
+        )}
+        {!running &&
+          resumable(listed, history.data?.lastInput, root?.id ?? null) && (
+            <button
+              className="resume-answer"
+              disabled={busy}
+              onClick={onResume}
+            >
+              <RotateCcw size={13} /> Resume answer
+            </button>
+          )}
+        <QueuedMessages
+          queue={history.data?.queue}
+          paused={history.data?.queuePaused}
+          scheduled={history.data?.scheduled}
+          running={running}
+          busy={busy}
+          onSteer={steer}
+          onMove={move}
+          onReturn={returnToComposer}
+        />
+        {root && shown.length === 1 && (
+          <p className="thread-reply-empty">
+            Dig into this message here. The main conversation stays focused.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { terminate } from "../terminate";
-import { executableCommand, spawnExecutable } from "../executables";
+import { terminate } from "../platform/terminate";
+import { executableCommand, spawnExecutable } from "../platform/executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
 import { HostedChild } from "../agent-host/child";
 import type { Entry } from "../agent-host/protocol";

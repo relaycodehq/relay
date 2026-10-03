@@ -1,4 +1,4 @@
-import type { CursorSdkIo } from "../../agent-updates";
+import type { CursorSdkIo } from "../agent-updates";
 import { cursorCall } from "./connection";
 import { forgetCursorModels } from "./catalog";
 import { currentSdk, ensureSdk, newestSdk, updateSdk } from "./sdk";

@@ -1,6 +1,6 @@
-import { findExecutable, installStamp } from "../../executables";
-import { memoByKey, memoWhileStamp } from "../../memo";
-import { withTimeout } from "../../timeout";
+import { findExecutable, installStamp } from "../../platform/executables";
+import { memoByKey, memoWhileStamp } from "../../util/memo";
+import { withTimeout } from "../../util/timeout";
 import type { ClaudeModel } from "../../../shared/settings";
 import type { ClaudeDefaults } from "../../../shared/agent-defaults";
 import type { ProviderCommand } from "../../../shared/commands";

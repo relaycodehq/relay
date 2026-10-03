@@ -3,7 +3,7 @@ import {
   sourceControlNames,
   type SourceControlProvider,
 } from "../../shared/source-control";
-import { runExecutable } from "../executables";
+import { runExecutable } from "../platform/executables";
 import { cliFields, probeCli, probeTimeout } from "./clis";
 
 /** GitHub through the `gh` CLI and whoever it is logged in as. */

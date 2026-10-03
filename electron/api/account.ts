@@ -3,7 +3,7 @@ import { z } from "zod";
 import { emptyWorkspace } from "../../shared/types";
 import { workspaceSchema } from "../../shared/validation";
 import { seal } from "../app/login";
-import { Gitea } from "../gitea";
+import { Gitea } from "../pull-requests/gitea";
 import { teaSetup, teaToken } from "../source-control/tea";
 import { takes, type ApiContext, type Handlers } from "./context";
 

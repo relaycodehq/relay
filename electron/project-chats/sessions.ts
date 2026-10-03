@@ -15,7 +15,7 @@ import {
   onClaudePending,
   stopClaudeAgent,
 } from "../rooms/claude-project";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 
 /** An agent's session and the last message it heard, on the main conversation or a side one. */
 export function agentSession(

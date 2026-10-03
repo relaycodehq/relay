@@ -9,7 +9,7 @@ import {
   type WorkItemsResult,
 } from "../../../shared/devops";
 import type { Project } from "../../../shared/projects";
-import type { Store } from "../../store";
+import type { Store } from "../../app/store";
 import { DevOpsAuth } from "./auth";
 import { DevOpsClient, type Fetch } from "./client";
 import { DevOpsKeys, type Decrypt, type Encrypt } from "./keys";

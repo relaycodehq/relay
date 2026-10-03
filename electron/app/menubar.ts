@@ -1,5 +1,5 @@
 import { app } from "electron";
-import { RelayTray } from "../tray";
+import { RelayTray } from "./tray";
 
 /** The tray icon's counts: threads working, and threads waiting on the user. */
 export class Menubar {

@@ -16,7 +16,7 @@ import type {
 } from "../../shared/projects";
 import { readTurn } from "../../shared/agent-trace";
 import { commitEverything, headOf } from "../handoff/git";
-import { worktreeExists } from "../worktrees";
+import { worktreeExists } from "../git/worktrees";
 import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";

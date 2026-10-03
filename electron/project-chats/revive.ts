@@ -1,8 +1,8 @@
 import { savedRuntimeMode } from "../../shared/agent-modes";
 import { migrateAgentSessions } from "../../shared/projects";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
-import { settleActivities } from "../answer-recorder";
-import { ownAgentWorktrees } from "../agent-worktrees";
+import { settleActivities } from "./answer-recorder";
+import { ownAgentWorktrees } from "./agent-worktrees";
 
 /** An answer the app closed on, with what it had written so far. */
 export function interrupt(m: ChatMessage) {

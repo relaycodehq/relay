@@ -3,10 +3,10 @@ import {
   type ProjectRoomContext,
   type PullRoomContext,
 } from "./access";
-import type { Store } from "../store";
-import { questionContext } from "../questions";
-import { inspectFolder } from "../repository";
-import { findExecutable } from "../executables";
+import type { Store } from "../app/store";
+import { questionContext } from "../pull-requests/questions";
+import { inspectFolder } from "../git/repository";
+import { findExecutable } from "../platform/executables";
 import {
   roomMention,
   roomInvitation,

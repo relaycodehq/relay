@@ -1,7 +1,7 @@
 // What a deep review covers, resolved in the checkout when it starts: the
 // commits or changes, their range and stats, a pull request fetched to hidden refs.
-import { currentBranchOrNull, git } from "../git";
-import { isRemoteOf } from "../repository";
+import { currentBranchOrNull, git } from "../git/git";
+import { isRemoteOf } from "../git/repository";
 import type { Project } from "../../shared/projects";
 import type { ReviewScope, ReviewTarget } from "../../shared/deep-review";
 

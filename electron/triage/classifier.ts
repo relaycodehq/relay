@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import { findExecutable, spawnExecutable } from "../executables";
+import { findExecutable, spawnExecutable } from "../platform/executables";
 import { sdk as claudeSdk } from "../rooms/claude-project";
 import { agentName } from "../../shared/agents";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";

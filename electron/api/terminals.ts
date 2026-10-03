@@ -2,8 +2,8 @@ import { z } from "zod";
 import { idSchema } from "../../shared/rooms";
 import { draftTerminalKey } from "../../shared/terminals";
 import { claudeSignInCommand } from "../rooms/claude-sign-in";
-import { projectTasks } from "../tasks";
-import { threadTerminals } from "../thread-terminals";
+import { projectTasks } from "../terminal/tasks";
+import { threadTerminals } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const terminalKeySchema = z.union([

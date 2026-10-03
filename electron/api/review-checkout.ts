@@ -13,16 +13,16 @@ import {
   textSchema,
 } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
-import { launchCodex } from "../local";
-import { readLocalFile, saveLocalFile } from "../local-files";
-import { launchLineQuestion } from "../questions";
-import { inspectFolder } from "../repository";
+import { launchCodex } from "../pull-requests/local";
+import { readLocalFile, saveLocalFile } from "../pull-requests/local-files";
+import { launchLineQuestion } from "../pull-requests/questions";
+import { inspectFolder } from "../git/repository";
 import {
   performGitAction,
   validateRepo,
   workingDiff,
   workingTree,
-} from "../working-tree";
+} from "../git/working-tree";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** A reviewed repository's linked local checkout: its changes, files, and agents run in it. */

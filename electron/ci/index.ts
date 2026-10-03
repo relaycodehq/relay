@@ -1,6 +1,6 @@
-import { currentBranch, git } from "../git";
-import { remoteUrl, repoOf } from "../repository";
-import type { FetchRequest, Gitea } from "../gitea";
+import { currentBranch, git } from "../git/git";
+import { remoteUrl, repoOf } from "../git/repository";
+import type { FetchRequest, Gitea } from "../pull-requests/gitea";
 import type { CiRun, CiStatus } from "../../shared/ci";
 import type { SourceControlKind } from "../../shared/source-control";
 import { GitHub } from "./github";

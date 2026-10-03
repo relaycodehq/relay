@@ -1,4 +1,4 @@
-import { memoOnce } from "../../memo";
+import { memoOnce } from "../../util/memo";
 import type { AgentDefaults, AgentModel } from "../../../shared/agents";
 import type { ProviderCommand } from "../../../shared/commands";
 import {

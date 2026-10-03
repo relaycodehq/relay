@@ -28,7 +28,7 @@
     "vendor:t3:check": "python3 scripts/update-t3-streaming.py",
     "vendor:t3:update": "python3 scripts/update-t3-streaming.py --update",
     "vendor:cursor": "node scripts/update-cursor-sdk.mjs",
-    "test:streaming": "vitest run tests/unit/t3-streaming.test.ts tests/unit/project-chats.test.ts",
+    "test:streaming": "vitest run tests/unit/t3-streaming.test.ts electron/project-chats/project-chats.test.ts",
     "package:win": "npm run build && electron-builder --win --publish never"
   },
   "dependencies": {

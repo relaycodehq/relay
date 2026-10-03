@@ -17,8 +17,8 @@ import {
 } from "../../shared/projects";
 import { idSchema, presenceSchema } from "../../shared/rooms";
 import { workingPathSchema } from "../../shared/working-tree";
-import { rememberSentModel } from "../new-thread-models";
-import { nameReviewSetup } from "../review-setup-names";
+import { rememberSentModel } from "../agents/new-thread-models";
+import { nameReviewSetup } from "../deep-review/review-setup-names";
 import type { ApiContext, Handlers } from "./context";
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */

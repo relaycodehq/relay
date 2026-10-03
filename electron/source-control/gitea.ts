@@ -3,7 +3,7 @@ import {
   type SourceControlProvider,
 } from "../../shared/source-control";
 import type { GiteaLogin } from "../app/login";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import { cliFields } from "./clis";
 import { teaSetup } from "./tea";
 

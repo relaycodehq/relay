@@ -1,10 +1,10 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
-import { git } from "../git";
-import { moveCheckout, replayOnto } from "../branch-rebase";
-import { serializeRepo } from "../working-tree";
-import { repoOf, remoteUrl } from "../repository";
+import { git } from "../git/git";
+import { moveCheckout, replayOnto } from "../git/branch-rebase";
+import { serializeRepo } from "../git/working-tree";
+import { repoOf, remoteUrl } from "../git/repository";
 import { needsFullBundle } from "../../shared/handoff";
 
 /**

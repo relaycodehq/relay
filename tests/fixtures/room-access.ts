@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import type { Gitea } from "../../electron/gitea";
+import type { Gitea } from "../../electron/pull-requests/gitea";
 import type { RoomProject } from "../../shared/rooms";
 import type { RepositoryVerifier } from "../../server/repository-access";
 // Deterministic identity fixture. Real credential verification is covered by repository-access.test.ts.

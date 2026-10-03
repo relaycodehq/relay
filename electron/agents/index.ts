@@ -14,8 +14,8 @@ import {
   listClaudeModels,
   reattachClaudeSessions,
 } from "../rooms/claude-project";
-import { codexDefaults, codexModels, codexSkills } from "../provider-commands";
-import { presentSkill } from "../skill-presentation";
+import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
+import { presentSkill } from "./skill-presentation";
 import { runOpenCode } from "./opencode/run";
 import { detachOpenCode, disposeOpenCode } from "./opencode/client";
 import { reattachOpenCodeServer } from "./opencode/server";

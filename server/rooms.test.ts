@@ -1,0 +1,364 @@
+import { roomVerifier } from "../tests/fixtures/room-access";
+import { describe, it, expect, afterEach } from "vitest";
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { RoomsDatabase, token } from "./database";
+import { createRoomsServer } from "./http";
+import {
+  agentMention,
+  roomServerSchema,
+  roomInvitation,
+  parseRoomInvitation,
+  type MessageInput,
+} from "../shared/rooms";
+
+const project = {
+  server: "https://gitea.example.test/gitea",
+  owner: "Web",
+  name: "portal",
+};
+const input = (body = "Hello"): MessageInput => ({
+  id: randomUUID(),
+  body,
+  parentId: null,
+  context: { head: "a".repeat(40), base: "b".repeat(40) },
+});
+const disposals: Array<() => void> = [];
+afterEach(() => {
+  for (const dispose of disposals.splice(0)) dispose();
+});
+function setup() {
+  const db = new RoomsDatabase(":memory:");
+  disposals.push(() => db.close());
+  const aliceToken = token(),
+    alice = db.create(project, "Alice", aliceToken),
+    invite = db.invite(alice),
+    bobToken = token(),
+    bob = db.join(alice.projectId, invite.code, "Bob", bobToken),
+    room = db.open(alice, 7, "Review the cache");
+  return { db, alice, bob, room, aliceToken, bobToken };
+}
+describe("room authorization and durable conversation", () => {
+  it("uses one-use invitations, retries redemption safely and revokes access", () => {
+    const { db, alice, bobToken, bob } = setup();
+    expect(db.authenticate(bobToken).id).toBe(bob.id);
+    const i = db.invite(alice),
+      s = token();
+    const joined = db.join(alice.projectId, i.code, "Colleague", s);
+    expect(db.join(alice.projectId, i.code, "Colleague", s)).toEqual(joined);
+    expect(() =>
+      db.join(alice.projectId, i.code, "Intruder", token()),
+    ).toThrow();
+    expect(() => db.invite(bob)).toThrow("owner");
+    expect(() => db.revoke(bob, alice.id)).toThrow();
+    db.revoke(alice, bob.id);
+    expect(() => db.authenticate(bobToken)).toThrow("revoked");
+  });
+  it("keeps rooms isolated and lets only the requester reserve/publish an agent answer", () => {
+    const { db, alice, bob, room } = setup();
+    const other = db.create({ ...project, name: "other" }, "Charlie", token());
+    expect(() => db.page(other, room.id, 0)).toThrow("Room not found");
+    const m = db.post(alice, room.id, input("@codex Is this safe?"));
+    expect(() => db.start(bob, room.id, m.id, "Luna")).toThrow("sender");
+    const run = db.start(alice, room.id, m.id, "Luna");
+    expect(run.started).toBe(true);
+    expect(db.start(alice, room.id, m.id, "Luna").started).toBe(false);
+    expect(() =>
+      db.update(bob, room.id, run.message.id, "forged", "completed", null),
+    ).toThrow("another participant");
+  });
+  it("deduplicates retrying a human message without losing its revision and reply context", () => {
+    const { db, alice, room } = setup(),
+      m = input();
+    db.post(alice, room.id, m);
+    db.post(alice, room.id, m);
+    expect(db.page(alice, room.id, 0).messages).toHaveLength(1);
+    expect(() => db.post(alice, room.id, { ...m, body: "changed" })).toThrow(
+      "different content",
+    );
+    const reply = db.post(alice, room.id, {
+      ...input("@codex Explain that"),
+      parentId: m.id,
+    });
+    expect(db.topic(alice, room.id, reply.parentId).map((m) => m.body)).toEqual(
+      ["Hello"],
+    );
+    expect(() =>
+      db.post(alice, room.id, { ...input(), parentId: randomUUID() }),
+    ).toThrow("not found");
+  });
+  it("keeps a reply's parent in the agent's context when the parent pins a long code excerpt", () => {
+    const { db, alice, room } = setup();
+    const parent = db.post(alice, room.id, {
+      ...input("Look at this loop"),
+      context: {
+        ...input().context,
+        path: "src/cache.ts",
+        side: "additions",
+        start: 1,
+        end: 150,
+        excerpt: "x".repeat(50_000),
+      },
+    });
+    const reply = db.post(alice, room.id, {
+      ...input("@codex Why does it run twice?"),
+      parentId: parent.id,
+    });
+    const topic = db.topic(alice, room.id, reply.parentId);
+    expect(topic.map((m) => m.body)).toEqual(["Look at this loop"]);
+    expect(topic[0].context.path).toBe("src/cache.ts");
+  });
+  it("pages durable history and sends revised answer snapshots after a cursor", () => {
+    const { db, alice, room } = setup();
+    for (let i = 0; i < 60; i++) db.post(alice, room.id, input(`Message ${i}`));
+    const page = db.page(alice, room.id, 0);
+    expect(page.messages).toHaveLength(50);
+    expect(page.messages[0].body).toBe("Message 10");
+    expect(page.more).toBe(true);
+    expect(
+      db.page(alice, room.id, 0, page.messages[0].order).messages,
+    ).toHaveLength(10);
+    const question = db.post(alice, room.id, input("@codex Check this"));
+    const run = db.start(alice, room.id, question.id, "Luna");
+    const first = db.page(alice, room.id, page.cursor);
+    expect(first.messages).toHaveLength(2);
+    db.update(
+      alice,
+      room.id,
+      run.message.id,
+      "Partial answer",
+      "running",
+      null,
+    );
+    expect(db.page(alice, room.id, first.cursor).messages[0].body).toBe(
+      "Partial answer",
+    );
+  });
+  it("recovers persisted messages on restart and marks abandoned runs without discarding partial text", () => {
+    const dir = mkdtempSync(join(tmpdir(), "relay-rooms-db-"));
+    let db = new RoomsDatabase(join(dir, "rooms.sqlite"));
+    const secret = token(),
+      s = db.create(project, "Alice", secret),
+      r = db.open(s, 7, "PR");
+    const m = db.post(s, r.id, input("@codex question")),
+      run = db.start(s, r.id, m.id, "Luna");
+    db.update(
+      s,
+      r.id,
+      run.message.id,
+      "Useful partial answer",
+      "running",
+      null,
+    );
+    db.db
+      .prepare("UPDATE messages SET updated=0 WHERE id=?")
+      .run(run.message.id);
+    db.close();
+    db = new RoomsDatabase(join(dir, "rooms.sqlite"));
+    db.expire();
+    const recovered = db.get(db.authenticate(secret), r.id, run.message.id);
+    expect(recovered.body).toBe("Useful partial answer");
+    expect(recovered.status).toBe("failed");
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+});
+describe("mentions and transport", () => {
+  it("requires an intentional leading mention and never invokes an agent for code or quoted mentions", () => {
+    expect(agentMention("Hi @codex")).toBeNull();
+    expect(agentMention("`@claude` question")).toBeNull();
+    expect(agentMention("```\n@codex\n```")).toBeNull();
+    expect(agentMention("@codexExample nope")).toBeNull();
+    expect(agentMention(" @Claude explain this")).toEqual({
+      provider: "claude",
+      question: "explain this",
+    });
+  });
+  it("requires encrypted remote transport, refuses credential URLs and permits loopback development", () => {
+    expect(roomServerSchema.parse("http://127.0.0.1:4319/")).toBe(
+      "http://127.0.0.1:4319",
+    );
+    expect(roomServerSchema.parse("https://rooms.test/review-relay/")).toBe(
+      "https://rooms.test/review-relay",
+    );
+    for (const url of [
+      "http://192.168.1.2:4319",
+      "https://a:b@rooms.test",
+      "file:///tmp/rooms",
+      "https://rooms.test/path//rooms",
+      "https://rooms.test/path%2frooms",
+      "https://rooms.test/?token=x",
+      "https://rooms.test/#fragment",
+    ])
+      expect(roomServerSchema.safeParse(url).success).toBe(false);
+  });
+  it("preserves a proxy base path through invitation creation and redemption", () => {
+    for (const server of [
+      "https://rooms.test",
+      "https://rooms.test/review-relay",
+    ]) {
+      const input = { server, projectId: randomUUID(), secret: token() };
+      const link = roomInvitation(input);
+      expect(parseRoomInvitation(link)).toEqual(input);
+      const url = new URL(link);
+      expect(url.search).toBe("");
+      expect(url.hash).toContain(input.secret);
+      for (const invalid of [
+        link.replace("https:", "http:"),
+        link.replace("rooms.test", "user:password@rooms.test"),
+        link.replace("/#join=", "/?token=leak#join="),
+        link.replace(input.projectId, "invalid"),
+      ])
+        expect(() => parseRoomInvitation(invalid)).toThrow("invitation link");
+    }
+  });
+  it("keeps authenticated members working when anonymous proxy traffic is rate limited", async () => {
+    const { db, aliceToken, bobToken } = setup(),
+      admin = token(),
+      server = createRoomsServer(db, admin, roomVerifier);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as any).port}`;
+      for (const [credential, secret] of [
+        ["alice", aliceToken],
+        ["bob", bobToken],
+      ]) {
+        db.bindIdentity(
+          db.authenticate(secret),
+          await roomVerifier.verify(project, credential),
+          true,
+        );
+        const verified = await fetch(url + "/v1/access", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${secret}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ giteaToken: credential }),
+        });
+        expect(verified.status).toBe(200);
+        await verified.text();
+      }
+      for (let batch = 0; batch < 60; batch++) {
+        await Promise.all(
+          Array.from({ length: 20 }, async () => {
+            const response = await fetch(url + "/v1/me");
+            expect(response.status).toBe(401);
+            await response.text();
+          }),
+        );
+      }
+      const blocked = await fetch(url + "/v1/me", {
+        headers: {
+          Authorization: `Bearer ${token()}`,
+          "X-Forwarded-For": "203.0.113.1",
+        },
+      });
+      expect(blocked.status).toBe(429);
+      await blocked.text();
+      for (const secret of [aliceToken, bobToken]) {
+        const response = await fetch(url + "/v1/me", {
+          headers: { Authorization: `Bearer ${secret}` },
+        });
+        expect(response.status).toBe(200);
+        await response.text();
+      }
+      const response = await fetch(url + "/v1/projects", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${admin}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      expect(response.status).toBe(400); // Authenticated setup reaches input validation.
+      await response.text();
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+  it("enforces HTTP authentication, rejects browser origins and validates message fields", async () => {
+    const { db, aliceToken, room } = setup(),
+      server = createRoomsServer(db, token(), roomVerifier);
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as any).port}`;
+      db.bindIdentity(
+        db.authenticate(aliceToken),
+        await roomVerifier.verify(project, "alice"),
+        true,
+      );
+      const verified = await fetch(url + "/v1/access", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ giteaToken: "alice" }),
+      });
+      expect(verified.status).toBe(200);
+      await verified.text();
+      expect((await fetch(url + `/v1/rooms/${room.id}/messages`)).status).toBe(
+        401,
+      );
+      expect(
+        (
+          await fetch(url + "/v1/me", {
+            headers: {
+              Authorization: `Bearer ${aliceToken}`,
+              Origin: "https://evil.test",
+            },
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await fetch(url + `/v1/rooms/${room.id}/messages`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${aliceToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ...input(), authorId: "fake" }),
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await fetch(url + "/v1/me", {
+            headers: { Authorization: `Bearer ${aliceToken}` },
+          })
+        ).status,
+      ).toBe(200);
+    } finally {
+      await new Promise<void>((r, e) =>
+        server.close((err) => (err ? e(err) : r())),
+      );
+    }
+  });
+});
+it("retries a room send saved with Claude's old separate pick", async () => {
+  const { sendRoomSchema } = await import("../shared/rooms");
+  const saved = (body: string) => ({
+    id: "00000000-0000-4000-8000-000000000001",
+    body,
+    parentId: null,
+    context: { head: "a".repeat(40), base: "b".repeat(40) },
+    choice: { model: "gpt-5.5", reasoningEffort: "high", fast: true },
+    claude: { model: "opus", effort: "max" },
+  });
+  expect(sendRoomSchema.parse(saved("@claude Why?")).choice).toEqual({
+    model: "opus",
+    reasoningEffort: "max",
+    fast: false,
+  });
+  const codex = sendRoomSchema.parse(saved("@codex Why?"));
+  expect(codex.choice).toEqual({
+    model: "gpt-5.5",
+    reasoningEffort: "high",
+    fast: true,
+  });
+  expect("claude" in codex).toBe(false);
+});

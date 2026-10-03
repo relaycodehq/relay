@@ -3,8 +3,8 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { Gitea } from "../../electron/gitea";
-import { Store } from "../../electron/store";
+import { Gitea } from "../../electron/pull-requests/gitea";
+import { Store } from "../../electron/app/store";
 import {
   normalizeServer,
   parsePullUrl,

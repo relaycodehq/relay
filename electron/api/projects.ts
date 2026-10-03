@@ -26,9 +26,9 @@ import {
   listDirectory,
   readImage,
   renameEntry,
-} from "../project-files";
-import { projectIcon } from "../project-icon";
-import { branchPulls } from "../pull-request-create";
+} from "../projects/project-files";
+import { projectIcon } from "../projects/project-icon";
+import { branchPulls } from "../pull-requests/pull-request-create";
 import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */

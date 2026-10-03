@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import type { Store } from "../store";
+import type { Store } from "../app/store";
 import {
   fromBase64Url,
   generateKeyPair,
