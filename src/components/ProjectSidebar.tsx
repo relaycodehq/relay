@@ -113,6 +113,7 @@ export function ProjectSidebar({
     scratch: scratchIds,
     open: openChat,
     onNew: newThread,
+    onProjectSettings: (id) => onSettings("projects", id),
     setError,
   });
   const activity = view === "activity" && !search.query;

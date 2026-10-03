@@ -12,6 +12,7 @@ export type ThreadMenuAction =
   | { kind: "settle" }
   | { kind: "rename" }
   | { kind: "regenerate" }
+  | { kind: "project-settings" }
   | { kind: "triage"; triage: ChatTriage };
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
@@ -28,6 +29,7 @@ export function useThreadActions({
   scratch,
   open,
   onNew,
+  onProjectSettings,
   setError,
 }: {
   /** The open thread. */
@@ -40,6 +42,7 @@ export function useThreadActions({
   open: (c: ChatSummary) => void;
   /** Opens a new thread in `p`. */
   onNew: (p: Project) => void;
+  onProjectSettings: (projectId: string) => void;
   setError: (message: string | undefined) => void;
 }) {
   const qc = useQueryClient();
@@ -145,6 +148,8 @@ export function useThreadActions({
           return setRenaming(c.id);
         case "regenerate":
           return void regenerate(c);
+        case "project-settings":
+          return onProjectSettings(c.projectId);
         case "triage":
           return void triage(c, action.triage).catch(failed);
       }

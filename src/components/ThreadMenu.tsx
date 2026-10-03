@@ -9,6 +9,7 @@ import {
   Mail,
   Pencil,
   RotateCcw,
+  Settings2,
   Sparkles,
   Split,
   SquarePen,
@@ -192,6 +193,14 @@ export function ThreadMenu({
           )}
         </MenuPopup>
       </Menu.SubmenuRoot>
+      {projectName && (
+        <MenuAction
+          icon={<Settings2 size={13} />}
+          onClick={() => onAction({ kind: "project-settings" })}
+        >
+          Project settings
+        </MenuAction>
+      )}
       <Menu.Separator className="sb-menu-separator" />
       <Menu.SubmenuRoot>
         <Menu.SubmenuTrigger className="sb-menu-item">
