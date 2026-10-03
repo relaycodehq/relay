@@ -345,6 +345,10 @@ test("a project-folder thread moves into its own worktree mid-conversation and i
     expect(await readFile(join(repo, "src/guard.ts"), "utf8")).toBe(
       "export const guard = true;\n",
     );
+    // The answer shows before its turn ends, and a running turn can't move.
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
 
     await page.getByRole("button", { name: /Project folder/ }).click();
     await page
