@@ -140,7 +140,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     : !!(thread?.running ?? summary?.running);
   const lastAnswer = [...listed]
     .reverse()
-    .find((m) => m.role === "assistant" && !m.compaction && !m.handoff);
+    .find(
+      (m) =>
+        m.role === "assistant" && !m.compaction && !m.handoff && !m.reload,
+    );
   const canResume =
     !running &&
     !!lastAnswer &&
@@ -296,6 +299,14 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
             rootId ?? null,
             args || undefined,
           );
+          await reload();
+          return true;
+        } catch (e) {
+          return e instanceof Error ? e.message : String(e);
+        }
+      case "reload":
+        try {
+          await remote.desktop("reloadProjectChatSession", id);
           await reload();
           return true;
         } catch (e) {

@@ -6,6 +6,7 @@ import { Check, Copy, Redo2, Reply, Split, Undo2 } from "lucide-react-native";
 import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
+import { reloadNote } from "../../../shared/session-reload";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
 import { localImagePath } from "../../../shared/answer-images";
@@ -102,6 +103,7 @@ export const MessageView = memo(function MessageView({
     [chatId, m.id, root, openImage],
   );
   if (m.handoff) return <HandoffRow message={m} />;
+  if (m.reload) return <StatusRow>{reloadNote(m.reload)}</StatusRow>;
   if (m.compaction)
     return (
       <StatusRow failed={m.status === "failed"}>

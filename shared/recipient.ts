@@ -55,6 +55,7 @@ export const contextAgent = (
         m.role === "assistant" &&
         !m.compaction &&
         !m.handoff &&
+        !m.reload &&
         m.id !== rootId,
     )?.provider;
 

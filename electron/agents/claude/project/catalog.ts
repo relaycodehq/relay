@@ -95,6 +95,8 @@ export const listClaudeCommands = (root: string) =>
 /** What threads in this checkout run on Default; null when Claude can't say. */
 export const claudeDefaults = (root: string) =>
   probeClaude(root).then((probe) => probe.defaults ?? null);
+/** A reloaded session may have new skills; the next listing asks Claude again. */
+export const forgetClaudeCommands = () => probeClaude.clear();
 const probeClaude = memoByKey<ClaudeProbe>((root) =>
   withProbe(
     {

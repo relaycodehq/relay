@@ -90,6 +90,7 @@ export function ThreadRowMenu({
       now={now}
       unread={unread(c)}
       regenerating={actions.regenerating.has(c.id)}
+      reloading={actions.reloading.has(c.id)}
       autoSettleDays={
         own?.autoSettleDays === undefined ? autoSettleDays : own.autoSettleDays
       }

@@ -37,6 +37,11 @@ export interface AgentInfo {
   commandsAlone: boolean;
   /** Compaction takes instructions for what the summary should keep. */
   compactInstructions: boolean;
+  /**
+   * A thread's session runs in a process of its own, so restarting it on the
+   * same conversation loads skills, plugins and instructions changed since.
+   */
+  reload: boolean;
   /** Reports plan usage windows for the usage ring. */
   usage: boolean;
   /** Lists models from many upstream providers, so the picker groups them. */
@@ -62,6 +67,7 @@ export const agents = {
     skills: true,
     commandsAlone: false,
     compactInstructions: false,
+    reload: true,
     usage: true,
     modelGroups: false,
   },
@@ -76,6 +82,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: true,
+    reload: true,
     usage: true,
     modelGroups: false,
   },
@@ -90,6 +97,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    reload: false,
     usage: false,
     modelGroups: true,
   },
@@ -103,6 +111,7 @@ export const agents = {
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
+    reload: true,
     usage: false,
     modelGroups: true,
     sdk: true,

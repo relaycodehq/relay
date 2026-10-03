@@ -7,7 +7,7 @@ export function memoByKey<T>(
   { ttl = 60000, max = 30 } = {},
 ) {
   const cache = new Map<string, { expires: number; result: Promise<T> }>();
-  return (key: string) => {
+  const get = (key: string) => {
     const previous = cache.get(key);
     if (previous && previous.expires > Date.now()) return previous.result;
     const result = load(key).catch((e) => {
@@ -18,6 +18,7 @@ export function memoByKey<T>(
     cache.set(key, { expires: Date.now() + ttl, result });
     return result;
   };
+  return Object.assign(get, { clear: () => cache.clear() });
 }
 
 /** Like `memoByKey` for one answer; `forget()` drops it, e.g. after signing in as someone else. */

@@ -122,6 +122,11 @@ export interface ProjectChatApi {
     parentId?: string | null,
     instructions?: string,
   ): Promise<void>;
+  /**
+   * Restarts the thread's agent on the same conversation, so it loads skills,
+   * plugins and instructions changed since it started.
+   */
+  reloadProjectChatSession(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */

@@ -8,6 +8,7 @@ import {
   Hourglass,
   Mail,
   Pencil,
+  RefreshCw,
   RotateCcw,
   Settings2,
   Sparkles,
@@ -21,7 +22,8 @@ import {
   snoozePresets,
   wakeLabel,
 } from "../../../shared/chat-activity";
-import { agentName } from "../../../shared/agents";
+import { agentName, agents } from "../../../shared/agents";
+import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import type { ThreadMenuAction } from "./useThreadActions";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
@@ -40,7 +42,8 @@ function autoSettleLabel(days: number | null | undefined, onCommit?: boolean) {
 
 /**
  * A thread's right-click menu, after T3 Code's: triage, naming, auto-settle
- * and copying, plus Fork from its latest answer on that answer's agent.
+ * and copying, plus Fork from its latest answer on that answer's agent and
+ * reloading the agent holding the conversation.
  */
 export function ThreadMenu({
   chat,
@@ -49,6 +52,7 @@ export function ThreadMenu({
   now,
   unread,
   regenerating,
+  reloading,
   autoSettleDays,
   settleOnCommit,
   settleKeys,
@@ -60,6 +64,7 @@ export function ThreadMenu({
   now: number;
   unread: boolean;
   regenerating: boolean;
+  reloading: boolean;
   /** The project's value, else the app's; null settles nothing by time. */
   autoSettleDays: number | null | undefined;
   /** The project also settles a thread after its agent committed. */
@@ -73,6 +78,7 @@ export function ThreadMenu({
   const path = chat.worktree?.path ?? projectPath;
   const branch = chat.worktree?.branch ?? chat.branch;
   const triage = (triage: ChatTriage) => onAction({ kind: "triage", triage });
+  const holder = threadContextAgent(chat);
   return (
     <MenuPopup side="bottom" align="start">
       <MenuAction
@@ -89,6 +95,17 @@ export function ThreadMenu({
       >
         Fork from last answer
       </MenuAction>
+      {holder && agents[holder].reload && (
+        <MenuAction
+          icon={<RefreshCw size={13} />}
+          hint={agentName(holder)}
+          // Restarting mid-answer or under background work would cut it off.
+          disabled={busy || reloading || !!chat.pending?.length}
+          onClick={() => onAction({ kind: "reload" })}
+        >
+          {reloading ? "Reloading session…" : "Reload session"}
+        </MenuAction>
+      )}
       {section === "settled" ? (
         <MenuAction
           icon={<RotateCcw size={13} />}

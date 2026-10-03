@@ -297,6 +297,7 @@ export class ChatTurns {
             m.role === "assistant" &&
             !m.compaction &&
             !m.handoff &&
+            !m.reload &&
             onBranch(m),
         );
       const handoffFrom =

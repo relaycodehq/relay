@@ -98,7 +98,8 @@ function excerpt(text: string, budget: number): string {
  */
 function titleContext(messages: ChatMessage[]): string {
   const sections = messages.flatMap((m, index) => {
-    if (m.parentId || m.side || m.handoff || m.compaction) return [];
+    if (m.parentId || m.side || m.handoff || m.compaction || m.reload)
+      return [];
     const body =
       m.role === "user"
         ? replacePastedTexts(m.body, (paste) => paste.text)

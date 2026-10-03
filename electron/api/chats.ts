@@ -79,6 +79,9 @@ export function chatHandlers(ctx: ApiContext) {
       (id, parentId, instructions) =>
         projectChats.compact(id, parentId, instructions || undefined),
     ),
+    reloadProjectChatSession: takes([idSchema], (id) =>
+      projectChats.reloadSessions(id),
+    ),
     projectChatQueueAction: takes(
       [
         idSchema,

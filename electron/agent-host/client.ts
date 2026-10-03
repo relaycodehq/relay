@@ -596,6 +596,13 @@ export class HostedQuery {
   stopTask(taskId: string) {
     return this.call("stopTask", taskId);
   }
+  supportedCommands() {
+    return this.call("supportedCommands");
+  }
+  /** A host older than this Relay refuses it. */
+  supportedAgents() {
+    return this.call("supportedAgents");
+  }
 }
 
 export interface ProcessReader {

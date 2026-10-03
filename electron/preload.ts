@@ -118,6 +118,7 @@ const methods = [
   "setDeepReviewFinding",
   "resumeProjectChat",
   "compactProjectChat",
+  "reloadProjectChatSession",
   "projectChatQueueAction",
   "respondProjectChat",
   "liveSyncState",

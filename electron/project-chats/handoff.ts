@@ -231,6 +231,7 @@ export class ComputerHandoff {
             !m.parentId &&
             !m.compaction &&
             !m.handoff &&
+            !m.reload &&
             m.status !== "failed",
         );
       // A retry finds the note already written, with nothing after it.

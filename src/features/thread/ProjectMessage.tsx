@@ -25,6 +25,7 @@ import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { CompactionRow } from "./CompactionRow";
+import { SessionReloadRow } from "./SessionReloadRow";
 import {
   AnswerImage,
   ImageThumbnail,
@@ -260,6 +261,7 @@ export const Message = memo(function Message({
         onOpenFile={onOpenFile}
       />
     );
+  if (m.reload) return <SessionReloadRow message={m} reload={m.reload} />;
   if (m.compaction)
     return (
       <CompactionRow

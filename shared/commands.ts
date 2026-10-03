@@ -13,6 +13,11 @@ export const relayCommands = [
   },
   { name: "context", description: "Show context window usage" },
   {
+    name: "reload",
+    description:
+      "Restart the agent on this conversation to load new skills, plugins and instructions",
+  },
+  {
     name: "btw",
     description: "Ask a side question without interrupting the agent",
     args: "<question>",

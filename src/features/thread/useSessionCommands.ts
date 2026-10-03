@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { agentName, agentProviders, agents } from "../../../shared/agents";
 import type { RelayCommand } from "../../../shared/commands";
 import { latestContext } from "../../../shared/context-usage";
@@ -28,6 +29,7 @@ export function useSessionCommands({
   running: boolean;
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
+  const qc = useQueryClient();
   const context = latestContext(shown);
   const compacting = shown.some(
     (m) => m.compaction && m.status === "streaming",
@@ -51,6 +53,17 @@ export function useSessionCommands({
       if (args && !agents[context.provider].compactInstructions)
         return `${agentName(context.provider)} compacts without custom instructions.`;
       compact(args || undefined);
+      return true;
+    }
+    if (command === "reload") {
+      if (!chat) return "There is no agent session to reload yet.";
+      if (running || busy || compacting)
+        return "Wait for the current answer before reloading the session.";
+      void run(async () => {
+        await api.reloadProjectChatSession(chat.id);
+        void qc.invalidateQueries({ queryKey: ["provider-commands"] });
+        await refetch();
+      });
       return true;
     }
     // With a question and an agent picked, the composer sends it itself.

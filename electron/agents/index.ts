@@ -13,6 +13,7 @@ import {
   listClaudeCommands,
   listClaudeModels,
   reattachClaudeSessions,
+  reloadClaudeSession,
 } from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { presentSkill } from "./skill-presentation";
@@ -56,6 +57,7 @@ const codex: AgentRuntime = {
 const claude: AgentRuntime = {
   run: (options) => runClaude({ ...options, ...claudeArgs(options.choice) }),
   closeSession: async (key) => closeClaudeSession(key),
+  reloadSession: reloadClaudeSession,
   models: listClaudeModels,
   defaults: async (root) => {
     const [defaults, models] = await Promise.all([

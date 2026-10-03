@@ -133,6 +133,7 @@ export const queryMethods = [
   "stopTask",
   "supportedCommands",
   "supportedModels",
+  "supportedAgents",
 ] as const;
 
 /** Reads newline-delimited JSON off a socket; a line that doesn't parse ends the connection. */

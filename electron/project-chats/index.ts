@@ -52,6 +52,7 @@ import { assertHere, ComputerHandoff } from "./handoff";
 import { ChatQueue } from "./queue";
 import { LimitResumes } from "./limit-resume";
 import { ChatSchedule } from "./schedule";
+import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
 import { ChatSharing } from "./sharing";
 import { ChatStorage, chatSummary, nextSend } from "./storage";
@@ -86,6 +87,7 @@ export class ProjectChats {
   private control = threadControl();
   private disposing = false;
   private councils: Councils;
+  private core: ChatCore;
   constructor(
     private store: Store,
     private projects: Projects,
@@ -115,6 +117,7 @@ export class ProjectChats {
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
     };
+    this.core = core;
     // Hosts look methods up at call time, not with .bind(this): tests
     // vi.spyOn(chats, "send"), and this.turns is only built last.
     this.councils = new Councils(core, {
@@ -486,7 +489,8 @@ export class ProjectChats {
               !m.parentId &&
               !m.side &&
               !m.handoff &&
-              !m.compaction,
+              !m.compaction &&
+              !m.reload,
           );
     if (at?.role !== "assistant" || at.status === "streaming")
       throw new Error("Fork from an answer that has finished.");
@@ -656,6 +660,10 @@ export class ProjectChats {
   /** Compacts the provider session behind the newest answer on this branch. */
   compact(id: string, parentId?: string, instructions?: string) {
     return this.turns.compact(id, parentId, instructions);
+  }
+  /** Restarts the thread's agent on its conversation, to load what changed on disk since. */
+  reloadSessions(id: string) {
+    return reloadSessions(this.core, id);
   }
   /**
    * Takes back the agent sessions that kept running while Relay restarted.

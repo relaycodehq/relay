@@ -19,6 +19,7 @@ export type ThreadMenuAction =
   | { kind: "settle" }
   | { kind: "rename" }
   | { kind: "regenerate" }
+  | { kind: "reload" }
   | { kind: "project-settings" }
   | { kind: "triage"; triage: ChatTriage };
 
@@ -28,9 +29,9 @@ export type ThreadActions = ReturnType<typeof useThreadActions>;
 const UNDOABLE = new Set<ChatTriage["kind"]>(["settle", "archive", "snooze"]);
 
 /**
- * What the sidebar does to a thread: opening, triage, naming and forking it.
- * Each change shows at once in every list holding the thread; a failure
- * goes to `setError`.
+ * What the sidebar does to a thread: opening, triage, naming, forking it and
+ * reloading its agent. Each change shows at once in every list holding the
+ * thread; a failure goes to `setError`.
  */
 export function useThreadActions({
   chatId,
@@ -171,6 +172,24 @@ export function useThreadActions({
       void refresh(c);
     }
   };
+  /** Threads whose agent is restarting on its conversation. */
+  const [reloading, setReloading] = useState<ReadonlySet<string>>(new Set());
+  const reload = async (c: ChatSummary) => {
+    setReloading((ids) => new Set(ids).add(c.id));
+    setError(undefined);
+    try {
+      await api.reloadProjectChatSession(c.id);
+      void qc.invalidateQueries({ queryKey: ["provider-commands"] });
+    } catch (e) {
+      failed(e);
+    } finally {
+      setReloading((ids) => {
+        const next = new Set(ids);
+        next.delete(c.id);
+        return next;
+      });
+    }
+  };
   /** Forks from the latest answer and opens the fork on that answer's agent. */
   const fork = async (c: ChatSummary) => {
     setError(undefined);
@@ -192,6 +211,7 @@ export function useThreadActions({
     setRenaming,
     rename,
     regenerating,
+    reloading,
     /** Does what the thread's right-click menu picked. */
     act(c: ChatSummary, action: ThreadMenuAction) {
       const p = projects.get(c.projectId);
@@ -207,6 +227,8 @@ export function useThreadActions({
           return setRenaming(c.id);
         case "regenerate":
           return void regenerate(c);
+        case "reload":
+          return void reload(c);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "triage":

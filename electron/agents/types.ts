@@ -7,6 +7,7 @@ import type {
   AgentActivity,
   ContextUsage,
   ForkPoint,
+  SessionReload,
 } from "../../shared/projects";
 import type { CodexReviewTarget } from "../../shared/deep-review";
 import type { ProviderCommand } from "../../shared/commands";
@@ -87,6 +88,12 @@ export interface AgentRuntime {
   run(options: AgentOptions): Promise<string>;
   /** Lets go of the live session kept under `key`, if any. */
   closeSession(key: string): Promise<void>;
+  /**
+   * Restarts the live session under `key` on the same conversation at once,
+   * saying what it loaded differently. Without this, reloading closes the
+   * session and the next turn resumes it.
+   */
+  reloadSession?(key: string): Promise<SessionReload | undefined>;
   /** The models the signed-in agent offers. */
   models(): Promise<AgentModel[]>;
   /** What threads in `root` run where the model or effort is left on Default. */

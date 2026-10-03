@@ -69,7 +69,7 @@ export function turnPrompt({
     known >= 0 && m.steered && m.provider === provider;
   const updates = previous
     .slice(known + 1)
-    .filter((m) => !heard(m) && !m.compaction && !m.handoff);
+    .filter((m) => !heard(m) && !m.compaction && !m.handoff && !m.reload);
   // A side conversation told as text keeps its message in view, with a little of what led to it.
   const focus = parent ? updates.indexOf(parent) : -1;
   const context =

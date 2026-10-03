@@ -25,7 +25,7 @@ import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded } from "./WorktreeControls";
 
 const isAnswer = (m: ChatMessage) =>
-  m.role === "assistant" && !m.compaction && !m.handoff;
+  m.role === "assistant" && !m.compaction && !m.handoff && !m.reload;
 
 /** The open conversation's last answer was cut short, and the input it
  * answered belongs to this conversation, so it can go again. */

@@ -24,12 +24,23 @@ interface AgentHandoff {
   /** The note is for another computer, where `to` carries on. */
   computer?: string;
 }
+/** What a reloaded session's agent loaded that its old process hadn't, and what it no longer has. */
+export interface NameChanges {
+  added: string[];
+  removed: string[];
+}
+/** Local marker: the agent's process was restarted on the same session. Each list is left out when the agent couldn't say. */
+export interface SessionReload {
+  skills?: NameChanges;
+  agents?: NameChanges;
+}
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
   /** Local: what a compaction left the agent with, when the provider hands it back readable. */
   compactSummary?: string;
   handoff?: AgentHandoff;
+  reload?: SessionReload;
   /** Local marker: the lead's brief for an Ultraplan council, shown inside it. */
   brief?: boolean;
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */
