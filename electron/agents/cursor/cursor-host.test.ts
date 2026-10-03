@@ -11,9 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
-import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
-import { AgentHosts } from "../../agent-host/client";
+import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import { AgentHosts, type ProcessReader } from "../../agent-host/client";
 import {
+  acquireCursorConnection,
   closeCursorConnection,
   detachCursor,
   reattachCursorSessions,
@@ -21,6 +22,7 @@ import {
 import { hostAgents } from "../hosted-sessions";
 import { runCursor } from "./run";
 import { configureCursor } from "./sdk";
+import type { InstalledSdk } from "./sdk-install";
 import type { AgentOptions } from "../types";
 
 // A Cursor turn keeps running in the agent host while Relay restarts, and the
@@ -226,4 +228,59 @@ it("lets a worker in the host close its agents when its thread's session ends", 
   await expect
     .poll(() => readFile(closed, "utf8"), { timeout: 5000 })
     .toContain(turn.seen.ids[0]);
+});
+
+it("numbers a picked-up worker's requests above the replies its log still holds", async () => {
+  let reader!: ProcessReader;
+  const written: { id: number }[] = [];
+  const hosted = {
+    read: (r: ProcessReader) => (reader = r),
+    write: (line: string) => written.push(JSON.parse(line)),
+    mark: () => {},
+    keep: () => {},
+    close: () => {},
+  };
+  const found = {
+    info: {
+      id: "s",
+      key: "thread-1",
+      kind: "process",
+      meta: { provider: "cursor", run: { run: "r", id: 1 } },
+      split: 0,
+      open: true,
+    },
+    attachProcess: () => hosted,
+    close: vi.fn(),
+  };
+  hostAgents({ discover: async () => [found] } as unknown as AgentHosts);
+  await reattachCursorSessions((key) => key === "thread-1");
+  const connection = await acquireCursorConnection(
+    "thread-1",
+    root,
+    {} as InstalledSdk,
+  );
+
+  // The last Relay steered and cancelled; the worker answered both.
+  const entry = (seq: number, kind: "line" | "input", value: unknown) => ({
+    seq,
+    kind,
+    text: JSON.stringify(value),
+  });
+  reader.replayed!([
+    entry(0, "input", { id: 1, method: "run", params: {} }),
+    entry(1, "input", { id: 2, method: "steer", params: {} }),
+    entry(2, "line", { id: 2, result: null }),
+    entry(3, "input", { id: 3, method: "cancel", params: {} }),
+    entry(4, "line", { id: 3, result: null }),
+  ]);
+  connection.resume();
+
+  const steered = connection.request("steer", { run: "r", text: "go on" });
+  expect(written.map((m) => m.id)).toEqual([4]);
+  reader.entry({
+    seq: 5,
+    kind: "line",
+    text: JSON.stringify({ id: 4, result: "taken" }),
+  });
+  expect(await steered).toBe("taken");
 });

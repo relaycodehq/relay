@@ -91,6 +91,16 @@ export class CursorConnection {
     this.waiting.clear();
   }
 
+  /** A worker picked up again was numbered by the last Relay: carry on above its ids. */
+  continueAfter(id: number) {
+    this.nextRequest = Math.max(this.nextRequest, id + 1);
+  }
+
+  /** Forgets replies nobody will ask for, e.g. to the last Relay's steers. */
+  dropOrphans() {
+    this.orphans.clear();
+  }
+
   /** The id the next request gets, for keeping with the worker before it goes out. */
   reserve() {
     return this.nextRequest++;
@@ -279,11 +289,15 @@ export function disposeCursor() {
 export function reattachCursorSessions(owns: (key: string) => boolean) {
   return sessions.reattach(owns, (found) => {
     const { info } = found;
-    const child = new HostedChild(found.attachProcess(), (entries) =>
-      cursorReplay(entries, info.split),
-    );
+    const inflight = (info.meta as CursorMeta).run;
+    const child = new HostedChild(found.attachProcess(), (entries) => {
+      connection.continueAfter(
+        Math.max(inflight?.id ?? 0, highestRequestId(entries)),
+      );
+      return cursorReplay(entries, info.split);
+    });
     const connection = new CursorConnection(child);
-    connection.inflight = (info.meta as CursorMeta).run;
+    connection.inflight = inflight;
     if (!info.open) child.release();
     return connection;
   });
@@ -294,4 +308,17 @@ function cursorReplay(entries: Entry[], split: number): string[] {
   return entries
     .filter((entry) => entry.kind === "line" && entry.seq >= split)
     .map((entry) => (entry as Extract<Entry, { kind: "line" }>).text);
+}
+
+/** The highest request id the log mentions, in what Relay sent or the worker answered. */
+function highestRequestId(entries: Entry[]) {
+  let highest = 0;
+  for (const entry of entries) {
+    if (entry.kind !== "line" && entry.kind !== "input") continue;
+    try {
+      const id = JSON.parse(entry.text)?.id;
+      if (typeof id === "number") highest = Math.max(highest, id);
+    } catch {}
+  }
+  return highest;
 }

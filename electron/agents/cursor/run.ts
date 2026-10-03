@@ -323,6 +323,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     clearTimeout(cancelTimer);
     signal.removeEventListener("abort", abort);
     connection.unlisten(run);
+    // What the last Relay's steers and cancels were answered with, in the replay.
+    if (adopted) connection.dropOrphans();
     settle(connection, agentId, !!key);
   }
 }
