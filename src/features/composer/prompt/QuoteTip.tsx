@@ -26,12 +26,12 @@ export function useQuoteTip(editor: Editor | null) {
       window.clearTimeout(timer);
       setTip(null);
     };
-    const edited = () => setTip(null);
     const over = (event: MouseEvent) => {
       const chip = chipOf(event.target);
       if (!chip) return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
+        if (!chip.isConnected) return;
         const rect = chip.getBoundingClientRect();
         setTip({
           text: chip.getAttribute("data-quote") ?? "",
@@ -55,13 +55,13 @@ export function useQuoteTip(editor: Editor | null) {
     dom.addEventListener("mouseover", over);
     dom.addEventListener("mouseout", out);
     window.addEventListener("scroll", hide, true);
-    editor.on("update", edited);
+    editor.on("update", hide);
     return () => {
       hide();
       dom.removeEventListener("mouseover", over);
       dom.removeEventListener("mouseout", out);
       window.removeEventListener("scroll", hide, true);
-      editor.off("update", edited);
+      editor.off("update", hide);
     };
   }, [editor]);
   return tip;
