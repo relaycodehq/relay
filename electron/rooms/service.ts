@@ -25,7 +25,7 @@ import { roomRequest, type Network } from "./transport";
 import { Hosting } from "./hosting";
 import { RoomConnections, roomProject } from "./connections";
 import { RoomDeliveries } from "./deliveries";
-import { RoomAnswers } from "./answers";
+import { RoomAnswers, type AnswerSlot } from "./answers";
 import { redacted } from "../../shared/redact-secrets";
 
 export type { RoomDelivery } from "./deliveries";
@@ -278,10 +278,24 @@ export class RoomService {
   }
   async send(c: PullRoomContext, input: SendRoom) {
     const mention = roomMention(input.body);
-    if (mention) {
-      this.answers.check(c, mention);
+    if (!mention) return this.post(c, input);
+    // Held from here, so a second @agent question sent meanwhile is refused
+    // before it posts anything.
+    const slot = this.answers.reserve(c, mention, input.id);
+    try {
       await findExecutable(mention.provider);
+      return await this.post(c, input, mention, slot);
+    } catch (e) {
+      this.answers.release(slot);
+      throw e;
     }
+  }
+  private async post(
+    c: PullRoomContext,
+    input: SendRoom,
+    mention?: ReturnType<typeof roomMention>,
+    slot?: AnswerSlot,
+  ) {
     const { connection, room } = await this.ready(c);
     const pull = await c.client.pull(c.ref);
     if (
@@ -321,16 +335,20 @@ export class RoomService {
       },
     );
     if (!mention) return;
-    return this.answers.ask(c, {
-      connection,
-      roomId: room.id,
-      request,
-      input,
-      mention,
-      pull,
-      context,
-      local: local!,
-    });
+    return this.answers.ask(
+      c,
+      {
+        connection,
+        roomId: room.id,
+        request,
+        input,
+        mention,
+        pull,
+        context,
+        local: local!,
+      },
+      slot,
+    );
   }
   flush(c: PullRoomContext) {
     return this.deliveries.flush(c);

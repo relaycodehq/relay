@@ -286,3 +286,84 @@ it("delivers a long answer in a non-Latin script, and a rejected delivery holds 
     await rm(root, { recursive: true, force: true });
   }
 });
+it("refuses a second @agent question sent while the first is still posting, without posting it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "relay-room-double-")),
+    project = { server: "https://gitea.test", owner: "Web", name: "portal" };
+  const store = new Store(join(root, "state"));
+  await store.load();
+  const database = new RoomsDatabase(":memory:"),
+    key = token(),
+    server = createRoomsServer(database, key, roomVerifier);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${(server.address() as any).port}`;
+  const client = {
+    ...roomClient(project),
+    pull: async () => ({
+      head: { sha: "a".repeat(40) },
+      merge_base: "b".repeat(40),
+      html_url: "https://gitea.test/Web/portal/pulls/7",
+      title: "Fixture PR",
+    }),
+  } as unknown as Gitea;
+  const context = {
+    client,
+    ref: { ...project, number: 7 },
+    key: "alice-project",
+    dir: await roomClone(join(root, "repo"), project),
+  };
+  const encode = async (s: string) => Buffer.from(s).toString("base64"),
+    decode = async (s: string) => Buffer.from(s, "base64").toString();
+  const service = new RoomService(store, fetch, encode, decode);
+  const question = (body: string) =>
+    sendRoomSchema.parse({
+      id: randomUUID(),
+      body,
+      parentId: null,
+      context: { head: "a".repeat(40), base: "b".repeat(40) },
+      choice: defaultAISettings.questions,
+    });
+  const posted = () =>
+    database.db
+      .prepare("SELECT data FROM messages")
+      .all()
+      .map((r) => JSON.parse(String(r.data)).body as string)
+      .filter((body) => body.startsWith("@codex"));
+  let finish!: (answer: string) => void;
+  vi.mocked(runCodex).mockImplementation(
+    () => new Promise<string>((resolve) => (finish = resolve)),
+  );
+  try {
+    await service.allowAccess(context, url);
+    await service.connect(context, { server: url, secret: key });
+    const results = await Promise.allSettled([
+      service.send(context, question("@codex First")),
+      service.send(context, question("@codex Second")),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected"]);
+    expect((results[1] as PromiseRejectedResult).reason.message).toContain(
+      "is answering another question",
+    );
+    expect(posted()).toEqual(["@codex First"]);
+    // A question that fails before it posts frees the slot for the next.
+    finish("Done.");
+    await vi.waitFor(() =>
+      expect(
+        (service as unknown as { answers: { busy: boolean } }).answers.busy,
+      ).toBe(false),
+    );
+    await expect(
+      service.send(context, {
+        ...question("@codex Third"),
+        context: { head: "c".repeat(40), base: "b".repeat(40) },
+      }),
+    ).rejects.toThrow("This PR changed");
+    await service.send(context, question("@codex Fourth"));
+    expect(posted()).toEqual(["@codex First", "@codex Fourth"]);
+  } finally {
+    finish?.("Done.");
+    await service.dispose();
+    await new Promise<void>((r) => server.close(() => r()));
+    database.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
