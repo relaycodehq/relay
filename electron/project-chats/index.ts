@@ -145,6 +145,10 @@ export class ProjectChats {
       this.worktrees.folder,
       (chat, root, provider, parentId) =>
         this.turns.unprompted(chat, root, provider, parentId),
+      (id, messageId, limit) =>
+        void this.limits
+          .stopped(id, messageId, limit)
+          .catch((e) => console.warn("Could not plan the resume:", e)),
     );
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(
@@ -165,10 +169,7 @@ export class ProjectChats {
       this.councils,
       this.queue,
       evidence,
-      {
-        sync: (id) => this.sync(id),
-        ended: (id, messageId) => this.limits.ended(id, messageId),
-      },
+      { sync: (id) => this.sync(id) },
     );
   }
   /**

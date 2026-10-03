@@ -73,6 +73,12 @@ export class TurnRunner {
       provider: AgentProvider,
       parentId?: string,
     ) => Promise<void>,
+    /** A usage limit stopped the reply `messageId`. */
+    private limited: (
+      chatId: string,
+      messageId: string,
+      limit: UsageLimitError,
+    ) => void,
   ) {}
 
   /**
@@ -137,7 +143,8 @@ export class TurnRunner {
       },
     );
     let point: string | undefined,
-      committed = false;
+      committed = false,
+      limit: UsageLimitError | undefined;
     try {
       const options = {
         onControl: (control: AgentControl) => {
@@ -274,8 +281,8 @@ export class TurnRunner {
           // that reads the new sign-in, resuming the same conversation.
           await agentRuntime(provider).closeSession(sessionKey);
         }
-        if (e instanceof UsageLimitError)
-          failed.limit = e.resetsAt ? { resetsAt: e.resetsAt } : {};
+        // A handoff note, side question or catch-up isn't the answer to carry on.
+        if (e instanceof UsageLimitError && turn.kind === "reply") limit = e;
         // A fork that failed may have left a broken session. Drop it and the
         // fork point: sending again starts over with the conversation as text.
         if (fork) {
@@ -301,6 +308,7 @@ export class TurnRunner {
       if (committed) chat.committedAt = ended.ended;
       answer.end();
       await this.core.storage.save(chat);
+      if (limit) this.limited(chat.id, ended.id, limit);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&

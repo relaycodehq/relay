@@ -3,7 +3,7 @@ import type {
   LimitResume,
   ProjectChat,
 } from "../../shared/projects";
-import { usageResetsAt } from "../agents/usage-limit";
+import { usageResetsAt, type UsageLimitError } from "../agents/usage-limit";
 import type { ChatCore } from "./core";
 
 /** Resumes this long after the limit lifts, in case the provider's clock runs behind. */
@@ -55,20 +55,20 @@ export class LimitResumes {
     this.timers.clear();
   }
 
-  /** A turn ended on `messageId`; if a usage limit stopped it, plans the resume. */
-  async ended(chatId: string, messageId: string) {
+  /** A usage limit stopped the answer `messageId`; plans its resume. */
+  async stopped(chatId: string, messageId: string, limit: UsageLimitError) {
     const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     // A reviewer's or thinker's thread is its council's to carry on.
-    if (!message?.limit || chat.reviewer || chat.thinker) return;
+    if (!message || chat.reviewer || chat.thinker) return;
     const at =
-      message.limit.resetsAt ??
-      (await usageResetsAt(message.provider).catch(() => undefined));
+      limit.resetsAt ??
+      (await usageResetsAt(limit.provider).catch(() => undefined));
     // A reset already past is stale: resuming on it would hit the limit again.
     if (!at || at <= Date.now() || at > Date.now() + LONGEST) return;
     await this.core.control(chatId, async () => {
       if (!stillLast(chat, message)) return;
-      chat.limitResume = { messageId, provider: message.provider, at };
+      chat.limitResume = { messageId, provider: limit.provider, at };
       await this.core.storage.persist(chat);
       this.arm(chatId, chat.limitResume);
     });

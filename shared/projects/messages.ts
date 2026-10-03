@@ -59,8 +59,6 @@ export interface ChatMessage {
   forkPoint?: ForkPoint;
   /** Local: the turn failed because Claude's login expired or was revoked. */
   signIn?: "claude";
-  /** Local: the turn stopped on the agent's usage limit, which lifts at `resetsAt` when known. */
-  limit?: { resetsAt?: number };
   ended?: number;
   author?: string;
   authorId?: string;

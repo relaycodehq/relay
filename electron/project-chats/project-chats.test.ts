@@ -1650,7 +1650,6 @@ it("resumes an answer a usage limit stopped once the limit lifts, and picks its 
   expect(failed).toMatchObject({
     status: "failed",
     error: "You've hit your usage limit.",
-    limit: { resetsAt: plan.at },
   });
   expect(plan).toMatchObject({ messageId: failed.id, provider: "codex" });
   // Codex said seconds; the plan keeps milliseconds, ten minutes out.

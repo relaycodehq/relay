@@ -42,8 +42,6 @@ const handoffPrompt = (to: AgentProvider, computer?: string) =>
 export interface TurnsHost {
   /** Pulls a shared thread's messages and reads it back. */
   sync(id: string): Promise<unknown>;
-  /** A reply ended on `messageId`, perhaps stopped by a usage limit. */
-  ended(id: string, messageId: string): Promise<void>;
 }
 
 /**
@@ -86,10 +84,6 @@ export class ChatTurns {
     }
     if (unread.length) void this.core.storage.save(chat).catch(() => {});
     if (turn) this.councils.step(chat.id, turn);
-    if (turn?.answer)
-      void this.host
-        .ended(chat.id, turn.answer)
-        .catch((e) => console.warn("Could not plan the resume:", e));
     void this.core.storage.updateSummary(chat).catch(() => {});
     void this.core
       .control(chat.id, () => this.queue.drain(chat.id))

@@ -9,7 +9,7 @@ import { codexActivity, codexEditedPaths } from "../activity";
 import { CodexAnswerStream } from "./answer-stream";
 import type { ContextUsage } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
-import { codexSpentUntil, UsageLimitError } from "../usage-limit";
+import { codexFailure, codexSpentUntil } from "./codex-limits";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -72,14 +72,6 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     review = "";
   // When the spent window lifts, from Codex's latest word on the account's limits.
   let spentUntil: number | undefined;
-  const failure = (error: any, fallback: string) =>
-    error?.codexErrorInfo === "usageLimitExceeded"
-      ? new UsageLimitError(
-          "codex",
-          error.message || "Codex hit its usage limit.",
-          spentUntil,
-        )
-      : new Error(error?.message ?? fallback);
   const fileChanges = new Map<string, unknown>();
   const stream = new CodexAnswerStream(options.onText, (id, text) =>
     options.onCommentary?.(id, text),
@@ -155,10 +147,14 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       finish(
         p.turn?.status === "completed"
           ? undefined
-          : failure(p.turn?.error, "Codex did not finish this answer."),
+          : codexFailure(
+              p.turn?.error,
+              "Codex did not finish this answer.",
+              spentUntil,
+            ),
       );
     if (method === "error" && !p.willRetry)
-      finish(failure(p.error, "Codex failed to answer."));
+      finish(codexFailure(p.error, "Codex failed to answer.", spentUntil));
   };
   let interruptTimeout: ReturnType<typeof setTimeout> | undefined;
   const abort = () => {
