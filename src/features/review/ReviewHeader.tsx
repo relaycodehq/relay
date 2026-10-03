@@ -12,6 +12,7 @@ import { api } from "../../lib/api";
 import type { ChecksController } from "../checks/useProjectChecks";
 import { ProjectChecksButton } from "../checks/ProjectChecks";
 import { IconButton, timeAgo } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 
 interface Actions {
@@ -130,9 +131,13 @@ function PullHeading({ pull }: { pull: Pull }) {
       <h1>{pull.title}</h1>
       <div className="branch-line">
         <GitBranch size={14} />
-        <code>{pull.head.ref}</code>
+        <code>
+          <MiddleTruncate text={pull.head.ref} kind="branch" />
+        </code>
         <span>→</span>
-        <code>{pull.base.ref}</code>
+        <code>
+          <MiddleTruncate text={pull.base.ref} kind="branch" />
+        </code>
         <span className="branch-divider" />
         <span className="additions">+{pull.additions ?? 0}</span>
         <span className="deletions">−{pull.deletions ?? 0}</span>

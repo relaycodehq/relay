@@ -8,6 +8,7 @@ import type { TurnDiffTarget } from "./turn-diff";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { ErrorBox, FileEntryIcon } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import "./changed-files.css";
 
@@ -80,7 +81,7 @@ export function TurnChanges({
                   onClick={() => setPath(f.path)}
                 >
                   <FileEntryIcon path={f.path} directory={false} />
-                  <span>{f.path}</span>
+                  <MiddleTruncate text={f.path} kind="path" title={null} />
                   {!f.binary && <DiffStatLabel stat={f} />}
                 </button>
               </ContextMenu.Trigger>

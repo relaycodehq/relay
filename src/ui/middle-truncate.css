@@ -1,0 +1,24 @@
+/* The hidden full text sizes the box; the shortened copy shares its cell.
+   A grid has no line of its own, so a host's text-overflow can't draw an
+   ellipsis over the hidden text. */
+.middle-truncate {
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: pre;
+  vertical-align: bottom;
+}
+.middle-truncate > span {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.middle-truncate-full {
+  visibility: hidden;
+}
+.middle-truncate-full::before {
+  content: attr(data-text);
+}

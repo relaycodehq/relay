@@ -9,6 +9,7 @@ import {
   WorkingDiff,
 } from "../diff/WorkingDiff";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 /** The resizable list of files a commit or turn changed, beside its diff. */
 export function ChangesSidebar({
@@ -65,7 +66,9 @@ export function ChangesReview({
       {path ? (
         <>
           <header>
-            <strong title={path}>{path}</strong>
+            <strong>
+              <MiddleTruncate text={path} kind="path" />
+            </strong>
             <span>
               {sides.deletions} → {sides.additions}
             </span>

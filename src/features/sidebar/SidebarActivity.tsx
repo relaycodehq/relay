@@ -33,6 +33,7 @@ import {
 import { SnoozeMenu } from "./SnoozeMenu";
 import { CardAgents, CardState } from "./ThreadStatus";
 import { rowKeys } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 export function ActivityView({
   rows,
@@ -230,7 +231,11 @@ function ThreadCard({
                 <GitPullRequest size={11} />#{c.scope.ref.number}
               </span>
             )}
-            <span className="sb-card-branch">{c.branch}</span>
+            <MiddleTruncate
+              className="sb-card-branch"
+              text={c.branch ?? ""}
+              kind="branch"
+            />
             <AwayWhere view={away} />
             <CardAgents chat={c} />
           </div>

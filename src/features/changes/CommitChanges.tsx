@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ChangesReview, ChangesSidebar } from "./ChangesPane";
 import { ErrorBox, FileEntryIcon, IconButton, Loading } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./changed-files.css";
 
 /** One commit's message and files, each diffed against its first parent. */
@@ -80,7 +81,7 @@ export function CommitChanges({
                   onClick={() => setPicked(f.path)}
                 >
                   <FileEntryIcon path={f.path} directory={false} />
-                  <span>{f.path}</span>
+                  <MiddleTruncate text={f.path} kind="path" title={null} />
                   {!f.binary && <DiffStatLabel stat={f} />}
                 </button>
               </div>

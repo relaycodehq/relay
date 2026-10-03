@@ -20,6 +20,7 @@ import { useSyntaxThemes } from "../../lib/appearance";
 import { useTypography } from "../../lib/typography";
 import { StyledDiffCodeView } from "../../vendor/t3code/StyledDiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 type SymbolTarget = Pull | { projectId: string; head: { sha: string } };
 const inspect = (target: SymbolTarget, query: SymbolQuery) =>
@@ -420,9 +421,11 @@ function SymbolPreview({
   return (
     <div className="symbol-preview">
       <div className="symbol-preview-heading">
-        <span title={location.path}>
-          {location.path}:{location.line}
-        </span>
+        <MiddleTruncate
+          text={`${location.path}:${location.line}`}
+          kind="path"
+          title={location.path}
+        />
         <button
           disabled={!selection}
           onClick={() => selection && void onNavigate(selection, "definition")}

@@ -14,6 +14,7 @@ import {
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { Spinner } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import {
   RebaseConflictCard,
   resolvePrompt,
@@ -207,15 +208,19 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           }
         >
           <GitBranch size={13} />
-          <span>
-            {branch !== undefined
-              ? branch || "Detached HEAD"
-              : !branchError
-                ? "Loading branch…"
-                : isGitMissing(branchError)
-                  ? "Git unavailable"
-                  : "Branch unavailable"}
-          </span>
+          {branch ? (
+            <MiddleTruncate text={branch} kind="branch" />
+          ) : (
+            <span>
+              {branch !== undefined
+                ? "Detached HEAD"
+                : !branchError
+                  ? "Loading branch…"
+                  : isGitMissing(branchError)
+                    ? "Git unavailable"
+                    : "Branch unavailable"}
+            </span>
+          )}
           <ChevronDown size={12} />
         </Popover.Trigger>
         <Popover.Portal>
@@ -272,7 +277,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
                         className="branch-picker-row"
                         data-current={b.current ? "" : undefined}
                       >
-                        <span>{b.name}</span>
+                        <MiddleTruncate text={b.name} kind="branch" />
                         <small>
                           {b.current
                             ? "current"

@@ -6,6 +6,7 @@ import type { CodeReference } from "../../../../shared/code-references";
 import type { ProjectFileLink } from "../../../../shared/project-file-links";
 import { sideLabels, type SelectedChange } from "../working-changes";
 import { ErrorBox, IconButton, Loading } from "../../../ui/ui";
+import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { SplitDiffToggle, WorkingDiff } from "../../diff/WorkingDiff";
 
 type Props = {
@@ -74,7 +75,9 @@ function SelectedDiff({
   return (
     <>
       <header>
-        <strong title={selected.path}>{selected.path}</strong>
+        <strong>
+          <MiddleTruncate text={selected.path} kind="path" />
+        </strong>
         <span>{`${sides.deletions} → ${sides.additions}`}</span>
         <SplitDiffToggle split={split} onChange={onSplit} />
         {onOpenFile && (

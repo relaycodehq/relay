@@ -213,7 +213,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.working-review > header span {
+.working-review > header > span {
   color: var(--muted);
 }
 /* A long path in "no local changes" wraps instead of widening the pane. */

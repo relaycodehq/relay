@@ -27,6 +27,7 @@ import { SubagentsIndicator } from "../agent-turn/Subagents";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import "../changes/branch-picker.css";
@@ -108,7 +109,7 @@ function ThreadBranch({
         title="This thread's worktree branch"
       >
         <GitBranch size={13} />
-        <span>{worktree.branch}</span>
+        <MiddleTruncate text={worktree.branch} kind="branch" />
       </span>
     );
   return (
