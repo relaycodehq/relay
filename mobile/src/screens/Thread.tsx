@@ -61,6 +61,7 @@ import {
   UnsentStrip,
   WaitingStrip,
 } from "../ui/ThreadExtras";
+import { useForeground } from "../ui/motion";
 import { type, useTheme } from "../ui/theme";
 
 /** A thread, or with `rootId` one of its side conversations. */
@@ -68,14 +69,17 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   const remote = useRemote();
   const t = useTheme();
   const { thread, error, reload, summary, loadEarlier } = useThread(id);
-  // Open on the phone counts as read, for the Activity list's unread marks.
+  // Open on the phone counts as read, for the Activity list's unread marks,
+  // but only while the app is in front: answers that land in the background
+  // are marked when it comes back.
   const updated = summary?.updated;
+  const foreground = useForeground();
   useEffect(() => {
-    if (!updated) return;
+    if (!updated || !foreground) return;
     markSeen(id, updated);
     // The desktop keeps the shared mark; an older one just doesn't know the call.
     void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
-  }, [id, updated]);
+  }, [id, updated, foreground]);
   const [settings, setSettings] = useState<RemoteSettings>();
   const [sheet, setSheet] = useState<
     "thread" | "snooze" | "rename" | "sides"
