@@ -34,7 +34,8 @@ export function useProviderCommands(projectId: string, provider: AgentProvider, 
   const remote = useRemote();
   const [cache, setCache] = useState<Partial<Record<AgentProvider, ProviderCommand[] | "failed">>>({});
   useEffect(() => {
-    if (!wanted || cache[provider] || remote.status !== "online") return;
+    // A new Scratchpad thread has no folder until the computer makes one.
+    if (!wanted || !projectId || cache[provider] || remote.status !== "online") return;
     void remote
       .desktop("projectCommands", projectId, provider)
       .then((list) => setCache((c) => ({ ...c, [provider]: list })))

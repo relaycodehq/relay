@@ -130,10 +130,13 @@ export const MessageView = memo(function MessageView({
         </Text>
         {user && (
           <Text style={[styles.meta, { color: t.muted }]}>
-            {new Date(m.created).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {/* Only the phone's own sends are pending; see remote/outbox. */}
+            {m.pending && !m.error
+              ? "Sending…"
+              : new Date(m.created).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
           </Text>
         )}
         {!user && m.author && (

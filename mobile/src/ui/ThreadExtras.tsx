@@ -13,6 +13,7 @@ import {
 import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
 import type { ChatPending } from "../../../shared/projects";
+import type { Outgoing } from "../remote/outbox";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
@@ -284,6 +285,33 @@ export function QueueList({
             : []
         }
       />
+    </View>
+  );
+}
+
+/** Messages the desktop didn't take: send again, or back into the composer. */
+export function UnsentStrip({
+  unsent,
+  onRetry,
+  onEdit,
+}: {
+  unsent: Outgoing[];
+  onRetry: (o: Outgoing) => void;
+  onEdit: (o: Outgoing) => void;
+}) {
+  const t = useTheme();
+  if (!unsent.length) return null;
+  return (
+    <View style={[styles.strip, { borderColor: t.border, backgroundColor: t.raised }]}>
+      {unsent.map((o) => (
+        <View key={o.send.id} style={styles.item}>
+          <Text numberOfLines={1} style={[styles.text, { color: t.text }]}>
+            {withoutMention(o.send.body)}
+          </Text>
+          <Action label="Edit" onPress={async () => onEdit(o)} />
+          <Action label="Try again" primary onPress={async () => onRetry(o)} />
+        </View>
+      ))}
     </View>
   );
 }

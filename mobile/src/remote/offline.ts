@@ -2,7 +2,8 @@
 // can still be read on a train. Written a little behind the live state and
 // replaced by it as soon as the computer answers again.
 import { Directory, File, Paths } from "expo-file-system";
-import type { RemoteOverview } from "../../../shared/remote";
+import type { RemoteOverview, RemoteSettings } from "../../../shared/remote";
+import type { NewThreadModels } from "../../../shared/new-thread-models";
 import type { Thread } from "./chat-state";
 
 /** Threads kept for reading offline, most recently opened first. */
@@ -68,6 +69,15 @@ export const loadOverview = (computer: string) =>
 export function saveOverview(computer: string, overview: RemoteOverview) {
   const file = overviewFile(computer);
   later(file.uri, () => write(file, overview));
+}
+
+/** What a new thread starts on, so its composer is there before the computer answers. */
+type NewThread = { settings: RemoteSettings; models: NewThreadModels };
+const newThreadFile = () => new File(folder(), "new-thread.json");
+export const loadNewThread = () => read<NewThread>(newThreadFile());
+export function saveNewThread(start: NewThread) {
+  const file = newThreadFile();
+  later(file.uri, () => write(file, start));
 }
 
 export const loadThread = (id: string) => read<Thread>(threadFile(id));

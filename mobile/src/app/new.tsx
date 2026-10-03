@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Keyboard,
   Pressable,
@@ -12,7 +12,13 @@ import { randomUUID } from "expo-crypto";
 import type { ChatWorkspace } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import { useRemote } from "../remote/RemoteProvider";
-import { composeSend, desktopNewThread } from "../../../shared/remote-compose";
+import {
+  composeSend,
+  desktopNewThread,
+  newThreadSettings,
+} from "../../../shared/remote-compose";
+import { loadNewThread, saveNewThread } from "../remote/offline";
+import { deliver } from "../remote/outbox";
 import {
   sameModel,
   type NewThreadModels,
@@ -65,31 +71,46 @@ export default function NewThread() {
   const setWorkspace = (next: ChatWorkspace) => {
     if (picked) setWorkspaces((all) => ({ ...all, [picked]: next }));
   };
+  // The composer is there at once, on what the computer said last time; its
+  // answer replaces that unless a pick here came first.
   const [settings, setSettings] = useState<RemoteSettings>();
   const [models, setModels] = useState<NewThreadModels>({});
-  const { desktop } = remote;
+  const chose = useRef(false);
+  const { desktop, status } = remote;
   useEffect(() => {
-    if (settings) return;
-    let live = true;
-    void desktopNewThread(desktop).then((s) => {
-      if (!live) return;
-      setSettings(s.settings);
-      setModels(s.models);
+    void loadNewThread().then((saved) => {
+      setSettings((s) => s ?? saved?.settings ?? newThreadSettings(undefined));
+      if (saved) setModels((m) => (Object.keys(m).length ? m : saved.models));
     });
-    return () => {
-      live = false;
-    };
-  }, [desktop, settings]);
+  }, []);
+  const asked = useRef(false);
+  useEffect(() => {
+    // Offline, each of its calls would fall back to a default.
+    if (status !== "online" || asked.current) return;
+    asked.current = true;
+    void desktopNewThread(desktop).then((s) => {
+      if (!chose.current) setSettings(s.settings);
+      setModels(s.models);
+      saveNewThread(s);
+    });
+  }, [desktop, status]);
   const start = async ({ body, settings: using, images }: Outgoing) => {
-    if (!projectId) throw new Error(scratchError ?? "Pick a project first.");
+    const where =
+      projectId ??
+      (picked === "scratch"
+        ? (await remote.desktop("createScratch")).id
+        : undefined);
+    if (!where) throw new Error("Pick a project first.");
     const chat = await remote.desktop(
       "createProjectChat",
-      projectId,
+      where,
       { kind: "project" },
       !chosen || chosen.plain ? undefined : workspace,
     );
-    await remote.desktop(
-      "sendProjectChat",
+    // The thread opens now; the message follows it there, as making a
+    // worktree or carrying images over a slow link can take a while.
+    deliver(
+      remote.desktop,
       chat.id,
       composeSend(using, body, {
         id: randomUUID(),
@@ -181,9 +202,9 @@ export default function NewThread() {
           </>
         )}
       </ScrollView>
-      {settings && projectId && (
+      {settings && (
         <Composer
-          projectId={projectId}
+          projectId={projectId ?? ""}
           settings={settings}
           onSettings={(s) => {
             // The next new thread, here or on the desktop, starts on it too.
@@ -194,6 +215,7 @@ export default function NewThread() {
                 choice: s.choice,
                 ...(s.contextWindow ? { contextWindow: s.contextWindow } : {}),
               }).catch(() => {});
+            chose.current = true;
             setSettings(s);
           }}
           running={false}

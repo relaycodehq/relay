@@ -23,6 +23,14 @@ import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
 import {
+  arrived,
+  deliver,
+  drop,
+  outgoingMessage,
+  retry,
+  useOutbox,
+} from "../remote/outbox";
+import {
   mainMessages,
   replyCounts,
   rootOf,
@@ -43,7 +51,12 @@ import { KeyboardAware } from "../ui/KeyboardAware";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
-import { QueueList, StoppedStrip, WaitingStrip } from "../ui/ThreadExtras";
+import {
+  QueueList,
+  StoppedStrip,
+  UnsentStrip,
+  WaitingStrip,
+} from "../ui/ThreadExtras";
 import { type, useTheme } from "../ui/theme";
 
 /** A thread, or with `rootId` one of its side conversations. */
@@ -81,10 +94,26 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     };
   }, [loaded, lastSent, settings, remote.desktop]);
   const all = useMemo(() => thread?.messages ?? [], [thread]);
-  const listed = useMemo(
-    () => (rootId ? sideConversation(all, rootId) : mainMessages(all)),
-    [all, rootId],
+  // Sent from here and not in the thread yet: shown at once, in their place.
+  const outbox = useOutbox(id);
+  const held = useMemo(() => new Set(all.map((m) => m.id)), [all]);
+  useEffect(() => arrived(held), [held]);
+  const outgoing = useMemo(
+    () => outbox.filter((o) => !held.has(o.send.id)),
+    [outbox, held],
   );
+  const listed = useMemo(() => {
+    const own = rootId ? sideConversation(all, rootId) : mainMessages(all);
+    const mine = outgoing
+      .map(outgoingMessage)
+      .filter((m) => (m.parentId ?? undefined) === rootId);
+    return mine.length ? [...own, ...mine] : own;
+  }, [all, rootId, outgoing]);
+  // The desktop took one the thread doesn't show yet: ask for it.
+  const fetchSent = outgoing.some((o) => o.sent);
+  useEffect(() => {
+    if (fetchSent) void reload();
+  }, [fetchSent, reload]);
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
   const counts = useMemo(() => replyCounts(all), [all]);
@@ -240,10 +269,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   }: Outgoing) => {
     // `/btw` asks beside the conversation, as in the desktop's composer.
     const side = !rootId && /^\/btw\s/i.test(body);
-    await remote.desktop(
-      "sendProjectChat",
-      id,
-      composeSend(using, side ? body.replace(/^\/btw\s+/i, "") : body, {
+    const message = composeSend(
+      using,
+      side ? body.replace(/^\/btw\s+/i, "") : body,
+      {
         id: randomUUID(),
         ...(rootId ? { parentId: rootId } : {}),
         ...(side ? { side: true } : {}),
@@ -254,8 +283,12 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           mimeType,
           dataUrl,
         })),
-      }),
+      },
     );
+    // A plain send shows in the thread at once; queued and scheduled ones
+    // land in the queue, which only the desktop's answer fills.
+    if (!delivery && !sendAt) return deliver(remote.desktop, id, message);
+    await remote.desktop("sendProjectChat", id, message);
     await reload();
   };
 
@@ -428,7 +461,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
         }}
       />
       <ConnectionLine />
-      {!thread ? (
+      {!thread && !outgoing.length ? (
         <View style={styles.center}>
           {error ? (
             <>
@@ -459,7 +492,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
             <MessageView
               chatId={id}
               message={item}
-              root={thread.root}
+              root={thread?.root}
               where={where}
               replies={rootId ? undefined : counts.get(item.id)}
               onOpenFile={openFile}
@@ -501,7 +534,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                   </Text>
                 </Pressable>
               )}
-              {!rootId && (
+              {!rootId && thread && (
                 <QueueList
                   queue={thread.queue}
                   scheduled={thread.scheduled ?? []}
@@ -526,7 +559,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
             </View>
           }
           ListFooterComponent={
-            thread.earlier && !rootId ? (
+            thread?.earlier && !rootId ? (
               loadEarlier ? (
                 <Pressable
                   accessibilityRole="button"
@@ -584,6 +617,14 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           }}
         />
       )}
+      <UnsentStrip
+        unsent={outgoing.filter((o) => o.error)}
+        onRetry={(o) => retry(remote.desktop, o.send.id)}
+        onEdit={(o) => {
+          drop(o.send.id);
+          composer.current?.restore(withoutMention(o.send.body));
+        }}
+      />
       {request && (
         <RequestCard
           key={request.id}

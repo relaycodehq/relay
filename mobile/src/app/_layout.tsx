@@ -4,6 +4,7 @@ import { Stack, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as SystemUI from "expo-system-ui";
 import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
+import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
 import {
   FullWidthContext,
@@ -51,6 +52,10 @@ function Screens() {
   }, [t.background]);
   useEffect(confirmLaunch, []);
   const { overview, call, status } = remote;
+  const { desktop } = remote;
+  useEffect(() => {
+    if (status === "online") resendFailed(desktop);
+  }, [status, desktop]);
   // The overview kept from last time arrives before the connection does.
   const offer = status === "online" ? overview?.phoneApp : undefined;
   useEffect(() => {
