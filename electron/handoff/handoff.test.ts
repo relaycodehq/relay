@@ -456,6 +456,56 @@ it("tells the computer it came from when a turn there fails", async () => {
   expect(shown).toMatchObject({ state: "stopped", error: expect.any(String) });
 }, 60000);
 
+it("brings replies written there back under the messages they answer", async () => {
+  const { laptop, mini, sender, thread } = await awayWithChangelog();
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  const before = (await laptop.chats.get(thread.id)).messages;
+  const carried = (await mini.chats.get(arrived!.id)).messages.slice(
+    0,
+    before.length,
+  );
+  expect(carried[1]!.id).not.toBe(before[1]!.id);
+
+  // A side question on a carried answer, and a main turn with a reply of its own.
+  const ask = async (body: string, parentId?: string) => {
+    const request = { ...input(body), ...(parentId ? { parentId } : {}) };
+    await mini.chats.send(arrived!.id, request);
+    await vi.waitFor(
+      async () => {
+        const saved = await mini.chats.get(arrived!.id);
+        const index = saved.messages.findIndex((m) => m.id === request.id);
+        expect(index).toBeGreaterThanOrEqual(0);
+        expect(saved.messages[index + 1]?.status).toBe("complete");
+      },
+      { timeout: 10000 },
+    );
+    return request.id;
+  };
+  const sideQuestion = await ask("@codex Why a changelog?", carried[1]!.id);
+  const main = await ask("@codex Now a main question");
+  const answerIndex = (await mini.chats.get(arrived!.id)).messages.findIndex(
+    (m) => m.id === main,
+  );
+  const mainReply = await ask(
+    "@codex About that main answer",
+    (await mini.chats.get(arrived!.id)).messages[answerIndex + 1]!.id,
+  );
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined(),
+    { timeout: 15000 },
+  );
+  const back = (await laptop.chats.get(thread.id)).messages;
+  const find = (id: string) => back.find((m) => m.id === id)!;
+  // On the laptop the carried answer has its old id again.
+  expect(find(sideQuestion).parentId).toBe(before[1]!.id);
+  const mainAnswerId = back[back.findIndex((m) => m.id === main) + 1]!.id;
+  expect(find(mainReply).parentId).toBe(mainAnswerId);
+  expect(find(main).parentId ?? undefined).toBeUndefined();
+}, 90000);
+
 it("lets the computer it came from peek at what the turn there is doing", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const thread = await laptop.chats.create(

@@ -43,17 +43,35 @@ export function portableMessages(
   messages: ChatMessage[],
   newIds = false,
 ): ChatMessage[] {
+  return relabeled(messages, newIds).messages;
+}
+function relabeled(messages: ChatMessage[], newIds: boolean) {
   const ids = new Map(
     messages.map((m) => [m.id, newIds ? randomUUID() : m.id]),
   );
-  return messages
-    .filter((m) => m.status !== "streaming")
-    .map(({ changes, pending, seq, forkPoint, images, unread, ...m }) => ({
-      ...structuredClone(m),
-      id: ids.get(m.id)!,
-      ...(m.parentId ? { parentId: ids.get(m.parentId) ?? m.parentId } : {}),
-      version: 1,
-    }));
+  return {
+    /** Each message's id before it was relabeled, by its id after. */
+    was: Object.fromEntries([...ids].map(([old, id]) => [id, old])),
+    messages: messages
+      .filter((m) => m.status !== "streaming")
+      .map(({ changes, pending, seq, forkPoint, images, unread, ...m }) => ({
+        ...structuredClone(m),
+        id: ids.get(m.id)!,
+        ...(m.parentId ? { parentId: ids.get(m.parentId) ?? m.parentId } : {}),
+        version: 1,
+      })),
+  };
+}
+/** Messages written here, pointing at the ids the carried ones had where they came from. */
+function pointingBack(
+  messages: ChatMessage[],
+  carriedIds: Record<string, string>,
+) {
+  return messages.map((m) =>
+    m.parentId && carriedIds[m.parentId]
+      ? { ...m, parentId: carriedIds[m.parentId] }
+      : m,
+  );
 }
 /** What another computer hears of a handed-over thread's latest turn. */
 type HandoffTurn = Pick<
@@ -234,7 +252,7 @@ export class ComputerHandoff {
     cameFrom: Omit<ChatCameFrom, "carried">,
     worktree: ChatWorktree,
   ) {
-    const messages = portableMessages(thread.messages, true);
+    const { messages, was } = relabeled(thread.messages, true);
     const note = [...messages]
       .reverse()
       .find(
@@ -252,6 +270,7 @@ export class ComputerHandoff {
       worktree,
       messages,
       cameFrom: { ...cameFrom, carried: messages.length },
+      carriedIds: was,
       handover: {
         computer: thread.from,
         fresh: true,
@@ -289,7 +308,10 @@ export class ComputerHandoff {
         }))
       : await this.leave(id, came.computer, came.carried);
     return {
-      messages: portableMessages(chat.messages.slice(came.carried)),
+      messages: pointingBack(
+        portableMessages(chat.messages.slice(came.carried)),
+        chat.carriedIds ?? {},
+      ),
       root,
       tip,
       branch: chat.worktree!.branch!,
@@ -352,9 +374,16 @@ export class ComputerHandoff {
       const sentTo = chat.sentTo;
       if (sentTo?.id !== handoffId) throw new Error("This thread isn't away.");
       const known = new Set(chat.messages.map((m) => m.id));
-      const arrived = portableMessages(messages).map((m) =>
-        known.has(m.id) ? { ...m, id: randomUUID() } : m,
-      );
+      const renamed = new Map<string, string>();
+      for (const m of messages)
+        if (known.has(m.id)) renamed.set(m.id, randomUUID());
+      const arrived = portableMessages(messages).map((m) => ({
+        ...m,
+        ...(renamed.has(m.id) ? { id: renamed.get(m.id)! } : {}),
+        ...(m.parentId && renamed.has(m.parentId)
+          ? { parentId: renamed.get(m.parentId)! }
+          : {}),
+      }));
       const note = [...arrived]
         .reverse()
         .find(

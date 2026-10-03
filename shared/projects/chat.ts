@@ -41,6 +41,8 @@ export interface ProjectChat extends ChatSummary {
   replySessions?: Record<string, AgentSessions>;
   /** Local: what the next turn hears about a handoff between computers. */
   handover?: ChatHandover;
+  /** Local: on a thread that came from another computer, each carried message's id there by its id here. */
+  carriedIds?: Record<string, string>;
 }
 /** An agent's session on a conversation, and the last message it heard there. */
 export interface AgentSession {

@@ -46,6 +46,7 @@ export function chatSummary({
   deepReview,
   ultraplans,
   handover,
+  carriedIds,
   ...summary
 }: ProjectChat): ChatSummary {
   const provider = [...messages]
