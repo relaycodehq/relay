@@ -10,6 +10,7 @@ import {
 } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { threadDraftKey } from "../lib/thread-storage";
+import { sameSpot, useShellSpot } from "./shell-spot";
 import type { ShellNavigation } from "./useShellNavigation";
 
 /**
@@ -19,7 +20,13 @@ import type { ShellNavigation } from "./useShellNavigation";
 export function useNewThreads(
   nav: Pick<
     ShellNavigation,
-    "project" | "chats" | "setSelected" | "setInbox" | "navigate"
+    | "project"
+    | "chatId"
+    | "draftId"
+    | "inbox"
+    | "setSelected"
+    | "setInbox"
+    | "navigate"
   >,
   projects: UseQueryResult<Project[]>,
   lock: NavigationLock,
@@ -29,6 +36,7 @@ export function useNewThreads(
 ) {
   const qc = useQueryClient();
   const { project } = nav;
+  const spotNow = useShellSpot(nav);
   /** ⌘N's picker shows. */
   const [picking, setPicking] = useState(false);
   async function addProject() {
@@ -74,6 +82,7 @@ export function useNewThreads(
    */
   async function start(text: string, send: boolean) {
     if (!project || lock.blocked()) return;
+    const from = spotNow();
     const id = freshNewThread(project.id);
     clearDraftScope(id);
     writeDraft(threadDraftKey(id), text);
@@ -87,14 +96,15 @@ export function useNewThreads(
           reply: false,
         }));
       if (sent) {
-        await nav.chats.refetch();
-        nav.navigate(project, sent);
+        await qc.refetchQueries({ queryKey: ["project-chats", project.id] });
+        // A send that takes a while must not pull the user off what they moved to.
+        if (sameSpot(spotNow(), from)) nav.navigate(project, sent);
         return;
       }
     } catch (e) {
       onError(e);
     }
-    nav.navigate(project, undefined, id);
+    if (sameSpot(spotNow(), from)) nav.navigate(project, undefined, id);
   }
   return { picking, setPicking, addProject, pick, scratch, open, start };
 }

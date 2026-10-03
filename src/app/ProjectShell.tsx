@@ -24,6 +24,7 @@ import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
 import { usePullThreads } from "./usePullThreads";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
+import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
 import { useShellNavigation } from "./useShellNavigation";
 import { useSidebarVisibility } from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
@@ -108,9 +109,11 @@ export default function ProjectShell() {
     prs.openInProject,
     setError,
   );
-  async function openCreated(c: ChatSummary) {
-    await chats.refetch();
-    nav.setChatId(c.id);
+  const spotNow = useShellSpot(nav);
+  /** Opens a thread that took a while to make, unless the user went elsewhere meanwhile. */
+  async function openCreated(c: ChatSummary, from: ShellSpot) {
+    await qc.refetchQueries({ queryKey: ["project-chats", from.projectId] });
+    if (sameSpot(spotNow(), from)) nav.setChatId(c.id);
   }
   const starts = useNewThreads(
     nav,
@@ -352,10 +355,24 @@ export default function ProjectShell() {
                   onDraftWorkspace={nav.setDraftWorkspace}
                   onStartThread={starts.start}
                   onCreated={async (c) => {
-                    if (!c.worktree) adoptDraftTerminal(project.id, c.id);
-                    await openCreated(c);
+                    const from: ShellSpot = {
+                      projectId: project.id,
+                      chatId: null,
+                      draftId,
+                      inbox: false,
+                    };
+                    if (!c.worktree && sameSpot(spotNow(), from))
+                      adoptDraftTerminal(project.id, c.id);
+                    await openCreated(c, from);
                   }}
-                  onForked={openCreated}
+                  onForked={(c) =>
+                    openCreated(c, {
+                      projectId: project.id,
+                      chatId: chat?.id ?? null,
+                      draftId,
+                      inbox: false,
+                    })
+                  }
                   onSwitchProject={(next) => navigate(next, undefined, true)}
                   onAddProject={() => void starts.addProject()}
                 />
