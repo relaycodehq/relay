@@ -66,7 +66,7 @@ export class OpenCodeError extends Error {
 }
 
 /** Calls OpenCode's HTTP API for work in `directory`. */
-export async function openCode<T = any>(
+export async function openCode<T = unknown>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   options: { directory?: string; body?: unknown; signal?: AbortSignal } = {},

@@ -2,6 +2,11 @@
 // from its sign-ins, its config or the environment, so Relay asks it rather
 // than reading those itself; the key never leaves the main process.
 import { openCode } from "./opencode/client";
+import {
+  configProvidersSchema,
+  OpenCodeShapeError,
+  parseOpenCodeResponse,
+} from "./opencode/events";
 import { memoOnce } from "../util/memo";
 import {
   openRouterCreditSchema,
@@ -11,9 +16,11 @@ import {
 const API = "https://openrouter.ai/api/v1";
 
 async function openRouterKey(): Promise<string | null> {
-  const { providers } = await openCode<{
-    providers: { id: string; key?: string }[];
-  }>("GET", "/config/providers");
+  const { providers } = parseOpenCodeResponse(
+    "provider config",
+    configProvidersSchema,
+    await openCode("GET", "/config/providers"),
+  );
   return providers.find((p) => p.id === "openrouter")?.key?.trim() || null;
 }
 
@@ -38,7 +45,15 @@ function empty(message: string): OpenRouterCredit {
 }
 
 async function load(): Promise<OpenRouterCredit> {
-  const key = await openRouterKey().catch(() => null);
+  let key: string | null;
+  try {
+    key = await openRouterKey();
+  } catch (e) {
+    // A server that isn't there has no key to show; one that answers oddly is worth saying.
+    return e instanceof OpenCodeShapeError
+      ? empty(e.message)
+      : empty("OpenCode has no OpenRouter key");
+  }
   if (!key) return empty("OpenCode has no OpenRouter key");
   try {
     const [info, credits] = await Promise.all([

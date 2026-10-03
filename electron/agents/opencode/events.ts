@@ -223,8 +223,51 @@ export const sessionStatusSchema = z.record(
 export const permissionListSchema = z.array(permissionRequestSchema);
 export const questionListSchema = z.array(questionRequestSchema);
 export const commandListSchema = z.array(
-  z.object({ name: z.string() }).loose(),
+  z
+    .object({
+      name: z.string(),
+      description: text,
+      hints: lenient(z.array(z.string())),
+    })
+    .loose(),
 );
+
+/** `GET /provider`: every provider OpenCode knows and which of them are signed in. */
+export const providerListSchema = z
+  .object({
+    all: z.array(z.object({ id: z.string() }).loose()),
+    connected: z.array(z.string()),
+  })
+  .loose();
+/** One provider of that list; only a signed-in one is read, since the rest are never offered. */
+export const providerSchema = z
+  .object({
+    id: z.string(),
+    name: text,
+    models: z.record(
+      z.string(),
+      z
+        .object({
+          id: z.string(),
+          name: text,
+          status: text,
+          capabilities: lenient(z.object({ toolcall: flag }).loose()),
+          limit: lenient(z.object({ context: count }).loose()),
+          variants: record,
+        })
+        .loose(),
+    ),
+  })
+  .loose();
+
+/** `GET /config`: what the project's config picks. */
+export const configSchema = z.object({ model: text }).loose();
+/** `GET /config/providers`: the providers the config resolves, with their keys. */
+export const configProvidersSchema = z
+  .object({
+    providers: z.array(z.object({ id: z.string(), key: text }).loose()),
+  })
+  .loose();
 /** Answers creating and forking a session. */
 export const sessionCreatedSchema = z.object({ id: z.string() }).loose();
 export const sessionSchema = z

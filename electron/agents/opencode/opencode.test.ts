@@ -6,7 +6,8 @@ import { findExecutable } from "../../platform/executables";
 import { runOpenCode } from "./run";
 import { disposeOpenCode } from "./client";
 import { permissionRules } from "./permissions";
-import { openCodeModels } from "./catalog";
+import { openCodeCommands, openCodeDefaults, openCodeModels } from "./catalog";
+import { readOpenRouterCredit } from "../openrouter-credit";
 import { runtimeModes } from "../../../shared/agent-modes";
 import type { AgentOptions } from "../types";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
@@ -339,4 +340,65 @@ it("never strips bash from a session, which Zen's free models refuse", () => {
 
 it("lists the signed-in providers' models, leaving Anthropic's to Relay's Claude", async () => {
   expect((await openCodeModels()).map((m) => m.id)).toEqual(["zen/pickle"]);
+});
+
+describe("what OpenCode lists and configures", () => {
+  beforeEach(() => openCodeModels.forget());
+
+  it("reads the default model and the commands of a project", async () => {
+    expect(await openCodeDefaults(root)).toEqual({
+      model: "zen/pickle",
+      effort: "",
+    });
+    expect(await openCodeCommands(root)).toEqual([
+      {
+        name: "init",
+        source: "other",
+        description: "Create AGENTS.md",
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      "provider-list-without-all",
+      () => openCodeModels(),
+      "provider list response (all",
+    ],
+    [
+      "model-without-id",
+      () => openCodeModels(),
+      "zen provider response (models.pickle.id",
+    ],
+    ["config-not-an-object", () => openCodeDefaults(root), "config response"],
+    [
+      "command-without-name",
+      () => openCodeCommands(root),
+      "command list response (0.name",
+    ],
+  ])(
+    "fails %s naming what's wrong instead of carrying on with undefined",
+    async (quirk, call, message) => {
+      vi.stubEnv("RELAY_OPENCODE_QUIRK", quirk);
+      await expect(call()).rejects.toThrow(
+        `OpenCode sent an unexpected ${message}`,
+      );
+    },
+  );
+
+  it("says so when OpenCode lists its providers in a shape this Relay can't read, rather than that it has no key", async () => {
+    vi.stubEnv("RELAY_OPENCODE_QUIRK", "providers-not-a-list");
+    expect(await readOpenRouterCredit(true)).toMatchObject({
+      balance: null,
+      message: expect.stringContaining(
+        "OpenCode sent an unexpected provider config response (providers",
+      ),
+    });
+  });
+
+  it("says OpenCode has no OpenRouter key when none of its providers has one", async () => {
+    expect(await readOpenRouterCredit(true)).toMatchObject({
+      message: "OpenCode has no OpenRouter key",
+    });
+  });
 });

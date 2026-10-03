@@ -7,6 +7,13 @@ import {
   type ReasoningEffort,
 } from "../../../shared/settings";
 import { openCode } from "./client";
+import {
+  commandListSchema,
+  configSchema,
+  parseOpenCodeResponse,
+  providerListSchema,
+  providerSchema,
+} from "./events";
 
 const byName = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -21,25 +28,6 @@ export function splitModel(
     : undefined;
 }
 
-type ProviderList = {
-  all: {
-    id: string;
-    name: string;
-    models: Record<
-      string,
-      {
-        id: string;
-        name: string;
-        status?: string;
-        capabilities?: { toolcall?: boolean };
-        limit?: { context?: number };
-        variants?: Record<string, unknown>;
-      }
-    >;
-  }[];
-  connected: string[];
-};
-
 /**
  * Anthropic's own models run through Relay's Claude agent, with its sign-in
  * and features; through OpenCode a Claude subscription is refused. Claude
@@ -52,10 +40,17 @@ const hidden = new Set(["anthropic"]);
  * after a minute, since connecting a provider in OpenCode adds its models.
  */
 export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
-  const { all, connected } = await openCode<ProviderList>("GET", "/provider");
+  const { all, connected } = parseOpenCodeResponse(
+    "provider list",
+    providerListSchema,
+    await openCode("GET", "/provider"),
+  );
   const signedIn = new Set(connected);
   return all
-    .filter((provider) => signedIn.has(provider.id) && !hidden.has(provider.id))
+    .filter((entry) => signedIn.has(entry.id) && !hidden.has(entry.id))
+    .map((entry) =>
+      parseOpenCodeResponse(`${entry.id} provider`, providerSchema, entry),
+    )
     .flatMap((provider) =>
       Object.values(provider.models).flatMap((model): AgentModel[] => {
         const id = `${provider.id}/${model.id}`;
@@ -74,7 +69,7 @@ export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
             description: model.id.includes("/")
               ? model.id.slice(0, model.id.indexOf("/")).replace(/^~/, "")
               : "",
-            group: provider.name,
+            group: provider.name ?? provider.id,
             efforts: Object.keys(model.variants ?? {}).flatMap(
               (v): ReasoningEffort[] => {
                 const effort = reasoningEffortSchema.safeParse(v).data;
@@ -92,9 +87,11 @@ export const openCodeModels = memoOnce(async (): Promise<AgentModel[]> => {
 
 /** The model OpenCode's config gives sessions in `root` that name none. */
 export async function openCodeDefaults(root: string): Promise<AgentDefaults> {
-  const config = await openCode<{ model?: string }>("GET", "/config", {
-    directory: root,
-  });
+  const config = parseOpenCodeResponse(
+    "config",
+    configSchema,
+    await openCode("GET", "/config", { directory: root }),
+  );
   return {
     model: modelSchema.safeParse(config.model).data ?? "",
     effort: "",
@@ -105,9 +102,11 @@ export async function openCodeDefaults(root: string): Promise<AgentDefaults> {
 export async function openCodeCommands(
   root: string,
 ): Promise<ProviderCommand[]> {
-  const commands = await openCode<
-    { name: string; description?: string; source?: string; hints?: string[] }[]
-  >("GET", "/command", { directory: root });
+  const commands = parseOpenCodeResponse(
+    "command list",
+    commandListSchema,
+    await openCode("GET", "/command", { directory: root }),
+  );
   return commands
     .filter((c) => /^[a-zA-Z0-9_.:-]+$/.test(c.name))
     .slice(0, 500)

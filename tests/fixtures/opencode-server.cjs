@@ -272,6 +272,22 @@ const server = http.createServer(async (req, res) => {
     req.on("close", () => clients.delete(res));
     return;
   }
+  if (quirk === "provider-list-without-all" && path === "/provider")
+    return send(200, { connected: ["zen"] });
+  if (quirk === "model-without-id" && path === "/provider")
+    return send(200, {
+      all: [{ id: "zen", name: "Zen", models: { pickle: { name: "Pickle" } } }],
+      connected: ["zen"],
+    });
+  if (quirk === "config-not-an-object" && path === "/config")
+    return send(200, "nope");
+  if (quirk === "command-without-name" && path === "/command")
+    return send(200, [{ description: "Create AGENTS.md" }]);
+  if (quirk === "providers-not-a-list" && path === "/config/providers")
+    return send(200, { providers: "none" });
+  if (path === "/config") return send(200, { model: "zen/pickle" });
+  if (path === "/config/providers")
+    return send(200, { providers: [{ id: "zen" }] });
   if (path === "/provider")
     return send(200, {
       all: [
