@@ -167,6 +167,7 @@ export function QueueList({
   queue,
   scheduled,
   running,
+  compacting,
   paused,
   onSteer,
   onEdit,
@@ -176,6 +177,8 @@ export function QueueList({
   queue: Waiting[];
   scheduled: Waiting[];
   running: boolean;
+  /** The running turn compacts the session: nothing steers it, the queue goes once it's done. */
+  compacting?: boolean;
   paused?: boolean;
   onSteer: (id: string) => Promise<void>;
   onEdit: (item: Waiting) => Promise<void>;
@@ -206,7 +209,9 @@ export function QueueList({
               later && item.at
                 ? `Sends ${wakeLabel(item.at, new Date())}`
                 : index === 0 && !paused
-                  ? "Next"
+                  ? compacting
+                    ? "Sends after compaction"
+                    : "Next"
                   : "Queued",
               item.images
                 ? `${item.images} ${item.images === 1 ? "image" : "images"}`
@@ -217,7 +222,7 @@ export function QueueList({
         </Text>
       </View>
       <Action
-        label={running ? "Steer now" : "Send now"}
+        label={compacting ? "Send next" : running ? "Steer now" : "Send now"}
         onPress={() => onSteer(item.id)}
       />
       <Pressable

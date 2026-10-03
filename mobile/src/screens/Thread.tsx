@@ -585,6 +585,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                   queue={thread.queue}
                   scheduled={thread.scheduled ?? []}
                   running={running}
+                  compacting={thread.messages.some(
+                    (m) => m.compaction && m.status === "streaming",
+                  )}
                   paused={thread.queuePaused}
                   onSteer={async (messageId) =>
                     void (await queueAction("steer", messageId))

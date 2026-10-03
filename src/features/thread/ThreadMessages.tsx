@@ -215,6 +215,9 @@ export function ThreadMessages({
           paused={history.data?.queuePaused}
           scheduled={history.data?.scheduled}
           running={running}
+          compacting={shown.some(
+            (m) => m.compaction && m.status === "streaming",
+          )}
           busy={busy}
           onSteer={steer}
           onMove={move}
