@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
-import type { AgentDefaults, AgentModel, AgentProvider } from "../../../shared/agents";
+import { agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
+import { modelEfforts } from "../../../shared/composer-commands";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ReasoningEffort } from "../../../shared/settings";
 import type { ModelCatalogs } from "../../../shared/composer-commands";
@@ -11,8 +12,6 @@ import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { Segmented } from "./Rows";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
-
-const providers: AgentProvider[] = ["codex", "claude", "opencode", "cursor"];
 
 /** The desktop's model picker, for a thumb: agent tabs, its models, effort, and Fast or the 200k window. */
 export function ModelSheet({
@@ -74,10 +73,10 @@ export function ModelSheet({
       choice: {
         ...settings.choice,
         model: id,
-        // An effort the new model lacks goes back to its default, as on the desktop.
-        reasoningEffort: list
-          ?.find((m) => m.id === id)
-          ?.efforts.includes(settings.choice.reasoningEffort)
+        // Only an effort the new model lacks goes back to its default, as on the desktop.
+        reasoningEffort: modelEfforts(provider, id, { [provider]: list }).includes(
+          settings.choice.reasoningEffort,
+        )
           ? settings.choice.reasoningEffort
           : "",
       },
@@ -89,7 +88,7 @@ export function ModelSheet({
       <View style={styles.tabs}>
         <Segmented
           value={provider}
-          options={providers.map((p) => ({ value: p, label: agentNames[p] }))}
+          options={agentProviders.map((p) => ({ value: p, label: agentNames[p] }))}
           onChange={(p) => onChange(settings, p)}
         />
       </View>
