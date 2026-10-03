@@ -29,7 +29,7 @@ import {
   dataUrlBytes,
   nextImageNumber,
   onlyImageTokens,
-} from "../images/image-refs";
+} from "../../../shared/image-refs";
 import { useImagePills } from "../images/image-pills";
 import type { Sketch, SketchHistory } from "../images/sketch";
 import { takeLegacyPastes } from "../../lib/thread-storage";

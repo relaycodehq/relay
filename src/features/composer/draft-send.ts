@@ -29,7 +29,7 @@ import {
   writeDraft,
   type ActivityDraft,
 } from "./drafts";
-import { numberImages } from "../images/image-refs";
+import { numberImages } from "../../../shared/image-refs";
 import { flattenSketch } from "../images/sketch";
 import { aiSettingsQuery } from "../agents/useAISettings";
 import { agentModelsQuery } from "../agents/useAgentPicks";

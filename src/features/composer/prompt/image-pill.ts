@@ -6,7 +6,7 @@ import {
   imageToken,
   isPastedImageName,
   shortImageName,
-} from "../../images/image-refs";
+} from "../../../../shared/image-refs";
 
 /** What an image pill shows; the screenshot itself stays with the composer. */
 export interface ImageChip {

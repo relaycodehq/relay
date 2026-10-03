@@ -19,7 +19,7 @@ import {
 } from "../../src/features/composer/ComposerPromptInput";
 import { UserText, type SentImage } from "../../src/features/thread/UserText";
 import { ImageThumbnail } from "../../src/features/images/ImagePreview";
-import { attachedImages, onlyImageTokens } from "../../src/features/images/image-refs";
+import { attachedImages, onlyImageTokens } from "../../shared/image-refs";
 
 initAppearance();
 initWindowFocus();

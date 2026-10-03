@@ -7,8 +7,9 @@ import {
   type ProjectChatSend,
 } from "../../../shared/projects";
 import { recipient } from "../../../shared/recipient";
+import { returnedDraft } from "../../../shared/returned-draft";
 import { api } from "../../lib/api";
-import { moveQueued, returnedDraft, type QueueDrop } from "./chat-queue";
+import { moveQueued, type QueueDrop } from "./chat-queue";
 import { saveSentSettings } from "../agents/composer-settings";
 import { loadDraftImages, saveDraftImages } from "../images/draft-images";
 import { readDraft, writeDraft } from "../composer/drafts";
@@ -72,6 +73,7 @@ export function useQueuedMessages({
         await loadDraftImages(key),
         input,
         !!parent,
+        () => crypto.randomUUID(),
       );
       if (input.selection && attachments.selection)
         throw new Error(

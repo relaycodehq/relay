@@ -1,4 +1,4 @@
-import { pasteBlock } from "../../../shared/pasted-texts";
+import { pasteBlock } from "./pasted-texts";
 
 /**
  * A screenshot sits in the draft as `[Image #n]`, the token Claude Code and

@@ -14,7 +14,7 @@ import {
   type ChatMessage,
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { onlyImageTokens } from "../images/image-refs";
+import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";

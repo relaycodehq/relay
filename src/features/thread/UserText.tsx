@@ -7,7 +7,7 @@ import {
   imageToken,
   isPastedImageName,
   shortImageName,
-} from "../images/image-refs";
+} from "../../../shared/image-refs";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { PastedTextPill } from "../composer/PastedTextCard";

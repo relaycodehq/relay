@@ -14,7 +14,7 @@ import {
   type ImageChip,
   type PromptInputHandle,
 } from "../../src/features/composer/ComposerPromptInput";
-import { attachedImages, numberImages } from "../../src/features/images/image-refs";
+import { attachedImages, numberImages } from "../../shared/image-refs";
 import { formatSize } from "../../src/lib/file-tree";
 
 initAppearance();

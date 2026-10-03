@@ -9,7 +9,7 @@ import {
 import { draftRecipient, type Recipient } from "../../../shared/recipient";
 import { dictationSnapshot, stopDictation } from "../dictation/audio/session";
 import type { DraftImage } from "../images/draft-images";
-import { numberImages } from "../images/image-refs";
+import { numberImages } from "../../../shared/image-refs";
 import { flattenSketch } from "../images/sketch";
 import type { AgentRuns } from "./useAgentRuns";
 import type { ComposerDraft } from "./useComposerDraft";

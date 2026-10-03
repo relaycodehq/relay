@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { ImageTag } from "../composer/prompt/image-pill";
-import { promptContent } from "../composer/prompt-content";
-import { promptText } from "../composer/prompt-text";
+import { ImageTag } from "../src/features/composer/prompt/image-pill";
+import { promptContent } from "../src/features/composer/prompt-content";
+import { promptText } from "../src/features/composer/prompt-text";
 import {
   attachedImages,
   imagesAfter,
@@ -13,7 +13,7 @@ import {
   onlyImageTokens,
   shortImageName,
 } from "./image-refs";
-import { pasteMarkdown } from "../../../shared/pasted-texts";
+import { pasteMarkdown } from "./pasted-texts";
 
 const shot = (id: string, n?: number) => ({ id, n });
 
