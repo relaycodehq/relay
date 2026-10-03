@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgentProvider } from "../../../shared/agents";
 import type {
@@ -26,8 +26,11 @@ export function useNewThreadModels(enabled: boolean) {
     enabled,
     refetchOnWindowFocus: "always",
   });
+  /** The latest save; an older one failing leaves a newer one be. */
+  const latest = useRef(0);
   const save = useCallback(
     (provider: AgentProvider, model: NewThreadModel) => {
+      const request = ++latest.current;
       const models = {
         ...(client.getQueryData<NewThreadModels>(key) ??
           cachedNewThreadModels()),
@@ -35,7 +38,13 @@ export function useNewThreadModels(enabled: boolean) {
       };
       client.setQueryData(key, models);
       cacheNewThreadModels(models);
-      void api.saveNewThreadModel(provider, model).catch(() => {});
+      // Shown as saved at once; one that wasn't goes back to what's kept now,
+      // not at some later focus.
+      void api.saveNewThreadModel(provider, model).catch((e) => {
+        console.warn("Could not save the new thread model:", e);
+        if (latest.current === request)
+          void client.invalidateQueries({ queryKey: key });
+      });
     },
     [client],
   );

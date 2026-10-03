@@ -10,13 +10,14 @@ export function memoByKey<T>(
   const get = (key: string) => {
     const previous = cache.get(key);
     if (previous && previous.expires > Date.now()) return previous.result;
-    const result = load(key).catch((e) => {
-      cache.delete(key);
-      throw e;
+    const entry = { expires: Date.now() + ttl, result: load(key) };
+    // A failure forgets only its own answer, not one asked for since.
+    entry.result.catch(() => {
+      if (cache.get(key) === entry) cache.delete(key);
     });
     if (cache.size >= max) cache.delete(cache.keys().next().value!);
-    cache.set(key, { expires: Date.now() + ttl, result });
-    return result;
+    cache.set(key, entry);
+    return entry.result;
   };
   return Object.assign(get, { clear: () => cache.clear() });
 }

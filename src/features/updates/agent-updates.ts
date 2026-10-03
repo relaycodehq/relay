@@ -5,28 +5,58 @@ import type { AgentProvider } from "../../../shared/agents";
 
 const listeners = new Set<() => void>();
 let versions: AgentVersions | undefined;
-let listening = false;
+/** Why the first state never came; asking again clears it. */
+let failure: string | undefined;
+let listening = false,
+  asking = false;
+
+function notify() {
+  for (const listener of listeners) listener();
+}
 
 function change(next: AgentVersions) {
   versions = next;
-  for (const listener of listeners) listener();
+  failure = undefined;
+  notify();
+}
+
+/** Asks for the state until one arrives; each new subscriber asks again. */
+export function askAgentVersions() {
+  if (versions || asking) return;
+  asking = true;
+  failure = undefined;
+  notify();
+  api
+    .agentVersions()
+    // An event can overtake the first answer; the newer state wins.
+    .then((state) => versions || change(state))
+    .catch((e) => {
+      failure = e instanceof Error ? e.message : String(e);
+      notify();
+    })
+    .finally(() => {
+      asking = false;
+    });
 }
 
 function subscribe(listener: () => void) {
   // A renderer hot-reloaded ahead of its main process has no agent checks yet.
-  if (!listening && api.agentVersions) {
+  if (!api.agentVersions) return () => {};
+  if (!listening) {
     listening = true;
-    // An event can overtake the first answer; the newer state wins.
-    void api.agentVersions().then((state) => versions || change(state));
     api.onAgentVersions(change);
   }
   listeners.add(listener);
+  askAgentVersions();
   return () => listeners.delete(listener);
 }
 
 /** The agent CLIs as the main process last found them. */
 export const useAgentVersions = () =>
   useSyncExternalStore(subscribe, () => versions);
+/** Why the agents couldn't be listed, while they aren't. */
+export const useAgentVersionsFailure = () =>
+  useSyncExternalStore(subscribe, () => failure);
 
 // Failures land in the state the main process sends, so the calls only start them.
 export const checkAgentVersions = () =>

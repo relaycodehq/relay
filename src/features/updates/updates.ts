@@ -17,22 +17,36 @@ export interface Updates {
 const shortestCheck = 1400;
 const listeners = new Set<() => void>();
 let updates: Updates = { checking: false };
-let listening = false;
+let listening = false,
+  asking = false;
 
 function change(next: Partial<Updates>) {
   updates = { ...updates, ...next };
   for (const listener of listeners) listener();
 }
 
+/** Asks for the state until one arrives; each new subscriber asks again. */
+function askState() {
+  if (updates.state || asking) return;
+  asking = true;
+  api
+    .updateState()
+    // An event can overtake the first answer; the newer state wins.
+    .then((state) => updates.state || change({ state }))
+    .catch((e) => console.warn("Could not read the update state:", e))
+    .finally(() => {
+      asking = false;
+    });
+}
+
 function subscribe(listener: () => void) {
   if (!listening) {
     listening = true;
-    // An event can overtake the first answer; the newer state wins.
-    void api.updateState().then((state) => updates.state || change({ state }));
     api.onUpdate((state) =>
       change(updates.checking ? { state } : { state, failure: undefined }),
     );
   }
+  askState();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

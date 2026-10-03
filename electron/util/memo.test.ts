@@ -26,6 +26,22 @@ describe("memoByKey", () => {
     expect(await get("a")).toBe("ok");
   });
 
+  it("keeps an answer asked for while an older one was failing", async () => {
+    let fail!: (e: Error) => void;
+    const load = vi
+      .fn<(key: string) => Promise<string>>()
+      .mockReturnValueOnce(new Promise((_, reject) => (fail = reject)))
+      .mockResolvedValue("fresh");
+    const get = memoByKey(load);
+    const old = get("a");
+    get.clear();
+    expect(await get("a")).toBe("fresh");
+    fail(new Error("offline"));
+    await expect(old).rejects.toThrow("offline");
+    expect(await get("a")).toBe("fresh");
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it("drops the oldest key past the limit", async () => {
     const load = vi.fn(async (key: string) => key);
     const get = memoByKey(load, { max: 2 });

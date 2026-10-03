@@ -251,6 +251,11 @@ export function ProjectComposer({
           {commands.error}
         </p>
       )}
+      {accounts.error && (
+        <p role="alert" className="composer-image-error">
+          {accounts.error}
+        </p>
+      )}
       <div className="thread-context-controls">{context}</div>
       {notice}
       <QuickSwitchHud

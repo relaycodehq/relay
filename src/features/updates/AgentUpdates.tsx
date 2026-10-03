@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useRecent } from "./useRecent";
 import {
+  askAgentVersions,
   checkAgentVersions,
   linkAgent,
   signInCursor,
@@ -18,6 +19,7 @@ import {
   unlinkAgent,
   updateAgent,
   useAgentVersions,
+  useAgentVersionsFailure,
 } from "./agent-updates";
 import {
   isBehind,
@@ -129,7 +131,16 @@ export function AgentUpdateButton({ onDetails }: { onDetails: () => void }) {
 /** Settings → AI models: each agent's version and its update. */
 export function AgentVersionSettings() {
   const versions = useAgentVersions();
-  if (!versions) return <p className="setting-muted">Loading agents…</p>;
+  const failure = useAgentVersionsFailure();
+  if (!versions)
+    return failure ? (
+      <ErrorBox
+        error={`Couldn't list the agents: ${failure}`}
+        retry={askAgentVersions}
+      />
+    ) : (
+      <p className="setting-muted">Loading agents…</p>
+    );
   const checked = versions.checkedAt
     ? `Last checked ${new Date(versions.checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
     : "Not checked yet.";
