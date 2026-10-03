@@ -108,9 +108,21 @@ export const CodeBlock = memo(function CodeBlock({
     code.startsWith(highlighted.code)
       ? highlighted
       : null;
-  // The button sits outside <pre> so it stays put when long lines scroll.
+  // The button sits outside <pre> so it stays put when long lines scroll,
+  // and sticks to the top of a block taller than the thread.
   return (
     <div className="markdown-code">
+      <div className="markdown-code-tools">
+        <button
+          type="button"
+          className="markdown-code-copy"
+          title={copied ? "Copied" : "Copy code"}
+          aria-label={copied ? "Copied" : "Copy code"}
+          onClick={() => copy(code)}
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
+      </div>
       <pre>
         <code className={lang ? `language-${lang}` : undefined}>
           {usable ? (
@@ -132,15 +144,6 @@ export const CodeBlock = memo(function CodeBlock({
           )}
         </code>
       </pre>
-      <button
-        type="button"
-        className="markdown-code-copy"
-        title={copied ? "Copied" : "Copy code"}
-        aria-label={copied ? "Copied" : "Copy code"}
-        onClick={() => copy(code)}
-      >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-      </button>
     </div>
   );
 });

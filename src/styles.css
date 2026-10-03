@@ -985,14 +985,27 @@ small {
   position: relative;
   margin: 10px 0;
 }
-.markdown-code > pre {
+.markdown-code pre {
   margin: 0;
+}
+/* The buttons ride along at the top of the thread while a block taller than
+   it scrolls by. The strip overlaps the block rather than pushing it down,
+   and leaves clicks on the code under it alone. */
+.markdown-code-tools {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 30px;
+  padding: 6px 6px 0;
+  pointer-events: none;
+}
+.markdown-code > .markdown-code-tools + * {
+  margin-top: -30px;
 }
 .markdown-quote-copy,
 .markdown-code-copy {
-  position: absolute;
-  top: 2px;
-  right: 2px;
   display: grid;
   place-items: center;
   width: 24px;
@@ -1006,13 +1019,17 @@ small {
   opacity: 0;
   transition: opacity 120ms ease;
 }
+.markdown-quote-copy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
 .markdown-code-copy {
-  top: 6px;
-  right: 6px;
+  pointer-events: auto;
 }
 .markdown-quote:hover > .markdown-quote-copy,
 .markdown-quote-copy:focus-visible,
-.markdown-code:hover > .markdown-code-copy,
+.markdown-code:hover .markdown-code-copy,
 .markdown-code-copy:focus-visible {
   opacity: 1;
 }
