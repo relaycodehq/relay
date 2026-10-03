@@ -188,6 +188,10 @@ async function finished(chats: ProjectChats, id: string, count?: number) {
       const chat = await chats.get(id);
       if (count) expect(chat.messages).toHaveLength(count);
       expect(chat.messages.at(-1)?.status).toBe("complete");
+      // The answer shows as finished a moment before it gives the thread back.
+      expect(
+        chats.list(chat.projectId).find((c) => c.id === id)?.running,
+      ).toBeFalsy();
     },
     { timeout: 10000 },
   );
