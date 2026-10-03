@@ -88,7 +88,7 @@ export function useComposerSend({
     // `/btw` goes to the agent picked here, beside whatever the thread runs.
     const btw = relayCommand(draft.text);
     if (btw?.name === "btw" && btw.args && to !== "message") {
-      if (busy || sending.current) return;
+      if (busy || sending.current || !runs.codex) return;
       sending.current = true;
       const outgoing = draft.take(false);
       try {
