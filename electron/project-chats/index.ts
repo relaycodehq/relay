@@ -1,16 +1,6 @@
 import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
-import { accountFor } from "../agents/accounts";
-import { randomUUID } from "node:crypto";
 import type { AgentResponse } from "../../shared/agent-modes";
-import {
-  autoSettledAt,
-  DEFAULT_AUTO_SETTLE_DAYS,
-  sameTriageState,
-  setTriageState,
-  settledSince,
-  triageState,
-} from "../../shared/chat-activity";
 import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
 import type {
   ChatCameFrom,
@@ -19,9 +9,7 @@ import type {
 } from "../../shared/handoff";
 import type {
   ChatMessage,
-  ChatPending,
   ChatScope,
-  ChatSummary,
   ChatTriage,
   ChatWorkspace,
   ChatWorktree,
@@ -29,21 +17,16 @@ import type {
   ProjectChat,
   ProjectChatPatch,
   ProjectChatSend,
-  ProjectSettings,
   ResumeSettings,
 } from "../../shared/projects";
-import {
-  DEFAULT_WORKTREE_CLEANUP_DAYS,
-  replyRoot,
-} from "../../shared/projects";
+import { replyRoot } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
-import { sentAgent } from "../../shared/recipient";
 import { agentRuntimes } from "../agents";
 import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
 import type { ProjectSharing } from "../projects/project-sharing";
 import type { Store } from "../app/store";
-import { ActiveTurns, type ActiveChat } from "./active";
+import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
 import type { ChatCore } from "./core";
@@ -55,13 +38,16 @@ import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
 import { ChatSharing } from "./sharing";
-import { ChatStorage, chatSummary, nextSend } from "./storage";
+import { ChatStorage } from "./storage";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
+import { ThreadCreate } from "./thread-create";
+import { ThreadList } from "./thread-list";
+import { ThreadTriage } from "./thread-triage";
 import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
 import { ThreadWorktrees } from "./worktrees";
-import { WorktreeCleanup, type CleanupCandidate } from "./worktree-cleanup";
+import { WorktreeCleanup } from "./worktree-cleanup";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -88,9 +74,12 @@ export class ProjectChats {
   private disposing = false;
   private councils: Councils;
   private core: ChatCore;
+  private threads: ThreadList;
+  private triaging: ThreadTriage;
+  private creating: ThreadCreate;
   constructor(
     private store: Store,
-    private projects: Projects,
+    projects: Projects,
     dir: string,
     private emit: (event: {
       chatId: string;
@@ -143,9 +132,12 @@ export class ProjectChats {
       core,
       this.worktrees,
       this.councils,
-      () => this.cleanupCandidates(),
+      () => this.threads.cleanupCandidates(),
     );
     this.files = new TurnFiles(core, this.worktrees);
+    this.threads = new ThreadList(core);
+    this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
+    this.creating = new ThreadCreate(core);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>
@@ -164,12 +156,14 @@ export class ProjectChats {
       this.titles,
       this.sharing,
       this.worktrees.folder,
-      (chat, root, provider, parentId) =>
-        this.turns.unprompted(chat, root, provider, parentId),
-      (id, messageId, limit) =>
-        void this.limits
-          .stopped(id, messageId, limit)
-          .catch((e) => console.warn("Could not plan the resume:", e)),
+      {
+        unprompted: (chat, root, provider, parentId) =>
+          this.turns.unprompted(chat, root, provider, parentId),
+        limited: (id, messageId, limit) =>
+          void this.limits
+            .stopped(id, messageId, limit)
+            .catch((e) => console.warn("Could not plan the resume:", e)),
+      },
     );
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
     this.queue = new ChatQueue(
@@ -205,120 +199,14 @@ export class ProjectChats {
   summariesChanged(projectId?: string) {
     this.storage.summariesChanged(projectId);
   }
-  autoSettleDays(): number | null {
-    const days = this.store.get().autoSettleDays;
-    return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
+  autoSettleDays() {
+    return this.threads.autoSettleDays();
   }
-  worktreeCleanupDays(): number | null {
-    const days = this.store.get().worktreeCleanupDays;
-    return days === undefined ? DEFAULT_WORKTREE_CLEANUP_DAYS : days;
+  worktreeCleanupDays() {
+    return this.threads.worktreeCleanupDays();
   }
-  /** How the project's threads settle by themselves, its own settings first. */
-  private settling(settings: ProjectSettings | undefined) {
-    return {
-      days:
-        settings?.autoSettleDays !== undefined
-          ? settings.autoSettleDays
-          : this.autoSettleDays(),
-      onCommit: !!settings?.settleOnCommit,
-    };
-  }
-  list(projectId: string): ChatSummary[] {
-    const { settings } = this.projects.get(projectId);
-    const now = Date.now();
-    const { days, onCommit } = this.settling(settings);
-    return this.live(projectId).map((listed) => {
-      const settledAt = autoSettledAt(listed, now, days, onCommit);
-      return settledAt
-        ? { ...listed, settledAt, autoSettled: true as const }
-        : listed;
-    });
-  }
-  /** The project's threads as saved, with what runs or waits in each now. */
-  private live(projectId: string): ChatSummary[] {
-    const chats = (this.store.get().chats ?? []).filter(
-      (c) => c.projectId === projectId,
-    );
-    // A review runs while any of its reviewers does, a thread while its thinkers do.
-    const helpers = new Map<string, ActiveChat[]>();
-    for (const c of chats) {
-      const parent = (c.reviewer ?? c.thinker)?.parent;
-      const active = parent && this.active.get(c.id);
-      if (active) helpers.set(parent, [...(helpers.get(parent) ?? []), active]);
-    }
-    // Once for the list: it is read on every change to any of its threads.
-    const live = this.sessions.pending();
-    return chats
-      .filter((c) => !c.reviewer && !c.thinker)
-      .sort((a, b) => b.updated - a.updated)
-      .map((c) => {
-        const crew = [
-          this.active.get(c.id),
-          ...(helpers.get(c.id) ?? []).sort((a, b) => a.started - b.started),
-          // A stopped answer reads as stopped while its agent winds down.
-        ].filter((a): a is ActiveChat => !!a && !a.stopping);
-        const active = crew[0];
-        const running = [
-          ...new Set(
-            crew.flatMap(({ input }) => (input ? [sentAgent(input)] : [])),
-          ),
-        ];
-        const pending = [
-          ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
-          ...(c.heldWakeups ?? []).map((w): ChatPending => ({
-            kind: "wakeup",
-            id: w.id,
-            prompt: w.prompt,
-            recurring: false,
-            at: w.at,
-          })),
-        ];
-        return active || pending.length
-          ? {
-              ...c,
-              ...(active
-                ? {
-                    running: true,
-                    runningSince: active.started,
-                    runningAgents: running,
-                    waiting: active.requests.list().length > 0,
-                  }
-                : {}),
-              ...(pending.length ? { pending } : {}),
-            }
-          : c;
-      });
-  }
-  /** Threads with a worktree on disk, each with when it settled and how long it keeps the worktree after. */
-  private cleanupCandidates(): CleanupCandidate[] {
-    const onDisk = (c: ChatSummary) =>
-      !!c.worktree?.path && !c.worktree.removedAt;
-    const projectIds = new Set(
-      (this.store.get().chats ?? []).filter(onDisk).map((c) => c.projectId),
-    );
-    const now = Date.now();
-    return [...projectIds].flatMap((projectId) => {
-      let project;
-      try {
-        project = this.projects.get(projectId);
-      } catch {
-        return [];
-      }
-      const { settings } = project;
-      const { days, onCommit } = this.settling(settings);
-      const keepDays =
-        settings?.worktreeCleanupDays !== undefined
-          ? settings.worktreeCleanupDays
-          : this.worktreeCleanupDays();
-      return this.live(projectId)
-        .filter(onDisk)
-        .map((chat) => ({
-          chat,
-          settledSince: settledSince(chat, now, days, onCommit),
-          days: keepDays,
-          checkout: project.path,
-        }));
-    });
+  list(projectId: string) {
+    return this.threads.list(projectId);
   }
   /**
    * Removes the worktrees of threads settled long enough, where nothing is
@@ -369,161 +257,28 @@ export class ProjectChats {
     return this.schedule.resolveStopped(id, action);
   }
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
-  async triage(id: string, triage: ChatTriage) {
-    const chat = await this.storage.load(id);
-    const now = Date.now();
-    if (triage.kind === "restore") {
-      if (!sameTriageState(triageState(chat), triage.from))
-        throw new Error(
-          "This thread changed since, so there's nothing to undo.",
-        );
-      setTriageState(chat, triage.to);
-      await this.storage.save(chat);
-      return chatSummary(chat);
-    }
-    if (triage.kind === "unread" || triage.kind === "auto-settle") {
-      if (triage.kind === "unread") chat.markedUnread = true;
-      else if (triage.enabled) delete chat.autoSettleOff;
-      else chat.autoSettleOff = true;
-      await this.storage.save(chat);
-      return chatSummary(chat);
-    }
-    if (triage.kind === "archive") {
-      if (this.active.has(id) || this.councils.busy(chat))
-        throw new Error("Stop the running answer before archiving.");
-      // Nothing reopens an archived thread to cancel what would still run in it.
-      if (
-        nextSend(chat.scheduled) ||
-        chat.heldWakeups?.length ||
-        this.sessions.pending(id).length
-      )
-        throw new Error(
-          "Cancel the scheduled messages and Claude's background work before archiving.",
-        );
-      chat.archivedAt = now;
-      await this.worktrees.dropLanded(chat, now);
-      await this.storage.save(chat);
-      return chatSummary(chat);
-    }
-    delete chat.snoozedAt;
-    delete chat.snoozedUntil;
-    if (triage.kind === "settle") chat.settledAt = now;
-    else if (triage.kind === "unsettle" || triage.kind === "snooze")
-      delete chat.settledAt;
-    // Settled by hand or automatically, moving it back keeps it out until something new happens.
-    if (triage.kind === "unsettle") chat.unsettledAt = now;
-    if (triage.kind === "snooze") {
-      if (triage.until <= now) throw new Error("Choose a future wake time.");
-      chat.snoozedAt = now;
-      chat.snoozedUntil = triage.until;
-    }
-    await this.storage.save(chat);
-    return chatSummary(chat);
+  triage(id: string, triage: ChatTriage) {
+    return this.triaging.triage(id, triage);
   }
-  /** Only moves forward, so a device that read less can't mark a thread unread again. */
-  async markSeen(id: string, seenAt: number) {
-    const chat = await this.storage.load(id);
-    if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
-    chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
-    delete chat.markedUnread;
-    await this.storage.save(chat);
+  markSeen(id: string, seenAt: number) {
+    return this.triaging.markSeen(id, seenAt);
   }
-  /** Runs `provider` on another account here, from the thread's next turn. */
-  async setAccount(id: string, provider: AccountProvider, account: string) {
-    if (accountFor(provider, account) !== account)
-      throw new Error("That account is gone.");
-    const chat = await this.storage.load(id);
-    chat.accounts = { ...chat.accounts, [provider]: account };
-    await this.storage.save(chat);
-    return chatSummary(chat);
+  setAccount(id: string, provider: AccountProvider, account: string) {
+    return this.triaging.setAccount(id, provider, account);
   }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
   }
-  async create(
-    projectId: string,
-    scope: ChatScope,
-    workspace: ChatWorkspace = "checkout",
-  ) {
-    const { plain } = await this.projects.inspect(projectId);
-    if (plain && (workspace === "worktree" || scope.kind !== "project"))
-      throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
-    if (workspace === "worktree" && scope.kind !== "project")
-      throw new Error("Only repository threads can work in a worktree.");
-    const chat: ProjectChat = {
-      id: randomUUID(),
-      projectId,
-      scope,
-      // The worktree itself is made with the first message, named after it.
-      ...(workspace === "worktree" ? { worktree: {} } : {}),
-      title:
-        scope.kind === "pr"
-          ? `PR #${scope.ref.number}`
-          : scope.kind === "review"
-            ? "Deep review"
-            : "New chat",
-      created: Date.now(),
-      updated: Date.now(),
-      messages: [],
-    };
-    await this.storage.add(chat);
-    return chatSummary(chat);
+  create(projectId: string, scope: ChatScope, workspace?: ChatWorkspace) {
+    return this.creating.create(projectId, scope, workspace);
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation
    * included when the answer is in one. The original keeps its turns' changes
    * to review and roll back; the fork starts without them.
    */
-  async fork(id: string, messageId?: string) {
-    const source = await this.storage.load(id);
-    if (source.scope.kind === "review")
-      throw new Error("A deep review can't be forked.");
-    const at = messageId
-      ? source.messages.find((m) => m.id === messageId)
-      : [...source.messages]
-          .reverse()
-          .find(
-            (m) =>
-              m.role === "assistant" &&
-              m.status !== "streaming" &&
-              !m.parentId &&
-              !m.side &&
-              !m.handoff &&
-              !m.compaction &&
-              !m.reload,
-          );
-    if (at?.role !== "assistant" || at.status === "streaming")
-      throw new Error("Fork from an answer that has finished.");
-    const upTo = source.messages.slice(0, source.messages.indexOf(at) + 1);
-    const side = at.parentId;
-    const main = side
-      ? upTo.slice(0, upTo.findIndex((m) => m.id === side) + 1)
-      : upTo;
-    const kept = upTo.filter((m) =>
-      side
-        ? m.parentId === side || (!m.parentId && main.includes(m))
-        : !m.parentId,
-    );
-    const chat: ProjectChat = {
-      id: randomUUID(),
-      projectId: source.projectId,
-      scope: source.scope,
-      title: `Fork: ${source.title}`.slice(0, 120),
-      created: Date.now(),
-      updated: Date.now(),
-      ...(source.branch ? { branch: source.branch } : {}),
-      // Its own worktree, made from the checkout with its first message.
-      ...(source.worktree ? { worktree: {} } : {}),
-      messages: kept.map(({ changes, pending, seq, parentId, ...m }) => ({
-        ...structuredClone(m),
-        id: randomUUID(),
-        version: 1,
-      })),
-    };
-    chat.forkedAt = chat.messages.at(-1)!.id;
-    await this.storage.copyImages(source.id, chat.id, kept);
-    await this.storage.add(chat);
-    return chatSummary(chat);
+  fork(id: string, messageId?: string) {
+    return this.creating.fork(id, messageId);
   }
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
     return this.handoffs.mark(id, sentTo);

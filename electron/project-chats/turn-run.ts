@@ -59,6 +59,18 @@ export async function turnModel(
   return resolveTurnModel(provider, input, models, defaults);
 }
 
+export interface TurnRunnerHost {
+  /** Claude started a turn of its own in the session. */
+  unprompted(
+    chat: ProjectChat,
+    root: string,
+    provider: AgentProvider,
+    parentId?: string,
+  ): Promise<void>;
+  /** A usage limit stopped the reply `messageId`. */
+  limited(chatId: string, messageId: string, limit: AgentError): void;
+}
+
 /** Runs one agent turn in a thread, recording its answer as it streams. */
 export class TurnRunner {
   constructor(
@@ -67,19 +79,7 @@ export class TurnRunner {
     private sharing: ChatSharing,
     /** The folder Relay makes threads' worktrees in. */
     private worktreesFolder: string,
-    /** Claude started a turn of its own in the session. */
-    private unprompted: (
-      chat: ProjectChat,
-      root: string,
-      provider: AgentProvider,
-      parentId?: string,
-    ) => Promise<void>,
-    /** A usage limit stopped the reply `messageId`. */
-    private limited: (
-      chatId: string,
-      messageId: string,
-      limit: AgentError,
-    ) => void,
+    private host: TurnRunnerHost,
   ) {}
 
   /**
@@ -232,7 +232,8 @@ export class TurnRunner {
             sessionFor(chat, provider, branch).thread = id;
             await this.core.storage.save(chat);
           },
-          onUnprompted: () => this.unprompted(chat, root, provider, branch),
+          onUnprompted: () =>
+            this.host.unprompted(chat, root, provider, branch),
         },
       };
       // Taken right before the agent starts, so the card lists only its edits.
@@ -331,7 +332,7 @@ export class TurnRunner {
       answer.end();
       // The sidebar hears of the finished answer once the turn lets go of the thread.
       await this.core.storage.save(chat, { holdSummary: true });
-      if (limit) this.limited(chat.id, ended.id, limit);
+      if (limit) this.host.limited(chat.id, ended.id, limit);
       if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&

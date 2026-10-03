@@ -1,0 +1,90 @@
+import type { AccountProvider } from "../../shared/agent-accounts";
+import {
+  sameTriageState,
+  setTriageState,
+  triageState,
+} from "../../shared/chat-activity";
+import type { ChatTriage } from "../../shared/projects";
+import { accountFor } from "../agents/accounts";
+import type { ChatCore } from "./core";
+import type { Councils } from "./councils";
+import { chatSummary, nextSend } from "./storage";
+import type { ThreadWorktrees } from "./worktrees";
+
+/** Where a thread sits in the sidebar and what it has been read up to; never what its agent does. */
+export class ThreadTriage {
+  constructor(
+    private core: ChatCore,
+    private worktrees: ThreadWorktrees,
+    private councils: Councils,
+  ) {}
+  /** Settle/snooze/archive only change sidebar visibility, never the agent. */
+  async triage(id: string, triage: ChatTriage) {
+    const chat = await this.core.storage.load(id);
+    const now = Date.now();
+    if (triage.kind === "restore") {
+      if (!sameTriageState(triageState(chat), triage.from))
+        throw new Error(
+          "This thread changed since, so there's nothing to undo.",
+        );
+      setTriageState(chat, triage.to);
+      await this.core.storage.save(chat);
+      return chatSummary(chat);
+    }
+    if (triage.kind === "unread" || triage.kind === "auto-settle") {
+      if (triage.kind === "unread") chat.markedUnread = true;
+      else if (triage.enabled) delete chat.autoSettleOff;
+      else chat.autoSettleOff = true;
+      await this.core.storage.save(chat);
+      return chatSummary(chat);
+    }
+    if (triage.kind === "archive") {
+      if (this.core.active.has(id) || this.councils.busy(chat))
+        throw new Error("Stop the running answer before archiving.");
+      // Nothing reopens an archived thread to cancel what would still run in it.
+      if (
+        nextSend(chat.scheduled) ||
+        chat.heldWakeups?.length ||
+        this.core.sessions.pending(id).length
+      )
+        throw new Error(
+          "Cancel the scheduled messages and Claude's background work before archiving.",
+        );
+      chat.archivedAt = now;
+      await this.worktrees.dropLanded(chat, now);
+      await this.core.storage.save(chat);
+      return chatSummary(chat);
+    }
+    delete chat.snoozedAt;
+    delete chat.snoozedUntil;
+    if (triage.kind === "settle") chat.settledAt = now;
+    else if (triage.kind === "unsettle" || triage.kind === "snooze")
+      delete chat.settledAt;
+    // Settled by hand or automatically, moving it back keeps it out until something new happens.
+    if (triage.kind === "unsettle") chat.unsettledAt = now;
+    if (triage.kind === "snooze") {
+      if (triage.until <= now) throw new Error("Choose a future wake time.");
+      chat.snoozedAt = now;
+      chat.snoozedUntil = triage.until;
+    }
+    await this.core.storage.save(chat);
+    return chatSummary(chat);
+  }
+  /** Only moves forward, so a device that read less can't mark a thread unread again. */
+  async markSeen(id: string, seenAt: number) {
+    const chat = await this.core.storage.load(id);
+    if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
+    chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
+    delete chat.markedUnread;
+    await this.core.storage.save(chat);
+  }
+  /** Runs `provider` on another account here, from the thread's next turn. */
+  async setAccount(id: string, provider: AccountProvider, account: string) {
+    if (accountFor(provider, account) !== account)
+      throw new Error("That account is gone.");
+    const chat = await this.core.storage.load(id);
+    chat.accounts = { ...chat.accounts, [provider]: account };
+    await this.core.storage.save(chat);
+    return chatSummary(chat);
+  }
+}
