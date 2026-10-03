@@ -1,6 +1,7 @@
 import { it, expect, vi, beforeEach, afterEach, describe } from "vitest";
 import {
   mkdtemp,
+  readdir,
   mkdir,
   writeFile,
   readFile,
@@ -14,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
+import { ChatStorage } from "../project-chats/storage";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import {
@@ -457,6 +459,30 @@ it("runs each reviewer in a hidden thread, then the lead, and lists its findings
   await expect(
     chats.setDeepReviewFinding(chat.id, "F7", "dismissed"),
   ).rejects.toThrow("no longer in this review");
+});
+
+it("leaves the thread and the disk as they were when a reviewer can't be created, so starting again works", async () => {
+  await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
+  const chat = await chats.create(projectId, { kind: "review" });
+  const add = ChatStorage.prototype.add;
+  const failing = vi
+    .spyOn(ChatStorage.prototype, "add")
+    .mockImplementationOnce(add)
+    .mockRejectedValueOnce(new Error("disk full"));
+
+  await expect(chats.startDeepReview(chat.id, config())).rejects.toThrow(
+    "disk full",
+  );
+  failing.mockRestore();
+
+  const after = await chats.get(chat.id);
+  expect(after.deepReview).toBeUndefined();
+  expect(after.messages).toEqual([]);
+  expect(store.get().chats?.map((c) => c.id)).toEqual([chat.id]);
+  expect(await readdir(join(root, "chats"))).toEqual([`${chat.id}.json`]);
+
+  await chats.startDeepReview(chat.id, config());
+  expect((await chats.get(chat.id)).deepReview?.reviewers).toHaveLength(2);
 });
 
 it("ends each reviewer's agent once it has reported", async () => {

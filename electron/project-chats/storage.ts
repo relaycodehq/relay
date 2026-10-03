@@ -1,4 +1,11 @@
-import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
@@ -129,6 +136,18 @@ export class ChatStorage {
     await this.save(chat);
     await this.addSummary(chat);
     this.cache.set(chat.id, chat);
+  }
+
+  /** Takes back a thread that was added but never shown, like a reviewer whose review didn't start. */
+  async remove(chat: ProjectChat) {
+    this.cache.delete(chat.id);
+    await this.writes(chat.id, () =>
+      rm(join(this.dir, chat.id + ".json"), { force: true }),
+    );
+    await this.store.update((s) => {
+      s.chats = (s.chats ?? []).filter((c) => c.id !== chat.id);
+    });
+    this.summariesChanged(chat.projectId);
   }
 
   async save(chat: ProjectChat) {

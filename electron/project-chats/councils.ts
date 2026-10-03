@@ -49,6 +49,7 @@ export class Councils {
       close: (id) => this.core.sessions.close(id),
       touch: (chat, messageId) => this.touch(chat, messageId),
       summary: (chat) => this.core.storage.updateSummary(chat),
+      discard: (chat) => this.core.storage.remove(chat),
     });
     this.ultraplans = new Ultraplans({
       load: (id) => this.core.storage.load(id),
@@ -182,7 +183,11 @@ export class Councils {
       updated: Date.now(),
       messages: [],
     };
-    await this.core.storage.add(chat);
+    await this.core.storage.add(chat).catch(async (error: unknown) => {
+      // It may have been saved before the failure; don't leave it hidden on disk.
+      await this.core.storage.remove(chat).catch(() => {});
+      throw error;
+    });
     return chat;
   }
 }

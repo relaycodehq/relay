@@ -49,6 +49,8 @@ export interface DeepReviewHost {
   /** Saves the thread and tells the renderer this message, and so the review, changed. */
   touch(chat: ProjectChat, messageId: string): Promise<void>;
   summary(chat: ProjectChat): Promise<void>;
+  /** Deletes a reviewer thread whose review never started. */
+  discard(chat: ProjectChat): Promise<void>;
 }
 
 export class DeepReviews {
@@ -89,20 +91,28 @@ export class DeepReviews {
       runtimeMode: config.runtimeMode,
       status: "reviewing",
     };
+    // Reviewers first: the thread only holds the review once all of them exist.
+    const created: ProjectChat[] = [];
+    try {
+      for (const [slot, reviewer] of config.reviewers.entries()) {
+        const { codex } = reviewerTask(reviewer, scope, state.focus);
+        const child = await this.host.createReviewer(chat, {
+          parent: chat.id,
+          slot,
+          ...(codex ? { codex } : {}),
+        });
+        created.push(child);
+        state.reviewers.push({ ...reviewer, chatId: child.id });
+      }
+    } catch (error) {
+      await Promise.allSettled(created.map((c) => this.host.discard(c)));
+      throw error;
+    }
     chat.messages.push(request);
     chat.title = `Deep review · ${scope.label}`;
     chat.updated = Date.now();
     chat.branch = scope.branch ?? chat.branch;
     chat.deepReview = state;
-    for (const [slot, reviewer] of config.reviewers.entries()) {
-      const { codex } = reviewerTask(reviewer, scope, state.focus);
-      const child = await this.host.createReviewer(chat, {
-        parent: chat.id,
-        slot,
-        ...(codex ? { codex } : {}),
-      });
-      state.reviewers.push({ ...reviewer, chatId: child.id });
-    }
     await this.host.touch(chat, request.id);
     await this.host.summary(chat);
     await this.sendReviewers(chat, [...state.reviewers.keys()]);
