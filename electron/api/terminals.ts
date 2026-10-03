@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { agentProviderSchema } from "../../shared/agents";
 import { idSchema } from "../../shared/rooms";
 import { draftTerminalKey } from "../../shared/terminals";
-import { claudeSignInCommand } from "../agents/claude/claude-sign-in";
+import { signInCommand } from "../agents/sign-in";
 import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
@@ -59,8 +60,12 @@ export function terminalHandlers(ctx: ApiContext) {
       [terminalKeySchema, z.string().max(1 << 20)],
       (key, data) => threadTerminals.write(key, data),
     ),
-    prefillClaudeSignIn: takes([terminalKeySchema], async (key) =>
-      threadTerminals.prefill(key, await claudeSignInCommand()),
+    prefillSignIn: takes(
+      [terminalKeySchema, agentProviderSchema],
+      async (key, provider) => {
+        const command = await signInCommand(provider);
+        return !!command && threadTerminals.prefill(key, command);
+      },
     ),
     resizeTerminal: takes(
       [

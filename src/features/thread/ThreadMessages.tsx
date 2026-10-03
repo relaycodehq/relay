@@ -71,7 +71,7 @@ export function ThreadMessages({
     resumeUltraplan,
   },
   actions: {
-    signInToClaude,
+    signIn,
     openReply,
     forkThread,
     openChanges,
@@ -159,9 +159,7 @@ export function ThreadMessages({
               onOpenFile={openFile}
               replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
               onSignIn={
-                m.signIn && m.id === listed.at(-1)?.id
-                  ? signInToClaude
-                  : undefined
+                m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
               }
               {...(chat && review?.report?.messageId === m.id
                 ? {

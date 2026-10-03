@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { agentName } from "../../../shared/agents";
+import { agentName, type AgentProvider } from "../../../shared/agents";
 import {
   matchLink,
   type ProjectFileLink,
@@ -13,7 +13,9 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { forkThreadSettings } from "../agents/composer-settings";
-import { prefillClaudeSignIn } from "../terminal/thread-terminals";
+import { prefillSignIn } from "../terminal/thread-terminals";
+import { signInCursor } from "../updates/agent-updates";
+import { signInOffer } from "./sign-in-offer";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import { useStableCallback } from "../../lib/useStableCallback";
 import type { ThreadHandle } from "./useThreadHandle";
@@ -47,9 +49,14 @@ export function useMessageActions({
 }) {
   const qc = useQueryClient();
   const chatId = chat?.id;
-  const signInToClaude = useCallback(
-    () =>
-      chatId ? prefillClaudeSignIn(projectId, chatId) : Promise.resolve(false),
+  /** True once signing in is under way or done; false when the terminal is busy. */
+  const signIn = useCallback(
+    async (provider: AgentProvider) => {
+      if (signInOffer(provider).via === "terminal")
+        return chatId ? prefillSignIn(projectId, chatId, provider) : false;
+      await signInCursor();
+      return true;
+    },
     [projectId, chatId],
   );
   const openReply = useStableCallback((m: ChatMessage) =>
@@ -109,7 +116,7 @@ export function useMessageActions({
     },
   );
   return {
-    signInToClaude,
+    signIn,
     openReply,
     forkThread,
     openChanges,

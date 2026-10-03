@@ -43,10 +43,16 @@ export interface AgentInfo {
   modelGroups: boolean;
   /** Runs from an SDK Relay downloads, not a CLI it finds on the machine. */
   sdk?: true;
+  /**
+   * The CLI's own sign-in, as arguments to run in a terminal. Agents without
+   * one sign in through Relay: Settings → Agents.
+   */
+  login?: string;
 }
 
 export const agents = {
   codex: {
+    login: "login",
     name: "Codex",
     cli: "Codex CLI",
     defaultModel: "Codex default",
@@ -60,6 +66,7 @@ export const agents = {
     modelGroups: false,
   },
   claude: {
+    login: "auth login",
     name: "Claude",
     cli: "Claude Code",
     defaultModel: "Claude default",
@@ -73,6 +80,7 @@ export const agents = {
     modelGroups: false,
   },
   opencode: {
+    login: "auth login",
     name: "OpenCode",
     cli: "OpenCode",
     defaultModel: "OpenCode default",

@@ -1,7 +1,11 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { Reply } from "lucide-react";
 import { clock } from "../../../shared/waiting";
-import { agentMentionPattern, agentName } from "../../../shared/agents";
+import {
+  agentMentionPattern,
+  agentName,
+  type AgentProvider,
+} from "../../../shared/agents";
 import {
   answerImagePaths,
   localImagePath,
@@ -30,6 +34,7 @@ import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
 import { RichText, Spinner } from "../../ui/ui";
 import { pilledImages, UserText, type SentImage } from "./UserText";
+import { signInOffer } from "./sign-in-offer";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -146,8 +151,8 @@ export const Message = memo(function Message({
   inlineCode?: (value: string) => ReactNode | undefined;
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
-  /** Offered when this turn failed on Claude's expired login. */
-  onSignIn?: () => Promise<boolean>;
+  /** Offered when this turn failed on its agent's missing or expired login. */
+  onSignIn?: (provider: AgentProvider) => Promise<boolean>;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -377,7 +382,9 @@ export const Message = memo(function Message({
           {m.error}
         </p>
       )}
-      {onSignIn && <ClaudeSignIn onSignIn={onSignIn} />}
+      {onSignIn && m.signIn && (
+        <SignIn provider={m.signIn} onSignIn={onSignIn} />
+      )}
       {m.role === "assistant" && (
         <MessageActions
           text={text}
@@ -390,20 +397,45 @@ export const Message = memo(function Message({
     </article>
   );
 });
-function ClaudeSignIn({ onSignIn }: { onSignIn: () => Promise<boolean> }) {
-  const [busy, setBusy] = useState(false);
+function SignIn({
+  provider,
+  onSignIn,
+}: {
+  provider: AgentProvider;
+  onSignIn: (provider: AgentProvider) => Promise<boolean>;
+}) {
+  const offer = signInOffer(provider);
+  const [state, setState] = useState<"idle" | "waiting" | "busy" | "failed">(
+    "idle",
+  );
+  const start = () => {
+    setState("waiting");
+    onSignIn(provider).then(
+      (typed) => setState(typed ? "idle" : "busy"),
+      () => setState(offer.via === "relay" ? "failed" : "busy"),
+    );
+  };
   return (
-    <div className="claude-sign-in">
+    <div className="agent-sign-in">
       <button
         className="text-button"
-        onClick={() => void onSignIn().then((typed) => setBusy(!typed))}
+        disabled={state === "waiting" && offer.via === "relay"}
+        onClick={start}
       >
-        Sign in to Claude in the terminal
+        {offer.label}
       </button>
-      {busy && (
+      {state === "waiting" && offer.via === "relay" && (
+        <small className="muted">Finish signing in in your browser.</small>
+      )}
+      {state === "busy" && offer.via === "terminal" && (
         <small className="muted">
-          The terminal is busy. Run <code>claude auth login</code> there once
-          it's free.
+          The terminal is busy. Run <code>{offer.command}</code> there once it's
+          free.
+        </small>
+      )}
+      {state === "failed" && offer.via === "relay" && (
+        <small className="muted">
+          Signing in didn't finish. Try again, or use Settings → Agents.
         </small>
       )}
     </div>

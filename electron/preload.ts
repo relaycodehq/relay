@@ -72,7 +72,7 @@ const methods = [
   "restartProjectTask",
   "openTerminal",
   "writeTerminal",
-  "prefillClaudeSignIn",
+  "prefillSignIn",
   "resizeTerminal",
   "ackTerminal",
   "adoptTerminal",

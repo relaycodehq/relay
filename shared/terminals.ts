@@ -1,3 +1,5 @@
+import type { AgentProvider } from "./agents";
+
 /** Output from a thread's shell, or its exit; -1 when Relay ended it. */
 export type TerminalEvent =
   | { key: string; data: string; exitCode?: undefined }
@@ -22,8 +24,11 @@ export interface TerminalApi {
     fresh?: boolean,
   ): Promise<TerminalOpened>;
   writeTerminal(key: string, data: string): Promise<void>;
-  /** Types the Claude sign-in command at the shell's prompt; false when a command holds the shell. */
-  prefillClaudeSignIn(key: string): Promise<boolean>;
+  /**
+   * Types the agent's own sign-in command at the shell's prompt; false when a
+   * command holds the shell, or the agent signs in through Relay.
+   */
+  prefillSignIn(key: string, provider: AgentProvider): Promise<boolean>;
   resizeTerminal(key: string, cols: number, rows: number): Promise<void>;
   ackTerminal(key: string, bytes: number): Promise<void>;
   /** Hands the draft's shell to the thread its first message started. */

@@ -7,6 +7,7 @@ import {
   draftTerminalKey,
   type TerminalEvent,
 } from "../../../shared/terminals";
+import type { AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { matches } from "../../lib/shortcuts";
 
@@ -241,15 +242,21 @@ export function terminalFor(projectId: string, chatId: string | null) {
 }
 
 /**
- * Opens the thread's terminal with Claude's sign-in command typed at the
+ * Opens the thread's terminal with the agent's sign-in command typed at the
  * prompt, for the user to run. False when a command holds the shell.
  */
-export async function prefillClaudeSignIn(projectId: string, chatId: string) {
+export async function prefillSignIn(
+  projectId: string,
+  chatId: string,
+  provider: AgentProvider,
+) {
   const terminal = terminalFor(projectId, chatId);
   terminal.focusOnShow = true;
   setTerminalOpen(terminal.key, true);
   if (!(await terminal.running())) return false;
-  const typed = await api.prefillClaudeSignIn(terminal.key).catch(() => false);
+  const typed = await api
+    .prefillSignIn(terminal.key, provider)
+    .catch(() => false);
   terminal.term.focus();
   return typed;
 }
