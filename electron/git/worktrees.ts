@@ -116,18 +116,22 @@ export async function uncommitted(root: string) {
     )
   ).trim();
   const tree = await snapshotTree(root);
-  const diff = await git(root, [
-    "diff",
-    "--numstat",
-    "-z",
-    "--no-renames",
-    "--no-color",
-    "--no-ext-diff",
-    "--no-textconv",
+  const compare = ["--no-renames", "--no-color", "--no-ext-diff", head, tree];
+  const [diff, raw] = await Promise.all([
+    git(root, ["diff", "--numstat", "-z", "--no-textconv", ...compare]),
+    git(root, ["diff", "--raw", "-z", ...compare]),
+  ]);
+  // A nested repository or submodule is a commit id, not file contents, so
+  // it stays in the checkout instead of moving.
+  const nested = new Set<string>();
+  const entries = raw.split("\0");
+  for (let i = 0; i + 1 < entries.length; i += 2)
+    if (/^:(160000|\d+ 160000) /.test(entries[i])) nested.add(entries[i + 1]);
+  return {
     head,
     tree,
-  ]);
-  return { head, tree, files: parseNumstat(diff) };
+    files: parseNumstat(diff).filter((f) => !nested.has(f.path)),
+  };
 }
 
 /**

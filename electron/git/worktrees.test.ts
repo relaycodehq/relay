@@ -186,6 +186,24 @@ it("moves every uncommitted edit into a new worktree, leaving the checkout at it
   expect(git(root, "show", `${kept}:src/deep/new.ts`)).toBe("untracked");
 });
 
+it("leaves a nested repository where it is and moves the rest", async () => {
+  const inner = join(root, "inner");
+  execFileSync("git", ["init", "-q", "-b", "main", inner]);
+  git(inner, "config", "user.name", "Test");
+  git(inner, "config", "user.email", "test@example.invalid");
+  await writeFile(join(inner, "x.ts"), "x\n");
+  git(inner, "add", ".");
+  git(inner, "commit", "-qm", "Inner");
+  await writeFile(join(root, "a.ts"), "one\ntwo\nthree\nfour\nfive\nwip\n");
+
+  const worktree = await moveIntoWorktree(root, dir, "Split the store", "c1");
+
+  expect(await paths(worktree)).toEqual(["a.ts"]);
+  expect(await read(join(worktree.path, "a.ts"))).toContain("wip");
+  expect(await read(join(inner, "x.ts"))).toBe("x\n");
+  expect(await read(join(root, "a.ts"))).not.toContain("wip");
+});
+
 it("moves a clean checkout's thread into a fresh worktree", async () => {
   const worktree = await moveIntoWorktree(root, dir, "Split the store", "c1");
   expect(await paths(worktree)).toEqual([]);
