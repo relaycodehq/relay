@@ -110,9 +110,9 @@ async function signedOut(connection: CursorConnection) {
 
 /** Runs one turn on a Cursor agent, starting or resuming it in the thread's worker. */
 export async function runCursor(options: AgentOptions): Promise<string> {
-  const { signal } = options;
+  const { signal, job } = options;
   signal.throwIfAborted();
-  if (options.compact)
+  if (job.kind === "compact")
     throw new Error(
       "Cursor summarizes a long thread on its own; there is nothing to compact by hand.",
     );
@@ -130,8 +130,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
   signal.throwIfAborted();
   const connection = await acquireCursorConnection(key, options.cwd, sdk);
 
-  const adopted = options.adopt ? connection.inflight : undefined;
-  if (options.adopt && !adopted) {
+  const adopted = job.kind === "adopt" ? connection.inflight : undefined;
+  if (job.kind === "adopt" && !adopted) {
     connection.busy = false;
     throw new Error("There is no Cursor turn to pick up.");
   }
@@ -210,9 +210,9 @@ export async function runCursor(options: AgentOptions): Promise<string> {
   signal.addEventListener("abort", abort, { once: true });
 
   // Without tools that change anything, a turn needs no sandbox to stay safe.
-  const mayGoUnsandboxed = !!(options.helper || options.readOnly);
+  const mayGoUnsandboxed = job.kind === "helper" || !!options.readOnly;
   const unsandboxed = (params: CursorRun): CursorRun => {
-    if (!options.helper)
+    if (job.kind !== "helper")
       options.onCommentary?.(
         "cursor-sandbox",
         "Cursor can't sandbox on this system, so it runs with read-only tools only.",
@@ -238,7 +238,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       connection.resume();
     } else {
       // A helper job (a thread title) is one bare question: no notes, no history, no tools.
-      const helper = options.helper;
+      const helper = job.kind === "helper" ? job : undefined;
       const note = helper
         ? undefined
         : await options.context?.().catch(() => undefined);

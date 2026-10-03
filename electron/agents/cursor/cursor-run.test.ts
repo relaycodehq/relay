@@ -101,6 +101,7 @@ function turn(prompt: string, extra: Partial<AgentOptions> = {}) {
   };
   const controller = new AbortController();
   const options: AgentOptions = {
+    job: { kind: "prompt" },
     cwd: dir,
     prompt,
     choice: { model: "", fast: false, reasoningEffort: "" },
@@ -319,7 +320,7 @@ describe("a Cursor turn", () => {
 
   it("won't compact by hand, since Cursor summarizes on its own", async () => {
     await expect(
-      runCursor(turn("x", { compact: true }).options),
+      runCursor(turn("x", { job: { kind: "compact" } }).options),
     ).rejects.toThrow(/on its own/);
   });
 });
@@ -327,7 +328,7 @@ describe("a Cursor turn", () => {
 describe("a helper job", () => {
   it("is one bare question: no tools, none of the user's Cursor settings, its own instructions, and nothing left behind", async () => {
     const { seen, options } = turn("Name this thread", {
-      helper: { instructions: "Answer with a title only." },
+      job: { kind: "helper", instructions: "Answer with a title only." },
       session: undefined,
     });
     await runCursor(options);
@@ -352,7 +353,7 @@ describe("a helper job", () => {
 
   it("never resumes the thread's agent or reads the thread's notes", async () => {
     const { options } = turn("Name this thread", {
-      helper: { instructions: "Title only." },
+      job: { kind: "helper", instructions: "Title only." },
       session: { id: "agent-1", onId: async () => {} },
       context: async () => "PRIVATE NOTE",
     });
@@ -467,7 +468,7 @@ describe("where Cursor can't sandbox", () => {
     expect(await runCursor(options)).toBe("Hello");
     await runCursor(
       turn("Name this thread", {
-        helper: { instructions: "Title only." },
+        job: { kind: "helper", instructions: "Title only." },
         session: undefined,
       }).options,
     );

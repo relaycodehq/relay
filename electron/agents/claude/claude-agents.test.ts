@@ -314,6 +314,7 @@ it("keeps following agents after the turn that started them ends", async () => {
   });
   const key = crypto.randomUUID();
   await runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Map the SDK with an agent.",
     choice: {} as never,

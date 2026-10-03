@@ -199,7 +199,7 @@ export class ClaudeTurnReader {
     const origin = (message as { origin?: { kind?: string } }).origin;
     const state = this.prompt.state;
     if (
-      !this.options.adopt &&
+      this.options.job.kind !== "adopt" &&
       (state === "queued" ||
         (state !== "started" && origin && origin.kind !== "human"))
     )
@@ -210,7 +210,8 @@ export class ClaudeTurnReader {
     if (stopped) throw stopped;
     if (failed) throw new Error("Claude could not complete this turn.");
     this.meter.finished(message.modelUsage);
-    if (this.options.compact) return { answer: this.compacted ?? "" };
+    if (this.options.job.kind === "compact")
+      return { answer: this.compacted ?? "" };
     const plan = this.session.plan;
     const final = plan || message.result || this.answer;
     const written = plan ? undefined : answeredFindings(final);
@@ -221,7 +222,7 @@ export class ClaudeTurnReader {
           : final),
     );
     // A turn Claude started itself may only have run tools.
-    if (!this.answer.trim() && !this.options.adopt)
+    if (!this.answer.trim() && this.options.job.kind !== "adopt")
       throw new Error("Claude returned an empty answer.");
     const steers = [...this.steering.values()];
     // A steer Claude didn't get to runs as its own turn right after this one.

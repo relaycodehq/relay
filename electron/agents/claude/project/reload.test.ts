@@ -71,6 +71,7 @@ function claudes(loads: { skills: string[]; agents: string[] }[]) {
 
 const turn = (key: string, prompt = "Go.", signal?: AbortSignal) =>
   runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt,
     choice: {} as never,

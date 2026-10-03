@@ -1,5 +1,6 @@
-import type { ChatMessage } from "../../shared/projects";
+import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type { CodexSkill } from "../agents/provider-commands";
+import type { AgentJob } from "../agents/types";
 
 /** Why an agent runs a turn in a thread; each kind follows its own rules. */
 export type ChatTurn =
@@ -65,4 +66,20 @@ export function turnRules(turn: ChatTurn) {
     /** A deep reviewer's Codex review applies to its own turns only. */
     reviews: kind !== "compact" && kind !== "adopt",
   };
+}
+
+/**
+ * What the agent runs for a turn of this kind. A compaction or a picked-up
+ * turn wins over a deep reviewer's Codex review, which wins over a side turn.
+ */
+export function agentJob(
+  turn: ChatTurn,
+  chat: Pick<ProjectChat, "reviewer">,
+): AgentJob {
+  if (turn.kind === "adopt" || turn.kind === "compact")
+    return { kind: turn.kind };
+  if (chat.reviewer?.codex && turnRules(turn).reviews)
+    return { kind: "review", target: chat.reviewer.codex };
+  if (turn.kind === "side") return { kind: "side" };
+  return { kind: "prompt" };
 }

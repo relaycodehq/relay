@@ -13,7 +13,7 @@ import { agentRuntime } from "../agents";
 import { accountFor, accountLabel } from "../agents/accounts";
 import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
-import { turnRules, type ChatTurn } from "./chat-turn";
+import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
@@ -163,8 +163,7 @@ export class TurnRunner {
         },
         onSteered: (id: string) => answer.continueBelow(id),
         skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
-        compact: turn.kind === "compact",
-        adopt: turn.kind === "adopt",
+        job: agentJob(turn, chat),
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
         cwd: root,
@@ -207,16 +206,9 @@ export class TurnRunner {
         },
         runtimeMode: input.runtimeMode,
         interactionMode: input.interactionMode,
-        ...(chat.thinker ? { readOnly: true } : {}),
-        ...(chat.reviewer
-          ? {
-              readOnly: true,
-              ...(chat.reviewer.codex && rules.reviews
-                ? { review: chat.reviewer.codex }
-                : {}),
-            }
+        ...(chat.thinker || chat.reviewer || rules.side
+          ? { readOnly: true }
           : {}),
-        ...(rules.side ? { readOnly: true, side: true } : {}),
         // The thread's running answer owns its requests; a side turn asks none.
         onRequest: rules.side
           ? undefined

@@ -47,10 +47,12 @@ it("shares private history, streams only to the requester, runs each participant
   let finish!: (s: string) => void;
   let askApproval = true;
   const turns = () =>
-    vi.mocked(runCodex).mock.calls.filter(([options]) => !options.helper);
+    vi
+      .mocked(runCodex)
+      .mock.calls.filter(([options]) => options.job.kind !== "helper");
   vi.mocked(runCodex).mockImplementation(async (options) => {
     // The thread-title helper runs beside the agent's turn; it neither asks nor streams.
-    if (options.helper) return "";
+    if (options.job.kind === "helper") return "";
     await options.session?.onId("local-session-" + options.cwd);
     options.onText("Private streamed partial");
     if (askApproval) {

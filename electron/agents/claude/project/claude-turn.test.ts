@@ -107,6 +107,7 @@ function recorder() {
 
 const run = (patch: Partial<Parameters<typeof runClaudeProject>[0]> = {}) =>
   runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Go.",
     choice: {} as never,
@@ -309,7 +310,7 @@ it("compacts the session and answers with the summary Claude kept", async () => 
     run({
       ...callbacks,
       prompt: "keep the API notes",
-      compact: true,
+      job: { kind: "compact" },
       onControl: control,
     }),
   ).resolves.toBe("Summary of the conversation");
@@ -498,7 +499,7 @@ it("shows a turn Claude starts by itself between prompts", async () => {
     id: session_id,
     async onId() {},
     onUnprompted: async () => {
-      shown = run({ adopt: true, session });
+      shown = run({ job: { kind: "adopt" }, session });
       await shown.catch(() => {});
     },
   };
@@ -506,7 +507,7 @@ it("shows a turn Claude starts by itself between prompts", async () => {
   later();
   await vi.waitFor(() => expect(shown).toBeDefined());
   await expect(shown).resolves.toBe("The build passed.");
-  await expect(run({ adopt: true, session })).rejects.toThrow(
+  await expect(run({ job: { kind: "adopt" }, session })).rejects.toThrow(
     "Claude has no turn of its own to show.",
   );
 });

@@ -57,8 +57,13 @@ it("asks for a commit message under commit-message instructions, not a thread ti
 
   expect(message).toBe("Raise the limit");
   expect(runs[0].prompt).toMatch(/Recent subjects:\nInitial\n/);
-  expect(runs[0].helper?.instructions).toMatch(/commit message/);
-  expect(runs[0].helper?.instructions).not.toMatch(/title/);
+  expect(runs[0].job).toMatchObject({
+    kind: "helper",
+    instructions: expect.stringMatching(/commit message/),
+  });
+  expect(runs[0].job).not.toMatchObject({
+    instructions: expect.stringMatching(/title/),
+  });
 });
 
 it("drafts with the commit-message model, not the line questions'", async () => {

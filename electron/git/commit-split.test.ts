@@ -78,7 +78,10 @@ it("commits hunks of one file separately, each where it belongs", async () => {
     [4, "notes.md", undefined],
   ]);
   expect(runs[0].prompt).toContain("Keep notes with B");
-  expect(runs[0].helper?.instructions).toMatch(/JSON/);
+  expect(runs[0].job).toMatchObject({
+    kind: "helper",
+    instructions: expect.stringMatching(/JSON/),
+  });
 
   await applyCommitSplit(root, {
     fingerprint: split.fingerprint,

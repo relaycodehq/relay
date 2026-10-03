@@ -130,6 +130,7 @@ function newRelay() {
 function threadTurn(extra: Partial<AgentOptions> = {}) {
   const seen = { text: [] as string[], ids: [] as string[] };
   const options: AgentOptions = {
+    job: { kind: "prompt" },
     cwd: root,
     prompt: "[[linger]]",
     choice: { model: "", fast: false, reasoningEffort: "" },
@@ -168,7 +169,7 @@ it("carries on a turn Relay restarted in, and shows the whole answer", async () 
   expect(back).toEqual([{ key: "thread-1", open: true }]);
 
   const second = threadTurn({
-    adopt: true,
+    job: { kind: "adopt" },
     session: { key: "thread-1", id: first.seen.ids[0], onId: async () => {} },
   });
   expect(await runCursor(second.options)).toBe("part one part two");
@@ -192,7 +193,7 @@ it("hands over a turn that finished while Relay was away", async () => {
   expect(back).toEqual([{ key: "thread-1", open: true }]);
 
   const second = threadTurn({
-    adopt: true,
+    job: { kind: "adopt" },
     session: { key: "thread-1", id: first.seen.ids[0], onId: async () => {} },
   });
   expect(await runCursor(second.options)).toBe("part one part two");

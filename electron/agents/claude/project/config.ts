@@ -17,12 +17,13 @@ export function claudePermissionMode(
   // from Bash; the other modes can approve a call without it.
   if (options.readOnly) return "default";
   if (options.interactionMode === "plan") return "plan";
+  // A turn that names no mode asks, rather than getting the run of the machine.
   return {
     "approval-required": "default",
     "auto-accept-edits": "acceptEdits",
     auto: "auto",
     "full-access": "bypassPermissions",
-  }[options.runtimeMode ?? "full-access"] as PermissionMode;
+  }[options.runtimeMode ?? "approval-required"] as PermissionMode;
 }
 
 /** The settings a session started with; another signature means retuning it or starting a new one. */

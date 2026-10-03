@@ -64,6 +64,7 @@ function claude(frames: (prompt: string) => object[]) {
 
 const run = () =>
   runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Reply with just the word banana.",
     choice: {} as never,
@@ -115,6 +116,7 @@ it("measures a fresh session's context against the window Claude reports", async
   ]);
   const seen: ContextUsage[] = [];
   await runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Reply with just the word banana.",
     choice: {} as never,
@@ -281,6 +283,7 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
   });
   const key = crypto.randomUUID();
   await runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Run the A/B.",
     choice: {} as never,
@@ -416,6 +419,7 @@ it("nests a subagent's calls under its agent call and reports its progress", asy
   ]);
   const seen: AgentActivity[] = [];
   await runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "Where is auth?",
     choice: {} as never,
@@ -520,6 +524,7 @@ it("moves a session with background work to new settings instead of ending it", 
   const key = crypto.randomUUID();
   const turn = (patch: Partial<Parameters<typeof runClaudeProject>[0]> = {}) =>
     runClaudeProject({
+      job: { kind: "prompt" },
       cwd: "/project",
       prompt: "Start the dev server.",
       choice: {} as never,

@@ -28,6 +28,7 @@ async function ask(frames: object[]) {
   );
   vi.mocked(findExecutable).mockResolvedValue(cli);
   return runClaude({
+    job: { kind: "answer" },
     cwd: root,
     prompt: "Why?",
     choice: { model: "", reasoningEffort: "", fast: false },

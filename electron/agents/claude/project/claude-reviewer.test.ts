@@ -38,6 +38,7 @@ it("keeps a deep review's Claude reviewer from changing the checkout", async () 
     ) as unknown as ReturnType<typeof query>;
   });
   await runClaudeProject({
+    job: { kind: "prompt" },
     cwd: "/project",
     prompt: "/code-review high",
     choice: {} as never,

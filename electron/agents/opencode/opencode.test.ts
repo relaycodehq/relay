@@ -64,6 +64,7 @@ function turn(prompt: string, extra: Partial<AgentOptions> = {}) {
     point: undefined as string | undefined,
   };
   const options: AgentOptions = {
+    job: { kind: "prompt" },
     cwd: root,
     prompt,
     choice: { model: "zen/pickle", reasoningEffort: "high", fast: false },

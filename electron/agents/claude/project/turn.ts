@@ -36,8 +36,10 @@ export async function runClaudeProject(
   const key = options.session?.key;
   const signature = sessionSignature(options);
   let session = key ? sessions.get(key) : undefined;
+  const adopting = options.job.kind === "adopt",
+    compacting = options.job.kind === "compact";
   let turn: ClaudeTurn;
-  if (options.adopt) {
+  if (adopting) {
     turn = adopt(session);
   } else {
     // A turn Claude started itself finishes first, so neither answer lands under the other.
@@ -90,14 +92,14 @@ export async function runClaudeProject(
     const reader = new ClaudeTurnReader(options, session);
     setOptions(session, options);
     // The host's log marks the turn, so a restart knows what to show again.
-    if (options.adopt) session.hosted?.mark("start", turn.from);
+    if (adopting) session.hosted?.mark("start", turn.from);
     session.plan = "";
     session.busy = true;
     const images = await claudeImages(options.images);
     options.signal.throwIfAborted();
-    if (options.compact && !session.threadId && !options.session?.id)
+    if (compacting && !session.threadId && !options.session?.id)
       throw new Error("There is no Claude session to compact yet.");
-    if (!options.adopt) {
+    if (!adopting) {
       // Claim the stream as the prompt goes out; a turn Claude began meanwhile
       // finishes first. Nothing may await between the check and the claim.
       while (session.unprompted)
@@ -111,7 +113,7 @@ export async function runClaudeProject(
         parent_tool_use_id: null,
         message: {
           role: "user",
-          content: options.compact
+          content: compacting
             ? `/compact ${options.prompt}`.trim()
             : [
                 // A screenshot sent alone has no text; the API refuses an empty block.
@@ -123,7 +125,7 @@ export async function runClaudeProject(
         },
       });
     }
-    if (!options.compact)
+    if (!compacting)
       options.onControl?.({
         steer: (text, id, steerImages) =>
           guardSteer(

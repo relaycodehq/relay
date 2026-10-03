@@ -74,6 +74,7 @@ async function ask(wire?: Parameters<typeof fakeCodex>[1]) {
   const cli = await fakeCli(join(root, "codex"), fakeCodex(log, wire));
   vi.mocked(findExecutable).mockResolvedValue(cli);
   const answer = runCodex({
+    job: { kind: "prompt" },
     cwd: root,
     prompt: "Hi",
     choice: { model: "", reasoningEffort: "", fast: false },

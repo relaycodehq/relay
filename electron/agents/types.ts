@@ -14,8 +14,26 @@ import type { ProviderCommand } from "../../shared/commands";
 import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
 
+/** What the run is for; each runtime handles every kind. */
+export type AgentJob =
+  /** A turn in a thread's session: send `prompt`. */
+  | { kind: "prompt" }
+  /** Compact the resumed session instead of sending `prompt`. */
+  | { kind: "compact" }
+  /** Show the turn the agent started on its own instead of sending `prompt`. */
+  | { kind: "adopt" }
+  /** Run Codex's own `/review` of this target instead of sending `prompt`. */
+  | { kind: "review"; target: CodexReviewTarget }
+  /** A `/btw` side thread, forked from the main one while that may still be working. */
+  | { kind: "side" }
+  /** A one-off helper job (a thread title, a commit message): no tools, no session, these instructions in place of the chat's own. */
+  | { kind: "helper"; instructions: string }
+  /** A one-off answer to a room's question: it may read the project, keeps no session. */
+  | { kind: "answer" };
+
 /** One turn of any agent, as a thread, room, title or helper job runs it. */
 export interface AgentOptions {
+  job: AgentJob;
   /** `id` names the chat message the steer came from, for `onSteered`. */
   onControl?: (control: {
     steer: (
@@ -46,28 +64,15 @@ export interface AgentOptions {
   onCost?: (usd: number) => void;
   /** Private context for this turn: the agent reads it, the transcript never shows it. */
   context?: () => Promise<string | undefined>;
-  /** Compact the resumed session instead of sending `prompt`. */
-  compact?: boolean;
-  /** Show the turn Claude just started on its own instead of sending `prompt`. */
-  adopt?: boolean;
   images?: {
     path: string;
     mimeType: "image/png" | "image/jpeg" | "image/webp";
   }[];
   skills?: { name: string; path: string }[];
-  /**
-   * A one-off helper job (a thread title, a commit message): no tools, no
-   * session, and these system instructions in place of the chat's own.
-   */
-  helper?: { instructions: string };
   runtimeMode?: RuntimeMode;
   interactionMode?: InteractionMode;
   /** A deep review's reviewer: it may read and run anything but changes no files. */
   readOnly?: boolean;
-  /** A `/btw` side thread, forked from the main one while that may still be working. */
-  side?: boolean;
-  /** Run Codex's own `/review` of this target instead of sending `prompt`. */
-  review?: CodexReviewTarget;
   onRequest?: AskAgentRequest;
   session?: {
     key?: string;

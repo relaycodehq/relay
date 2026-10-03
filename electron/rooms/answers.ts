@@ -160,6 +160,7 @@ export class RoomAnswers {
     const heartbeat = setInterval(publish, 2000);
     try {
       text = await agentRuntime(provider).run({
+        job: { kind: "answer" },
         cwd: c.dir!,
         prompt,
         choice: input.choice,
