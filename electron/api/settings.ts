@@ -87,6 +87,13 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return enabled;
     }),
+    keepAwake: () => store.get().keepAwake ?? true,
+    saveKeepAwake: takes([z.boolean()], async (enabled) => {
+      await store.update((s) => {
+        s.keepAwake = enabled;
+      });
+      return enabled;
+    }),
     autoSettleDays: () => {
       const days = store.get().autoSettleDays;
       return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;

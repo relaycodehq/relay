@@ -213,6 +213,10 @@ export class PhoneRemote {
     }
     return this.state();
   }
+  /** A paired phone or computer may call in, so this one shouldn't sleep on its own. */
+  expectsCalls() {
+    return this.server.listening && this.devices.list().length > 0;
+  }
   async pairing(): Promise<PhonePairing> {
     const host = this.server.host;
     if (!host) throw new Error("Turn on phone access first.");

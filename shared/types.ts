@@ -276,6 +276,9 @@ export interface Api
   saveAISettings(settings: AISettings): Promise<AISettings>;
   smartProjectNames(): Promise<boolean>;
   saveSmartProjectNames(enabled: boolean): Promise<boolean>;
+  /** Plugged in, Relay keeps the computer from idling to sleep; on battery only while it has work or a paired device. */
+  keepAwake(): Promise<boolean>;
+  saveKeepAwake(enabled: boolean): Promise<boolean>;
   /** Days without activity before a thread settles by itself; null never. */
   autoSettleDays(): Promise<number | null>;
   saveAutoSettleDays(days: number | null): Promise<number | null>;

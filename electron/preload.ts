@@ -186,6 +186,8 @@ const methods = [
   "saveAISettings",
   "smartProjectNames",
   "saveSmartProjectNames",
+  "keepAwake",
+  "saveKeepAwake",
   "autoSettleDays",
   "saveAutoSettleDays",
   "saveSidebarView",

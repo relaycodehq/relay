@@ -19,6 +19,8 @@ interface State {
   projectGroups?: string[];
   /** Prettify automatic project names; unset keeps the original default (on). */
   smartProjectNames?: boolean;
+  /** Keep the computer from idling to sleep while Relay runs; unset is on. */
+  keepAwake?: boolean;
   /** Legacy saves: automatic names were already title-cased by the old migration. */
   projectTitlesTidied?: true;
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */

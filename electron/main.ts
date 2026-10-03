@@ -13,6 +13,7 @@ import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
+import { KeepAwake } from "./app/keep-awake";
 import { Quit } from "./app/quit";
 import { AppWindow } from "./app/window";
 import { BlameService } from "./git/blame";
@@ -86,6 +87,11 @@ const menubar = new Menubar(
   () => window.open(),
   () => projectChats?.working() ?? 0,
 );
+const keepAwake = new KeepAwake({
+  enabled: () => store?.get().keepAwake ?? true,
+  busy: () =>
+    (projectChats?.working() ?? 0) > 0 || !!phoneRemote?.expectsCalls(),
+});
 const quit = new Quit({
   window,
   started: () => !!store,
@@ -110,6 +116,7 @@ const quit = new Quit({
       ),
   release: () => {
     menubar.destroy();
+    keepAwake.dispose();
     threadTerminals.closeAll();
     blame.dispose();
     login.client?.dispose();
@@ -302,7 +309,10 @@ app
     chats.onSummaries((projectId) => {
       summaries.changed(projectId);
       menubar.refresh();
+      void keepAwake.refresh();
     });
+    // Settings, phone access and the power source change without a thread noticing.
+    setInterval(() => void keepAwake.refresh(), 15_000).unref();
     // Whether a PR thread's review began reads with the account.
     login.changed = () => chats.summariesChanged();
     // A quiet thread settles itself as days pass; the feed sends only what changed.
