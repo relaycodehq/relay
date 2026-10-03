@@ -6,7 +6,8 @@
  * the other computer continues in a fresh agent session, briefed by the
  * outgoing agent's handoff note. Bringing it back is the same the other way.
  */
-import type { AgentProvider } from "./agents";
+import { z } from "zod";
+import { agentProviderSchema, type AgentProvider } from "./agents";
 import type { UpdateState } from "./updates";
 import type {
   AgentActivity,
@@ -66,6 +67,27 @@ type HandoffSettings = Pick<
   ProjectChatSend,
   "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
 >;
+
+/**
+ * One message as it crosses between computers, in either direction. The
+ * paired computer is trusted like a paired phone, which runs agents with
+ * full access; this only keeps a peer on another version, or a broken one,
+ * from writing messages into the thread that nothing can read. Fields only
+ * one side knows pass through untouched.
+ */
+export const handoffMessageSchema = z
+  .object({
+    id: z.string().max(200),
+    role: z.enum(["user", "assistant"]),
+    body: z.string().max(2_000_000),
+    status: z.enum(["complete", "failed", "streaming", "cancelled"]),
+    created: z.number(),
+    version: z.number(),
+    provider: agentProviderSchema.optional(),
+    parentId: z.string().max(200).nullish(),
+  })
+  .passthrough();
+export const handoffMessagesSchema = z.array(handoffMessageSchema).max(20_000);
 
 /** The conversation half of a handoff; the code travels as a bundle beside it. */
 export interface HandoffThread {

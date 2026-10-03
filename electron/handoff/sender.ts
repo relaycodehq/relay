@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   handoffChunk,
+  handoffMessagesSchema,
   needsFullBundle,
   type ComputerInfo,
   type AwayThread,
@@ -424,11 +425,10 @@ export class Handoffs {
       await mkdir(folder, { recursive: true, mode: 0o700 });
       const json = join(folder, "thread");
       await download(client, id, "thread", back.thread, json);
-      const messages = JSON.parse(
+      const messages = readReturned(
         await readFile(json, "utf8"),
-      ) as ChatMessage[];
-      if (!Array.isArray(messages))
-        throw new Error("The thread came back unreadable.");
+        this.computers.get(computerId).name,
+      );
       if (back.bundle) {
         const bundle = join(folder, "bundle");
         await download(client, id, "bundle", back.bundle, bundle);
@@ -485,6 +485,27 @@ export class Handoffs {
     }
     await this.computers.setUnacknowledged(computerId, left);
   }
+}
+
+/** The thread as it came back, or an error naming what's wrong, before anything of it is applied. */
+function readReturned(text: string, computer: string): ChatMessage[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`${computer} sent the thread back unreadable.`);
+  }
+  const parsed = handoffMessagesSchema.safeParse(json);
+  if (parsed.success) return parsed.data as ChatMessage[];
+  const [issue] = parsed.error.issues;
+  const [at, ...field] = issue!.path;
+  const where =
+    typeof at === "number"
+      ? `message ${at + 1}${field.length ? `'s ${field.join(".")}` : ""}`
+      : "the message list";
+  throw new Error(
+    `${computer} sent the thread back in a form this Relay can't read (${where}: ${issue!.message}). Nothing was changed here.`,
+  );
 }
 
 /** Too old to take threads from this computer: before bridge 10, or behind this one's. */

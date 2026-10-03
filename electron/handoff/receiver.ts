@@ -1,9 +1,9 @@
 import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { agentProviderSchema } from "../../shared/agents";
 import {
   handoffChunk,
+  handoffMessagesSchema,
   maxHandoffBundle,
   maxHandoffThread,
   needsFullBundle,
@@ -41,20 +41,6 @@ const branchSchema = z
   .max(200)
   .regex(/^[\w./-]+$/)
   .refine((b) => !b.includes("..") && !b.startsWith("-"));
-// The paired computer is trusted like a paired phone, which runs agents with
-// full access; this only keeps a broken sender from breaking the thread.
-const messageSchema = z
-  .object({
-    id: z.string().max(200),
-    role: z.enum(["user", "assistant"]),
-    body: z.string().max(2_000_000),
-    status: z.enum(["complete", "failed", "streaming", "cancelled"]),
-    created: z.number(),
-    version: z.number(),
-    provider: agentProviderSchema.optional(),
-    parentId: z.string().max(200).optional(),
-  })
-  .passthrough();
 const threadSchema = z
   .object({
     from: z.string().trim().min(1).max(80),
@@ -68,7 +54,7 @@ const threadSchema = z
       interactionMode: true,
       contextWindow: true,
     }),
-    messages: z.array(messageSchema).max(20_000),
+    messages: handoffMessagesSchema,
     git: z
       .object({
         branch: branchSchema,

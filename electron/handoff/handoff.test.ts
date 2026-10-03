@@ -20,6 +20,7 @@ import { Computers } from "./computers";
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { remoteBridgeVersion } from "../../shared/remote";
+import { handoffMessagesSchema } from "../../shared/handoff";
 import type { UpdateState } from "../../shared/updates";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
@@ -582,6 +583,55 @@ it("hands a thread back without files when its worktree and branch are both gone
   );
   expect(git(here, "rev-parse", "HEAD")).toBe(head);
 }, 60000);
+
+it("refuses a hand-back whose messages are malformed, and changes nothing here", async () => {
+  const { laptop, mini, sender, thread, here } = await awayWithChangelog(false);
+  const before = (await laptop.chats.get(thread.id)).messages;
+  const head = git(here, "rev-parse", "HEAD");
+  const real = mini.chats.handBack.bind(mini.chats);
+  vi.spyOn(mini.chats, "handBack").mockImplementation(async (id, deviceId) => {
+    const back = await real(id, deviceId);
+    return {
+      ...back,
+      messages: [
+        ...back.messages,
+        { id: "bad", role: "assistant", body: 42, created: 1, version: 1 },
+      ] as never,
+    };
+  });
+
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () =>
+      expect((await laptop.chats.get(thread.id)).sentTo?.error).toMatch(
+        /message \d+'s body/,
+      ),
+    { timeout: 15000 },
+  );
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo?.state).toBe("returning");
+  expect(after.messages).toEqual(before);
+  expect(git(here, "rev-parse", "HEAD")).toBe(head);
+  expect(git(here, "for-each-ref", "refs/relay/handoffs/")).toBe("");
+}, 60000);
+
+it("takes hand-back messages with a null parent and fields only the other side knows", () => {
+  const message = {
+    id: "m1",
+    role: "assistant",
+    body: "Done",
+    status: "complete",
+    created: 1,
+    version: 1,
+    provider: "codex",
+    parentId: null,
+    somethingNewer: { a: 1 },
+  };
+  expect(handoffMessagesSchema.parse([message])).toEqual([message]);
+  expect(
+    handoffMessagesSchema.safeParse([{ ...message, status: "?" }]).success,
+  ).toBe(false);
+});
 
 it("lets the computer it came from peek at what the turn there is doing", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
