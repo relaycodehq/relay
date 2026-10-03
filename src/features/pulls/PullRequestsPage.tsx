@@ -127,11 +127,11 @@ export function PullRequestsPage({
     return () => clearTimeout(t);
   }, [typed]);
   const searchRef = useRef<HTMLInputElement>(null);
-  useShortcut("pr-search", true, () => {
+  useShortcut("find", true, () => {
     searchRef.current?.focus();
     searchRef.current?.select();
   });
-  const searchKeys = useShortcutLabel("pr-search");
+  const searchKeys = useShortcutLabel("find");
   const openKeys = useShortcutLabel("pr-open");
   const context: PullContext = { verdicts, started, onOpen };
   const projectOf = (r: Repo) => projectFor(projects, account.server, r);

@@ -288,6 +288,7 @@
   overflow: hidden;
 }
 .working-diff-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;

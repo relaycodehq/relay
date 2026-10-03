@@ -18,6 +18,7 @@ import { labelDiffGapControls } from "./diffGapControls";
 import { useTypography } from "../../lib/typography";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ImageDiff } from "./ImageDiff";
+import { useDiffFind } from "./find/useDiffFind";
 export interface WorkingLineTarget {
   side: Side;
   start: number;
@@ -78,6 +79,12 @@ export function WorkingDiff({
   // The viewer mounts once the syntax workers are ready, after the diff.
   const [viewer, setViewer] = useState<Viewer | null>(null);
   useEffect(() => setSelection(null), [pair]);
+  const find = useDiffFind({
+    frame,
+    viewer: () => viewer,
+    itemId: "working",
+    diff,
+  });
   const items = useMemo<CodeViewDiffItem[]>(
     () => (diff ? [{ id: "working", type: "diff", fileDiff: diff }] : []),
     [diff],
@@ -183,6 +190,7 @@ export function WorkingDiff({
   })();
   return (
     <div className="working-diff-frame" ref={frame}>
+      {find}
       {onAsk && selection && (
         <div className="selection-toolbar">
           <span>

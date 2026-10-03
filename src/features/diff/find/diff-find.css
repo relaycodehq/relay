@@ -1,0 +1,40 @@
+/* The find bar floats over the diff's top-right corner, clear of its scrollbar. */
+.diff-find {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 3px 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px -16px #0009;
+  font-size: 12px;
+}
+.diff-find input {
+  width: 180px;
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.diff-find-count {
+  min-width: 64px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.diff-find .icon-button {
+  width: 24px;
+  height: 24px;
+}
+.diff-find .icon-button:disabled {
+  opacity: 0.4;
+}

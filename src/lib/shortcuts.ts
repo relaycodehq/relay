@@ -27,6 +27,8 @@ const STORAGE_KEY = "relay-shortcuts";
 const LEGACY_DICTATION = "relay-dictation-shortcut";
 
 const bindingList = z.array(keyComboSchema).max(MAX_BINDINGS);
+/** Commands saved under an older name. */
+const formerIds: Partial<Record<ShortcutId, string>> = { find: "pr-search" };
 
 function legacyDictation(): ShortcutOverrides {
   try {
@@ -45,7 +47,10 @@ const store = persistedStore<ShortcutOverrides>(
     const raw = JSON.parse(saved) as Record<string, unknown>;
     const overrides: ShortcutOverrides = {};
     for (const id of shortcutIds) {
-      const list = bindingList.safeParse(raw?.[id]);
+      const former = formerIds[id];
+      const list = bindingList.safeParse(
+        raw?.[id] ?? (former ? raw?.[former] : undefined),
+      );
       if (list.success) overrides[id] = list.data;
     }
     return overrides;

@@ -31,6 +31,7 @@ import { labelDiffGapControls } from "./diffGapControls";
 import { SelectionToolbar } from "./viewer/SelectionToolbar";
 import { FileChecks } from "./viewer/FileChecks";
 import { LineAnnotations, type NoteActions } from "./viewer/LineAnnotations";
+import { useDiffFind } from "./find/useDiffFind";
 
 interface Props extends NoteActions {
   /** A project thread's workspace, where blame is read instead of the PR's linked folder. */
@@ -117,6 +118,14 @@ export function DiffViewer({
     contentHash,
   );
   const { diff, error: diffError } = useFileDiff(contents.data);
+  const frame = useRef<HTMLDivElement>(null);
+  const find = useDiffFind({
+    frame,
+    viewer: () => viewer.current,
+    itemId: file.filename,
+    diff,
+    wholeFile: fullContext,
+  });
   const [selection, setSelection] = useState<CodeViewLineSelection | null>(
     null,
   );
@@ -207,7 +216,8 @@ export function DiffViewer({
     );
   if (!diff) return <Loading text="Comparing file versions…" />;
   return (
-    <div className="diff-wrapper" {...blame.handlers}>
+    <div className="diff-wrapper" ref={frame} {...blame.handlers}>
+      {find}
       {blame.overlay}
       {symbols.overlay}
       {symbols.ready && symbols.controls}

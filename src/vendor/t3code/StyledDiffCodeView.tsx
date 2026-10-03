@@ -177,6 +177,15 @@ const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
   outline-offset: -2px;
 }
 
+/* Relay: find-in-diff marks, painted over the viewer's own text (features/diff/find). */
+::highlight(relay-diff-find) {
+  background-color: light-dark(#ffe17a, #6e5a10);
+}
+::highlight(relay-diff-find-current) {
+  background-color: light-dark(#ff9f2e, #c77a12);
+  color: light-dark(#000, #fff);
+}
+
 [data-diffs-header] [data-header-content] {
   align-items: center !important;
   line-height: 1 !important;

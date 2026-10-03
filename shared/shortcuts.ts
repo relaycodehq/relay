@@ -233,10 +233,12 @@ const shortcutCommands = {
     bare: true,
     defaults: one("KeyK"),
   },
-  "pr-search": {
-    title: "Search pull requests",
-    group: "Reviews",
-    keywords: "find filter",
+  find: {
+    title: "Find",
+    group: "General",
+    description:
+      "Finds text in the diff you last clicked into, or searches pull requests on their page.",
+    keywords: "search filter diff pull requests",
     defaults: one("mod+KeyF"),
   },
   "pr-open": {
