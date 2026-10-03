@@ -1006,7 +1006,8 @@ small {
 }
 .markdown-quote-copy,
 .markdown-code-copy,
-.inline-command-run {
+.inline-command-run,
+.markdown-table-copy {
   display: grid;
   place-items: center;
   width: 24px;
@@ -1028,17 +1029,27 @@ small {
 .markdown-code-copy {
   pointer-events: auto;
 }
+/* Above the header cells' column resizers. */
+.markdown-table-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+}
 .markdown-quote:hover > .markdown-quote-copy,
 .markdown-quote-copy:focus-visible,
 .markdown-code:hover .markdown-code-copy,
 .markdown-code-copy:focus-visible,
 .inline-command:hover > .inline-command-run,
-.inline-command-run:focus-visible {
+.inline-command-run:focus-visible,
+.markdown-table-frame:hover > .markdown-table-copy,
+.markdown-table-copy:focus-visible {
   opacity: 1;
 }
 .markdown-quote-copy:hover,
 .markdown-code-copy:hover,
-.inline-command-run:hover {
+.inline-command-run:hover,
+.markdown-table-copy:hover {
   color: var(--text);
 }
 .markdown-code-error {
@@ -1098,8 +1109,15 @@ small {
   margin: 0 6px 0 0;
   vertical-align: -1px;
 }
-.markdown-table {
+.markdown-table-frame {
+  position: relative;
   margin: 10px 0;
+  max-width: 100%;
+}
+.markdown-table-frame.resized {
+  width: fit-content;
+}
+.markdown-table {
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border);

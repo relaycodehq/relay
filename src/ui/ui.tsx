@@ -4,9 +4,7 @@ import {
   useMemo,
   useRef,
   useId,
-  useState,
   type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   Component,
   Fragment,
@@ -31,6 +29,7 @@ import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { CodeBlock, InlineCommand } from "./CodeBlock";
 import { ColorCode } from "./ColorCode";
+import { MarkdownTable } from "./MarkdownTable";
 import {
   projectFileLink,
   type ProjectFileLink,
@@ -225,73 +224,6 @@ function MarkdownFence({ node }: { node?: { position?: Position } }) {
       lang={markdownCodeLanguage(node)}
       closed={fenceClosed(source, node?.position)}
     />
-  );
-}
-const MIN_TABLE_COLUMN_WIDTH = 60;
-// Columns size themselves until the first drag; after that the table switches to
-// fixed layout with the measured widths so each column can be dragged freely.
-function MarkdownTable({ children }: { children?: ReactNode }) {
-  const tableRef = useRef<HTMLTableElement>(null);
-  const [widths, setWidths] = useState<number[] | null>(null);
-  const startResize = (event: ReactPointerEvent<HTMLTableElement>) => {
-    const handle = (event.target as HTMLElement).closest(
-      ".markdown-table-resizer",
-    );
-    const cell = handle?.parentElement as HTMLTableCellElement | null;
-    const headerRow = tableRef.current?.rows[0];
-    if (!handle || !cell || !headerRow || event.button !== 0) return;
-    event.preventDefault();
-    const index = cell.cellIndex;
-    const initial = Array.from(headerRow.cells, (headerCell) =>
-      Math.round(headerCell.getBoundingClientRect().width),
-    );
-    const startX = event.clientX;
-    setWidths(initial);
-    const move = (moveEvent: PointerEvent) => {
-      const next = [...initial];
-      next[index] = Math.max(
-        MIN_TABLE_COLUMN_WIDTH,
-        initial[index] + moveEvent.clientX - startX,
-      );
-      setWidths(next);
-    };
-    const stop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-      document.body.classList.remove("resizing-table-column");
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-    document.body.classList.add("resizing-table-column");
-  };
-  return (
-    <div className={`markdown-table${widths ? " resized" : ""}`}>
-      <table
-        ref={tableRef}
-        className={widths ? "resized" : undefined}
-        style={
-          widths
-            ? { width: widths.reduce((sum, width) => sum + width, 0) }
-            : undefined
-        }
-        onPointerDown={startResize}
-        onDoubleClick={(event) => {
-          if ((event.target as HTMLElement).closest(".markdown-table-resizer"))
-            setWidths(null);
-        }}
-      >
-        {widths && (
-          <colgroup>
-            {widths.map((width, index) => (
-              <col key={index} style={{ width }} />
-            ))}
-          </colgroup>
-        )}
-        {children}
-      </table>
-    </div>
   );
 }
 // Quotes carry a copy button so the quoted text can be lifted without the reply around it.
