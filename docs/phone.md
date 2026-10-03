@@ -56,10 +56,10 @@ The desktop hosts the bridge (`electron/remote/`): a WebSocket server on port 47
 ## Tests
 
 ```sh
-npx vitest run tests/unit/remote-crypto.test.ts tests/unit/remote-devices.test.ts \
-  tests/unit/remote-bridge.test.ts tests/unit/phone-remote.test.ts \
-  tests/unit/phone-thread-state.test.ts tests/unit/phone-compose.test.ts \
-  tests/unit/phone-app.test.ts
+npx vitest run shared/remote-crypto.test.ts electron/remote/remote-devices.test.ts \
+  electron/remote/remote-bridge.test.ts electron/remote/phone-remote.test.ts \
+  tests/unit/phone-thread-state.test.ts shared/phone-compose.test.ts \
+  electron/remote/phone-app.test.ts
 env -u RELAY_DEV_URL npx playwright test e2e/phone-remote.spec
 RELAY_DICTATION_MODEL=<model folder> env -u RELAY_DEV_URL npx playwright test e2e/phone-dictation.spec
 ```

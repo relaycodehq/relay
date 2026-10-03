@@ -1,5 +1,5 @@
 // Deep review: type each reviewer's prompt, start from a recent setup.
-// Open http://127.0.0.1:5177/previews/review-prompts.html
+// Open http://127.0.0.1:5177/previews/review-prompts/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

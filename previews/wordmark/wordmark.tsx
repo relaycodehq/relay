@@ -1,6 +1,6 @@
 // Draft "Relay" wordmark: the real R from assets/relay-mark.svg, with "elay"
-// drawn as the same ribbon by previews/wordmark-ribbon.ts.
-// Open http://127.0.0.1:5177/previews/wordmark.html
+// drawn as the same ribbon by previews/wordmark/wordmark-ribbon.ts.
+// Open http://127.0.0.1:5177/previews/wordmark/
 import { StrictMode, useMemo, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "../../src/styles.css";

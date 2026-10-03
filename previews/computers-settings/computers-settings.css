@@ -1,5 +1,5 @@
 /* Preview frame: a Settings pane as wide as the real one. The panel's own
-   styles are src/components/computers.css. */
+   styles are src/features/handoff/computers.css. */
 .cm-page {
   --cm-on: light-dark(#1a7f37, #3fb950);
   --cm-wait: light-dark(#9a6700, #d29922);

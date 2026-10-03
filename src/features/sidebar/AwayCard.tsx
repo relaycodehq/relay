@@ -1,5 +1,5 @@
 // Activity cards of threads handed off to another computer: the computer on
-// the meta line, and a peek on hover. lib/useAwayViews lays its state over the card.
+// the meta line, and a peek on hover. useAwayViews lays its state over the card.
 import type { ReactElement } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { MonitorOff, MonitorUp } from "lucide-react";

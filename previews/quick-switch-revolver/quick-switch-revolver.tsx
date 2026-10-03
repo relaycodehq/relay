@@ -1,5 +1,5 @@
 // Revolver styles for the quick switch: presets are rounds in a cylinder.
-// Open http://127.0.0.1:5177/previews/quick-switch-revolver.html
+// Open http://127.0.0.1:5177/previews/quick-switch-revolver/
 // (?view=cylinder|rounds|swing&at=2, &closed to start hidden)
 import "../_shared/desktop-stub";
 import {

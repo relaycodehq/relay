@@ -1,5 +1,5 @@
 // Quick switch: model presets from Settings that ⌘⌥←→ steps through in the composer.
-// Open http://127.0.0.1:5177/previews/quick-switch.html
+// Open http://127.0.0.1:5177/previews/quick-switch/
 // (?view=track|list|drum|dock|tab|settings&at=2, &closed to start hidden)
 import "../_shared/desktop-stub";
 import {

@@ -1,5 +1,5 @@
 // Options for the Pull requests page, inside the real app shell on sample data.
-// Open http://127.0.0.1:5177/previews/pr-overview.html (?option=triage|board|table|peek|sidebar)
+// Open http://127.0.0.1:5177/previews/pr-overview/ (?option=triage|board|table|peek|sidebar)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";

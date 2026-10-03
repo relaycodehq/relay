@@ -1,5 +1,5 @@
 // Settings → Keyboard shortcuts: click a keycap and press new keys.
-// Open http://127.0.0.1:5177/previews/shortcuts.html
+// Open http://127.0.0.1:5177/previews/shortcuts/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

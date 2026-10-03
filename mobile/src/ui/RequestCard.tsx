@@ -17,7 +17,7 @@ import type {
 import { Button } from "./Button";
 import { mono, type, useTheme } from "./theme";
 
-// The desktop's wording, from src/components/AgentRequestCard.tsx.
+// The desktop's wording, from src/features/thread/AgentRequestCard.tsx.
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
   acceptForSession: "Always allow this session",

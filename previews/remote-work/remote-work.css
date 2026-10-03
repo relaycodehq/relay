@@ -1,4 +1,4 @@
-/* Preview frame only; the real styles live in src/components. */
+/* Preview frame only; the real styles live in src/app and src/features. */
 .rw-page {
   display: flex;
   flex-direction: column;

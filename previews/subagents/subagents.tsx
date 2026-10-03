@@ -1,7 +1,7 @@
 // Subagents beside the Project folder control: an icon and a count while any
 // run, five hover cards to choose from, and each agent's run opened read-only.
 // Sample data on a clock you can scrub; the app's own styles and turn view.
-// Open http://127.0.0.1:5177/previews/subagents.html
+// Open http://127.0.0.1:5177/previews/subagents/
 import "../_shared/desktop-stub";
 import {
   StrictMode,

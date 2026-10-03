@@ -1,5 +1,5 @@
 // The thread header, squeezed: the current one against three tighter takes.
-// Open http://127.0.0.1:5177/previews/compact-header.html
+// Open http://127.0.0.1:5177/previews/compact-header/
 import "../_shared/desktop-stub";
 import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";

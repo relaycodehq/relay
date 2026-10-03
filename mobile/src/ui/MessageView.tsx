@@ -30,7 +30,7 @@ export type Rewind = (
 
 const hideImage: ShowImage = () => null;
 
-/** A message laid out like the desktop's (src/components/ProjectChat.tsx). */
+/** A message laid out like the desktop's (src/features/thread/ProjectChat.tsx). */
 export const MessageView = memo(function MessageView({
   chatId,
   message: m,

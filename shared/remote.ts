@@ -125,7 +125,7 @@ export interface RemoteProject {
 }
 
 /**
- * A project's own icon (electron/project-icon), by the hash of its data URL.
+ * A project's own icon (electron/projects/project-icon), by the hash of its data URL.
  * The data only comes along when the phone's copy is missing or stale; a
  * null hash means the project has none and keeps the folder.
  */

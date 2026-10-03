@@ -1,5 +1,5 @@
 // Settings → Phone as it walks through Tailscale, one sample state at a time.
-// Open http://127.0.0.1:5177/previews/phone-tailscale.html
+// Open http://127.0.0.1:5177/previews/phone-tailscale/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

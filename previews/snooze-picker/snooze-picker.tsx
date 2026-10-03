@@ -1,5 +1,5 @@
 // Snooze → a time of your own: three ways to pick one, from the real
-// sidebar card. Open http://127.0.0.1:5177/previews/snooze-picker.html (?v=a|b|c)
+// sidebar card. Open http://127.0.0.1:5177/previews/snooze-picker/ (?v=a|b|c)
 import "../_shared/desktop-stub";
 import { StrictMode, useRef, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";

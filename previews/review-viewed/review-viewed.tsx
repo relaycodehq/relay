@@ -1,5 +1,5 @@
 // Options for splitting a PR's changed files into unviewed and viewed.
-// Open http://127.0.0.1:5177/previews/review-viewed.html (?option=fold|sink)
+// Open http://127.0.0.1:5177/previews/review-viewed/ (?option=fold|sink)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";

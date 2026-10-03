@@ -89,7 +89,7 @@ export function ProjectChat({
   project: Project;
   projects: Project[];
   chat?: ChatSummary;
-  /** The unsent thread shown while there's no `chat`; see lib/drafts. */
+  /** The unsent thread shown while there's no `chat`; see features/composer/drafts. */
   draftId: string;
   draftScope: ChatScope;
   contextText?: {

@@ -4,7 +4,7 @@
 // Finder draws those labels black over a background image, even in dark mode
 // (checked on macOS 15), so a background has to be light where they sit.
 // ?export=<option>[&hint=1] renders the bare background for screenshotting.
-// Open http://127.0.0.1:5177/previews/dmg-background.html
+// Open http://127.0.0.1:5177/previews/dmg-background/
 import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { HardDriveDownload } from "lucide-react";

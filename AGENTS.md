@@ -5,10 +5,11 @@
 - **Show visual choices as working UI in the browser.** When asked for ideas
   or options to choose from and they can be seen (layouts, cards, flows,
   styles), build them instead of describing them or drawing ASCII. Put the
-  page in `previews/<name>.html` and `.tsx`; the dev server serves it at
-  `http://127.0.0.1:5177/previews/<name>.html`. Use the app's own CSS, theme
-  and components on sample data (`previews/desktop-stub.ts` stands in for the
-  desktop bridge), add a switcher between the options, make the controls
+  page in `previews/<name>/index.html` and `<name>.tsx`; the dev server serves
+  it at `http://127.0.0.1:5177/previews/<name>/` (keep the trailing slash:
+  without it Vite serves the main app). Use the app's own CSS, theme and
+  components on sample data (`previews/_shared/desktop-stub.ts` stands in for
+  the desktop bridge), add a switcher between the options, make the controls
   work, label the data as sample, check it in a headless browser, then open
   it for the user with `open <url>`.
 

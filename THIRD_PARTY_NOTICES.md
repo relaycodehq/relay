@@ -129,7 +129,7 @@ license above and the local LICENSE apply.
 
 ## T3 Code pull request picker
 
-The searchable pull request popover in `src/components/ProjectPullPicker.tsx`
+The searchable pull request popover in `src/features/pulls/ProjectPullPicker.tsx`
 adapts the combobox interaction from T3 Code's
 `BranchToolbarBranchSelector.tsx` and `pullRequest/PullRequestCandidatePicker.tsx`
 at `b5a0f810108d42ca8635b5a3d75a6e885bb3a254`. The MIT license above
@@ -137,7 +137,7 @@ applies.
 
 ## T3 Code project headline picker
 
-The inline project switcher in `src/components/ProjectHeadlinePicker.tsx`
+The inline project switcher in `src/features/projects/ProjectHeadlinePicker.tsx`
 adapts T3 Code's `chat/DraftHeroHeadline.tsx` at
 `b5a0f810108d42ca8635b5a3d75a6e885bb3a254`. The MIT license above
 applies.

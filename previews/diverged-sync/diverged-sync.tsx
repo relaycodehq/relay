@@ -1,7 +1,7 @@
 // The branch sync button when the checkout has diverged from its upstream:
 // it rebases on click, and on a conflict offers a new thread to resolve it.
 // Three takes on the conflict drop-up, on sample data.
-// Open http://127.0.0.1:5177/previews/diverged-sync.html (?v=menu|card|worktree&o=conflict|clean)
+// Open http://127.0.0.1:5177/previews/diverged-sync/ (?v=menu|card|worktree&o=conflict|clean)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";

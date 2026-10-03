@@ -217,7 +217,7 @@ export const sampleCursorModels = [
 
 /**
  * Stands in for the helper agent that names a setup once its review starts,
- * as `electron/thread-titles.ts` names threads: the prompts say most, then
+ * as `electron/agents/thread-titles.ts` names threads: the prompts say most, then
  * who reviews.
  */
 function nameFor(setup: Setup, models: (a: Reviewer | Lead) => string) {

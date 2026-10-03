@@ -1,5 +1,5 @@
 // Settings → Integrations (Git, Source control, work items), and the Gitea
-// sign-in's tea logins. Open http://127.0.0.1:5177/previews/source-control.html
+// sign-in's tea logins. Open http://127.0.0.1:5177/previews/source-control/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

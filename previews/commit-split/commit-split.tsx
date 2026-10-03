@@ -1,6 +1,6 @@
 // The Changes pane's "Split into commits…" on sample data: the plan comes back
 // after a moment, commits are made in memory. Open
-// http://127.0.0.1:5177/previews/commit-split.html
+// http://127.0.0.1:5177/previews/commit-split/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

@@ -1,6 +1,6 @@
 // Handing a thread to another computer: the header button, the strip on the
 // composer through each step, and Settings → Computers, on sample data.
-// Open http://127.0.0.1:5177/previews/handoff.html (?s=<scene>)
+// Open http://127.0.0.1:5177/previews/handoff/ (?s=<scene>)
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

@@ -13,7 +13,7 @@ export type ThreadHandle = ReturnType<typeof useThreadHandle>;
  */
 export function useThreadHandle(
   chat: ChatSummary | undefined,
-  /** The thread's id, or the unsent one's; see lib/drafts. */
+  /** The thread's id, or the unsent one's; see features/composer/drafts. */
   id: string,
   projectId: string,
   /** Fetches the thread's messages again. */

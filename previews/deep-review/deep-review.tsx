@@ -1,5 +1,5 @@
 // Deep review, previewed on sample data with the app's own styles and
-// controls. Open http://127.0.0.1:5177/previews/deep-review.html
+// controls. Open http://127.0.0.1:5177/previews/deep-review/
 import "../_shared/desktop-stub";
 import {
   StrictMode,

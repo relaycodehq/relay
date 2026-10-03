@@ -1,4 +1,4 @@
-// The phone's copy of the desktop's AgentTurn (src/components/AgentTurn.tsx):
+// The phone's copy of the desktop's AgentTurn (src/features/agent-turn/AgentTurn.tsx):
 // same structure, wording and states, from the same shared/agent-trace logic.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -370,7 +370,7 @@ function WordIn({ animate, children }: { animate: boolean; children: ReactNode }
   );
 }
 
-// The frames of the desktop's .thinking-glyph (src/components/agent-trace.css).
+// The frames of the desktop's .thinking-glyph (src/features/agent-turn/agent-trace.css).
 const glyphs: Partial<Record<ChatMessage["provider"], { frames: string[]; ms: number }>> = {
   claude: { frames: [..."·✢✳✶✻✽✻✶✳✢"], ms: 150 },
   codex: { frames: [..."⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"], ms: 80 },

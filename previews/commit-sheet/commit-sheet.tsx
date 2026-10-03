@@ -1,5 +1,5 @@
 // The Commit & push sheet on sample data; the message comes back after a
-// moment. Open http://127.0.0.1:5177/previews/commit-sheet.html
+// moment. Open http://127.0.0.1:5177/previews/commit-sheet/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

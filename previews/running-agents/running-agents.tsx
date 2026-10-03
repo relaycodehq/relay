@@ -1,5 +1,5 @@
 // Activity cards showing who's answering, previewed on sample data.
-// Open http://127.0.0.1:5177/previews/running-agents.html
+// Open http://127.0.0.1:5177/previews/running-agents/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

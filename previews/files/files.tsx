@@ -1,6 +1,6 @@
 // The Files pane on a sample project kept in memory: tree, folder grid, picture
 // viewer, editor, rename, create and trash. Nothing here touches the disk.
-// Open http://127.0.0.1:5177/previews/files.html
+// Open http://127.0.0.1:5177/previews/files/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

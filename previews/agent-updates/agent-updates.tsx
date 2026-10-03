@@ -1,5 +1,5 @@
 // Agent CLI updates: the sidebar footer control and Settings' Installed agents.
-// Open http://127.0.0.1:5177/previews/agent-updates.html
+// Open http://127.0.0.1:5177/previews/agent-updates/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

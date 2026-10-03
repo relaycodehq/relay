@@ -1,5 +1,5 @@
 // The default agent setting and the new-thread composers that follow it.
-// Open http://127.0.0.1:5177/previews/default-agent.html
+// Open http://127.0.0.1:5177/previews/default-agent/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

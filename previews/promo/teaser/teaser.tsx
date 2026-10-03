@@ -1,6 +1,6 @@
 // A teaser for Relay, filmed on the app's own components with sample data.
 // Every frame is a function of the teaser clock, so scripts/record-teaser.mjs
-// can render it frame by frame. Open http://127.0.0.1:5177/previews/teaser.html
+// can render it frame by frame. Open http://127.0.0.1:5177/previews/promo/teaser/
 // (?t=12.5 freezes on a moment, ?from=20 starts playing there).
 import "../../_shared/desktop-stub";
 import { restoreSavedAppearance } from "./teaser-setup";

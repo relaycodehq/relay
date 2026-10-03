@@ -32,9 +32,9 @@ Do not edit `src/vendor/t3code/markdown-incremental.ts` or
 - `electron/rooms/codex-connection.ts`: keeps the native process alive between turns so native session approval rules survive. Stop and app disposal close it.
 - `electron/rooms/codex.ts`: executable lookup, permissions, model settings,
   session resume, cancellation, and normalized text updates.
-- `electron/project-chats.ts`: local history, restart recovery, coalesced IPC
+- `electron/project-chats/index.ts`: local history, restart recovery, coalesced IPC
   delivery and persistence. These are Relay responsibilities.
-- `src/components/ui.tsx`: one incremental parser cache per Markdown renderer.
+- `src/ui/ui.tsx`: one incremental parser cache per Markdown renderer.
   Raw HTML and remote image fetching remain disabled.
 
 The tests exercise fragmented Unicode, request correlation, malformed and oversized

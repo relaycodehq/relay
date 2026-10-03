@@ -1,4 +1,4 @@
-// Renders previews/reel.html to an mp4, frame by frame, with its own score.
+// Renders previews/promo/reel to an mp4, frame by frame, with its own score.
 //
 //   node scripts/record-reel.mjs [--out reel.mp4] [--fps 60] [--blur 3] [--from 0] [--to 72]
 //                                [--width 1920] [--density 2] [--url http://127.0.0.1:5177]
@@ -38,7 +38,7 @@ const page = await browser.newPage({
   colorScheme: "dark",
 });
 page.on("pageerror", (error) => console.error("page:", error.message));
-await page.goto(`${base}/previews/reel.html?record&density=${density}`);
+await page.goto(`${base}/previews/promo/reel/?record&density=${density}`);
 await page.waitForFunction(() => !!window.reel);
 // Straight to the DevTools protocol: its fast PNG path is three times quicker
 // than page.screenshot().

@@ -1,6 +1,6 @@
 // Typography and VS Code themes from Open VSX in the Appearance settings. Search and install
 // hit the live Open VSX API; account and the rest are sample data.
-// Open http://127.0.0.1:5177/previews/theme-import.html
+// Open http://127.0.0.1:5177/previews/theme-import/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

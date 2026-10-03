@@ -1,7 +1,7 @@
 // Three ways to show installed VS Code themes more compactly. The installed
 // extensions are real, fetched from Open VSX and mapped with Relay's own
 // theme mapping; installing and removing are sample actions.
-// Open http://127.0.0.1:5177/previews/installed-themes.html
+// Open http://127.0.0.1:5177/previews/installed-themes/
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";

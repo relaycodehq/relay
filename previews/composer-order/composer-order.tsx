@@ -1,5 +1,5 @@
 // Settings → Composer toolbar: drag the composer's controls into your order.
-// Open http://127.0.0.1:5177/previews/composer-order.html (?agent=codex)
+// Open http://127.0.0.1:5177/previews/composer-order/ (?agent=codex)
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

@@ -1,5 +1,5 @@
 // The real composer and Settings with quick-switch presets, on sample data.
-// Open http://127.0.0.1:5177/previews/quick-switch-app.html (?settings to open Settings,
+// Open http://127.0.0.1:5177/previews/quick-switch-app/ (?settings to open Settings,
 // &style=list|track|dock|tab to try another style)
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";

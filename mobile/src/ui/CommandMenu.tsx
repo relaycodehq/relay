@@ -1,4 +1,4 @@
-// The desktop composer's slash menu (src/components/ComposerCommands.tsx):
+// The desktop composer's slash menu (src/features/composer/ComposerCommands.tsx):
 // Relay's own actions, then the agent's commands or skills.
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";

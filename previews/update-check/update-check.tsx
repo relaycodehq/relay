@@ -1,7 +1,7 @@
 // Check for updates in Settings → About, on a simulated updater. Orbit is the
 // control the app ships; Warp and Morph are other looks to compare. Sample
 // data, the app's own styles and components.
-// Open http://127.0.0.1:5177/previews/update-check.html
+// Open http://127.0.0.1:5177/previews/update-check/
 import "../_shared/desktop-stub";
 import {
   StrictMode,
@@ -54,7 +54,7 @@ import type { UpdateState } from "../../shared/updates";
 initAppearance();
 initWindowFocus();
 
-/* A stand-in for electron/updater.ts, answering however the bar says. */
+/* A stand-in for electron/app/updater.ts, answering however the bar says. */
 type Answer = "latest" | "newer" | "manual" | "offline";
 const sim = {
   answer: "latest" as Answer,

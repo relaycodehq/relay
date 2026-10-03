@@ -1,7 +1,7 @@
 // Moving a project-folder thread into its own worktree mid-conversation:
 // the footer's Project folder menu, the handoff menu, the confirm dialog and
 // the footer afterwards, on sample data.
-// Open http://127.0.0.1:5177/previews/move-to-worktree.html (?s=<scene>)
+// Open http://127.0.0.1:5177/previews/move-to-worktree/ (?s=<scene>)
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

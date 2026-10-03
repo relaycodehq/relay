@@ -1,6 +1,6 @@
 // Settings → Plugins, three redesigns on sample data. The settings sheet is
 // drawn here (no dialog) so option B can add plugin pages to the nav.
-// Open http://127.0.0.1:5177/previews/plugins-page.html (?o=stack|pages|readout)
+// Open http://127.0.0.1:5177/previews/plugins-page/ (?o=stack|pages|readout)
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

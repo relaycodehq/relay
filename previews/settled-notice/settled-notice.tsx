@@ -1,6 +1,6 @@
 // A settled thread, opened: three ways to say "you're in a settled thread,
 // replying moves it back to Activity".
-// Open http://127.0.0.1:5177/previews/settled-notice.html (?v=a|b|c)
+// Open http://127.0.0.1:5177/previews/settled-notice/ (?v=a|b|c)
 import "../_shared/desktop-stub";
 import { StrictMode, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";

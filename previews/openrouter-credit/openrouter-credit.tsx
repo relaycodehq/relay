@@ -1,5 +1,5 @@
 // OpenCode on an OpenRouter model shows dollars left instead of a usage ring.
-// Open http://127.0.0.1:5177/previews/openrouter-credit.html
+// Open http://127.0.0.1:5177/previews/openrouter-credit/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

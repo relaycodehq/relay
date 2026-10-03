@@ -12,7 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useForeground, useReducedMotion } from "./motion";
 import { useTheme } from "./theme";
 
-// The desktop's .live-shine (src/components/agent-trace.css): a 4.5rem band of
+// The desktop's .live-shine (src/features/agent-turn/agent-trace.css): a 4.5rem band of
 // the text colour crossing a muted label every 2.2s.
 const band = 72;
 

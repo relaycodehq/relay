@@ -1,6 +1,6 @@
 // The Clockify plugin on sample data: the sidebar timer, its settings and
 // the end-of-day review, laid out by the real attribution from sample
-// threads. Open http://127.0.0.1:5177/previews/clockify.html
+// threads. Open http://127.0.0.1:5177/previews/clockify/
 import "../_shared/desktop-stub";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

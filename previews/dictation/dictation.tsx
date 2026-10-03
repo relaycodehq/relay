@@ -1,7 +1,7 @@
 // Dictation in the composer, on sample data: a recorded clip plays through the
 // real capture path and waveform, and a stand-in engine replays the text the
 // real Parakeet engine produced for that clip, with its real timing.
-// Open http://127.0.0.1:5177/previews/dictation.html
+// Open http://127.0.0.1:5177/previews/dictation/
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";

@@ -1,5 +1,5 @@
 // Colour values in chat's inline code get a swatch that grows on hover.
-// Open http://127.0.0.1:5177/previews/color-swatch.html
+// Open http://127.0.0.1:5177/previews/color-swatch/
 import "../_shared/desktop-stub";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

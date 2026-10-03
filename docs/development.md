@@ -26,7 +26,7 @@ npm run package:omarchy
 
 `npm run test:e2e` runs the real Electron renderer against an isolated local Gitea fixture, with native windows hidden and activation suppressed. It does not steal desktop focus, open Keychain prompts, or call your private server. The test launcher uses synthetic credential storage; the shipped app always uses its real OS storage. Native window-focus tests require an explicit `RELAY_TEST_HEADED=1`, and OS credential integration requires `RELAY_TEST_NATIVE_STORAGE=1`; leave both unset for normal runs. Linux CI runs under Xvfb in `.github/workflows/checks.yml` for pull requests and branches.
 
-Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI; `src/vendor/t3code/` contains the attributed upstream components; `tests/` covers API/state boundaries and desktop flows. There is no demo mode in the shipped app.
+Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); `src/vendor/t3code/` contains the attributed upstream components; unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
 
 ## Releases and automatic updates
 
@@ -36,7 +36,7 @@ Each build reports on its commit as the `Release` commit status, which GitHub an
 
 `scripts/mini-ci/install.sh` copies the scripts over and reloads the job. Build logs are in `~/relay-ci.noindex/logs`; a failed commit isn't retried until `~/relay-ci.noindex/state/failed` is deleted or a newer commit lands. `release.sh <commit> --dry-run` builds without publishing.
 
-Installed apps fetch `latest.json` every four hours (`electron/updater.ts`). When a newer version is out, an **Update** button appears in the sidebar footer. It downloads the file for the current install, checks its SHA-512, and switches over on **Restart**:
+Installed apps fetch `latest.json` every four hours (`electron/app/updater.ts`). When a newer version is out, an **Update** button appears in the sidebar footer. It downloads the file for the current install, checks its SHA-512, and switches over on **Restart**:
 
 - **macOS**: unzips the new `Relay.app` and swaps it in after the app quits. This needs no Apple signing, but Relay must live in a writable folder rather than a translocated download.
 - **Windows**: runs the NSIS installer silently, which then restarts Relay.

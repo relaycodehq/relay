@@ -1,6 +1,6 @@
 // A thread handed off to another computer, in the real sidebar and strip:
 // its card works like a local run's, and both peek at the run on hover.
-// Open http://127.0.0.1:5177/previews/remote-work.html (?s=<state>)
+// Open http://127.0.0.1:5177/previews/remote-work/ (?s=<state>)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";

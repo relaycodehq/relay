@@ -1,5 +1,5 @@
 // The revolver quick switch's ratchet click, to try by ear.
-// Open http://127.0.0.1:5177/previews/revolver-sound.html
+// Open http://127.0.0.1:5177/previews/revolver-sound/
 import "../_shared/desktop-stub";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";

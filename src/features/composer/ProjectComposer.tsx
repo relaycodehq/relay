@@ -85,7 +85,10 @@ export function ProjectComposer({
 }: {
   ref?: Ref<ComposerHandle>;
   projectId: string;
-  /** Where its draft and its settings are kept; see lib/drafts and lib/composer-settings. */
+  /**
+   * Where its draft and its settings are kept; see features/composer/drafts
+   * and features/agents/composer-settings.
+   */
   keys: { draft: string; settings: string; inherit?: InheritedSettings };
   conversation: ComposerConversation;
   /** The row above it: what the conversation is about, and where it works. */

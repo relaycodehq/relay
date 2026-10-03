@@ -1,4 +1,4 @@
-// Renders previews/teaser.html to video, one seeked frame at a time, so the
+// Renders previews/promo/teaser to video, one seeked frame at a time, so the
 // motion is smooth no matter how slow a frame is to paint. Needs the dev
 // server on :5177 and ffmpeg.
 //
@@ -16,7 +16,7 @@ const option = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i < 0 ? fallback : args[i + 1];
 };
-const url = option("url", "http://127.0.0.1:5177/previews/teaser.html?capture");
+const url = option("url", "http://127.0.0.1:5177/previews/promo/teaser/?capture");
 const scale = Number(option("scale", "1"));
 const fps = Number(option("fps", "60"));
 const stills = option("stills");

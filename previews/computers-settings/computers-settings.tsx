@@ -1,5 +1,5 @@
 // Settings → Computers, the real panel on sample data.
-// Open http://127.0.0.1:5177/previews/computers-settings.html (?s=paired|one|empty)
+// Open http://127.0.0.1:5177/previews/computers-settings/ (?s=paired|one|empty)
 import "../_shared/desktop-stub";
 import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";

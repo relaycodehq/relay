@@ -1,5 +1,5 @@
 // Screenshot pills: ways to show more of the picture, in the composer and the thread.
-// Open http://127.0.0.1:5177/previews/image-pill-looks.html (?look=name)
+// Open http://127.0.0.1:5177/previews/image-pill-looks/ (?look=name)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";

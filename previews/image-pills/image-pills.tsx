@@ -1,5 +1,5 @@
 // Screenshots in the message: how an `[Image #n]` pill could look in the composer.
-// Open http://127.0.0.1:5177/previews/image-pills.html (?look=name)
+// Open http://127.0.0.1:5177/previews/image-pills/ (?look=name)
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
