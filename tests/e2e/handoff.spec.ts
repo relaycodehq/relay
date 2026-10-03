@@ -209,6 +209,36 @@ test("a worktree thread goes to another computer from its header and comes back 
       laptop.page.getByText(/Handoff note for /).first(),
     ).toBeVisible();
     await screenshot(laptop.page, { path: "test-results/handoff-back.png" });
+
+    // Away again, but this time the mini can't hand it back: take it back without it.
+    await laptop.page
+      .getByRole("button", { name: "Hand off to another computer" })
+      .click();
+    await laptop.page
+      .getByRole("menuitem", { name: /Continues in Mini/ })
+      .click();
+    await expect(strip).toContainText(/finished|Working on/, {
+      timeout: 60_000,
+    });
+    await strip
+      .getByRole("button", { name: "Take it back without Mini" })
+      .click();
+    const confirm = laptop.page.getByRole("dialog", {
+      name: "Take it back without Mini?",
+    });
+    await expect(confirm).toContainText("stays there, on its branch");
+    await screenshot(laptop.page, {
+      path: "test-results/handoff-abandon-confirm.png",
+    });
+    await confirm.getByRole("button", { name: "Take it back" }).click();
+    await expect(strip).toBeHidden({ timeout: 30_000 });
+    await expect(laptop.page.getByLabel("Message project")).not.toHaveAttribute(
+      "data-placeholder",
+      /This thread is on /,
+    );
+    await screenshot(laptop.page, {
+      path: "test-results/handoff-abandoned.png",
+    });
   } finally {
     for (const app of apps) await app.close().catch(() => {});
     await rm(root, { recursive: true, force: true, maxRetries: 10 });

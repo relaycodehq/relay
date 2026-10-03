@@ -8,6 +8,7 @@ import { liveLabel } from "../../../shared/activity-labels";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
 import { threadDraftKey } from "../../lib/thread-storage";
+import { AbandonDialog } from "./AbandonDialog";
 import { canPeek, remoteCall, RemotePeek } from "./RemotePeek";
 import "./waiting-strip.css";
 import "./handoff.css";
@@ -108,6 +109,7 @@ export function HandoffStrip({
 }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
@@ -135,111 +137,134 @@ export function HandoffStrip({
       });
   };
   const { sentTo } = data;
+  // Mid-way back, the job there ends itself or fails, and then it can be taken back.
+  const canAbandon = sentTo.state !== "returning" || !!sentTo.error;
   return (
-    <div
-      className={`waiting-strip handoff-strip ${line.failed ? "failed" : ""}`}
-      role="status"
-    >
-      <div className="waiting-strip-head">
-        {line.failed ? (
-          <CircleAlert size={15} />
-        ) : sentTo.state === "away" && !data.remote?.running ? (
-          <MonitorCheck size={15} />
-        ) : (
-          <MonitorUp size={15} />
-        )}
-        {canPeek(data) ? (
-          <Popover.Root>
-            <Popover.Trigger
-              openOnHover
-              delay={150}
-              closeDelay={250}
-              className="waiting-strip-text handoff-strip-peek"
-            >
+    <>
+      <div
+        className={`waiting-strip handoff-strip ${line.failed ? "failed" : ""}`}
+        role="status"
+      >
+        <div className="waiting-strip-head">
+          {line.failed ? (
+            <CircleAlert size={15} />
+          ) : sentTo.state === "away" && !data.remote?.running ? (
+            <MonitorCheck size={15} />
+          ) : (
+            <MonitorUp size={15} />
+          )}
+          {canPeek(data) ? (
+            <Popover.Root>
+              <Popover.Trigger
+                openOnHover
+                delay={150}
+                closeDelay={250}
+                className="waiting-strip-text handoff-strip-peek"
+              >
+                <b>{line.title}</b>
+                {line.detail && <span> · {line.detail}</span>}
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Positioner
+                  side="top"
+                  align="start"
+                  sideOffset={10}
+                  collisionPadding={12}
+                >
+                  <Popover.Popup
+                    className="subagents-card remote-peek-card"
+                    aria-label={`What ${sentTo.computer} is doing`}
+                  >
+                    <RemotePeek view={data} />
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : (
+            <span className="waiting-strip-text" title={line.detail}>
               <b>{line.title}</b>
               {line.detail && <span> · {line.detail}</span>}
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Positioner
-                side="top"
-                align="start"
-                sideOffset={10}
-                collisionPadding={12}
-              >
-                <Popover.Popup
-                  className="subagents-card remote-peek-card"
-                  aria-label={`What ${sentTo.computer} is doing`}
-                >
-                  <RemotePeek view={data} />
-                </Popover.Popup>
-              </Popover.Positioner>
-            </Popover.Portal>
-          </Popover.Root>
-        ) : (
-          <span className="waiting-strip-text" title={line.detail}>
-            <b>{line.title}</b>
-            {line.detail && <span> · {line.detail}</span>}
-          </span>
-        )}
-        {sentTo.state === "sending" && sentTo.error && (
-          <>
+            </span>
+          )}
+          {canAbandon && (
             <button
               type="button"
+              disabled={busy}
+              title={`If ${sentTo.computer} can't hand it back: unlock it here as it left`}
+              onClick={() => setAbandoning(true)}
+            >
+              Take it back without {sentTo.computer}
+            </button>
+          )}
+          {sentTo.state === "sending" && sentTo.error && (
+            <>
+              <button
+                type="button"
+                disabled={busy || !data.online}
+                title={
+                  data.online
+                    ? "Only works if the handoff never arrived"
+                    : `${sentTo.computer} has to be reachable to tell whether it got the thread`
+                }
+                onClick={() => act(() => api.keepThreadHere(chat.id))}
+              >
+                Keep it here
+              </button>
+              <button
+                type="button"
+                className="primary-action"
+                disabled={busy}
+                onClick={() => act(() => api.retryHandoff(chat.id))}
+              >
+                Try again
+              </button>
+            </>
+          )}
+          {(sentTo.state === "away" ||
+            (sentTo.state === "returning" && sentTo.error)) && (
+            <button
+              type="button"
+              className={
+                sentTo.conflicts?.length ? undefined : "primary-action"
+              }
               disabled={busy || !data.online}
               title={
                 data.online
-                  ? "Only works if the handoff never arrived"
-                  : `${sentTo.computer} has to be reachable to tell whether it got the thread`
+                  ? `Stop the work on ${sentTo.computer} and carry on here`
+                  : `${sentTo.computer} has to be reachable to bring it back`
               }
-              onClick={() => act(() => api.keepThreadHere(chat.id))}
+              onClick={() => act(() => api.bringBackThread(chat.id))}
             >
-              Keep it here
+              {sentTo.error ? "Try again" : "Bring back"}
             </button>
+          )}
+          {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
             <button
               type="button"
               className="primary-action"
-              disabled={busy}
-              onClick={() => act(() => api.retryHandoff(chat.id))}
+              disabled={busy || !data.online}
+              title="Bring it back with its work set aside, and ask it to replay that work here"
+              onClick={() => {
+                const key = threadDraftKey(chat.id),
+                  draft = readDraft(key).trim();
+                const prompt = resolveReturnPrompt({ ...chat, sentTo });
+                writeDraft(key, draft ? `${prompt}\n\n${draft}` : prompt);
+                act(() => api.bringBackThread(chat.id, true));
+              }}
             >
-              Try again
+              Bring back to resolve
             </button>
-          </>
-        )}
-        {(sentTo.state === "away" ||
-          (sentTo.state === "returning" && sentTo.error)) && (
-          <button
-            type="button"
-            className={sentTo.conflicts?.length ? undefined : "primary-action"}
-            disabled={busy || !data.online}
-            title={
-              data.online
-                ? `Stop the work on ${sentTo.computer} and carry on here`
-                : `${sentTo.computer} has to be reachable to bring it back`
-            }
-            onClick={() => act(() => api.bringBackThread(chat.id))}
-          >
-            {sentTo.error ? "Try again" : "Bring back"}
-          </button>
-        )}
-        {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
-          <button
-            type="button"
-            className="primary-action"
-            disabled={busy || !data.online}
-            title="Bring it back with its work set aside, and ask it to replay that work here"
-            onClick={() => {
-              const key = threadDraftKey(chat.id),
-                draft = readDraft(key).trim();
-              const prompt = resolveReturnPrompt({ ...chat, sentTo });
-              writeDraft(key, draft ? `${prompt}\n\n${draft}` : prompt);
-              act(() => api.bringBackThread(chat.id, true));
-            }}
-          >
-            Bring back to resolve
-          </button>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      {abandoning && (
+        <AbandonDialog
+          chatId={chat.id}
+          computer={sentTo.computer}
+          onClose={() => setAbandoning(false)}
+        />
+      )}
+    </>
   );
 }
 
