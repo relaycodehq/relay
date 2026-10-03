@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CodexAppServerRequestError } from "../../vendor/t3code/codex/errors";
 import { signedOutError, usageLimitError } from "../errors";
 import { latestReset, resetMs } from "../usage-limit";
 
@@ -44,4 +45,20 @@ export function codexFailure(
   // Codex names a rejected login itself; its own words say where, not what to do.
   if (info === "unauthorized") return signedOutError("codex");
   return new Error(message ?? fallback);
+}
+
+/**
+ * A request Codex answered with a JSON-RPC error. Its schema leaves `data` open,
+ * so a rejected login is read from `codexErrorInfo` when it's there and from the
+ * HTTP 401 in the message when it isn't; anything else stays as it came.
+ */
+export function codexRequestFailure(error: unknown) {
+  if (!(error instanceof CodexAppServerRequestError)) return error;
+  const data = turnErrorSchema.safeParse(error.data);
+  if (
+    (data.success && data.data.codexErrorInfo === "unauthorized") ||
+    /\b401\b|unauthori[sz]ed/i.test(error.errorMessage)
+  )
+    return signedOutError("codex");
+  return error;
 }

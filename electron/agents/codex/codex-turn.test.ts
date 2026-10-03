@@ -40,12 +40,22 @@ const fakeCodex = (
       method: "turn/completed",
       params: { threadId: "thread", turn: { id: "turn", status: "completed" } },
     },
-  }: { thread?: Wire; turn?: Wire; said?: Wire[]; ending?: Wire | null } = {},
+    refusing,
+  }: {
+    thread?: Wire;
+    turn?: Wire;
+    said?: Wire[];
+    ending?: Wire | null;
+    /** A JSON-RPC error answering `method` instead of its result. */
+    refusing?: { method: string; error: Wire };
+  } = {},
 ) => `
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const m = JSON.parse(line);
-  if (m.method === "initialize") send({ id: m.id, result: {} });
+  if (m.method === ${JSON.stringify(refusing?.method ?? "")})
+    send({ id: m.id, error: ${JSON.stringify(refusing?.error ?? {})} });
+  else if (m.method === "initialize") send({ id: m.id, result: {} });
   else if (m.method === "config/read") send({ id: m.id, result: { config: {} } });
   else if (m.method === "thread/start")
     send({ id: m.id, result: ${JSON.stringify(thread)} });
@@ -188,4 +198,39 @@ it("ends a turn Codex rejected the login of as signed out, and a spent plan as a
       })
     ).answer,
   ).rejects.toThrow("The model is overloaded.");
+});
+
+it.each(["thread/start", "turn/start"])(
+  "ends a turn whose %s request Codex refused as unauthorized as signed out",
+  async (method) => {
+    for (const error of [
+      {
+        code: -32603,
+        message: "unexpected status 401 Unauthorized: Missing bearer",
+      },
+      {
+        code: -32603,
+        message: "Request failed",
+        data: { codexErrorInfo: "unauthorized" },
+      },
+    ]) {
+      const { answer } = await ask({ refusing: { method, error } });
+      await expect(answer).rejects.toMatchObject({
+        kind: "signedOut",
+        provider: "codex",
+      });
+    }
+  },
+);
+
+it("leaves a refused request that isn't about the login as Codex's own words", async () => {
+  const { answer } = await ask({
+    refusing: {
+      method: "turn/start",
+      error: { code: -32600, message: "Invalid request: no such model." },
+    },
+  });
+  const error = await answer.catch((e) => e);
+  expect(error).not.toHaveProperty("kind");
+  expect(error.message).toContain("Invalid request: no such model.");
 });

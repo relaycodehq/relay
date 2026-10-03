@@ -505,6 +505,22 @@ if (args.includes("--permission-prompt-tool")) {
         process.stderr.write("dyld: Library not loaded: libfixture.dylib\n");
         process.exit(134);
       }
+      // Codex refusing the request itself, not failing the turn: its login is rejected.
+      if (
+        m.params.input.some(
+          (i) =>
+            i.type === "text" && i.text.includes("fixture codex refused login"),
+        )
+      ) {
+        send({
+          id: m.id,
+          error: {
+            code: -32603,
+            message: "unexpected status 401 Unauthorized",
+          },
+        });
+        return;
+      }
       send({ id: m.id, result: { turn: { id: "fixture-turn" } } });
       send({
         method: "turn/started",

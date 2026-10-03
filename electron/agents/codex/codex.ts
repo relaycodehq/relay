@@ -10,7 +10,11 @@ import { CodexAnswerStream } from "./answer-stream";
 import { ANSWER_LIMIT, guardSteer } from "../turn-kit";
 import type { ContextUsage } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
-import { codexFailure, codexSpentUntil } from "./codex-limits";
+import {
+  codexFailure,
+  codexRequestFailure,
+  codexSpentUntil,
+} from "./codex-limits";
 import {
   configReadSchema,
   parseCodexNotification,
@@ -422,7 +426,9 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       return result;
     };
     // Stop also needs to interrupt initialization, not wait for its RPC timeout.
-    const answer = await Promise.race([start(), result]);
+    const answer = await Promise.race([start(), result]).catch((error) => {
+      throw codexRequestFailure(error);
+    });
     succeeded = true;
     return answer;
   } finally {
