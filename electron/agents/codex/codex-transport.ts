@@ -40,7 +40,7 @@ async function* boundedOutput(source: AsyncIterable<Buffer>) {
 /** App-owned boundary. The JSON-RPC framing, ordering and request lifecycle live in pristine T3 source. */
 export async function withCodexTransport<T>(
   child: ChildProcessWithoutNullStreams,
-  onNotification: (method: string, params: any) => void,
+  onNotification: (method: string, params: unknown) => void,
   onError: (error: Error) => void,
   run: (transport: CodexTransport) => Promise<T>,
   onRequest?: (method: string, params: any) => Promise<unknown>,

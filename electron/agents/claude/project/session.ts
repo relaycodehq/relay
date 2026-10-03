@@ -5,7 +5,13 @@ import type {
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { FoundSession, HostedQuery } from "../../../agent-host/client";
-import { HostedSessions, inAgentHost } from "../../hosted-sessions";
+import { z } from "zod";
+import { HostedSessions, inAgentHost, savedMeta } from "../../hosted-sessions";
+import {
+  interactionModeSchema,
+  runtimeModeSchema,
+} from "../../../../shared/agent-modes";
+import { reasoningEffortSchema } from "../../../../shared/settings";
 import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
@@ -16,21 +22,32 @@ import { readSettings, sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
 import { ClaudeFrames, holdOpen, pump, type ClaudeTurn } from "./stream";
 
 /** What a hosted session keeps with it, to be picked up again after a restart. */
-type HostedMeta = {
-  signature: string;
-  skipsPermissions: boolean;
-  options: Pick<
-    ClaudeRunOptions,
-    | "cwd"
-    | "model"
-    | "effort"
-    | "contextWindow"
-    | "runtimeMode"
-    | "interactionMode"
-    | "readOnly"
-    | "choice"
-  >;
-};
+export const hostedMetaSchema = z
+  .object({
+    signature: z.string(),
+    skipsPermissions: z.boolean(),
+    options: z
+      .object({
+        cwd: z.string(),
+        model: z.string(),
+        effort: z.string(),
+        contextWindow: z.literal("200k").optional().catch(undefined),
+        runtimeMode: runtimeModeSchema.optional(),
+        interactionMode: interactionModeSchema.optional(),
+        readOnly: z.boolean().optional(),
+        choice: z
+          .object({
+            model: z.string(),
+            fast: z.boolean(),
+            // A level only another version knows is the agent's own.
+            reasoningEffort: reasoningEffortSchema.catch(""),
+          })
+          .loose(),
+      })
+      .loose(),
+  })
+  .loose();
+type HostedMeta = z.infer<typeof hostedMetaSchema>;
 /** A thread's Claude Code session, kept between its turns. */
 export type ClaudeSession = {
   options: ClaudeRunOptions;
@@ -254,8 +271,8 @@ export function reattachClaudeSessions(
   unprompted: (key: string) => () => Promise<void>,
 ) {
   return sessions.reattach(owns, (found) => {
-    const meta = found.info.meta as HostedMeta | undefined;
-    return meta?.options
+    const meta = savedMeta(found, hostedMetaSchema);
+    return meta
       ? restoreSession(found, meta, unprompted(found.info.key))
       : undefined;
   });

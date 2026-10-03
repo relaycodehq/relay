@@ -4,20 +4,28 @@ import { executableCommand, spawnExecutable } from "../../platform/executables";
 import { withCodexTransport, type CodexTransport } from "./codex-transport";
 import { HostedChild } from "../../agent-host/child";
 import type { Entry } from "../../agent-host/protocol";
-import { HostedSessions } from "../hosted-sessions";
+import { z } from "zod";
+import { HostedSessions, savedMeta } from "../hosted-sessions";
+import { threadStartedSchema, type CodexThreadStarted } from "./codex-schemas";
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
-type CodexMeta = { provider: "codex"; started?: any };
+export const codexMetaSchema = z
+  .object({
+    provider: z.literal("codex"),
+    started: threadStartedSchema.optional(),
+  })
+  .loose();
+type CodexMeta = z.infer<typeof codexMetaSchema>;
 
 /** A native session owns its approvals. Keep its process alive between project turns. */
 class CodexConnection {
   child?: ChildProcessWithoutNullStreams | HostedChild;
   readonly ready: Promise<CodexTransport>;
   readonly done: Promise<void>;
-  started?: any;
+  started?: CodexThreadStarted;
   busy = false;
   closed = false;
-  onNotification?: (method: string, params: any) => void;
+  onNotification?: (method: string, params: unknown) => void;
   onRequest?: (method: string, params: any) => Promise<unknown>;
   onError?: (error: Error) => void;
   private release!: () => void;
@@ -73,7 +81,7 @@ class CodexConnection {
       .catch(fail);
   }
   /** The thread it started, kept with a hosted server for the next Relay. */
-  keep(started: any) {
+  keep(started: CodexThreadStarted) {
     this.started = started;
     if (this.child instanceof HostedChild)
       this.child.hosted.keep({
@@ -151,8 +159,8 @@ export function closeCodexConnection(key: string) {
 export function reattachCodexSessions(owns: (key: string) => boolean) {
   return sessions.reattach(owns, (found) => {
     const { info } = found;
-    const meta = info.meta as CodexMeta;
-    if (!meta.started) return;
+    const meta = savedMeta(found, codexMetaSchema);
+    if (!meta?.started) return;
     const child = new HostedChild(found.attachProcess(), (entries) =>
       codexReplay(entries, info.split),
     );

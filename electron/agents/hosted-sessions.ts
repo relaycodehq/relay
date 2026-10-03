@@ -4,6 +4,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { HostedChild } from "../agent-host/child";
 import type { AgentHosts, FoundSession } from "../agent-host/client";
 import type { ProcessSpec } from "../agent-host/protocol";
+import { z } from "zod";
 
 let hosts: AgentHosts | undefined;
 /** Every agent's sessions run in the agent host from now on, so they outlive a restart of Relay. */
@@ -43,8 +44,26 @@ export async function foundSessions(
   return (await hosts.discover()).filter(
     ({ info }) =>
       (info.kind ?? "claude") === kind &&
-      ((info.meta as { provider?: string } | undefined)?.provider ??
-        "claude") === provider,
+      (providerOf.safeParse(info.meta).data?.provider ?? "claude") === provider,
+  );
+}
+const providerOf = z.object({ provider: z.string().optional() }).loose();
+
+/**
+ * What an agent saved with a session, read as this Relay knows it. The host
+ * outlives Relay's updates, so a newer or older Relay may have written
+ * something else; then it is undefined, and the session, which nothing here
+ * can pick up, ends like one whose process died.
+ */
+export function savedMeta<Meta>(
+  found: FoundSession,
+  schema: z.ZodType<Meta>,
+): Meta | undefined {
+  const parsed = schema.safeParse(found.info.meta);
+  if (parsed.success) return parsed.data;
+  const [issue] = parsed.error.issues;
+  console.warn(
+    `Ending a saved session of ${found.info.key} that this Relay can't read (${issue?.path.join(".") || "meta"}: ${issue?.message}).`,
   );
 }
 

@@ -16,6 +16,15 @@ import {
   type SessionInfo,
 } from "../agent-host/protocol";
 import { hostAgents, HostedSessions } from "./hosted-sessions";
+import {
+  codexMetaSchema,
+  reattachCodexSessions,
+} from "./codex/codex-connection";
+import { cursorMetaSchema, reattachCursorSessions } from "./cursor/connection";
+import {
+  hostedMetaSchema,
+  reattachClaudeSessions,
+} from "./claude/project/session";
 import { AsyncQueue } from "../util/async-queue";
 
 afterEach(() => {
@@ -300,5 +309,104 @@ describe("a host that stops answering", () => {
       vi.useRealTimers();
       hosts.detach();
     }
+  });
+});
+
+describe("saved sessions from another version of Relay", () => {
+  const found = (info: Partial<SessionInfo>) => {
+    const session = {
+      info: {
+        id: "one",
+        key: "thread",
+        split: 0,
+        open: false,
+        meta: undefined,
+        ...info,
+      },
+      close: vi.fn(),
+    };
+    return session as unknown as FoundSession & { close: typeof session.close };
+  };
+  const reattachWith = (...sessions: FoundSession[]) =>
+    hostAgents({ discover: async () => sessions } as unknown as AgentHosts);
+
+  it("ends a session whose saved info isn't what its agent reads, instead of taking it back", async () => {
+    const codex = found({
+      kind: "process",
+      meta: { provider: "codex", started: { thread: {} } },
+    });
+    const cursor = found({
+      kind: "process",
+      meta: { provider: "cursor", run: "oops" },
+    });
+    const claude = found({
+      meta: { signature: "s", skipsPermissions: false, options: { cwd: 5 } },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    reattachWith(codex, cursor, claude);
+    expect(await reattachCodexSessions(() => true)).toEqual([]);
+    expect(await reattachCursorSessions(() => true)).toEqual([]);
+    expect(await reattachClaudeSessions(() => true, vi.fn())).toEqual([]);
+    for (const session of [codex, cursor, claude])
+      expect(session.close).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("can't read"));
+  });
+
+  it("reads what the current Relay saves, and fields a newer one adds", () => {
+    const started = {
+      thread: { id: "t1", extra: true },
+      model: "gpt-6-astra",
+      reasoningEffort: null,
+      newer: 1,
+    };
+    expect(
+      codexMetaSchema.parse({ provider: "codex", started, newer: 1 }),
+    ).toMatchObject({ started: { thread: { id: "t1" } } });
+    expect(
+      codexMetaSchema.parse({ provider: "codex" }).started,
+    ).toBeUndefined();
+    expect(
+      cursorMetaSchema.parse({
+        provider: "cursor",
+        agentId: "a",
+        run: { run: "r", id: 3 },
+        newer: 1,
+      }).run,
+    ).toEqual({ run: "r", id: 3 });
+    expect(
+      hostedMetaSchema.parse({
+        signature: "[]",
+        skipsPermissions: true,
+        options: {
+          cwd: "/repo",
+          model: "claude-opus",
+          effort: "high",
+          choice: {
+            model: "claude-opus",
+            fast: false,
+            reasoningEffort: "high",
+          },
+          newer: 1,
+        },
+        newer: 1,
+      }).options.cwd,
+    ).toBe("/repo");
+    // The default model is an empty one; an effort or window only a newer Relay knows falls back.
+    expect(
+      hostedMetaSchema.parse({
+        signature: "[]",
+        skipsPermissions: false,
+        options: {
+          cwd: "/repo",
+          model: "",
+          effort: "",
+          contextWindow: "500k",
+          choice: { model: "", fast: false, reasoningEffort: "ludicrous" },
+        },
+      }).options,
+    ).toMatchObject({
+      contextWindow: undefined,
+      choice: { model: "", reasoningEffort: "" },
+    });
   });
 });

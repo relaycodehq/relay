@@ -7,7 +7,8 @@ import { HostedChild } from "../../agent-host/child";
 import type { Entry } from "../../agent-host/protocol";
 import { terminate } from "../../platform/terminate";
 import { withTimeout } from "../../util/timeout";
-import { HostedSessions } from "../hosted-sessions";
+import { z } from "zod";
+import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { cursorSetup } from "./sdk";
 import type { InstalledSdk } from "./sdk-install";
 import {
@@ -19,11 +20,14 @@ import {
 } from "./protocol";
 
 /** What a hosted worker keeps for the next Relay: its agent, and the turn it was in. */
-export interface CursorMeta {
-  provider: "cursor";
-  agentId?: string;
-  run?: { run: string; id: number };
-}
+export const cursorMetaSchema = z
+  .object({
+    provider: z.literal("cursor"),
+    agentId: z.string().optional(),
+    run: z.object({ run: z.string(), id: z.number() }).optional(),
+  })
+  .loose();
+export type CursorMeta = z.infer<typeof cursorMetaSchema>;
 
 /** An error the worker reported, keeping the SDK's name for it, e.g. `AuthenticationError`. */
 export class CursorError extends Error {
@@ -289,7 +293,9 @@ export function disposeCursor() {
 export function reattachCursorSessions(owns: (key: string) => boolean) {
   return sessions.reattach(owns, (found) => {
     const { info } = found;
-    const inflight = (info.meta as CursorMeta).run;
+    const meta = savedMeta(found, cursorMetaSchema);
+    if (!meta) return;
+    const inflight = meta.run;
     const child = new HostedChild(found.attachProcess(), (entries) => {
       connection.continueAfter(
         Math.max(inflight?.id ?? 0, highestRequestId(entries)),

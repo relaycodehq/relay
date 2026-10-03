@@ -122,7 +122,7 @@ describe("T3 protocol through the desktop adapter", () => {
       errors: Error[] = [];
     await withCodexTransport(
       w.child,
-      (_, p) => notifications.push(p.delta),
+      (_, p) => notifications.push((p as { delta: string }).delta),
       (e) => errors.push(e),
       async (transport) => {
         const a = transport.request("first", {}),
