@@ -430,8 +430,12 @@ export async function performGitAction(
           action.paths,
           () => true,
         );
-        // New and deleted files must be in the index before `commit --only` sees them.
-        await git(root, ["add", "--", ...paths]);
+        // Only files Git doesn't know yet need adding; `commit --only` takes
+        // tracked ones as they are, deleted or renamed away included.
+        const untracked = paths.filter(
+          (p) => state.changes.find((c) => c.path === p)?.index === "?",
+        );
+        if (untracked.length) await git(root, ["add", "--", ...untracked]);
         await git(
           root,
           ["commit", "--only", "-m", action.message, "--", ...paths],

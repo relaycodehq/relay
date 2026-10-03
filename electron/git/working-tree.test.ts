@@ -92,6 +92,29 @@ it("commits only the chosen files and leaves the rest of the checkout alone", as
     }),
   ).rejects.toThrow("no longer changed");
 });
+it("commits chosen files that were deleted or renamed through the index", async () => {
+  await writeFile(join(root, "a.txt"), "a\n");
+  await writeFile(join(root, "c.txt"), "c\n");
+  git("add", ".");
+  git("commit", "-qm", "Add a and c");
+  git("rm", "-q", "a.txt");
+  git("mv", "c.txt", "d.txt");
+  await writeFile(join(root, "other.ts"), "not mine\n");
+  let tree = await workingTree(root);
+  expect(tree.changes.find((c) => c.path === "d.txt")?.previousPath).toBe(
+    "c.txt",
+  );
+  tree = await performGitAction(root, {
+    kind: "commit",
+    revision: tree.revision,
+    message: "Remove and rename",
+    paths: ["a.txt", "d.txt"],
+  });
+  expect(
+    git("show", "--name-status", "--format=", "-M", "HEAD").split("\n").sort(),
+  ).toEqual(["D\ta.txt", "R100\tc.txt\td.txt"]);
+  expect(tree.changes.map((c) => c.path)).toEqual(["other.ts"]);
+});
 it("handles literal odd filenames, renames, deletion and untracked files", async () => {
   const name = ":(glob)* weird\nfile.ts";
   await writeFile(join(root, name), "new\n");
