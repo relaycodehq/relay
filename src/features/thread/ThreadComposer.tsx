@@ -140,6 +140,7 @@ export function ThreadComposer({
   checkout,
   scopeButtons,
   onSend,
+  onEditQueued,
   onStartThread,
   onOpenAgent,
   onOpenTurnDiff,
@@ -157,6 +158,8 @@ export function ThreadComposer({
   checkout: ProjectCheckout;
   scopeButtons: ReactNode;
   onSend: (value: ComposedSend, dispatch?: () => void) => Promise<boolean>;
+  /** Takes the newest queued message back into the composer; false when none waits. */
+  onEditQueued: () => boolean;
   /** Opens a new project-folder thread on `text`, sent or as a draft. */
   onStartThread?: (text: string, send: boolean) => Promise<void>;
   /** Opens a subagent's run as a side thread. */
@@ -299,6 +302,7 @@ export function ThreadComposer({
       placeholder={placeholder}
       sent={sent}
       onSend={onSend}
+      onEditQueued={onEditQueued}
       onStop={() => {
         if (chat) void api.cancelProjectChat(chat.id).catch(setError);
       }}

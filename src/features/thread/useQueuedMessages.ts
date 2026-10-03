@@ -21,7 +21,7 @@ export type QueuedMessageActions = ReturnType<typeof useQueuedMessages>;
 
 /** What can be done with a queued or scheduled message: send it now, move it, or take it back into the composer. */
 export function useQueuedMessages({
-  handle: { chat, id, run, refetch, listChanged },
+  handle: { chat, id, busy, run, refetch, listChanged },
   messages,
   queue,
   attachments,
@@ -59,13 +59,15 @@ export function useQueuedMessages({
     );
     void queueAction("move", moving, moved.index);
   }
+  /** The conversation a queued message goes to: a side one by its first message, or the main one. */
+  function conversationOf(input: ProjectChatSend) {
+    const from = messages.find((m) => m.id === input.parentId);
+    return from ? rootOf(messages, from).id : (input.parentId ?? null);
+  }
   async function returnToComposer(input: ProjectChatSend) {
     if (!chat) return;
     await run(async () => {
-      const from = messages.find((m) => m.id === input.parentId);
-      const parent = from
-        ? rootOf(messages, from).id
-        : (input.parentId ?? null);
+      const parent = conversationOf(input);
       const key = threadDraftKey(id, parent);
       const old = readDraft(key);
       const back = returnedDraft(
@@ -97,8 +99,23 @@ export function useQueuedMessages({
       void listChanged();
     });
   }
+  /** Takes the conversation's newest queued message back, as its × does; false when none waits. */
+  function editLast(rootId: string | null) {
+    if (!chat || busy) return false;
+    let last: NonNullable<typeof queue>[number] | undefined;
+    for (const queued of queue ?? [])
+      if (
+        conversationOf(queued.input) === rootId &&
+        (!last || queued.created >= last.created)
+      )
+        last = queued;
+    if (!last) return false;
+    void returnToComposer(last.input);
+    return true;
+  }
   return {
     restored,
+    editLast,
     steer: (messageId: string) => queueAction("steer", messageId),
     move,
     returnToComposer,

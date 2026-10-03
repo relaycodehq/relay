@@ -184,6 +184,14 @@ const shortcutCommands = {
     keywords: "dictation voice speech microphone push to talk",
     defaults: (mac) => [combo(mac, mac ? "alt+Space" : "ctrl+Space")],
   },
+  "edit-queued": {
+    title: "Edit the last queued message",
+    group: "Composer",
+    description:
+      "Takes it back into the composer, as its × does. Works with the caret at the start of your message.",
+    keywords: "queue queued edit take back return",
+    defaults: one("alt+ArrowUp"),
+  },
   quote: {
     title: "Quote the selected text in your message",
     group: "Composer",

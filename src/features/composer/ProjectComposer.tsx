@@ -16,6 +16,7 @@ import { useComposerToolbar } from "./composer-toolbar";
 import { effortStep, quickStep } from "../quick-switch/effort-shortcut";
 import { quickItems } from "../quick-switch/quick-switch";
 import { sendAction, useSendKey } from "../../lib/send-key";
+import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
 import { sendTarget, useComposerSend } from "./useComposerSend";
@@ -94,6 +95,7 @@ export function ProjectComposer({
   onSend,
   onStop,
   onCommand,
+  onEditQueued,
 }: {
   ref?: Ref<ComposerHandle>;
   projectId: string;
@@ -124,6 +126,8 @@ export function ProjectComposer({
   onStop: () => void;
   /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
+  /** Takes the newest queued message back into the composer; false when none waits. */
+  onEditQueued?: () => boolean;
 }) {
   const {
     shared,
@@ -309,6 +313,14 @@ export function ProjectComposer({
             // A recalled message takes ↑/↓ even from a menu it opened.
             if (recall.keyDown(e, draft.text)) return;
             if (commands.onKeyDown(e)) return;
+            if (e.nativeEvent.isComposing) return;
+            if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
+              const at = promptInput.current?.caret();
+              if (at?.start === 0 && at.end === 0 && onEditQueued()) {
+                e.preventDefault();
+                return;
+              }
+            }
             const step = effortStep(e);
             if (step) {
               e.preventDefault();

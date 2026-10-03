@@ -344,6 +344,7 @@ export function ProjectChat({
             }}
             scopeButtons={scopeButtons}
             onSend={send}
+            onEditQueued={() => queue.editLast(root?.id ?? null)}
             onStartThread={onStartThread}
             onOpenAgent={setAgentView}
             onOpenTurnDiff={opens.onOpenTurnDiff}

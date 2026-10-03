@@ -10,6 +10,7 @@ import type {
 } from "../../../shared/projects";
 import type { QueueDrop } from "./chat-queue";
 import { sendKeyLabel, steerKeyLabel, useSendKey } from "../../lib/send-key";
+import { useShortcutLabel } from "../../lib/shortcuts";
 import { Spinner } from "../../ui/ui";
 import "./queued-messages.css";
 
@@ -60,6 +61,7 @@ export function QueuedMessages({
   onReturn: (input: ProjectChatSend) => void;
 }) {
   const sendKey = useSendKey();
+  const editKey = useShortcutLabel("edit-queued");
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<QueueDrop | null>(null);
   const clearDrag = () => {
@@ -183,6 +185,12 @@ export function QueuedMessages({
             <p className="chat-queue-hint">
               <kbd>{sendKeyLabel(sendKey)}</kbd> to queue ·{" "}
               <kbd>{steerKeyLabel(sendKey)}</kbd> to steer
+              {editKey && (
+                <>
+                  {" "}
+                  · <kbd>{editKey}</kbd> to edit the last
+                </>
+              )}
             </p>
           )}
         </section>
