@@ -10,6 +10,7 @@ import {
 import { ClaudeSignedOutError } from "../claude-sign-in";
 import { resetMs, UsageLimitError } from "../../usage-limit";
 import type { ClaudeRunOptions } from "./config";
+import { answerLimitError } from "../../turn-kit";
 import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
 import type { ClaudeSession } from "./session";
@@ -120,8 +121,8 @@ export class ClaudeTurnReader {
 
   private publish(text: string) {
     // The limit is on the whole answer shown and saved, follow-ups included.
-    if (this.before.length + text.length > 100000)
-      throw new Error("Answer size limit reached.");
+    const over = answerLimitError(this.before.length + text.length);
+    if (over) throw over;
     this.answer = text;
     this.options.onText(this.before + text);
   }

@@ -99,6 +99,18 @@ class FakeAgent {
         say({ type: "text-delta", text: `Got: ${run.steers[0]}` });
         return { status: "finished", result: `Got: ${run.steers[0]}` };
       }
+      if (/\[\[flood\]\]/.test(prompt)) {
+        say({ type: "text-delta", text: "x".repeat(60000) });
+        say({ type: "text-delta", text: "y".repeat(60000) });
+        // A cancel ends it early; without one it finishes on its own.
+        await Promise.race([
+          new Promise((resolve) => {
+            run.wake = resolve;
+          }),
+          pause(1500),
+        ]);
+        return { status: "finished", result: "done" };
+      }
       if (/\[\[linger\]\]/.test(prompt)) {
         say({ type: "text-delta", text: "part one " });
         await pause(Number(process.env.CURSOR_FAKE_LINGER ?? 800));

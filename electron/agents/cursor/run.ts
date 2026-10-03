@@ -17,6 +17,7 @@ import {
 } from "./connection";
 import type { CursorRun, CursorRunResult, CursorUpdate } from "./protocol";
 import { currentSdk, ensureSdk } from "./sdk";
+import { answerLimitError } from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
@@ -131,6 +132,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
   const steers: (string | undefined)[] = [];
   let agentId = options.session?.id;
 
+  let overflow!: (error: Error) => void;
+  let capped = false;
   const handle = (update: CursorUpdate) => {
     switch (update.type) {
       case "agent": {
@@ -141,9 +144,16 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         }
         return;
       }
-      case "text-delta":
+      case "text-delta": {
         turn.add(String(update.text ?? ""));
+        const over = answerLimitError(turn.size);
+        if (over && !capped) {
+          capped = true;
+          overflow(over);
+          abort();
+        }
         return;
+      }
       case "tool-call-started":
       case "tool-call-completed": {
         const done = update.type === "tool-call-completed";
@@ -180,6 +190,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       }
     }
   };
+  const overflowed = new Promise<never>((_, reject) => (overflow = reject));
+  void overflowed.catch(() => {});
   connection.listen(run, handle);
 
   let cancelTimer: NodeJS.Timeout | undefined;
@@ -288,7 +300,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     });
     let result: CursorRunResult;
     try {
-      result = await Promise.race([reply, cancelled]);
+      result = await Promise.race([reply, cancelled, overflowed]);
     } catch (error) {
       if (
         !params?.sandbox ||
@@ -301,7 +313,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       cannotSandbox = true;
       turn.reset();
       params = unsandboxed(params);
-      result = await Promise.race([send(params), cancelled]).catch(
+      result = await Promise.race([send(params), cancelled, overflowed]).catch(
         async (error) => {
           throw await explainCursorError(error, connection);
         },

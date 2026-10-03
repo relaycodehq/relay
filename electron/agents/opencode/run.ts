@@ -17,6 +17,7 @@ import {
 import { editedPaths, openCodeActivity, type ToolPart } from "./activity";
 import { openCodeModels, splitModel } from "./catalog";
 import { markOpenCodeTurn } from "./server";
+import { answerLimitError } from "../turn-kit";
 
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -107,8 +108,9 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
       .map((id) => parts.get(id)!.text)
       .filter((t) => t.trim())
       .join("\n\n");
-    if (next.length > 100000) {
-      finish(new Error("Answer size limit reached."));
+    const over = answerLimitError(next.length);
+    if (over) {
+      finish(over);
       return;
     }
     if (next !== answer) {

@@ -1,3 +1,5 @@
+import { answerLimitError } from "../turn-kit";
+
 /** T3 Code's turn timeline separates commentary, work and the terminal answer.
  * Codex message phases are optional, so an unphased last message is provisional
  * until the next message or turn completion establishes the terminal message. */
@@ -39,12 +41,11 @@ export class CodexAnswerStream {
       if (method === "item/completed" && entry.phase === "commentary")
         finished = id;
     }
-    if (
-      this.messages.size > 100 ||
-      [...this.messages.values()].reduce((n, m) => n + m.text.length, 0) >
-        100000
-    )
-      throw new Error("Answer size limit reached.");
+    const over = answerLimitError(
+      [...this.messages.values()].reduce((n, m) => n + m.text.length, 0),
+    );
+    if (over) throw over;
+    if (this.messages.size > 100) throw new Error("Answer size limit reached.");
     this.publish();
     // A finished note never changes or becomes the answer. Forget it once
     // shown: a long turn writes hundreds, and they don't count to the limit.

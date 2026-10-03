@@ -2,6 +2,7 @@ import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import type { HostedHandlers } from "../../../agent-host/client";
 import type { AgentQuestion } from "../../../../shared/agent-modes";
 import type { ClaudeRunOptions } from "./config";
+import { ANSWER_LIMIT } from "../../turn-kit";
 
 /** The session a request comes from, as answering it needs. */
 type Asker = {
@@ -89,7 +90,7 @@ export function sessionCallbacks(holder: Asker) {
     }
     if (tool === "ExitPlanMode") {
       if (typeof input.plan === "string") {
-        holder.plan = input.plan.slice(0, 100000);
+        holder.plan = input.plan.slice(0, ANSWER_LIMIT);
         options.onPlan?.(holder.plan);
         options.onText(holder.plan);
       }

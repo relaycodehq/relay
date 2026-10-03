@@ -154,6 +154,11 @@ export class TurnText {
       .join("\n\n");
   }
 
+  /** How long the answer shown is. */
+  get size() {
+    return this.shown.length;
+  }
+
   private shown = "";
   private publish() {
     const next = this.answer();

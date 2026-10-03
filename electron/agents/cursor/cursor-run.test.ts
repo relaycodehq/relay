@@ -227,6 +227,14 @@ describe("a Cursor turn", () => {
     expect(seen.steered).toEqual(["m1"]);
   });
 
+  it("stops an answer that grows past the size limit, like the other agents", async () => {
+    const { controller, options } = turn("[[flood]]");
+    await expect(runCursor(options)).rejects.toThrow(
+      "Answer size limit reached.",
+    );
+    expect(controller.signal.aborted).toBe(false);
+  });
+
   it("says what went wrong when Cursor fails", async () => {
     await expect(runCursor(turn("[[fail]]").options)).rejects.toThrow(
       "The model is down.",

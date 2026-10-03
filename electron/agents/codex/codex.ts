@@ -7,6 +7,7 @@ import { codexModelArgs } from "../../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "../activity";
 import { CodexAnswerStream } from "./answer-stream";
+import { ANSWER_LIMIT } from "../turn-kit";
 import type { ContextUsage } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
 import { codexFailure, codexSpentUntil } from "./codex-limits";
@@ -112,7 +113,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     }
     if (method === "item/plan/delta" && typeof p.delta === "string") {
       plan += p.delta;
-      if (plan.length > 100000) {
+      if (plan.length > ANSWER_LIMIT) {
         finish(new Error("Plan size limit reached."));
         return;
       }
@@ -123,7 +124,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       p.item?.type === "exitedReviewMode" &&
       typeof p.item.review === "string"
     ) {
-      review = p.item.review.slice(0, 100000);
+      review = p.item.review.slice(0, ANSWER_LIMIT);
       options.onText(review);
     }
     if (
@@ -131,7 +132,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       p.item?.type === "plan" &&
       typeof p.item.text === "string"
     ) {
-      plan = p.item.text.slice(0, 100000);
+      plan = p.item.text.slice(0, ANSWER_LIMIT);
       options.onPlan?.(plan);
     }
     const activity = codexActivity(method, p.item);

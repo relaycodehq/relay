@@ -1,6 +1,7 @@
 import { terminate } from "../../platform/terminate";
 import { runClaudeProject, type ClaudeRunOptions } from "./project";
 import { claudeImages } from "./project/sdk";
+import { ANSWER_LIMIT, answerLimitError } from "../turn-kit";
 import { findExecutable, spawnExecutable } from "../../platform/executables";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   if (options.runtimeMode && !options.helper) return runClaudeProject(options);
@@ -101,8 +102,9 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
             m.event.delta?.type === "text_delta"
           ) {
             answer += m.event.delta.text;
-            if (answer.length > 100000) {
-              finish(new Error("Answer size limit reached."));
+            const over = answerLimitError(answer.length);
+            if (over) {
+              finish(over);
               return;
             }
             options.onText(answer);
@@ -117,7 +119,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
               return;
             }
             if (typeof m.result === "string") {
-              answer = m.result.slice(0, 100000);
+              answer = m.result.slice(0, ANSWER_LIMIT);
               options.onText(answer);
             }
             finish(
