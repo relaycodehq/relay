@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Account, Progress, WorkspaceState } from "../../shared/types";
@@ -89,6 +89,7 @@ export class Store {
       if (parsed.version !== 1)
         throw new Error("Unsupported saved data version.");
       this.state = parsed;
+      this.savedAtLoad = (await stat(join(this.dir, "state.json"))).mtimeMs;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT")
         throw new Error(
@@ -99,6 +100,8 @@ export class Store {
   get() {
     return this.state;
   }
+  /** When state.json was last written before this launch; 0 for a first run. */
+  savedAtLoad = 0;
   /** The saved AI settings, filled in and checked, or the defaults. */
   aiSettings() {
     return aiSettingsSchema.parse(this.state.aiSettings ?? defaultAISettings);

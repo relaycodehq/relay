@@ -571,6 +571,10 @@ export class ProjectChats {
   reattach() {
     return this.turns.reattach();
   }
+  /** Puts right any thread summary a crash left behind its thread. */
+  async reconcileSummaries() {
+    await this.storage.reconcile(this.store.savedAtLoad);
+  }
   /** Threads with an answer running now. */
   working() {
     return this.active.size;

@@ -399,6 +399,7 @@ app
     // Agent sessions that kept running through a restart come back before the window does.
     await chats.reattach();
     chats.armWakeups();
+    void chats.reconcileSummaries().catch(() => {});
     rearmOnWake(powerMonitor, () => chats.armWakeups());
     updater.start();
     // Tests' stand-in agents only answer what a test expects of them.

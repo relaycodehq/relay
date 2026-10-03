@@ -4,6 +4,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -69,6 +70,9 @@ function same(a: ChatSummary, b: ChatSummary) {
   const plain = (summary: ChatSummary) => JSON.parse(JSON.stringify(summary));
   return isDeepStrictEqual(plain(a), plain(b));
 }
+
+/** Threads saved this long before the store was are read back too, in case other store writes queued ahead of theirs. */
+const RECONCILE_MARGIN_MS = 5000;
 
 /**
  * The threads' files in Relay's data folder (`<id>.json` and their
@@ -185,6 +189,33 @@ export class ChatStorage {
       if (index >= 0) s.chats![index] = chatSummary(chat);
     });
     this.summariesChanged(chat.projectId);
+  }
+
+  /**
+   * After a crash between a thread's file and its summary, the summary reads
+   * the older of the two. Reads only the threads saved since the store was,
+   * the other files being too many to parse at launch.
+   */
+  async reconcile(storeSavedAt: number) {
+    const listed = this.store.get().chats ?? [];
+    const recent = await Promise.all(
+      listed.map(async ({ id }) => {
+        const saved = await stat(join(this.dir, id + ".json")).catch(
+          () => undefined,
+        );
+        return saved && saved.mtimeMs > storeSavedAt - RECONCILE_MARGIN_MS
+          ? id
+          : undefined;
+      }),
+    );
+    for (const id of recent) {
+      if (!id) continue;
+      try {
+        await this.syncSummary(await this.load(id));
+      } catch {
+        // An unreadable thread surfaces when it is opened.
+      }
+    }
   }
 
   async addSummary(chat: ProjectChat) {

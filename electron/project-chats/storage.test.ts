@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../app/store";
@@ -82,4 +82,33 @@ it("leaves a thread that isn't listed to add", async () => {
   expect(store.get().chats ?? []).toEqual([]);
   await storage.addSummary(chat);
   expect(store.get().chats).toHaveLength(1);
+});
+
+it("puts right a summary a crash left behind its thread", async () => {
+  const chat = thread();
+  await storage.add(chat);
+  const stale = thread();
+  await storage.add(stale);
+  // Their files moved on, and the process died before the store heard.
+  chat.title = "Renamed before the crash";
+  chat.messages.push(answer("Done"));
+  stale.title = "Also renamed";
+  await storage.save(chat, { holdSummary: true });
+  await storage.save(stale, { holdSummary: true });
+  await store.flush();
+  expect(listed(chat).title).toBe("Thread");
+
+  await open();
+  const old = new Date(Date.now() - 3_600_000);
+  // Written long before the store was, so the store can't have missed it.
+  await utimes(join(root, "chats", stale.id + ".json"), old, old);
+  await storage.reconcile(store.savedAtLoad);
+
+  expect(listed(chat)).toMatchObject({
+    title: "Renamed before the crash",
+    provider: "codex",
+    empty: false,
+  });
+  expect(listed(stale).title).toBe("Thread");
+  expect(changed).toEqual(["p"]);
 });
