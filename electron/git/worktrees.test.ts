@@ -202,6 +202,10 @@ it("leaves a nested repository where it is and moves the rest", async () => {
   expect(await read(join(worktree.path, "a.ts"))).toContain("wip");
   expect(await read(join(inner, "x.ts"))).toBe("x\n");
   expect(await read(join(root, "a.ts"))).not.toContain("wip");
+  expect(existsSync(join(worktree.path, "inner"))).toBe(false);
+  expect(git(root, "ls-tree", "refs/relay/worktrees/c1/moved", "inner")).toBe(
+    "",
+  );
 });
 
 it("moves a clean checkout's thread into a fresh worktree", async () => {

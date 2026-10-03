@@ -1,4 +1,5 @@
-import { lstat, mkdir, rm, stat, symlink } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { git as gitIn } from "./git";
 import {
@@ -115,23 +116,64 @@ export async function uncommitted(root: string) {
       },
     )
   ).trim();
-  const tree = await snapshotTree(root);
-  const compare = ["--no-renames", "--no-color", "--no-ext-diff", head, tree];
-  const [diff, raw] = await Promise.all([
-    git(root, ["diff", "--numstat", "-z", "--no-textconv", ...compare]),
-    git(root, ["diff", "--raw", "-z", ...compare]),
+  const snapshot = await snapshotTree(root);
+  const raw = await git(root, [
+    "diff",
+    "--raw",
+    "-z",
+    "--no-renames",
+    "--no-ext-diff",
+    head,
+    snapshot,
   ]);
   // A nested repository or submodule is a commit id, not file contents, so
   // it stays in the checkout instead of moving.
-  const nested = new Set<string>();
+  const nested: { path: string; mode: string; sha: string }[] = [];
   const entries = raw.split("\0");
-  for (let i = 0; i + 1 < entries.length; i += 2)
-    if (/^:(160000|\d+ 160000) /.test(entries[i])) nested.add(entries[i + 1]);
-  return {
+  for (let i = 0; i + 1 < entries.length; i += 2) {
+    const [before, after, sha] = entries[i].slice(1).split(" ");
+    if (before === "160000" || after === "160000")
+      nested.push({ path: entries[i + 1], mode: before, sha });
+  }
+  const tree = nested.length
+    ? await withoutNested(root, snapshot, nested)
+    : snapshot;
+  const numstat = await git(root, [
+    "diff",
+    "--numstat",
+    "-z",
+    "--no-textconv",
+    "--no-renames",
+    "--no-color",
+    "--no-ext-diff",
     head,
     tree,
-    files: parseNumstat(diff).filter((f) => !nested.has(f.path)),
-  };
+  ]);
+  return { head, tree, files: parseNumstat(numstat) };
+}
+
+/** `tree` with each nested path put back as `head` had it, or gone if it had none. */
+async function withoutNested(
+  root: string,
+  tree: string,
+  nested: { path: string; mode: string; sha: string }[],
+) {
+  const scratch = await mkdtemp(join(tmpdir(), "relay-nested-"));
+  const env = { GIT_INDEX_FILE: join(scratch, "index") };
+  try {
+    await gitIn(root, ["read-tree", tree], { env });
+    for (const { path, mode, sha } of nested)
+      await gitIn(
+        root,
+        mode === "000000"
+          ? ["update-index", "--force-remove", "--", path]
+          : ["update-index", "--add", "--cacheinfo", `${mode},${sha},${path}`],
+        { env },
+      );
+    return (await gitIn(root, ["write-tree"], { env })).trim();
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
 }
 
 /**
