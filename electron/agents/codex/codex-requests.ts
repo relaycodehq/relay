@@ -1,27 +1,43 @@
+import type { z } from "zod";
 import type {
   AskAgentRequest,
   AgentDecision,
   AgentQuestion,
 } from "../../../shared/agent-modes";
+import {
+  approvalRequestSchemas,
+  parseCodexRequest,
+  userInputRequestSchema,
+} from "./codex-schemas";
+
+/** The fields the three approval requests share, plus each one's own, all optional but `permissions`'s. */
+type ApprovalParams = Partial<
+  z.infer<
+    (typeof approvalRequestSchemas)["item/commandExecution/requestApproval"]
+  > &
+    z.infer<(typeof approvalRequestSchemas)["item/fileChange/requestApproval"]>
+> & {
+  permissions?: Record<string, unknown>;
+};
+
 /** Translate native requests; never accept permissions invented by the renderer. */
 export async function codexRequest(
   method: string,
-  params: any,
+  raw: unknown,
   ask: AskAgentRequest,
 ) {
   if (method === "item/tool/requestUserInput") {
-    const questions: AgentQuestion[] = (params.questions ?? []).map(
-      (q: any) => ({
-        id: q.id,
-        header: q.header,
-        question: q.question,
-        isSecret: !!q.isSecret,
-        options: q.options?.map((o: any) => ({
-          label: o.label,
-          description: o.description,
-        })),
-      }),
-    );
+    const params = parseCodexRequest(method, userInputRequestSchema, raw);
+    const questions: AgentQuestion[] = params.questions.map((q) => ({
+      id: q.id,
+      header: q.header ?? undefined,
+      question: q.question,
+      isSecret: !!q.isSecret,
+      options: q.options?.map((o) => ({
+        label: o.label,
+        description: o.description ?? undefined,
+      })),
+    }));
     if (!questions.length || questions.length > 10)
       throw new Error("Invalid provider questions.");
     const response = await ask({
@@ -40,21 +56,20 @@ export async function codexRequest(
       ),
     };
   }
-  if (
-    [
-      "item/commandExecution/requestApproval",
-      "item/fileChange/requestApproval",
-      "item/permissions/requestApproval",
-    ].includes(method)
-  ) {
+  if (method in approvalRequestSchemas) {
+    const params = parseCodexRequest(
+      method,
+      approvalRequestSchemas[method as keyof typeof approvalRequestSchemas],
+      raw,
+    ) as ApprovalParams;
     const offered: AgentDecision[] = [
       "accept",
       "acceptForSession",
       "decline",
       "cancel",
     ];
-    const decisions = Array.isArray(params.availableDecisions)
-      ? offered.filter((d) => params.availableDecisions.includes(d))
+    const decisions = params.availableDecisions
+      ? offered.filter((d) => params.availableDecisions!.includes(d))
       : offered;
     const command = method === "item/commandExecution/requestApproval";
     const permissions = method === "item/permissions/requestApproval";

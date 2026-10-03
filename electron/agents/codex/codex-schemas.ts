@@ -121,3 +121,63 @@ const tokenUsageSchema = z
   .loose();
 export const readTokenUsage = (value: unknown) =>
   tokenUsageSchema.safeParse(value).data;
+
+const questionSchema = z
+  .object({
+    id: z.string(),
+    question: z.string(),
+    header: lenient(z.string()),
+    isSecret: lenient(z.boolean()),
+    options: lenient(
+      z
+        .array(
+          z
+            .object({ label: z.string(), description: lenient(z.string()) })
+            .loose(),
+        )
+        .max(50),
+    ),
+  })
+  .loose();
+
+/** `item/tool/requestUserInput`: Codex asking the user something mid-turn. */
+export const userInputRequestSchema = z
+  .object({ questions: z.array(questionSchema) })
+  .loose();
+
+const text = z.string().nullish();
+const approvalFields = {
+  reason: text,
+  cwd: text,
+  availableDecisions: lenient(z.array(z.string())),
+};
+
+/** The three `…/requestApproval` requests; `changes` is added from the item Relay saw start. */
+export const approvalRequestSchemas = {
+  "item/commandExecution/requestApproval": z
+    .object({ ...approvalFields, command: text })
+    .loose(),
+  "item/fileChange/requestApproval": z
+    .object({
+      ...approvalFields,
+      grantRoot: z.unknown().optional(),
+      changes: z.unknown().optional(),
+    })
+    .loose(),
+  "item/permissions/requestApproval": z
+    .object({ ...approvalFields, permissions: z.object({}).loose() })
+    .loose(),
+};
+
+/** What Codex asked of Relay with `method`, or an error naming what's wrong with it. */
+export function parseCodexRequest<T>(
+  method: string,
+  schema: z.ZodType<T>,
+  params: unknown,
+): T {
+  const parsed = schema.safeParse(params);
+  if (parsed.success) return parsed.data;
+  throw new Error(
+    `Codex sent an unexpected ${method} request (${named(parsed.error.issues[0]!)}).`,
+  );
+}
