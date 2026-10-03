@@ -1,12 +1,13 @@
 import { draftImageKeys, saveDraftImages } from "../images/draft-images";
 import {
   currentNewThread,
+  dropThreadDraft,
   hasText,
   newThreadId,
   newThreadProject,
-  writeDraft,
 } from "./drafts";
-import { DRAFT_PREFIX, keyOwner } from "../../lib/thread-storage";
+import { keyOwner, migrateDrafts } from "../../lib/thread-storage";
+import { RECORD_PREFIX } from "../../lib/thread-draft";
 
 interface KnownThreads {
   projects: Set<string>;
@@ -66,6 +67,8 @@ let swept = false;
 export async function sweepThreadStorage(source: ThreadSource) {
   if (swept) return;
   swept = true;
+  // Drafts kept the old way become records first, so the list below has them.
+  migrateDrafts();
   // Listed before the threads are asked for: a thread exists before anything
   // is kept for it, so every key listed here belongs to a thread the answer has.
   const keys = storageKeys();
@@ -79,7 +82,8 @@ export async function sweepThreadStorage(source: ThreadSource) {
     threads: new Set(lists.flat().map((c) => c.id)),
   };
   for (const key of staleKeys(keys, known))
-    if (key.startsWith(DRAFT_PREFIX)) writeDraft(key, "");
+    if (key.startsWith(RECORD_PREFIX))
+      dropThreadDraft(key.slice(RECORD_PREFIX.length));
     else localStorage.removeItem(key);
   for (const key of staleKeys(images, known)) await saveDraftImages(key, []);
 }

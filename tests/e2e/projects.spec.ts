@@ -523,8 +523,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .poll(() =>
         page.evaluate(() =>
           Object.entries(localStorage)
-            .filter(([key]) => key.startsWith("chat-draft:"))
-            .map(([, value]) => value),
+            .filter(([key]) => key.startsWith("relay-draft:"))
+            .map(([, value]) => JSON.parse(value).main?.text),
         ),
       )
       .toContain(
@@ -547,8 +547,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .poll(() =>
         page.evaluate(() =>
           Object.entries(localStorage)
-            .filter(([key]) => key.startsWith("chat-draft:"))
-            .map(([, value]) => value),
+            .filter(([key]) => key.startsWith("relay-draft:"))
+            .map(([, value]) => JSON.parse(value).main?.text),
         ),
       )
       .toContain(

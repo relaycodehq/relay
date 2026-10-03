@@ -3,10 +3,13 @@ import {
   activityDrafts,
   currentNewThread,
   freshNewThread,
+  loadDraftScope,
   newThreadId,
+  saveDraftScope,
   setCurrentNewThread,
   writeDraft,
 } from "./drafts";
+import { threadStorage } from "../../lib/thread-storage";
 import type { ChatSummary, Project } from "../../../shared/projects";
 
 const store = new Map<string, string>();
@@ -58,14 +61,16 @@ it("clears what abandoned empty slots left behind", () => {
   type(kept, "Second idea");
   for (const id of [empty, kept]) {
     store.set("composer-settings:" + id, "{}");
-    store.set("relay-draft-scope:" + id.slice(4), '{"kind":"review"}');
+    saveDraftScope(id, { kind: "review" });
+    threadStorage(id).reply.save("r1");
   }
   setCurrentNewThread("p1", kept);
   freshNewThread("p1");
   expect(store.has("composer-settings:" + empty)).toBe(false);
-  expect(store.has("relay-draft-scope:p1:a")).toBe(false);
+  expect(store.has("relay-draft:" + empty)).toBe(false);
   expect(store.has("composer-settings:" + kept)).toBe(true);
-  expect(store.has("relay-draft-scope:p1:b")).toBe(true);
+  expect(loadDraftScope(kept)).toEqual({ kind: "review" });
+  expect(loadDraftScope(empty)).toEqual({ kind: "project" });
 });
 
 it("ignores a saved new thread from another project", () => {

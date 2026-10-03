@@ -40,35 +40,25 @@ const sweep = async (
     },
   });
 };
-const seed = (keys: string[]) => {
-  for (const key of keys)
-    store.set(key, key.includes("draft:") ? "text" : "{}");
-};
-
-// Everything a thread with a side conversation `r1` keeps.
+// What a thread's composers keep: its draft record, with a side conversation
+// `r1`, and the settings of both.
+const draftRecord = (text = "Hi") =>
+  JSON.stringify({
+    v: 1,
+    ...(text ? { main: { text, skills: { $go: "Go" } } } : {}),
+    replies: { r1: { text: "Reply" } },
+    replyRoot: "r1",
+    scope: { kind: "project" },
+  });
 const threadKeys = (id: string) => [
-  `chat-draft:${id}`,
-  `chat-draft:${id}:r1`,
-  `chat-reply:${id}`,
-  `chat-selection:${id}`,
-  `chat-work-item:${id}`,
-  `chat-code-refs:${id}`,
+  `relay-draft:${id}`,
   `composer-settings:${id}`,
   `composer-settings:${id}:r1`,
-  `skill-chips:chat-draft:${id}`,
-  `quote-chips:chat-draft:${id}:r1`,
-  `file-chips:chat-draft:${id}`,
-  `pasted-texts:chat-draft:${id}`,
 ];
-const unsentKeys = (id: string) => [
-  `chat-draft:${id}`,
-  `chat-reply:${id}`,
-  `chat-selection:${id}`,
-  `composer-settings:${id}`,
-  `relay-draft-scope:${id.slice(4)}`,
-  `relay-draft-workspace:${id.slice(4)}`,
-  `skill-chips:chat-draft:${id}`,
-];
+const seed = (keys: string[], text?: string) => {
+  for (const key of keys)
+    store.set(key, key.startsWith("relay-draft:") ? draftRecord(text) : "{}");
+};
 const unrelated = [
   "theme",
   "relay-thread-panes",
@@ -84,7 +74,33 @@ it("drops every key of a thread that's gone and keeps the live ones'", async () 
   expect([...store.keys()].sort()).toEqual(
     [...threadKeys("live"), ...unrelated].sort(),
   );
+  expect(store.get("relay-draft:live")).toBe(draftRecord());
   expect([...images.keys()]).toEqual(["chat-draft:live:r1"]);
+});
+
+it("moves drafts kept key by key into records before it sweeps, dropping a gone thread's and keeping the live one's", async () => {
+  for (const id of ["gone", "live"]) {
+    store.set(`chat-draft:${id}`, "Hi");
+    store.set(`chat-draft:${id}:r1`, "Reply");
+    store.set(`chat-reply:${id}`, "r1");
+    store.set(`skill-chips:chat-draft:${id}`, '{"$go":"Go"}');
+    store.set(`pasted-texts:chat-draft:${id}`, "[]");
+    store.set(`composer-settings:${id}`, "{}");
+  }
+  seed([], "");
+  store.set("theme", "dark");
+  await sweep({ p1: ["live"] });
+  expect([...store.keys()].sort()).toEqual([
+    "composer-settings:live",
+    "relay-draft:live",
+    "theme",
+  ]);
+  expect(JSON.parse(store.get("relay-draft:live")!)).toEqual({
+    v: 1,
+    main: { text: "Hi", skills: { $go: "Go" } },
+    replies: { r1: { text: "Reply" } },
+    replyRoot: "r1",
+  });
 });
 
 it("drops a new-thread slot left empty, keeping the base, the open slot and slots with text", async () => {
@@ -92,8 +108,12 @@ it("drops a new-thread slot left empty, keeping the base, the open slot and slot
     abandoned = "new:p1:a",
     open = "new:p1:b",
     written = "new:p1:c";
-  seed([base, abandoned, open, written].flatMap(unsentKeys));
-  for (const id of [base, abandoned, open]) store.delete("chat-draft:" + id);
+  const unsent = (id: string) => [
+    `relay-draft:${id}`,
+    `composer-settings:${id}`,
+  ];
+  seed([base, abandoned, open].flatMap(unsent), "");
+  seed(unsent(written));
   store.set("relay-new-thread:p1", open);
   images.set("chat-draft:" + abandoned, [{}]);
   await sweep({ p1: [] });
@@ -101,13 +121,14 @@ it("drops a new-thread slot left empty, keeping the base, the open slot and slot
   expect(left.filter((k) => k.includes(":p1:a"))).toEqual([]);
   for (const id of [base, open, written])
     expect(left).toContain("composer-settings:" + id);
-  expect(left).toContain("chat-draft:" + written);
+  for (const id of [base, open, written])
+    expect(left).toContain("relay-draft:" + id);
   expect(images.size).toBe(0);
 });
 
 it("drops what a project that's gone kept, its unsent drafts included", async () => {
+  seed(["relay-draft:new:p2", "composer-settings:new:p2"]);
   seed([
-    ...unsentKeys("new:p2"),
     "relay-new-thread:p2",
     "relay-project-chat:p2",
     "relay-project-chat:p1",

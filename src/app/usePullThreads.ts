@@ -7,7 +7,7 @@ import {
   loadComposerSettings,
   saveComposerSettings,
 } from "../features/agents/composer-settings";
-import { readDraft, writeDraft } from "../features/composer/drafts";
+import { moveDraft, readDraft } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { threadDraftKey } from "../lib/thread-storage";
 import type { ShellNavigation } from "./useShellNavigation";
@@ -102,11 +102,8 @@ export function usePullThreads(
         ref,
       });
       saveComposerSettings(next.id, loadComposerSettings(from));
-      const draft = readDraft(threadDraftKey(from));
-      if (draft) {
-        writeDraft(threadDraftKey(next.id), draft);
-        writeDraft(threadDraftKey(from), "");
-      }
+      if (readDraft(threadDraftKey(from)))
+        moveDraft(threadDraftKey(from), threadDraftKey(next.id));
       await chats.refetch();
       nav.setChatId(next.id);
     } catch (e) {

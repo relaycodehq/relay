@@ -11,9 +11,7 @@ import { agentMentionPattern } from "../../../shared/agents";
 import {
   cleanPaste,
   isLongPaste,
-  pasteMarkdown,
   pastedTexts,
-  type PastedText,
 } from "../../../shared/pasted-texts";
 import { api } from "../../lib/api";
 import {
@@ -32,7 +30,6 @@ import {
 } from "../../../shared/image-refs";
 import { useImagePills } from "../images/image-pills";
 import type { Sketch, SketchHistory } from "../images/sketch";
-import { takeLegacyPastes } from "../../lib/thread-storage";
 
 export type ComposerDraft = ReturnType<typeof useComposerDraft>;
 
@@ -85,24 +82,6 @@ export function useComposerDraft(
   );
   // Paste pills live in the draft text; their cards mirror them in order.
   const pastes = useMemo(() => pastedTexts(text), [text]);
-  // Earlier versions kept pastes beside the draft; move any left into it.
-  useEffect(() => {
-    const kept = takeLegacyPastes(key);
-    if (kept === null) return;
-    try {
-      const value: unknown = JSON.parse(kept);
-      const blocks = (Array.isArray(value) ? value : [])
-        .filter(
-          (p): p is PastedText =>
-            Number.isInteger(p?.n) && typeof p.text === "string",
-        )
-        .map(pasteMarkdown)
-        .join("");
-      if (blocks) set(text.trimEnd() + blocks);
-    } catch {
-      // Nothing readable to keep.
-    }
-  }, [key]);
   useEffect(() => {
     let live = true;
     const loaded = loadDraftImages(key);

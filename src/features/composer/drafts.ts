@@ -6,12 +6,17 @@ import type {
   Project,
 } from "../../../shared/projects";
 import {
-  DRAFT_PREFIX,
   composerSettingsKey,
   currentNewThreadKey,
+  draftKeysWithText,
+  moveDraftBody,
+  readDraftText,
+  removeThreadDraft,
   threadDraftKey,
   threadStorage,
+  writeDraftText,
 } from "../../lib/thread-storage";
+import { DRAFT_PREFIX } from "../../lib/thread-draft";
 
 // Chat drafts live outside React state so a keystroke re-renders only the
 // composer that shows the draft, not the whole conversation around it.
@@ -20,19 +25,34 @@ const listeners = new Map<string, Set<() => void>>();
 const indexListeners = new Set<() => void>();
 let index: string[] | undefined;
 
-export function readDraft(key: string): string {
-  return localStorage.getItem(key) ?? "";
+export const readDraft = readDraftText;
+
+function changed(key: string, hadText: boolean, hasNow: boolean) {
+  listeners.get(key)?.forEach((notify) => notify());
+  if (hadText !== hasNow) {
+    index = undefined;
+    indexListeners.forEach((notify) => notify());
+  }
 }
 
 export function writeDraft(key: string, value: string) {
   const had = !!readDraft(key).trim();
-  if (value) localStorage.setItem(key, value);
-  else localStorage.removeItem(key);
-  listeners.get(key)?.forEach((notify) => notify());
-  if (had !== !!value.trim()) {
-    index = undefined;
-    indexListeners.forEach((notify) => notify());
-  }
+  writeDraftText(key, value);
+  changed(key, had, !!value.trim());
+}
+
+/** Moves a composer's text and pills to another's, as when a draft follows its thread. */
+export function moveDraft(from: string, to: string) {
+  const hadFrom = !!readDraft(from).trim(),
+    hadTo = !!readDraft(to).trim();
+  moveDraftBody(from, to);
+  changed(from, hadFrom, !!readDraft(from).trim());
+  changed(to, hadTo, !!readDraft(to).trim());
+}
+
+/** Forgets a thread's draft altogether: text, pills and what it attached. */
+export function dropThreadDraft(thread: string) {
+  for (const key of removeThreadDraft(thread)) changed(key, true, false);
 }
 
 export function useDraft(key: string): string {
@@ -53,17 +73,12 @@ export function useDraft(key: string): string {
 
 function draftKeys(): string[] {
   if (index) return index;
-  const keys: string[] = [];
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(DRAFT_PREFIX) && localStorage.getItem(key)?.trim())
-        keys.push(key);
-    }
+    return (index = draftKeysWithText().sort());
   } catch {
     // Storage is a convenience here.
+    return (index = []);
   }
-  return (index = keys.sort());
 }
 const subscribeIndex = (notify: () => void) => {
   indexListeners.add(notify);
@@ -129,7 +144,10 @@ export const clearDraftWorkspace = (id: string) =>
 export function forgetNewThread(id: string) {
   clearDraftScope(id);
   threadStorage(id).reply.save(null);
-  if (isSlot(id)) localStorage.removeItem(composerSettingsKey(id));
+  if (isSlot(id)) {
+    localStorage.removeItem(composerSettingsKey(id));
+    dropThreadDraft(id);
+  }
 }
 
 /**

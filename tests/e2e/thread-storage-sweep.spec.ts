@@ -44,19 +44,27 @@ test("drops what's kept for threads that are gone, after the thread lists load",
         kind: "project",
       });
       const keys = (id: string) => [
-        "chat-draft:" + id,
-        "chat-reply:" + id,
+        "relay-draft:" + id,
         "composer-settings:" + id,
-        "skill-chips:chat-draft:" + id,
       ];
-      // An unsent slot left empty, and a thread that's gone.
+      // An unsent slot left empty, and a thread that's gone, one of them
+      // with a draft kept key by key as before the record.
       const seeded = [
         ...keys(live.id),
         ...keys("gone"),
+        "chat-draft:gone",
+        "skill-chips:chat-draft:gone",
         `composer-settings:new:${project.id}:left`,
       ];
       for (const key of seeded)
-        localStorage.setItem(key, key.startsWith("chat-draft:") ? "Hi" : "{}");
+        localStorage.setItem(
+          key,
+          key.startsWith("relay-draft:")
+            ? '{"v":1,"main":{"text":"Hi"}}'
+            : key.startsWith("chat-draft:")
+              ? "Hi"
+              : "{}",
+        );
       // A screenshot pasted into the gone thread's draft.
       await new Promise<void>((resolve, reject) => {
         const open = indexedDB.open("relay-draft-images", 1);
