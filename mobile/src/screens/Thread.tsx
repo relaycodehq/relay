@@ -46,7 +46,6 @@ import { diffHref, workspaceId } from "../remote/links";
 import { Button } from "../ui/Button";
 import { CiStatusButton } from "../ui/CiStatus";
 import { Composer, type ComposerHandle, type Outgoing } from "../ui/Composer";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { KeyboardAware } from "../ui/KeyboardAware";
 import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
@@ -460,7 +459,6 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
               ),
         }}
       />
-      <ConnectionLine />
       {!thread && !outgoing.length ? (
         <View style={styles.center}>
           {error ? (
@@ -474,7 +472,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
                 onPress={() => void reload()}
               />
             </>
-          ) : remote.status === "offline" || remote.status === "denied" ? (
+          ) : remote.status !== "online" ? (
             <Text style={[styles.note, { color: t.muted }]}>
               This thread hasn’t been opened on this phone, so there’s no copy
               to read until {remote.name} is back.

@@ -5,7 +5,6 @@ import { Check, GitBranch } from "lucide-react-native";
 import type { BranchList, BranchRef } from "../../../shared/branches";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "../ui/Button";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { LoadFailed, Row } from "../ui/Rows";
 import { Sheet } from "../ui/Sheet";
 import { type, useTheme } from "../ui/theme";
@@ -72,7 +71,6 @@ export default function BranchesScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "Branches" }} />
-      <ConnectionLine />
       {!list ? (
         <View style={styles.center}>
           {error ? (

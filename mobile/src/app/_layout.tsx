@@ -4,6 +4,7 @@ import { Stack, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as SystemUI from "expo-system-ui";
 import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
+import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
 import {
@@ -18,6 +19,7 @@ import {
   useSidebarHidden,
 } from "../ui/panes";
 import { ComputerSheet } from "../ui/ComputerSwitch";
+import { ConnectionLine } from "../ui/ConnectionLine";
 import { NeedsYou } from "../ui/NeedsYou";
 import { Sidebar } from "../ui/Sidebar";
 import { ThemeProvider } from "../ui/ThemeProvider";
@@ -47,6 +49,7 @@ function Screens() {
   const [headerHeight, setHeaderHeight] = useState(0);
   const selected = useOpenItem(pathname);
   useOrientationPolicy();
+  useOfflineCopies();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);
@@ -89,8 +92,17 @@ function Screens() {
           )}
           <View style={styles.pane}>
             <Stack
-              screenLayout={({ children }) => (
-                <ReportHeaderHeight>{children}</ReportHeaderHeight>
+              screenLayout={({ children, route }) => (
+                <ReportHeaderHeight>
+                  <View style={styles.pane}>
+                    {/* Every screen says when the computer isn't there; the
+                        list says it itself, in the sidebar when that shows. */}
+                    {!sidebar &&
+                      !ownLine.has(route.name) &&
+                      !(route.name === "index" && !panes) && <ConnectionLine />}
+                    {children}
+                  </View>
+                </ReportHeaderHeight>
               )}
               screenOptions={({ navigation, route }) => ({
                 headerStyle: { backgroundColor: t.background },
@@ -142,6 +154,9 @@ function Screens() {
     </FullWidthContext.Provider>
   );
 }
+
+/** Screens that show the connection their own way. */
+const ownLine = new Set(["settings", "pair"]);
 
 /** Screens whose composer already keeps clear of the navigation bar. */
 const ownsBottom = new Set([

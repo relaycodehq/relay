@@ -6,8 +6,10 @@ import type { RemoteOverview, RemoteSettings } from "../../../shared/remote";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
 import type { Thread } from "./chat-state";
 
-/** Threads kept for reading offline, most recently opened first. */
+/** Threads kept for reading offline, most recently saved first. */
 const keep = 20;
+/** The most recent threads saved without being opened; fewer than `keep`, so opened ones stay. */
+export const copiedAhead = 8;
 const pause = 5_000;
 
 const root = () => new Directory(Paths.cache, "relay-offline");
@@ -81,6 +83,16 @@ export function saveNewThread(start: NewThread) {
 }
 
 export const loadThread = (id: string) => read<Thread>(threadFile(id));
+
+/** Whether the saved copy is missing or older than the thread's last change. */
+export function threadStale(id: string, updated: number) {
+  try {
+    const file = threadFile(id);
+    return !file.exists || (file.modificationTime ?? 0) < updated;
+  } catch {
+    return true;
+  }
+}
 
 export function saveThread(id: string, thread: Thread) {
   const file = threadFile(id);

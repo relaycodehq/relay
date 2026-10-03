@@ -12,7 +12,6 @@ import {
 import type { ProjectTask } from "../../../../shared/tasks";
 import type { WorkingTree } from "../../../../shared/working-tree";
 import { useRemote } from "../../remote/RemoteProvider";
-import { ConnectionLine } from "../../ui/ConnectionLine";
 import { Row, SectionTitle, rowStyles } from "../../ui/Rows";
 import { ThreadRow } from "../../ui/ThreadRow";
 import { useTheme } from "../../ui/theme";
@@ -47,7 +46,6 @@ export default function ProjectScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: project?.name ?? "Project" }} />
-      <ConnectionLine />
       <ScrollView
         contentContainerStyle={styles.list}
         refreshControl={

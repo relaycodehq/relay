@@ -4,7 +4,6 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import type { CommitLog } from "../../../shared/history";
 import { useRemote } from "../remote/RemoteProvider";
 import { Button } from "../ui/Button";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { LoadFailed, Row } from "../ui/Rows";
 import { ago } from "../ui/ThreadRow";
 import { mono, useTheme } from "../ui/theme";
@@ -33,7 +32,6 @@ export default function HistoryScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "History" }} />
-      <ConnectionLine />
       {!log ? (
         <View style={styles.center}>
           {error ? (

@@ -3,7 +3,6 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "re
 import { Stack, useLocalSearchParams } from "expo-router";
 import type { ProjectTask } from "../../../shared/tasks";
 import { useRemote } from "../remote/RemoteProvider";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { rowStyles } from "../ui/Rows";
 import { Action } from "../ui/ThreadExtras";
 import { ago } from "../ui/ThreadRow";
@@ -46,7 +45,6 @@ export default function TasksScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: "Tasks" }} />
-      <ConnectionLine />
       {!tasks ? (
         <View style={styles.center}>
           {error ? (

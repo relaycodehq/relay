@@ -24,7 +24,6 @@ import {
 import { useRemote } from "../remote/RemoteProvider";
 import { diffHref } from "../remote/links";
 import { Button } from "../ui/Button";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { KeyboardAware } from "../ui/KeyboardAware";
 import { LoadFailed, SectionTitle, rowStyles } from "../ui/Rows";
 import { mono, type, useTheme } from "../ui/theme";
@@ -257,7 +256,6 @@ export default function ChangesScreen() {
   return (
     <KeyboardAware>
       <Stack.Screen options={{ title: tree.branch || "Changes" }} />
-      <ConnectionLine />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

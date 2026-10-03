@@ -3,7 +3,6 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from "
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { FileText, Folder } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
-import { ConnectionLine } from "../ui/ConnectionLine";
 import { LoadFailed, Row, rowStyles } from "../ui/Rows";
 import { type, useTheme } from "../ui/theme";
 
@@ -54,7 +53,6 @@ export default function FilesScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: dir ? name(dir) : "Files" }} />
-      <ConnectionLine />
       <TextInput
         accessibilityLabel="Search files"
         placeholder={dir ? `Search in ${name(dir)}…` : "Search files…"}
