@@ -156,6 +156,16 @@ export async function git(
   }
 }
 /** The checked-out branch; empty when HEAD is detached. */
+/** Paths with unresolved conflicts, as they are on disk rather than C-quoted. */
+export async function conflictedFiles(root: string) {
+  const out = await git(root, [
+    "diff",
+    "--name-only",
+    "--diff-filter=U",
+    "-z",
+  ]).catch(() => "");
+  return out.split("\0").filter(Boolean);
+}
 export async function currentBranch(root: string) {
   return (await git(root, ["branch", "--show-current"])).trim();
 }

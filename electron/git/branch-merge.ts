@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { currentBranch, git } from "./git";
+import { conflictedFiles, currentBranch, git } from "./git";
 import { baseCandidates, branches } from "./branches";
 import {
   gitOperation,
@@ -169,14 +169,7 @@ export function mergeBranch(
             120000,
           );
         } catch (e) {
-          const conflicts = (
-            await git(dir, ["diff", "--name-only", "--diff-filter=U"]).catch(
-              () => "",
-            )
-          )
-            .trim()
-            .split("\n")
-            .filter(Boolean);
+          const conflicts = await conflictedFiles(dir);
           if (!conflicts.length) throw e;
           return { merged: false, conflicts };
         }
@@ -246,14 +239,7 @@ export function catchUpBranch(root: string, base: string) {
       await git(root, ["merge", "--no-edit", `refs/heads/${base}`], 120000);
       return { conflicts: [] as string[] };
     } catch (e) {
-      const conflicts = (
-        await git(root, ["diff", "--name-only", "--diff-filter=U"]).catch(
-          () => "",
-        )
-      )
-        .trim()
-        .split("\n")
-        .filter(Boolean);
+      const conflicts = await conflictedFiles(root);
       if (!conflicts.length) throw e;
       return { conflicts };
     }

@@ -89,6 +89,13 @@ it("changes nothing on a conflict, and says what clashed", async () => {
   expect(git("worktree", "list").split("\n")).toHaveLength(1);
 });
 
+it("names a conflicting file with non-ASCII letters as it is on disk", async () => {
+  await pushElsewhere("ü.ts", "theirs\n");
+  await commitIn(root, "ü.ts", "ours\n", "Mine");
+
+  expect(await rebase()).toMatchObject({ rebased: false, conflicts: ["ü.ts"] });
+});
+
 it("refuses rather than overwrite an edit to a file the upstream changed", async () => {
   await pushElsewhere("c.ts", "theirs\n");
   await commitIn(root, "a.ts", "a1\n", "Mine");

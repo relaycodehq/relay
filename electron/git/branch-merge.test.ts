@@ -106,6 +106,16 @@ it("reports conflicts and changes nothing", async () => {
   expect(git("worktree", "list").split("\n")).toHaveLength(1);
 });
 
+it("names conflicting files with non-ASCII letters as they are on disk", async () => {
+  await commit("ü.ts", "base\n", "Add ü");
+  git("switch", "-q", "main");
+  await commit("ü.ts", "main\n", "Main ü");
+  git("switch", "-q", "feature");
+  await commit("ü.ts", "feature\n", "Feature ü");
+  expect(await merge(false)).toEqual({ merged: false, conflicts: ["ü.ts"] });
+  expect(await catchUpBranch(root, "main")).toEqual({ conflicts: ["ü.ts"] });
+});
+
 it("has nothing to merge into from main itself", async () => {
   git("switch", "-q", "main");
   await expect(mergePlan(root)).rejects.toThrow("is the main branch");

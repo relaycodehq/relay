@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { git } from "./git";
+import { conflictedFiles, git } from "./git";
 import { fetchUpstream, serializeRepo, workingTree } from "./working-tree";
 import {
   checkoutChanged,
@@ -52,14 +52,7 @@ export async function replayOnto(
         120000,
       );
     } catch (e) {
-      const conflicts = (
-        await git(dir, ["diff", "--name-only", "--diff-filter=U"]).catch(
-          () => "",
-        )
-      )
-        .trim()
-        .split("\n")
-        .filter(Boolean);
+      const conflicts = await conflictedFiles(dir);
       if (!conflicts.length) throw e;
       return { conflicts };
     }
