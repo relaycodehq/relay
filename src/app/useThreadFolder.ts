@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { workspaceId } from "../../shared/workspaces";
-import { agentsSince } from "../../shared/waiting";
 import { api } from "../lib/api";
-import { worktreeThread } from "./thread-folder";
+import { agentWorkingIn, worktreeThread } from "./thread-folder";
 import { useProjectChecks } from "../features/checks/useProjectChecks";
 import type { ShellNavigation } from "./useShellNavigation";
 import { workingTreeKey } from "../lib/working-tree-key";
@@ -38,7 +37,7 @@ export function useThreadFolder({
       ? { id: where, head: tree.data.head }
       : undefined,
     // An agent rewriting files would trigger a recheck on every save.
-    !!chats.data?.some((c) => c.running || agentsSince(c.pending)),
+    agentWorkingIn(chats.data, inWorktree),
   );
   return {
     /** Workspace id: the checkout, or the thread's worktree. */

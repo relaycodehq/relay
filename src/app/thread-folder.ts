@@ -1,3 +1,4 @@
+import { agentsSince } from "../../shared/waiting";
 import type {
   ChatScope,
   ChatSummary,
@@ -10,6 +11,20 @@ const WORKTREE_PENDING =
 /** The thread while it works in a worktree on disk; otherwise its folder is the project's checkout. */
 export const worktreeThread = (chat: ChatSummary | undefined) =>
   !!chat?.worktree?.path && !chat.worktree.removedAt ? chat : undefined;
+
+/**
+ * Whether an agent is at work in the folder `inWorktree` (a worktree thread,
+ * or the checkout without one). Another thread's worktree doesn't touch it.
+ */
+export const agentWorkingIn = (
+  chats: ChatSummary[] | undefined,
+  inWorktree: ChatSummary | undefined,
+) =>
+  !!chats?.some(
+    (c) =>
+      (c.running || agentsSince(c.pending) !== undefined) &&
+      worktreeThread(c)?.id === inWorktree?.id,
+  );
 
 /**
  * Why the thread's terminal can't open, if it can't. It works where the

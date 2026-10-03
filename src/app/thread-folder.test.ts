@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ChatSummary, ChatWorktree } from "../../shared/projects";
-import { terminalBlocked, worktreeThread } from "./thread-folder";
+import {
+  agentWorkingIn,
+  terminalBlocked,
+  worktreeThread,
+} from "./thread-folder";
 
 const thread = (worktree?: ChatWorktree): ChatSummary => ({
   id: "c1",
@@ -50,5 +54,45 @@ describe("terminalBlocked", () => {
     } as const;
     expect(terminalBlocked(undefined, pr, "worktree")).toBeUndefined();
     expect(terminalBlocked(undefined, project, "checkout")).toBeUndefined();
+  });
+});
+
+describe("agentWorkingIn", () => {
+  const running = (c: ChatSummary): ChatSummary => ({ ...c, running: true });
+  const task = (c: ChatSummary): ChatSummary => ({
+    ...c,
+    pending: [
+      { kind: "task", id: "t1", description: "Look", agent: true, since: 5 },
+    ],
+  });
+  const own = { ...thread(made), id: "wt" };
+  const other = {
+    ...thread({ path: "/tmp/other", branch: "relay/other" }),
+    id: "other",
+  };
+
+  it("counts the checkout's threads for the checkout, not a worktree's", () => {
+    const chats = [running(thread()), own];
+    expect(agentWorkingIn(chats, undefined)).toBe(true);
+    expect(agentWorkingIn(chats, own)).toBe(false);
+  });
+
+  it("counts a worktree thread only for its own worktree", () => {
+    const chats = [thread(), running(own)];
+    expect(agentWorkingIn(chats, own)).toBe(true);
+    expect(agentWorkingIn(chats, other)).toBe(false);
+    expect(agentWorkingIn(chats, undefined)).toBe(false);
+  });
+
+  it("counts background agents, and a removed worktree's thread as the checkout's", () => {
+    expect(agentWorkingIn([task(own)], own)).toBe(true);
+    const gone = running({ ...own, worktree: { ...made, removedAt: 1 } });
+    expect(agentWorkingIn([gone], undefined)).toBe(true);
+    expect(agentWorkingIn([gone], own)).toBe(false);
+  });
+
+  it("is quiet while nothing runs", () => {
+    expect(agentWorkingIn([thread(), own], undefined)).toBe(false);
+    expect(agentWorkingIn(undefined, undefined)).toBe(false);
   });
 });
