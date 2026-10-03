@@ -70,9 +70,11 @@ export class ChatTurns {
     return [...this.starts];
   }
   /**
-   * Ends a run. The finished answer moved `updated`, so the sidebar summary
-   * catches up, but only once the thread no longer counts as active; then a
-   * deep review or Ultraplan takes its next step and queued messages go out.
+   * Ends a run. The thread goes idle first: the finished answer moved
+   * `updated`, and the sidebar summary only catches up once the thread no
+   * longer counts as active. Queued messages go out last, after a deep review
+   * or Ultraplan has taken its next step, since that step decides whether the
+   * council still holds them back.
    */
   private endRun(
     chat: ProjectChat,
@@ -80,7 +82,23 @@ export class ChatTurns {
     turn?: { request?: string; answer?: string },
   ) {
     this.core.active.release(chat.id, active);
-    // A steer the agent never confirmed reading still went to it; stop waiting.
+    this.settleUnread(chat);
+    void this.core.storage
+      .syncSummary(chat)
+      .catch((e) => console.warn("Could not update the thread's summary:", e));
+    const stepped = turn && this.councils.step(chat.id, turn);
+    // Taken now, so the queue keeps its place ahead of anything sent after
+    // the run ended. A step never takes this thread's control, so waiting
+    // for it here can't deadlock.
+    void this.core
+      .control(chat.id, async () => {
+        await stepped;
+        await this.queue.drain(chat.id);
+      })
+      .catch((e) => console.warn("Could not send the queued messages:", e));
+  }
+  /** A steer the agent never confirmed reading still went to it; stop waiting. */
+  private settleUnread(chat: ProjectChat) {
     const unread = chat.messages.filter((m) => m.unread);
     for (const m of unread) {
       delete m.unread;
@@ -91,13 +109,6 @@ export class ChatTurns {
       void this.core.storage
         .save(chat)
         .catch((e) => console.warn("Could not save the thread:", e));
-    if (turn) this.councils.step(chat.id, turn);
-    void this.core.storage
-      .syncSummary(chat)
-      .catch((e) => console.warn("Could not update the thread's summary:", e));
-    void this.core
-      .control(chat.id, () => this.queue.drain(chat.id))
-      .catch((e) => console.warn("Could not send the queued messages:", e));
   }
   resume(id: string, settings?: ResumeSettings) {
     return this.core.control(id, () => this.resumeHeld(id, settings));

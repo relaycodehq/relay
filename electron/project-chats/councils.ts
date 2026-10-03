@@ -82,7 +82,7 @@ export class Councils {
     this.ultraplans.begin(chat, input, lead, brief);
   }
 
-  /** A turn in the thread ended; a review or council at work takes its next step. */
+  /** A turn in the thread ended; a review or council at work takes its next step, settling once it has. */
   step(id: string, turn: { request?: string; answer?: string }) {
     const step = Promise.all([
       this.reviews
@@ -94,6 +94,7 @@ export class Councils {
     ]).then(() => {});
     this.steps.add(step);
     void step.finally(() => this.steps.delete(step));
+    return step;
   }
 
   /** Steps still running, for closing. */
