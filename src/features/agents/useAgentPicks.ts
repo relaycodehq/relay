@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import type { AgentModel, AgentProvider } from "../../../shared/agents";
-import { pickAgents } from "./composer-settings";
+import { pickAgents } from "./composer-models";
 import { api } from "../../lib/api";
 
 interface AgentPickCatalog {

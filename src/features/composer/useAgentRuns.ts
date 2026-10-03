@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import type { AgentProvider } from "../../../shared/agents";
+import { agents, type AgentProvider } from "../../../shared/agents";
+import type { NewThreadModel } from "../../../shared/new-thread-models";
 import type { SendSettings } from "../../../shared/compose-send";
 import type { ResumeSettings } from "../../../shared/projects";
 import type { Recipient } from "../../../shared/recipient";
@@ -13,13 +14,17 @@ import {
   type ReasoningEffort,
 } from "../../../shared/settings";
 import {
+  agentChoice,
+  claudeOf,
   claudeOn,
   isPickAgent,
   livePick,
   messageChoice,
   messageContext,
+  modelOf,
   pickAgents,
-} from "../agents/composer-settings";
+  withModel,
+} from "../agents/composer-models";
 import { stepEffort } from "../quick-switch/effort-shortcut";
 import type { ComposerRun, QuickPreset } from "../quick-switch/quick-switch";
 import type { ComposerState } from "./useComposerSettings";
@@ -27,6 +32,8 @@ import type { ModelCatalogs } from "./useModelCatalogs";
 import { useStableCallback } from "../../lib/useStableCallback";
 
 export type AgentRuns = ReturnType<typeof useAgentRuns>;
+
+const blankPick = { model: "", reasoningEffort: "" as const };
 
 /**
  * What each agent runs from this composer: its model and effort as picked
@@ -38,8 +45,9 @@ export function useAgentRuns(
   /** An agent was picked here, so an @mention in the draft would only override it. */
   onPick: () => void,
 ) {
-  const { claude, picks, setProvider, setChoice, setClaude, setPicks } = state;
+  const { models, setProvider, setModels } = state;
   const { claude: claudeModels, codex: codexModels, defaults } = catalogs;
+  const claude = claudeOf(models);
   const claudeListed = findClaudeModel(claudeModels, claude.model);
   const claudeEfforts = claudeEffortsFor(claudeModels, claude.model);
   // An effort Codex no longer lists for the model runs as its default.
@@ -48,15 +56,17 @@ export function useAgentRuns(
     [state.codexChoice, codexModels],
   );
   const pickOf = (to: AgentProvider) =>
-    livePick(picks[to], catalogs.picks[to]?.models);
+    livePick(models[to], catalogs.picks[to]?.models);
   const choiceFor = (to: string): ModelChoice | undefined =>
-    messageChoice(
-      to,
-      codex,
-      claude,
-      isPickAgent(to) ? pickOf(to) : { model: "", reasoningEffort: "" },
-    );
-  const contextFor = (to: string) => messageContext(to, claude);
+    messageChoice(to, models, codex, isPickAgent(to) ? pickOf(to) : blankPick);
+  const contextFor = (to: string) => messageContext(to, models);
+  const set = (provider: AgentProvider, next: NewThreadModel) =>
+    setModels((all) => withModel(all, provider, next));
+  const change = (
+    provider: AgentProvider,
+    next: (current: NewThreadModel) => NewThreadModel,
+  ) =>
+    setModels((all) => withModel(all, provider, next(modelOf(all, provider))));
   const picker = useMemo(
     () => ({
       codex: { models: codexModels, model: codex?.model ?? "" },
@@ -66,7 +76,7 @@ export function useAgentRuns(
           p,
           {
             models: catalogs.picks[p]?.models,
-            model: picks[p]?.model ?? "",
+            model: models[p]?.choice.model ?? "",
           },
         ]),
       ),
@@ -78,7 +88,7 @@ export function useAgentRuns(
       claudeListed?.id,
       claude.model,
       catalogs.picks,
-      picks,
+      models,
     ],
   );
   const select = useStableCallback(function select(
@@ -90,28 +100,32 @@ export function useAgentRuns(
       const efforts =
         catalogs.picks[next]?.models?.find((m) => m.id === model)?.efforts ??
         [];
-      setPicks((all) => ({
-        ...all,
-        [next]: {
+      change(next, ({ choice }) => ({
+        choice: {
+          ...choice,
           model,
-          reasoningEffort: efforts.includes(all[next]?.reasoningEffort ?? "")
-            ? all[next]!.reasoningEffort
+          reasoningEffort: efforts.includes(choice.reasoningEffort)
+            ? choice.reasoningEffort
             : "",
         },
       }));
     }
     if (next === "claude") {
       const efforts = claudeEffortsFor(claudeModels, model);
-      setClaude((c) =>
+      change("claude", (c) =>
         claudeOn(
           c,
           model,
-          efforts.includes(c.reasoningEffort) ? c.reasoningEffort : "",
+          efforts.includes(c.choice.reasoningEffort)
+            ? c.choice.reasoningEffort
+            : "",
         ),
       );
     }
     if (next === "codex" && codex)
-      setChoice(supportedChoice({ ...codex, model }, codexModels));
+      set("codex", {
+        choice: supportedChoice({ ...codex, model }, codexModels),
+      });
     onPick();
   });
   const levels = {
@@ -123,19 +137,17 @@ export function useAgentRuns(
   };
   const setCodexEffort = useStableCallback(
     (reasoningEffort: ReasoningEffort) =>
-      codex && setChoice({ ...codex, reasoningEffort }),
+      codex && set("codex", { choice: { ...codex, reasoningEffort } }),
   );
-  const setPickEffort = (to: AgentProvider, reasoningEffort: ReasoningEffort) =>
-    setPicks((all) => ({
-      ...all,
-      [to]: { model: all[to]?.model ?? "", reasoningEffort },
-    }));
   // Stable for the memoized effort menus.
   const setEffort = useStableCallback(
     (to: Recipient, reasoningEffort: ReasoningEffort) => {
-      if (to === "claude") setClaude((c) => ({ ...c, reasoningEffort }));
-      else if (isPickAgent(to)) setPickEffort(to, reasoningEffort);
-      else setCodexEffort(reasoningEffort);
+      if (to === "codex") setCodexEffort(reasoningEffort);
+      else if (to !== "message")
+        change(to, ({ choice, ...rest }) => ({
+          choice: { ...choice, reasoningEffort },
+          ...rest,
+        }));
     },
   );
   const claudeRuns = claude.model
@@ -183,14 +195,18 @@ export function useAgentRuns(
         : undefined;
     },
     /** What `to` runs now, in a quick-switch preset's terms. */
-    now: (to: Recipient): ComposerRun | undefined =>
-      to === "message"
-        ? undefined
-        : to === "codex"
-          ? codex && { provider: "codex", ...codex }
-          : to === "claude"
-            ? { provider: "claude", ...claude, fast: false }
-            : { provider: to, ...pickOf(to), fast: false },
+    now(to: Recipient): ComposerRun | undefined {
+      if (to === "message" || (to === "codex" && !codex)) return;
+      return {
+        provider: to,
+        ...agentChoice(
+          to,
+          models,
+          isPickAgent(to) ? pickOf(to) : blankPick,
+          codex,
+        ),
+      };
+    },
     select,
     pickAgent(to: Recipient) {
       setProvider(to);
@@ -198,24 +214,20 @@ export function useAgentRuns(
     },
     applyPreset(p: QuickPreset) {
       setProvider(p.provider);
+      const choice = {
+        model: p.model,
+        reasoningEffort: p.reasoningEffort,
+        fast: p.fast,
+      };
       if (p.provider === "claude")
-        setClaude((c) => claudeOn(c, p.model, p.reasoningEffort));
-      else if (p.provider === "codex")
-        setChoice(
-          supportedChoice(
-            {
-              model: p.model,
-              reasoningEffort: p.reasoningEffort,
-              fast: p.fast,
-            },
-            codexModels,
-          ),
-        );
+        change("claude", (c) => claudeOn(c, p.model, p.reasoningEffort));
       else
-        setPicks((all) => ({
-          ...all,
-          [p.provider]: { model: p.model, reasoningEffort: p.reasoningEffort },
-        }));
+        set(p.provider, {
+          choice:
+            p.provider === "codex"
+              ? supportedChoice(choice, codexModels)
+              : choice,
+        });
       onPick();
     },
     /** Whether `to` has an effort to pick, or for Claude a context window. */
@@ -233,33 +245,46 @@ export function useAgentRuns(
      * which accounts without 1M by default still need.
      */
     setContextWindow(size: "200k" | "1m") {
-      setClaude((c) =>
+      change("claude", ({ choice }) =>
         size === "200k"
           ? {
-              ...c,
-              model: withClaudeContextWindow(c.model, "200k"),
+              choice: {
+                ...choice,
+                model: withClaudeContextWindow(choice.model, "200k"),
+              },
               contextWindow: "200k",
             }
           : {
-              model: c.model && withClaudeContextWindow(c.model, "1m"),
-              reasoningEffort: c.reasoningEffort,
+              choice: {
+                ...choice,
+                model:
+                  choice.model && withClaudeContextWindow(choice.model, "1m"),
+              },
             },
       );
     },
-    setFast(fast: boolean) {
-      if (codex) setChoice({ ...codex, fast });
+    fastOf: (to: AgentProvider) =>
+      agentChoice(to, models, pickOf(to), codex).fast,
+    /** Fast mode, for an agent that has it. */
+    setFast(to: AgentProvider, fast: boolean) {
+      if (!agents[to].fast) return;
+      const choice = to === "codex" ? codex : modelOf(models, to).choice;
+      if (choice) set(to, { choice: { ...choice, fast } });
     },
     /** ⌘⌥←/→: `to`'s effort one level up or down. */
     stepEffort(to: Recipient, step: -1 | 1) {
       if (to === "claude")
-        setClaude((c) => ({
-          ...c,
-          reasoningEffort: stepEffort(
-            claudeEfforts,
-            c.reasoningEffort,
-            levels.claude,
-            step,
-          ),
+        change("claude", ({ choice, ...rest }) => ({
+          choice: {
+            ...choice,
+            reasoningEffort: stepEffort(
+              claudeEfforts,
+              choice.reasoningEffort,
+              levels.claude,
+              step,
+            ),
+          },
+          ...rest,
         }));
       else if (to === "codex" && codex)
         setCodexEffort(
@@ -272,11 +297,10 @@ export function useAgentRuns(
         );
       else if (isPickAgent(to)) {
         const pick = pickOf(to);
-        setPickEffort(
-          to,
-          stepEffort(pick.efforts, pick.reasoningEffort, "", step),
-        );
+        setEffort(to, stepEffort(pick.efforts, pick.reasoningEffort, "", step));
       }
     },
+    /** Claude as the composer shows it. */
+    claude,
   };
 }

@@ -11,14 +11,16 @@ import {
   followLastAgent,
   hasComposerSettings,
   loadComposerSettings,
-  newThreadModelsOf,
   saveComposerSettings,
-  withNewThreadModels,
   type AgentFollow,
-  type ComposerModels,
   type ComposerSettings,
   type InheritedSettings,
 } from "../agents/composer-settings";
+import {
+  newThreadModelsOf,
+  withNewThreadModels,
+  type ComposerModels,
+} from "../agents/composer-models";
 import { useAISettings } from "../agents/useAISettings";
 import { useNewThreadAgent } from "./useNewThreadAgent";
 import { useNewThreadModels } from "./useNewThreadModels";
@@ -61,18 +63,12 @@ export function useComposerSettings({
   // phone; picking one here makes it that agent for both.
   const followsLastAgent = key.startsWith("new:") && !shared;
   useFollowLastAgent(followsLastAgent, picked, setProvider);
-  const [choice, setChoice] = useState(saved.choice);
-  const [claude, setClaude] = useState(saved.claude);
-  const [picks, setPicks] = useState(saved.picks);
+  const [models, setModels] = useState(saved.models);
   const saveLastModel = useFollowLastModels(
     followsLastAgent || (unsaved && !shared),
     followsLastAgent,
-    { choice, claude, picks },
-    (next) => {
-      setChoice(next.choice);
-      setClaude(next.claude);
-      setPicks(next.picks);
-    },
+    models,
+    setModels,
   );
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
@@ -80,9 +76,7 @@ export function useComposerSettings({
   const [council, setCouncil] = useState(saved.council);
   const settings: ComposerSettings = {
     provider: picked,
-    choice,
-    claude,
-    picks,
+    models,
     runtimeMode,
     interactionMode,
     ultraplan,
@@ -90,27 +84,16 @@ export function useComposerSettings({
   };
   useEffect(() => {
     saveComposerSettings(key, settings);
-  }, [
-    key,
-    picked,
-    choice,
-    claude,
-    picks,
-    runtimeMode,
-    interactionMode,
-    ultraplan,
-    council,
-  ]);
+  }, [key, picked, models, runtimeMode, interactionMode, ultraplan, council]);
   return {
     ...settings,
     /** The agent it runs: the one picked here, else the thread's or the default. */
     provider,
     setProvider,
     /** Codex's model; unset follows the line-question setting, unset until that loads. */
-    codexChoice: choice ?? (ai.data && codexQuestionChoice(ai.data)),
-    setChoice,
-    setClaude,
-    setPicks,
+    codexChoice:
+      models.codex?.choice ?? (ai.data && codexQuestionChoice(ai.data)),
+    setModels,
     setRuntimeMode,
     setInteractionMode,
     setUltraplan,
@@ -147,24 +130,21 @@ function useFollowLastAgent(
 function useFollowLastModels(
   follows: boolean,
   always: boolean,
-  { choice, claude, picks }: ComposerModels,
+  models: ComposerModels,
   set: (next: ComposerModels) => void,
 ) {
   const [lastModels, saveLastModel] = useNewThreadModels(follows);
   const tookLastModels = useRef(false);
-  const models = useMemo(
-    () => newThreadModelsOf({ choice, claude, picks }),
-    [choice, claude, picks],
-  );
-  const current = useRef({ choice, claude, picks });
-  current.current = { choice, claude, picks };
+  const shared = useMemo(() => newThreadModelsOf(models), [models]);
+  const current = useRef(models);
+  current.current = models;
   useEffect(() => {
     if (!follows || !lastModels) return;
     if (!always && tookLastModels.current) return;
     tookLastModels.current = true;
     const changed = Object.fromEntries(
       agentProviders.flatMap((p) =>
-        lastModels[p] && !sameModel(lastModels[p], models[p])
+        lastModels[p] && !sameModel(lastModels[p], shared[p])
           ? [[p, lastModels[p]]]
           : [],
       ),
@@ -175,14 +155,14 @@ function useFollowLastModels(
   const shownModels = useRef<NewThreadModels>(undefined);
   useEffect(() => {
     const before = shownModels.current;
-    shownModels.current = models;
+    shownModels.current = shared;
     if (!always || !before) return;
     for (const p of agentProviders)
       if (
-        !sameModel(models[p], before[p]) &&
-        !sameModel(models[p], lastModels?.[p])
+        !sameModel(shared[p], before[p]) &&
+        !sameModel(shared[p], lastModels?.[p])
       )
-        saveLastModel(p, models[p]!);
-  }, [models]);
+        saveLastModel(p, shared[p]!);
+  }, [shared]);
   return saveLastModel;
 }

@@ -50,7 +50,7 @@ export function useModelCatalogs(projectId: string) {
   return {
     claude,
     codex,
-    /** The agents whose model the composer keeps in `picks`; see features/agents/composer-settings. */
+    /** The catalogs of the agents in `pickAgents`; see features/agents/composer-models. */
     picks: agentPicks.catalogs,
     defaults,
     of,

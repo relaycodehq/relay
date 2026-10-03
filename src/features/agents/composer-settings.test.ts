@@ -2,16 +2,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   composerProvider,
   cacheNewThreadModels,
-  claudeOn,
   followLastAgent,
   type AgentFollow,
   loadComposerSettings,
-  newThreadModelsOf,
   saveComposerSettings,
   saveSentSettings,
   startThreadSettings,
-  withNewThreadModels,
+  type ComposerSettings,
 } from "./composer-settings";
+import { newThreadModelsOf, withNewThreadModels } from "./composer-models";
 import { sentModel } from "../../../shared/new-thread-models";
 
 const store = new Map<string, string>();
@@ -29,17 +28,22 @@ const sol = {
   fast: true,
   reasoningEffort: "high" as const,
 };
+const modes = {
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  ultraplan: false,
+  council: "angles",
+} as const;
+const plain = (
+  model: string,
+  reasoningEffort: "" | "low" | "high" | "max" = "",
+) => ({ choice: { model, fast: false, reasoningEffort } });
 
 it("reopens a returned Claude message on Claude's model, keeping Codex's", () => {
   saveComposerSettings("chat", {
+    ...modes,
     provider: "codex",
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max" },
-    picks: {},
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    ultraplan: false,
-    council: "angles",
+    models: { codex: { choice: sol }, claude: plain("opus", "max") },
   });
   saveSentSettings("chat", "claude", {
     provider: "claude",
@@ -49,9 +53,10 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
   });
   expect(loadComposerSettings("chat")).toEqual({
     provider: "claude",
-    choice: sol,
-    claude: { model: "claude-sonnet-4-6", reasoningEffort: "low" },
-    picks: {},
+    models: {
+      codex: { choice: sol },
+      claude: plain("claude-sonnet-4-6", "low"),
+    },
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: false,
@@ -66,9 +71,10 @@ it("reopens a returned Claude message on Claude's model, keeping Codex's", () =>
   });
   expect(loadComposerSettings("chat")).toMatchObject({
     provider: "message",
-    choice: { model: "gpt-6-luna" },
-    claude: { model: "claude-sonnet-4-6" },
-    picks: {},
+    models: {
+      codex: { choice: { model: "gpt-6-luna" } },
+      claude: { choice: { model: "claude-sonnet-4-6" } },
+    },
   });
 });
 
@@ -84,7 +90,11 @@ it("starts a side conversation from the thread's settings, on its agent", () => 
       settingsKey: "chat",
       provider: "claude",
     }),
-  ).toMatchObject({ provider: "claude", choice: sol, runtimeMode: "auto" });
+  ).toMatchObject({
+    provider: "claude",
+    models: { codex: { choice: sol } },
+    runtimeMode: "auto",
+  });
 });
 
 it("falls back to defaults for anything unreadable", () => {
@@ -93,42 +103,38 @@ it("falls back to defaults for anything unreadable", () => {
     "composer-settings:b",
     JSON.stringify({
       provider: "gpt",
-      choice: { model: "gpt-5.5", fast: false, reasoningEffort: "ultra" },
-      claude: { model: "bad id!", reasoningEffort: "ultra" },
+      choice: { model: "gpt-5.5", fast: false, reasoningEffort: "turbo" },
+      claude: { model: "bad id!", reasoningEffort: "turbo" },
       picks: {},
       mode: "ask",
     }),
   );
   const defaults = {
-    choice: undefined,
-    claude: { model: "", reasoningEffort: "" },
-    picks: {},
     interactionMode: "default",
     ultraplan: false,
     council: "angles",
+    provider: undefined,
   };
   expect(loadComposerSettings("a")).toEqual({
     ...defaults,
-    provider: undefined,
+    models: {},
     runtimeMode: "full-access",
   });
+  // What reads is kept: Codex's model, without the level it doesn't know.
   expect(loadComposerSettings("b")).toEqual({
     ...defaults,
-    provider: undefined,
+    models: { codex: plain("gpt-5.5"), claude: plain("") },
     runtimeMode: "approval-required",
   });
 });
 
 it("starts every new thread on the models the desktop and phone share", () => {
   saveComposerSettings("new:a", {
+    ...modes,
     provider: "claude",
-    choice: undefined,
-    claude: { model: "sonnet", reasoningEffort: "high" },
-    picks: { cursor: { model: "auto", reasoningEffort: "" } },
+    models: { claude: plain("sonnet", "high"), cursor: plain("auto") },
     runtimeMode: "auto",
     interactionMode: "plan",
-    ultraplan: false,
-    council: "angles",
   });
   // Only the agents the phone or desktop remembered move; modes stay.
   cacheNewThreadModels({
@@ -141,32 +147,30 @@ it("starts every new thread on the models the desktop and phone share", () => {
   const loaded = loadComposerSettings("new:a");
   expect(loaded).toMatchObject({
     provider: "claude",
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max", contextWindow: "200k" },
-    picks: { cursor: { model: "auto" } },
+    models: {
+      codex: { choice: sol },
+      claude: { ...plain("opus", "max"), contextWindow: "200k" },
+      cursor: plain("auto"),
+    },
     interactionMode: "plan",
   });
   // A thread with nothing saved here, from the phone or another build,
   // opens on them too, not on Codex's Default.
-  expect(loadComposerSettings("unseen")).toMatchObject({
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max", contextWindow: "200k" },
+  expect(loadComposerSettings("unseen").models).toMatchObject({
+    codex: { choice: sol },
+    claude: { ...plain("opus", "max"), contextWindow: "200k" },
   });
   // A thread's own settings stay its own.
-  saveComposerSettings("thread", { ...loaded, choice: undefined });
-  expect(loadComposerSettings("thread").choice).toBeUndefined();
+  saveComposerSettings("thread", {
+    ...loaded,
+    models: { ...loaded.models, codex: undefined },
+  });
+  expect(loadComposerSettings("thread").models.codex).toBeUndefined();
   // Shared and read back, every agent keeps its model; Codex's Default
   // follows the line-question setting again.
-  const models = {
-    choice: undefined,
-    claude: loaded.claude,
-    picks: loaded.picks,
-  };
-  expect(withNewThreadModels(models, newThreadModelsOf(models))).toEqual({
-    choice: undefined,
-    claude: loaded.claude,
-    picks: { ...loaded.picks, opencode: { model: "", reasoningEffort: "" } },
-  });
+  expect(
+    withNewThreadModels(loaded.models, newThreadModelsOf(loaded.models)),
+  ).toEqual({ ...loaded.models, opencode: plain("") });
 });
 
 it("remembers the model a message went to an agent with, not one to people", () => {
@@ -216,14 +220,7 @@ it("follows the default agent until one is picked", () => {
   expect(composerProvider(undefined, false, "claude")).toBe("claude");
   expect(composerProvider(undefined, true, "claude")).toBe("message");
   expect(composerProvider("codex", false, "claude")).toBe("codex");
-  saveComposerSettings("new:project", {
-    claude: { model: "", reasoningEffort: "" },
-    picks: {},
-    runtimeMode: "auto",
-    interactionMode: "default",
-    ultraplan: false,
-    council: "angles",
-  });
+  saveComposerSettings("new:project", { ...modes, models: {} });
   expect(loadComposerSettings("new:project").provider).toBeUndefined();
 });
 
@@ -239,44 +236,34 @@ it("reads an old new-thread Codex as the old default, other agents as picks", ()
 
 it("starts a thread on the agent its first message went to", () => {
   saveComposerSettings("new:project", {
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max" },
-    picks: {},
+    ...modes,
+    models: { codex: { choice: sol }, claude: plain("opus", "max") },
     runtimeMode: "auto",
     interactionMode: "plan",
     ultraplan: true,
-    council: "angles",
   });
   startThreadSettings("new:project", "thread", "claude");
   expect(loadComposerSettings("thread")).toMatchObject({
     provider: "claude",
-    choice: sol,
-    claude: { model: "opus" },
-    picks: {},
+    models: { codex: { choice: sol }, claude: plain("opus", "max") },
     interactionMode: "plan",
   });
   // The new-thread composer keeps following the default agent, on its models
   // and runtime mode, but the next thread starts in Build.
   expect(loadComposerSettings("new:project")).toMatchObject({
     provider: undefined,
-    choice: sol,
-    claude: { model: "opus" },
+    models: { codex: { choice: sol }, claude: { choice: { model: "opus" } } },
     runtimeMode: "auto",
     interactionMode: "default",
     ultraplan: false,
   });
 });
 
-it("keeps another agent's model in its own slot, apart from Codex's and Claude's", () => {
+it("keeps another agent's model in its own entry, apart from Codex's and Claude's", () => {
   saveComposerSettings("chat", {
+    ...modes,
     provider: "codex",
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max" },
-    picks: {},
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    ultraplan: false,
-    council: "angles",
+    models: { codex: { choice: sol }, claude: plain("opus", "max") },
   });
   saveSentSettings("chat", "opencode", {
     provider: "opencode",
@@ -290,13 +277,10 @@ it("keeps another agent's model in its own slot, apart from Codex's and Claude's
   });
   expect(loadComposerSettings("chat")).toMatchObject({
     provider: "opencode",
-    choice: sol,
-    claude: { model: "opus", reasoningEffort: "max" },
-    picks: {
-      opencode: {
-        model: "openrouter/anthropic/claude-opus-5",
-        reasoningEffort: "high",
-      },
+    models: {
+      codex: { choice: sol },
+      claude: plain("opus", "max"),
+      opencode: plain("openrouter/anthropic/claude-opus-5", "high"),
     },
     runtimeMode: "approval-required",
   });
@@ -311,7 +295,7 @@ it("keeps another agent's model in its own slot, apart from Codex's and Claude's
   expect(loadComposerSettings("odd-picks")).toMatchObject({
     // An agent it doesn't know follows the default agent.
     provider: undefined,
-    picks: { opencode: { model: "", reasoningEffort: "" } },
+    models: { opencode: plain("") },
   });
 });
 
@@ -338,19 +322,57 @@ it("hands on agents picked here and takes up ones picked on the phone, without e
   expect(step("codex", "opencode")).toEqual({ save: "opencode" });
 });
 
-it("keeps Claude on a 200k window across models, unless the model is a [1m] one", () => {
-  const opus = {
-    model: "opus",
-    reasoningEffort: "high" as const,
-    contextWindow: "200k" as const,
+it("moves settings saved in the old shapes to `models`, and loses none", () => {
+  const old = {
+    agent: "claude",
+    choice: sol,
+    claude: { model: "opus", reasoningEffort: "max", contextWindow: "200k" },
+    picks: { cursor: { model: "auto", reasoningEffort: "" } },
+    mode: "auto",
+    interactionMode: "plan",
+    ultraplan: true,
+    council: "same",
   };
-  expect(claudeOn(opus, "sonnet", "")).toEqual({
-    model: "sonnet",
-    reasoningEffort: "",
-    contextWindow: "200k",
+  store.set("composer-settings:chat", JSON.stringify(old));
+  const loaded = loadComposerSettings("chat");
+  const expected: ComposerSettings = {
+    provider: "claude",
+    models: {
+      codex: { choice: sol },
+      claude: { ...plain("opus", "max"), contextWindow: "200k" },
+      cursor: plain("auto"),
+    },
+    runtimeMode: "auto",
+    interactionMode: "plan",
+    ultraplan: true,
+    council: "same",
+  };
+  expect(loaded).toEqual(expected);
+  // Written back in the new shape only: the old keys go with the old blob.
+  saveComposerSettings("chat", loaded);
+  const written = JSON.parse(store.get("composer-settings:chat")!);
+  expect(Object.keys(written).sort()).toEqual([
+    "agent",
+    "council",
+    "interactionMode",
+    "models",
+    "runtimeMode",
+    "ultraplan",
+  ]);
+  expect(loadComposerSettings("chat")).toEqual(expected);
+});
+
+it("reads what an older build writes over the new shape", () => {
+  saveComposerSettings("chat", {
+    ...modes,
+    models: { claude: plain("opus", "max"), cursor: plain("auto") },
   });
-  expect(claudeOn(opus, "sonnet[1m]", "max")).toEqual({
-    model: "sonnet[1m]",
-    reasoningEffort: "max",
+  // A downgrade and upgrade: the older build saved its own keys, without `models`.
+  store.set(
+    "composer-settings:chat",
+    JSON.stringify({ claude: { model: "sonnet", reasoningEffort: "low" } }),
+  );
+  expect(loadComposerSettings("chat").models).toEqual({
+    claude: plain("sonnet", "low"),
   });
 });

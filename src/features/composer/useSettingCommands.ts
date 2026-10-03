@@ -15,7 +15,7 @@ import {
 } from "../../../shared/composer-commands";
 import type { Recipient } from "../../../shared/recipient";
 import { effortLabels } from "../../../shared/settings";
-import { isPickAgent } from "../agents/composer-settings";
+import { isPickAgent } from "../agents/composer-models";
 import type { AgentRuns } from "./useAgentRuns";
 import type { ComposerState } from "./useComposerSettings";
 import type { ModelCatalogs } from "./useModelCatalogs";
@@ -44,8 +44,8 @@ export function useSettingCommands({
   /** Any other command; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
 }) {
-  const { claude, interactionMode } = state;
-  const { codex, claudeListed, levels, pickOf } = runs;
+  const { interactionMode } = state;
+  const { codex, claude, claudeListed, levels, pickOf } = runs;
   /** Bumped by a bare /model, which opens the model picker. */
   const [pickerSignal, setPickerSignal] = useState(0);
   /** The recipient's model, as /model and /effort see it; "" is Default. */
@@ -59,7 +59,7 @@ export function useSettingCommands({
     recipient: to,
     targets: composerTargets,
     model: recipientModel(),
-    fast: !!codex?.fast,
+    fast: to !== "message" && runs.fastOf(to),
     plan: interactionMode === "plan",
     catalogs: Object.fromEntries(
       agentProviders.map((p) => [p, catalogs.of(p)]),
@@ -134,7 +134,8 @@ export function useSettingCommands({
           current: m.value === state.runtimeMode,
         }));
       if (command === "plan") return toggles(interactionMode === "plan");
-      if (command === "fast" && agents[to].fast) return toggles(!!codex?.fast);
+      if (command === "fast" && agents[to].fast)
+        return toggles(runs.fastOf(to));
       return undefined;
     },
     // Applies a settings command to this composer; anything else goes up.
@@ -156,7 +157,7 @@ export function useSettingCommands({
       else if (change.command === "plan") {
         state.setInteractionMode(change.plan ? "plan" : "default");
         if (!change.plan) state.setUltraplan(false);
-      } else runs.setFast(change.fast);
+      } else if (to !== "message") runs.setFast(to, change.fast);
       return true;
     },
   };

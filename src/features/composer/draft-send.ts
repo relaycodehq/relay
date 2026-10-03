@@ -11,14 +11,16 @@ import { agentSwitchNoticeHidden } from "./agent-switch-notice";
 import { api } from "../../lib/api";
 import {
   composerProvider,
-  isPickAgent,
-  livePick,
   loadComposerSettings,
-  messageChoice,
-  messageContext,
   saveComposerSettings,
   startThreadSettings,
 } from "../agents/composer-settings";
+import {
+  isPickAgent,
+  livePick,
+  messageChoice,
+  messageContext,
+} from "../agents/composer-models";
 import {
   clearDraftAttachments,
   loadDraftAttachments,
@@ -74,16 +76,16 @@ export async function sendDraft(
   const recipient = draftRecipient(text, provider);
   if (takesOver(recipient, holder) && !agentSwitchNoticeHidden()) return null;
   const selected = supportedChoice(
-    settings.choice ?? codexQuestionChoice(ai),
+    settings.models.codex?.choice ?? codexQuestionChoice(ai),
     await codexModels(qc),
   );
   const pick = isPickAgent(recipient)
     ? livePick(
-        settings.picks[recipient],
+        settings.models[recipient],
         await qc.fetchQuery(agentModelsQuery(recipient)).catch(() => []),
       )
     : { model: "", reasoningEffort: "" as const };
-  const choice = messageChoice(recipient, selected, settings.claude, pick);
+  const choice = messageChoice(recipient, settings.models, selected, pick);
   if (!choice) return null;
   const council =
     settings.ultraplan &&
@@ -96,7 +98,7 @@ export async function sendDraft(
     {
       to: recipient,
       choice,
-      ...messageContext(recipient, settings.claude),
+      ...messageContext(recipient, settings.models),
       runtimeMode: settings.runtimeMode,
       interactionMode: settings.interactionMode,
     },

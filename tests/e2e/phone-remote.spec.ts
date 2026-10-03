@@ -175,7 +175,11 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
         page.evaluate(() =>
           Object.keys(localStorage)
             .filter((key) => key.startsWith("composer-settings:new:"))
-            .map((key) => JSON.parse(localStorage.getItem(key)!).claude?.model),
+            .map(
+              (key) =>
+                JSON.parse(localStorage.getItem(key)!).models?.claude?.choice
+                  ?.model,
+            ),
         ),
       )
       .toContain("claude-opus-5-5");

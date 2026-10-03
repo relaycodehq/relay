@@ -8,56 +8,26 @@ import {
   newThreadModelsSchema,
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
-import {
-  agentProviders,
-  isAgentProvider,
-  type AgentModel,
-  type AgentProvider,
-} from "../../../shared/agents";
+import { isAgentProvider, type AgentProvider } from "../../../shared/agents";
 import {
   ultraplanKindSchema,
   type UltraplanKind,
 } from "../../../shared/ultraplan";
-import {
-  aiSettingsSchema,
-  claudeContextWindow,
-  claudeEfforts,
-  modelSchema,
-  reasoningEffortSchema,
-  type ModelChoice,
-  type ReasoningEffort,
-} from "../../../shared/settings";
 import { readJson } from "../../lib/persisted-store";
 import { composerSettingsKey } from "../../lib/thread-storage";
+import {
+  readComposerModels,
+  withNewThreadModels,
+  type ComposerModels,
+} from "./composer-models";
 
 type Provider = AgentProvider | "message";
-/**
- * Agents whose model and effort the composer keeps in `picks`. Codex and
- * Claude keep settings of their own: Fast mode, and the context window.
- */
-export const pickAgents = agentProviders.filter(
-  (p) => p !== "codex" && p !== "claude",
-);
-export const isPickAgent = (provider: string): provider is AgentProvider =>
-  (pickAgents as string[]).includes(provider);
-/** A model and effort, for an agent with no settings of its own beyond them. */
-interface AgentPick {
-  model: string;
-  reasoningEffort: ReasoningEffort;
-}
 /** What a chat composer starts from: its agent, each agent's model, its modes. */
 export interface ComposerSettings {
   /** The agent picked here; unset follows the default agent setting. */
   provider?: Provider;
-  /** Codex's model; unset follows the line-question setting. */
-  choice?: ModelChoice;
-  claude: {
-    model: string;
-    reasoningEffort: ReasoningEffort;
-    contextWindow?: "200k";
-  };
-  /** Every other agent's model and effort; Codex and Claude keep theirs above. */
-  picks: Partial<Record<AgentProvider, AgentPick>>;
+  /** Each agent's model; see ComposerModels. */
+  models: ComposerModels;
   runtimeMode: RuntimeMode;
   interactionMode: InteractionMode;
   /** Plan with a council first; see shared/ultraplan. */
@@ -68,19 +38,6 @@ export interface ComposerSettings {
 const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
   value === "message" || isAgentProvider(value);
-function readPicks(value: unknown): ComposerSettings["picks"] {
-  if (!value || typeof value !== "object") return {};
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([provider, pick]) => {
-      const model = modelSchema.safeParse(pick?.model).data ?? "";
-      const reasoningEffort =
-        reasoningEffortSchema.safeParse(pick?.reasoningEffort).data ?? "";
-      return isAgentProvider(provider)
-        ? [[provider, { model, reasoningEffort }]]
-        : [];
-    }),
-  );
-}
 function pickedProvider(key: string, saved: any): Provider | undefined {
   if (isProvider(saved?.agent)) return saved.agent;
   // Composers once saved whichever agent they showed, so a new thread's Codex
@@ -90,165 +47,12 @@ function pickedProvider(key: string, saved: any): Provider | undefined {
     ? undefined
     : saved.provider;
 }
-/** The model and efforts an agent in `picks` runs; "" is its Default. */
-export function livePick(
-  pick: AgentPick | undefined,
-  models: AgentModel[] | undefined,
-) {
-  const { model, reasoningEffort } = pick ?? {
-    model: "",
-    reasoningEffort: "" as const,
-  };
-  const efforts = models?.find((m) => m.id === model)?.efforts ?? [];
-  return {
-    model,
-    efforts,
-    // An effort the model no longer lists runs as its default.
-    reasoningEffort: efforts.includes(reasoningEffort)
-      ? reasoningEffort
-      : ("" as const),
-  };
-}
-/**
- * What a message to `to` runs on, from Codex's `selected` choice. Every agent
- * keeps its own model and effort; Codex-only settings never reach the others.
- */
-export function messageChoice(
-  to: string,
-  selected: ModelChoice | undefined,
-  claude: ComposerSettings["claude"],
-  pick: AgentPick,
-): ModelChoice | undefined {
-  if (!selected) return undefined;
-  if (to === "claude")
-    return {
-      ...selected,
-      model: claude.model,
-      reasoningEffort: claude.reasoningEffort,
-      fast: false,
-    };
-  if (isPickAgent(to))
-    return {
-      model: pick.model,
-      reasoningEffort: pick.reasoningEffort,
-      fast: false,
-    };
-  return selected;
-}
-/**
- * Claude on `model` at `reasoningEffort`. A 200k window picked before stays,
- * except on a `[1m]` model: picking one asks for 1M.
- */
-export const claudeOn = (
-  claude: ComposerSettings["claude"],
-  model: string,
-  reasoningEffort: ReasoningEffort,
-): ComposerSettings["claude"] => ({
-  model,
-  reasoningEffort,
-  ...(claude.contextWindow && claudeContextWindow(model) !== "1m"
-    ? { contextWindow: claude.contextWindow }
-    : {}),
-});
-export const messageContext = (
-  to: string,
-  claude: ComposerSettings["claude"],
-) =>
-  to === "claude" && claude.contextWindow
-    ? { contextWindow: claude.contextWindow }
-    : {};
 /** The agent a composer runs: its pick, else the default for its kind. */
 export const composerProvider = (
   picked: Provider | undefined,
   shared: boolean,
   fallback: AgentProvider = "codex",
 ): Provider => picked ?? (shared ? "message" : fallback);
-export type ComposerModels = Pick<
-  ComposerSettings,
-  "choice" | "claude" | "picks"
->;
-function readModels(saved: any): ComposerModels {
-  return {
-    choice: aiSettingsSchema.shape.questions.safeParse(saved?.choice).data,
-    claude: {
-      model: modelSchema.safeParse(saved?.claude?.model).data ?? "",
-      reasoningEffort: claudeEfforts.includes(saved?.claude?.reasoningEffort)
-        ? reasoningEffortSchema.parse(saved.claude.reasoningEffort)
-        : "",
-      ...(saved?.claude?.contextWindow === "200k"
-        ? { contextWindow: "200k" as const }
-        : {}),
-    },
-    picks: readPicks(saved?.picks),
-  };
-}
-const blankChoice: ModelChoice = {
-  model: "",
-  fast: false,
-  reasoningEffort: "",
-};
-/** Each agent's model in `models`, the way desktop and phone share them. */
-export function newThreadModelsOf({
-  choice,
-  claude,
-  picks,
-}: ComposerModels): NewThreadModels {
-  return {
-    ...Object.fromEntries(
-      pickAgents.map((p) => [p, { choice: { ...blankChoice, ...picks[p] } }]),
-    ),
-    codex: { choice: choice ?? blankChoice },
-    claude: {
-      choice: {
-        model: claude.model,
-        fast: false,
-        reasoningEffort: claude.reasoningEffort,
-      },
-      ...(claude.contextWindow ? { contextWindow: claude.contextWindow } : {}),
-    },
-  };
-}
-/** `models` with each agent in `models` on its model there; the others keep theirs. */
-export function withNewThreadModels(
-  models: ComposerModels,
-  remembered: NewThreadModels,
-): ComposerModels {
-  let next = models;
-  for (const provider of agentProviders) {
-    const entry = remembered[provider];
-    if (!entry) continue;
-    const { choice, contextWindow } = entry;
-    next = isPickAgent(provider)
-      ? {
-          ...next,
-          picks: {
-            ...next.picks,
-            [provider]: {
-              model: choice.model,
-              reasoningEffort: choice.reasoningEffort,
-            },
-          },
-        }
-      : provider === "claude"
-        ? {
-            ...next,
-            claude: {
-              model: choice.model,
-              reasoningEffort: choice.reasoningEffort,
-              ...(contextWindow ? { contextWindow } : {}),
-            },
-          }
-        : {
-            ...next,
-            // Default follows the line-question setting.
-            choice:
-              choice.model || choice.reasoningEffort || choice.fast
-                ? choice
-                : undefined,
-          };
-  }
-  return next;
-}
 /**
  * Every project's new-thread composer starts on the same models, kept on the
  * desktop and shared with the phone. This copy opens a composer on them at once.
@@ -310,9 +114,13 @@ export function loadComposerSettings(
     provider,
     // A thread this window has no settings for (started on the phone, or in
     // another build of Relay) opens on the models last used, like a new one.
-    ...(isNewThread(key) || !saved
-      ? withNewThreadModels(readModels(saved), cachedNewThreadModels() ?? {})
-      : readModels(saved)),
+    models:
+      isNewThread(key) || !saved
+        ? withNewThreadModels(
+            readComposerModels(saved),
+            cachedNewThreadModels() ?? {},
+          )
+        : readComposerModels(saved),
     runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
     ultraplan: saved?.ultraplan === true,
@@ -380,7 +188,7 @@ export function saveSentSettings(
   const saved = loadComposerSettings(key);
   saveComposerSettings(key, {
     ...saved,
-    ...withNewThreadModels(saved, {
+    models: withNewThreadModels(saved.models, {
       [sent.provider]: {
         choice: sent.choice,
         ...(sent.contextWindow ? { contextWindow: sent.contextWindow } : {}),

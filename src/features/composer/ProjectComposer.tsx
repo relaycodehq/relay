@@ -347,7 +347,6 @@ export function ProjectComposer({
               effort: to !== "message" && runs.offersEffort(to) && (
                 <ComposerEffortControl
                   to={to}
-                  state={composer}
                   runs={runs}
                   codexModels={catalogs.codex}
                 />
