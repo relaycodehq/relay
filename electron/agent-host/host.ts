@@ -216,14 +216,18 @@ function receive(socket: Socket, message: ClientMessage) {
     }
     case "call": {
       const session = sessions.get(message.session);
+      // Call ids start over with each Relay: a late answer is for whoever asked.
+      const reply = (result: HostMessage) => {
+        if (socket === client) send(result);
+      };
       void (
         session
           ? session.call(message.method, message.args)
           : Promise.reject(new Error("The session has ended."))
       ).then(
-        (value) => send({ t: "return", id: message.id, value }),
+        (value) => reply({ t: "return", id: message.id, value }),
         (error) =>
-          send({
+          reply({
             t: "return",
             id: message.id,
             error: error instanceof Error ? error.message : String(error),

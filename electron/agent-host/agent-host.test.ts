@@ -23,8 +23,11 @@ let n = 0;
 const emit = (v) => process.stdout.write(JSON.stringify({ uuid: "f" + ++n, session_id: "fake", ...v }) + "\\n");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const m = JSON.parse(line);
-  if (m.type === "control_request")
-    return emit({ type: "control_response", response: { subtype: "success", request_id: m.request_id, response: {} } });
+  if (m.type === "control_request") {
+    const answer = () => emit({ type: "control_response", response: { subtype: "success", request_id: m.request_id, response: { asked: m.request.subtype } } });
+    const slow = m.request.subtype !== "initialize" && Number(process.env.FAKE_DELAY);
+    return slow ? setTimeout(answer, slow) : answer();
+  }
   if (m.type === "control_response" && m.response.request_id === "ask-1") {
     const text = "Told: " + m.response.response.behavior;
     emit({ type: "assistant", parent_tool_use_id: null, message: { id: "a", role: "assistant", content: [{ type: "text", text }], usage: {} } });
@@ -83,7 +86,11 @@ const alive = (pid: number) => {
     return false;
   }
 };
-async function open(hosts: AgentHosts, canUseTool: () => Promise<unknown>) {
+async function open(
+  hosts: AgentHosts,
+  canUseTool: () => Promise<unknown>,
+  env: Record<string, string> = {},
+) {
   log = join(root, `claude-${Date.now()}.log`);
   const query = await hosts.open({
     key: "thread",
@@ -91,7 +98,7 @@ async function open(hosts: AgentHosts, canUseTool: () => Promise<unknown>) {
     options: {
       cwd: root,
       pathToClaudeCodeExecutable: claude,
-      env: { ...process.env, FAKE_LOG: log },
+      env: { ...process.env, FAKE_LOG: log, ...env },
     },
     hooks: {},
     handlers: { canUseTool: async () => canUseTool(), hooks: {} },
@@ -130,6 +137,25 @@ it("asks again, after a restart, what Claude asked while Relay was away", async 
     hooks: {},
   });
   expect(await answerOf(query)).toBe("Told: allow");
+}, 20_000);
+
+it("doesn't hand the next Relay the answer to a call the last one made", async () => {
+  const first = hostsFor();
+  const old = await open(first, () => new Promise(() => {}), {
+    FAKE_DELAY: "800",
+  });
+  // Call 1 of the old Relay, answered only after it has gone.
+  void old.getSettings().catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  first.detach();
+
+  const [found] = await hostsFor().discover();
+  const query = found.attach({
+    canUseTool: () => new Promise(() => {}),
+    hooks: {},
+  });
+  // Also call 1, of the new one.
+  expect(await query.getContextUsage()).toEqual({ asked: "get_context_usage" });
 }, 20_000);
 
 it("ends a session Relay closes, and its Claude Code with it", async () => {
