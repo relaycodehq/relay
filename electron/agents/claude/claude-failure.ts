@@ -1,3 +1,4 @@
+import { redacted } from "../../../shared/redact-secrets";
 import { signedOutError, usageLimitError } from "../errors";
 import { resetMs } from "../usage-limit";
 
@@ -62,4 +63,12 @@ export class ClaudeFailureWatch {
       );
     if (failed && this.signedOut) return signedOutError("claude");
   }
+}
+
+/** What the CLI said when it failed, trimmed and without anything that looks like a secret. */
+export function claudeReason(result: unknown) {
+  if (typeof result !== "string") return;
+  const text = redacted(result).replace(/\s+/g, " ").trim();
+  if (!text) return;
+  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
 }

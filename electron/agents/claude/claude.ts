@@ -3,6 +3,7 @@ import { runClaudeProject, type ClaudeRunOptions } from "./project";
 import { claudeImages } from "./project/sdk";
 import { ANSWER_LIMIT, answerLimitError } from "../turn-kit";
 import { findExecutable, spawnExecutable } from "../../platform/executables";
+import { ClaudeFailureWatch, claudeReason } from "./claude-failure";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   if (options.runtimeMode && !options.helper) return runClaudeProject(options);
   const executable = await findExecutable("claude");
@@ -42,6 +43,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
       ],
       { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] },
     );
+    const failures = new ClaudeFailureWatch();
     let buffer = "",
       answer = "",
       settled = false;
@@ -96,6 +98,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
         if (!line.trim()) continue;
         try {
           const m = JSON.parse(line);
+          failures.see(m);
           if (
             m.type === "stream_event" &&
             m.event?.type === "content_block_delta" &&
@@ -110,11 +113,18 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
             options.onText(answer);
           }
           if (m.type === "result") {
-            if (m.is_error || m.subtype !== "success") {
+            const failed = m.is_error || m.subtype !== "success";
+            // A refused request can still end in a "successful" result.
+            const stopped = failures.failure(failed);
+            if (stopped || failed) {
+              const reason = claudeReason(m.result);
               finish(
-                new Error(
-                  "Claude could not complete this question. Check your local Claude Code account and model settings.",
-                ),
+                stopped ??
+                  new Error(
+                    reason
+                      ? `Claude could not complete this question: ${reason}`
+                      : "Claude could not complete this question. Check your local Claude Code account and model settings.",
+                  ),
               );
               return;
             }
