@@ -4,6 +4,7 @@ import {
   command,
   type MenuShortcutId,
 } from "../../shared/shortcuts";
+import { reportBug } from "../bug-report";
 import type { AppWindow } from "./window";
 
 /** Accelerators the user picked in Settings; the rest keep their defaults. */
@@ -87,6 +88,13 @@ export function setApplicationMenu(
       {
         role: "help",
         submenu: [
+          {
+            label: "Report a Bug…",
+            click: () =>
+              void reportBug().catch((e) =>
+                console.warn("Could not open the bug report:", e),
+              ),
+          },
           {
             label: "Show Logs",
             click: () => void shell.openPath(app.getPath("logs")),

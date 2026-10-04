@@ -18,6 +18,12 @@ import { startLog } from "./app/log";
 import { Quit } from "./app/quit";
 import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
+import {
+  offerCrashReport,
+  offerWindowReport,
+  watchForCrashes,
+  type LastRun,
+} from "./bug-report";
 import { BlameService } from "./git/blame";
 import { Ci } from "./ci";
 import { ProjectChecks } from "./checks/service";
@@ -90,7 +96,10 @@ const window = new AppWindow({
     blame.dispose();
     projectChecks.stop();
   },
-  rendererGone: () => projectChecks.stop(),
+  rendererGone: (details) => {
+    projectChecks.stop();
+    if (window.win) void offerWindowReport(window.win, details);
+  },
 });
 const menubar = new Menubar(
   () => window.open(),
@@ -183,12 +192,13 @@ const hostingSetup = process.argv.includes("--configure-room-hosting-stdin")
       (error) => ({ error }),
     )
   : null;
+let lastRun: LastRun | null = null;
 if (!app.requestSingleInstanceLock()) {
   if (hostingSetup) {
     console.error("Close Relay before configuring hosting.");
     app.exit(1);
   } else app.quit();
-}
+} else if (!hostingSetup) lastRun = watchForCrashes();
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();
@@ -197,6 +207,7 @@ app
   .then(async () => {
     app.setName("Relay");
     quit.detachOnSignals();
+    if (lastRun) await offerCrashReport(lastRun);
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();

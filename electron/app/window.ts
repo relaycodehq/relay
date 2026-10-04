@@ -41,7 +41,12 @@ export class AppWindow {
   interfaceScale = 1;
   private closingToQuit = false;
 
-  constructor(private hooks: { closed(): void; rendererGone(): void }) {}
+  constructor(
+    private hooks: {
+      closed(): void;
+      rendererGone(details: Electron.RenderProcessGoneDetails): void;
+    },
+  ) {}
 
   /** Pushes to the renderer; channels in `RelayEvents` must carry their payload. */
   send<C extends string>(
@@ -201,7 +206,9 @@ export class AppWindow {
       if (choice === 1) event.preventDefault();
       else this.closingToQuit = false;
     });
-    win.webContents.on("render-process-gone", () => this.hooks.rendererGone());
+    win.webContents.on("render-process-gone", (_event, details) =>
+      this.hooks.rendererGone(details),
+    );
     win.on("closed", () => {
       this.hooks.closed();
       // Only the window knows what's unread; a closed one can't clear it later.
