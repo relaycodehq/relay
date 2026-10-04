@@ -268,6 +268,10 @@
 .thread-bottom-composer > * {
   pointer-events: auto;
 }
+/* A long prompt scrolls inside itself before it covers a short window's thread. */
+.thread-bottom-composer .composer-prompt-input {
+  max-height: min(240px, 30vh);
+}
 /* Scrolled up to read: shrink the input to one line until focused. */
 .thread-bottom-composer .composer-prompt-input {
   transition:

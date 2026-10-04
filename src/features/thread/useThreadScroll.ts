@@ -131,15 +131,17 @@ export function useThreadScroll({
     const dock = composerDock.current;
     if (!dock) return;
     // Messages scroll underneath the composer, so they need bottom padding as
-    // tall as it. Only measure while expanded: shrinking the padding when the
-    // composer collapses would pull the reader back toward the bottom.
+    // tall as it. While it is folded away the padding only grows: shrinking it
+    // would pull the reader back toward the bottom, but a prompt typed into
+    // the folded composer, or a card above it, still has to leave the end of
+    // the thread readable. Unfolding re-observes, which measures it exactly.
     const observer = new ResizeObserver(() => {
-      if (dock.classList.contains("collapsed")) return;
-      setDockHeight(dock.offsetHeight);
+      const height = dock.offsetHeight;
+      setDockHeight((h) => (scrolledUp ? Math.max(h, height) : height));
     });
     observer.observe(dock);
     return () => observer.disconnect();
-  }, [isEmpty]);
+  }, [isEmpty, scrolledUp]);
   // The padding lands a render after the measurement, and a thread opens with
   // none, so re-pin once it has. Pinning before it would leave the end of the
   // thread under the composer, and the next scroll event would stop following.
