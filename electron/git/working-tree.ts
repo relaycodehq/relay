@@ -107,22 +107,35 @@ function parseStatus(raw: string): WorkingChange[] {
   }
   return result;
 }
+/**
+ * Where `git push` would send the branch: its push remote (`pushRemote`, then
+ * `remote.pushDefault`) or else the remote it tracks. A push remote of its own
+ * takes the branch under its own name; `tracks` says the push goes where the
+ * branch fetches from, so pushing may set its upstream.
+ */
 export async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
   const config = (key: string) =>
-    git(root, ["config", "--get", `branch.${branch}.${key}`]).then(
+    git(root, ["config", "--get", key]).then(
       (out) => out.trim(),
       () => "",
     );
-  const [remote, merge, remotes] = await Promise.all([
-    config("remote").then((value) => value || "origin"),
-    config("merge").then((value) => value || `refs/heads/${branch}`),
-    git(root, ["remote"]).then((out) => out.trim().split("\n")),
-  ]);
-  if (!remotes.includes(remote) || !merge.startsWith("refs/heads/"))
-    return null;
+  const [fetched, pushTo, pushDefault, merge, mode, remotes] =
+    await Promise.all([
+      config(`branch.${branch}.remote`).then((value) => value || "origin"),
+      config(`branch.${branch}.pushRemote`),
+      config("remote.pushDefault"),
+      config(`branch.${branch}.merge`),
+      config("push.default"),
+      git(root, ["remote"]).then((out) => out.trim().split("\n")),
+    ]);
+  const remote = pushTo || pushDefault || fetched;
+  const tracks = remote === fetched;
+  const ref =
+    tracks && merge && mode !== "current" ? merge : `refs/heads/${branch}`;
+  if (!remotes.includes(remote) || !ref.startsWith("refs/heads/")) return null;
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
-  return { remote, url, ref: merge, label: `${remote}/${merge.slice(11)}` };
+  return { remote, url, ref, tracks, label: `${remote}/${ref.slice(11)}` };
 }
 export async function fetchUpstream(root: string, branch: string) {
   // Detached or local-only branches have nothing to fetch.
@@ -516,7 +529,8 @@ export async function performGitAction(
           [
             "push",
             "--porcelain",
-            "--set-upstream",
+            // A branch fetching from one remote and pushing to another keeps tracking the first.
+            ...(target.tracks ? ["--set-upstream"] : []),
             target.remote,
             `HEAD:${target.ref}`,
           ],

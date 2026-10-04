@@ -438,6 +438,39 @@ it("rejects stale state and non-fast-forward pushes without changing the working
   ).rejects.toThrow(/rejected|fetch first/);
   expect(git("rev-parse", "HEAD")).toBe(tree.head);
 });
+it("pushes to the branch's push remote and keeps tracking the remote it fetches from", async () => {
+  const fork = await mkdtemp(join(tmpdir(), "relay-fork-"));
+  try {
+    execFileSync("git", ["init", "--bare", "-q", fork]);
+    git("remote", "add", "fork", fork);
+    git("checkout", "-q", "-b", "feature", "--track", "origin/review");
+    git("commit", "-q", "--allow-empty", "-m", "Feature");
+    const before = git("rev-parse", "origin/review");
+
+    git("config", "remote.pushDefault", "fork");
+    expect((await workingTree(root)).pushTarget).toBe("fork/feature");
+    git("config", "--unset", "remote.pushDefault");
+    git("config", "branch.feature.pushRemote", "fork");
+    const tree = await workingTree(root);
+    expect(tree.pushTarget).toBe("fork/feature");
+
+    await performGitAction(root, { kind: "push", revision: tree.revision });
+    expect(
+      execFileSync("git", ["-C", fork, "rev-parse", "feature"], {
+        encoding: "utf8",
+      }).trim(),
+    ).toBe(git("rev-parse", "HEAD"));
+    expect(
+      execFileSync("git", ["-C", remote, "rev-parse", "review"], {
+        encoding: "utf8",
+      }).trim(),
+    ).toBe(before);
+    expect(git("config", "branch.feature.remote")).toBe("origin");
+    expect(git("config", "branch.feature.merge")).toBe("refs/heads/review");
+  } finally {
+    await rm(fork, { recursive: true, force: true });
+  }
+});
 it("hides a token kept in the push remote's address", async () => {
   // Gitea and GitHub both accept a token in place of the user name.
   for (const [url, shown] of [
