@@ -113,6 +113,7 @@ export default function NewThread() {
     // worktree or carrying images over a slow link can take a while.
     deliver(
       remote.desktop,
+      remote.active ?? "",
       chat.id,
       composeSend(using, body, {
         id: randomUUID(),

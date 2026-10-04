@@ -344,7 +344,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     );
     // A plain send shows in the thread at once; queued and scheduled ones
     // land in the queue, which only the desktop's answer fills.
-    if (!delivery && !sendAt) return deliver(remote.desktop, id, message);
+    if (!delivery && !sendAt) return deliver(remote.desktop, remote.active ?? "", id, message);
     await remote.desktop("sendProjectChat", id, message);
     await reload();
   };

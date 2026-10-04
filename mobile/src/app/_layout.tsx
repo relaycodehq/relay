@@ -55,10 +55,10 @@ function Screens() {
   }, [t.background]);
   useEffect(confirmLaunch, []);
   const { overview, call, status } = remote;
-  const { desktop } = remote;
+  const { desktop, active } = remote;
   useEffect(() => {
-    if (status === "online") resendFailed(desktop);
-  }, [status, desktop]);
+    if (status === "online" && active) resendFailed(desktop, active);
+  }, [status, desktop, active]);
   // The overview kept from last time arrives before the connection does.
   const offer = status === "online" ? overview?.phoneApp : undefined;
   useEffect(() => {
