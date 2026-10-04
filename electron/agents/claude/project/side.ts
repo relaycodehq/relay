@@ -71,3 +71,15 @@ export async function askClaudeSide(options: {
     stream.close();
   }
 }
+
+/** A side question to a live session, mid-turn included; null with no answer. */
+export async function askLive(
+  stream: ClaudeStream,
+  question: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const answer = await (stream as SideAsking).askSideQuestion(question, {
+    signal,
+  });
+  return answer?.response.trim() || null;
+}

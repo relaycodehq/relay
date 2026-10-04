@@ -23,6 +23,7 @@ import {
   SettingsSelect,
 } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
+import { WatchThreadsSetting } from "../WatchThreadsSetting";
 
 export function useModelEntries(
   setError: (error: unknown) => void,
@@ -52,6 +53,17 @@ export function useModelEntries(
         "account accounts sign in login switch work personal subscription limit usage claude codex email plan profile",
       block: true,
       render: () => <AccountsSettings onError={setError} />,
+    },
+    {
+      id: "watch-threads",
+      category: "models",
+      title: "Flag what I'd miss",
+      description:
+        "A side check reads along and points out what you'd likely miss, like a subagent changing a test to make it pass, or a tradeoff mentioned in passing. Notes show in the turn they're about. Claude threads only.",
+      keywords:
+        "watch watcher heads up you should know flag miss notice subagent cheat tests side check observer cost price tokens",
+      block: true,
+      render: () => <WatchThreadsSetting />,
     },
     {
       id: "quick-switch",

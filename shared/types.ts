@@ -20,6 +20,7 @@ import type {
   TeaSetup,
 } from "./source-control";
 import type { LineQuestion } from "./questions";
+import type { WatchScope } from "./watch";
 import type {
   ProjectCheckInfo,
   ProjectCheckState,
@@ -279,6 +280,9 @@ export interface Api
   /** Plugged in, Relay keeps the computer from idling to sleep; on battery only while it has work or a paired device. */
   keepAwake(): Promise<boolean>;
   saveKeepAwake(enabled: boolean): Promise<boolean>;
+  /** Flag what I'd miss in Claude threads: off (the default), the main thread, or with its subagents. */
+  watchThreads(): Promise<WatchScope>;
+  saveWatchThreads(scope: WatchScope): Promise<WatchScope>;
   /** Days without activity before a thread settles by itself; null never. */
   autoSettleDays(): Promise<number | null>;
   saveAutoSettleDays(days: number | null): Promise<number | null>;

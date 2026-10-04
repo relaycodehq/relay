@@ -7,6 +7,7 @@ import type {
   ProjectChat,
 } from "../../shared/projects";
 import type { TurnModel } from "../../shared/turn-model";
+import type { WatchNote } from "../../shared/watch";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -105,6 +106,12 @@ export class AnswerRecorder {
     }
     if (index >= 0) trace[index] = entry;
     else if (trace.length < TRACE_LIMIT) trace.push(entry);
+    this.changed();
+  }
+  /** A side check flagged something; it can land after the turn ended, on the answer it was about. */
+  note(note: WatchNote) {
+    if (this.stopped) return;
+    (this.message.notes ??= []).push(note);
     this.changed();
   }
   commentary(id: string, text: string | null) {

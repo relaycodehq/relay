@@ -2,6 +2,7 @@ import type { AgentProvider } from "../agents";
 import type { AccountMove } from "../agent-accounts";
 import { isImagePath } from "../answer-images";
 import type { TurnModel } from "../turn-model";
+import type { WatchNote } from "../watch";
 
 /** How full the provider session's context window was after this answer. */
 export interface ContextUsage {
@@ -65,6 +66,8 @@ export interface ChatMessage {
   images?: ChatImage[];
   activity?: AgentActivity[];
   trace?: AgentTrace[];
+  /** Local: what the side check flagged during this turn; see shared/watch. */
+  notes?: WatchNote[];
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   /** Local: where the agent's session stood after this answer, so a side conversation can fork from it. */

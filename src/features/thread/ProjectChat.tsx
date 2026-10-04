@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -187,6 +188,17 @@ export function ProjectChat({
       onContextUsed();
     }
   }, [contextText?.id]);
+  // Into the main thread's draft, after whatever is already typed there.
+  const steerFromNote = useCallback(
+    (text: string) => {
+      setRootId(null);
+      const key = threadDraftKey(id),
+        old = readDraft(key);
+      writeDraft(key, `${old}${old ? "\n\n" : ""}${text}`);
+      requestAnimationFrame(() => composer.current?.focus());
+    },
+    [id],
+  );
   const actions = useMessageActions({
     handle,
     messages,
@@ -282,6 +294,7 @@ export function ProjectChat({
             onResume={() =>
               void resume(() => composer.current?.agentSettings())
             }
+            onSteer={steerFromNote}
           />
         </RunCommand.Provider>
       )}

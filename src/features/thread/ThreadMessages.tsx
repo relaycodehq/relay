@@ -85,6 +85,7 @@ export function ThreadMessages({
   queue: { steer, move, returnToComposer },
   worktree,
   onResume,
+  onSteer,
 }: {
   handle: ThreadHandle;
   projectPath: string;
@@ -97,6 +98,8 @@ export function ThreadMessages({
   worktree: ThreadWorktree;
   /** Sends the cut-short answer's input again. */
   onResume: () => void;
+  /** Puts a message for the agent in the composer. */
+  onSteer: (text: string) => void;
 }) {
   // Keyed on the report alone: a new renderer redraws the whole summary, and
   // the review changes with every finding dismissed or fixed.
@@ -179,6 +182,7 @@ export function ThreadMessages({
               onSignIn={
                 m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
               }
+              onSteer={root?.side ? undefined : onSteer}
               {...(chat && review?.report?.messageId === m.id
                 ? {
                     inlineCode: reviewCode,

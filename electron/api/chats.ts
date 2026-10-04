@@ -242,5 +242,10 @@ export function chatHandlers(ctx: ApiContext) {
       (id, findingId, status) =>
         projectChats.setDeepReviewFinding(id, findingId, status),
     ),
+    closeWatchNote: takes(
+      [idSchema, idSchema, idSchema, z.boolean()],
+      (id, messageId, noteId, known) =>
+        projectChats.closeWatchNote(id, messageId, noteId, known),
+    ),
   } satisfies Handlers;
 }

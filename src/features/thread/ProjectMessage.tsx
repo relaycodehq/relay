@@ -12,6 +12,7 @@ import {
 } from "../../../shared/answer-images";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { parseContextReport } from "../../../shared/context-report";
+import { WatchNotes } from "../watch/WatchNotes";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import {
   turnImages,
@@ -134,6 +135,7 @@ export const Message = memo(function Message({
   inlineCode,
   after,
   onSignIn,
+  onSteer,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -157,6 +159,8 @@ export const Message = memo(function Message({
   after?: ReactNode;
   /** Offered when this turn failed on its agent's missing or expired login. */
   onSignIn?: (provider: AgentProvider) => Promise<boolean>;
+  /** Puts a message for the agent in the composer, from a watch note. */
+  onSteer?: (text: string) => void;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -327,6 +331,16 @@ export const Message = memo(function Message({
                 }
               : undefined
           }
+        />
+      )}
+      {m.role === "assistant" && onSteer && (
+        <WatchNotes
+          chatId={chatId}
+          messageId={m.id}
+          notes={m.notes}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+          onSteer={onSteer}
         />
       )}
       {!!parsed.refs.length && (

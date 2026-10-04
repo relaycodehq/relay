@@ -5,6 +5,7 @@ import type { Api } from "../../shared/types";
 import { fallbackCodexModels, type ClaudeModel } from "../../shared/settings";
 import { fetchThemes, searchThemes } from "../../shared/open-vsx";
 import { releaseNotesFrom, releasesApi } from "../../shared/updates";
+import type { WatchScope } from "../../shared/watch";
 
 const claudeModels: ClaudeModel[] = [
   {
@@ -70,6 +71,14 @@ const stub: Partial<Api> = {
     releaseNotesFrom(await (await fetch(releasesApi)).json()),
   // No repository icons in a preview; the letter badge stands in.
   projectIcon: async () => null,
+  // A watch note closes in the turn; there's no saved chat to update.
+  closeWatchNote: async () => {},
+  watchThreads: async () =>
+    (localStorage.getItem("preview-watch-threads") ?? "off") as WatchScope,
+  saveWatchThreads: async (scope) => {
+    localStorage.setItem("preview-watch-threads", scope);
+    return scope;
+  },
   writeClipboard: (text) => navigator.clipboard.writeText(text),
   providerUsage: async (provider) => ({
     provider,

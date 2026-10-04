@@ -1,0 +1,104 @@
+/* A note from the side check, in the turn it's about: a quiet card, no colour. */
+.watch-note {
+  margin: 12px 0 4px;
+  padding: 10px 12px 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--toolbar);
+  font-size: 13px;
+}
+.watch-note header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+.watch-note header svg {
+  flex: none;
+}
+.watch-note-tag {
+  flex: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.watch-note-source {
+  min-width: 0;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.watch-note-line {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+.watch-note-explain {
+  margin-top: 10px;
+  line-height: 1.55;
+}
+.watch-note-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.watch-note-explain ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.watch-note-explain li + li {
+  margin-top: 3px;
+}
+.watch-note-diff {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--code-background);
+  font: 12px / 1.6 var(--font-mono);
+}
+.watch-note-diff figcaption {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font: 11px var(--font-sans);
+}
+.watch-note-diff code {
+  display: block;
+  white-space: pre-wrap;
+}
+.watch-note-diff code[data-sign="-"] {
+  background: color-mix(in srgb, var(--diff-deletion) 16%, transparent);
+}
+.watch-note-diff code[data-sign="+"] {
+  background: color-mix(in srgb, var(--diff-addition) 16%, transparent);
+}
+.watch-note-actions {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 0 -8px;
+}
+.watch-note-actions button,
+.watch-note-close {
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.watch-note-actions button:first-child {
+  color: var(--text);
+}
+.watch-note-actions button:hover,
+.watch-note-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.watch-note-close {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  padding: 4px;
+}

@@ -239,6 +239,13 @@ export interface ProjectCouncilApi {
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
+  /** Takes a watch note out of its turn; `known` also keeps its topic from coming up again. */
+  closeWatchNote(
+    id: string,
+    messageId: string,
+    noteId: string,
+    known: boolean,
+  ): Promise<void>;
 }
 
 /** A thread's own worktree, and the ones its agent made. */

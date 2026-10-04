@@ -48,6 +48,7 @@ import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
 import { ThreadWorktrees } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
+import { WATCH_KNOWN_LIMIT } from "../../shared/watch";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -337,6 +338,31 @@ export class ProjectChats {
   }
   resumeUltraplan(id: string, request: string) {
     return this.councils.resumeUltraplan(id, request);
+  }
+  /** The same chat object a running turn writes into, so its next publish keeps the note closed. */
+  closeWatchNote(
+    id: string,
+    messageId: string,
+    noteId: string,
+    known: boolean,
+  ) {
+    return this.core.control(id, async () => {
+      const chat = await this.storage.load(id);
+      const message = chat.messages.find((m) => m.id === messageId);
+      const note = message?.notes?.find((n) => n.id === noteId);
+      if (!message || !note || note.closed) return;
+      note.closed = true;
+      message.version++;
+      await this.storage.save(chat);
+      this.core.emit({ chatId: id, message: structuredClone(message) });
+      if (known)
+        await this.core.store.update((s) => {
+          s.watchKnown = [
+            ...(s.watchKnown ?? []).filter((t) => t !== note.title),
+            note.title,
+          ].slice(-WATCH_KNOWN_LIMIT);
+        });
+    });
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);

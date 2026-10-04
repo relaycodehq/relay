@@ -12,8 +12,9 @@ import type { ClaudeRunOptions } from "./config";
 import { answerLimitError } from "../../turn-kit";
 import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
-import type { ClaudeSession } from "./session";
+import { watchOf, type ClaudeSession } from "./session";
 import { ToolRows } from "./tool-rows";
+import { TurnWatcher } from "../watch/watcher";
 
 /**
  * What a frame leaves the turn to do: read on, see whether Claude runs a
@@ -45,6 +46,7 @@ export class ClaudeTurnReader {
   private compacted?: string;
   private rows: ToolRows;
   private meter: ContextMeter;
+  private watcher?: TurnWatcher;
 
   constructor(
     private options: ClaudeRunOptions,
@@ -52,6 +54,12 @@ export class ClaudeTurnReader {
   ) {
     this.rows = new ToolRows(options);
     this.meter = new ContextMeter(options, session);
+    if (options.watch)
+      this.watcher = new TurnWatcher(
+        options.watch,
+        watchOf(session).checks,
+        options.signal,
+      );
   }
 
   /** The answer so far, follow-ups included. */
@@ -183,6 +191,8 @@ export class ClaudeTurnReader {
         this.reported = reportedFindings(tool.input) ?? this.reported;
       this.rows.call(tool, parent);
     }
+    // Subagents are the session's to watch: most outlive the turn.
+    if (!parent) this.watcher?.called(tools.map((tool) => tool.id));
     if (
       text &&
       !tools.length &&

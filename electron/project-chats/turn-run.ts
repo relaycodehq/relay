@@ -15,6 +15,7 @@ import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
 import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
+import type { AgentWatch } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
@@ -156,6 +157,19 @@ export class TurnRunner {
     let point: string | undefined,
       committed = false,
       limit: AgentError | undefined;
+    // The thread's own turns, including the ones Claude starts when a
+    // background subagent ends; Claude alone can ask beside a live session.
+    const { watchThreads: scope = "off", watchKnown: known = [] } =
+      this.core.store.get();
+    const watch: AgentWatch | undefined =
+      scope !== "off" &&
+      provider === "claude" &&
+      (turn.kind === "reply" || turn.kind === "adopt") &&
+      !rules.side &&
+      !chat.thinker &&
+      !chat.reviewer
+        ? { scope, known, onNote: (note) => answer.note(note) }
+        : undefined;
     try {
       const options = {
         onControl: (control: AgentControl) => {
@@ -214,6 +228,7 @@ export class TurnRunner {
         onRequest: rules.side
           ? undefined
           : this.core.active.get(chat.id)?.requests.ask,
+        ...(watch ? { watch } : {}),
         session: {
           key: sessionKey,
           id: sessionId,

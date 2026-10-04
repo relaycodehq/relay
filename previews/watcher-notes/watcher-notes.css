@@ -1,0 +1,125 @@
+.wn-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+}
+.wn-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.wn-sample {
+  color: var(--muted);
+  font-size: 11px;
+}
+.wn-tabs {
+  display: flex;
+  gap: 2px;
+}
+.wn-tabs button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wn-tabs button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.wn-about {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wn-tool {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.wn-tool:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.wn-chat {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wn-chat .project-messages {
+  flex: 1;
+  min-height: 0;
+}
+.wn-chat .thread-message-column {
+  margin: 0 auto;
+}
+.wn-chat .composer-dock {
+  max-width: var(--thread-width);
+  margin: 0 auto;
+}
+.wn-subheader {
+  border-bottom: 1px solid var(--border);
+}
+.wn-subheader .spacer {
+  flex: 1;
+}
+.wn-thread-title {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.wn-prompt {
+  display: block;
+  resize: none;
+  color: var(--text);
+}
+.wn-prompt::placeholder {
+  color: var(--muted);
+}
+.wn-status {
+  min-height: 24px;
+  margin: 6px 0 -10px;
+  padding: 0 20px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.wn-queued {
+  color: var(--muted);
+  font-weight: 400;
+}
+.wn-tabs {
+  display: flex;
+  gap: 2px;
+}
+.wn-tabs button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.wn-tabs button[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.wn-settings {
+  width: min(100% - 56px, 720px);
+  margin: 40px auto;
+}

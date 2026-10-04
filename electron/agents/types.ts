@@ -1,3 +1,4 @@
+import type { WatchNote, WatchScope } from "../../shared/watch";
 import type {
   RuntimeMode,
   InteractionMode,
@@ -30,6 +31,14 @@ export type AgentJob =
   | { kind: "helper"; instructions: string }
   /** A one-off answer to a room's question: it may read the project, keeps no session. */
   | { kind: "answer" };
+
+/** A thread turn's side check; see shared/watch. Claude reads it, the others ignore it. */
+export type AgentWatch = {
+  scope: Exclude<WatchScope, "off">;
+  /** Topics the person said they already know. */
+  known: string[];
+  onNote: (note: WatchNote) => void;
+};
 
 /** One turn of any agent, as a thread, room, title or helper job runs it. */
 export interface AgentOptions {
@@ -74,6 +83,7 @@ export interface AgentOptions {
   /** A deep review's reviewer: it may read and run anything but changes no files. */
   readOnly?: boolean;
   onRequest?: AskAgentRequest;
+  watch?: AgentWatch;
   session?: {
     key?: string;
     id?: string;

@@ -21,6 +21,10 @@ interface State {
   smartProjectNames?: boolean;
   /** Keep the computer from idling to sleep while Relay runs; unset is on. */
   keepAwake?: boolean;
+  /** Flag what I'd miss in Claude threads; unset is off. */
+  watchThreads?: import("../../shared/watch").WatchScope;
+  /** Topics the watcher was told are already known, newest last. */
+  watchKnown?: string[];
   /** Legacy saves: automatic names were already title-cased by the old migration. */
   projectTitlesTidied?: true;
   /** Set once groups were dragged; `projectGroups` order is then the sidebar's. */

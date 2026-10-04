@@ -935,3 +935,13 @@
   padding: 4px 0 6px;
   border-top: 0;
 }
+
+/* Flag what I'd miss: a switch at its own width, the cost in a line under it. */
+.watch-scope {
+  display: flex;
+}
+.watch-cost {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
