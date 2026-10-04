@@ -40,8 +40,12 @@ export type LogEntry =
   | { kind: "end"; failure?: string };
 export type Entry = LogEntry & { seq: number };
 
-/** How the host answers a hook: record it in the log, or ask the client within `timeout`. */
-export type HookMode = "record" | { ask: true; timeout: number };
+/**
+ * How the host answers a hook: record it in the log, hold a reviewer's Bash to
+ * read-only commands on its own, or ask the client within `timeout`.
+ */
+export type HookMode =
+  "record" | "readOnlyBash" | { ask: true; timeout: number };
 
 export interface SessionInfo {
   id: string;

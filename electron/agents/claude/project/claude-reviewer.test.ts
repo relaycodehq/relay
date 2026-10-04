@@ -69,4 +69,21 @@ it("keeps a deep review's Claude reviewer from changing the checkout", async () 
   expect(options.disallowedTools).toEqual(
     expect.arrayContaining(["Edit", "MultiEdit", "Write", "NotebookEdit"]),
   );
+  // Nor a PreToolUse hook, which holds Bash to commands that only read.
+  const [bash] = options.hooks!.PreToolUse!;
+  expect(bash.matcher).toBe("Bash");
+  const run = (command: string) =>
+    bash.hooks[0](
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_input: { command },
+      } as never,
+      "tool",
+      { signal: new AbortController().signal },
+    );
+  expect(await run("git diff main...HEAD")).toEqual({});
+  expect(await run("touch marker.txt")).toMatchObject({
+    hookSpecificOutput: { permissionDecision: "deny" },
+  });
 });

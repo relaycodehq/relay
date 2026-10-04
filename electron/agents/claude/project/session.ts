@@ -17,6 +17,7 @@ import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
 import { claudePermissionMode, type ClaudeRunOptions } from "./config";
+import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
 import { ClaudeWork } from "./pending";
 import { hostedHandlers, sessionCallbacks } from "./requests";
 import { readSettings, sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
@@ -212,6 +213,9 @@ export async function startSession(
           ],
           // Relay's private environment note reaches Claude without entering the transcript.
           UserPromptSubmit: [{ hooks: [promptSubmit] }],
+          ...(holder.options.readOnly
+            ? { PreToolUse: [{ matcher: "Bash", hooks: [readOnlyBashHook] }] }
+            : {}),
         },
         canUseTool,
         onElicitation,
@@ -256,6 +260,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
       hooks: {
         Stop: "record",
         UserPromptSubmit: { ask: true, timeout: 4000 },
+        ...(options.readOnly ? { PreToolUse: "readOnlyBash" as const } : {}),
       },
       handlers: hostedHandlers(holder),
     }),

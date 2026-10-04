@@ -21,6 +21,7 @@ import {
   type SessionInfo,
 } from "./protocol";
 import { AsyncQueue } from "../util/async-queue";
+import { readOnlyBashHook } from "./read-only-bash";
 import { terminate } from "../platform/terminate";
 
 /** Log sizes: past this, what a restart can't need goes first. */
@@ -170,25 +171,28 @@ export class ClaudeSession extends HostSession {
       HookEvent,
       HookMode,
     ][])
-      matchers[event] = [
-        {
-          hooks: [
-            async (input) => {
-              if (mode === "record") {
-                this.append({ kind: "hook", event, input });
-                return {};
-              }
-              // The answer is JSON off the socket; the SDK needs an object.
-              return (
-                (await this.host.ask(this, "hook", [event, input], {
-                  timeout: mode.timeout,
-                  fallback: {},
-                })) ?? {}
-              );
-            },
-          ],
-        },
-      ];
+      matchers[event] =
+        mode === "readOnlyBash"
+          ? [{ matcher: "Bash", hooks: [readOnlyBashHook] }]
+          : [
+              {
+                hooks: [
+                  async (input) => {
+                    if (mode === "record") {
+                      this.append({ kind: "hook", event, input });
+                      return {};
+                    }
+                    // The answer is JSON off the socket; the SDK needs an object.
+                    return (
+                      (await this.host.ask(this, "hook", [event, input], {
+                        timeout: mode.timeout,
+                        fallback: {},
+                      })) ?? {}
+                    );
+                  },
+                ],
+              },
+            ];
     this.query = query({
       prompt: this.input,
       options: {
