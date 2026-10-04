@@ -147,6 +147,18 @@
 .change-name.conflict {
   color: light-dark(#c4323f, #f0707a);
 }
+/* A gitignored file an agent wrote: muted, an eye-off mark in the checkbox's place. */
+.ignored-mark {
+  flex: none;
+  width: 13px;
+  color: var(--muted);
+}
+.ignored-change .change-name {
+  color: var(--muted);
+}
+.ignored-change.selected .change-name {
+  color: var(--text);
+}
 .change-dir {
   min-width: 0;
   overflow: hidden;

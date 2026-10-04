@@ -296,6 +296,10 @@ export interface ProjectGitApi {
     path: string,
     area: ChangeArea,
   ): Promise<FilePair>;
+  /** A gitignored file an agent wrote, against how it was before the agent's first write. */
+  projectIgnoredDiff(where: string, path: string): Promise<FilePair>;
+  /** Takes gitignored files off the Changes list. */
+  projectDismissIgnored(where: string, paths: string[]): Promise<WorkingTree>;
   projectGitAction(where: string, action: GitAction): Promise<WorkingTree>;
   /** A generated message for committing just these changed files. */
   projectCommitMessage(where: string, paths: string[]): Promise<string>;

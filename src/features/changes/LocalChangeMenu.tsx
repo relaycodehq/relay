@@ -10,6 +10,7 @@ import {
   SquarePen,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
 import type { ChangeArea, WorkingChange } from "../../../shared/working-tree";
 import { api } from "../../lib/api";
@@ -167,6 +168,71 @@ export function LocalChangeMenu({
                   {area === "staged" ? "Revert to HEAD" : "Discard changes"}
                 </ContextMenuItem>
               </>
+            )}
+          </ContextMenu.Popup>
+        </ContextMenu.Positioner>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  );
+}
+
+/** Right-click actions for a gitignored file an agent wrote. */
+export function IgnoredChangeMenu({
+  path,
+  projectId,
+  trigger,
+  onOpenFile,
+  onDismiss,
+  onDismissAll,
+  onError,
+}: {
+  path: string;
+  projectId?: string;
+  trigger: ReactElement;
+  onOpenFile?: (path: string) => void;
+  onDismiss: () => void;
+  onDismissAll?: () => void;
+  onError: (error: unknown) => void;
+}) {
+  const run = (work: () => Promise<unknown>) => void work().catch(onError);
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger render={trigger} />
+      <ContextMenu.Portal>
+        <ContextMenu.Positioner className="sb-menu-positioner">
+          <ContextMenu.Popup className="sb-menu">
+            {onOpenFile && (
+              <ContextMenuItem
+                icon={<SquarePen size={13} />}
+                onClick={() => onOpenFile(path)}
+              >
+                Open in editor
+              </ContextMenuItem>
+            )}
+            {projectId && (
+              <ContextMenuItem
+                icon={<FolderOpen size={13} />}
+                onClick={() =>
+                  run(() => api.revealProjectPath(projectId, path))
+                }
+              >
+                {revealLabel}
+              </ContextMenuItem>
+            )}
+            <ContextMenuItem
+              icon={<Copy size={13} />}
+              onClick={() => run(() => api.writeClipboard(path))}
+            >
+              Copy relative path
+            </ContextMenuItem>
+            <ContextMenu.Separator className="sb-menu-separator" />
+            <ContextMenuItem icon={<X size={13} />} onClick={onDismiss}>
+              Dismiss
+            </ContextMenuItem>
+            {onDismissAll && (
+              <ContextMenuItem icon={<X size={13} />} onClick={onDismissAll}>
+                Dismiss all ignored files
+              </ContextMenuItem>
             )}
           </ContextMenu.Popup>
         </ContextMenu.Positioner>

@@ -80,10 +80,13 @@ export function useWorkingDiff(
 ) {
   return useQuery({
     queryKey: [...key, "diff", selected?.path, selected?.area, tree?.revision],
-    queryFn: () =>
-      projectId
-        ? api.projectWorkingDiff(projectId, selected!.path, selected!.area)
-        : api.workingDiff(pull!, selected!.path, selected!.area),
+    queryFn: () => {
+      const { path, area } = selected!;
+      if (area === "ignored") return api.projectIgnoredDiff(projectId!, path);
+      return projectId
+        ? api.projectWorkingDiff(projectId, path, area)
+        : api.workingDiff(pull!, path, area);
+    },
     enabled: !!selected && !!tree,
     gcTime: 0,
   });

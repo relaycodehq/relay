@@ -8,6 +8,7 @@ import { useRequests, type RequestChannel } from "../../lib/request-channel";
 import {
   revealArea,
   settleSelection,
+  type ListArea,
   type SelectedChange,
 } from "./working-changes";
 
@@ -43,7 +44,7 @@ export function useChangeReveals({
       : null;
   useEffect(() => {
     if (!selected || !tree) return;
-    const next = settleSelection(selected, tree.changes);
+    const next = settleSelection(selected, tree.changes, tree.ignored);
     if (next !== selected) setSelected(next);
   }, [tree, selected]);
   useEffect(() => {
@@ -67,7 +68,7 @@ export function useChangeReveals({
         ?.scrollIntoView({ block: "nearest" });
   }, [revealed]);
   /** Selects a file by hand, which drops a reveal still waiting. */
-  const pick = (path: string, area: ChangeArea) => {
+  const pick = (path: string, area: ListArea) => {
     setSelected({ path, area });
     setWanted(null);
     setLine(undefined);

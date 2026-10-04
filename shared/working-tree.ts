@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FilePair, Repo } from "./types";
+import type { AgentProvider } from "./agents";
 import { filePathSchema } from "./validation";
 // Windows also opens .git as ".git.", ".git ", "GIT~1" and ".git::$INDEX_ALLOCATION".
 const dotGit = /^(\.git[. ]*|git~\d+)(:.*)?$/i;
@@ -43,6 +44,21 @@ export interface WorkingTree {
   /** Lines added and removed across all uncommitted changes, against HEAD. */
   lines: { additions: number; deletions: number };
   outgoing: { sha: string; subject: string }[];
+  /** Gitignored files agents wrote since the last commit; a project's checkout only. */
+  ignored?: IgnoredTouch[];
+}
+/** A gitignored file an agent's file tools wrote, which Git's status can't show. */
+export interface IgnoredTouch {
+  path: string;
+  /** The agent that wrote it last. */
+  agent: AgentProvider;
+  /**
+   * How it was before the agent's first write: Relay kept a copy, the file
+   * didn't exist, or it sits under an ignored folder Relay doesn't copy.
+   */
+  before: "kept" | "none" | "unknown";
+  /** The rule ignoring it, as `.gitignore:4 .env*.local`. */
+  rule?: string;
 }
 export const gitActionSchema = z.discriminatedUnion("kind", [
   z

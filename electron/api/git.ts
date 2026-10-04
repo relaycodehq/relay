@@ -30,6 +30,7 @@ import {
   workingDiff,
   workingTree,
 } from "../git/working-tree";
+import { dismissIgnored, ignoredDiff } from "../git/ignored-touches";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const branchNameSchema = z.string().min(1).max(250);
@@ -46,6 +47,18 @@ export function gitHandlers(ctx: ApiContext) {
       [workspaceIdSchema, workingPathSchema, z.enum(["staged", "unstaged"])],
       async (where, path, area) =>
         workingDiff(await placeRoot(where), path, area),
+    ),
+    projectIgnoredDiff: takes(
+      [workspaceIdSchema, workingPathSchema],
+      async (where, path) => ignoredDiff(await placeRoot(where), path),
+    ),
+    projectDismissIgnored: takes(
+      [workspaceIdSchema, z.array(workingPathSchema).min(1).max(1000)],
+      async (where, paths) => {
+        const root = await placeRoot(where);
+        await dismissIgnored(root, paths);
+        return workingTree(root);
+      },
     ),
     projectHistory: takes(
       [workspaceIdSchema, historyScopeSchema, historyLimitSchema],

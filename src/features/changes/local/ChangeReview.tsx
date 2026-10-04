@@ -4,7 +4,11 @@ import type { FilePair } from "../../../../shared/types";
 import type { WorkingTree } from "../../../../shared/working-tree";
 import type { CodeReference } from "../../../../shared/code-references";
 import type { ProjectFileLink } from "../../../../shared/project-file-links";
-import { sideLabels, type SelectedChange } from "../working-changes";
+import {
+  ignoredSides,
+  sideLabels,
+  type SelectedChange,
+} from "../working-changes";
 import { ErrorBox, IconButton, Loading } from "../../../ui/ui";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { SplitDiffToggle, WorkingDiff } from "../../diff/WorkingDiff";
@@ -71,14 +75,23 @@ function SelectedDiff({
   onOpenFile,
   onAsk,
 }: Omit<Props, "missing"> & { selected: SelectedChange }) {
-  const sides = sideLabels(selected.area);
+  const touch =
+    selected.area === "ignored"
+      ? tree.ignored?.find((t) => t.path === selected.path)
+      : undefined;
+  const ignored = touch && ignoredSides(touch);
+  const sides =
+    ignored?.sides ??
+    sideLabels(selected.area === "staged" ? "staged" : "unstaged");
   return (
     <>
       <header>
         <strong>
           <MiddleTruncate text={selected.path} kind="path" />
         </strong>
-        <span>{`${sides.deletions} → ${sides.additions}`}</span>
+        <span title={touch?.rule && `Gitignored by ${touch.rule}`}>
+          {ignored?.said ?? `${sides.deletions} → ${sides.additions}`}
+        </span>
         <SplitDiffToggle split={split} onChange={onSplit} />
         {onOpenFile && (
           <IconButton

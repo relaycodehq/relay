@@ -119,6 +119,7 @@ export function LocalChanges({
               />
               <ChangeList
                 sections={sections}
+                ignored={tree.ignored ?? []}
                 revision={tree.revision}
                 selected={selected}
                 grouped={grouped}
@@ -133,6 +134,13 @@ export function LocalChanges({
                 listRef={fileList}
                 onAct={(action) => void act(action)}
                 onPick={pick}
+                onDismiss={(paths) =>
+                  projectId &&
+                  void api
+                    .projectDismissIgnored(projectId, paths)
+                    .then((next) => working.settle(next, ""))
+                    .catch(working.setError)
+                }
                 onOpenFile={onOpenFile}
                 onTrashed={() => void state.refetch()}
                 onError={working.setError}

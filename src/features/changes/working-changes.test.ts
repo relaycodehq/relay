@@ -80,6 +80,10 @@ it("follows a selected diff to the list it moved to, and drops it once the file 
   const inConflict = { path: "src/d.ts", area: "unstaged" as const };
   expect(settleSelection(inConflict, [conflicted])).toBe(inConflict);
   expect(settleSelection(kept, [staged])).toBeNull();
+  const env = { path: ".env.local", area: "ignored" as const };
+  const touch = { path: ".env.local", agent: "claude", before: "kept" } as const;
+  expect(settleSelection(env, [], [touch])).toBe(env);
+  expect(settleSelection(env, [], [])).toBeNull();
 });
 
 it("reveals the working diff first, and knows a partly staged file's other list", () => {

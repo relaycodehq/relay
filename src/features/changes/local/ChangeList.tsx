@@ -1,22 +1,27 @@
 import type { RefObject } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, EyeOff } from "lucide-react";
+import { agentName } from "../../../../shared/agents";
 import {
   changeKind,
   type ChangeArea,
   type GitAction,
+  type IgnoredTouch,
   type WorkingChange,
 } from "../../../../shared/working-tree";
 import {
   byFolder,
   changeLabels,
   type ChangeSection,
+  type ListArea,
   type SelectedChange,
 } from "../working-changes";
 import { FileEntryIcon } from "../../../ui/FileEntryIcon";
-import { LocalChangeMenu } from "../LocalChangeMenu";
+import { IgnoredChangeMenu, LocalChangeMenu } from "../LocalChangeMenu";
 
 interface Props {
   sections: ChangeSection[];
+  /** Gitignored files agents wrote; they close the working list. */
+  ignored: IgnoredTouch[];
   revision: string;
   selected: SelectedChange | null;
   grouped: boolean;
@@ -26,7 +31,8 @@ interface Props {
   projectId?: string;
   listRef: RefObject<HTMLDivElement | null>;
   onAct: (action: GitAction) => void;
-  onPick: (path: string, area: ChangeArea) => void;
+  onPick: (path: string, area: ListArea) => void;
+  onDismiss: (paths: string[]) => void;
   onOpenFile?: (path: string, line?: number) => void;
   onTrashed: () => void;
   onError: (e: unknown) => void;
@@ -102,7 +108,57 @@ function Section(props: SectionProps) {
           : s.files.map((c) => (
               <ChangeRow key={c.path} change={c} nested={false} {...props} />
             )))}
+      {open &&
+        !staged &&
+        props.ignored.map((t) => (
+          <IgnoredRow key={t.path} touch={t} {...props} />
+        ))}
     </section>
+  );
+}
+
+/** Git can't stage it, so an eye-off mark sits where the box would. */
+function IgnoredRow({
+  touch: t,
+  selected,
+  projectId,
+  onPick,
+  onOpenFile,
+  onDismiss,
+  onError,
+  ignored,
+}: SectionProps & { touch: IgnoredTouch }) {
+  const slash = t.path.lastIndexOf("/");
+  return (
+    <IgnoredChangeMenu
+      path={t.path}
+      projectId={projectId}
+      onOpenFile={onOpenFile}
+      onDismiss={() => onDismiss([t.path])}
+      onDismissAll={
+        ignored.length > 1 ? () => onDismiss(ignored.map((i) => i.path)) : undefined
+      }
+      onError={onError}
+      trigger={
+        <div
+          className={`working-file ignored-change ${selected?.path === t.path && selected.area === "ignored" ? "selected" : ""}`}
+        >
+          <EyeOff size={12} className="ignored-mark" aria-hidden />
+          <button
+            className="change-select"
+            aria-label={`Gitignored ${t.path}`}
+            title={`${t.path}\nGitignored${t.rule ? ` by ${t.rule}` : ""} · written by ${agentName(t.agent)}`}
+            onClick={() => onPick(t.path, "ignored")}
+          >
+            <FileEntryIcon path={t.path} directory={false} />
+            <span className="change-name">{t.path.slice(slash + 1)}</span>
+            {slash > 0 && (
+              <span className="change-dir">{t.path.slice(0, slash)}</span>
+            )}
+          </button>
+        </div>
+      }
+    />
   );
 }
 

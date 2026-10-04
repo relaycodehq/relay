@@ -79,6 +79,8 @@ const methods = [
   "ackTerminal",
   "adoptTerminal",
   "projectWorkingDiff",
+  "projectIgnoredDiff",
+  "projectDismissIgnored",
   "projectTurnDiff",
   "projectHistory",
   "projectCommit",

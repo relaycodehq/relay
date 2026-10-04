@@ -17,6 +17,7 @@ import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
 import { projectTasks } from "../terminal/tasks";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
+import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { commitWatch } from "./turn-commit";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
@@ -231,9 +232,18 @@ export class TurnRunner {
       // Taken right before the agent starts, so the card lists only its edits.
       const first = message.id;
       // A side turn changes nothing, and edits made meanwhile are the main answer's.
-      const before = rules.records
-        ? await (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
-        : null;
+      // Ignored files stay out of the snapshot; a resumed turn may have written them already.
+      const [before, ignoredStart] = await Promise.all([
+        rules.records
+          ? (rules.resumesSnapshot ? resumeTurn : startTurn)(root, first)
+          : null,
+        rules.records && !rules.resumesSnapshot
+          ? keepIgnored(root).catch((e) => {
+              console.warn("Could not keep the ignored files:", e);
+              return null;
+            })
+          : null,
+      ]);
       if (before && !branch) {
         const checkout = chat.worktree
           ? await this.core.projects.root(chat.projectId)
@@ -259,6 +269,9 @@ export class TurnRunner {
             { edited: [...edited], commands: [...commands.values()] },
           );
           if (files.length) answer.message.changes = files;
+          await recordIgnored(root, ignoredStart, [...edited], provider).catch(
+            (e) => console.warn("Could not list the ignored files edited:", e),
+          );
           committed = !!(await commits?.ended());
         }
       }

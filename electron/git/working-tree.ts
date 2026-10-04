@@ -26,6 +26,7 @@ import { digest } from "../util/hash";
 import { imageSides, type FileSource } from "./image-pair";
 import { NotText, decodeText, readWorkingFile } from "./working-files";
 import { parseNumstat } from "./turn-changes";
+import { ignoredTouches } from "./ignored-touches";
 import {
   checkoutChanged,
   isStaged,
@@ -40,12 +41,27 @@ export async function ignoredPaths(
   root: string,
   paths: string[],
 ): Promise<Set<string>> {
-  if (!paths.length) return new Set();
+  return new Set((await checkIgnore(root, paths)).split("\0").filter(Boolean));
+}
+/** The rule ignoring each of `paths`, as `.gitignore:4 .env*.local`; paths no rule ignores are left out. */
+export async function ignoreRules(root: string, paths: string[]) {
+  const fields = (await checkIgnore(root, paths, ["-v"])).split("\0");
+  const rules = new Map<string, string>();
+  // Four fields a path: source, line, pattern, path. A negated rule (`!x`) un-ignores.
+  for (let i = 0; i + 3 < fields.length; i += 4) {
+    const [source, line, pattern, path] = fields.slice(i, i + 4);
+    if (source && !pattern.startsWith("!"))
+      rules.set(path, `${source}:${line} ${pattern}`);
+  }
+  return rules;
+}
+async function checkIgnore(root: string, paths: string[], flags: string[] = []) {
+  if (!paths.length) return "";
   const file = await gitExecutable();
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const child = execFile(
       file,
-      ["-C", root, "check-ignore", "--no-index", "--stdin", "-z"],
+      ["-C", root, "check-ignore", ...flags, "--no-index", "--stdin", "-z"],
       {
         timeout: 15000,
         maxBuffer: 16 * 1024 * 1024,
@@ -55,7 +71,7 @@ export async function ignoredPaths(
       },
       (error, stdout) => {
         if (error && Number(error.code) !== 1) reject(gitError(error));
-        else resolve(new Set(stdout.split("\0").filter(Boolean)));
+        else resolve(stdout);
       },
     );
     child.stdin?.on("error", () => {});
@@ -247,7 +263,8 @@ export async function workingTree(root: string): Promise<WorkingTree> {
   // Staging the status line doesn't show (such as `git add -p`) only happens
   // on changed paths. The whole index is megabytes in a large repository.
   const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
-  const [index, stamps, destination, counts, log, lines] = await Promise.all([
+  const [index, stamps, destination, counts, log, lines, ignored] =
+    await Promise.all([
     tracked.length
       ? git(root, [
           "ls-files",
@@ -288,6 +305,7 @@ export async function workingTree(root: string): Promise<WorkingTree> {
       ? git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`])
       : "",
     lineCounts(root, changes, head),
+    ignoredTouches(root, head),
   ]);
   return {
     head,
@@ -308,8 +326,18 @@ export async function workingTree(root: string): Promise<WorkingTree> {
         sha: r.slice(0, r.indexOf(" ")),
         subject: r.slice(r.indexOf(" ") + 1),
       })),
+    ...(ignored.touches.length ? { ignored: ignored.touches } : {}),
     revision: digest(
-      JSON.stringify([head, branch, raw, index, stamps, upstream, destination]),
+      JSON.stringify([
+        head,
+        branch,
+        raw,
+        index,
+        stamps,
+        upstream,
+        destination,
+        ignored.stamp,
+      ]),
     ),
   };
 }

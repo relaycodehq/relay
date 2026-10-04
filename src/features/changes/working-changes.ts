@@ -5,10 +5,12 @@ import {
   isUnstaged,
   type ChangeArea,
   type ChangeKind,
+  type IgnoredTouch,
   type WorkingChange,
   type WorkingTree,
 } from "../../../shared/working-tree";
 import { parentOf } from "../../lib/file-tree";
+import { agentName } from "../../../shared/agents";
 
 export const changeLabels: Record<ChangeKind, string> = {
   added: "Added",
@@ -53,9 +55,12 @@ export const changeSections = (changes: WorkingChange[]): ChangeSection[] => [
   },
 ];
 
+/** The staged or working list, or the gitignored files agents wrote. */
+export type ListArea = ChangeArea | "ignored";
+
 export interface SelectedChange {
   path: string;
-  area: ChangeArea;
+  area: ListArea;
 }
 
 /**
@@ -65,7 +70,10 @@ export interface SelectedChange {
 export function settleSelection(
   selected: SelectedChange,
   changes: WorkingChange[],
+  ignored: IgnoredTouch[] = [],
 ): SelectedChange | null {
+  if (selected.area === "ignored")
+    return ignored.some((t) => t.path === selected.path) ? selected : null;
   const change = changes.find((c) => c.path === selected.path);
   if (!change) return null;
   if (selected.area === "unstaged" && !isUnstaged(change))
@@ -97,6 +105,20 @@ export const sideLabels = (area: ChangeArea) =>
     ? { deletions: "HEAD", additions: "Index" }
     : { deletions: "Index", additions: "Working file" };
 
+/** The sides of an ignored file's diff, and what its header says about them. */
+export function ignoredSides(touch: IgnoredTouch) {
+  const agent = agentName(touch.agent);
+  return {
+    sides: { deletions: `Before ${agent}`, additions: "Now" },
+    said:
+      touch.before === "kept"
+        ? `Before ${agent} → Now`
+        : touch.before === "none"
+          ? `Made by ${agent}`
+          : `Written by ${agent} · no copy from before`,
+  };
+}
+
 /** The commit message and the selected diff, kept per project. */
 interface SavedChanges {
   selected: SelectedChange | null;
@@ -110,7 +132,7 @@ export function parseSavedChanges(saved: unknown): SavedChanges {
   return {
     selected:
       typeof selected?.path === "string" &&
-      ["staged", "unstaged"].includes(selected.area as string)
+      ["staged", "unstaged", "ignored"].includes(selected.area as string)
         ? (selected as SelectedChange)
         : null,
     message: typeof s?.message === "string" ? s.message : "",
