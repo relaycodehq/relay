@@ -113,13 +113,23 @@ export class RemoteDevices {
   }
   /** The device the token belongs to, or undefined. */
   async verify(deviceId: string, token: string) {
-    const device = this.list().find((d) => d.id === deviceId);
-    if (!device || !sameSecret(hash(token), device.tokenHash)) return;
+    if (!this.holding(deviceId, token)) return;
     await this.store.update((s) => {
       const saved = s.phoneRemote?.devices?.find((d) => d.id === deviceId);
       if (saved) saved.lastSeen = this.now();
     });
-    return device;
+    // A removal saved while this update waited its turn wins.
+    return this.holding(deviceId, token);
+  }
+  /** Whether the device is still paired; a removed one's sessions end. */
+  paired(deviceId: string) {
+    return this.list().some((d) => d.id === deviceId);
+  }
+  private holding(deviceId: string, token: string) {
+    const device = this.list().find((d) => d.id === deviceId);
+    return device && sameSecret(hash(token), device.tokenHash)
+      ? device
+      : undefined;
   }
   async setApp(deviceId: string, app: PhoneAppReport) {
     const saved = this.list().find((d) => d.id === deviceId);

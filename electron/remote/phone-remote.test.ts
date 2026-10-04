@@ -258,6 +258,19 @@ it("streams thread changes to the phone and cuts it off when removed", async () 
   expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
 });
 
+it("ends the session of a phone removed without being cut off", async () => {
+  const { remote, dispatched } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  // As when the removal lands mid sign-in and `disconnect` finds no session.
+  await remote.devices.revoke(p.credentials()!.deviceId);
+  await expect(p.client.call("overview")).rejects.toThrow();
+  await p.until("denied");
+  expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
+  expect(dispatched).toEqual([]);
+});
+
 it("gives up on a quiet link at once, even when the socket never finishes closing", async () => {
   const { remote } = await desktop();
   const link = parsePairingUrl((await remote.pairing()).url)!;

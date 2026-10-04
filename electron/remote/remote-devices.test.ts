@@ -38,6 +38,23 @@ it("trades a pairing code once for a token it only keeps hashed", async () => {
   }
 });
 
+it("turns a sign-in away when the phone is removed while it signs in", async () => {
+  const { dir, devices } = await setup();
+  try {
+    const { device, token } = await devices.pair(
+      devices.newPairing().code,
+      "Pixel",
+    );
+    // The removal is still being saved when the phone's sign-in arrives.
+    const removing = devices.revoke(device.id);
+    const signingIn = devices.verify(device.id, token);
+    await removing;
+    expect(await signingIn).toBeUndefined();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("voids a code after it expires or after five wrong guesses", async () => {
   let now = 1_000_000;
   const { dir, devices } = await setup(() => now);

@@ -113,8 +113,18 @@ export class RemoteServer {
   /** To every device online, or those `to` picks. */
   broadcast(event: RemoteEvent, to?: (deviceId: string) => boolean) {
     for (const c of this.connections)
-      if (c.deviceId && (!to || to(c.deviceId)))
+      if (c.deviceId && this.stillPaired(c) && (!to || to(c.deviceId)))
         this.send(c, { t: "event", event });
+  }
+  /**
+   * Ends the session of a device removed since it signed in, as the removal
+   * can land while its sign-in is still under way and miss `disconnect`.
+   */
+  private stillPaired(c: Connection) {
+    if (c.deviceId && this.options.devices.paired(c.deviceId)) return true;
+    this.send(c, { t: "denied", reason: "This phone was removed in Relay." });
+    c.socket.close();
+    return false;
   }
   /** Ends a revoked device's sessions right away. */
   disconnect(deviceId: string, reason = "This phone was removed in Relay.") {
@@ -206,6 +216,7 @@ export class RemoteServer {
       }
       return;
     }
+    if (!this.stillPaired(c)) return;
     if (frame.t !== "call" || !Number.isSafeInteger(frame.id)) return;
     const { id, method, args } = frame;
     try {
