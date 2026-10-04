@@ -77,7 +77,7 @@ Relay runs the agents on your computer with your own subscriptions. No Relay acc
 | Platform | Status |
 | --- | --- |
 | macOS (Apple Silicon) | Primary development target. Ad-hoc signed, not notarized. |
-| Windows x64 | Built and released from CI on every push, with Windows-specific fixes landing regularly. Less daily use than macOS. |
+| Windows x64 | Built with every release, with Windows-specific fixes landing regularly. Less daily use than macOS. |
 | Linux x86-64 | AppImage and Omarchy bundle are cross-built. Runtime testing on real distributions is still thin. |
 
 Automated tests do not cover real agent accounts, OS credential prompts, signing or every Linux desktop.
@@ -128,7 +128,7 @@ npm run test:e2e
 
 `npm test` runs the whole unit suite; pass a file path to run just one. `npm run test:e2e` drives the real Electron app against an isolated local Gitea fixture, with windows hidden and synthetic credential storage.
 
-`npm run package:mac`, `package:win`, `package:linux` and `package:omarchy` build installers into `release/`. Every push to `main` builds and publishes all of them to [relay-releases](https://github.com/lubomirmolin/relay-releases).
+`npm run package:mac`, `package:win`, `package:linux` and `package:omarchy` build installers into `release/`. Every new `v*` tag on `main` builds and publishes all of them to [relay-releases](https://github.com/lubomirmolin/relay-releases); pushing to `main` alone ships nothing.
 
 </details>
 
