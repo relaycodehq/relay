@@ -92,7 +92,8 @@ export async function sendDraft(
     recipient !== "message" &&
     !chat?.shared &&
     scope.kind !== "review";
-  const outgoing = numberImages(text, await loadDraftImages(key));
+  const draftImages = await loadDraftImages(key);
+  const outgoing = numberImages(text, draftImages);
   const images = await Promise.all(outgoing.images.map(flattenSketch));
   const value = buildSend(
     {
@@ -122,8 +123,9 @@ export async function sendDraft(
       scope.kind === "project" ? loadDraftWorkspace(id, project) : undefined,
     ));
   started.set(id, target);
+  const attachments = loadDraftAttachments(id);
   await api.sendProjectChat(target.id, {
-    ...withAttachments(value, loadDraftAttachments(id)),
+    ...withAttachments(value, attachments),
     id: crypto.randomUUID(),
   });
   started.delete(id);
@@ -133,10 +135,27 @@ export async function sendDraft(
     startThreadSettings(id, target.id, recipient);
     forgetNewThread(id);
   }
-  writeDraft(key, "");
-  clearDraftAttachments(id);
-  await saveDraftImages(key, []).catch(() => {});
+  // The draft may have been opened and written in while this went out: only
+  // what went goes.
+  const left = unsent(readDraft(key), text);
+  if (left !== readDraft(key)) writeDraft(key, left);
+  clearDraftAttachments(id, attachments);
+  const sentImages = new Set(draftImages.map((image) => image.id));
+  await loadDraftImages(key)
+    .then((now) =>
+      saveDraftImages(
+        key,
+        now.filter((image) => !sentImages.has(image.id)),
+      ),
+    )
+    .catch(() => {});
   await qc.invalidateQueries({ queryKey: ["project-chats"] });
   if (chat) await qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
   return target;
+}
+
+/** The draft once `sent` went: what was typed after it stays, a rewrite stays whole. */
+export function unsent(draft: string, sent: string) {
+  const now = draft.trim();
+  return now.startsWith(sent) ? now.slice(sent.length).trim() : draft;
 }

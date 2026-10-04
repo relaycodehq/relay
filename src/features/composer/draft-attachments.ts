@@ -9,9 +9,14 @@ import { threadStorage } from "../../lib/thread-storage";
 
 // What a thread's main composer attached besides its text, kept per thread
 // (or unsent thread) until the message goes.
-export function clearDraftAttachments(id: string) {
+/** Clears what went out with `sent`, keeping anything attached since. */
+export function clearDraftAttachments(id: string, sent: DraftAttachments) {
   const { selection, workItem, codeRefs } = threadStorage(id);
-  for (const kind of [selection, workItem, codeRefs]) kind.clear();
+  const same = (now: unknown, then: unknown) =>
+    JSON.stringify(now) === JSON.stringify(then);
+  if (same(selection.load(), sent.selection)) selection.clear();
+  if (same(workItem.load(), sent.workItem)) workItem.clear();
+  if (same(codeRefs.load(), sent.codeRefs)) codeRefs.clear();
 }
 
 export interface DraftAttachments {
