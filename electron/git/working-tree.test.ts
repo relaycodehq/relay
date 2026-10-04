@@ -10,7 +10,7 @@ import {
   mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { workingTree, workingDiff, performGitAction } from "./working-tree";
 import { revisionDiff } from "./turn-changes";
 let root: string, remote: string;
@@ -356,6 +356,35 @@ it("discards back to the index or to HEAD, keeping a copy of each file in the Tr
   );
   expect(tree.changes.map((c) => c.path)).toEqual(["loose.ts"]);
   expect(trashed).toEqual(["staged\nworking\n", "staged\n", "new\n"]);
+});
+it("keeps the staged version too when it differs from the file on disk", async () => {
+  await writeFile(join(root, "code.ts"), "staged\n");
+  await writeFile(join(root, "gone.ts"), "staged, then deleted\n");
+  git("add", "code.ts", "gone.ts");
+  await writeFile(join(root, "code.ts"), "working\n");
+  await rm(join(root, "gone.ts"));
+  const trashed: Record<string, string> = {};
+  const tree = await performGitAction(
+    root,
+    {
+      kind: "discard",
+      revision: (await workingTree(root)).revision,
+      paths: ["code.ts", "gone.ts"],
+      area: "staged",
+    },
+    async (file) => {
+      trashed[basename(file)] = await readFile(file, "utf8");
+    },
+  );
+  expect(trashed).toEqual({
+    "code.ts": "working\n",
+    "code (staged).ts": "staged\n",
+    "gone (staged).ts": "staged, then deleted\n",
+  });
+  expect(await readFile(join(root, "code.ts"), "utf8")).toBe(
+    "export const a = 1;\n",
+  );
+  expect(tree.changes).toEqual([]);
 });
 it("shows changed binary and oversized files as binary instead of failing", async () => {
   await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 1]));

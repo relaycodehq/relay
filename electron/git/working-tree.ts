@@ -9,9 +9,10 @@ import {
   mkdtemp,
   readFile,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { inspectRepository } from "./repository";
 import {
   git,
@@ -323,24 +324,45 @@ function withPreviousPaths(
     ),
   ];
 }
-/** Hands a copy of each file on disk to `trash`, so a discard can be undone. */
+/**
+ * Hands a copy of each file on disk to `trash`, so a discard can be undone;
+ * discarding staged changes also hands over a staged version that differs
+ * from the one on disk, as "name (staged).ext".
+ */
 async function keepCopies(
   root: string,
+  changes: WorkingChange[],
   paths: string[],
   trash: (file: string) => Promise<void>,
+  staged: boolean,
 ) {
-  for (const path of paths) {
-    const source = join(root, path);
-    const stat = await lstat(source).catch(() => null);
-    if (!stat?.isFile()) continue;
+  const keep = async (name: string, write: (copy: string) => Promise<void>) => {
     const dir = await mkdtemp(join(tmpdir(), "relay-discard-"));
     try {
-      const copy = join(dir, basename(path));
-      await copyFile(source, copy);
+      const copy = join(dir, name);
+      await write(copy);
       await trash(copy);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  };
+  for (const path of paths) {
+    const source = join(root, path);
+    const stat = await lstat(source).catch(() => null);
+    if (stat?.isFile())
+      await keep(basename(path), (copy) => copyFile(source, copy));
+    const change = changes.find((c) => c.path === path);
+    if (!staged || !change || !/[MARCT]/.test(change.index)) continue;
+    if (change.worktree === " ") continue;
+    const size = Number(
+      await git(root, ["cat-file", "-s", `:${path}`]).catch(() => NaN),
+    );
+    if (!Number.isFinite(size)) continue;
+    const blob = await gitBytes(root, ["cat-file", "blob", `:${path}`], size);
+    const ext = extname(path);
+    await keep(`${basename(path, ext)} (staged)${ext}`, (copy) =>
+      writeFile(copy, blob),
+    );
   }
 }
 export async function performGitAction(
@@ -392,7 +414,7 @@ export async function performGitAction(
         action.paths,
         (c) => staged || /[RC]/.test(c.worktree),
       );
-      await keepCopies(root, action.paths, trash);
+      await keepCopies(root, state.changes, action.paths, trash, staged);
       for (const part of chunks(paths, 100))
         await git(
           root,
