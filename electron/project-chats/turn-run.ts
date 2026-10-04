@@ -17,6 +17,7 @@ import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
 import type { AgentWatch } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
+import { currentBranchOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { commitWatch } from "./turn-commit";
@@ -288,6 +289,8 @@ export class TurnRunner {
             (e) => console.warn("Could not list the ignored files edited:", e),
           );
           committed = !!(await commits?.ended());
+          // The agent may have left the checkout on another branch, as landing one in main does.
+          chat.branch = await currentBranchOr(root, chat.branch);
         }
       }
       const done = answer.message;

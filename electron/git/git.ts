@@ -175,6 +175,12 @@ export const currentBranchOrNull = (root: string) =>
     (name) => name || null,
     () => null,
   );
+/** The checked-out branch, none when detached, or `known` when Git can't say. */
+export const currentBranchOr = (root: string, known: string | undefined) =>
+  currentBranch(root).then(
+    (name) => name || undefined,
+    () => known,
+  );
 /** Git's output as bytes, up to `limit`; past it, the content isn't text Relay shows. */
 export async function gitBytes(
   root: string,

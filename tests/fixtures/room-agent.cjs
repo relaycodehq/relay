@@ -749,6 +749,16 @@ if (args.includes("--permission-prompt-tool")) {
           },
         });
       }
+      // Leaves the checkout on another branch, as landing one in main does.
+      const switchTo = /fixture switch branch to (\S+)/.exec(said)?.[1];
+      if (switchTo)
+        require("node:child_process").execFileSync(
+          "git",
+          switchTo === "detached"
+            ? ["switch", "-q", "--detach"]
+            : ["switch", "-q", switchTo],
+          { cwd: m.params.cwd },
+        );
       if (!process.env.RELAY_AGENT_NO_TITLE)
         send({
           method: "thread/name/updated",

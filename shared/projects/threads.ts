@@ -63,7 +63,7 @@ export interface ChatSummary {
   markedUnread?: true;
   /** Archived threads are hidden from the sidebar. */
   archivedAt?: number;
-  /** Branch checked out when the latest message was sent. */
+  /** Branch checked out when the latest message was sent or its answer ended. */
   branch?: string;
   /** Set on threads that work in their own worktree; fixed when the thread starts. */
   worktree?: ChatWorktree;

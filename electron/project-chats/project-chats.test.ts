@@ -1928,6 +1928,38 @@ it("lists and rolls back only the files a turn's agent changed", async () => {
   await expect(readFile(join(repo, "src", "guard.ts"))).rejects.toThrow();
   expect(await readFile(join(repo, "stray.md"), "utf8")).toBe("Stray.\n");
 }, 20000);
+it("shows the branch a turn left the checkout on, not the one it started on", async () => {
+  const repo = join(root, "repo");
+  const git = (...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-c", "user.name=T", "-c", "user.email=t@t", ...args],
+      { cwd: repo },
+    );
+  git("switch", "-q", "-c", "main");
+  git("commit", "-q", "--allow-empty", "-m", "start");
+  git("switch", "-q", "-c", "feature");
+  const chat = await chats.create(projectId, { kind: "project" });
+  const turn = async (body: string) => {
+    const sent = input(body);
+    await chats.send(chat.id, sent);
+    await vi.waitFor(
+      async () => {
+        const saved = await chats.get(chat.id);
+        expect(saved.messages.at(-1)?.status).toBe("complete");
+        expect(saved.messages.at(-2)?.id).toBe(sent.id);
+        expect(chats.hasActiveProject(projectId)).toBe(false);
+      },
+      { timeout: 10000 },
+    );
+    return (await chats.get(chat.id)).branch;
+  };
+  expect(await turn("@codex fixture switch branch to main")).toBe("main");
+  // A detached checkout is on no branch; the old name would be a lie.
+  expect(
+    await turn("@codex fixture switch branch to detached"),
+  ).toBeUndefined();
+}, 30000);
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");
   const chat = await chats.create(projectId, { kind: "project" });

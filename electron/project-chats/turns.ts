@@ -13,7 +13,7 @@ import { agentName, agents, helperProviders } from "../../shared/agents";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatTurn } from "./chat-turn";
-import { currentBranchOrNull } from "../git/git";
+import { currentBranchOr } from "../git/git";
 import { codexSkills, type CodexSkill } from "../agents/provider-commands";
 import { promptTitle } from "../agents/thread-titles";
 import { turnPrompt } from "./turn-prompt";
@@ -235,7 +235,7 @@ export class ChatTurns {
       delete chat.limitResume;
       this.councils.sent(chat, input);
       chat.updated = Date.now();
-      chat.branch = (await currentBranchOrNull(root)) ?? chat.branch;
+      chat.branch = await currentBranchOr(root, chat.branch);
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       this.core.storage.keep(chat);
