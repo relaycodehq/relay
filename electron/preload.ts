@@ -119,6 +119,7 @@ const methods = [
   "resumeUltraplan",
   "setDeepReviewFinding",
   "closeWatchNote",
+  "watchSpend",
   "resumeProjectChat",
   "compactProjectChat",
   "reloadProjectChatSession",

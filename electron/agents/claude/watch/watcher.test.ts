@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WatchNote } from "../../../../shared/watch";
 import type { AgentWatch } from "../../types";
-import { WatchChecks } from "./checks";
+import { WatchChecks } from "../../watch/checks";
 import { SubagentWatch } from "./subagents";
-import { TurnWatcher } from "./watcher";
+import { TurnWatcher } from "../../watch/watcher";
 
 const none = "learn: none";
 const note = (line: string) => `learn: ${line}\ntag: Heads up\n- a point`;
@@ -14,7 +14,7 @@ function setup(answer: (question: string) => string = () => none) {
   const abort = new AbortController();
   const checks = new WatchChecks(async (question) => {
     asked.push(question);
-    return answer(question);
+    return { reply: answer(question) };
   });
   const watch = (scope: AgentWatch["scope"]): AgentWatch => ({
     scope,
@@ -189,8 +189,8 @@ describe("WatchChecks", () => {
     let release!: () => void;
     const ask = vi.fn(
       () =>
-        new Promise<string>((resolve) => {
-          release = () => resolve(none);
+        new Promise<{ reply: string }>((resolve) => {
+          release = () => resolve({ reply: none });
         }),
     );
     const checks = new WatchChecks(ask);

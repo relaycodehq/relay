@@ -1,7 +1,7 @@
 import type { AgentWatch } from "../../types";
-import type { WatchChecks } from "./checks";
+import type { WatchChecks } from "../../watch/checks";
 import { SubagentLog } from "./digest";
-import { subagentCheckPrompt } from "./prompt";
+import { subagentCheckPrompt } from "../../watch/prompt";
 
 /** A subagent's calls between checks of its work, besides the one when it ends. */
 const AGENT_EVERY = 8;

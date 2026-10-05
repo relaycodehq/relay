@@ -49,6 +49,7 @@ import { ChatTurns } from "./turns";
 import { ThreadWorktrees } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT } from "../../shared/watch";
+import { WatchSpendLog } from "./watch-spend";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -106,6 +107,7 @@ export class ProjectChats {
       control: this.control,
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
+      watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
     };
     this.core = core;
     // Hosts look methods up at call time, not with .bind(this): tests
@@ -363,6 +365,16 @@ export class ProjectChats {
           ].slice(-WATCH_KNOWN_LIMIT);
         });
     });
+  }
+  /** What side checks spent in the last `days`, by thread. */
+  watchSpend(days: number) {
+    const titles = new Map(
+      (this.store.get().chats ?? []).map((c) => [c.id, c.title]),
+    );
+    return (
+      this.core.watchSpend?.summary(days, (id) => titles.get(id)) ??
+      Promise.resolve(undefined)
+    );
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);

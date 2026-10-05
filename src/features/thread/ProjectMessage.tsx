@@ -333,16 +333,6 @@ export const Message = memo(function Message({
           }
         />
       )}
-      {m.role === "assistant" && onSteer && (
-        <WatchNotes
-          chatId={chatId}
-          messageId={m.id}
-          notes={m.notes}
-          projectRoot={projectRoot}
-          onOpenFile={onOpenFile}
-          onSteer={onSteer}
-        />
-      )}
       {!!parsed.refs.length && (
         <CodeReferenceList
           references={parsed.refs}
@@ -361,6 +351,17 @@ export const Message = memo(function Message({
         )
       ) : null}
       {after}
+      {m.role === "assistant" && onSteer && (
+        <WatchNotes
+          agent={agentName(m.provider)}
+          chatId={chatId}
+          messageId={m.id}
+          notes={m.notes}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+          onSteer={onSteer}
+        />
+      )}
       {!!m.changes?.length && m.status !== "streaming" && (
         <ChangedFilesCard
           files={m.changes}

@@ -14,7 +14,7 @@ import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
 import { watchOf, type ClaudeSession } from "./session";
 import { ToolRows } from "./tool-rows";
-import { TurnWatcher } from "../watch/watcher";
+import { TurnWatcher } from "../../watch/watcher";
 
 /**
  * What a frame leaves the turn to do: read on, see whether Claude runs a

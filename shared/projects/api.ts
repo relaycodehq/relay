@@ -11,6 +11,7 @@ import type {
 import type { CiStatus } from "../ci";
 import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
+import type { WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type {
   DeepReviewStart,
@@ -246,6 +247,8 @@ export interface ProjectCouncilApi {
     noteId: string,
     known: boolean,
   ): Promise<void>;
+  /** What "Flag what I'd miss" spent this past week, by thread. */
+  watchSpend(): Promise<WatchSpendSummary | undefined>;
 }
 
 /** A thread's own worktree, and the ones its agent made. */

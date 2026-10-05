@@ -1,4 +1,4 @@
-import type { WatchNote, WatchScope } from "../../shared/watch";
+import type { WatchNote, WatchScope, WatchSpend } from "../../shared/watch";
 import type {
   RuntimeMode,
   InteractionMode,
@@ -38,6 +38,8 @@ export type AgentWatch = {
   /** Topics the person said they already know. */
   known: string[];
   onNote: (note: WatchNote) => void;
+  /** What a check spent, or what the watched session did in a turn. */
+  onSpend?: (spend: WatchSpend) => void;
 };
 
 /** One turn of any agent, as a thread, room, title or helper job runs it. */

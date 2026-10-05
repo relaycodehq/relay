@@ -1,4 +1,4 @@
-import type { AgentWatch } from "../../types";
+import type { AgentWatch } from "../types";
 import type { WatchChecks } from "./checks";
 import { threadCheckPrompt } from "./prompt";
 

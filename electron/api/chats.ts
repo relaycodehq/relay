@@ -247,5 +247,6 @@ export function chatHandlers(ctx: ApiContext) {
       (id, messageId, noteId, known) =>
         projectChats.closeWatchNote(id, messageId, noteId, known),
     ),
+    watchSpend: () => projectChats.watchSpend(7),
   } satisfies Handlers;
 }

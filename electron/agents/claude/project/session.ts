@@ -16,9 +16,10 @@ import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
-import { WatchChecks } from "../watch/checks";
+import { WatchChecks } from "../../watch/checks";
 import { SubagentWatch } from "../watch/subagents";
-import { askLive } from "./side";
+import { ClaudeMeter } from "../watch/spend";
+import { askLive, sessionTotals } from "./side";
 import { claudePermissionMode, type ClaudeRunOptions } from "./config";
 import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
 import { ClaudeWork } from "./pending";
@@ -91,16 +92,17 @@ export type ClaudeSession = {
   /** The subagents it started, followed between turns too. */
   agents: SubagentTracker;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
-  watch?: { checks: WatchChecks; subagents: SubagentWatch };
+  watch?: { checks: WatchChecks; meter: ClaudeMeter; subagents: SubagentWatch };
 };
 
 /** The session's side checks; they ask whatever stream the session has at the time. */
 export function watchOf(session: ClaudeSession) {
   if (!session.watch) {
+    const meter = new ClaudeMeter(() => sessionTotals(session.stream));
     const checks = new WatchChecks((question, signal) =>
-      askLive(session.stream, question, signal),
+      meter.measure(() => askLive(session.stream, question, signal)),
     );
-    session.watch = { checks, subagents: new SubagentWatch(checks) };
+    session.watch = { checks, meter, subagents: new SubagentWatch(checks) };
   }
   return session.watch;
 }

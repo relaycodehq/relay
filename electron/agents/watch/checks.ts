@@ -1,13 +1,22 @@
 import { randomUUID } from "node:crypto";
-import type { WatchNote } from "../../../../shared/watch";
-import type { AgentWatch } from "../../types";
+import type { WatchNote, WatchTokens } from "../../../shared/watch";
+import type { AgentWatch } from "../types";
 import { parseNote, sameNote, type ParsedNote } from "./parse";
 
-/** Asks beside the live session; null when it had no answer. */
+/** What one check cost, as its agent measured it; no `usd` without a list price. */
+export type CheckCost = {
+  model: string;
+  tokens: WatchTokens;
+  usd?: number;
+  /** Taken out of totals the thread's own requests also moved. */
+  split?: boolean;
+};
+
+/** Asks beside the live session; `reply` is null when it had no answer. */
 export type WatchAsk = (
   question: string,
   signal: AbortSignal,
-) => Promise<string | null>;
+) => Promise<{ reply: string | null; cost?: CheckCost }>;
 
 export type WatchCheck = {
   /** One of each waits at a time: "main", or a subagent's call id. */
@@ -22,7 +31,8 @@ export type WatchCheck = {
 
 /**
  * A session's side checks, one at a time, with what they already showed so
- * the same point isn't made twice in the thread.
+ * the same point isn't made twice in the thread. Each check reports what it
+ * spent when its agent could measure it.
  */
 export class WatchChecks {
   private queue: WatchCheck[] = [];
@@ -50,13 +60,24 @@ export class WatchChecks {
     try {
       for (let check; (check = this.queue.shift());) {
         if (check.signal.aborted) continue;
-        const reply = await this.ask(
-          check.prompt(this.shown),
-          check.signal,
-        ).catch(() => null);
+        // Asked for at once: a subagent's digest counts as seen from here.
+        const question = check.prompt(this.shown);
+        const { reply, cost } = await this.ask(question, check.signal).catch(
+          () => ({ reply: null, cost: undefined }),
+        );
         const parsed = reply ? parseNote(reply) : null;
-        if (parsed && !this.seen(parsed, check.watch.known))
-          this.show(parsed, check);
+        const noted = !!parsed && !this.seen(parsed, check.watch.known);
+        if (noted) this.show(parsed, check);
+        if (cost)
+          check.watch.onSpend?.({
+            kind: "check",
+            about: check.agent ? "subagent" : "main",
+            model: cost.model,
+            tokens: cost.tokens,
+            ...(cost.usd === undefined ? {} : { usd: cost.usd }),
+            ...(cost.split ? { split: true as const } : {}),
+            noted,
+          });
       }
     } finally {
       this.running = false;

@@ -3,10 +3,11 @@ import { api } from "../../lib/api";
 import { Segmented } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
 import { useSavedSetting } from "./useSavedSetting";
+import { WatchSpendLine } from "./WatchSpend";
 
 /**
- * Off, the main thread, or with its subagents, and roughly what a check
- * costs, as measured on real Claude Code runs.
+ * Off, the main thread, or with its subagents, and what the checks spent
+ * this past week.
  */
 export function WatchThreadsSetting() {
   const watch = useSavedSetting(
@@ -32,10 +33,7 @@ export function WatchThreadsSetting() {
         />
       </div>
       {watch.error && <ErrorBox error={watch.error} />}
-      <p className="watch-cost">
-        Checks every 6 tool calls and when a subagent ends · about 2–4¢ a check
-        on Opus 5.5
-      </p>
+      <WatchSpendLine />
     </>
   );
 }

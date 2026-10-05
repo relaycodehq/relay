@@ -1,6 +1,8 @@
 import { findExecutable } from "../../../platform/executables";
 import { runAccount } from "../../accounts";
 import { AsyncQueue } from "../../../util/async-queue";
+import { withTimeout } from "../../../util/timeout";
+import type { SessionTotals } from "../watch/spend";
 import { sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
 import { sessions } from "./session";
 
@@ -82,4 +84,18 @@ export async function askLive(
     signal,
   });
   return answer?.response.trim() || null;
+}
+
+/** What the session has spent so far, side questions included. */
+export async function sessionTotals(
+  stream: ClaudeStream,
+): Promise<SessionTotals> {
+  const { session } = await withTimeout(
+    stream.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+      skipBehaviors: true,
+    }),
+    5000,
+    "Claude did not report usage.",
+  );
+  return { usd: session.total_cost_usd, models: session.model_usage };
 }

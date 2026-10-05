@@ -43,8 +43,11 @@ export async function pump(
       if (seq !== undefined && seq < session.hosted!.split)
         restore(session, next.value);
       else {
-        if (session.options.watch || session.watch)
-          watchOf(session).subagents.observe(next.value, session.options);
+        if (session.options.watch || session.watch) {
+          const watch = watchOf(session);
+          watch.meter.observe(next.value, session.options.watch);
+          watch.subagents.observe(next.value, session.options);
+        }
         receive(session, next.value);
       }
     }

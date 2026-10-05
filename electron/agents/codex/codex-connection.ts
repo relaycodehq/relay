@@ -5,6 +5,7 @@ import { withCodexTransport, type CodexTransport } from "./codex-transport";
 import { HostedChild } from "../../agent-host/child";
 import type { Entry } from "../../agent-host/protocol";
 import { z } from "zod";
+import type { CodexWatch } from "./codex-watch";
 import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { threadStartedSchema, type CodexThreadStarted } from "./codex-schemas";
 import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
@@ -32,6 +33,12 @@ class CodexConnection {
   onNotification?: (method: string, params: unknown) => void;
   onRequest?: (method: string, params: any) => Promise<unknown>;
   onError?: (error: Error) => void;
+  /** What its thread was started or resumed with; a side check's fork needs exactly this to read the cache. */
+  threadSettings?: Record<string, unknown>;
+  /** Side checks' forks by thread id: what they say goes to them, never to the turn. */
+  private sides = new Map<string, (method: string, params: any) => void>();
+  /** Watch state for "Flag what I'd miss", made the first time a turn asks. */
+  watch?: CodexWatch;
   private release!: () => void;
   constructor(
     open: () => Promise<ChildProcessWithoutNullStreams | HostedChild>,
@@ -68,13 +75,23 @@ class CodexConnection {
         return withCodexTransport(
           // Hosted or not, it reads and writes like the child it was.
           child as ChildProcessWithoutNullStreams,
-          (method, params) => this.onNotification?.(method, params),
+          (method, params) => {
+            const side = this.sides.get(threadOf(params));
+            if (side) side(method, params);
+            else this.onNotification?.(method, params);
+          },
           fail,
           async (wire) => {
             ready(wire);
             await lifetime;
           },
           async (method, params) => {
+            // A fork never asks the person anything, and never through the turn.
+            if (this.sides.has(threadOf(params))) {
+              if (method.endsWith("requestApproval"))
+                return { decision: "decline" };
+              throw new Error(`A side check can't answer ${method}.`);
+            }
             if (this.onRequest) return this.onRequest(method, params);
             if (method.endsWith("requestApproval"))
               return { decision: "decline" };
@@ -83,6 +100,13 @@ class CodexConnection {
         );
       })
       .catch(fail);
+  }
+  /** Sends one thread's notifications and requests to `listen` until the returned function stops it. */
+  side(threadId: string, listen: (method: string, params: any) => void) {
+    this.sides.set(threadId, listen);
+    return () => {
+      this.sides.delete(threadId);
+    };
   }
   /** The thread it started, kept with a hosted server for the next Relay. */
   keep(started: CodexThreadStarted) {
@@ -117,6 +141,12 @@ class CodexConnection {
     terminate(child);
   }
 }
+function threadOf(params: unknown) {
+  const id = (params as { threadId?: unknown } | null)?.threadId;
+  return typeof id === "string" ? id : "";
+}
+
+export type { CodexConnection };
 const sessions = new HostedSessions<CodexConnection>({
   provider: "codex",
   name: "Codex",

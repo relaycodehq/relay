@@ -7,7 +7,7 @@ import { RichText } from "../../ui/RichText";
 import "./watch-notes.css";
 
 /**
- * What the side check flagged in this turn, under the work it's about.
+ * What the side check flagged in this turn, after the answer and before its changes.
  * Closing one, in any of the three ways, keeps it out of the turn.
  */
 export function WatchNotes({
@@ -17,7 +17,10 @@ export function WatchNotes({
   projectRoot,
   onOpenFile,
   onSteer,
+  agent,
 }: {
+  /** Who "Tell" puts the message in front of: Claude or Codex. */
+  agent: string;
   chatId: string;
   messageId: string;
   notes: WatchNote[] | undefined;
@@ -92,7 +95,7 @@ export function WatchNotes({
             close(note);
           }}
         >
-          Tell Claude
+          Tell {agent}
         </button>
         <button type="button" onClick={() => close(note, true)}>
           I know this

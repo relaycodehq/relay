@@ -13,11 +13,10 @@ import "../../src/features/settings/settings.css";
 import "./watcher-notes.css";
 import { initAppearance, setMode } from "../../src/lib/appearance";
 import { initWindowFocus } from "../../src/lib/window-focus";
-import { AgentTurn } from "../../src/features/agent-turn/AgentTurn";
-import { WatchNotes } from "../../src/features/watch/WatchNotes";
+import { Message } from "../../src/features/thread/ProjectMessage";
 import { WatchThreadsSetting } from "../../src/features/settings/WatchThreadsSetting";
 import type { WatchNote } from "../../shared/watch";
-import { notes, projectRoot, turn, userAsk } from "./watcher-data";
+import { finished, notes, projectRoot, turn, userAsk } from "./watcher-data";
 
 initAppearance();
 initWindowFocus();
@@ -65,6 +64,11 @@ function App() {
       ? "setting"
       : "thread",
   );
+  const [state, setState] = useState<"running" | "done">(
+    new URLSearchParams(location.search).get("turn") === "running"
+      ? "running"
+      : "done",
+  );
   // A new key remounts the notes, so closed ones come back.
   const [round, setRound] = useState(0);
   const [shown, setShown] = useState(sample);
@@ -80,7 +84,12 @@ function App() {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [round, sent.length]);
+  }, [round, sent.length, state]);
+
+  const steer = (text: string) => {
+    setDraft((old) => `${old}${old ? "\n\n" : ""}${text}`);
+    requestAnimationFrame(() => input.current?.focus());
+  };
 
   const send = () => {
     if (!draft.trim()) return;
@@ -110,6 +119,19 @@ function App() {
             </button>
           ))}
         </div>
+        {view === "thread" && (
+          <div className="wn-tabs" role="group" aria-label="Turn">
+            {(["running", "done"] as const).map((v) => (
+              <button
+                key={v}
+                aria-pressed={state === v}
+                onClick={() => setState(v)}
+              >
+                {v === "running" ? "Working" : "Answered"}
+              </button>
+            ))}
+          </div>
+        )}
         <span className="wn-about">
           The app's WatchNotes, as a Claude thread shows them with Settings →
           Agents → Flag what I'd miss on "With subagents".
@@ -157,29 +179,21 @@ function App() {
                   <p>{userAsk}</p>
                 </div>
               </article>
-              <article className="project-message assistant">
-                <header>
-                  <strong>Claude</strong>
-                </header>
-                <AgentTurn
-                  message={turn(now)}
-                  projectRoot={projectRoot}
-                  onOpenFile={() => {}}
-                  onChanges={() => {}}
-                />
-                <WatchNotes
-                  key={round}
-                  chatId="sample-chat"
-                  messageId="turn"
-                  notes={shown}
-                  projectRoot={projectRoot}
-                  onOpenFile={() => {}}
-                  onSteer={(text) => {
-                    setDraft((old) => `${old}${old ? "\n\n" : ""}${text}`);
-                    requestAnimationFrame(() => input.current?.focus());
-                  }}
-                />
-              </article>
+              <Message
+                key={round}
+                message={{
+                  ...(state === "done" ? finished(now) : turn(now)),
+                  notes: shown,
+                }}
+                chatId="sample-chat"
+                onReply={() => {}}
+                onChanges={() => {}}
+                onTurnDiff={() => {}}
+                onRewind={async () => ({ conflicts: [] })}
+                projectRoot={projectRoot}
+                onOpenFile={() => {}}
+                onSteer={steer}
+              />
               {sent.map((m) => (
                 <article key={m.id} className="project-message user">
                   <header>

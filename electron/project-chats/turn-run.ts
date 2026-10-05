@@ -159,17 +159,23 @@ export class TurnRunner {
       committed = false,
       limit: AgentError | undefined;
     // The thread's own turns, including the ones Claude starts when a
-    // background subagent ends; Claude alone can ask beside a live session.
+    // background subagent ends. Claude asks beside its live session, Codex
+    // in a throwaway fork of the thread, as its own /side does.
     const { watchThreads: scope = "off", watchKnown: known = [] } =
       this.core.store.get();
     const watch: AgentWatch | undefined =
       scope !== "off" &&
-      provider === "claude" &&
+      (provider === "claude" || provider === "codex") &&
       (turn.kind === "reply" || turn.kind === "adopt") &&
       !rules.side &&
       !chat.thinker &&
       !chat.reviewer
-        ? { scope, known, onNote: (note) => answer.note(note) }
+        ? {
+            scope,
+            known,
+            onNote: (note) => answer.note(note),
+            onSpend: (spend) => this.core.watchSpend?.add(chat.id, spend),
+          }
         : undefined;
     try {
       const options = {

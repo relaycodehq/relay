@@ -1,5 +1,5 @@
 /**
- * What the watcher asks beside a running Claude thread: is there one thing
+ * What the watcher asks beside a running Claude or Codex thread: is there one thing
  * the person would miss and regret? Almost always the answer is no.
  */
 
@@ -19,7 +19,7 @@ diff: <path of the file it is about, only when a short excerpt of a change prove
 \`\`\`
 <up to 6 lines of that change, - for removed, + for added>
 \`\`\`
-ask: <one message the person could send Claude to act on it, written to Claude, or none>`;
+ask: <one message the person could send you to act on it, written to you as the agent, or none>`;
 
 const bar = `The bar is high. Speak up only when not knowing it costs them money, time, wasted work, a wrong result, or a decision they are in the middle of. Good reasons:
 - A result that looks done but is not: tests weakened or skipped to pass, an error swallowed, a check removed, a requirement quietly dropped.

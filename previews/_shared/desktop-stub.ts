@@ -79,6 +79,60 @@ const stub: Partial<Api> = {
     localStorage.setItem("preview-watch-threads", scope);
     return scope;
   },
+  // Sample week of side checks on Opus 5.5 threads.
+  watchSpend: async () => {
+    const thread = (
+      chatId: string,
+      title: string,
+      checks: number,
+      notes: number,
+      usd: number,
+      threadUsd: number,
+      split: number,
+      subagentChecks: number,
+    ) => ({
+      chatId,
+      title,
+      checks,
+      notes,
+      usd,
+      threadUsd,
+      split,
+      subagentChecks,
+      unpriced: 0,
+      tokens: {
+        cacheRead: checks * 118_000,
+        cacheWrite: checks * 900,
+        input: checks * 1_400,
+        output: checks * 260,
+      },
+    });
+    const threads = [
+      thread("t1", "Fix flaky checkout tests", 14, 2, 0.41, 6.9, 9, 5),
+      thread(
+        "t2",
+        "Website: usage scrubber + hero film",
+        11,
+        2,
+        0.33,
+        4.8,
+        6,
+        0,
+      ),
+      thread("t3", "Phone outbox retries", 6, 1, 0.16, 2.2, 3, 2),
+      thread("t4", "Settings → Projects page", 3, 0, 0.07, 1.1, 1, 0),
+    ];
+    const sum = (pick: (t: (typeof threads)[number]) => number) =>
+      threads.reduce((total, t) => total + pick(t), 0);
+    return {
+      days: 7,
+      checks: sum((t) => t.checks),
+      notes: sum((t) => t.notes),
+      usd: sum((t) => t.usd),
+      threadUsd: sum((t) => t.threadUsd),
+      threads,
+    };
+  },
   writeClipboard: (text) => navigator.clipboard.writeText(text),
   providerUsage: async (provider) => ({
     provider,

@@ -59,7 +59,7 @@ export function useModelEntries(
       category: "models",
       title: "Flag what I'd miss",
       description:
-        "A side check reads along and points out what you'd likely miss, like a subagent changing a test to make it pass, or a tradeoff mentioned in passing. Notes show in the turn they're about. Claude threads only.",
+        "A side check reads along and points out what you'd likely miss, like a subagent changing a test to make it pass, or a tradeoff mentioned in passing. Notes show in the turn they're about. Claude and Codex threads; subagents are watched in Claude only.",
       keywords:
         "watch watcher heads up you should know flag miss notice subagent cheat tests side check observer cost price tokens",
       block: true,

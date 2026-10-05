@@ -146,3 +146,30 @@ export function turn(now: number): ChatMessage {
     version: 1,
   };
 }
+
+/** The same turn once Claude has answered. */
+export function finished(now: number): ChatMessage {
+  const running = turn(now);
+  return {
+    ...running,
+    status: "complete",
+    ended: now - 30 * 1000,
+    trace: running.trace?.map((t) =>
+      t.kind === "activity" && t.activity.status === "running"
+        ? { ...t, activity: { ...t.activity, status: "complete" } }
+        : t,
+    ),
+    body: [
+      "The checkout flake is fixed: 14 of 14 pass, 20 runs in a row locally, and the full suite is green.",
+      "",
+      "- **Cause:** the spec raced the cart total. It read the total before the discount request settled, so on slower CI runners it sometimes saw the old amount.",
+      "- **Spec:** `tests/checkout.spec.ts` now waits for the total to settle before it checks it.",
+      "- **CI timing:** runners are about 2× slower than local, but nothing sits near the 30 s timeout, so I left the timeouts alone.",
+      "- **Config:** `playwright.config.ts` retries failed tests twice, which covers the odd slow runner.",
+    ].join("\n"),
+    changes: [
+      { path: "tests/checkout.spec.ts", additions: 6, deletions: 3 },
+      { path: "playwright.config.ts", additions: 1, deletions: 0 },
+    ],
+  };
+}
