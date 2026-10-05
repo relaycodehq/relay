@@ -29,6 +29,9 @@ export type MadeWorktree = Required<
 const keptRef = (chatId: string) => `refs/relay/worktrees/${chatId}/kept`;
 /** The checkout's edits as they moved into a thread's worktree. */
 const movedRef = (chatId: string) => `refs/relay/worktrees/${chatId}/moved`;
+/** What was copied into a thread's worktree when it started: where its own changes begin. */
+export const copiedRef = (chatId: string) =>
+  `refs/relay/worktrees/${chatId}/copied`;
 
 const slug = (text: string) =>
   text
@@ -221,6 +224,51 @@ export async function moveIntoWorktree(
   for (let i = 0; i < paths.length; i += 500)
     await git(root, ["reset", "-q", "--", ...paths.slice(i, i + 500)]);
   return made;
+}
+
+/**
+ * A new worktree at `source`'s commit, its changes counted from `source`'s
+ * branch, holding a copy of the edits `source` hasn't committed, unstaged like
+ * they were there. `source` is a checkout or worktree; it stays as it was.
+ * Ignored files and nested repositories don't come along. The copy is kept
+ * under `copiedRef(chatId)`, so its work can be told apart from the copy's.
+ */
+export async function copyIntoWorktree(
+  root: string,
+  dir: string,
+  name: string,
+  source: string,
+  chatId: string,
+): Promise<{ worktree: MadeWorktree; copied: number }> {
+  const { head, tree, files } = await uncommitted(source);
+  const from =
+    (await git(source, ["branch", "--show-current"])).trim() || undefined;
+  const worktree = await adoptWorktree(root, dir, name, head, {
+    from,
+    start: head,
+  });
+  if (files.length)
+    try {
+      await git(worktree.path, ["read-tree", "-u", "--reset", tree], 120000);
+      await git(worktree.path, ["reset", "-q"]);
+      await git(root, [
+        "update-ref",
+        copiedRef(chatId),
+        await commitTree(
+          root,
+          tree,
+          head,
+          "Relay: the edits a started thread's worktree began with",
+        ),
+      ]);
+    } catch (e) {
+      await git(root, ["worktree", "remove", "--force", worktree.path])
+        .catch(() => rm(worktree.path, { recursive: true, force: true }))
+        .then(() => git(root, ["branch", "-D", worktree.branch]))
+        .catch(() => {});
+      throw e;
+    }
+  return { worktree, copied: files.length };
 }
 
 /**

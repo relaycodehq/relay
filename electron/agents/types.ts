@@ -84,6 +84,8 @@ export interface AgentOptions {
   interactionMode?: InteractionMode;
   /** A deep review's reviewer: it may read and run anything but changes no files. */
   readOnly?: boolean;
+  /** Relay's tools for starting and driving other threads, reached as this thread; see electron/relay-mcp. */
+  relayTools?: { url: string; token: string };
   onRequest?: AskAgentRequest;
   watch?: AgentWatch;
   session?: {

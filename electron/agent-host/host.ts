@@ -27,6 +27,13 @@ import {
   type HostRecord,
 } from "./protocol";
 import {
+  readRelayMcp,
+  serveRelayTools,
+  toolText,
+  verifyRelayToken,
+  type ToolResult,
+} from "../relay-mcp";
+import {
   ClaudeSession,
   ProcessSession,
   type HostSession,
@@ -129,6 +136,84 @@ const host: SessionHost = {
   asking: (session) =>
     [...asks.values()].some((a) => a.message.session === session.id),
 };
+
+/**
+ * Relay's tools, served here so a call outlives a restart of Relay: the call
+ * waits for the next one. Only the newest host serves them, on Relay's port.
+ */
+type ToolCall = {
+  message: Extract<HostMessage, { t: "tool" }>;
+  resolve: (result: ToolResult) => void;
+  /** Sent to a Relay that has since gone. */
+  delivered: boolean;
+};
+const toolCalls = new Map<number, ToolCall>();
+let nextTool = 1;
+/** Calls that only read or wait; anything else may have happened already. */
+const replayable = new Set(["list_threads", "read_thread", "wait_for_threads"]);
+let tools: ReturnType<typeof serveRelayTools> | undefined;
+
+function serveTools() {
+  const config = readRelayMcp(dir);
+  if (!config || draining || tools) return;
+  const serving = serveRelayTools(config.port, {
+    verify: (token) => verifyRelayToken(config.secret, token),
+    log,
+    call: (chatId, name, args, signal) =>
+      new Promise<ToolResult>((resolve) => {
+        const id = nextTool++;
+        const call: ToolCall = {
+          message: { t: "tool", id, chatId, name, args },
+          resolve: (result) => {
+            toolCalls.delete(id);
+            signal.removeEventListener("abort", cancel);
+            resolve(result);
+          },
+          delivered: !!client,
+        };
+        const cancel = () => {
+          if (!toolCalls.has(id)) return;
+          send({ t: "toolCancel", id });
+          call.resolve(toolText("Cancelled.", true));
+        };
+        toolCalls.set(id, call);
+        signal.addEventListener("abort", cancel, { once: true });
+        send(call.message);
+      }),
+  });
+  tools = serving;
+  serving.ready.then(
+    () => log(`serving Relay's tools on ${config.port}`),
+    (error) => {
+      tools = undefined;
+      // The host before this one lets the port go once it drains.
+      if (error?.code === "EADDRINUSE") setTimeout(serveTools, 2000).unref();
+      else log(`can't serve Relay's tools: ${error?.message}`);
+    },
+  );
+}
+
+function stopTools() {
+  void tools?.close();
+  tools = undefined;
+}
+
+/** A new Relay: calls nobody answered go to it, or end if they may have run. */
+function resendTools() {
+  for (const call of [...toolCalls.values()]) {
+    if (call.delivered && !replayable.has(call.message.name)) {
+      call.resolve(
+        toolText(
+          "Relay restarted during this call. Check list_threads before trying again.",
+          true,
+        ),
+      );
+      continue;
+    }
+    call.delivered = true;
+    send(call.message);
+  }
+}
 
 function open(message: Extract<ClientMessage, { t: "open" }>) {
   if (draining) throw new Error("This agent host is closing.");
@@ -251,9 +336,14 @@ function receive(socket: Socket, message: ClientMessage) {
     case "close":
       closeSession(message.session);
       return;
+    case "toolResult":
+      toolCalls.get(message.id)?.resolve(message.result);
+      return;
     case "drain":
       draining = true;
       log("draining");
+      // The newer host takes the tools' port; calls already here still get answered.
+      stopTools();
       return settle();
   }
 }
@@ -290,6 +380,7 @@ function greet(socket: Socket, message: ClientMessage) {
     sessions: [...sessions.values()].map((s) => s.info()),
   });
   log("client connected");
+  resendTools();
 }
 
 const token = randomBytes(24).toString("hex");
@@ -331,6 +422,9 @@ const server = createServer((socket) => {
 
 function shutdown(reason: string) {
   log(`exit: ${reason}`);
+  for (const call of [...toolCalls.values()])
+    call.resolve(toolText("Relay's agent host closed.", true));
+  stopTools();
   for (const id of [...sessions.keys()]) closeSession(id);
   try {
     rmSync(recordFile, { force: true });
@@ -344,8 +438,8 @@ function settle() {
   if (client) return;
   const away = Date.now() - lastClient;
   const working = [...sessions.values()].some((s) => s.working());
-  // Relay starts a host again whenever it needs one.
-  if (!sessions.size) shutdown("no sessions");
+  // Relay starts a host again whenever it needs one; a tool call waits for it.
+  if (!sessions.size && !toolCalls.size) shutdown("no sessions");
   else if (!working && away > limits.idle) shutdown("idle without Relay");
   else if (away > limits.orphaned) shutdown("Relay never came back");
 }
@@ -377,5 +471,6 @@ server.listen(socketPath, () => {
   writeFileSync(temp, JSON.stringify(record), { mode: 0o600 });
   renameSync(temp, recordFile);
   log(`listening, version ${version}`);
+  serveTools();
 });
 setInterval(settle, 15_000).unref();

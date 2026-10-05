@@ -8,6 +8,7 @@ import { runAccount } from "../accounts";
 import { codexModelArgs } from "../../../shared/settings";
 import type { CodexTransport } from "./codex-transport";
 import { codexActivity, codexEditedPaths } from "../activity";
+import { WAIT_LIMIT_SECONDS } from "../../relay-mcp/tools";
 import { CodexAnswerStream } from "./answer-stream";
 import { ANSWER_LIMIT, guardSteer } from "../turn-kit";
 import type { ContextUsage } from "../../../shared/projects";
@@ -26,6 +27,8 @@ import {
   type CodexNotification,
   type CodexThreadStarted,
 } from "./codex-schemas";
+/** Where a Codex app server finds the token for Relay's tools. */
+const RELAY_TOKEN_ENV = "RELAY_MCP_TOKEN";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
@@ -82,7 +85,12 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         : []),
     ],
     options.cwd,
-    account,
+    options.relayTools
+      ? {
+          ...account,
+          env: { ...account.env, [RELAY_TOKEN_ENV]: options.relayTools.token },
+        }
+      : account,
   );
   let wire: CodexTransport | undefined,
     threadId = "",
@@ -305,11 +313,21 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           configReadSchema,
         );
         const mcpOverrides = Object.fromEntries(
-          Object.keys(configuration.config?.mcp_servers ?? {}).map((name) => [
-            `mcp_servers.${name}.enabled`,
-            false,
-          ]),
+          Object.keys(configuration.config?.mcp_servers ?? {})
+            .filter((name) => !(options.relayTools && name === "relay"))
+            .map((name) => [`mcp_servers.${name}.enabled`, false]),
         );
+        // Relay's own tools; a wait may hold its call for ten minutes.
+        const relayServer = options.relayTools
+          ? {
+              "mcp_servers.relay.url": options.relayTools.url,
+              "mcp_servers.relay.bearer_token_env_var": RELAY_TOKEN_ENV,
+              "mcp_servers.relay.tool_timeout_sec": WAIT_LIMIT_SECONDS + 60,
+              // Relay asks the user itself where it matters (starting threads);
+              // left to Codex, its stricter modes turned every call down unasked.
+              "mcp_servers.relay.default_tools_approval_mode": "approve",
+            }
+          : {};
         const instructions =
           job.kind === "helper"
             ? job.instructions
@@ -336,6 +354,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             web_search: "disabled",
             features: { apps: false, plugins: false, multi_agent: false },
             ...mcpOverrides,
+            ...relayServer,
           },
         };
         started = await transport.call(

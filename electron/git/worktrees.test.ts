@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  copiedRef,
+  copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
   reattachWorktree,
@@ -327,4 +329,71 @@ it("leaves a new worktree to createWorktree when the branch is gone or the folde
   expect(
     await reattachWorktree(root, { ...kept, removedAt: 1 }),
   ).toBeUndefined();
+});
+
+it("copies a checkout's uncommitted edits into a new worktree and leaves the checkout alone", async () => {
+  await writeFile(join(root, "a.ts"), "one\ntwo\nthree\nfour\nfive\nwip\n");
+  await writeFile(join(root, "b.ts"), "staged\n");
+  git(root, "add", "b.ts");
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(join(root, "src/new.ts"), "untracked\n");
+  const status = git(root, "status", "--porcelain");
+  const head = git(root, "rev-parse", "HEAD");
+
+  const { worktree, copied } = await copyIntoWorktree(
+    root,
+    dir,
+    "Chat width",
+    root,
+    "c1",
+  );
+
+  expect(copied).toBe(3);
+  expect(git(root, "status", "--porcelain")).toBe(status);
+  expect(worktree).toMatchObject({ head, start: head, from: "main" });
+  expect(await read(join(worktree.path, "a.ts"))).toContain("wip");
+  expect(await read(join(worktree.path, "src/new.ts"))).toBe("untracked\n");
+  expect(git(worktree.path, "diff", "--cached", "--name-only")).toBe("");
+  expect(await paths(worktree)).toEqual(["a.ts", "b.ts", "src/new.ts"]);
+  // What was copied stays findable, as the base its own work is measured from.
+  const kept = git(root, "rev-parse", copiedRef("c1"));
+  expect(git(root, "show", `${kept}:src/new.ts`)).toBe("untracked");
+});
+
+it("copies from a thread's own worktree at its commit, counting from its branch", async () => {
+  const lead = await made();
+  await writeFile(join(lead.path, "b.ts"), "committed by the lead\n");
+  git(lead.path, "commit", "-qam", "Lead's work");
+  await writeFile(join(lead.path, "a.ts"), "lead wip\n");
+  const leadHead = git(lead.path, "rev-parse", "HEAD");
+
+  const { worktree, copied } = await copyIntoWorktree(
+    root,
+    dir,
+    "Child",
+    lead.path,
+    "c2",
+  );
+
+  expect(copied).toBe(1);
+  expect(worktree).toMatchObject({ head: leadHead, from: lead.branch });
+  expect(await read(join(worktree.path, "b.ts"))).toBe(
+    "committed by the lead\n",
+  );
+  expect(await read(join(worktree.path, "a.ts"))).toBe("lead wip\n");
+  // Only the copy is the child's to show; the lead's commit is where it starts.
+  expect(await paths(worktree)).toEqual(["a.ts"]);
+  expect(git(lead.path, "status", "--porcelain")).toBe("M a.ts");
+});
+
+it("a clean source gives a plain worktree at its commit", async () => {
+  const { worktree, copied } = await copyIntoWorktree(
+    root,
+    dir,
+    "Clean",
+    root,
+    "c3",
+  );
+  expect(copied).toBe(0);
+  expect(git(worktree.path, "status", "--porcelain")).toBe("");
 });

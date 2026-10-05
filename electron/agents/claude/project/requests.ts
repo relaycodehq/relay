@@ -1,7 +1,7 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import type { HostedHandlers } from "../../../agent-host/client";
 import type { AgentQuestion } from "../../../../shared/agent-modes";
-import type { ClaudeRunOptions } from "./config";
+import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
 import { ANSWER_LIMIT } from "../../turn-kit";
 
 /** The session a request comes from, as answering it needs. */
@@ -54,6 +54,9 @@ export function sessionCallbacks(holder: Asker) {
         };
       return { behavior: "allow", updatedInput: input };
     }
+    // Relay's own tools ask the user themselves where it matters (starting threads).
+    if (tool.startsWith(`mcp__${RELAY_SERVER}__`))
+      return { behavior: "allow", updatedInput: input };
     if (!options.onRequest)
       return {
         behavior: "deny",

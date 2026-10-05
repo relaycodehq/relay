@@ -3,6 +3,7 @@ import type {
   ChatScope,
   ChatWorkspace,
   ProjectChat,
+  StartedBy,
 } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./storage";
@@ -14,6 +15,7 @@ export class ThreadCreate {
     projectId: string,
     scope: ChatScope,
     workspace: ChatWorkspace = "checkout",
+    startedBy?: StartedBy,
   ) {
     const { plain } = await this.core.projects.inspect(projectId);
     if (plain && (workspace === "worktree" || scope.kind !== "project"))
@@ -35,6 +37,7 @@ export class ThreadCreate {
       created: Date.now(),
       updated: Date.now(),
       messages: [],
+      ...(startedBy ? { startedBy } : {}),
     };
     await this.core.storage.add(chat);
     return chatSummary(chat);

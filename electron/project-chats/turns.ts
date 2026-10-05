@@ -6,7 +6,7 @@ import type {
   ProjectChatSend,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import { replyRoot, sentBy } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agents, helperProviders } from "../../shared/agents";
@@ -229,6 +229,7 @@ export class ChatTurns {
           : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
         ...(chat.shared ? { pending: true } : {}),
+        ...sentBy(input),
       };
       chat.messages.push(user);
       // Anything said after a limit stopped the answer replaces carrying it on.

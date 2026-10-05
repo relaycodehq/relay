@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
-import type { AgentResponse } from "../../shared/agent-modes";
+import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
 import type { DeepReviewStart, FindingStatus } from "../../shared/deep-review";
 import type {
   ChatCameFrom,
@@ -12,6 +12,7 @@ import type {
   ChatScope,
   ChatTriage,
   ChatWorkspace,
+  StartedBy,
   ChatWorktree,
   KnownMessages,
   ProjectChat,
@@ -272,8 +273,13 @@ export class ProjectChats {
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
   }
-  create(projectId: string, scope: ChatScope, workspace?: ChatWorkspace) {
-    return this.creating.create(projectId, scope, workspace);
+  create(
+    projectId: string,
+    scope: ChatScope,
+    workspace?: ChatWorkspace,
+    startedBy?: StartedBy,
+  ) {
+    return this.creating.create(projectId, scope, workspace, startedBy);
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation
@@ -411,6 +417,17 @@ export class ProjectChats {
   }
   worktreeFolders(projectId: string) {
     return this.worktrees.folders(projectId);
+  }
+  /**
+   * Gives worktree thread `id` its worktree now, holding a copy of the files
+   * thread `from` works on, uncommitted edits included; see electron/started-threads.
+   */
+  async worktreeFrom(id: string, from: string, prompt: string) {
+    const chat = await this.storage.load(id);
+    if (!chat.worktree || chat.worktree.path)
+      throw new Error("That thread has no worktree to make.");
+    const source = await this.worktrees.root(await this.storage.load(from));
+    return this.worktrees.copyFrom(chat, source, prompt);
   }
   hasActiveProject(projectId: string) {
     return this.worktrees.checkoutBusy(projectId);
@@ -572,6 +589,19 @@ export class ProjectChats {
   }
   join(projectId: string, url: string) {
     return this.sharing.join(projectId, url);
+  }
+  /** Asks the user in the thread's running turn, as its agent would; see electron/started-threads. */
+  askInTurn(
+    id: string,
+    request: Omit<AgentRequest, "id">,
+    signal?: AbortSignal,
+  ) {
+    const active = this.active.get(id);
+    if (!active)
+      return Promise.reject(
+        new Error("This thread has no running turn to ask in."),
+      );
+    return active.requests.ask(request, signal);
   }
   respond(id: string, requestId: string, response: AgentResponse) {
     const active = this.active.get(id);

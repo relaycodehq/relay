@@ -3,6 +3,9 @@ import type { AgentOptions } from "../../types";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
 import { chromeArgs } from "./sdk";
 
+/** Relay's own tools reach Claude as `mcp__relay__…`. */
+export const RELAY_SERVER = "relay";
+
 export type ClaudeRunOptions = AgentOptions & {
   model: string;
   effort: string;
@@ -75,7 +78,21 @@ export function sessionConfig(
       : {}),
     // A thread gets the MCP servers the terminal's `claude` would; a reviewer
     // works unattended, so it keeps to none.
-    ...(options.readOnly ? { strictMcpConfig: true, mcpServers: {} } : {}),
+    ...(options.readOnly
+      ? { strictMcpConfig: true, mcpServers: {} }
+      : options.relayTools
+        ? {
+            mcpServers: {
+              [RELAY_SERVER]: {
+                type: "http",
+                url: options.relayTools.url,
+                headers: {
+                  Authorization: `Bearer ${options.relayTools.token}`,
+                },
+              },
+            },
+          }
+        : {}),
     extraArgs: chromeArgs,
     env:
       options.contextWindow === "200k"

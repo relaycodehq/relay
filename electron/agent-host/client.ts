@@ -23,6 +23,7 @@ import {
   type SessionInfo,
 } from "./protocol";
 import { AsyncQueue } from "../util/async-queue";
+import { toolText, type ToolResult } from "../relay-mcp/tools";
 
 /**
  * How long a session's control call may take. Claude Code answers them at
@@ -72,7 +73,17 @@ const alive = (pid: number) => {
   }
 };
 
+/** Answers a call an agent made to Relay's tools; see electron/relay-mcp. */
+export type ToolHandler = (
+  chatId: string,
+  name: string,
+  args: unknown,
+  signal: AbortSignal,
+) => Promise<ToolResult>;
+
 export class AgentHosts {
+  /** Who answers the agents' calls to Relay's tools, once Relay can. */
+  tools: ToolHandler | undefined;
   private connections: HostConnection[] = [];
   private starting?: Promise<HostConnection>;
   private discovered?: Promise<FoundSession[]>;
@@ -119,8 +130,10 @@ export class AgentHosts {
         }
         let connection: HostConnection;
         try {
-          connection = await HostConnection.open(record, () =>
-            this.forget(connection),
+          connection = await HostConnection.open(
+            record,
+            () => this.forget(connection),
+            () => this.tools,
           );
         } catch (error) {
           console.warn("Could not reach an agent host:", error);
@@ -149,6 +162,11 @@ export class AgentHosts {
   async openProcess(request: HostedProcessOpen) {
     const connection = await this.current();
     return connection.openProcess(request);
+  }
+
+  /** A host of this version is running, so Relay's tools are served. */
+  async ensure() {
+    await this.current();
   }
 
   /** Relay is restarting: let go of the hosts and leave their sessions running. */
@@ -208,8 +226,10 @@ export class AgentHosts {
       })(),
     ]);
     child.removeAllListeners();
-    const connection = await HostConnection.open(record, () =>
-      this.forget(connection),
+    const connection = await HostConnection.open(
+      record,
+      () => this.forget(connection),
+      () => this.tools,
     );
     this.connections.push(connection);
     return connection;
@@ -237,20 +257,27 @@ class HostConnection {
     { resolve: (v: unknown) => void; reject: (e: Error) => void }
   >();
   private nextCall = 1;
+  /** Tool calls being answered, to stop when the agent gives up. */
+  private toolCalls = new Map<number, AbortController>();
 
   private constructor(
     private socket: Socket,
     private onClose: () => void,
+    private tools: () => ToolHandler | undefined,
   ) {}
 
-  static open(record: HostRecord, onClose: () => void) {
+  static open(
+    record: HostRecord,
+    onClose: () => void,
+    tools: () => ToolHandler | undefined,
+  ) {
     return new Promise<HostConnection>((resolve, reject) => {
       if (record.protocol !== protocolVersion)
         return reject(
           new Error(`The agent host speaks protocol ${record.protocol}.`),
         );
       const socket = connect(record.socket);
-      const connection = new HostConnection(socket, onClose);
+      const connection = new HostConnection(socket, onClose, tools);
       const timer = setTimeout(() => {
         socket.destroy();
         reject(new Error("The agent host did not answer."));
@@ -405,7 +432,38 @@ class HostConnection {
         for (const endpoint of this.endpoints.values())
           if (endpoint instanceof HostedQuery) endpoint.cancel(message.id);
         return;
+      case "tool":
+        void this.tool(message);
+        return;
+      case "toolCancel":
+        this.toolCalls.get(message.id)?.abort();
+        return;
     }
+  }
+
+  private async tool(message: Extract<HostMessage, { t: "tool" }>) {
+    const abort = new AbortController();
+    this.toolCalls.set(message.id, abort);
+    const handler = this.tools();
+    let result: ToolResult;
+    try {
+      result = handler
+        ? await handler(
+            message.chatId,
+            message.name,
+            message.args,
+            abort.signal,
+          )
+        : toolText("Relay is still starting. Try again in a moment.", true);
+    } catch (error) {
+      result = toolText(
+        error instanceof Error ? error.message : String(error),
+        true,
+      );
+    } finally {
+      this.toolCalls.delete(message.id);
+    }
+    if (!this.closed) this.send({ t: "toolResult", id: message.id, result });
   }
 
   /** The host went away: its sessions ended with it, unless Relay let go first. */
@@ -413,6 +471,7 @@ class HostConnection {
     if (this.closed) return;
     this.closed = true;
     this.onClose();
+    for (const abort of this.toolCalls.values()) abort.abort();
     if (this.detached) return;
     for (const call of this.calls.values())
       call.reject(new Error("The agent host has stopped."));

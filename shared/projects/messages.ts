@@ -79,6 +79,8 @@ export interface ChatMessage {
   ended?: number;
   author?: string;
   authorId?: string;
+  /** Local: the thread whose agent sent this message, through Relay's tools; `author` names it. */
+  fromThread?: string;
   seq?: number;
   parentId?: string | null;
   pending?: boolean;
@@ -120,6 +122,8 @@ export interface AgentActivity {
   parentId?: string;
   /** A running agent's latest status line, e.g. "Reading auth.ts · 12 tools". */
   progress?: string;
+  /** An MCP tool call: which server's tool it was. */
+  mcp?: { server: string; tool: string };
 }
 /** Private turn events. Sharing serializes only the final answer body. */
 export type AgentTrace =

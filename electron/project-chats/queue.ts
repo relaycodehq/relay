@@ -4,7 +4,7 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import { replyRoot, sentBy } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
@@ -154,6 +154,7 @@ export class ChatQueue {
       ...(images.length ? { images } : {}),
       ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
       ...(chat.shared ? { pending: true } : {}),
+      ...sentBy(next.input),
     };
     // In the thread before the agent hears it: Codex can say it read the
     // steer in the same breath as accepting it, and its answer continues

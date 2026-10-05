@@ -87,6 +87,8 @@ export interface ChatSummary {
   reviewer?: ReviewerTask;
   /** An Ultraplan's thinker; its thread shows inside the council, never on its own. */
   thinker?: ThinkerTask;
+  /** Started by another thread's agent through Relay's tools; listed under that thread. */
+  startedBy?: StartedBy;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;
@@ -95,6 +97,11 @@ export interface ChatSummary {
   waiting?: boolean;
   /** Work Claude left running that will start its next turn by itself. */
   pending?: ChatPending[];
+}
+export interface StartedBy {
+  chatId: string;
+  /** The agent that started it. */
+  agent: AgentProvider;
 }
 export interface HeldWakeup {
   id: string;

@@ -1,0 +1,152 @@
+// The tools Relay offers an agent for starting and driving threads of its own.
+// The agent host lists them without asking Relay, so they stay put while it
+// restarts; Relay answers the calls (electron/started-threads).
+import { z } from "zod";
+import { agentProviderSchema } from "../../shared/agents";
+import { reasoningEffortSchema } from "../../shared/settings";
+
+/** How many threads one thread may have working at once. */
+export const STARTED_LIMIT = 6;
+/** The longest wait_for_threads holds its call. */
+export const WAIT_LIMIT_SECONDS = 600;
+
+const threadId = z
+  .string()
+  .uuid()
+  .describe("A thread id from start_threads or list_threads.");
+
+export const relayToolSchemas = {
+  start_threads: z
+    .object({
+      threads: z
+        .array(
+          z
+            .object({
+              prompt: z
+                .string()
+                .trim()
+                .min(1)
+                .max(32000)
+                .describe(
+                  "The whole task, self-contained: the new thread sees none of this conversation.",
+                ),
+              agent: agentProviderSchema
+                .optional()
+                .describe("Who works on it. Left out: the agent you are."),
+              model: z
+                .string()
+                .max(120)
+                .optional()
+                .describe(
+                  "A model id that agent offers. Left out: yours when it's the same agent, otherwise that agent's default.",
+                ),
+              effort: reasoningEffortSchema
+                .optional()
+                .describe("Reasoning effort. Left out: as with model."),
+              worktree: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Work in a worktree of its own on a new branch (the default), so threads working at once don't edit the same files. False: the project's checkout.",
+                ),
+              uncommitted: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Its worktree starts from the files you work on, your uncommitted edits included (the default). False: from your last commit only.",
+                ),
+              plan: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Plan first and wait for the user's go-ahead before changing anything.",
+                ),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(STARTED_LIMIT),
+    })
+    .strict(),
+  list_threads: z.object({}).strict(),
+  read_thread: z
+    .object({
+      id: threadId,
+      after: z
+        .string()
+        .optional()
+        .describe(
+          "Only messages after this message id, the `next` of an earlier read.",
+        ),
+    })
+    .strict(),
+  send_to_thread: z
+    .object({
+      id: threadId,
+      message: z.string().trim().min(1).max(32000),
+      steer: z
+        .boolean()
+        .optional()
+        .describe(
+          "Hand it to the agent mid-answer, if it's working. Otherwise it waits for the answer to end.",
+        ),
+    })
+    .strict(),
+  wait_for_threads: z
+    .object({
+      ids: z
+        .array(threadId)
+        .max(50)
+        .optional()
+        .describe("Left out: every thread you started."),
+      timeoutSeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(WAIT_LIMIT_SECONDS)
+        .optional()
+        .describe(`At most ${WAIT_LIMIT_SECONDS}; default 300.`),
+    })
+    .strict(),
+  stop_thread: z.object({ id: threadId }).strict(),
+};
+
+export type RelayToolName = keyof typeof relayToolSchemas;
+export type RelayToolArgs<N extends RelayToolName> = z.infer<
+  (typeof relayToolSchemas)[N]
+>;
+
+const descriptions: Record<RelayToolName, string> = {
+  start_threads: `Start new Relay threads in this project, each working on its own task while you go on. Each is an ordinary thread the user sees under yours and can talk to directly. Up to ${STARTED_LIMIT} of yours can work at once. Returns their ids; then use wait_for_threads, read_thread and send_to_thread.`,
+  list_threads:
+    "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer.",
+  read_thread:
+    "A thread you started: its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
+  send_to_thread:
+    "Send a message to a thread you started, as its user would. It answers in its own turn.",
+  wait_for_threads:
+    "Wait until the threads stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working.",
+  stop_thread: "Stop the answer a thread you started is working on.",
+};
+
+/** What tools/list returns. */
+export const relayToolList = Object.entries(relayToolSchemas).map(
+  ([name, schema]) => {
+    const { $schema: _, ...inputSchema } = z.toJSONSchema(schema);
+    return {
+      name,
+      description: descriptions[name as RelayToolName],
+      inputSchema,
+    };
+  },
+);
+
+/** An MCP tool result. */
+export interface ToolResult {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+}
+export const toolText = (text: string, isError = false): ToolResult => ({
+  content: [{ type: "text", text }],
+  ...(isError ? { isError: true } : {}),
+});

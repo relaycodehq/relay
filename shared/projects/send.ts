@@ -52,6 +52,11 @@ export const projectChatSendSchema = z
     images: z.array(pastedImageSchema).max(3).optional(),
     /** Plan this with a council of thinkers first; see shared/ultraplan. */
     ultraplan: ultraplanKindSchema.optional(),
+    /** Sent by the agent in another thread, through Relay's tools; see electron/started-threads. */
+    fromThread: z
+      .object({ id: idSchema, name: z.string().trim().min(1).max(300) })
+      .strict()
+      .optional(),
     /** Deep review findings this message asks the lead to fix. */
     fixes: z
       .array(z.string().regex(/^F\d{1,3}$/))
@@ -71,3 +76,9 @@ export const resumeSettingsSchema = projectChatSendSchema
   })
   .strict();
 export type ResumeSettings = z.infer<typeof resumeSettingsSchema>;
+
+/** Who a message says it's from, when another thread's agent sent it. */
+export const sentBy = (input: Pick<ProjectChatSend, "fromThread">) =>
+  input.fromThread
+    ? { author: input.fromThread.name, fromThread: input.fromThread.id }
+    : {};

@@ -21,6 +21,7 @@ import { currentBranchOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { commitWatch } from "./turn-commit";
+import { relayToolsFor } from "../relay-mcp";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
@@ -178,6 +179,7 @@ export class TurnRunner {
           }
         : undefined;
     try {
+      const relayTools = relayToolsFor(chat.id);
       const options = {
         onControl: (control: AgentControl) => {
           const active = this.core.active.get(chat.id);
@@ -230,6 +232,15 @@ export class TurnRunner {
         interactionMode: input.interactionMode,
         ...(chat.thinker || chat.reviewer || rules.side
           ? { readOnly: true }
+          : {}),
+        // A started thread gets none, so nothing starts threads of threads.
+        ...(relayTools &&
+        !chat.thinker &&
+        !chat.reviewer &&
+        !rules.side &&
+        !chat.startedBy &&
+        !chat.shared
+          ? { relayTools }
           : {}),
         // The thread's running answer owns its requests; a side turn asks none.
         onRequest: rules.side

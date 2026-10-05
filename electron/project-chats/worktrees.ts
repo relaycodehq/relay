@@ -7,6 +7,7 @@ import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
+  copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
   reattachWorktree,
@@ -49,6 +50,25 @@ export class ThreadWorktrees {
       ));
     await this.core.storage.save(chat);
     return chat.worktree.path!;
+  }
+
+  /**
+   * Makes `chat`'s worktree now rather than with its first message: at the
+   * commit `source` is on, with a copy of what `source` hasn't committed.
+   * Resolves to how many files came along.
+   */
+  async copyFrom(chat: ProjectChat, source: string, prompt: string) {
+    const root = await this.core.projects.root(chat.projectId);
+    const { worktree, copied } = await copyIntoWorktree(
+      root,
+      this.folder,
+      promptTitle(prompt),
+      source,
+      chat.id,
+    );
+    chat.worktree = worktree;
+    await this.core.storage.save(chat);
+    return copied;
   }
 
   private async of(id: string) {

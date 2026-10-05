@@ -1,6 +1,7 @@
 // The agent host keeps Claude sessions running while Relay itself restarts.
 // It speaks newline-delimited JSON over a local socket, one client at a time.
 import type { Socket } from "node:net";
+import type { ToolResult } from "../relay-mcp/tools";
 import type {
   CanUseTool,
   ElicitationRequest,
@@ -109,7 +110,9 @@ export type ClientMessage =
   | { t: "abort"; session: string }
   | { t: "close"; session: string }
   /** Take no new sessions; exit once the last one closes. */
-  | { t: "drain" };
+  | { t: "drain" }
+  /** What Relay made of a call to its tools; see electron/relay-mcp. */
+  | { t: "toolResult"; id: number; result: ToolResult };
 
 export type HostMessage =
   | { t: "welcome"; version: string; pid: number; sessions: SessionInfo[] }
@@ -119,7 +122,11 @@ export type HostMessage =
   | { t: "return"; id: number; value?: unknown; error?: string }
   | AskMessage
   | { t: "cancel"; id: number }
-  | { t: "refused"; error: string };
+  | { t: "refused"; error: string }
+  /** A thread's agent called one of Relay's tools; it waits for `toolResult`. */
+  | { t: "tool"; id: number; chatId: string; name: string; args: unknown }
+  /** The agent gave up on that call. */
+  | { t: "toolCancel"; id: number };
 
 /** What the host asks Relay while a session runs: each question's arguments and the answer it waits for. */
 export interface Asks {

@@ -50,7 +50,33 @@ export function codexActivity(
     (item.type === "mcpToolCall" || item.type === "dynamicToolCall") &&
     typeof item.tool === "string"
   )
-    return { ...base, kind: "tool", label: item.tool.slice(0, 500) };
+    return {
+      ...base,
+      kind: "tool",
+      ...(typeof item.server === "string"
+        ? mcpCall(item.server, item.tool)
+        : { label: item.tool.slice(0, 500) }),
+    };
+}
+
+/** What Relay's own tools read as in a turn. */
+const relayToolLabels: Record<string, string> = {
+  start_threads: "Started threads",
+  list_threads: "Checked on started threads",
+  read_thread: "Read a started thread",
+  send_to_thread: "Messaged a started thread",
+  wait_for_threads: "Waited for started threads",
+  stop_thread: "Stopped a started thread",
+};
+
+/** An MCP call's label and which server's tool it was. */
+function mcpCall(server: string, tool: string) {
+  const label =
+    (server === "relay" && relayToolLabels[tool]) || `${server}: ${tool}`;
+  return {
+    label: label.slice(0, 500),
+    mcp: { server: server.slice(0, 120), tool: tool.slice(0, 120) },
+  };
 }
 
 /** Claude's tools that write a file, by the input field that names it. */
@@ -105,7 +131,9 @@ export function claudeActivity(
       return call("tool", "Updated the plan");
   }
   const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
-  return call("tool", mcp ? `${mcp[1]}: ${mcp[2]}` : name);
+  return mcp
+    ? { ...call("tool", name), ...mcpCall(mcp[1]!, mcp[2]!) }
+    : call("tool", name);
 }
 
 /** Every path a Codex patch writes, a rename's new name included. */

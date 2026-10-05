@@ -36,6 +36,7 @@ import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { LiveSyncs } from "./projects/live-sync";
 import { ProjectChats } from "./project-chats";
+import { answerRelayTools, prepareRelayTools } from "./started-threads/serve";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
 import { ProjectSharing } from "./projects/project-sharing";
@@ -225,6 +226,10 @@ app
       hostAgents(hosts);
       projectTasks.hosts = () => hosts.pids();
     }
+    // Before any agent session starts, so each gets the tools.
+    const relayTools = await prepareRelayTools(
+      join(app.getPath("userData"), "agent-host"),
+    );
     setGitPath(loaded.get().gitPath ?? null);
     setLinkedAgents(loaded.get().agentPaths ?? {});
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
@@ -426,6 +431,7 @@ app
     serveApi(window, dispatch);
     // Agent sessions that kept running through a restart come back before the window does.
     await chats.reattach();
+    if (relayTools) void answerRelayTools(relayTools, chats, agentHosts);
     chats.armWakeups();
     void chats
       .reconcileSummaries()
