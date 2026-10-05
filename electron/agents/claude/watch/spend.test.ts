@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ModelUsage } from "@anthropic-ai/claude-agent-sdk";
 import type { WatchSpend } from "../../../../shared/watch";
 import {
@@ -157,6 +157,31 @@ describe("ClaudeMeter", () => {
         onSpend: (s) => spent.push(s),
       },
     );
-    expect(spent).toEqual([{ kind: "thread", usd: 0.5 }]);
+    await vi.waitFor(() =>
+      expect(spent).toEqual([{ kind: "thread", usd: 0.5 }]),
+    );
+  });
+
+  it("counts a session's first watched turn even when its result beats the baseline", async () => {
+    let baseline!: (t: SessionTotals) => void;
+    const meter = new ClaudeMeter(
+      () => new Promise<SessionTotals>((resolve) => (baseline = resolve)),
+    );
+    const spent: WatchSpend[] = [];
+    const watch = {
+      scope: "main" as const,
+      known: [],
+      onNote: () => {},
+      onSpend: (s: WatchSpend) => spent.push(s),
+    };
+    const result = (usd: number) =>
+      ({ type: "result", total_cost_usd: usd }) as unknown as SDKMessage;
+    // A resumed session starts from its old total, not from zero.
+    meter.observe(result(4.8), watch);
+    meter.observe(result(5.1), watch);
+    baseline({ usd: 4.3, models: {} });
+    await vi.waitFor(() => expect(spent).toHaveLength(2));
+    expect(spent[0].usd).toBeCloseTo(0.5, 10);
+    expect(spent[1].usd).toBeCloseTo(0.3, 10);
   });
 });

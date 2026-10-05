@@ -179,13 +179,22 @@ export function checkSpend(
  */
 export class ClaudeMeter {
   private tally = new RequestTally();
-  /** The session's dollars at its last result. */
+  /** The session's dollars at its last result; resumed sessions start with their old total. */
   private spent?: number;
+  /** Results wait for the baseline, so a session's first watched turn counts too. */
+  private ready: Promise<void>;
 
   constructor(private totals: () => Promise<SessionTotals>) {
-    void totals()
-      .then((t) => (this.spent ??= t.usd))
-      .catch(() => {});
+    this.ready = totals().then(
+      (t) => {
+        this.spent ??= t.usd;
+      },
+      (e) =>
+        console.warn(
+          "Could not read where the Claude session's spend starts:",
+          e,
+        ),
+    );
   }
 
   /** Every frame of the session; `watch` is the turn reading it, if watched. */
@@ -193,9 +202,11 @@ export class ClaudeMeter {
     this.tally.observe(message);
     if (message.type !== "result") return;
     const total = message.total_cost_usd;
-    if (this.spent !== undefined && total >= this.spent)
-      watch?.onSpend?.({ kind: "thread", usd: total - this.spent });
-    this.spent = total;
+    this.ready = this.ready.then(() => {
+      if (this.spent !== undefined && total >= this.spent)
+        watch?.onSpend?.({ kind: "thread", usd: total - this.spent });
+      this.spent = total;
+    });
   }
 
   /** Runs one side question, and what it cost when the totals answered on both sides. */
