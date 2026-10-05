@@ -7,6 +7,8 @@ export interface ReadAloudEngine {
   name: string;
   /** Who made it and the weights' license, as Settings shows it. */
   credit: string;
+  /** Where the weights' license can be read; Settings links it. */
+  license?: string;
   /** What gets downloaded into the engine's folder, pinned to a revision, with sizes and sha256. */
   files: DictationModelFile[];
   /** Voices it ships; the first is the default. */

@@ -161,6 +161,7 @@ export const pocketTts: ReadAloudEngine = {
   name: "Pocket TTS",
   credit:
     "Kyutai, CC BY 4.0; ONNX export by KevinAHM. Voices: Alba MacKenna and the VCTK corpus (University of Edinburgh), CC BY 4.0; LibriVox readers and Unmute donors, CC0.",
+  license: "https://creativecommons.org/licenses/by/4.0/",
   files: [
     ...Object.entries(model).map(([key, [size, sha256]]) => {
       const name = modelFiles[key as keyof typeof modelFiles];

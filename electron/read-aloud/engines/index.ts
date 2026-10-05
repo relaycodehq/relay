@@ -1,4 +1,7 @@
 import type { ReadAloudEngine } from "../engine";
+import { pocketTts } from "./pocket";
+import { supertonic } from "./supertonic";
 
-// Pocket TTS, Supertonic and Audio8 TTS join this list as they land.
-export const readAloudEngines: ReadAloudEngine[] = [];
+// Pocket first: with none picked, the first downloaded engine reads, and Pocket
+// starts speaking fastest. Supertonic is the one for languages besides English.
+export const readAloudEngines: ReadAloudEngine[] = [pocketTts, supertonic];

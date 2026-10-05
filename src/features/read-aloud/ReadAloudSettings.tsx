@@ -104,12 +104,28 @@ export function ReadAloudSpeedSetting({ state }: { state: ReadAloudState }) {
   );
 }
 
+function License({ engine }: { engine: ReadAloudEngineInfo }) {
+  if (!engine.license) return null;
+  return (
+    <a
+      href={engine.license}
+      onClick={(e) => {
+        e.preventDefault();
+        void api.openExternal(e.currentTarget.href);
+      }}
+    >
+      License
+    </a>
+  );
+}
+
 /** An engine's download: its size or progress, and the button for what comes next. */
 export function ReadAloudDownload({ engine }: { engine: ReadAloudEngineInfo }) {
   const model = engine.model;
   if (model.status === "downloading")
     return (
       <div className="read-aloud-download">
+        <License engine={engine} />
         <small role="status">
           {megabytes(model.received)} of {megabytes(model.total)}
         </small>
@@ -122,6 +138,7 @@ export function ReadAloudDownload({ engine }: { engine: ReadAloudEngineInfo }) {
   if (model.status === "ready")
     return (
       <div className="read-aloud-download">
+        <License engine={engine} />
         <small>{megabytes(engine.size)}</small>
         <button onClick={() => void api.removeReadAloudEngine(engine.id)}>
           <Trash2 size={14} />
@@ -132,6 +149,7 @@ export function ReadAloudDownload({ engine }: { engine: ReadAloudEngineInfo }) {
   const partial = !!model.received;
   return (
     <div className="read-aloud-download">
+      <License engine={engine} />
       {model.status === "failed" ? (
         <small className="failed" role="alert">
           {model.error}

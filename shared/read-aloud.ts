@@ -23,6 +23,8 @@ export interface ReadAloudEngineInfo {
   name: string;
   /** Who made it and the weights' license. */
   credit: string;
+  /** Where the weights' license can be read. */
+  license?: string;
   /** Bytes its download takes. */
   size: number;
   /** The first is the default. */

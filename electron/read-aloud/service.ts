@@ -79,6 +79,7 @@ export class ReadAloud {
         id: engine.id,
         name: engine.name,
         credit: engine.credit,
+        ...(engine.license ? { license: engine.license } : {}),
         size: engine.files.reduce((sum, file) => sum + file.size, 0),
         voices: engine.voices,
         model: this.models.get(engine.id) ?? { status: "missing" },

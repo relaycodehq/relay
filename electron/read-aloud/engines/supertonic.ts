@@ -108,6 +108,9 @@ export const supertonic: ReadAloudEngine = {
   name: "Supertonic 3",
   credit:
     "Supertonic 3 by Supertone Inc. Weights under the BigScience OpenRAIL-M license.",
+  // Its use restrictions bind whoever runs it (§5), so Settings links them.
+  license:
+    "https://huggingface.co/supertone-oss-archive/supertonic-3/blob/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE",
   files: [
     file(
       "onnx/duration_predictor.onnx",
