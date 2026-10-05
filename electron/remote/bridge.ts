@@ -4,6 +4,7 @@ import { z } from "zod";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import {
   knownMessagesSchema,
+  type AgentActivity,
   type ChatMessage,
   type ChatSummary,
   type KnownMessages,
@@ -14,6 +15,7 @@ import {
   phoneDesktopMethods,
   remoteBridgeVersion,
   maxRemoteHistory,
+  phoneDetailPreview,
   remoteHistory,
   type ComputerMethod,
   type PhoneAppearance,
@@ -66,6 +68,7 @@ export interface RemoteHost {
 }
 
 const pathSchema = z.string().min(1).max(1000);
+const activityIdSchema = z.string().min(1).max(200);
 const knownIconsSchema = z
   .record(idSchema, z.string().max(64).nullable())
   .refine((known) => Object.keys(known).length <= 1000);
@@ -161,7 +164,9 @@ export class RemoteBridge {
         projectId: patch.projectId,
         title: patch.title,
         scope: patch.scope,
-        messages: patch.messages.slice(-history),
+        messages: patch.messages
+          .slice(-history)
+          .map((m) => (typeof m === "string" ? m : forPhone(m))),
         earlier: Math.max(0, patch.messages.length - history),
         requests: patch.requests,
         queuePaused: patch.queuePaused,
@@ -193,6 +198,15 @@ export class RemoteBridge {
             }
           : {}),
       };
+    },
+    activityDetail: async (chatId, messageId, activityId) => {
+      const message = (await this.host.chat(chatId)).messages.find(
+        (m): m is ChatMessage => typeof m !== "string" && m.id === messageId,
+      );
+      return (
+        messageActivity(message).find((a) => a.id === activityId)?.detail ??
+        null
+      );
     },
     diff: async (source) => {
       const [method, args]: [ApiMethod, unknown[]] =
@@ -251,6 +265,12 @@ export class RemoteBridge {
             ? undefined
             : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
         );
+      case "activityDetail":
+        return a.activityDetail(
+          idSchema.parse(args[0]),
+          idSchema.parse(args[1]),
+          activityIdSchema.parse(args[2]),
+        );
       case "diff":
         return a.diff(diffSourceSchema.parse(args[0]));
       case "desktop":
@@ -271,7 +291,11 @@ export class RemoteBridge {
   }
   /** Relays a chat event, holding back streaming updates to one per message every `streamMs`. */
   chatEvent(event: { chatId: string; message: ChatMessage; title?: string }) {
-    const next = { kind: "message" as const, ...event };
+    const next = {
+      kind: "message" as const,
+      ...event,
+      message: forPhone(event.message),
+    };
     const held = this.streams.get(event.message.id);
     if (event.message.status === "streaming") {
       if (held) held.event = next;
@@ -339,6 +363,39 @@ export class RemoteBridge {
   }
 }
 
+const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
+  m?.trace
+    ? m.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
+    : (m?.activity ?? []);
+
+/**
+ * Tool output is most of a thread's weight (8.5 of 11.9 MB over 40 real
+ * threads), and the phone shows it only in a fold you open; it gets the
+ * start and the end, and `activityDetail` the rest when the fold opens.
+ */
+function cutDetail(a: AgentActivity): AgentActivity {
+  const detail = a.detail;
+  if (!detail || detail.length <= phoneDetailPreview) return a;
+  const half = phoneDetailPreview / 2;
+  return {
+    ...a,
+    detail: `${detail.slice(0, half)}\n…\n${detail.slice(-half)}`,
+    detailCut: detail.length - phoneDetailPreview,
+  };
+}
+
+export function forPhone(m: ChatMessage): ChatMessage {
+  if (m.trace)
+    return {
+      ...m,
+      trace: m.trace.map((e) =>
+        e.kind === "activity" ? { ...e, activity: cutDetail(e.activity) } : e,
+      ),
+    };
+  if (m.activity) return { ...m, activity: m.activity.map(cutDetail) };
+  return m;
+}
+
 function summary(c: ChatSummary): RemoteChatSummary {
   return {
     id: c.id,
@@ -361,6 +418,8 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.nextSend ? { nextSend: c.nextSend } : {}),
     ...(c.empty ? { empty: true } : {}),
     ...(c.goal ? { goal: c.goal } : {}),
+    ...(c.startedBy ? { startedBy: c.startedBy } : {}),
+    ...(c.limitResume ? { limitResume: c.limitResume } : {}),
   };
 }
 

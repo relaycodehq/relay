@@ -27,6 +27,7 @@ import { Lightbox, type LightboxImage } from "./Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
 import { ReadAloudButton } from "./ReadAloudButton";
+import { WatchNotes } from "./WatchNotes";
 import { mono, type, useTheme } from "./theme";
 
 export type Rewind = (
@@ -52,6 +53,7 @@ export const MessageView = memo(function MessageView({
   onOpenTurn,
   onRewind,
   onRerunSetup,
+  onSteer,
 }: {
   chatId: string;
   message: ChatMessage;
@@ -72,6 +74,8 @@ export const MessageView = memo(function MessageView({
   onRewind?: (message: ChatMessage, ...args: Parameters<Rewind>) => ReturnType<Rewind>;
   /** Offered on the thread's latest worktree setup, when it didn't get through. */
   onRerunSetup?: (message: ChatMessage) => void;
+  /** Puts a message for the agent in the composer, for a watch note's Tell. */
+  onSteer?: (text: string) => void;
 }) {
   const t = useTheme();
   const changes = m.changes;
@@ -167,7 +171,7 @@ export const MessageView = memo(function MessageView({
           <Text style={[styles.meta, { color: t.muted }]}>started on its own</Text>
         )}
       </View>
-      {!user && <AgentRun message={m} root={root} />}
+      {!user && <AgentRun chatId={chatId} message={m} root={root} />}
       {user ? (
         // A screenshot sent on its own leaves nothing for the bubble to hold.
         !!withoutMention(m.body).trim() && (
@@ -199,6 +203,16 @@ export const MessageView = memo(function MessageView({
           images={viewing.images}
           index={viewing.index}
           onClose={() => setViewing(undefined)}
+        />
+      )}
+      {!user && (
+        <WatchNotes
+          chatId={chatId}
+          messageId={m.id}
+          notes={m.notes}
+          agent={agentNames[m.provider]}
+          onLink={openLink}
+          onSteer={onSteer}
         />
       )}
       {!!m.changes?.length && m.status !== "streaming" && (

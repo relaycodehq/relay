@@ -33,23 +33,27 @@ const paceColor = (pace: MeterPace, fallback: string) =>
 const hasUsage = (provider: AgentProvider) =>
   provider === "claude" || provider === "codex";
 
+/** The last usage each computer reported per agent, so a thread opens with its meters drawn. */
+const lastUsage = new Map<string, ProviderUsage>();
+
 /** The agent's plan usage, looked up now and every few minutes while a thread is open. */
 export function useUsage(provider: AgentProvider) {
-  const { desktop, status } = useRemote();
-  const [usage, setUsage] = useState<{
-    provider: AgentProvider;
-    value: ProviderUsage;
-  }>();
+  const { desktop, status, active } = useRemote();
+  const key = `${active ?? ""}:${provider}`;
+  const [usage, setUsage] = useState(() => ({ key, value: lastUsage.get(key) }));
   // Keyed by the connection and agent, not every thread update: each look asks
   // the provider's usage service.
   const load = useCallback(
     (force = false) => {
       if (!hasUsage(provider) || status !== "online") return;
       void desktop("providerUsage", provider as "claude" | "codex", force)
-        .then((value) => setUsage({ provider, value }))
+        .then((value) => {
+          lastUsage.set(key, value);
+          setUsage({ key, value });
+        })
         .catch(() => {});
     },
-    [desktop, status, provider],
+    [desktop, status, provider, key],
   );
   useEffect(() => {
     load();
@@ -57,7 +61,7 @@ export function useUsage(provider: AgentProvider) {
     return () => clearInterval(timer);
   }, [load]);
   return {
-    usage: usage?.provider === provider ? usage.value : undefined,
+    usage: usage.key === key ? usage.value : lastUsage.get(key),
     reload: load,
   };
 }

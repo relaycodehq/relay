@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet } from "react-native";
 import { answerImagePaths } from "../../../shared/answer-images";
 import { turnImages, type ChatMessage } from "../../../shared/projects";
+import { outgoingImage } from "../remote/outbox";
 import { useRemote } from "../remote/RemoteProvider";
 import type { LightboxImage } from "./Lightbox";
 import { useTheme } from "./theme";
 
 export type Source =
   | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string };
+  | { kind: "read"; chatId: string; messageId: string; path: string }
+  /** Pasted into a message still on its way; the outbox holds it. */
+  | { kind: "pending"; messageId: string; index: number };
 
 // Data URLs by source, so scrolling back doesn't fetch them again.
 const cache = new Map<string, string>();
@@ -20,10 +23,12 @@ export const imageFailed = (s: Source) => failed.has(keyOf(s));
 export function useImage(source: Source) {
   const remote = useRemote();
   const key = keyOf(source);
-  const [uri, setUri] = useState(cache.get(key));
-  const [error, setError] = useState(failed.has(key));
+  const [uri, setUri] = useState(() =>
+    source.kind === "pending" ? outgoingImage(source.messageId, source.index) : cache.get(key),
+  );
+  const [error, setError] = useState(failed.has(key) || (source.kind === "pending" && !uri));
   useEffect(() => {
-    if (uri || error || remote.status !== "online") return;
+    if (uri || error || source.kind === "pending" || remote.status !== "online") return;
     const load =
       source.kind === "attached"
         ? remote.desktop("projectChatImage", source.chatId, source.imageId)
@@ -55,8 +60,10 @@ export function messageImages(chatId: string, message: ChatMessage, root?: strin
     name: fileName(path),
   });
   const pasted = (message.images ?? []).map(
-    (image): LightboxImage => ({
-      source: { kind: "attached", chatId, imageId: image.id },
+    (image, index): LightboxImage => ({
+      source: message.pending
+        ? { kind: "pending", messageId: message.id, index }
+        : { kind: "attached", chatId, imageId: image.id },
       name: image.name,
     }),
   );

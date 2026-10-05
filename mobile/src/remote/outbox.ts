@@ -148,6 +148,10 @@ export function useOutbox(chatId: string) {
   return all.filter((o) => o.chatId === chatId);
 }
 
+/** A pasted image of one still on its way, which the desktop can't hand back yet. */
+export const outgoingImage = (id: string, index: number) =>
+  items.find((o) => o.send.id === id)?.send.images?.[index]?.dataUrl;
+
 /** How the thread shows one until the desktop's copy arrives. */
 export const outgoingMessage = (o: Outgoing): ChatMessage => ({
   id: o.send.id,
@@ -159,6 +163,16 @@ export const outgoingMessage = (o: Outgoing): ChatMessage => ({
   version: 0,
   pending: true,
   ...(o.error ? { error: `Not sent: ${o.error}` } : {}),
+  ...(o.send.images?.length
+    ? {
+        images: o.send.images.map((image, i) => ({
+          id: `${o.send.id}:${i}`,
+          name: image.name,
+          mimeType: image.mimeType,
+          sizeBytes: Math.round((image.dataUrl.length * 3) / 4),
+        })),
+      }
+    : {}),
   ...(o.send.parentId ? { parentId: o.send.parentId } : {}),
   ...(o.send.side ? { side: true } : {}),
 });

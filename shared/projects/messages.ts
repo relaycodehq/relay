@@ -132,6 +132,8 @@ export interface AgentActivity {
   label: string;
   status: "running" | "complete" | "failed";
   detail?: string;
+  /** Phones only: how many characters the desktop left out of `detail`; `activityDetail` has them all. */
+  detailCut?: number;
   /** The agent call this one ran inside, when a subagent made it. */
   parentId?: string;
   /** A running agent's latest status line, e.g. "Reading auth.ts · 12 tools". */

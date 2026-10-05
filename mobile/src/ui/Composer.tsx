@@ -20,7 +20,7 @@ import type { TakenBack } from "../../../shared/remote-queued";
 import { agents, agentProviders, type AgentProvider } from "../../../shared/agents";
 import { sendLaterPresets, wakeLabel } from "../../../shared/chat-activity";
 import { isComposerCommand, relayCommand, type ComposerCommand, type RelayCommand } from "../../../shared/commands";
-import { composerCommand, type ModelCatalogs } from "../../../shared/composer-commands";
+import { composerCommand } from "../../../shared/composer-commands";
 import type { ContextUsage } from "../../../shared/projects";
 import type { RemoteSettings } from "../../../shared/remote";
 import type { ModelChoice } from "../../../shared/settings";
@@ -36,6 +36,7 @@ import {
   type DictationTarget,
 } from "../remote/dictation";
 import { maxImages, pickImages, type Attachment } from "../remote/images";
+import { knownModels, loadModelLists, savedModelsRead } from "../remote/model-catalogs";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel, modeLabel, runtimeModes } from "../remote/modes";
 import { CommandMenu, commandItems, useProviderCommands, type CommandItem } from "./CommandMenu";
@@ -255,34 +256,25 @@ export const Composer = forwardRef<
       : withRememberedModel(other, remembered ?? {});
   };
   const switchTo = (next: RemoteSettings, to: AgentProvider) => onSettings(switched(next, to));
-  // The desktop lists each agent's models once; one it couldn't list is asked again next time.
-  const catalogs = useRef<ModelCatalogs>({});
-  // Kept in state too, so the toolbar can name the model once its list arrives.
-  const [listed, setListed] = useState<{ from: typeof desktop; lists: ModelCatalogs }>();
+  // Held for the connection, and saved, so the toolbar names the model at once.
+  const [lists, setLists] = useState(() => ({ from: desktop, lists: knownModels(desktop) }));
   const loadCatalogs = async (wanted: readonly AgentProvider[]) => {
-    await Promise.all(
-      wanted
-        .filter((p) => !catalogs.current[p])
-        .map((p) => desktop("agentModels", p).then((list) => void (catalogs.current[p] = list), () => {})),
-    );
-    setListed({ from: desktop, lists: { ...catalogs.current } });
-    return catalogs.current;
+    const known = await loadModelLists(desktop, wanted);
+    setLists({ from: desktop, lists: known });
+    return known;
   };
   useEffect(() => {
-    catalogs.current = {};
-  }, [desktop]);
-  useEffect(() => {
-    if (catalogs.current[provider]) return;
-    desktop("agentModels", provider).then(
-      (list) => {
-        catalogs.current[provider] = list;
-        setListed({ from: desktop, lists: { ...catalogs.current } });
-      },
-      () => {},
-    );
+    let live = true;
+    const show = () => live && setLists({ from: desktop, lists: knownModels(desktop) });
+    void savedModelsRead(desktop).then(show);
+    void loadModelLists(desktop, [provider]).then(show);
+    return () => {
+      live = false;
+    };
   }, [desktop, provider]);
   // Claude's ids are aliases ("opus"); the list carries the full name.
-  const models = listed?.from === desktop ? listed.lists[provider] : undefined;
+  const catalogs = lists.from === desktop ? lists.lists : knownModels(desktop);
+  const models = catalogs[provider];
   const modelLabel = settings.choice.model
     ? (models?.find((m) => m.id === settings.choice.model)?.name ?? settings.choice.model)
     : "Default";
@@ -542,7 +534,7 @@ export const Composer = forwardRef<
         open={sheet === "model"}
         projectId={projectId}
         settings={settings}
-        known={listed?.from === desktop ? listed.lists : undefined}
+        known={catalogs}
         onClose={() => setSheet(undefined)}
         onChange={(next, to) => (to ? switchTo(next, to) : onSettings(next))}
       />

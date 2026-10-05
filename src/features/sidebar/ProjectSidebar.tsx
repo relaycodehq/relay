@@ -4,7 +4,7 @@ import { Bell, GitPullRequest, Plus } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { chatActivitySections } from "../../../shared/chat-activity";
-import { startedFamilies } from "./activity";
+import { startedFamilies } from "../../../shared/started-families";
 import { api } from "../../lib/api";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { useNow } from "../../lib/useNow";

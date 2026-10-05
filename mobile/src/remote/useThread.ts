@@ -24,10 +24,17 @@ export function useThread(id: string) {
   const [history, setHistory] = useState(remoteHistory);
 
   // The copy from the last visit, readable before (or without) the computer.
+  const cacheRead = useRef<Promise<void>>(undefined);
   useEffect(() => {
     let live = true;
-    void loadThread(id).then(
-      (cached) => live && cached && setThread((t) => t ?? cached),
+    cacheRead.current = loadThread(id).then(
+      (cached) => {
+        if (!live || !cached) return;
+        // Set before the render, so the first fetch asks only for what changed since.
+        current.current ??= cached;
+        setThread((t) => t ?? cached);
+      },
+      () => {},
     );
     return () => {
       live = false;
@@ -42,6 +49,7 @@ export function useThread(id: string) {
     }
     const run = async () => {
       try {
+        await cacheRead.current;
         const patch = await remote.call(
           "chat",
           id,

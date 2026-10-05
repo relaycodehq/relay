@@ -69,6 +69,8 @@ interface Remote {
   /** Forgets one computer, the active one by default, and moves on to the next. */
   forget(id?: string): Promise<void>;
   onMessage(chatId: string, listener: (e: MessageEvent) => void): () => void;
+  /** Every thread's message events, e.g. to tell of finished answers. */
+  onAnyMessage(listener: (e: MessageEvent) => void): () => void;
 }
 
 const Context = createContext<Remote | null>(null);
@@ -108,6 +110,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   const active = useRef<string>(undefined);
   const [activeId, setActiveId] = useState<string>();
   const listeners = useRef(new Map<string, Set<(e: MessageEvent) => void>>());
+  const everyMessage = useRef(new Set<(e: MessageEvent) => void>());
   const pairing = useRef<{
     resolve: () => void;
     reject: (e: Error) => void;
@@ -151,9 +154,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
             setOverview((o) => o && { ...o, chats: event.chats });
           else if (event.kind === "appearance")
             setOverview((o) => o && { ...o, appearance: event.appearance });
-          else
+          else {
             for (const listener of listeners.current.get(event.chatId) ?? [])
               listener(event);
+            for (const listener of everyMessage.current) listener(event);
+          }
         },
       });
       const previous = live.relayClient;
@@ -269,6 +274,11 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const onAnyMessage = useCallback<Remote["onAnyMessage"]>((listener) => {
+    everyMessage.current.add(listener);
+    return () => void everyMessage.current.delete(listener);
+  }, []);
+
   const switchTo = useCallback(
     async (id: string) => {
       const credentials = saved.find((c) => c.key === id);
@@ -345,6 +355,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
         await clearCredentials(id);
       },
       onMessage,
+      onAnyMessage,
     }),
     [
       ready,
@@ -361,6 +372,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       call,
       desktop,
       onMessage,
+      onAnyMessage,
     ],
   );
 

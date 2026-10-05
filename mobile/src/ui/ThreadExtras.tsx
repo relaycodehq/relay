@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleStop,
+  Hourglass,
   SquareTerminal,
   Target,
   X,
@@ -14,9 +15,10 @@ import {
 import { presentGoal, type ThreadGoal } from "../../../shared/goal";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
-import type { ChatPending } from "../../../shared/projects";
+import type { ChatPending, LimitResume } from "../../../shared/projects";
 import type { Outgoing } from "../remote/outbox";
 import type { RemoteQueued } from "../../../shared/remote";
+import { agentNames } from "./ProviderIcon";
 import { MenuSheet } from "./Sheet";
 import { withoutMention } from "../../../shared/remote-compose";
 import { useTick } from "./motion";
@@ -193,6 +195,51 @@ export function StoppedStrip({
           primary
           onPress={() => onResolve("resume")}
         />
+      </View>
+    </View>
+  );
+}
+
+/** A usage limit stopped the answer; the desktop carries it on once the limit lifts. */
+export function LimitStrip({
+  plan,
+  onSet,
+}: {
+  plan: LimitResume;
+  onSet: (on: boolean) => Promise<void>;
+}) {
+  const t = useTheme();
+  useTick(30_000);
+  const now = new Date();
+  const due = plan.at <= now.getTime();
+  // Off with the limit lifted, Resume answer in the thread does the same.
+  if (plan.off && due) return null;
+  return (
+    <View
+      style={[
+        styles.strip,
+        { borderColor: t.border, backgroundColor: t.raised },
+      ]}
+    >
+      <View style={styles.item}>
+        <Hourglass size={15} color={t.muted} />
+        <Text style={[styles.text, { color: t.text }]}>
+          {agentNames[plan.provider]} hit its usage limit
+          <Text style={{ color: t.muted }}>
+            {plan.off
+              ? ` · resets ${wakeLabel(plan.at, now)}`
+              : due
+                ? " · resuming the answer"
+                : ` · resumes the answer at ${wakeLabel(plan.at, now)}`}
+          </Text>
+        </Text>
+      </View>
+      <View style={styles.actions}>
+        {plan.off ? (
+          <Action label="Resume then" primary onPress={() => onSet(true)} />
+        ) : (
+          <Action label="Don't resume" onPress={() => onSet(false)} />
+        )}
       </View>
     </View>
   );

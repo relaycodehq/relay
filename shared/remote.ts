@@ -15,8 +15,10 @@ import type {
   ChatPending,
   ChatScope,
   KnownMessages,
+  LimitResume,
   ProjectChatPatch,
   ProjectChatSend,
+  StartedBy,
 } from "./projects";
 import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
@@ -114,6 +116,10 @@ export interface RemoteChatSummary {
   empty?: boolean;
   /** Its native `/goal`; older desktops leave it out. */
   goal?: ThreadGoal;
+  /** The thread whose agent started it; missing before `awayBridge`. */
+  startedBy?: StartedBy;
+  /** The answer a usage limit stopped, resumed once the limit lifts; missing before `awayBridge`. */
+  limitResume?: LimitResume;
 }
 
 export interface RemoteProject {
@@ -136,7 +142,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 12;
+export const remoteBridgeVersion = 13;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -144,6 +150,17 @@ export const remoteBridgeVersion = 12;
 export const recipientBridge = 11;
 /** From here a desktop reads answers aloud to phones (`readAloud`). */
 export const readAloudBridge = 12;
+/**
+ * From here a desktop sends phones a tool call's output cut to
+ * `phoneDetailPreview` characters, and the whole of it on `activityDetail`.
+ */
+export const activityDetailBridge = 13;
+export const phoneDetailPreview = 600;
+/**
+ * From here a desktop tells phones which thread started which and when a
+ * limited answer resumes, and takes `setLimitResume` and `closeWatchNote`.
+ */
+export const awayBridge = 13;
 /** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
 export const handoffBridge = 11;
 
@@ -310,6 +327,8 @@ export const phoneDesktopMethods = [
   "markProjectChatSeen",
   "forkProjectChat",
   "rewindProjectTurn",
+  "setLimitResume",
+  "closeWatchNote",
   "projectChatImage",
   "projectChatReadImage",
   "projectChatQueuedImages",
@@ -406,6 +425,12 @@ export interface RemoteApi {
   dictate(request: PhoneDictation): Promise<PhoneDictationHeard>;
   /** Missing before `readAloudBridge`. */
   readAloud(request: PhoneReadAloud): Promise<PhoneReadAloudAudio>;
+  /** A tool call's whole output, which the thread sent cut; missing before `activityDetailBridge`. */
+  activityDetail(
+    chatId: string,
+    messageId: string,
+    activityId: string,
+  ): Promise<string | null>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
@@ -455,6 +480,7 @@ export const remoteMethods = [
   "reportApp",
   "dictate",
   "readAloud",
+  "activityDetail",
   "computerProjects",
   "handoffUpload",
   "receiveHandoff",

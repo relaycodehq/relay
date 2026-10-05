@@ -11,7 +11,8 @@
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
 // of these can pass for two computers, one of them behind the phone.
 // RELAY_DICTATION_MODEL=<folder with the files in shared/dictation.ts> lets
-// the phone dictate.
+// the phone dictate. RELAY_READ_ALOUD_MODELS=<a Relay's models folder> lends
+// it the read-aloud voices downloaded there.
 import { _electron as electron } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
@@ -80,6 +81,14 @@ if (modelDir) {
     join(model, "verified.json"),
     JSON.stringify(dictationModel.files.map((file) => file.sha256)),
   );
+}
+
+const voices = process.env.RELAY_READ_ALOUD_MODELS;
+if (voices) {
+  const { readdir } = await import("node:fs/promises");
+  await mkdir(join(root, "data", "models"), { recursive: true });
+  for (const engine of await readdir(voices))
+    await symlink(join(voices, engine), join(root, "data", "models", engine));
 }
 
 const env = Object.fromEntries(

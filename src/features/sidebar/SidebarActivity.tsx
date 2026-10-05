@@ -22,7 +22,11 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { mac } from "../../lib/mod-key";
 import { modifiersLabel, useBindings } from "../../lib/shortcuts";
 import { awayStopped } from "./useAwayViews";
-import { familyLine, familySettled, type StartedFamilies } from "./activity";
+import {
+  familyLine,
+  familySettled,
+  type StartedFamilies,
+} from "../../../shared/started-families";
 import { SHELF_PAGE, type Shelves } from "./useShelves";
 import { AwayPeek, AwayWhere } from "./AwayCard";
 import { DraftCard } from "./DraftCard";
@@ -55,7 +59,7 @@ export function ActivityView({
   threads: ChatSummary[];
   sections: Record<ChatActivitySection, ChatSummary[]>;
   /** The active threads as cards, started ones under their lead. */
-  families: StartedFamilies;
+  families: StartedFamilies<ChatSummary>;
   away: Record<string, HandoffView>;
   /** The jump-thread shortcuts show on the first cards. */
   hints: boolean;

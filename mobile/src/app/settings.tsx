@@ -1,4 +1,4 @@
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Check, Monitor, Plus, RefreshCw } from "lucide-react-native";
 import { useRemote } from "../remote/RemoteProvider";
@@ -14,7 +14,8 @@ import { describeUpdate } from "../remote/computer-update";
 import { useComputerUpdateAction } from "../ui/ComputerUpdate";
 import { ConnectionLine } from "../ui/ConnectionLine";
 import { MenuRow } from "../ui/Sheet";
-import { SectionTitle } from "../ui/Rows";
+import { SectionTitle, ToggleRow } from "../ui/Rows";
+import { phoneCanWatch, useNotifyPreference } from "../remote/watch";
 import { useThemePreference, type ThemePreference } from "../ui/ThemeProvider";
 import { type, useTheme } from "../ui/theme";
 
@@ -22,6 +23,7 @@ export default function Settings() {
   const remote = useRemote();
   const t = useTheme();
   const { preference, setPreference } = useThemePreference();
+  const [notify, setNotify] = useNotifyPreference();
   const known = !!remote.overview?.appearance;
   const app = appReport(useSelfUpdate());
   const offered = remote.overview?.phoneApp?.version;
@@ -59,6 +61,25 @@ export default function Settings() {
           onPress={() => setPreference(c.value)}
         />
       ))}
+      {phoneCanWatch && (
+        <>
+          <SectionTitle>Notifications</SectionTitle>
+          <ToggleRow
+            label="When a thread finishes or needs you"
+            hint={`While Relay is in the background. It stays connected to ${remote.name} for that, with a quiet notice in the shade.`}
+            value={notify}
+            onChange={(on) =>
+              void setNotify(on).then((done) => {
+                if (!done)
+                  Alert.alert("Notifications are off for Relay", "Turn them on in Android's settings.", [
+                    { text: "Not now", style: "cancel" },
+                    { text: "Open settings", onPress: () => void Linking.openSettings() },
+                  ]);
+              })
+            }
+          />
+        </>
+      )}
       <SectionTitle>App</SectionTitle>
       <View style={styles.computer}>
         <View style={styles.text}>

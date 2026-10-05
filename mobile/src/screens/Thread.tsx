@@ -25,6 +25,7 @@ import { latestSetup } from "../../../shared/worktree-command";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
+import { clearThreadNotice } from "../remote/watch";
 import { clearHandedBack, handBack, peekHandedBack } from "../remote/taken-back";
 import {
   arrived,
@@ -58,6 +59,7 @@ import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
 import {
   GoalStrip,
+  LimitStrip,
   QueueList,
   StoppedStrip,
   UnsentStrip,
@@ -79,6 +81,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   useEffect(() => {
     if (!updated || !foreground) return;
     markSeen(id, updated);
+    clearThreadNotice(id);
     // The desktop keeps the shared mark; an older one just doesn't know the call.
     void remote.desktop("markProjectChatSeen", id, updated).catch(() => {});
   }, [id, updated, foreground]);
@@ -213,6 +216,13 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     (m: ChatMessage) => router.push(`/chat/${id}/reply/${m.id}`),
     [id],
   );
+  const steerFromNote = useCallback((text: string) => {
+    try {
+      composer.current?.restore({ body: text, images: [] });
+    } catch (e) {
+      Alert.alert("Couldn't add it", e instanceof Error ? e.message : String(e));
+    }
+  }, []);
   const rewind = useCallback(
     async (
       m: ChatMessage,
@@ -576,6 +586,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
               onOpenTurn={openTurn}
               onRewind={rewind}
               onRerunSetup={!running && item.id === setupId ? rerunSetup : undefined}
+              onSteer={rootId ? undefined : steerFromNote}
             />
           )}
           ListHeaderComponent={
@@ -675,6 +686,18 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
       )}
       {!rootId && summary?.goal && (
         <GoalStrip goal={summary.goal} running={running} />
+      )}
+      {!rootId && summary?.limitResume && !running && (
+        <LimitStrip
+          plan={summary.limitResume}
+          onSet={(on) =>
+            remote
+              .desktop("setLimitResume", id, on)
+              .catch((e) =>
+                Alert.alert("Couldn't change it", e instanceof Error ? e.message : String(e)),
+              )
+          }
+        />
       )}
       {!rootId && !!thread?.stopped?.items.length && (
         <StoppedStrip

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { agentProviders, type AgentDefaults, type AgentModel, type AgentProvider } from "../../../shared/agents";
 import { modelEfforts } from "../../../shared/composer-commands";
@@ -9,7 +9,7 @@ import type { ModelCatalogs } from "../../../shared/composer-commands";
 import { useRemote } from "../remote/RemoteProvider";
 import { effortLabel } from "../remote/modes";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
-import { Segmented } from "./Rows";
+import { Segmented, ToggleRow } from "./Rows";
 import { Sheet } from "./Sheet";
 import { type, useTheme } from "./theme";
 
@@ -172,7 +172,7 @@ export function ModelSheet({
         </>
       )}
       {provider === "codex" && (
-        <Toggle
+        <ToggleRow
           label="Fast"
           hint="Codex's faster service tier; uses more of your limit."
           value={settings.choice.fast}
@@ -180,7 +180,7 @@ export function ModelSheet({
         />
       )}
       {provider === "claude" && (
-        <Toggle
+        <ToggleRow
           label="200k context window"
           hint="Off leaves Claude on its default window, 1M on most models."
           value={settings.contextWindow === "200k"}
@@ -226,34 +226,6 @@ function ModelRow({
       </View>
       {checked && <Check size={16} color={t.accent} />}
     </Pressable>
-  );
-}
-
-function Toggle({
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const t = useTheme();
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Text style={[styles.label, { color: t.text }]}>{label}</Text>
-        <Text style={[styles.hint, { color: t.muted }]}>{hint}</Text>
-      </View>
-      <Switch
-        accessibilityLabel={label}
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ true: t.accent, false: t.border }}
-      />
-    </View>
   );
 }
 

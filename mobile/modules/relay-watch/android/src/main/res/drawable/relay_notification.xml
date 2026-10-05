@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- assets/relay-mark.svg in one colour, as Android's status bar wants. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="832"
+  android:viewportHeight="832">
+  <group
+    android:scaleX="1.42"
+    android:scaleY="1.42"
+    android:translateX="23.698"
+    android:translateY="-28.2864">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M115,64C180,120 231,202 256,294C272,350 274,396 254,420C247,429 235,432 222,426C245,410 241,360 234,316C221,230 182,136 115,64Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M117,278C109,257 119,238 141,227L173,239C150,246 141,258 148,281C157,315 180,354 207,385C226,407 238,418 254,420C244,434 229,435 214,429C186,417 157,381 137,343C123,316 116,294 117,278Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M404,303C392,316 348,306 320,314C311,317 334,334 352,347C387,373 429,400 459,426C485,448 505,471 504,487C504,496 498,503 490,507C499,497 502,488 495,477C482,458 453,442 420,422C382,398 346,376 318,352C296,333 279,318 288,303C298,286 327,280 350,282C371,284 391,294 404,303Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M117,278C109,251 119,227 145,217C174,205 211,207 245,214C296,224 350,244 387,263C405,273 414,287 404,303C375,287 340,272 302,260C261,247 225,239 195,240C157,239 132,254 117,278Z" />
+  </group>
+</vector>

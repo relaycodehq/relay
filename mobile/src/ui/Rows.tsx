@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { Button } from "./Button";
 import { type, useTheme } from "./theme";
@@ -137,7 +137,43 @@ export const rowStyles = StyleSheet.create({
   },
 });
 
+/** A setting that is on or off, with a line saying what it does. */
+export function ToggleRow({
+  label,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const t = useTheme();
+  return (
+    <View style={styles.toggle}>
+      <View style={styles.toggleText}>
+        <Text style={[styles.toggleLabel, { color: t.text }]}>{label}</Text>
+        <Text style={[styles.toggleHint, { color: t.muted }]}>{hint}</Text>
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        trackColor={{ true: t.accent, false: t.border }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  toggle: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, minHeight: 52, paddingVertical: 8 },
+  toggleText: { flex: 1, gap: 2 },
+  toggleLabel: { fontSize: type.body },
+  toggleHint: { fontSize: type.tiny, lineHeight: 17 },
   row: {
     flexDirection: "row",
     alignItems: "center",

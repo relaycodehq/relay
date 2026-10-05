@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from "react";
 import { requireOptionalNativeModule } from "expo";
 import type { RemoteClient } from "../../../shared/remote-client";
+import { hold, release } from "./watch";
 
 /** modules/relay-speaker; missing in Expo Go, on iOS, and in APKs from before read aloud. */
 interface RelaySpeaker {
@@ -69,6 +70,8 @@ export async function startReadAloud(
   clearTimeout(errorTimer);
   const current: Reading = { id: ++nextId, key, call };
   reading = current;
+  // Keeps pulling with the screen off; tapped on screen, so Android allows it.
+  hold("read");
   set({ key, loading: true, error: undefined });
   try {
     await call("readAloud", { type: "start", id: current.id, markdown });
@@ -105,6 +108,7 @@ export async function startReadAloud(
   }
   if (reading !== current) return;
   reading = undefined;
+  release("read");
   void speaker.stop().catch(() => {});
   set({ key: undefined, loading: false });
 }
@@ -113,6 +117,7 @@ export function stopReadAloud() {
   const current = reading;
   if (!current) return;
   reading = undefined;
+  release("read");
   void speaker?.stop().catch(() => {});
   void current
     .call("readAloud", { type: "stop", id: current.id })

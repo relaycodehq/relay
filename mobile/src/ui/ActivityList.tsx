@@ -1,6 +1,6 @@
 // The desktop sidebar's Activity view: one card per open thread, the ones that
 // need nothing from you faded back, and Snoozed and Settled folded away below.
-import { useMemo, useState, type ReactElement } from "react";
+import { Fragment, useMemo, useState, type ReactElement } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +13,7 @@ import {
 import {
   CalendarClock,
   Check,
+  ChevronDown,
   ChevronRight,
   RotateCcw,
   Sunrise,
@@ -25,6 +26,11 @@ import {
   wakeLabel,
 } from "../../../shared/chat-activity";
 import type { RemoteChatSummary, RemoteProject } from "../../../shared/remote";
+import {
+  familyLine,
+  familySettled,
+  startedFamilies,
+} from "../../../shared/started-families";
 import { agentsSince } from "../../../shared/waiting";
 import { useUnread } from "../remote/seen";
 import { useNow } from "./motion";
@@ -71,14 +77,20 @@ export function ActivityList({
     [projects],
   );
   const sections = chatActivitySections(chats, now);
+  const families = startedFamilies(sections.active, sections.settled);
   const [acting, setActing] = useState<RemoteChatSummary>();
   const [shelves, setShelves] = useState({ snoozed: 0, settled: 0 });
+  // A family's fold as the user left it; until then open while any of it needs a look.
+  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
 
   const project = (c: RemoteChatSummary) =>
     byId.get(c.projectId) ?? { id: c.projectId, name: "?" };
 
   const shelf = (kind: "snoozed" | "settled", label: string) => {
-    const items = sections[kind];
+    const items =
+      kind === "settled"
+        ? sections.settled.filter((c) => !families.headers.has(c.id))
+        : sections.snoozed;
     if (!items.length) return null;
     const shown = shelves[kind];
     return (
@@ -171,24 +183,72 @@ export function ActivityList({
         <View style={styles.heading}>
           <Text style={[styles.headingText, { color: t.muted }]}>Activity</Text>
           <Text style={[styles.headingCount, { color: t.muted }]}>
-            {sections.active.length
-              ? `${sections.active.length} open`
-              : "All settled"}
+            {families.top.length ? `${families.top.length} open` : "All settled"}
           </Text>
         </View>
-        {sections.active.map((c) => (
-          <Card
-            key={c.id}
-            chat={c}
-            project={project(c)}
-            unread={unread(c)}
-            selected={c.id === selected}
-            now={now}
-            t={t}
-            onPress={() => onOpen(c)}
-            onLongPress={() => setActing(c)}
-          />
-        ))}
+        {families.top.map((c) => {
+          const started = families.started.get(c.id) ?? [];
+          const children = (
+            <View style={[styles.started, { borderColor: t.border }]}>
+              {started.map((s) => (
+                <Card
+                  key={s.id}
+                  chat={s}
+                  project={project(s)}
+                  unread={unread(s)}
+                  selected={s.id === selected}
+                  now={now}
+                  t={t}
+                  compact
+                  onPress={() => onOpen(s)}
+                  onLongPress={() => setActing(s)}
+                />
+              ))}
+            </View>
+          );
+          if (families.headers.has(c.id))
+            return (
+              <Fragment key={c.id}>
+                <SettledLead
+                  chat={c}
+                  project={project(c)}
+                  selected={c.id === selected}
+                  t={t}
+                  onPress={() => onOpen(c)}
+                  onUnsettle={() => onTriage(c, { kind: "unsettle" })}
+                />
+                {children}
+              </Fragment>
+            );
+          const open =
+            started.length > 0 &&
+            (toggled.get(c.id) ?? !familySettled(started, unread));
+          return (
+            <Fragment key={c.id}>
+              <Card
+                chat={c}
+                project={project(c)}
+                unread={unread(c)}
+                selected={c.id === selected}
+                now={now}
+                t={t}
+                family={
+                  started.length
+                    ? {
+                        started,
+                        open,
+                        onFold: () =>
+                          setToggled((m) => new Map(m).set(c.id, !open)),
+                      }
+                    : undefined
+                }
+                onPress={() => onOpen(c)}
+                onLongPress={() => setActing(c)}
+              />
+              {open && children}
+            </Fragment>
+          );
+        })}
         {!sections.active.length && (
           <View style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: t.accentSoft }]}>
@@ -245,6 +305,8 @@ function Card({
   selected,
   now,
   t,
+  family,
+  compact,
   onPress,
   onLongPress,
 }: {
@@ -254,11 +316,46 @@ function Card({
   selected: boolean;
   now: number;
   t: Palette;
+  /** The threads its agent started, listed under it unless folded. */
+  family?: { started: RemoteChatSummary[]; open: boolean; onFold: () => void };
+  /** A started thread under its lead: no project line, its state beside the title. */
+  compact?: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) {
+  // A question in a started thread is the lead's to bring up while they're folded together.
+  const asking = !!family?.started.some((s) => s.waiting);
   // Only the open thread, unread news and questions stay bright.
-  const bright = selected || unread || chat.waiting;
+  const bright = selected || unread || chat.waiting || asking;
+  const state = (
+    <CardState
+      chat={asking ? { ...chat, waiting: true } : chat}
+      unread={unread}
+      now={now}
+      t={t}
+    />
+  );
+  if (compact)
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={chat.title}
+        accessibilityHint="Hold to settle or snooze"
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={({ pressed }) => [
+          styles.compactCard,
+          selected && { backgroundColor: mix(t.text, t.background, 0.09) },
+          pressed && { backgroundColor: t.hover },
+          !bright && !pressed && styles.dim,
+        ]}
+      >
+        <Text numberOfLines={1} style={[styles.compactCardTitle, { color: t.text }]}>
+          {chat.title}
+        </Text>
+        {state}
+      </Pressable>
+    );
   return (
     <Pressable
       accessibilityRole="button"
@@ -278,20 +375,44 @@ function Card({
         <Text numberOfLines={1} style={[styles.project, { color: t.muted }]}>
           {project.name}
         </Text>
-        <CardState chat={chat} unread={unread} now={now} t={t} />
+        {state}
       </View>
       <Text numberOfLines={1} style={[styles.title, { color: t.text }]}>
         {chat.title}
       </Text>
-      {(chat.branch || chat.provider || chat.scope === "pr") && (
+      {(family || chat.branch || chat.provider || chat.scope === "pr") && (
         <View style={styles.meta}>
-          <Text
-            numberOfLines={1}
-            style={[styles.branch, { color: mix(t.muted, t.background, 0.7) }]}
-          >
-            {chat.scope === "pr" ? "Pull request · " : ""}
-            {chat.branch}
-          </Text>
+          {family ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: family.open }}
+              accessibilityLabel={
+                family.open
+                  ? "Fold the threads it started"
+                  : "Show the threads it started"
+              }
+              hitSlop={10}
+              onPress={family.onFold}
+              style={styles.family}
+            >
+              {family.open ? (
+                <ChevronDown size={12} color={t.muted} />
+              ) : (
+                <ChevronRight size={12} color={t.muted} />
+              )}
+              <Text numberOfLines={1} style={[styles.familyText, { color: t.muted }]}>
+                {familyLine(family.started)}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text
+              numberOfLines={1}
+              style={[styles.branch, { color: mix(t.muted, t.background, 0.7) }]}
+            >
+              {chat.scope === "pr" ? "Pull request · " : ""}
+              {chat.branch}
+            </Text>
+          )}
           {chat.provider && (
             <View style={styles.provider}>
               <ProviderIcon
@@ -303,6 +424,52 @@ function Card({
           )}
         </View>
       )}
+    </Pressable>
+  );
+}
+
+/** A settled lead whose started threads still show: a muted row above them. */
+function SettledLead({
+  chat,
+  project,
+  selected,
+  t,
+  onPress,
+  onUnsettle,
+}: {
+  chat: RemoteChatSummary;
+  project: Pick<RemoteProject, "id" | "name">;
+  selected: boolean;
+  t: Palette;
+  onPress: () => void;
+  onUnsettle: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={chat.title}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.compact,
+        (pressed || selected) && { backgroundColor: t.hover },
+      ]}
+    >
+      <View style={styles.faded}>
+        <ProjectBadge project={project} />
+      </View>
+      <Text numberOfLines={1} style={[styles.compactTitle, { color: t.muted }]}>
+        {chat.title}
+      </Text>
+      <Text style={[styles.compactAge, { color: t.muted }]}>Settled</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Move back to activity"
+        hitSlop={8}
+        onPress={onUnsettle}
+        style={styles.compactAction}
+      >
+        <RotateCcw size={15} color={t.muted} />
+      </Pressable>
     </Pressable>
   );
 }
@@ -412,6 +579,24 @@ const styles = StyleSheet.create({
   meta: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 16 },
   branch: { flex: 1, fontSize: type.tiny },
   provider: { opacity: 0.75 },
+  family: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
+  familyText: { flexShrink: 1, fontSize: type.tiny },
+  started: {
+    marginLeft: 22,
+    marginBottom: 4,
+    paddingLeft: 6,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+  },
+  compactCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  compactCardTitle: { flex: 1, fontSize: type.small, fontWeight: "500" },
   empty: {
     alignItems: "center",
     gap: 6,

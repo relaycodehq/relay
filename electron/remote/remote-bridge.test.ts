@@ -267,6 +267,51 @@ it("sends a thread's latest hundred messages, and older pages on request", async
   await expect(page(5000)).rejects.toThrow();
 });
 
+it("sends a phone a long tool output's ends, and the whole of it when asked", async () => {
+  const messageId = randomUUID();
+  const output = `${"a".repeat(1000)}${"b".repeat(1000)}`;
+  const message: ChatMessage = {
+    id: messageId,
+    role: "assistant",
+    body: "Done",
+    status: "complete",
+    created: 1,
+    provider: "claude",
+    version: 1,
+    trace: [
+      { kind: "commentary", id: "c", text: "Looking" },
+      { kind: "activity", id: "t1", activity: { id: "t1", kind: "command", label: "npm test", status: "complete", detail: output } },
+      { kind: "activity", id: "t2", activity: { id: "t2", kind: "command", label: "ls", status: "complete", detail: "short" } },
+    ],
+  };
+  const host = {
+    projects: async () => [],
+    projectPath: () => "/r",
+    chats: () => [],
+    chat: async () => ({
+      id: chatId,
+      projectId,
+      title: "Tools",
+      scope: { kind: "project" },
+      created: 1,
+      updated: 2,
+      messages: [message],
+    }),
+    dispatch: async () => null,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const b = new RemoteBridge(host, () => {});
+  const chat = (await b.handle("chat", [chatId])) as { messages: ChatMessage[] };
+  const [long, short] = chat.messages[0]!.trace!.flatMap((e) =>
+    e.kind === "activity" ? [e.activity] : [],
+  );
+  expect(long!.detail).toBe(`${"a".repeat(300)}\n…\n${"b".repeat(300)}`);
+  expect(long!.detailCut).toBe(1400);
+  expect(short).toEqual(message.trace![2]!.kind === "activity" && message.trace![2]!.activity);
+  expect(await b.handle("activityDetail", [chatId, messageId, "t1"])).toBe(output);
+  expect(await b.handle("activityDetail", [chatId, messageId, "gone"])).toBeNull();
+});
+
 it("tells a phone what a queued message needs to be taken back, but leaves its screenshots on the desktop", async () => {
   const input = (id: string, over = {}) => ({
     id,

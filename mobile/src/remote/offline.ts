@@ -3,6 +3,7 @@
 // replaced by it as soon as the computer answers again.
 import { Directory, File, Paths } from "expo-file-system";
 import type { RemoteOverview, RemoteSettings } from "../../../shared/remote";
+import type { ModelCatalogs } from "../../../shared/composer-commands";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
 import type { Thread } from "./chat-state";
 
@@ -71,6 +72,14 @@ export const loadOverview = (computer: string) =>
 export function saveOverview(computer: string, overview: RemoteOverview) {
   const file = overviewFile(computer);
   later(file.uri, () => write(file, overview));
+}
+
+/** The agents' model lists as last listed, so a composer names its model before the computer answers. */
+const modelsFile = () => new File(folder(), "models.json");
+export const loadModels = () => read<ModelCatalogs>(modelsFile());
+export function saveModels(lists: ModelCatalogs) {
+  const file = modelsFile();
+  later(file.uri, () => write(file, lists));
 }
 
 /** What a new thread starts on, so its composer is there before the computer answers. */

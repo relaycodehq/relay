@@ -24,6 +24,7 @@ import {
   Wrench,
 } from "lucide-react-native";
 import type { AgentActivity, ChatMessage } from "../../../shared/projects";
+import { activityDetailBridge } from "../../../shared/remote";
 import {
   doneLabel,
   duration,
@@ -37,6 +38,7 @@ import {
   thinkingWord,
   turnHeading,
 } from "../../../shared/agent-trace";
+import { useRemote } from "../remote/RemoteProvider";
 import { Markdown } from "./Markdown";
 import { useReducedMotion, useTick } from "./motion";
 import { Shine } from "./Shine";
@@ -52,13 +54,23 @@ const icons = {
   tool: Wrench,
 } satisfies Record<AgentActivity["kind"], unknown>;
 
-/** Each agent call's own tool calls, and how to show their paths. */
+/** Each agent call's own tool calls, how to show their paths, and whose turn they're in. */
 const Subagents = createContext({
   calls: new Map<string, AgentActivity[]>(),
   display: (text: string) => text,
+  chatId: "",
+  messageId: "",
 });
 
-export function AgentRun({ message, root }: { message: ChatMessage; root?: string }) {
+export function AgentRun({
+  chatId,
+  message,
+  root,
+}: {
+  chatId: string;
+  message: ChatMessage;
+  root?: string;
+}) {
   const t = useTheme();
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
@@ -123,7 +135,7 @@ export function AgentRun({ message, root }: { message: ChatMessage; root?: strin
         />
       </Pressable>
       {expanded && (entries.length > 0 || thinking) && (
-        <Subagents.Provider value={{ calls, display }}>
+        <Subagents.Provider value={{ calls, display, chatId, messageId: message.id }}>
           <View style={styles.trace} accessibilityLabel="Agent activity">
             {groupTrace(shown).map((part, index, parts) =>
               part.kind === "commentary" ? (
@@ -207,17 +219,35 @@ function ToolRow({ activity: a, label }: { activity: AgentActivity; label: strin
   return (
     <Fold heading={heading}>
       {calls.length > 0 && <SubagentRows calls={calls} />}
-      {!!a.detail && (
-        <ScrollView
-          nestedScrollEnabled
-          style={[styles.detail, { backgroundColor: t.toolbar }]}
-        >
-          <Text selectable style={[styles.detailText, { color: t.muted }]}>
-            {a.detail}
-          </Text>
-        </ScrollView>
-      )}
+      {!!a.detail && <Detail activity={a} />}
     </Fold>
+  );
+}
+
+/** A call's output; the desktop sends a long one cut, and the whole of it once the fold opens. */
+function Detail({ activity: a }: { activity: AgentActivity }) {
+  const t = useTheme();
+  const { chatId, messageId } = useContext(Subagents);
+  const { call, overview } = useRemote();
+  const [whole, setWhole] = useState<string>();
+  const cut = !!a.detailCut && (overview?.bridge ?? 1) >= activityDetailBridge;
+  useEffect(() => {
+    if (!cut || !chatId) return;
+    let live = true;
+    call("activityDetail", chatId, messageId, a.id).then(
+      (detail) => live && detail && setWhole(detail),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [cut, call, chatId, messageId, a.id]);
+  return (
+    <ScrollView nestedScrollEnabled style={[styles.detail, { backgroundColor: t.toolbar }]}>
+      <Text selectable style={[styles.detailText, { color: t.muted }]}>
+        {whole ?? a.detail}
+      </Text>
+    </ScrollView>
   );
 }
 

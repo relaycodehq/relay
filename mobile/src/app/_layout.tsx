@@ -7,6 +7,7 @@ import { RemoteProvider, useRemote } from "../remote/RemoteProvider";
 import { useOfflineCopies } from "../remote/offline-copies";
 import { resendFailed } from "../remote/outbox";
 import { appReport, checkForUpdate, confirmLaunch, useSelfUpdate } from "../remote/self-update";
+import { useThreadNotifications } from "../remote/watch";
 import {
   FullWidthContext,
   HeaderHeightContext,
@@ -50,6 +51,7 @@ function Screens() {
   const selected = useOpenItem(pathname);
   useOrientationPolicy();
   useOfflineCopies();
+  useThreadNotifications();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(t.background);
   }, [t.background]);
@@ -132,7 +134,8 @@ function Screens() {
               />
               <Stack.Screen name="new" options={{ title: "New thread" }} />
               <Stack.Screen name="settings" options={{ title: "Settings" }} />
-              <Stack.Screen name="chat/[id]/index" options={{ title: "" }} />
+              {/* A notification for the thread already open brings it forward instead of stacking a copy. */}
+              <Stack.Screen name="chat/[id]/index" options={{ title: "" }} dangerouslySingular />
               <Stack.Screen
                 name="chat/[id]/reply/[root]"
                 options={{ title: "Replies" }}
