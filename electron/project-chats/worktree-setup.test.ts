@@ -8,6 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -182,6 +183,27 @@ it("leaves a project without setup alone, and runs teardown before removing the 
   await chats.removeWorktree(chat.id);
   expect(await readFile(torn, "utf8")).toBe("10\n");
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
+});
+
+it("archives at once and tears the worktree down after", async () => {
+  const torn = join(root, "torn");
+  await settle({
+    worktreeTeardown: `sleep 1; touch ${JSON.stringify(torn)}`,
+  });
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(chat.id, input("@codex Hello"));
+  await answered(chat.id, 2);
+
+  const started = Date.now();
+  await chats.triage(chat.id, { kind: "archive" });
+  expect(Date.now() - started).toBeLessThan(800);
+  expect(existsSync(torn)).toBe(false);
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).worktree!.removedAt).toBeDefined(),
+    { timeout: 5000 },
+  );
+  expect(existsSync(torn)).toBe(true);
 });
 
 it("shows a failed teardown in the thread but removes the worktree anyway", async () => {

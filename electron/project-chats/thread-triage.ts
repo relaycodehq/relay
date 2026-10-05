@@ -59,8 +59,11 @@ export class ThreadTriage {
           "Cancel the scheduled messages and Claude's background work before archiving.",
         );
       chat.archivedAt = now;
-      await this.worktrees.dropLanded(chat, now);
       await this.core.storage.save(chat);
+      // A teardown can take minutes; the thread is archived meanwhile.
+      void this.core
+        .control(id, () => this.dropLanded(id, now))
+        .catch((e) => console.warn("Could not drop an archived worktree:", e));
       return chatSummary(chat);
     }
     delete chat.snoozedAt;
@@ -78,6 +81,13 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     if (triage.kind === "settle") await this.settleStarted(id, now);
     return chatSummary(chat);
+  }
+  /** Removes the worktree of a thread still archived since `at`, if all of it landed. */
+  private async dropLanded(id: string, at: number) {
+    const chat = await this.core.storage.load(id);
+    if (chat.archivedAt !== at) return;
+    await this.worktrees.dropLanded(chat, at);
+    await this.core.storage.save(chat);
   }
   /** The threads `id`'s agent started, still listed. */
   private async started(id: string) {
