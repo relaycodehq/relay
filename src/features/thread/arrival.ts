@@ -41,6 +41,8 @@ export function nextArrival(
 }
 
 let current: Arrival | undefined;
+/** When each thread's divider faded, this run: what was there then was seen, so going back to it doesn't bring the divider back. */
+const faded = new Map<string, number>();
 const listeners = new Set<() => void>();
 function set(next: Arrival | undefined) {
   if (next === current) return;
@@ -49,7 +51,8 @@ function set(next: Arrival | undefined) {
 }
 
 export function noteArrival(next: Parameters<typeof nextArrival>[1]) {
-  set(nextArrival(current, next));
+  const readTo = Math.max(next.readTo, faded.get(next.chatId) ?? 0);
+  set(nextArrival(current, { ...next, readTo }));
 }
 
 /** No thread is open. */
@@ -58,8 +61,9 @@ export function clearArrival() {
 }
 
 export function markArrivalRead(chatId: string) {
-  if (current?.chatId === chatId && !current.read)
-    set({ ...current, read: true });
+  if (current?.chatId !== chatId || current.read) return;
+  faded.set(chatId, Date.now());
+  set({ ...current, read: true });
 }
 
 function subscribe(listener: () => void) {

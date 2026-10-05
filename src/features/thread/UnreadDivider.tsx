@@ -53,9 +53,9 @@ export function UnreadDivider({
     return () => clearTimeout(timer);
   }, [watching, inView, chatId]);
   const now = new Date();
-  const when = sentLabel(since, now).replace(/^Yesterday/, "yesterday");
+  const when = sentLabel(since, now);
   const today = new Date(since).toDateString() === now.toDateString();
-  const label = `New since ${today ? `today, ${when}` : when}`;
+  const label = today ? `Today ${when}` : when;
   return (
     <div
       ref={row}
