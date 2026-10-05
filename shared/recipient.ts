@@ -56,6 +56,7 @@ export const contextAgent = (
         !m.compaction &&
         !m.handoff &&
         !m.reload &&
+        !m.worktreeCommand &&
         m.id !== rootId,
     )?.provider;
 

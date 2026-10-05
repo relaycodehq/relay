@@ -257,18 +257,29 @@ export interface AwayWindow {
  * or finished while you were away, which `since` says when you'd read up to.
  * A message that started and ended while you watched is not new, even below
  * the divider. Your own messages and Relay's notes about the session (a
- * compaction, a reload) are never what's new. None when nothing is new, or
+ * compaction, a reload, a worktree's setup) are never what's new. None when nothing is new, or
  * when the divider would sit above the first message and so separate nothing.
  */
 export function unreadStart(
   messages: (Pick<ChatMessage, "id" | "created" | "ended"> &
-    Partial<Pick<ChatMessage, "role" | "author" | "compaction" | "reload">>)[],
+    Partial<
+      Pick<
+        ChatMessage,
+        "role" | "author" | "compaction" | "reload" | "worktreeCommand"
+      >
+    >)[],
   away: AwayWindow[],
 ): { id: string; since: number } | undefined {
   const during = (at: number | undefined) =>
     at === undefined ? undefined : away.find((w) => at > w.from && at <= w.to);
   for (const [index, m] of messages.entries()) {
-    if ((m.role === "user" && !m.author) || m.compaction || m.reload) continue;
+    if (
+      (m.role === "user" && !m.author) ||
+      m.compaction ||
+      m.reload ||
+      m.worktreeCommand
+    )
+      continue;
     const gap = during(m.created) ?? during(m.ended);
     if (gap) return index ? { id: m.id, since: gap.from } : undefined;
   }

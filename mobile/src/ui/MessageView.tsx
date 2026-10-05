@@ -7,6 +7,11 @@ import { sentLabel } from "../../../shared/chat-activity";
 import type { ChatMessage, TurnFileChange } from "../../../shared/projects";
 import { withoutMention } from "../../../shared/remote-compose";
 import { reloadNote } from "../../../shared/session-reload";
+import {
+  copiedNote,
+  setupCanRerun,
+  worktreeCommandNote,
+} from "../../../shared/worktree-command";
 import { fileHref, fileLinkTarget, folderHref } from "../remote/links";
 import { AgentRun } from "./AgentRun";
 import { localImagePath } from "../../../shared/answer-images";
@@ -45,6 +50,7 @@ export const MessageView = memo(function MessageView({
   onFork,
   onOpenTurn,
   onRewind,
+  onRerunSetup,
 }: {
   chatId: string;
   message: ChatMessage;
@@ -63,6 +69,8 @@ export const MessageView = memo(function MessageView({
   /** Everything the turn changed, on a screen of its own. */
   onOpenTurn?: (message: ChatMessage) => void;
   onRewind?: (message: ChatMessage, ...args: Parameters<Rewind>) => ReturnType<Rewind>;
+  /** Offered on the thread's latest worktree setup, when it didn't get through. */
+  onRerunSetup?: (message: ChatMessage) => void;
 }) {
   const t = useTheme();
   const changes = m.changes;
@@ -103,6 +111,13 @@ export const MessageView = memo(function MessageView({
     [chatId, m.id, root, openImage],
   );
   if (m.handoff) return <HandoffRow message={m} />;
+  if (m.worktreeCommand)
+    return (
+      <WorktreeCommandRow
+        message={m}
+        onRerun={onRerunSetup && setupCanRerun(m) ? () => onRerunSetup(m) : undefined}
+      />
+    );
   if (m.reload)
     return (
       <StatusRow>{reloadNote(m.reload, m.status === "streaming")}</StatusRow>
@@ -320,6 +335,38 @@ function HandoffRow({ message: m }: { message: ChatMessage }) {
   );
 }
 
+/** The desktop's WorktreeCommandRow: what the project's setup or teardown printed, and running setup again. */
+function WorktreeCommandRow({ message: m, onRerun }: { message: ChatMessage; onRerun?: () => void }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  const run = m.worktreeCommand!;
+  const text = [run.copied?.length ? copiedNote(run.copied) : "", run.output]
+    .filter(Boolean)
+    .join("\n\n");
+  return (
+    <View>
+      <StatusRow
+        failed={m.status === "failed" || m.status === "cancelled"}
+        action={text ? { label: open ? "Hide output" : "Show output", onPress: () => setOpen(!open) } : undefined}
+      >
+        {worktreeCommandNote(run, m.status)}
+      </StatusRow>
+      {onRerun && (
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={onRerun} style={styles.rerun}>
+          <Text style={[styles.statusText, { color: t.accent }]}>Run setup again</Text>
+        </Pressable>
+      )}
+      {open && !!text && (
+        <View style={[styles.handoffNote, { borderColor: t.border }]}>
+          <Text style={[styles.output, { color: t.muted }]} selectable>
+            {`$ ${run.command}\n${text.slice(-4000)}`}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function ChangedFiles({
   files,
   onOpen,
@@ -469,6 +516,8 @@ const styles = StyleSheet.create({
   },
   rule: { flex: 1, height: StyleSheet.hairlineWidth },
   statusText: { fontSize: type.tiny, textAlign: "center", flexShrink: 1 },
+  rerun: { alignSelf: "center", marginTop: -4, marginBottom: 8 },
+  output: { fontSize: type.tiny, fontFamily: mono, lineHeight: 16 },
   handoffNote: {
     marginHorizontal: 40,
     marginBottom: 8,

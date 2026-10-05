@@ -1,6 +1,7 @@
 import { basename, join, sep } from "node:path";
 import type * as NodePty from "node-pty";
 import type { TerminalEvent, TerminalOpened } from "../../shared/terminals";
+import { inheritedEnv, userShell } from "./env";
 import { projectTasks } from "./tasks";
 
 // node-pty ships native binaries, so it's copied next to main.cjs instead of
@@ -36,14 +37,6 @@ interface Session {
   outputTail: string;
 }
 
-function shell(): [string, string[]] {
-  if (process.platform === "win32") return ["powershell.exe", ["-NoLogo"]];
-  const fallback = process.platform === "darwin" ? "/bin/zsh" : "/bin/bash";
-  // A login shell reads the profile that sets PATH; apps started from the
-  // Dock or a launcher get a bare one.
-  return [process.env.SHELL || fallback, ["-l"]];
-}
-
 /**
  * One shell per thread, keyed by chat id (`draft:<projectId>` before the
  * thread exists). Shells outlive the window's view of them: switching threads
@@ -58,13 +51,17 @@ class ThreadTerminals {
     this.send = send;
   }
 
-  /** Attaches to the key's shell, starting one in `cwd` if there's none or `fresh` asks for a new one. */
+  /**
+   * Attaches to the key's shell, starting one in `cwd` with `extraEnv` if
+   * there's none or `fresh` asks for a new one.
+   */
   open(
     key: string,
     cwd: string,
     cols: number,
     rows: number,
     fresh = false,
+    extraEnv: Record<string, string> = {},
   ): TerminalOpened {
     this.attached = true;
     let session = this.sessions.get(key);
@@ -92,9 +89,10 @@ class ThreadTerminals {
           : {}),
       };
     }
-    const [file, args] = shell();
+    const [file, args] = userShell();
     const env: Record<string, string> = {
-      ...inherited(),
+      ...inheritedEnv(),
+      ...extraEnv,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
       TERM_PROGRAM: "Relay",
@@ -288,24 +286,6 @@ class ThreadTerminals {
     } catch {}
     if (notify) this.send({ key: session.key, exitCode: -1 });
   }
-}
-
-/**
- * Relay's own environment minus what only concerns Relay: started through
- * `npm run`, it carries npm's settings (nvm refuses to load with them) and
- * RELAY_DEV_URL, which would point a Relay run from the terminal at this
- * window's renderer.
- */
-function inherited() {
-  const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env))
-    if (
-      value !== undefined &&
-      !/^(npm_|RELAY_|ELECTRON_)/i.test(name) &&
-      name !== "INIT_CWD"
-    )
-      env[name] = value;
-  return env;
 }
 
 const chatOf = (key: string) => (key.startsWith("draft:") ? undefined : key);

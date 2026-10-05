@@ -82,7 +82,14 @@ export function reviveChat(
     );
     if (changes?.length) m.changes = changes;
     else delete m.changes;
-    if (m.status === "streaming" && !streams(m)) {
+    if (m.status === "streaming" && m.worktreeCommand) {
+      // Its process went with the app; the row offers to run it again.
+      m.status = "cancelled";
+      m.worktreeCommand.stopped = "cancelled";
+      m.ended = Date.now();
+      m.version++;
+      interrupted = true;
+    } else if (m.status === "streaming" && !streams(m)) {
       interrupt(m);
       interrupted = true;
     }

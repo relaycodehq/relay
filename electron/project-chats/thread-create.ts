@@ -71,7 +71,8 @@ export class ThreadCreate {
               !m.side &&
               !m.handoff &&
               !m.compaction &&
-              !m.reload,
+              !m.reload &&
+              !m.worktreeCommand,
           );
     if (at?.role !== "assistant" || at.status === "streaming")
       throw new Error("Fork from an answer that has finished.");

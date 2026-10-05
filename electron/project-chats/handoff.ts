@@ -232,6 +232,7 @@ export class ComputerHandoff {
             !m.compaction &&
             !m.handoff &&
             !m.reload &&
+            !m.worktreeCommand &&
             m.status !== "failed",
         );
       // A retry finds the note already written, with nothing after it.
@@ -400,7 +401,13 @@ export class ComputerHandoff {
     const chat = await this.core.storage.load(id);
     const answers = chat.messages
       .slice(chat.cameFrom?.carried ?? 0)
-      .filter((m) => m.role === "assistant" && !m.parentId && !m.handoff);
+      .filter(
+        (m) =>
+          m.role === "assistant" &&
+          !m.parentId &&
+          !m.handoff &&
+          !m.worktreeCommand,
+      );
     const last = answers.at(-1);
     const active = this.core.active.get(id);
     const model = (active?.input ?? chat.lastInput)?.choice.model;

@@ -56,6 +56,8 @@ export interface AgentOptions {
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
   cwd: string;
+  /** Added to the agent process's environment, e.g. a worktree's RELAY_PORT_OFFSET; read when its process starts. */
+  env?: Record<string, string>;
   prompt: string;
   choice: ModelChoice;
   /** The Claude Code or Codex account to run on; left out, the one in use. */

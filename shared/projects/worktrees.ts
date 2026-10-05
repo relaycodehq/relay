@@ -34,6 +34,12 @@ export interface ChatWorktree {
    * uncommitted in it. Its branch stays, and the next message checks it out again.
    */
   cleanedUp?: true;
+  /** Made since Relay ran setup commands: "pending" until the project's setup has run in this folder. */
+  setup?: "pending" | "done";
+  /** What `.worktreeinclude` copied into this folder, until setup shows it. */
+  included?: string[];
+  /** Added to its dev servers' ports, handed out as RELAY_PORT_OFFSET; the checkout's is 0. */
+  portOffset?: number;
 }
 /**
  * Days a settled thread keeps its worktree before Relay removes it; 0 as soon

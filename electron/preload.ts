@@ -125,6 +125,7 @@ const methods = [
   "resumeProjectChat",
   "compactProjectChat",
   "reloadProjectChatSession",
+  "rerunWorktreeSetup",
   "projectChatQueueAction",
   "respondProjectChat",
   "liveSyncState",

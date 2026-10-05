@@ -53,6 +53,7 @@ export function terminalHandlers(ctx: ApiContext) {
           size.cols,
           size.rows,
           fresh,
+          chatId ? await projectChats.worktreeEnv(chatId) : {},
         );
       },
     ),

@@ -45,6 +45,7 @@ export function chatSummary({
   checkoutNotes,
   scopeHeard,
   movedIn,
+  setupNote,
   deepReview,
   ultraplans,
   handover,

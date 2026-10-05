@@ -1,6 +1,8 @@
 import { Fragment, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import { unreadStart } from "../../../shared/chat-activity";
+import { latestSetup } from "../../../shared/worktree-command";
+import { api } from "../../lib/api";
 import type {
   ChatMessage,
   ProjectChat as ProjectChatData,
@@ -28,7 +30,11 @@ import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
 
 const isAnswer = (m: ChatMessage) =>
-  m.role === "assistant" && !m.compaction && !m.handoff && !m.reload;
+  m.role === "assistant" &&
+  !m.compaction &&
+  !m.handoff &&
+  !m.reload &&
+  !m.worktreeCommand;
 
 /** The open conversation's last answer was cut short, and the input it
  * answered belongs to this conversation, so it can go again. */
@@ -120,6 +126,10 @@ export function ThreadMessages({
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
     [arrival, root, listed],
   );
+  const setupId = useMemo(
+    () => (root ? undefined : latestSetup(listed)?.id),
+    [root, listed],
+  );
   return (
     <div className="project-messages" ref={scroll} onScroll={onScroll}>
       {chat && history.isPending && <Loading text="Opening conversation…" />}
@@ -188,6 +198,12 @@ export function ThreadMessages({
                 m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
               }
               onSteer={root?.side ? undefined : onSteer}
+              onRerunSetup={
+                // Setup changes files the running answer may be using.
+                chat && !busy && !running && m.id === setupId
+                  ? () => api.rerunWorktreeSetup(chat.id, m.id)
+                  : undefined
+              }
               {...(chat && review?.report?.messageId === m.id
                 ? {
                     inlineCode: reviewCode,

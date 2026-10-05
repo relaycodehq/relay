@@ -223,6 +223,12 @@
 .settings-project-name {
   width: 240px;
 }
+.settings-worktree-command {
+  width: 100%;
+  min-height: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
 .settings-project-path {
   max-width: 280px;
   overflow: hidden;

@@ -27,6 +27,7 @@ import {
   type CodexNotification,
   type CodexThreadStarted,
 } from "./codex-schemas";
+import { withWorktreeEnv } from "../worktree-env";
 /** Where a Codex app server finds the token for Relay's tools. */
 const RELAY_TOKEN_ENV = "RELAY_MCP_TOKEN";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
@@ -85,12 +86,15 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         : []),
     ],
     options.cwd,
-    options.relayTools
-      ? {
-          ...account,
-          env: { ...account.env, [RELAY_TOKEN_ENV]: options.relayTools.token },
-        }
-      : account,
+    {
+      ...account,
+      env: withWorktreeEnv(account.env, {
+        ...options.env,
+        ...(options.relayTools
+          ? { [RELAY_TOKEN_ENV]: options.relayTools.token }
+          : {}),
+      }),
+    },
   );
   let wire: CodexTransport | undefined,
     threadId = "",

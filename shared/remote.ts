@@ -293,6 +293,7 @@ export const phoneDesktopMethods = [
   "resumeProjectChat",
   "compactProjectChat",
   "reloadProjectChatSession",
+  "rerunWorktreeSetup",
   "resolveStoppedWork",
   "stopProjectChatPending",
   "triageProjectChat",

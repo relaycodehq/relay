@@ -35,6 +35,19 @@ export interface SessionReload {
   skills?: NameChanges;
   agents?: NameChanges;
 }
+/** Local marker: a project's worktree command ran in the thread's worktree. */
+export interface WorktreeCommandRun {
+  /** Setup runs before a new worktree's first turn; teardown before Relay removes it. */
+  kind: "setup" | "teardown";
+  command: string;
+  /** The tail of what it printed, stdout and stderr together. */
+  output: string;
+  /** Ignored files `.worktreeinclude` copied in, for setup. */
+  copied?: string[];
+  exitCode?: number;
+  /** It ended without exiting by itself. */
+  stopped?: "timeout" | "cancelled";
+}
 export interface ChatMessage {
   /** Local marker: this answer compacted the provider session instead of replying. */
   compaction?: boolean;
@@ -42,6 +55,7 @@ export interface ChatMessage {
   compactSummary?: string;
   handoff?: AgentHandoff;
   reload?: SessionReload;
+  worktreeCommand?: WorktreeCommandRun;
   /** Local marker: the lead's brief for an Ultraplan council, shown inside it. */
   brief?: boolean;
   /** Local marker: the agent started this turn itself, e.g. when a background task ended. */

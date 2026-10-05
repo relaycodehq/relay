@@ -34,6 +34,8 @@ export interface ProjectChat extends ChatSummary {
   scopeHeard?: Record<string, string>;
   /** Local: moved from the project folder into its worktree; `owed` are the sessions not yet told. */
   movedIn?: { from: string; to: string; owed: string[] };
+  /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
+  setupNote?: string;
   deepReview?: DeepReviewState;
   /** Ultraplan councils, by the user message each one works on. */
   ultraplans?: Record<string, UltraplanState>;

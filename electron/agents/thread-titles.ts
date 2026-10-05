@@ -99,7 +99,14 @@ function excerpt(text: string, budget: number): string {
  */
 function titleContext(messages: ChatMessage[]): string {
   const sections = messages.flatMap((m, index) => {
-    if (m.parentId || m.side || m.handoff || m.compaction || m.reload)
+    if (
+      m.parentId ||
+      m.side ||
+      m.handoff ||
+      m.compaction ||
+      m.reload ||
+      m.worktreeCommand
+    )
       return [];
     const body =
       m.role === "user"

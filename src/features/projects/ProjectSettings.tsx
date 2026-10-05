@@ -317,3 +317,49 @@ export function ProjectCommitSettleSwitch({ project }: { project: Project }) {
     </>
   );
 }
+
+/** A worktree command, saved when the field is left; Escape puts back what's saved. */
+export function ProjectWorktreeCommandField({
+  project,
+  setting,
+  placeholder,
+}: {
+  project: Project;
+  setting: "worktreeSetup" | "worktreeTeardown";
+  placeholder: string;
+}) {
+  const command = useProjectSetting(project, setting);
+  const saved = command.value ?? "";
+  const [text, setText] = useState(saved);
+  useEffect(() => setText(saved), [project.id, saved]);
+  const commit = () => {
+    const next = text.trim();
+    if (next !== saved) command.change(next || undefined);
+  };
+  return (
+    <>
+      <textarea
+        className="settings-worktree-command"
+        aria-label={
+          setting === "worktreeSetup" ? "Setup command" : "Teardown command"
+        }
+        value={text}
+        placeholder={placeholder}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        rows={2}
+        maxLength={4000}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && text !== saved) {
+            e.preventDefault();
+            setText(saved);
+          }
+        }}
+      />
+      {!!command.error && <ErrorBox error={command.error} />}
+    </>
+  );
+}

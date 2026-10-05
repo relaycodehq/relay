@@ -32,6 +32,7 @@ export const projectNameSchema = z
   .min(1, "Name the project.")
   .max(80)
   .refine((value) => !/[\x00-\x1f]/.test(value), "Use a plain name.");
+const worktreeCommand = z.string().trim().min(1).max(4000);
 /** What a project does its own way; anything unset follows the app's settings. */
 export const projectSettingsSchema = z
   .object({
@@ -43,6 +44,10 @@ export const projectSettingsSchema = z
     settleOnCommit: z.literal(true).optional(),
     /** Days after settling before its threads' worktrees are removed; null never. */
     worktreeCleanupDays: z.number().int().min(0).max(90).nullable().optional(),
+    /** Runs in each new worktree before its thread's first turn. */
+    worktreeSetup: worktreeCommand.optional(),
+    /** Runs in a worktree before Relay removes it. */
+    worktreeTeardown: worktreeCommand.optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;

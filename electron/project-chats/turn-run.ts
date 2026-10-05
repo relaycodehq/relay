@@ -73,6 +73,8 @@ export interface TurnRunnerHost {
   ): Promise<void>;
   /** A usage limit stopped the reply `messageId`. */
   limited(chatId: string, messageId: string, limit: AgentError): void;
+  /** What the thread's agent process is told about its worktree. */
+  env(chat: ProjectChat): Promise<Record<string, string>>;
 }
 
 /** Runs one agent turn in a thread, recording its answer as it streams. */
@@ -180,6 +182,7 @@ export class TurnRunner {
         : undefined;
     try {
       const relayTools = relayToolsFor(chat.id);
+      const env = await this.host.env(chat);
       const options = {
         onControl: (control: AgentControl) => {
           const active = this.core.active.get(chat.id);
@@ -191,6 +194,7 @@ export class TurnRunner {
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
         cwd: root,
+        ...(Object.keys(env).length ? { env } : {}),
         prompt,
         context: async () =>
           projectTasks.note(

@@ -95,6 +95,9 @@ export function chatHandlers(ctx: ApiContext) {
     reloadProjectChatSession: takes([idSchema], (id) =>
       projectChats.reloadSessions(id),
     ),
+    rerunWorktreeSetup: takes([idSchema, idSchema], (id, messageId) =>
+      projectChats.rerunWorktreeSetup(id, messageId),
+    ),
     projectChatQueueAction: takes(
       [
         idSchema,

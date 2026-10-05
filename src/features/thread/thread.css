@@ -574,3 +574,20 @@
   flex-direction: column;
   align-items: flex-start;
 }
+/* What a worktree's setup or teardown printed, kept at its end while it runs. */
+.worktree-command-output {
+  max-height: 240px;
+  margin: 4px 24px 8px;
+  padding: 8px 12px;
+  overflow: auto;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.worktree-command-line {
+  color: var(--text);
+}

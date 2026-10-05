@@ -1,0 +1,4 @@
+# Ignored files a worktree thread copies from the checkout; see
+# electron/git/worktree-include.ts. The project's skills aren't committed.
+.claude/skills/
+mobile/expo-env.d.ts

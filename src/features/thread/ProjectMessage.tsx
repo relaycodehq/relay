@@ -27,6 +27,7 @@ import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { CompactionRow } from "./CompactionRow";
 import { SessionReloadRow } from "./SessionReloadRow";
+import { WorktreeCommandRow } from "./WorktreeCommandRow";
 import {
   AnswerImage,
   ImageThumbnail,
@@ -137,6 +138,7 @@ export const Message = memo(function Message({
   after,
   onSignIn,
   onSteer,
+  onRerunSetup,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -162,6 +164,8 @@ export const Message = memo(function Message({
   onSignIn?: (provider: AgentProvider) => Promise<boolean>;
   /** Puts a message for the agent in the composer, from a watch note. */
   onSteer?: (text: string) => void;
+  /** Offered on the thread's latest worktree setup, when it didn't get through. */
+  onRerunSetup?: (m: ChatMessage) => Promise<void>;
 }) {
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
@@ -268,6 +272,13 @@ export const Message = memo(function Message({
       />
     );
   if (m.reload) return <SessionReloadRow message={m} reload={m.reload} />;
+  if (m.worktreeCommand)
+    return (
+      <WorktreeCommandRow
+        message={m}
+        onRerun={onRerunSetup && (() => onRerunSetup(m))}
+      />
+    );
   if (m.compaction)
     return (
       <CompactionRow

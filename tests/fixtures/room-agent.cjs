@@ -49,6 +49,8 @@ function record(data) {
         // Which account's folder it ran with; see electron/agents/accounts.
         claudeConfig: process.env.CLAUDE_CONFIG_DIR,
         codexHome: process.env.CODEX_HOME,
+        // A worktree thread's dev-server port offset; see project-chats/worktree-setup.
+        portOffset: process.env.RELAY_PORT_OFFSET,
         ...data,
       }) +
         "\n",

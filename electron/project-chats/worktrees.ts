@@ -25,15 +25,19 @@ import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
+import { WorktreeSetup } from "./worktree-setup";
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
 export class ThreadWorktrees {
+  readonly setup: WorktreeSetup;
   constructor(
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */
     readonly folder: string,
     private councils: Pick<Councils, "busy">,
-  ) {}
+  ) {
+    this.setup = new WorktreeSetup(core);
+  }
 
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
   async root(chat: ProjectChat, prompt?: string): Promise<string> {
@@ -196,6 +200,7 @@ export class ThreadWorktrees {
     if (awaitsReturn(chat)) return;
     const status = await this.status(chat.id).catch(() => null);
     if (status && !status.files.length) {
+      await this.setup.teardown(chat, chat.worktree);
       await removeWorktree(
         await this.core.projects.root(chat.projectId),
         chat.id,
@@ -253,6 +258,7 @@ export class ThreadWorktrees {
       threadTerminals.closeWithin(worktree.path);
       await projectTasks.stopWithin(worktree.path);
     }
+    await this.setup.teardown(chat, worktree);
     await removeWorktree(
       await this.core.projects.root(chat.projectId),
       chat.id,

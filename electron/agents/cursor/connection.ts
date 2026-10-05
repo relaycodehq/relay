@@ -18,6 +18,7 @@ import {
   type CursorMethods,
   type CursorUpdate,
 } from "./protocol";
+import { withWorktreeEnv } from "../worktree-env";
 
 /** What a hosted worker keeps for the next Relay: its agent, and the turn it was in. */
 export const cursorMetaSchema = z
@@ -172,16 +173,20 @@ export class CursorConnection {
   }
 }
 
-function command(sdk: InstalledSdk, store = cursorSetup().store) {
+function command(
+  sdk: InstalledSdk,
+  store = cursorSetup().store,
+  env: Record<string, string> = {},
+) {
   const { worker } = cursorSetup();
   return {
     command: process.execPath,
     args: [worker, "--sdk", sdk.entry, "--store", store],
     // Electron's binary runs the worker as plain Node.
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" } as Record<
-      string,
-      string
-    >,
+    env: withWorktreeEnv(process.env as Record<string, string>, {
+      ...env,
+      ELECTRON_RUN_AS_NODE: "1",
+    }),
   };
 }
 
@@ -200,11 +205,12 @@ export function acquireCursorConnection(
   key: string | undefined,
   cwd: string,
   sdk: InstalledSdk,
+  env?: Record<string, string>,
 ): Promise<CursorConnection> {
   return sessions.acquire(key, async () => {
     if (key)
       return new CursorConnection(
-        await launch(key, cwd, sdk, threadStore(key)),
+        await launch(key, cwd, sdk, threadStore(key), env),
       );
     // A one-off job leaves no agent behind: its history goes with it.
     const parent = cursorSetup().store;
@@ -231,8 +237,9 @@ function launch(
   cwd: string,
   sdk: InstalledSdk,
   store?: string,
+  env?: Record<string, string>,
 ) {
-  const spec = command(sdk, store);
+  const spec = command(sdk, store, env);
   return sessions.spawn(
     key,
     { provider: "cursor" } satisfies CursorMeta,

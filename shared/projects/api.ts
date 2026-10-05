@@ -130,6 +130,8 @@ export interface ProjectChatApi {
    * plugins and instructions changed since it started.
    */
   reloadProjectChatSession(id: string): Promise<void>;
+  /** Runs the project's setup command again in the thread's worktree, in the row of setup run `messageId`. */
+  rerunWorktreeSetup(id: string, messageId: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** A thread another thread's agent started stands on its own from now on. */

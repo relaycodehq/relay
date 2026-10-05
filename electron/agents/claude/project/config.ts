@@ -1,6 +1,7 @@
 import type { Options, PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentOptions } from "../../types";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
+import { withWorktreeEnv } from "../../worktree-env";
 import { chromeArgs } from "./sdk";
 
 /** Relay's own tools reach Claude as `mcp__relay__…`. */
@@ -94,10 +95,12 @@ export function sessionConfig(
           }
         : {}),
     extraArgs: chromeArgs,
-    env:
-      options.contextWindow === "200k"
-        ? { ...env, CLAUDE_CODE_DISABLE_1M_CONTEXT: "1" }
-        : env,
+    env: withWorktreeEnv(env, {
+      ...options.env,
+      ...(options.contextWindow === "200k"
+        ? { CLAUDE_CODE_DISABLE_1M_CONTEXT: "1" }
+        : {}),
+    }),
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort
       ? { effort: options.effort as NonNullable<Options["effort"]> }

@@ -288,6 +288,16 @@ export class ChatTurns {
   ) {
     const id = chat.id;
     try {
+      // A new worktree is set up before anything runs in it.
+      await this.worktrees.setup.prepare(
+        chat,
+        asked.provider,
+        active.abort.signal,
+      );
+      if (active.abort.signal.aborted) {
+        this.core.active.release(id, active);
+        return;
+      }
       // A side conversation continues the main one as it stood at its message.
       const upToParent = new Set(
         parent
@@ -315,6 +325,7 @@ export class ChatTurns {
             !m.compaction &&
             !m.handoff &&
             !m.reload &&
+            !m.worktreeCommand &&
             onBranch(m),
         );
       const handoffFrom =

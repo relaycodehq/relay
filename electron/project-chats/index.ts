@@ -167,6 +167,7 @@ export class ProjectChats {
           void this.limits
             .stopped(id, messageId, limit)
             .catch((e) => console.warn("Could not plan the resume:", e)),
+        env: (chat) => this.worktrees.setup.env(chat),
       },
     );
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
@@ -515,6 +516,13 @@ export class ProjectChats {
   worktreeBranch(projectId: string, prompt: string, branch?: string) {
     return this.worktrees.branch(projectId, prompt, branch);
   }
+  rerunWorktreeSetup(id: string, messageId: string) {
+    return this.worktrees.setup.rerun(id, messageId);
+  }
+  /** What a terminal in the thread's worktree is told, like its agent; nothing in the checkout. */
+  async worktreeEnv(id: string) {
+    return this.worktrees.setup.env(await this.storage.load(id));
+  }
   worktreeMovePreview(id: string) {
     return this.worktrees.movePreview(id);
   }
@@ -638,6 +646,7 @@ export class ProjectChats {
    */
   async dispose({ detach = false } = {}) {
     this.sessions.stopListening();
+    await this.worktrees.setup.stop();
     if (detach) {
       this.disposing = true;
       this.schedule.stop();

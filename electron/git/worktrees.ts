@@ -2,6 +2,7 @@ import { lstat, mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { git as gitIn } from "./git";
+import { copyIncluded } from "./worktree-include";
 import {
   apply,
   commitTree,
@@ -23,9 +24,9 @@ import type { ChatWorktree, TurnFileChange } from "../../shared/projects";
 const git = (root: string, args: string[], timeout = 30000) =>
   gitIn(root, args, timeout);
 export type MadeWorktree = Required<
-  Pick<ChatWorktree, "path" | "branch" | "head" | "start" | "base">
+  Pick<ChatWorktree, "path" | "branch" | "head" | "start" | "base" | "setup">
 > &
-  Pick<ChatWorktree, "from" | "named" | "wanted">;
+  Pick<ChatWorktree, "from" | "named" | "wanted" | "included">;
 
 /** What a worktree held when it was removed, in case it's wanted back. */
 const keptRef = (chatId: string) => `refs/relay/worktrees/${chatId}/kept`;
@@ -149,10 +150,12 @@ async function placeFor(
 /**
  * Makes a worktree on a new branch from the checkout's commit: the one the
  * user named for the thread, or `relay/…` after `name`, also when that one
- * can't be made by now, which `wanted` records. Uncommitted edits stay in the checkout. `node_modules` is linked
- * from the checkout when Git ignores it there, so the project runs without
- * installing. A thread making its worktree again takes its old folder back
- * when it's free, so the agent's session finds the same working directory.
+ * can't be made by now, which `wanted` records. Uncommitted edits stay in the
+ * checkout. What the checkout's `.worktreeinclude` names is copied in, and
+ * `node_modules` is linked from the checkout when Git ignores it there, so the
+ * project runs without installing. A thread making its worktree again takes
+ * its old folder back when it's free, so the agent's session finds the same
+ * working directory.
  */
 export async function createWorktree(
   root: string,
@@ -182,7 +185,7 @@ export async function createWorktree(
     if (!previous?.named) throw error;
     return add();
   });
-  await linkModules(root, path);
+
   return {
     path,
     branch,
@@ -192,6 +195,7 @@ export async function createWorktree(
     ...(from ? { from } : {}),
     ...(branch === previous?.named ? { named: branch } : {}),
     ...(wanted ? { wanted } : {}),
+    ...(await bootstrap(root, root, path)),
   };
 }
 
@@ -325,7 +329,8 @@ export async function moveIntoWorktree(
  * A new worktree at `source`'s commit, its changes counted from `source`'s
  * branch, holding a copy of the edits `source` hasn't committed, unstaged like
  * they were there. `source` is a checkout or worktree; it stays as it was.
- * Ignored files and nested repositories don't come along. The copy is kept
+ * Of the ignored files, only what `source`'s `.worktreeinclude` names comes
+ * along, and nested repositories don't. The copy is kept
  * under `copiedRef(chatId)`, so its work can be told apart from the copy's.
  */
 export async function copyIntoWorktree(
@@ -341,6 +346,7 @@ export async function copyIntoWorktree(
   const worktree = await adoptWorktree(root, dir, name, head, {
     from,
     start: head,
+    includeFrom: source,
   });
   if (files.length)
     try {
@@ -402,6 +408,8 @@ export async function cantCarryOn(
  * when it can be made here, and is `relay/…` after `name` otherwise. `over`
  * is the worktree an earlier trip left on `branch`, cleared by `cantCarryOn`:
  * its folder moves up to `commit` and carries on, ignored files and all.
+ * A new folder gets the `.worktreeinclude` files of `includeFrom`, the
+ * checkout unless given.
  */
 export async function adoptWorktree(
   root: string,
@@ -413,11 +421,13 @@ export async function adoptWorktree(
     start,
     branch: wanted,
     over,
+    includeFrom = root,
   }: {
     from?: string;
     start?: string;
     branch?: string;
     over?: ChatWorktree;
+    includeFrom?: string;
   } = {},
 ): Promise<MadeWorktree> {
   const has = (ref: string) =>
@@ -449,6 +459,8 @@ export async function adoptWorktree(
       base,
       ...(source ? { from: source } : {}),
       named: wanted!,
+      // The same folder: its setup and ignored files are still there.
+      setup: kept.setup ?? "done",
     };
   }
   const named =
@@ -470,7 +482,6 @@ export async function adoptWorktree(
     ["worktree", "add", "-q", kept ? "-B" : "-b", branch, path, commit],
     120000,
   );
-  await linkModules(root, path);
   return {
     path,
     branch,
@@ -479,6 +490,21 @@ export async function adoptWorktree(
     base,
     ...(source ? { from: source } : {}),
     ...(named ? { named } : {}),
+    ...(await bootstrap(root, includeFrom, path)),
+  };
+}
+
+/**
+ * Readies a folder `git worktree add` just made: `.worktreeinclude` files
+ * from `source`, then `node_modules` from the checkout `root` unless the
+ * include brought its own. Setup is still to run in it.
+ */
+async function bootstrap(root: string, source: string, path: string) {
+  const included = await copyIncluded(source, path);
+  await linkModules(root, path);
+  return {
+    setup: "pending" as const,
+    ...(included.length ? { included } : {}),
   };
 }
 
@@ -621,9 +647,17 @@ export async function reattachWorktree(
   } catch {
     return undefined;
   }
-  await linkModules(root, path);
-  const { removedAt: _removed, cleanedUp: _cleaned, ...rest } = previous;
-  if (ahead) return rest;
+  // A fresh folder: its ignored files and setup are gone with the old one.
+  const ready = await bootstrap(root, root, path);
+  const {
+    removedAt: _removed,
+    cleanedUp: _cleaned,
+    included: _included,
+    // Free since removal, so maybe handed on; setup gives it a new one.
+    portOffset: _offset,
+    ...rest
+  } = previous;
+  if (ahead) return { ...rest, ...ready };
   const from = (await git(root, ["branch", "--show-current"])).trim();
   return {
     path,
@@ -633,6 +667,7 @@ export async function reattachWorktree(
     base: head,
     ...(from ? { from } : {}),
     ...(previous.named ? { named: previous.named } : {}),
+    ...ready,
   };
 }
 

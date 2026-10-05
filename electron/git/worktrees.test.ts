@@ -156,6 +156,24 @@ it("links the project's ignored node_modules into a new worktree", async () => {
   expect(await paths(worktree)).toEqual([]);
 });
 
+it("copies what .worktreeinclude lists into new and reattached worktrees", async () => {
+  await writeFile(join(root, ".gitignore"), ".env\n");
+  await writeFile(join(root, ".worktreeinclude"), ".env\n");
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Include env");
+  await writeFile(join(root, ".env"), "SECRET=1\n");
+
+  const worktree = await made();
+  expect(worktree).toMatchObject({ setup: "pending", included: [".env"] });
+  expect(await read(join(worktree.path, ".env"))).toBe("SECRET=1\n");
+  expect(await paths(worktree)).toEqual([]);
+
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  const back = await reattachWorktree(root, { ...worktree, setup: "done" });
+  expect(back).toMatchObject({ setup: "pending", included: [".env"] });
+  expect(await read(join(worktree.path, ".env"))).toBe("SECRET=1\n");
+});
+
 it("moves every uncommitted edit into a new worktree, leaving the checkout at its commit", async () => {
   await writeFile(join(root, ".gitignore"), ".env\n");
   await writeFile(join(root, "gone.ts"), "bye\n");
@@ -316,6 +334,7 @@ it("moves a kept branch with nothing of its own up to the checkout", async () =>
     start: head,
     base: head,
     from: "main",
+    setup: "pending",
   });
   expect(await read(join(worktree.path, "b.ts"))).toBe("bee\nmain\n");
 });
@@ -388,6 +407,26 @@ it("copies from a thread's own worktree at its commit, counting from its branch"
   // Only the copy is the child's to show; the lead's commit is where it starts.
   expect(await paths(worktree)).toEqual(["a.ts"]);
   expect(git(lead.path, "status", "--porcelain")).toBe("M a.ts");
+});
+
+it("copies a started thread's included files from the worktree it copies", async () => {
+  await writeFile(join(root, ".gitignore"), ".env\n");
+  await writeFile(join(root, ".worktreeinclude"), ".env\n");
+  git(root, "add", ".");
+  git(root, "commit", "-qm", "Include env");
+  await writeFile(join(root, ".env"), "checkout\n");
+  const lead = await made();
+  await writeFile(join(lead.path, ".env"), "lead's edit\n");
+
+  const { worktree } = await copyIntoWorktree(
+    root,
+    dir,
+    "Started",
+    lead.path,
+    randomUUID(),
+  );
+
+  expect(await read(join(worktree.path, ".env"))).toBe("lead's edit\n");
 });
 
 it("a clean source gives a plain worktree at its commit", async () => {

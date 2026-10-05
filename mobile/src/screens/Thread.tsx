@@ -21,6 +21,7 @@ import type { RelayCommand } from "../../../shared/commands";
 import { snoozePresets, wakeLabel } from "../../../shared/chat-activity";
 import { latestContext } from "../../../shared/context-usage";
 import { contextAgent } from "../../../shared/recipient";
+import { latestSetup } from "../../../shared/worktree-command";
 import { useRemote } from "../remote/RemoteProvider";
 import { useThread } from "../remote/useThread";
 import { markSeen } from "../remote/seen";
@@ -130,6 +131,10 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
   // Newest first: the list is inverted so it opens at the latest answer.
   const shown = useMemo(() => [...listed].reverse(), [listed]);
   const counts = useMemo(() => replyCounts(all), [all]);
+  const setupId = useMemo(
+    () => (rootId ? undefined : latestSetup(listed)?.id),
+    [rootId, listed],
+  );
   // Side conversations: `/btw` questions and messages someone replied to.
   const sides = useMemo(
     () => all.filter((m) => !m.parentId && (m.side || counts.has(m.id))),
@@ -142,7 +147,11 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
     .reverse()
     .find(
       (m) =>
-        m.role === "assistant" && !m.compaction && !m.handoff && !m.reload,
+        m.role === "assistant" &&
+        !m.compaction &&
+        !m.handoff &&
+        !m.reload &&
+        !m.worktreeCommand,
     );
   const canResume =
     !running &&
@@ -171,6 +180,13 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           Alert.alert(what, e instanceof Error ? e.message : String(e)),
         ),
     [reload],
+  );
+  const rerunSetup = useCallback(
+    (m: ChatMessage) =>
+      act("Couldn't run setup again", () =>
+        remote.desktop("rerunWorktreeSetup", id, m.id),
+      ),
+    [act, id, remote.desktop],
   );
   const openFile = useCallback(
     (file: TurnFileChange, messageId: string) =>
@@ -558,6 +574,7 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
               onFork={rootId ? undefined : fork}
               onOpenTurn={openTurn}
               onRewind={rewind}
+              onRerunSetup={!running && item.id === setupId ? rerunSetup : undefined}
             />
           )}
           ListHeaderComponent={
