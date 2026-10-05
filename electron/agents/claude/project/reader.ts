@@ -228,6 +228,13 @@ export class ClaudeTurnReader {
         (state !== "started" && origin && origin.kind !== "human"))
     )
       return "more";
+    // A steer cut the turn short; Claude answers it next, on the same stream.
+    if (
+      (message.terminal_reason === "aborted_tools" ||
+        message.terminal_reason === "aborted_streaming") &&
+      this.steering.size
+    )
+      return "more";
     this.steerable = false;
     const failed = message.is_error || message.subtype !== "success";
     const stopped = this.failures.failure(failed);

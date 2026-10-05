@@ -200,7 +200,7 @@ it("answers a steer below it once Claude reads it", async () => {
   });
   await expect(answer).resolves.toBe("Also done.");
   expect(sent[0]).toMatchObject({
-    priority: "next",
+    priority: "now",
     message: { content: "And this" },
   });
   expect(log).toMatchInlineSnapshot(`
@@ -214,6 +214,40 @@ it("answers a steer below it once Claude reads it", async () => {
   await expect(steer("Late", "msg-3")).rejects.toThrow(
     "This turn has finished. Send the queued message as a new turn.",
   );
+});
+
+it("answers a steer that cut a running tool short", async () => {
+  let steer!: (text: string, id?: string) => Promise<void>;
+  // The frames Claude Code 2.1.289 writes when a "now" steer lands mid-Bash.
+  claude(async function* ({ next }) {
+    const prompt = await next();
+    yield lifecycle(prompt.uuid, "started");
+    yield assistant("m1", [
+      { type: "tool_use", id: "t1", name: "Bash", input: { command: "sleep 25" } },
+    ]);
+    const steered = await next();
+    yield lifecycle(steered.uuid, "queued");
+    yield toolResult("t1", "<error>Command was aborted before completion</error>");
+    yield { ...result(""), terminal_reason: "aborted_tools" };
+    yield lifecycle(prompt.uuid, "cancelled");
+    yield lifecycle(steered.uuid, "started");
+    yield { type: "system", subtype: "init", session_id };
+    yield says("m2", "Stopped.");
+    yield result("Stopped.");
+  });
+  const { log, callbacks } = recorder();
+  await expect(
+    run({
+      ...callbacks,
+      onControl: (control) => (steer = control.steer),
+      onActivity: (a) => {
+        callbacks.onActivity(a);
+        if (a.status === "running") void steer("Stop that", "msg-2");
+      },
+    }),
+  ).resolves.toBe("Stopped.");
+  expect(log).toContain("steered msg-2");
+  expect(log.at(-1)).toBe('text "Stopped."');
 });
 
 it("turns a steer away when the turn ends while its screenshot is read", async () => {

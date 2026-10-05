@@ -134,7 +134,8 @@ export async function runClaudeProject(
             (attached) => {
               const uuid = randomUUID();
               reader.track(uuid, id);
-              // "next" folds the message into the running turn at its next step.
+              // "now" cuts Claude off mid-reply or mid-tool, running tools
+              // included, and has it answer this message right away.
               session!.input.push({
                 type: "user",
                 uuid,
@@ -149,7 +150,7 @@ export async function runClaudeProject(
                       ]
                     : text,
                 },
-                priority: "next",
+                priority: "now",
               });
             },
           ),
