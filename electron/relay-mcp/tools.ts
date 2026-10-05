@@ -109,6 +109,7 @@ export const relayToolSchemas = {
     })
     .strict(),
   stop_thread: z.object({ id: threadId }).strict(),
+  settle_thread: z.object({ id: threadId }).strict(),
 };
 
 export type RelayToolName = keyof typeof relayToolSchemas;
@@ -127,6 +128,8 @@ const descriptions: Record<RelayToolName, string> = {
   wait_for_threads:
     "Wait until the threads stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working.",
   stop_thread: "Stop the answer a thread you started is working on.",
+  settle_thread:
+    "Settle a thread you started once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user.",
 };
 
 /** What tools/list returns. */

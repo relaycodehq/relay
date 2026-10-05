@@ -93,6 +93,9 @@ function fakeChats() {
         });
       },
       cancel: async () => undefined,
+      triage: async (id: string, triage: { kind: string }) => {
+        if (triage.kind === "settle") chats.get(id)!.settledAt = Date.now();
+      },
       worktreeFrom: async (id: string, from: string) => {
         copies.push({ id, from });
         return 2;
@@ -381,4 +384,40 @@ test("a worktree starts from the lead's files, uncommitted edits included, unles
   expect(clean).toMatchObject({ worktree: true });
   expect(clean.uncommittedFilesCopied).toBeUndefined();
   expect(inCheckout).toMatchObject({ worktree: false });
+});
+
+test("settling a started thread waits until it's done and never asks", async () => {
+  const { lead, chats, api, asked } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "Branch name" }],
+    }),
+  );
+  const asks = asked.length;
+  const thread = chats.get(child.id)!;
+  thread.running = true;
+  expect(
+    await call(threads, lead.id, "settle_thread", { id: child.id }),
+  ).toMatchObject({ isError: true });
+  expect(thread.settledAt).toBeUndefined();
+
+  thread.running = false;
+  thread.messages.push({
+    id: "answer",
+    role: "assistant",
+    body: "Done.",
+    status: "complete",
+    created: 4,
+    provider: "claude",
+    version: 1,
+  });
+  expect(
+    await call(threads, lead.id, "settle_thread", { id: child.id }),
+  ).toMatchObject({ content: [{ text: "Settled." }] });
+  expect(thread.settledAt).toBeDefined();
+  expect(asked).toHaveLength(asks);
+  expect(
+    await call(threads, lead.id, "settle_thread", { id: lead.id }),
+  ).toMatchObject({ isError: true });
 });

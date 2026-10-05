@@ -78,6 +78,7 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
     "send_to_thread",
     "wait_for_threads",
     "stop_thread",
+    "settle_thread",
   ]);
   expect(list.result.tools[0].inputSchema.properties.threads.type).toBe(
     "array",

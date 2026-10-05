@@ -67,6 +67,7 @@ const relayToolLabels: Record<string, string> = {
   send_to_thread: "Messaged a started thread",
   wait_for_threads: "Waited for started threads",
   stop_thread: "Stopped a started thread",
+  settle_thread: "Settled a started thread",
 };
 
 /** An MCP call's label and which server's tool it was. */

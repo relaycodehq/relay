@@ -41,7 +41,14 @@ const POLL_MS = 1000;
 
 type Chats = Pick<
   ProjectChats,
-  "list" | "get" | "create" | "send" | "cancel" | "askInTurn" | "worktreeFrom"
+  | "list"
+  | "get"
+  | "create"
+  | "send"
+  | "cancel"
+  | "askInTurn"
+  | "worktreeFrom"
+  | "triage"
 >;
 
 const defaultChoice: ModelChoice = {
@@ -145,6 +152,8 @@ export class StartedThreads {
         await this.chats.cancel(input.id);
         return toolText("Stopped.");
       }
+      case "settle_thread":
+        return this.settle(lead, input.id);
     }
   }
 
@@ -182,6 +191,21 @@ export class StartedThreads {
     const summary = this.children(lead).find((c) => c.id === id);
     if (!summary) throw new Error("That isn't a thread you started.");
     return { summary, chat: await this.chats.get(id) };
+  }
+
+  private async settle(lead: ProjectChat, id: string) {
+    const { summary, chat } = await this.own(lead, id);
+    const status = startedStatus(summary, chat);
+    if (status === "working" || status === "needs-input")
+      return toolText(
+        status === "working"
+          ? "It's still working: wait for it or stop it first."
+          : "It's waiting on the user's input.",
+        true,
+      );
+    if (summary.settledAt) return toolText("Already settled.");
+    await this.chats.triage(id, { kind: "settle" });
+    return toolText("Settled.");
   }
 
   /** Who the lead's messages say they're from, and on what it last ran. */
