@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, rename, stat, writeFile, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { net } from "electron";
 import type { DictationModelFile } from "../../shared/dictation";
@@ -57,10 +57,13 @@ export async function downloadModel(
       (s) => s.size,
       () => -1,
     );
-    if (have !== file.size || (await sha256(path)) !== file.sha256)
+    if (have !== file.size || (await sha256(path)) !== file.sha256) {
+      // Some models keep files in subfolders, such as onnx/ and voices/.
+      await mkdir(dirname(path), { recursive: true });
       await fetchFile(file, path, signal, (received) =>
         progress(done + received),
       );
+    }
     done += file.size;
     progress(done);
   }

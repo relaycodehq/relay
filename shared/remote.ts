@@ -136,12 +136,16 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 11;
+export const remoteBridgeVersion = 12;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
  */
 export const recipientBridge = 11;
+/** From here a desktop reads answers aloud to phones (`readAloud`). */
+export const readAloudBridge = 12;
+/** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
+export const handoffBridge = 11;
 
 /**
  * The phone app's code this desktop carries (scripts/export-phone-bundle.mjs),
@@ -196,6 +200,8 @@ export interface RemoteOverview {
   phoneApp?: PhoneAppRelease;
   /** The desktop's speech model, which phones dictate with; missing before version 8. */
   dictation?: DictationModelState["status"];
+  /** Whether the desktop has a voice ready to read answers to phones; missing before version 12. */
+  readAloud?: boolean;
   projects: RemoteProject[];
   /** Unarchived threads with messages, newest first. */
   chats: RemoteChatSummary[];
@@ -356,6 +362,28 @@ export interface PhoneDictationHeard {
 /** The most base64 one audio call may carry: a second of speech. */
 export const maxDictationChunk = 44_000;
 
+/**
+ * Read aloud on a phone: the desktop's voice, the phone's speaker. The phone
+ * pulls the audio as it plays, so the desktop never has to find one phone to
+ * push to. One reading per phone; a new start ends the last.
+ */
+export type PhoneReadAloud =
+  | { type: "start"; id: number; markdown: string }
+  | { type: "pull"; id: number }
+  | { type: "stop"; id: number };
+export interface PhoneReadAloudAudio {
+  /** Mono 16-bit little-endian PCM as base64, at most `maxReadAloudPull` seconds; empty when none is ready. */
+  pcm: string;
+  sampleRate: number;
+  /** The desktop is still loading the voice. */
+  loading: boolean;
+  /** Nothing more is coming after this audio. */
+  done: boolean;
+}
+export const maxReadAloudPull = 3;
+/** The longest answer a phone may ask to hear, in characters. */
+export const maxReadAloudText = 1_000_000;
+
 /** Everything a paired phone may ask of the desktop. Nothing else is reachable. */
 export interface RemoteApi {
   overview(): Promise<RemoteOverview>;
@@ -376,6 +404,8 @@ export interface RemoteApi {
   /** What the phone's app runs, for the desktop's Settings. */
   reportApp(report: PhoneAppReport): Promise<void>;
   dictate(request: PhoneDictation): Promise<PhoneDictationHeard>;
+  /** Missing before `readAloudBridge`. */
+  readAloud(request: PhoneReadAloud): Promise<PhoneReadAloudAudio>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
@@ -424,6 +454,7 @@ export const remoteMethods = [
   "phoneAppFile",
   "reportApp",
   "dictate",
+  "readAloud",
   "computerProjects",
   "handoffUpload",
   "receiveHandoff",

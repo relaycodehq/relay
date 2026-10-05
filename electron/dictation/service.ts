@@ -14,7 +14,11 @@ import {
   dictationModelSize,
   type DictationModelState,
 } from "../../shared/dictation";
-import { downloadModel, modelComplete, modelReceived } from "./model-files";
+import {
+  downloadModel,
+  modelComplete,
+  modelReceived,
+} from "../util/model-files";
 import type { WorkerCommand, WorkerNotice } from "./worker";
 
 /** The model's memory goes back to the system this long after the last use. */

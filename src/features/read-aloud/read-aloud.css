@@ -1,0 +1,44 @@
+/* An answer being read keeps its actions in view, so Stop stays in reach. */
+.message-actions:has(.read-aloud-button[data-reading], .read-aloud-error) {
+  opacity: 1;
+}
+.message-actions .read-aloud-button[data-reading] {
+  color: var(--text);
+}
+.read-aloud-button[data-reading="loading"] svg {
+  animation: read-aloud-wait 1.1s ease-in-out infinite alternate;
+}
+@keyframes read-aloud-wait {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+.read-aloud-error {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+/* Settings → Read aloud */
+.read-aloud-download {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.read-aloud-download small {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.read-aloud-download small.failed {
+  color: var(--danger);
+  white-space: normal;
+}
+.read-aloud-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

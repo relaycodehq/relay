@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatSummary } from "./projects";
+import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
 
 /** A thread's message as it streams or changes; `title` once the thread is named. */
 export interface ProjectChatEvent {
@@ -17,4 +18,6 @@ export interface ProjectChatsEvent {
 export interface RelayEvents {
   "relay:project-chat": ProjectChatEvent;
   "relay:project-chats": ProjectChatsEvent;
+  "relay:read-aloud": ReadAloudEvent;
+  "relay:read-aloud-state": ReadAloudState;
 }

@@ -190,6 +190,34 @@ Relay’s runtime permission labels/descriptions, Build/Plan toggle, Codex sandb
 Microsoft TypeScript 5.9.3 ships with Relay for live project checks when a project’s own compiler has no language service API. Licensed under the Apache License 2.0; the license and Microsoft’s third-party notices are included beside it in `typescript-5/`.
 Source: https://github.com/microsoft/TypeScript
 
+## ONNX Runtime
+
+`onnxruntime-node` 1.30.0 runs the read aloud voice models on this computer; Relay ships its native library for the platform it's built for. The library's own third-party notices are at https://github.com/microsoft/onnxruntime/blob/v1.30.0/ThirdPartyNotices.txt.
+
+Source: https://github.com/microsoft/onnxruntime
+
+MIT License
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## Anthropic Claude Agent SDK
 
 `@anthropic-ai/claude-agent-sdk` version 0.3.276 is used for Claude project sessions.

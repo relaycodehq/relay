@@ -11,6 +11,7 @@ import {
   Sparkles,
   UserRound,
   Users,
+  Volume2,
 } from "lucide-react";
 import type { SettingsCategory } from "../../../lib/settings-page";
 
@@ -84,6 +85,13 @@ export const categories: {
     label: "Dictation",
     description: "Speak your messages; words appear as you talk.",
     icon: Mic,
+  },
+  {
+    id: "read-aloud",
+    label: "Read aloud",
+    description:
+      "Have answers read to you by a voice that runs on this computer.",
+    icon: Volume2,
   },
   {
     id: "shortcuts",

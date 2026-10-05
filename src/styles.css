@@ -1386,7 +1386,8 @@ body.resizing-table-column {
     .project-ribbon-sheen,
     .live-shine,
     .update-comet-spin,
-    .thread-terminal .xterm-cursor-blink
+    .thread-terminal .xterm-cursor-blink,
+    .read-aloud-button[data-reading="loading"] svg
   ),
 :root[data-inactive] .sb-status.waiting i::after,
 :root[data-inactive] .thinking-glyph::before {

@@ -441,6 +441,7 @@ export const Message = memo(function Message({
       {m.role === "assistant" && (
         <MessageActions
           text={text}
+          readingKey={m.id}
           sent={m.created}
           pending={m.status === "streaming"}
           onReply={() => onReply(m)}

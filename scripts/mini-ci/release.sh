@@ -115,8 +115,9 @@ cp "release/Relay-$version-mac-arm64.zip" "release/Relay-$version-mac-arm64.dmg"
 step "Windows"
 # electron-builder makes the NSIS installer on macOS without Wine; only the
 # native modules have to be swapped for Windows builds.
-rm -rf dist-electron/node-pty/prebuilds dist-electron/sherpa/sherpa-onnx-darwin-*
-mkdir -p dist-electron/node-pty/prebuilds
+rm -rf dist-electron/node-pty/prebuilds dist-electron/sherpa/sherpa-onnx-darwin-* dist-electron/onnxruntime/bin/napi-v6/darwin
+mkdir -p dist-electron/node-pty/prebuilds dist-electron/onnxruntime/bin/napi-v6/win32
+cp -R node_modules/onnxruntime-node/bin/napi-v6/win32/x64 dist-electron/onnxruntime/bin/napi-v6/win32/
 cp -R node_modules/node-pty/prebuilds/win32-x64 dist-electron/node-pty/prebuilds/
 find dist-electron/node-pty/prebuilds -name '*.pdb' -delete
 sherpa_version="$(node -p 'require("./node_modules/sherpa-onnx-node/package.json").version')"
@@ -151,6 +152,7 @@ trap quit_docker EXIT
   docker run --rm -i --platform linux/amd64 \
     -v relay-ci-npm:/root/.npm -v relay-ci-cache:/root/.cache \
     -e VERSION="$version" -e npm_config_fund=false -e npm_config_audit=false \
+    -e ONNXRUNTIME_NODE_INSTALL=skip \
     electronuserland/builder:22 bash -c '
       set -euo pipefail
       exec 3>&1 1>&2
