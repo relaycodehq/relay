@@ -281,8 +281,9 @@ export class ProjectChats {
     scope: ChatScope,
     workspace?: ChatWorkspace,
     startedBy?: StartedBy,
+    branch?: string,
   ) {
-    return this.creating.create(projectId, scope, workspace, startedBy);
+    return this.creating.create(projectId, scope, workspace, startedBy, branch);
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation
@@ -316,8 +317,9 @@ export class ProjectChats {
     thread: HandoffThread,
     cameFrom: Omit<ChatCameFrom, "carried">,
     worktree: ChatWorktree,
+    renamed?: string,
   ) {
-    return this.handoffs.adopt(projectId, thread, cameFrom, worktree);
+    return this.handoffs.adopt(projectId, thread, cameFrom, worktree, renamed);
   }
   handBack(id: string, deviceId: string) {
     return this.handoffs.handBack(id, deviceId);
@@ -503,6 +505,15 @@ export class ProjectChats {
   }
   removeWorktree(id: string) {
     return this.worktrees.remove(id);
+  }
+  returnedCopy(projectId: string, branch: string, tip: string) {
+    return this.worktrees.returnedCopy(projectId, branch, tip);
+  }
+  passedOn(id: string) {
+    return this.worktrees.passedOn(id);
+  }
+  worktreeBranch(projectId: string, prompt: string, branch?: string) {
+    return this.worktrees.branch(projectId, prompt, branch);
   }
   worktreeMovePreview(id: string) {
     return this.worktrees.movePreview(id);

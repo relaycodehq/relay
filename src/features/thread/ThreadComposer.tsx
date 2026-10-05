@@ -32,6 +32,7 @@ import { IconButton } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
+import { WorktreeBranchField } from "./WorktreeBranchField";
 import "../changes/branch-picker.css";
 
 /** What goes out with the main conversation's next message besides its text. */
@@ -88,22 +89,52 @@ export interface ProjectCheckout {
   locked: boolean;
 }
 
-/** The branch the thread works on: the checkout's, to switch, or its own worktree's. */
+/**
+ * The branch the thread works on: the checkout's, to switch, or its own
+ * worktree's, named before the first message.
+ */
 function ThreadBranch({
   project,
   worktree,
   checkout,
+  newWorktree,
+  draftKey,
   disabled,
   onStartThread,
 }: {
   project: Project;
   worktree: ThreadWorktree;
   checkout: ProjectCheckout;
+  /** An unsent thread that will work in a worktree of its own. */
+  newWorktree: boolean;
+  draftKey: string;
   disabled: boolean;
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   // A folder without Git has no branch to show or switch.
   if (project.plain) return null;
+  const picker = (
+    <ProjectBranchPicker
+      projectId={project.id}
+      branch={checkout.branch}
+      disabled={checkout.locked || disabled}
+      onStartThread={onStartThread}
+    />
+  );
+  if (newWorktree)
+    return (
+      <>
+        <WorktreeBranchField
+          projectId={project.id}
+          draftKey={draftKey}
+          value={worktree.newBranch}
+          onChange={worktree.setNewBranch}
+          disabled={disabled}
+        />
+        <span className="worktree-branch-from">from</span>
+        {picker}
+      </>
+    );
   if (worktree.branch)
     return (
       <span
@@ -114,14 +145,7 @@ function ThreadBranch({
         <MiddleTruncate text={worktree.branch} kind="branch" />
       </span>
     );
-  return (
-    <ProjectBranchPicker
-      projectId={project.id}
-      branch={checkout.branch}
-      disabled={checkout.locked || disabled}
-      onStartThread={onStartThread}
-    />
-  );
+  return picker;
 }
 
 /**
@@ -277,6 +301,12 @@ export function ThreadComposer({
             project={project}
             worktree={worktree}
             checkout={checkout}
+            newWorktree={
+              !chat &&
+              scope.kind === "project" &&
+              worktree.workspace === "worktree"
+            }
+            draftKey={threadDraftKey(id)}
             disabled={waiting || held}
             onStartThread={onStartThread}
           />

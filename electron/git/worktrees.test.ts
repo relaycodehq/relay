@@ -13,12 +13,16 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  adoptWorktree,
+  cantCarryOn,
   copiedRef,
   copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
+  newBranchProblem,
   reattachWorktree,
   removeWorktree,
+  suggestedBranch,
   worktreeChanges,
   worktreeHoldsWork,
   type MadeWorktree,
@@ -396,4 +400,132 @@ it("a clean source gives a plain worktree at its commit", async () => {
   );
   expect(copied).toBe(0);
   expect(git(worktree.path, "status", "--porcelain")).toBe("");
+});
+
+it("makes the branch the user named, in a folder named after it", async () => {
+  const worktree = await createWorktree(root, dir, "Split the store", {
+    named: "feature/Store-Split",
+  });
+  expect(worktree).toMatchObject({
+    branch: "feature/Store-Split",
+    named: "feature/Store-Split",
+    from: "main",
+  });
+  expect(worktree.path).toBe(join(dir, "project", "feature-store-split"));
+  expect(git(worktree.path, "branch", "--show-current")).toBe(
+    "feature/Store-Split",
+  );
+});
+
+it("makes do with relay/… when a named branch can't be made by now, saying why", async () => {
+  git(root, "branch", "taken");
+  git(root, "branch", "team/a/b");
+  for (const [named, problem] of [
+    ["taken", "taken already exists."],
+    [
+      "taken/more",
+      "There's a branch called taken, so taken/more can't be made.",
+    ],
+    ["team/a", "There's a branch called team/a/b, so team/a can't be made."],
+    ["my branch", "Branch names can't contain spaces."],
+  ]) {
+    const worktree = await createWorktree(root, dir, "Split the store", {
+      named,
+    });
+    expect(worktree.branch).toMatch(/^relay\/split-the-store/);
+    expect(worktree.named).toBeUndefined();
+    expect(worktree.wanted).toEqual({ branch: named, problem });
+  }
+  expect(await newBranchProblem(root, "team/b")).toBeUndefined();
+});
+
+it("suggests the branch createWorktree would pick", async () => {
+  expect(await suggestedBranch(root, dir, "Split the store")).toBe(
+    "relay/split-the-store",
+  );
+  const first = await made();
+  expect(await suggestedBranch(root, dir, "Split the store")).toBe(
+    "relay/split-the-store-2",
+  );
+  expect((await made()).branch).toBe("relay/split-the-store-2");
+  expect(first.named).toBeUndefined();
+});
+
+it("checks out a kept user-named branch again, and remakes a removed one on its name", async () => {
+  const worktree: ChatWorktree = await createWorktree(root, dir, "Store", {
+    named: "feature/store",
+  });
+  await commitSea(worktree.path!);
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  const back = await reattachWorktree(root, { ...worktree, removedAt: 1 });
+  expect(back).toEqual(worktree);
+  expect(git(worktree.path!, "branch", "--show-current")).toBe("feature/store");
+
+  await removeWorktree(root, randomUUID(), back!);
+  const again = await createWorktree(root, dir, "Something else", {
+    ...back!,
+    removedAt: 1,
+  });
+  expect(again).toMatchObject({
+    path: worktree.path,
+    branch: "feature/store",
+    named: "feature/store",
+  });
+});
+
+it("remakes a named worktree whose name got taken as relay/… after the thread", async () => {
+  const worktree = await createWorktree(root, dir, "Store", {
+    named: "feature/store",
+  });
+  await removeWorktree(root, randomUUID(), worktree, { keepBranch: true });
+  // Its branch is checked out somewhere else now, so it can't come back.
+  git(
+    root,
+    "worktree",
+    "add",
+    "-q",
+    join(root, "..", "elsewhere"),
+    "feature/store",
+  );
+  expect(
+    await reattachWorktree(root, { ...worktree, removedAt: 1 }),
+  ).toBeUndefined();
+  const again = await createWorktree(root, dir, "Store again", {
+    ...worktree,
+    removedAt: 1,
+  });
+  expect(again.branch).toBe("relay/store-again");
+  expect(again.named).toBeUndefined();
+});
+
+it("keeps an arriving branch's name when it can, else names it after the thread", async () => {
+  const tip = git(root, "rev-parse", "HEAD");
+  const kept = await adoptWorktree(root, dir, "store", tip, {
+    branch: "feature/store",
+  });
+  expect(kept).toMatchObject({
+    branch: "feature/store",
+    named: "feature/store",
+  });
+
+  const fallback = await adoptWorktree(root, dir, "store", tip, {
+    branch: "feature/store",
+  });
+  expect(fallback.branch).toBe("relay/store");
+  expect(fallback.named).toBeUndefined();
+});
+
+it("lets an earlier trip's worktree carry on only when it holds nothing the new tip lacks", async () => {
+  const worktree = await createWorktree(root, dir, "Store", {
+    named: "feature/store",
+  });
+  await commitSea(worktree.path);
+  const ahead = git(worktree.path, "rev-parse", "HEAD");
+  expect(await cantCarryOn(root, worktree, ahead)).toBeUndefined();
+  // The tip it would move to is behind its own commit.
+  expect(
+    await cantCarryOn(root, worktree, git(root, "rev-parse", "HEAD")),
+  ).toBe("it has commits on feature/store that never went back");
+  await writeFile(join(worktree.path, "d.ts"), "dee\n");
+  expect(await cantCarryOn(root, worktree, ahead)).toMatch(/uncommitted/);
 });

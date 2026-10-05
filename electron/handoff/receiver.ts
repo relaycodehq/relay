@@ -19,9 +19,10 @@ import {
 } from "../../shared/remote";
 import type { UpdateState } from "../../shared/updates";
 import { idSchema } from "../../shared/rooms";
+import { branchNameProblem } from "../../shared/branch-names";
 import { git } from "../git/git";
 import type { ProjectChats } from "../project-chats";
-import { adoptWorktree } from "../git/worktrees";
+import { adoptWorktree, newBranchProblem } from "../git/worktrees";
 import {
   bundleBranch,
   fetchBundle,
@@ -36,11 +37,11 @@ const base64 = z
   .max(Math.ceil(handoffChunk / 3) * 4)
   .regex(/^[A-Za-z0-9+/]*={0,2}$/);
 const shaSchema = z.string().regex(/^[0-9a-f]{40,64}$/);
+// Any name git takes: a thread's branch may be one the user chose.
 const branchSchema = z
   .string()
-  .max(200)
-  .regex(/^[\w./-]+$/)
-  .refine((b) => !b.includes("..") && !b.startsWith("-"));
+  .max(250)
+  .refine((b) => !branchNameProblem(b));
 const threadSchema = z
   .object({
     from: z.string().trim().min(1).max(80),
@@ -269,19 +270,37 @@ export class HandoffReceiver {
     else throw new Error(needsFullBundle);
     if (tip !== thread.git.tip)
       throw new Error("The bundle doesn't hold the handed-off commit.");
+    // A thread here before, and handed back since, left its branch behind.
+    const copy = await this.host.chats.returnedCopy(
+      project.id,
+      thread.git.branch,
+      tip,
+    );
+    const over = copy && "worktree" in copy ? copy : undefined;
+    const renamed =
+      copy && "problem" in copy
+        ? copy.problem
+        : !over && (await newBranchProblem(root, thread.git.branch));
     const worktree = await adoptWorktree(
       root,
       this.host.worktrees,
       thread.git.branch.replace(/^relay\//, ""),
       tip,
-      { from: thread.git.from, start: thread.git.start },
+      {
+        from: thread.git.from,
+        start: thread.git.start,
+        branch: thread.git.branch,
+        ...(over ? { over: over.worktree } : {}),
+      },
     );
+    if (over) await this.host.chats.passedOn(over.id);
     await git(root, ["update-ref", "-d", ref]).catch(() => {});
     const chat = await this.host.chats.adopt(
       project.id,
       thread,
       { id, computer: thread.from, deviceId: device.id, at: Date.now(), tip },
       worktree,
+      renamed || undefined,
     );
     await rm(folder, { recursive: true, force: true });
     return this.receipt(chat.id, project.id);

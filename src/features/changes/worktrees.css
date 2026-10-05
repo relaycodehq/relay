@@ -5,6 +5,63 @@
 .thread-context-controls .workspace-trigger ~ .composer-branch-trigger {
   margin-left: 0;
 }
+/* A new worktree's branch, typed in place of the branch picker's name. */
+.worktree-branch-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 3px 0 3px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.worktree-branch-input {
+  field-sizing: content;
+  min-width: 14ch;
+  max-width: 32ch;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  text-overflow: ellipsis;
+}
+.worktree-branch-input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+.worktree-branch-input:hover:not(:disabled),
+.worktree-branch-input:focus {
+  background: var(--hover);
+  color: var(--text);
+}
+.worktree-branch-input:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 0;
+}
+.worktree-branch-field .worktree-branch-input[aria-invalid],
+.worktree-branch-problem {
+  color: var(--danger);
+}
+/* Above the field, so the row keeps its width; an unsent thread has room there. */
+.worktree-branch-problem {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 6px;
+  white-space: nowrap;
+}
+.thread-context-controls .worktree-branch-field ~ .composer-branch-trigger {
+  margin-left: 0;
+}
+.worktree-branch-from {
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 2px;
+}
 .workspace-trigger.static {
   cursor: default;
 }
@@ -48,7 +105,7 @@
   background: var(--accent);
 }
 .worktree-landed-mark,
-.worktree-landed > svg {
+.worktree-landed:not(.worktree-renamed) > svg {
   flex: none;
   color: light-dark(#1a7f45, #4cc38a);
 }

@@ -25,7 +25,7 @@ import { SideQuestion } from "./SideQuestion";
 import { UnreadDivider } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
-import { WorktreeLanded } from "./WorktreeControls";
+import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
 
 const isAnswer = (m: ChatMessage) =>
   m.role === "assistant" && !m.compaction && !m.handoff && !m.reload;
@@ -110,6 +110,11 @@ export function ThreadMessages({
         : undefined,
     [chat?.id, review?.report],
   );
+  // Said once, under the message that made the worktree.
+  const renamedAfter =
+    !root && chat?.worktree?.wanted
+      ? listed.find((m) => m.role === "user" && !m.parentId)?.id
+      : undefined;
   const arrival = useArrival(chat?.id);
   const unread = useMemo(
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
@@ -216,6 +221,12 @@ export function ThreadMessages({
                     ),
                   }
                 : {})}
+            />
+          ),
+          m.id === renamedAfter && (
+            <WorktreeRenamed
+              key="worktree-renamed"
+              worktree={chat!.worktree!}
             />
           ),
         ])}

@@ -26,6 +26,7 @@ const optional = <T extends z.ZodType>(schema: T) =>
   schema.nullish().transform((value) => value ?? undefined);
 const agentIdSchema = z.string().min(1).max(200);
 const imagePathSchema = z.string().min(1).max(500);
+const branchSchema = z.string().trim().min(1).max(250);
 
 /** Project threads: their turns, agents, worktrees, sharing, and deep reviews. */
 export function chatHandlers(ctx: ApiContext) {
@@ -33,8 +34,19 @@ export function chatHandlers(ctx: ApiContext) {
   return {
     projectChats: takes([idSchema], (id) => ctx.listChats(id)),
     createProjectChat: takes(
-      [idSchema, chatScopeSchema, optional(chatWorkspaceSchema)],
-      (id, scope, workspace) => projectChats.create(id, scope, workspace),
+      [
+        idSchema,
+        chatScopeSchema,
+        optional(chatWorkspaceSchema),
+        optional(branchSchema),
+      ],
+      (id, scope, workspace, branch) =>
+        projectChats.create(id, scope, workspace, undefined, branch),
+    ),
+    worktreeBranch: takes(
+      [idSchema, z.string(), optional(branchSchema)],
+      (projectId, prompt, branch) =>
+        projectChats.worktreeBranch(projectId, prompt, branch),
     ),
     projectChat: takes(
       [idSchema, optional(knownMessagesSchema)],

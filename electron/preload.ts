@@ -101,6 +101,7 @@ const methods = [
   "projectChats",
   "createProjectChat",
   "projectWorktree",
+  "worktreeBranch",
   "projectWorktreeDiff",
   "removeProjectWorktree",
   "projectWorktreeMove",

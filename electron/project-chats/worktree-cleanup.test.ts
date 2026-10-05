@@ -116,6 +116,20 @@ describe("which settled threads' worktrees can go", () => {
       );
   });
 
+  it("counts a branch the user named as Relay's own", () => {
+    const named = { path, branch: "feature/cache", named: "feature/cache" };
+    expect(
+      cleanupKept(candidate({ worktree: named }), scene()),
+    ).toBeUndefined();
+    // Named one thing, on another now: not the branch Relay made.
+    expect(
+      cleanupKept(
+        candidate({ worktree: { ...named, branch: "feature/other" } }),
+        scene(),
+      ),
+    ).toBe("not a worktree Relay made");
+  });
+
   it("keeps it while the thread is handed off or another computer waits for it", () => {
     const cameFrom = {
       id: "h",
@@ -247,7 +261,7 @@ describe("cleaning up a real thread's worktree", () => {
   });
 
   /** A worktree thread that answered once, with a commit on its branch, settled by hand. */
-  async function settledThread() {
+  async function settledThread(branch?: string) {
     root = await realpath(await mkdtemp(join(tmpdir(), "relay-cleanup-")));
     const cli = await fakeCli(
       join(root, "codex"),
@@ -270,6 +284,8 @@ describe("cleaning up a real thread's worktree", () => {
       projectId,
       { kind: "project" },
       "worktree",
+      undefined,
+      branch,
     );
     await chats.send(thread.id, input("@codex Add a changelog"));
     await finished(thread.id, 2);
@@ -298,37 +314,45 @@ describe("cleaning up a real thread's worktree", () => {
     );
   }
 
-  it("removes it but keeps its branch, and the next message checks the branch out again", async () => {
-    const { chats, repo, id, worktree } = await settledThread();
-    const tip = git(worktree.path!, "rev-parse", "HEAD");
+  it.each([
+    ["one on Relay's branch", undefined],
+    ["one on a branch the user named", "feature/changelog"],
+  ])(
+    "removes %s but keeps the branch, and the next message checks it out again",
+    async (_, branch) => {
+      const { chats, repo, id, worktree } = await settledThread(branch);
+      if (branch) expect(worktree.branch).toBe(branch);
+      const tip = git(worktree.path!, "rev-parse", "HEAD");
 
-    await chats.cleanUpWorktrees();
+      await chats.cleanUpWorktrees();
 
-    expect(existsSync(worktree.path!)).toBe(false);
-    expect(git(repo, "rev-parse", worktree.branch!)).toBe(tip);
-    const cleaned = (await chats.get(id)).worktree!;
-    expect(cleaned.removedAt).toBeTypeOf("number");
-    expect(cleaned.cleanedUp).toBe(true);
-    expect(await chats.worktreeStatus(id)).toMatchObject({
-      removed: true,
-      cleanedUp: true,
-      branch: worktree.branch,
-    });
-    // Saving the removal is no activity: the thread stays settled.
-    const listed = chats.list((await chats.get(id)).projectId);
-    expect(listed.find((c) => c.id === id)?.settledAt).toBeDefined();
+      expect(existsSync(worktree.path!)).toBe(false);
+      expect(git(repo, "rev-parse", worktree.branch!)).toBe(tip);
+      const cleaned = (await chats.get(id)).worktree!;
+      expect(cleaned.removedAt).toBeTypeOf("number");
+      expect(cleaned.cleanedUp).toBe(true);
+      expect(await chats.worktreeStatus(id)).toMatchObject({
+        removed: true,
+        cleanedUp: true,
+        branch: worktree.branch,
+      });
+      // Saving the removal is no activity: the thread stays settled.
+      const listed = chats.list((await chats.get(id)).projectId);
+      expect(listed.find((c) => c.id === id)?.settledAt).toBeDefined();
 
-    await chats.send(id, input("@codex And a date on each line"));
-    await finished(id, 4);
-    const back = (await chats.get(id)).worktree!;
-    expect(back.path).toBe(worktree.path);
-    expect(back.branch).toBe(worktree.branch);
-    expect(back.removedAt).toBeUndefined();
-    expect(back.cleanedUp).toBeUndefined();
-    expect(await readFile(join(back.path!, "CHANGELOG.md"), "utf8")).toBe(
-      "- 1.0 First\n",
-    );
-  }, 30000);
+      await chats.send(id, input("@codex And a date on each line"));
+      await finished(id, 4);
+      const back = (await chats.get(id)).worktree!;
+      expect(back.path).toBe(worktree.path);
+      expect(back.branch).toBe(worktree.branch);
+      expect(back.removedAt).toBeUndefined();
+      expect(back.cleanedUp).toBeUndefined();
+      expect(await readFile(join(back.path!, "CHANGELOG.md"), "utf8")).toBe(
+        "- 1.0 First\n",
+      );
+    },
+    30000,
+  );
 
   it("leaves a worktree with files Git doesn't have yet", async () => {
     const { chats, id, worktree } = await settledThread();

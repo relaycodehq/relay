@@ -1,17 +1,21 @@
 import type {
   ChatWorktree,
   ProjectChat,
+  WorktreeBranch,
   WorktreeStatus,
 } from "../../shared/projects";
 import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
+  cantCarryOn,
   copyIntoWorktree,
   createWorktree,
   moveIntoWorktree,
+  newBranchProblem,
   reattachWorktree,
   removeWorktree,
+  suggestedBranch,
   uncommitted,
   worktreeChanges,
   worktreeDiff,
@@ -69,6 +73,69 @@ export class ThreadWorktrees {
     chat.worktree = worktree;
     await this.core.storage.save(chat);
     return copied;
+  }
+
+  /**
+   * The branch a new thread's worktree would get: Relay's pick for `prompt`,
+   * or `branch` with why it can't be made, if it can't.
+   */
+  async branch(
+    projectId: string,
+    prompt: string,
+    branch?: string,
+  ): Promise<WorktreeBranch> {
+    const root = await this.core.projects.root(projectId);
+    if (!branch)
+      return {
+        branch: await suggestedBranch(root, this.folder, promptTitle(prompt)),
+      };
+    const problem = await newBranchProblem(root, branch);
+    return problem ? { branch, problem } : { branch };
+  }
+
+  /**
+   * The copy an earlier trip of a thread left here on `branch`, once it went
+   * back, for the thread arriving again at `tip` to carry on in; or why it
+   * can't, when that copy has work of its own. Undefined when no such copy
+   * holds the branch.
+   */
+  async returnedCopy(
+    projectId: string,
+    branch: string,
+    tip: string,
+  ): Promise<
+    { id: string; worktree: ChatWorktree } | { problem: string } | undefined
+  > {
+    // The latest trip's copy: an earlier one handed its folder on to it.
+    const copy = (this.core.store.get().chats ?? [])
+      .filter(
+        (c) =>
+          c.projectId === projectId &&
+          c.cameFrom?.returnedAt &&
+          !c.cameFrom.abandonedAt &&
+          c.worktree?.branch === branch,
+      )
+      .sort((a, b) => b.cameFrom!.returnedAt! - a.cameFrom!.returnedAt!)[0];
+    if (!copy?.worktree) return;
+    const root = await this.core.projects.root(projectId);
+    if (await newBranchProblem(root, branch).then((p) => !p)) return;
+    const why = await cantCarryOn(root, copy.worktree, tip);
+    if (why)
+      return {
+        problem: `“${copy.title}”, from its last trip here, still holds it, and ${why}.`,
+      };
+    return { id: copy.id, worktree: copy.worktree };
+  }
+
+  /** A returned copy's worktree went on to the thread arriving again; the copy keeps its conversation. */
+  async passedOn(id: string) {
+    await this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      if (!chat.worktree) return;
+      chat.worktree.removedAt = Date.now();
+      delete chat.worktree.cleanedUp;
+      await this.core.storage.save(chat);
+    });
   }
 
   private async of(id: string) {

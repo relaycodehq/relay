@@ -1,0 +1,46 @@
+/* Only B and C; A uses the app's own styles in src/features/changes/worktrees.css. */
+.worktree-branch-strip .worktree-branch-problem {
+  position: static;
+}
+.worktree-branch-strip .worktree-branch-from {
+  margin-left: auto;
+}
+.worktree-branch-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.worktree-branch-popup {
+  min-width: 260px;
+}
+.worktree-branch-popup .composer-select-item {
+  width: 100%;
+  border: 0;
+  background: none;
+}
+.worktree-branch-popup-field {
+  display: grid;
+  gap: 5px;
+  margin: 6px 4px 2px;
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+.worktree-branch-popup-field .worktree-branch-input {
+  max-width: none;
+  margin: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.worktree-branch-popup-field small.danger {
+  color: var(--danger);
+}
+.worktree-dot.danger {
+  background: var(--danger);
+}

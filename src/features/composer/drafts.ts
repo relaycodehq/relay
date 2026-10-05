@@ -119,9 +119,8 @@ export const saveDraftScope = (id: string, scope: ChatScope) =>
   threadStorage(id).scope.save(scope);
 /** Drops the scope and the workspace picked for it. */
 export function clearDraftScope(id: string) {
-  const { scope, workspace } = threadStorage(id);
-  scope.clear();
-  workspace.clear();
+  threadStorage(id).scope.clear();
+  clearDraftWorkspace(id);
 }
 
 /** Where a project's new threads start unless one picks otherwise. */
@@ -137,8 +136,18 @@ export const saveDraftWorkspace = (
   workspace: ChatWorkspace,
   project: Pick<Project, "settings">,
 ) => threadStorage(id).workspace.save(workspace, projectWorkspace(project));
-export const clearDraftWorkspace = (id: string) =>
+export function clearDraftWorkspace(id: string) {
   threadStorage(id).workspace.clear();
+  threadStorage(id).branch.save("");
+}
+/** The branch typed for an unsent thread's worktree, when it will work in one. */
+export const draftWorktreeBranch = (
+  id: string,
+  project: Pick<Project, "settings">,
+) =>
+  loadDraftWorkspace(id, project) === "worktree"
+    ? threadStorage(id).branch.load().trim() || undefined
+    : undefined;
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */
 export function forgetNewThread(id: string) {

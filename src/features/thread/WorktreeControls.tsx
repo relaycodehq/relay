@@ -1,9 +1,16 @@
 import { Menu } from "@base-ui/react/menu";
-import { Check, ChevronDown, Folder, FolderGit2 } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Folder,
+  FolderGit2,
+  GitBranch,
+} from "lucide-react";
 import type {
   AgentWorktree,
   ChatSummary,
   ChatWorkspace,
+  ChatWorktree,
   WorktreeStatus,
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
@@ -397,6 +404,18 @@ export function WorktreeLanded({ status }: { status: WorktreeStatus }) {
         ? `Merged through PR #${status.pr?.number}`
         : `Merged into ${status.from ?? "its source branch"}`}
       {status.removed ? " · worktree removed" : ""}
+    </p>
+  );
+}
+
+/** The quiet line under a thread's first message when the branch named for it was taken by the time it sent. */
+export function WorktreeRenamed({ worktree }: { worktree: ChatWorktree }) {
+  const { wanted, branch } = worktree;
+  if (!wanted || !branch) return null;
+  return (
+    <p className="worktree-landed worktree-renamed">
+      <GitBranch size={12} />
+      Its worktree is on {branch}, not {wanted.branch}: {wanted.problem}
     </p>
   );
 }

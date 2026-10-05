@@ -228,6 +228,11 @@ export function threadStorage(id: string) {
         edit({ workspace: workspace === fallback ? undefined : workspace }),
       clear: () => edit({ workspace: undefined }),
     },
+    /** The branch typed for an unsent thread's worktree; none leaves it to Relay. */
+    branch: {
+      load: (): string => read().branch ?? "",
+      save: (branch: string) => edit({ branch: branch || undefined }),
+    },
   };
 }
 

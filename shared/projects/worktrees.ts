@@ -5,6 +5,17 @@ export interface ChatWorktree {
   /** Unset until the first message makes the worktree. */
   path?: string;
   branch?: string;
+  /**
+   * A branch name kept rather than taken from its folder: the one the user
+   * gave it, made with the first message, or the one it had on the computer
+   * it came from. Relay still counts the branch as its own.
+   */
+  named?: string;
+  /**
+   * The branch the user named that couldn't be made by the time the first
+   * message sent, and why; the worktree went on a `relay/…` branch instead.
+   */
+  wanted?: { branch: string; problem: string };
   /** The checkout's branch it was made from; its changes are what that branch lacks. */
   from?: string;
   /** The checkout's commit when the worktree was made. */
@@ -49,6 +60,11 @@ export interface WorktreeStatus {
   removed: boolean;
   /** Removed after the thread settled, its branch kept; see `ChatWorktree.cleanedUp`. */
   cleanedUp?: true;
+}
+/** The branch a new thread's worktree would be made on, and why it can't, if it can't. */
+export interface WorktreeBranch {
+  branch: string;
+  problem?: string;
 }
 /** Every uncommitted edit in the project folder, with the other threads whose turns changed each. */
 export interface WorktreeMove {

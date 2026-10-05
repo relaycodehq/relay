@@ -53,7 +53,8 @@ function relayMade(worktree: ChatWorktree, checkout: string, folder: string) {
     return !rel.startsWith("..") && !isAbsolute(rel);
   };
   return (
-    !!worktree.branch?.startsWith("relay/") &&
+    (!!worktree.branch?.startsWith("relay/") ||
+      (!!worktree.named && worktree.branch === worktree.named)) &&
     path !== resolve(folder) &&
     inside(resolve(folder), path) &&
     !inside(path, resolve(checkout))

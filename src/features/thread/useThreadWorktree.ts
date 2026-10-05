@@ -9,6 +9,7 @@ import {
 } from "../composer/drafts";
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "../../lib/working-tree-key";
+import { threadStorage } from "../../lib/thread-storage";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -39,6 +40,13 @@ export function useThreadWorktree({
     saveDraftWorkspace(id, workspace, project);
     onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
+  // The new worktree's branch as typed; empty leaves it to Relay.
+  const [newBranch, setNewBranch] = useState(() =>
+    chat ? "" : threadStorage(id).branch.load(),
+  );
+  useEffect(() => {
+    if (!chat) threadStorage(id).branch.save(newBranch);
+  }, [newBranch, !chat]);
   const query = useQuery({
     queryKey: ["worktree", chat?.id],
     queryFn: () => api.projectWorktree(chat!.id),
@@ -73,6 +81,8 @@ export function useThreadWorktree({
   return {
     workspace,
     setWorkspace,
+    newBranch,
+    setNewBranch,
     status,
     // Where this thread's files are: links in its answers resolve against it.
     folder: live?.path ?? project.path,

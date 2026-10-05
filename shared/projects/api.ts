@@ -52,7 +52,7 @@ import type {
   ChatTriage,
   ChatWorkspace,
 } from "./threads";
-import type { WorktreeMove, WorktreeStatus } from "./worktrees";
+import type { WorktreeBranch, WorktreeMove, WorktreeStatus } from "./worktrees";
 
 // Calls taking `where` accept a workspace id (see shared/workspaces.ts):
 // the checkout, or a thread's worktree.
@@ -99,6 +99,8 @@ export interface ProjectChatApi {
     id: string,
     scope: ChatScope,
     workspace?: ChatWorkspace,
+    /** The new worktree's branch, when the user named it. */
+    branch?: string,
   ): Promise<ChatSummary>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
@@ -256,6 +258,12 @@ export interface ProjectCouncilApi {
 /** A thread's own worktree, and the ones its agent made. */
 export interface ProjectWorktreeApi {
   projectWorktree(chatId: string): Promise<WorktreeStatus>;
+  /** The branch a new thread's worktree would get for `prompt`, or whether `branch` can be made. */
+  worktreeBranch(
+    projectId: string,
+    prompt: string,
+    branch?: string,
+  ): Promise<WorktreeBranch>;
   /** One file as the worktree has it, against where its branch forks. */
   projectWorktreeDiff(chatId: string, path: string): Promise<FilePair>;
   removeProjectWorktree(chatId: string): Promise<void>;

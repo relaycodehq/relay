@@ -2841,3 +2841,56 @@ it("settles a quiet thread by itself until it's moved back by hand", async () =>
     vi.useRealTimers();
   }
 });
+
+it("starts a thread whose named branch got taken before its first message on relay/…, and keeps why", async () => {
+  const repo = join(root, "repo");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { stdio: "pipe" });
+  git(
+    "-c",
+    "user.name=T",
+    "-c",
+    "user.email=t@t",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "First",
+  );
+  await expect(
+    chats.create(
+      projectId,
+      { kind: "project" },
+      "worktree",
+      undefined,
+      "my branch",
+    ),
+  ).rejects.toThrow("Branch names can't contain spaces.");
+  const chat = await chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+    undefined,
+    "feature/cache",
+  );
+  // Someone else took the name while the thread waited to send.
+  git("branch", "feature/cache");
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    { timeout: 6000 },
+  );
+  expect((await chats.get(chat.id)).worktree).toMatchObject({
+    branch: "relay/explain-the-cache-guard",
+    wanted: {
+      branch: "feature/cache",
+      problem: "feature/cache already exists.",
+    },
+  });
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.worktree?.wanted,
+  ).toBeDefined();
+}, 15000);

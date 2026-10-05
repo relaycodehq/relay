@@ -283,6 +283,8 @@ export class ComputerHandoff {
     thread: HandoffThread,
     cameFrom: Omit<ChatCameFrom, "carried">,
     worktree: ChatWorktree,
+    /** Why the branch couldn't keep its name here, when it couldn't. */
+    renamed?: string,
   ) {
     const { messages, was } = relabeled(thread.messages, true);
     const note = [...messages]
@@ -317,7 +319,11 @@ export class ComputerHandoff {
       .send(chat.id, {
         ...settings,
         id: randomUUID(),
-        body: `@${provider} Carry on with this work, handed over from ${thread.from}.`,
+        body: `@${provider} Carry on with this work, handed over from ${thread.from}.${
+          worktree.branch === thread.git.branch
+            ? ""
+            : ` Its branch on this computer is ${worktree.branch}, not ${thread.git.branch}: ${renamed ?? `${thread.git.branch} couldn't be made here.`}`
+        }`,
         to: provider,
         provider,
       })

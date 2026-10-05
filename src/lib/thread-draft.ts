@@ -48,6 +48,8 @@ export interface ThreadDraft {
   scope?: ChatScope;
   /** Where an unsent thread will work, when picked for it. */
   workspace?: ChatWorkspace;
+  /** The branch typed for an unsent thread's worktree, in place of Relay's pick. */
+  branch?: string;
 }
 
 export const emptyBody = (): DraftBody => ({
@@ -75,7 +77,8 @@ export const isThreadDraftEmpty = (draft: ThreadDraft) =>
   !draft.workItem &&
   !draft.codeRefs.length &&
   !draft.scope &&
-  draft.workspace === undefined;
+  draft.workspace === undefined &&
+  !draft.branch;
 
 export const bodyOf = (draft: ThreadDraft, reply?: string): DraftBody =>
   (reply ? draft.replies[reply] : draft.main) ?? emptyBody();
@@ -123,6 +126,7 @@ const readCodeRefs = (value: unknown): CodeReference[] =>
 const readScope = (value: unknown) => chatScopeSchema.safeParse(value).data;
 const readWorkspace = (value: unknown) =>
   chatWorkspaceSchema.safeParse(value).data;
+/** A non-empty string, or nothing. */
 const readRoot = (value: unknown) =>
   typeof value === "string" && value ? value : undefined;
 
@@ -154,6 +158,7 @@ export function parseThreadDraft(saved: unknown): ThreadDraft {
     codeRefs: readCodeRefs(saved.codeRefs),
     scope: readScope(saved.scope),
     workspace: readWorkspace(saved.workspace),
+    branch: readRoot(saved.branch),
   };
 }
 
@@ -180,6 +185,7 @@ export function serializeThreadDraft(draft: ThreadDraft): string {
     ...(draft.codeRefs.length ? { codeRefs: draft.codeRefs } : {}),
     ...(draft.scope ? { scope: draft.scope } : {}),
     ...(draft.workspace !== undefined ? { workspace: draft.workspace } : {}),
+    ...(draft.branch ? { branch: draft.branch } : {}),
   });
 }
 

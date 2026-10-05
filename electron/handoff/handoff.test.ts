@@ -337,13 +337,15 @@ it("hands a worktree thread to the other computer and brings it back", async () 
 }, 60000);
 
 /** A worktree thread handed to the mini with CHANGELOG.md in it; the worktrees on both sides. */
-async function awayWithChangelog(changelog = true) {
+async function awayWithChangelog(changelog = true, branch?: string) {
   const paired = await pairedComputers();
   const { laptop, mini, sender, computerId } = paired;
   const thread = await laptop.chats.create(
     laptop.projectId,
     { kind: "project" },
     "worktree",
+    undefined,
+    branch,
   );
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);
@@ -390,6 +392,97 @@ it("replays work that comes back onto a worktree that moved on meanwhile", async
   expect(git(here, "status", "--porcelain")).toBe("");
   expect(git(here, "for-each-ref", "refs/relay/handoffs/")).toBe("");
 }, 60000);
+
+it("keeps a branch the user named on the other computer, and brings its work back", async () => {
+  const { sender, mini, thread, here, there } = await awayWithChangelog(
+    true,
+    "feature/changelog",
+  );
+  expect(git(here, "branch", "--show-current")).toBe("feature/changelog");
+  expect(git(there, "branch", "--show-current")).toBe("feature/changelog");
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  expect(arrived!.worktree?.named).toBe("feature/changelog");
+
+  await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () => expect(await sender.view(thread.id)).toBeNull(),
+    { timeout: 15000 },
+  );
+  expect(await readFile(join(here, "CHANGELOG.md"), "utf8")).toBe(
+    "- 1.1 Second\n- 1.0 First\n",
+  );
+  expect(git(here, "branch", "--show-current")).toBe("feature/changelog");
+}, 60000);
+
+/** A thread on a named branch, there and back again, then handed to the mini a second time. */
+async function secondTrip(meanwhile: (there: string) => Promise<void>) {
+  const away = await awayWithChangelog(true, "feature/changelog");
+  const { sender, laptop, mini, computerId, thread, there } = away;
+  await writeFile(join(there, "CHANGELOG.md"), "- 1.1 Second\n- 1.0 First\n");
+  await sender.bringBack(thread.id);
+  await vi.waitFor(
+    async () => expect(await sender.view(thread.id)).toBeNull(),
+    { timeout: 15000 },
+  );
+  // What the first trip left there: its copy, still holding the branch.
+  const [first] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  await vi.waitFor(async () =>
+    expect((await mini.chats.get(first!.id)).cameFrom?.returnedAt).toBeTruthy(),
+  );
+  expect(git(there, "branch", "--show-current")).toBe("feature/changelog");
+  await meanwhile(there);
+
+  await laptop.chats.send(thread.id, input("@codex A date on each line"));
+  await finished(laptop.chats, thread.id);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(
+    async () =>
+      expect((await sender.view(thread.id))?.sentTo.state).toBe("away"),
+    { timeout: 15000 },
+  );
+  const second = mini.chats
+    .list(mini.projectId)
+    .find((c) => c.cameFrom && c.id !== first!.id)!;
+  const kickoff = [...(await mini.chats.get(second.id)).messages]
+    .reverse()
+    .find((m) => m.body.includes("Carry on with this work"))!.body;
+  return { ...away, first: first!, second, kickoff };
+}
+
+it("carries on in the folder and named branch of an earlier trip that went back", async () => {
+  const { mini, here, there, first, second, kickoff } = await secondTrip(
+    async (there) => {
+      // A hand-copied file Git ignores, which a fresh folder wouldn't have.
+      const common = git(there, "rev-parse", "--git-common-dir");
+      await writeFile(join(common, "info", "exclude"), ".env\n");
+      await writeFile(join(there, ".env"), "SECRET=1\n");
+    },
+  );
+  expect(second.worktree).toMatchObject({
+    path: there,
+    branch: "feature/changelog",
+  });
+  expect(git(there, "rev-parse", "HEAD")).toBe(git(here, "rev-parse", "HEAD"));
+  expect(await readFile(join(there, ".env"), "utf8")).toBe("SECRET=1\n");
+  expect((await mini.chats.get(first.id)).worktree?.removedAt).toBeTypeOf(
+    "number",
+  );
+  expect(kickoff).not.toContain("Its branch on this computer");
+}, 90000);
+
+it("says why an arriving thread's branch got another name", async () => {
+  const { there, second, kickoff } = await secondTrip(async (there) => {
+    await writeFile(join(there, "scratch.txt"), "left behind\n");
+  });
+  expect(second.worktree?.branch).toBe("relay/feature-changelog-2");
+  expect(second.worktree?.path).not.toBe(there);
+  expect(kickoff).toContain(
+    "Its branch on this computer is relay/feature-changelog-2, not feature/changelog:",
+  );
+  expect(kickoff).toContain("from its last trip here, still holds it");
+  expect(kickoff).toContain("uncommitted changes");
+}, 90000);
 
 it("brings a thread back with its clashing work set aside, to resolve it there", async () => {
   const { sender, laptop, thread, here, there, commitHere } =

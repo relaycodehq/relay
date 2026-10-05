@@ -3,6 +3,7 @@ import {
   assembleLegacy,
   draftKeyOf,
   emptyThreadDraft,
+  isThreadDraftEmpty,
   mergeLegacy,
   parseLegacyKey,
   parseThreadDraft,
@@ -46,6 +47,14 @@ describe("the record", () => {
     expect(parseThreadDraft(JSON.parse(serializeThreadDraft(full)))).toEqual(
       full,
     );
+  });
+
+  it("keeps the branch typed for a new worktree, and a draft holding only that", () => {
+    const named = { ...emptyThreadDraft(), branch: "feature/login" };
+    expect(isThreadDraftEmpty(named)).toBe(false);
+    expect(
+      parseThreadDraft(JSON.parse(serializeThreadDraft(named))).branch,
+    ).toBe("feature/login");
   });
 
   it("writes nothing for what is empty", () => {

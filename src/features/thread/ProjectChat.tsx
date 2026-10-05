@@ -240,6 +240,9 @@ export function ProjectChat({
         project.id,
         scope,
         scope.kind === "project" ? workspace : undefined,
+        scope.kind === "project" && workspace === "worktree"
+          ? worktree.newBranch.trim() || undefined
+          : undefined,
       ),
     onCreated,
   );
