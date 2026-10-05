@@ -20,7 +20,7 @@ import { mono, type, useTheme } from "./theme";
 // The desktop's wording, from src/features/thread/AgentRequestCard.tsx.
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
-  acceptForSession: "Always allow this session",
+  acceptForSession: "Always",
   decline: "Decline",
   cancel: "Cancel",
 };
@@ -39,6 +39,7 @@ export function RequestCard({
   const t = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const canRemember = request.decisions?.includes("acceptForSession");
   const respond = async (response: AgentResponse) => {
     setBusy(true);
     setError(undefined);
@@ -81,33 +82,22 @@ export function RequestCard({
       ) : (
         <>
           <View style={styles.decisions}>
-            {(["decline", "accept"] as const)
+            {(["decline", "acceptForSession", "accept"] as const)
               .filter((d) => request.decisions?.includes(d))
               .map((decision) => (
                 <Button
                   key={decision}
-                  label={labels[decision]}
+                  label={
+                    decision === "accept" && canRemember
+                      ? "Once"
+                      : labels[decision]
+                  }
                   primary={decision === "accept"}
                   disabled={busy}
                   onPress={() => respond({ kind: "approval", decision })}
                 />
               ))}
           </View>
-          {request.decisions?.includes("acceptForSession") && (
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              hitSlop={8}
-              onPress={() =>
-                respond({ kind: "approval", decision: "acceptForSession" })
-              }
-              style={styles.quiet}
-            >
-              <Text style={[styles.quietText, { color: t.accent }]}>
-                {labels.acceptForSession}
-              </Text>
-            </Pressable>
-          )}
         </>
       )}
       {error && <Text style={[styles.hint, { color: t.danger }]}>{error}</Text>}
@@ -245,8 +235,6 @@ const styles = StyleSheet.create({
   },
   detailText: { fontFamily: mono, fontSize: 12, lineHeight: 17 },
   decisions: { flexDirection: "row", gap: 8 },
-  quiet: { alignSelf: "center", paddingVertical: 4 },
-  quietText: { fontSize: type.small, fontWeight: "500" },
   questions: { gap: 8 },
   questionHead: { flexDirection: "row", justifyContent: "space-between" },
   topic: { fontSize: type.tiny, fontWeight: "600", textTransform: "uppercase" },

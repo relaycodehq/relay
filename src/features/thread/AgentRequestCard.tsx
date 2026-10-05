@@ -10,7 +10,7 @@ import type {
 import "./agent-request.css";
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
-  acceptForSession: "Always allow this session",
+  acceptForSession: "Always",
   decline: "Decline",
   cancel: "Cancel",
 };
@@ -25,6 +25,7 @@ export function AgentRequestCard({
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string>();
+  const canRemember = request.decisions?.includes("acceptForSession");
   async function respond(response: AgentResponse) {
     setBusy(true);
     setError(undefined);
@@ -57,7 +58,7 @@ export function AgentRequestCard({
 
       {request.kind === "approval" && (
         <footer>
-          {(["decline", "accept"] as const)
+          {(["decline", "acceptForSession", "accept"] as const)
             .filter((d) => request.decisions?.includes(d))
             .map((decision) => (
               <button
@@ -65,14 +66,19 @@ export function AgentRequestCard({
                 key={decision}
                 className={decision === "accept" ? "primary" : ""}
                 disabled={busy}
+                title={
+                  decision === "acceptForSession"
+                    ? "Don't ask again in this thread"
+                    : undefined
+                }
                 onClick={() => void respond({ kind: "approval", decision })}
               >
-                {labels[decision]}
+                {decision === "accept" && canRemember
+                  ? "Once"
+                  : labels[decision]}
               </button>
             ))}
-          {request.decisions?.some(
-            (d) => d === "acceptForSession" || d === "cancel",
-          ) && (
+          {request.decisions?.includes("cancel") && (
             <Menu.Root>
               <Menu.Trigger disabled={busy} aria-label="More approval options">
                 <Ellipsis size={16} />
@@ -85,20 +91,15 @@ export function AgentRequestCard({
                   sideOffset={6}
                 >
                   <Menu.Popup className="composer-select-popup">
-                    {request.decisions
-                      .filter((d) => d === "acceptForSession" || d === "cancel")
-                      .map((decision) => (
-                        <Menu.Item
-                          key={decision}
-                          className="composer-select-item"
-                          disabled={busy}
-                          onClick={() =>
-                            void respond({ kind: "approval", decision })
-                          }
-                        >
-                          {labels[decision]}
-                        </Menu.Item>
-                      ))}
+                    <Menu.Item
+                      className="composer-select-item"
+                      disabled={busy}
+                      onClick={() =>
+                        void respond({ kind: "approval", decision: "cancel" })
+                      }
+                    >
+                      {labels.cancel}
+                    </Menu.Item>
                   </Menu.Popup>
                 </Menu.Positioner>
               </Menu.Portal>

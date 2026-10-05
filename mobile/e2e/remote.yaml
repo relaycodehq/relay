@@ -23,7 +23,7 @@ appId: host.exp.exponent
     visible: "Run this command?"
     timeout: 20000
 - takeScreenshot: ${OUT}/2-approval
-- tapOn: "Approve"
+- tapOn: "Once"
 - extendedWaitUntil:
     visible: "Approval flow completed."
     timeout: 20000
