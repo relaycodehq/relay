@@ -45,6 +45,20 @@
   align-items: center;
   gap: 6px;
 }
+/* Another thread's agent wrote it: its name opens that thread. */
+.project-message > header .message-author-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+}
+.project-message > header .message-author-link:hover {
+  text-decoration: underline;
+}
 .project-message > header .provider-glyph {
   width: 14px;
   height: 14px;

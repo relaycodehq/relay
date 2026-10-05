@@ -42,6 +42,7 @@ import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
 import { ProjectChat } from "../features/thread/ProjectChat";
+import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
 import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import {
@@ -325,59 +326,67 @@ export default function ProjectShell() {
                 {...frame("chat")}
                 className="project-chat-pane"
               >
-                <ProjectChat
-                  key={chat?.id ?? draftId}
-                  ref={composer}
-                  project={project}
-                  projects={realProjects}
-                  chat={chat}
-                  draftId={draftId}
-                  draftScope={nav.draftScope}
-                  viewing={codeOpen ? view.viewing : NO_VIEWING}
-                  contextText={view.context}
-                  onContextUsed={() => view.setContext(undefined)}
-                  scopes={{
-                    canChoosePR: !!account && !!project.repository,
-                    onRepository: () => nav.newThreadIn({ kind: "project" }),
-                    onChoosePR: () => {
-                      if (!lock.blocked()) setChoosePR(true);
-                    },
-                    onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
-                    onDeepReview: () => nav.newThreadIn({ kind: "review" }),
+                <StartedThreadsContext.Provider
+                  value={{
+                    lead: chat?.id,
+                    threads: chats.data ?? [],
+                    open: (c) => navigate(project, c),
                   }}
-                  opens={{
-                    onOpenCode: opens.openCode,
-                    onOpenFile: opens.openChatFile,
-                    onOpenTurnDiff: opens.openTurnDiff,
-                  }}
-                  onCommand={runCommand}
-                  onShare={() => {
-                    if (chat) void signIn.withAccount(() => setShare(chat));
-                  }}
-                  onDraftWorkspace={nav.setDraftWorkspace}
-                  onStartThread={starts.start}
-                  onCreated={async (c) => {
-                    const from: ShellSpot = {
-                      projectId: project.id,
-                      chatId: null,
-                      draftId,
-                      inbox: false,
-                    };
-                    if (!c.worktree && sameSpot(spotNow(), from))
-                      adoptDraftTerminal(project.id, c.id);
-                    await openCreated(c, from);
-                  }}
-                  onForked={(c) =>
-                    openCreated(c, {
-                      projectId: project.id,
-                      chatId: chat?.id ?? null,
-                      draftId,
-                      inbox: false,
-                    })
-                  }
-                  onSwitchProject={(next) => navigate(next, undefined, true)}
-                  onAddProject={() => void starts.addProject()}
-                />
+                >
+                  <ProjectChat
+                    key={chat?.id ?? draftId}
+                    ref={composer}
+                    project={project}
+                    projects={realProjects}
+                    chat={chat}
+                    draftId={draftId}
+                    draftScope={nav.draftScope}
+                    viewing={codeOpen ? view.viewing : NO_VIEWING}
+                    contextText={view.context}
+                    onContextUsed={() => view.setContext(undefined)}
+                    scopes={{
+                      canChoosePR: !!account && !!project.repository,
+                      onRepository: () => nav.newThreadIn({ kind: "project" }),
+                      onChoosePR: () => {
+                        if (!lock.blocked()) setChoosePR(true);
+                      },
+                      onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
+                      onDeepReview: () => nav.newThreadIn({ kind: "review" }),
+                    }}
+                    opens={{
+                      onOpenCode: opens.openCode,
+                      onOpenFile: opens.openChatFile,
+                      onOpenTurnDiff: opens.openTurnDiff,
+                    }}
+                    onCommand={runCommand}
+                    onShare={() => {
+                      if (chat) void signIn.withAccount(() => setShare(chat));
+                    }}
+                    onDraftWorkspace={nav.setDraftWorkspace}
+                    onStartThread={starts.start}
+                    onCreated={async (c) => {
+                      const from: ShellSpot = {
+                        projectId: project.id,
+                        chatId: null,
+                        draftId,
+                        inbox: false,
+                      };
+                      if (!c.worktree && sameSpot(spotNow(), from))
+                        adoptDraftTerminal(project.id, c.id);
+                      await openCreated(c, from);
+                    }}
+                    onForked={(c) =>
+                      openCreated(c, {
+                        projectId: project.id,
+                        chatId: chat?.id ?? null,
+                        draftId,
+                        inbox: false,
+                      })
+                    }
+                    onSwitchProject={(next) => navigate(next, undefined, true)}
+                    onAddProject={() => void starts.addProject()}
+                  />
+                </StartedThreadsContext.Provider>
                 <RunningTasks
                   key={project.id}
                   project={project}

@@ -27,8 +27,16 @@ export class ThreadTriage {
         throw new Error(
           "This thread changed since, so there's nothing to undo.",
         );
+      const settled = chat.settledAt;
       setTriageState(chat, triage.to);
       await this.core.storage.save(chat);
+      // Undoing a settle brings back the threads it settled along with it.
+      if (settled && chat.settledAt !== settled)
+        for (const child of await this.started(id))
+          if (child.settledAt === settled) {
+            delete child.settledAt;
+            await this.core.storage.save(child);
+          }
       return chatSummary(chat);
     }
     if (triage.kind === "unread" || triage.kind === "auto-settle") {
@@ -68,7 +76,34 @@ export class ThreadTriage {
       chat.snoozedUntil = triage.until;
     }
     await this.core.storage.save(chat);
+    if (triage.kind === "settle") await this.settleStarted(id, now);
     return chatSummary(chat);
+  }
+  /** The threads `id`'s agent started, still listed. */
+  private async started(id: string) {
+    const ids = (this.core.store.get().chats ?? [])
+      .filter((c) => c.startedBy?.chatId === id && !c.archivedAt)
+      .map((c) => c.id);
+    return Promise.all(ids.map((c) => this.core.storage.load(c)));
+  }
+  /**
+   * Settling a thread settles the threads its agent started that are done
+   * too, at the same moment, so undo finds them. One still working, asking
+   * or about to go on stays out until it's done.
+   */
+  private async settleStarted(id: string, now: number) {
+    for (const child of await this.started(id)) {
+      const going =
+        this.core.active.has(child.id) ||
+        this.core.sessions.pending(child.id).length > 0 ||
+        (!!child.queue?.length && !child.queuePaused) ||
+        !!nextSend(child.scheduled);
+      if (going || child.settledAt) continue;
+      delete child.snoozedAt;
+      delete child.snoozedUntil;
+      child.settledAt = now;
+      await this.core.storage.save(child);
+    }
   }
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {

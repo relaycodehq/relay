@@ -4,6 +4,7 @@ import { Bell, GitPullRequest, Plus } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { chatActivitySections } from "../../../shared/chat-activity";
+import { startedFamilies } from "./activity";
 import { api } from "../../lib/api";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { useNow } from "../../lib/useNow";
@@ -106,6 +107,7 @@ export function ProjectSidebar({
   const unread = useUnread(chatId, all);
   const search = useThreadSearch(all, byId);
   const sections = chatActivitySections(all, now);
+  const families = startedFamilies(sections.active);
   const actions = useThreadActions({
     chatId,
     active: sections.active,
@@ -118,7 +120,8 @@ export function ProjectSidebar({
   });
   const activity = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
-    active: sections.active,
+    // The shortcuts count the cards, which started threads don't get.
+    active: families.top,
     chatId,
     jumping: activity,
     actions,
@@ -175,6 +178,7 @@ export function ProjectSidebar({
             rows={rows}
             threads={all}
             sections={sections}
+            families={families}
             away={away}
             hints={cmdHeld}
             shelves={shelves}

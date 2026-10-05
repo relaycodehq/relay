@@ -1,0 +1,234 @@
+/* The sidebar's amber, for the card and turn that live outside .sb. */
+:root {
+  --sb-waiting: #d99a2b;
+}
+
+/* Preview stage: the sidebar on the left, the open thread on the right. */
+.st-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.st-sidebar {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+.st-sidebar .sb {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.st-heading {
+  padding: 2px 10px 4px;
+}
+.st-bar-button {
+  padding: 3px 9px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The chip: subagents' icon and count, with an amber dot when one asks. */
+.st-chip {
+  flex: none;
+  gap: 5px;
+  margin: -3px 0;
+  padding: 2px 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.st-chip:hover,
+.st-chip[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+/* Started threads hang off a guide line under their lead. */
+.st-fold {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+.st-fold:hover {
+  color: var(--text);
+}
+.st-kids {
+  display: grid;
+  gap: 2px;
+  margin: 1px 0 4px 17px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+.st-kids .sb-card-branch + .sb-card-state {
+  margin-left: auto;
+}
+.st-kids .sb-card-state + .sb-card-provider {
+  margin-left: 0;
+}
+.st-ask-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-waiting);
+}
+.st-peek-agent {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  opacity: 0.7;
+}
+.st-peek-agent .provider-glyph {
+  width: 12px;
+  height: 12px;
+}
+.subagents-now.st-asks {
+  white-space: normal;
+  padding-left: 8px;
+  border-left: 2px solid var(--sb-waiting);
+}
+
+/* The open thread. */
+.st-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.st-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.st-header-title {
+  font-weight: 550;
+}
+.st-header small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.st-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.st-thread {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  display: grid;
+  gap: 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.st-user {
+  justify-self: end;
+  max-width: 85%;
+  padding: 9px 13px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.st-user-agent {
+  justify-self: stretch;
+  max-width: none;
+  display: grid;
+  gap: 4px;
+}
+.st-user-agent small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.st-user-agent .provider-glyph {
+  width: 12px;
+  height: 12px;
+}
+.st-answer {
+  margin: 0;
+}
+.st-muted {
+  color: var(--muted);
+}
+.st-working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.st-answer.st-asks {
+  padding-left: 10px;
+  border-left: 2px solid var(--sb-waiting);
+}
+.st-crumb {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.st-crumb strong {
+  font-weight: 550;
+  color: var(--text);
+}
+.st-crumb:hover strong {
+  text-decoration: underline;
+}
+
+/* The tool call as one trace line, its chip at the end. */
+.st-trace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.st-trace > svg {
+  flex: none;
+}
+.st-trace-muted {
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.st-trace-chip {
+  margin-left: 2px;
+}
+
+.st-composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 720px;
+  width: calc(100% - 48px);
+  margin: 0 auto 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}

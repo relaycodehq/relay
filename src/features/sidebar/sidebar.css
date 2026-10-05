@@ -968,6 +968,57 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Threads a thread's agent started hang off a guide line under its card. */
+.sb-started {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 4px 17px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+.sb-card-family {
+  /* As wide as its words, from the left: buttons centre theirs. */
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  height: auto;
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-card-family:hover {
+  color: var(--text);
+  background: none;
+}
+.sb-card-family > svg {
+  flex: none;
+}
+/* A started thread trades its state for Settle on hover, beside the branch. */
+.sb-card.compact .sb-card-state {
+  margin-left: auto;
+}
+.sb-card.compact .sb-card-actions {
+  margin: -4px 0 -4px auto;
+}
+/* One still working has nothing to trade it for. */
+.sb-card.compact:not(:has(.sb-card-actions)):hover .sb-card-state,
+.sb-card.compact:not(:has(.sb-card-actions)):focus-visible .sb-card-state {
+  display: inline-flex;
+}
+.sb-card.compact .sb-card-state + .sb-card-provider,
+.sb-card.compact .sb-card-actions + .sb-card-provider {
+  margin-left: 0;
+}
+
 /* Unsent composer text, T3 Code-style: amber-tinted card with the text. */
 .sb-card.draft {
   background: color-mix(in srgb, var(--sb-waiting) 7%, var(--sidebar));

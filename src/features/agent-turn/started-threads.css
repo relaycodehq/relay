@@ -1,0 +1,41 @@
+/* Started threads: the chip beside a start_threads call, and its card's
+   marks. The card itself is the subagents one. */
+.started-chip {
+  flex: none;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+/* In the call's row, or the folded turn's, it sits after the label, as small as the row. */
+.agent-step-heading .started-chip,
+.agent-run-heading .started-chip {
+  margin: -2px 0 -2px 4px;
+  padding: 1px 5px;
+  font-size: 11.5px;
+}
+.started-chip:hover,
+.started-chip[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+.started-ask {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d99a2b;
+}
+.started-agent {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  opacity: 0.7;
+}
+.started-agent .provider-glyph {
+  width: 12px;
+  height: 12px;
+}
+.subagents-now.started-asks {
+  white-space: normal;
+  padding-left: 8px;
+  border-left: 2px solid #d99a2b;
+}

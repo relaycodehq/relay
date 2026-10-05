@@ -59,3 +59,47 @@ export function attention(
       : undefined;
   return { count, mark };
 }
+
+/**
+ * Activity's cards: threads another thread's agent started sit under their
+ * lead, in the order they were started, while the lead is listed too.
+ */
+export function startedFamilies(active: ChatSummary[]) {
+  const listed = new Set(active.map((c) => c.id));
+  const started = new Map<string, ChatSummary[]>();
+  for (const c of active) {
+    const lead = c.startedBy?.chatId;
+    if (lead && listed.has(lead))
+      started.set(lead, [...(started.get(lead) ?? []), c]);
+  }
+  for (const children of started.values())
+    children.sort((a, b) => a.created - b.created);
+  return {
+    top: active.filter((c) => !started.has(c.startedBy?.chatId ?? "")),
+    started,
+  };
+}
+export type StartedFamilies = ReturnType<typeof startedFamilies>;
+
+/** "4 threads · 1 working · 1 needs you", on the lead's card. */
+export function familyLine(started: ChatSummary[]) {
+  const asking = started.filter((c) => c.waiting).length;
+  const working = started.filter((c) => c.running && !c.waiting).length;
+  return [
+    `${started.length} thread${started.length === 1 ? "" : "s"}`,
+    working && `${working} working`,
+    asking && `${asking} need${asking === 1 ? "s" : ""} you`,
+    !working && !asking && "all done",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Every thread in the family is done and read: it folds until something happens. */
+export const familySettled = (
+  started: ChatSummary[],
+  unread: (c: ChatSummary) => boolean,
+) =>
+  started.every(
+    (c) => !c.running && !c.waiting && !c.pending?.length && !unread(c),
+  );

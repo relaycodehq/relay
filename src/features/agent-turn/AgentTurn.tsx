@@ -45,6 +45,7 @@ import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
 import { useImageSource, type PreviewImage } from "../images/ImagePreview";
+import { isStartThreads, StartedChip, startedIds } from "./StartedThreads";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -188,6 +189,7 @@ function ToolRow({
       )}
       <span className={a.kind === "command" ? "mono" : undefined}>{label}</span>
       <Progress activity={a} />
+      {isStartThreads(a) && <StartedChip ids={startedIds(a.detail)} />}
     </>
   );
   if (!expandable)
@@ -313,6 +315,13 @@ export function AgentTurn({
   const display = (text: string) => text.split(root).join("");
   const ended = message.ended ?? message.created;
   const heading = turnHeading(message, expanded, turn);
+  // Folded, the turn still shows the threads it started.
+  const starts = expanded
+    ? []
+    : (message.trace ?? []).flatMap((e) =>
+        e.kind === "activity" && isStartThreads(e.activity) ? [e.activity] : [],
+      );
+  const startedBy = starts.map((a) => startedIds(a.detail));
   const label =
     heading.kind === "working" ? (
       "Working for"
@@ -372,6 +381,15 @@ export function AgentTurn({
             </>
           ) : null}
         </span>
+        {starts.length > 0 && (
+          <StartedChip
+            ids={
+              startedBy.every(Boolean)
+                ? startedBy.flatMap((ids) => ids!)
+                : undefined
+            }
+          />
+        )}
         <ChevronRight size={13} className="agent-run-chevron" />
       </summary>
       {expanded && (entries.length > 0 || thinking) && (

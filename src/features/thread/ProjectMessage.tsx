@@ -36,6 +36,7 @@ import {
 import { ImageViewer } from "../images/ImageViewer";
 import { CopyMessageButton, MessageActions } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
+import { useStartedThreads } from "../agent-turn/StartedThreads";
 import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
 import { pilledImages, UserText, type SentImage } from "./UserText";
@@ -283,7 +284,7 @@ export const Message = memo(function Message({
     >
       <header>
         {m.role === "user" ? (
-          <strong>{m.author ?? "You"}</strong>
+          <MessageAuthor message={m} />
         ) : (
           <MessageAgentName provider={m.provider} model={m.model} />
         )}
@@ -480,5 +481,24 @@ function SignIn({
         </small>
       )}
     </div>
+  );
+}
+
+/** Who wrote a message; another thread's agent opens that thread on a click. */
+function MessageAuthor({ message: m }: { message: ChatMessage }) {
+  const started = useStartedThreads();
+  const from = m.fromThread
+    ? started?.threads.find((c) => c.id === m.fromThread)
+    : undefined;
+  if (!from || !started) return <strong>{m.author ?? "You"}</strong>;
+  return (
+    <button
+      type="button"
+      className="message-author-link"
+      title={`Open ${from.title}`}
+      onClick={() => started.open(from)}
+    >
+      {m.author}
+    </button>
   );
 }

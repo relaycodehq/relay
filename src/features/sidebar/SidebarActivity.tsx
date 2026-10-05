@@ -1,8 +1,10 @@
 // The sidebar's Activity view: drafts and open threads as cards, Snoozed
 // and Settled folded away below.
+import { Fragment, useState } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   Check,
+  ChevronDown,
   ChevronRight,
   GitPullRequest,
   RotateCcw,
@@ -20,6 +22,7 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { mac } from "../../lib/mod-key";
 import { modifiersLabel, useBindings } from "../../lib/shortcuts";
 import { awayStopped } from "./useAwayViews";
+import { familyLine, familySettled, type StartedFamilies } from "./activity";
 import { SHELF_PAGE, type Shelves } from "./useShelves";
 import { AwayPeek, AwayWhere } from "./AwayCard";
 import { DraftCard } from "./DraftCard";
@@ -39,6 +42,7 @@ export function ActivityView({
   rows,
   threads,
   sections,
+  families,
   away,
   hints,
   shelves,
@@ -50,6 +54,8 @@ export function ActivityView({
   /** Every listed thread, to find the ones drafts are written in. */
   threads: ChatSummary[];
   sections: Record<ChatActivitySection, ChatSummary[]>;
+  /** The active threads as cards, started ones under their lead. */
+  families: StartedFamilies;
   away: Record<string, HandoffView>;
   /** The jump-thread shortcuts show on the first cards. */
   hints: boolean;
@@ -63,6 +69,12 @@ export function ActivityView({
 }) {
   // Follows drafts as they gain or lose text; each card follows its own.
   const draftKeys = useDraftKeys();
+  // A family opens or folds by itself; a click on its line overrides that.
+  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(
+    new Map(),
+  );
+  const fold = (id: string, open: boolean) =>
+    setToggled((was) => new Map(was).set(id, !open));
   const jumpBinding = useBindings("jump-thread")[0];
   const { projects, chatId, actions } = rows;
   const drafts = activityDrafts(
@@ -76,9 +88,7 @@ export function ActivityView({
       <div className="sb-view-heading">
         <h2>Activity</h2>
         <small>
-          {sections.active.length
-            ? `${sections.active.length} open`
-            : "All settled"}
+          {families.top.length ? `${families.top.length} open` : "All settled"}
         </small>
       </div>
       <div className={`sb-cards ${hints ? "shortcuts" : ""}`}>
@@ -93,16 +103,45 @@ export function ActivityView({
             onSendOpen={onSendDraft}
           />
         ))}
-        {sections.active.map((c, index) => (
-          <ThreadCard
-            key={c.id}
-            chat={c}
-            rows={rows}
-            away={away[c.id]}
-            jump={hints && jumpBinding && index < 9 ? jumpBinding : undefined}
-            index={index}
-          />
-        ))}
+        {families.top.map((c, index) => {
+          const started = families.started.get(c.id) ?? [];
+          const open =
+            started.length > 0 &&
+            (toggled.get(c.id) ?? !familySettled(started, rows.unread));
+          return (
+            <Fragment key={c.id}>
+              <ThreadCard
+                chat={c}
+                rows={rows}
+                away={away[c.id]}
+                jump={
+                  hints && jumpBinding && index < 9 ? jumpBinding : undefined
+                }
+                index={index}
+                family={
+                  started.length
+                    ? { started, open, onFold: () => fold(c.id, open) }
+                    : undefined
+                }
+              />
+              {open && (
+                <div className="sb-started">
+                  {started.map((s, i) => (
+                    <ThreadCard
+                      key={s.id}
+                      chat={s}
+                      rows={rows}
+                      away={away[s.id]}
+                      jump={undefined}
+                      index={i}
+                      compact
+                    />
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
       </div>
       {!sections.active.length && !drafts.length && (
         <div className="sb-empty">
@@ -138,6 +177,8 @@ function ThreadCard({
   away,
   jump,
   index,
+  family,
+  compact = false,
 }: {
   chat: ChatSummary;
   rows: SidebarRows;
@@ -145,11 +186,25 @@ function ThreadCard({
   away: HandoffView | undefined;
   jump: KeyCombo | undefined;
   index: number;
+  /** The threads its agent started, listed under it unless folded. */
+  family?: { started: ChatSummary[]; open: boolean; onFold: () => void };
+  /** A started thread under its lead: no project line, its state beside the branch. */
+  compact?: boolean;
 }) {
   const { chatId, now, unread, projects, actions, settleKeys } = rows;
   const p = projects.get(c.projectId);
   const isUnread = unread(c);
   const selected = chatId === c.id;
+  // A question in a started thread is the lead's to bring up while they're folded together.
+  const asking = !!family?.started.some((s) => s.waiting);
+  const state = (
+    <CardState
+      chat={asking ? { ...c, waiting: true } : c}
+      unread={isUnread}
+      now={now}
+      stopped={awayStopped(away)}
+    />
+  );
   return (
     <ContextMenu.Root>
       <AwayPeek view={away}>
@@ -162,56 +217,54 @@ function ThreadCard({
             isUnread && "unread",
             // Only the open thread, finished-but-unread ones and open
             // questions stay bright; everything else, running included, dims.
-            !selected && !isUnread && !c.waiting && "dim",
+            !selected && !isUnread && !c.waiting && !asking && "dim",
+            compact && "compact",
           ]
             .filter(Boolean)
             .join(" ")}
           onClick={() => actions.open(c)}
           onKeyDown={rowKeys(() => actions.open(c))}
         >
-          <div className="sb-card-top">
-            <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
-            <span className="sb-card-name">
-              <span className="sb-card-project">{p?.name}</span>
-              {jump && (
-                <kbd className="sb-card-shortcut" aria-hidden>
-                  <span className={mac ? "glyph" : undefined}>
-                    {modifiersLabel(jump)}
-                  </span>
-                  {index + 1}
-                </kbd>
-              )}
-            </span>
-            <CardState
-              chat={c}
-              unread={isUnread}
-              now={now}
-              stopped={awayStopped(away)}
-            />
-            <div className="sb-card-actions">
-              {!c.waiting && (
-                <SnoozeMenu
-                  now={now}
-                  onSnooze={(until) =>
-                    void actions.triage(c, { kind: "snooze", until })
-                  }
-                />
-              )}
-              {!c.running && !c.waiting && (
-                <button
-                  className="sb-card-action"
-                  title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    actions.settle(c);
-                  }}
-                >
-                  <Check size={13} />
-                  Settle
-                </button>
-              )}
+          {!compact && (
+            <div className="sb-card-top">
+              <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+              <span className="sb-card-name">
+                <span className="sb-card-project">{p?.name}</span>
+                {jump && (
+                  <kbd className="sb-card-shortcut" aria-hidden>
+                    <span className={mac ? "glyph" : undefined}>
+                      {modifiersLabel(jump)}
+                    </span>
+                    {index + 1}
+                  </kbd>
+                )}
+              </span>
+              {state}
+              <div className="sb-card-actions">
+                {!c.waiting && (
+                  <SnoozeMenu
+                    now={now}
+                    onSnooze={(until) =>
+                      void actions.triage(c, { kind: "snooze", until })
+                    }
+                  />
+                )}
+                {!c.running && !c.waiting && (
+                  <button
+                    className="sb-card-action"
+                    title={`Settle${c.id === chatId && settleKeys ? ` (${settleKeys})` : ""} — hide until something new happens`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      actions.settle(c);
+                    }}
+                  >
+                    <Check size={13} />
+                    Settle
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           {actions.renaming === c.id ? (
             <ThreadRename
               chat={c}
@@ -231,12 +284,51 @@ function ThreadCard({
                 <GitPullRequest size={11} />#{c.scope.ref.number}
               </span>
             )}
-            <MiddleTruncate
-              className="sb-card-branch"
-              text={c.branch ?? ""}
-              kind="branch"
-            />
+            {family ? (
+              <button
+                className="sb-card-family"
+                aria-expanded={family.open}
+                title={
+                  family.open
+                    ? "Fold the threads it started"
+                    : "Show the threads it started"
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  family.onFold();
+                }}
+              >
+                {family.open ? (
+                  <ChevronDown size={11} />
+                ) : (
+                  <ChevronRight size={11} />
+                )}
+                {familyLine(family.started)}
+              </button>
+            ) : (
+              <MiddleTruncate
+                className="sb-card-branch"
+                text={c.branch ?? ""}
+                kind="branch"
+              />
+            )}
             <AwayWhere view={away} />
+            {compact && state}
+            {compact && !c.running && !c.waiting && (
+              <div className="sb-card-actions">
+                <button
+                  className="sb-card-action icon"
+                  title="Settle — hide until something new happens"
+                  aria-label={`Settle ${c.title}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.settle(c);
+                  }}
+                >
+                  <Check size={13} />
+                </button>
+              </div>
+            )}
             <CardAgents chat={c} />
           </div>
         </ContextMenu.Trigger>
