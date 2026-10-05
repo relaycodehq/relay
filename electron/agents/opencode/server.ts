@@ -35,6 +35,8 @@ const openCodeMetaSchema = z
     provider: z.literal("opencode"),
     password: z.string(),
     url: z.string().optional(),
+    /** Started with Relay's worktree variables plugin; see worktree-env. */
+    worktreeEnv: z.boolean().optional(),
   })
   .loose();
 type OpenCodeMeta = z.infer<typeof openCodeMetaSchema>;
@@ -53,6 +55,7 @@ export function openCodeServer(): Promise<OpenCodeServer> {
 }
 
 async function start(): Promise<OpenCodeServer> {
+  outdated = false;
   const executable = await findExecutable("opencode");
   const password = randomBytes(24).toString("base64url");
   const args = ["serve", "--hostname=127.0.0.1", "--port=0"];
@@ -85,7 +88,12 @@ async function start(): Promise<OpenCodeServer> {
       `OpenCode ${version ?? "(unknown version)"} is too old for Relay. Update it to 1.14 or later.`,
     );
   }
-  hosted?.keep({ provider: "opencode", password, url } satisfies OpenCodeMeta);
+  hosted?.keep({
+    provider: "opencode",
+    password,
+    url,
+    worktreeEnv: true,
+  } satisfies OpenCodeMeta);
   return { url, auth, version: version ?? "" };
 }
 
@@ -249,9 +257,26 @@ export function detachOpenCodeServer() {
   stopLocal();
 }
 
+/** Turns running on the hosted server, so an outdated one stops once they're done. */
+const turns = new Set<string>();
+/** The hosted server predates the worktree variables plugin. */
+let outdated = false;
+
 /** Marks a thread's turn on the hosted server, so a restart knows it was running. */
 export function markOpenCodeTurn(key: string, mark: "start" | "end") {
   hosted?.mark(mark, { turn: key });
+  if (mark === "start") turns.add(key);
+  else turns.delete(key);
+  if (outdated && !turns.size) retire();
+}
+
+/** The next turn starts a server that has the plugin. */
+function retire() {
+  console.info(
+    "Restarting OpenCode's server to give worktree threads their variables.",
+  );
+  outdated = false;
+  stopOpenCodeServer();
 }
 
 /**
@@ -280,8 +305,14 @@ export async function reattachOpenCodeServer(
       version: health.version ?? "",
     });
     for (const key of Object.keys(found.info.turns ?? {}))
-      if (owns(key)) back.push({ key, open: true });
-      else markOpenCodeTurn(key, "end");
+      if (owns(key)) {
+        back.push({ key, open: true });
+        turns.add(key);
+      } else markOpenCodeTurn(key, "end");
+    // Kept from a Relay before the plugin: its threads' commands would get no
+    // RELAY_PORT_OFFSET until it restarts, so it does once nothing runs on it.
+    outdated = !meta.worktreeEnv;
+    if (outdated && !turns.size) retire();
   }
   return back;
 }
