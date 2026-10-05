@@ -31,20 +31,32 @@ export function reloadSessions(core: ChatCore, id: string) {
       throw new Error(
         "Claude still has background work or wake-ups in this thread, and reloading would stop them.",
       );
-    const changes = await core.sessions.reload(id);
-    const now = Date.now();
+    // The line shows while the agent restarts, which can take a while, and says what changed once it has.
     const message: ChatMessage = {
       id: randomUUID(),
       role: "assistant",
       body: "",
-      status: "complete",
+      status: "streaming",
       provider,
-      created: now,
-      ended: now,
+      created: Date.now(),
       version: 1,
-      reload: changes ?? {},
+      reload: {},
     };
     chat.messages.push(message);
+    await core.storage.save(chat);
+    core.emit({ chatId: id, message: structuredClone(message) });
+    let changes: Awaited<ReturnType<typeof core.sessions.reload>>;
+    try {
+      changes = await core.sessions.reload(id);
+    } catch (error) {
+      chat.messages.splice(chat.messages.indexOf(message), 1);
+      await core.storage.save(chat);
+      throw error;
+    }
+    message.status = "complete";
+    message.ended = Date.now();
+    message.reload = changes ?? {};
+    message.version++;
     await core.storage.save(chat);
     core.emit({ chatId: id, message: structuredClone(message) });
   });

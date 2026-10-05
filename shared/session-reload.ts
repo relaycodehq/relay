@@ -8,8 +8,9 @@ const kinds = (reload: SessionReload) =>
     [reload.agents, "agent", "Agents"],
   ] as [NameChanges | undefined, string, string][];
 
-/** "Session reloaded · picked up 2 new skills · 1 agent gone". */
-export function reloadNote(reload: SessionReload) {
+/** "Session reloaded · picked up 2 new skills · 1 agent gone", or "Reloading session…" while `live`. */
+export function reloadNote(reload: SessionReload, live = false) {
+  if (live) return "Reloading session…";
   const added = kinds(reload)
     .filter(([c]) => c?.added.length)
     .map(([c, word]) => count(c!.added.length, `new ${word}`));

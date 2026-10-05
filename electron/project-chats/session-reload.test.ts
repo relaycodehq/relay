@@ -88,7 +88,10 @@ it("restarts Codex on the same thread and notes it quietly", async () => {
     body: "",
     reload: {},
   });
-  expect(events.at(-1)?.message.id).toBe(note.id);
+  // It shows while the agent restarts, then says it's done.
+  expect(
+    events.filter((e) => e.message.id === note.id).map((e) => e.message.status),
+  ).toEqual(["streaming", "complete"]);
   // Your own action: the thread neither moves up nor turns unread.
   const after = chats.list(projectId)[0];
   expect(after.updated).toBe(before.updated);

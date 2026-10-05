@@ -11,7 +11,9 @@ export function SessionReloadRow({
 }) {
   return (
     <div className="context-compaction" data-message-id={m.id} role="status">
-      <span title={reloadDetail(reload)}>{reloadNote(reload)}</span>
+      <span title={reloadDetail(reload)}>
+        {reloadNote(reload, m.status === "streaming")}
+      </span>
     </div>
   );
 }

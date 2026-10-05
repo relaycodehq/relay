@@ -103,7 +103,10 @@ export const MessageView = memo(function MessageView({
     [chatId, m.id, root, openImage],
   );
   if (m.handoff) return <HandoffRow message={m} />;
-  if (m.reload) return <StatusRow>{reloadNote(m.reload)}</StatusRow>;
+  if (m.reload)
+    return (
+      <StatusRow>{reloadNote(m.reload, m.status === "streaming")}</StatusRow>
+    );
   if (m.compaction)
     return (
       <StatusRow failed={m.status === "failed"}>
