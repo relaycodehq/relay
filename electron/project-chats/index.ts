@@ -52,7 +52,8 @@ import { TurnRunner } from "./turn-run";
 import { ChatTurns } from "./turns";
 import { ThreadWorktrees } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
-import { WATCH_KNOWN_LIMIT } from "../../shared/watch";
+import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
+import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
 
 /**
@@ -79,6 +80,7 @@ export class ProjectChats {
   private control = threadControl();
   private disposing = false;
   private councils: Councils;
+  private watchNotes: WatchReviews;
   private core: ChatCore;
   private threads: ThreadList;
   private triaging: ThreadTriage;
@@ -116,6 +118,12 @@ export class ProjectChats {
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
     };
     this.core = core;
+    this.watchNotes = new WatchReviews(
+      store,
+      this.storage,
+      dir,
+      join(dirname(dir), "watch-verdicts.jsonl"),
+    );
     // Hosts look methods up at call time, not with .bind(this): tests
     // vi.spyOn(chats, "send"), and this.turns is only built last.
     this.councils = new Councils(core, {
@@ -389,22 +397,30 @@ export class ProjectChats {
     id: string,
     messageId: string,
     noteId: string,
-    known: boolean,
+    how: WatchClose,
+    read = false,
   ) {
+    const known = how === "known";
     return this.core.control(id, async () => {
       const chat = await this.storage.load(id);
       const message = chat.messages.find((m) => m.id === messageId);
       const note = message?.notes?.find((n) => n.id === noteId);
       if (!message || !note || note.closed) return;
       note.closed = true;
+      note.how = how;
+      if (read) note.read = true;
+      if (known) note.known = true;
       message.version++;
       await this.storage.save(chat);
       this.core.emit({ chatId: id, message: structuredClone(message) });
       if (known)
         await this.core.store.update((s) => {
+          // The headline alone doesn't say what topic they closed.
           s.watchKnown = [
-            ...(s.watchKnown ?? []).filter((t) => t !== note.title),
-            note.title,
+            ...(s.watchKnown ?? []).filter(
+              (t) => t !== note.title && !t.startsWith(`${note.title}: `),
+            ),
+            `${note.title}: ${note.line}`,
           ].slice(-WATCH_KNOWN_LIMIT);
         });
     });
@@ -418,6 +434,13 @@ export class ProjectChats {
       this.core.watchSpend?.summary(days, (id) => titles.get(id)) ??
       Promise.resolve(undefined)
     );
+  }
+  /** The notes of the last `days` with what was done with each. */
+  watchReview(days: number) {
+    return this.watchNotes.review(days);
+  }
+  judgeWatchNotes(days: number) {
+    return this.watchNotes.judge(days);
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);

@@ -5,7 +5,12 @@ import type { Api } from "../../shared/types";
 import { fallbackCodexModels, type ClaudeModel } from "../../shared/settings";
 import { fetchThemes, searchThemes } from "../../shared/open-vsx";
 import { releaseNotesFrom, releasesApi } from "../../shared/updates";
-import type { WatchScope } from "../../shared/watch";
+import type {
+  WatchReview,
+  WatchReviewNote,
+  WatchScope,
+  WatchVerdict,
+} from "../../shared/watch";
 
 const claudeModels: ClaudeModel[] = [
   {
@@ -73,6 +78,8 @@ const stub: Partial<Api> = {
   projectIcon: async () => null,
   // A watch note closes in the turn; there's no saved chat to update.
   closeWatchNote: async () => {},
+  watchReview: async () => sampleWatchReview(false),
+  judgeWatchNotes: async () => sampleWatchReview(true),
   watchThreads: async () =>
     (localStorage.getItem("preview-watch-threads") ?? "off") as WatchScope,
   saveWatchThreads: async (scope) => {
@@ -161,3 +168,73 @@ window.relay = new Proxy(stub as Api, {
       Promise.reject(new Error(`Preview has no stub for ${String(key)}`));
   },
 });
+
+/** Sample notes; judging fills in the ones that were ready. */
+function sampleWatchReview(judged: boolean): WatchReview {
+  const note = (
+    id: string,
+    thread: string,
+    title: string,
+    action: WatchReviewNote["action"],
+    verdict?: Pick<WatchVerdict, "worth" | "later" | "why">,
+    read = false,
+  ): WatchReviewNote => ({
+    chatId: thread,
+    thread,
+    id,
+    title,
+    line: `${title}, in one line.`,
+    created: Date.now() - Number(id) * 3_600_000,
+    action,
+    read,
+    ...(verdict && (judged || id === "1")
+      ? { verdict: { noteId: id, at: Date.now(), ...verdict } }
+      : {}),
+    ready: !judged && id !== "1" && id !== "5",
+  });
+  return {
+    days: 7,
+    notes: [
+      note(
+        "1",
+        "Branch names on handoff",
+        "Repeat handoffs may lose the name",
+        "told",
+        {
+          worth: "yes",
+          later: "note",
+          why: "The next message asks for exactly this and the agent confirmed the silent fallback.",
+        },
+        true,
+      ),
+      note(
+        "2",
+        "Branch names on handoff",
+        "Taken name can strand a thread",
+        "dismissed",
+        {
+          worth: "marginal",
+          later: "agent",
+          why: "Two turns later the agent added the fallback without being asked.",
+        },
+      ),
+      note(
+        "3",
+        "Snooze time picker",
+        "Agent will choose the field's look",
+        "open",
+        {
+          worth: "no",
+          later: "agent",
+          why: "It was about a plan; the agent then showed its choice and the person agreed.",
+        },
+      ),
+      note("4", "Snooze time picker", "Past times are accepted", "known", {
+        worth: "marginal",
+        later: "never",
+        why: "True, but nobody came back to it and nothing broke.",
+      }),
+      note("5", "Worktree teardown", "Teardown runs after archive", "open"),
+    ],
+  };
+}

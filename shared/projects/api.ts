@@ -11,7 +11,7 @@ import type {
 import type { CiStatus } from "../ci";
 import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
-import type { WatchSpendSummary } from "../watch";
+import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type {
   DeepReviewStart,
@@ -251,15 +251,23 @@ export interface ProjectCouncilApi {
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ): Promise<void>;
-  /** Takes a watch note out of its turn; `known` also keeps its topic from coming up again. */
+  /**
+   * Takes a watch note out of its turn; "known" also keeps its topic from
+   * coming up again. `read` says its details were open.
+   */
   closeWatchNote(
     id: string,
     messageId: string,
     noteId: string,
-    known: boolean,
+    how: WatchClose,
+    read: boolean,
   ): Promise<void>;
   /** What "Flag what I'd miss" spent this past week, by thread. */
   watchSpend(): Promise<WatchSpendSummary | undefined>;
+  /** This past week's notes with what was done with each; development builds. */
+  watchReview(): Promise<WatchReview>;
+  /** Has a helper model grade the notes not graded yet; spends on the helper's account. */
+  judgeWatchNotes(): Promise<WatchReview>;
 }
 
 /** A thread's own worktree, and the ones its agent made. */

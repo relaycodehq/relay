@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { Segmented } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
 import { useSavedSetting } from "./useSavedSetting";
+import { WatchReviewDetail } from "./WatchReview";
 import { WatchSpendLine } from "./WatchSpend";
 
 /**
@@ -34,6 +35,7 @@ export function WatchThreadsSetting() {
       </div>
       {watch.error && <ErrorBox error={watch.error} />}
       <WatchSpendLine />
+      {import.meta.env.DEV && <WatchReviewDetail />}
     </>
   );
 }

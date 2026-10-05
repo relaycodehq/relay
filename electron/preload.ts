@@ -123,6 +123,8 @@ const methods = [
   "setDeepReviewFinding",
   "closeWatchNote",
   "watchSpend",
+  "watchReview",
+  "judgeWatchNotes",
   "resumeProjectChat",
   "compactProjectChat",
   "reloadProjectChatSession",

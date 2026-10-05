@@ -2841,6 +2841,48 @@ it("settles a quiet thread by itself until it's moved back by hand", async () =>
     vi.useRealTimers();
   }
 });
+it("keeps a note closed with I know this as known in its thread, and its line in the known list", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.dispose();
+  const path = join(root, "chats", chat.id + ".json");
+  const saved = JSON.parse(await readFile(path, "utf8"));
+  const turn = randomUUID();
+  const note = (id: string, title: string) => ({
+    id,
+    tag: "Heads up",
+    line: `${title}, in one line.`,
+    title,
+    points: [],
+    created: Date.now(),
+  });
+  saved.messages.push({
+    id: turn,
+    role: "assistant",
+    provider: "claude",
+    created: Date.now(),
+    body: "Done.",
+    status: "complete",
+    version: 1,
+    notes: [
+      note("n1", "Reruns can't be stopped"),
+      note("n2", "Retries hide failures"),
+    ],
+  });
+  await writeFile(path, JSON.stringify(saved));
+  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+  await chats.closeWatchNote(chat.id, turn, "n1", "known", true);
+  await chats.closeWatchNote(chat.id, turn, "n2", "told");
+  const notes = (await chats.get(chat.id)).messages.find(
+    (m) => m.id === turn,
+  )!.notes!;
+  expect(notes.map((n) => [n.closed, n.known, n.how, n.read])).toEqual([
+    [true, true, "known", true],
+    [true, undefined, "told", undefined],
+  ]);
+  expect(store.get().watchKnown).toEqual([
+    "Reruns can't be stopped: Reruns can't be stopped, in one line.",
+  ]);
+});
 
 it("starts a thread whose named branch got taken before its first message on relay/…, and keeps why", async () => {
   const repo = join(root, "repo");

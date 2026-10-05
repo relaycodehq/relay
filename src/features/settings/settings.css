@@ -1067,3 +1067,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.watch-spend-detail .watch-review-note {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A judged note's reason sits under it, as one row with it. */
+.watch-spend-detail .watch-review-judged td {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.watch-spend-detail .watch-review-why td {
+  padding-top: 0;
+  white-space: normal;
+  color: var(--muted);
+}

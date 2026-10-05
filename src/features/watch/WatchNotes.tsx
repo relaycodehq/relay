@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Eye, X } from "lucide-react";
-import type { WatchNote } from "../../../shared/watch";
+import type { WatchClose, WatchNote } from "../../../shared/watch";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import { RichText } from "../../ui/RichText";
@@ -34,11 +34,13 @@ export function WatchNotes({
   const [closed, setClosed] = useState<string[]>([]);
   const shown = notes?.filter((n) => !n.closed && !closed.includes(n.id));
   if (!chatId || !shown?.length) return null;
-  const close = (note: WatchNote, known = false) => {
+  const close = (note: WatchNote, how: WatchClose) => {
     setClosed((all) => [...all, note.id]);
-    void api.closeWatchNote(chatId, messageId, note.id, known).catch(() => {
-      setClosed((all) => all.filter((id) => id !== note.id));
-    });
+    void api
+      .closeWatchNote(chatId, messageId, note.id, how, open === note.id)
+      .catch(() => {
+        setClosed((all) => all.filter((id) => id !== note.id));
+      });
   };
   return shown.map((note) => (
     <aside key={note.id} className="watch-note" aria-label={note.tag}>
@@ -52,7 +54,7 @@ export function WatchNotes({
           type="button"
           className="watch-note-close"
           aria-label="Dismiss"
-          onClick={() => close(note)}
+          onClick={() => close(note, "dismissed")}
         >
           <X size={13} />
         </button>
@@ -92,12 +94,12 @@ export function WatchNotes({
           type="button"
           onClick={() => {
             onSteer(note.steer ?? `About this: ${note.line}`);
-            close(note);
+            close(note, "told");
           }}
         >
           Tell {agent}
         </button>
-        <button type="button" onClick={() => close(note, true)}>
+        <button type="button" onClick={() => close(note, "known")}>
           I know this
         </button>
       </div>

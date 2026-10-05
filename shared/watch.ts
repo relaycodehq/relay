@@ -25,7 +25,18 @@ export type WatchNote = {
   closed?: true;
   /** Closed with "I know this": the thread's checks skip its whole topic. */
   known?: true;
+  /** How it was closed; notes closed before this was kept have none. */
+  how?: WatchClose;
+  /** Learn more was open when it closed. */
+  read?: true;
 };
+
+/**
+ * How a note leaves its turn: with the X, with Tell (it went into the composer
+ * as a message for the agent), or with "I know this".
+ */
+export const watchCloses = ["dismissed", "told", "known"] as const;
+export type WatchClose = (typeof watchCloses)[number];
 
 /** How many "I know this" topics the watcher keeps passing on. */
 export const WATCH_KNOWN_LIMIT = 50;
@@ -83,3 +94,39 @@ export type WatchSpendSummary = {
   threadUsd: number;
   threads: WatchSpendThread[];
 };
+
+/**
+ * A second opinion on a note that was shown, from how its thread went on.
+ * Development builds only: it tells us how often the checker is worth it.
+ */
+export type WatchVerdict = {
+  noteId: string;
+  at: number;
+  /** Whether it deserved the interruption. */
+  worth: "yes" | "marginal" | "no";
+  /**
+   * What came after: the agent got there by itself, the person raised it
+   * without using the note, the note was acted on, nobody came back to it,
+   * or the thread ended before there was anything to go by.
+   */
+  later: "agent" | "user" | "note" | "never" | "unknown";
+  why: string;
+};
+
+/** One shown note with what the person did with it. */
+export type WatchReviewNote = {
+  chatId: string;
+  thread: string;
+  id: string;
+  title: string;
+  line: string;
+  created: number;
+  /** "closed" is from before the way was kept: dismissed or told. */
+  action: WatchClose | "open" | "closed";
+  read: boolean;
+  verdict?: WatchVerdict;
+  /** Not judged yet, and its thread has gone on far enough to judge it. */
+  ready: boolean;
+};
+
+export type WatchReview = { days: number; notes: WatchReviewNote[] };

@@ -16,6 +16,7 @@ import {
   resumeSettingsSchema,
 } from "../../shared/projects";
 import { idSchema, presenceSchema } from "../../shared/rooms";
+import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
@@ -263,10 +264,12 @@ export function chatHandlers(ctx: ApiContext) {
         projectChats.setDeepReviewFinding(id, findingId, status),
     ),
     closeWatchNote: takes(
-      [idSchema, idSchema, idSchema, z.boolean()],
-      (id, messageId, noteId, known) =>
-        projectChats.closeWatchNote(id, messageId, noteId, known),
+      [idSchema, idSchema, idSchema, z.enum(watchCloses), z.boolean()],
+      (id, messageId, noteId, how, read) =>
+        projectChats.closeWatchNote(id, messageId, noteId, how, read),
     ),
     watchSpend: () => projectChats.watchSpend(7),
+    watchReview: () => projectChats.watchReview(7),
+    judgeWatchNotes: () => projectChats.judgeWatchNotes(7),
   } satisfies Handlers;
 }
