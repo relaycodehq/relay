@@ -10,6 +10,9 @@ permissions:
 concurrency:
   group: checks-${{ github.ref }}
   cancel-in-progress: true
+env:
+  # onnxruntime-node would otherwise fetch CUDA libraries Relay doesn't use.
+  ONNXRUNTIME_NODE_INSTALL: skip
 jobs:
   unit:
     runs-on: ubuntu-22.04

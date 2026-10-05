@@ -18,6 +18,7 @@ import { roomEntries } from "./sections/rooms";
 import { phoneEntries } from "./sections/phone";
 import { computerEntries } from "./sections/computers";
 import { useDictationEntries } from "./sections/dictation";
+import { useReadAloudEntries } from "./sections/read-aloud";
 import { useShortcutEntries } from "./sections/shortcuts";
 import { useAboutEntries } from "./sections/about";
 import "./settings.css";
@@ -58,6 +59,7 @@ export function Settings({
     projects = useProjectEntries(account?.id, initialProject),
     models = useModelEntries(setError),
     dictation = useDictationEntries(),
+    readAloud = useReadAloudEntries(),
     shortcuts = useShortcutEntries(),
     about = useAboutEntries();
   const entries = [
@@ -71,6 +73,7 @@ export function Settings({
     ...phoneEntries(),
     ...computerEntries({ onOpenChat, onClose }),
     ...dictation,
+    ...readAloud,
     ...shortcuts,
     ...about,
   ];

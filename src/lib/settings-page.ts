@@ -20,5 +20,6 @@ export type SettingsCategory =
   | "phone"
   | "computers"
   | "dictation"
+  | "read-aloud"
   | "shortcuts"
   | "about";

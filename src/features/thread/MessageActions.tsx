@@ -1,16 +1,20 @@
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { sentLabel } from "../../../shared/chat-activity";
 import { useCopy } from "../../lib/useCopy";
+import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
 
-/** The row under an agent's answer: copy, fork, reply, and when it was sent. */
+/** The row under an agent's answer: copy, read aloud, fork, reply, and when it was sent. */
 export function MessageActions({
   text,
+  readingKey,
   sent,
   pending,
   onReply,
   onFork,
 }: {
   text?: string;
+  /** What identifies the answer while it is read aloud. */
+  readingKey?: string;
   sent: number;
   /** While the answer streams the row keeps its height but stays hidden. */
   pending: boolean;
@@ -20,6 +24,9 @@ export function MessageActions({
   return (
     <footer className="message-actions" inert={pending}>
       {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
+      {!!text?.trim() && readingKey && (
+        <ReadAloudButton readingKey={readingKey} text={text} />
+      )}
       {onFork && (
         <button
           type="button"

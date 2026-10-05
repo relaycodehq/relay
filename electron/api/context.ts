@@ -14,6 +14,7 @@ import type { ProjectChecks } from "../checks/service";
 import type { DevOps } from "../plugins/devops/service";
 import type { ClockifyPlugin } from "../plugins/clockify/service";
 import type { Dictation } from "../dictation/service";
+import type { ReadAloud } from "../read-aloud";
 import type { LiveSyncs } from "../projects/live-sync";
 import type { ProjectChats } from "../project-chats";
 import type { PullMerges } from "../project-chats/pull-merges";
@@ -51,6 +52,7 @@ export interface Services {
   pullRequestCreation: PullRequestCreation;
   updater: Updater;
   dictation: Dictation;
+  readAloud: ReadAloud;
   agentUpdates: AgentUpdates;
   agentAccounts: AgentAccounts;
 }

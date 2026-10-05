@@ -13,6 +13,11 @@ import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
 import type { ReleaseNote, UpdateState } from "./updates";
 import type { DictationModelState } from "./dictation";
+import type {
+  ReadAloudEvent,
+  ReadAloudSettings,
+  ReadAloudState,
+} from "./read-aloud";
 import type { AgentVersions } from "./agent-updates";
 import type {
   SourceControlKind,
@@ -452,6 +457,19 @@ export interface Api
   /** Starts loading the model so the first words don't wait for it. */
   warmDictation(): Promise<void>;
   onDictationState(callback: (state: DictationModelState) => void): () => void;
+  readAloudState(): Promise<ReadAloudState>;
+  saveReadAloudSettings(settings: ReadAloudSettings): Promise<ReadAloudState>;
+  downloadReadAloudEngine(engine: string): Promise<ReadAloudState>;
+  cancelReadAloudDownload(engine: string): Promise<void>;
+  removeReadAloudEngine(engine: string): Promise<ReadAloudState>;
+  /**
+   * Reads an answer's markdown aloud; its audio comes as `onReadAloud` events
+   * under `id`, ending with "end". Ends any reading already going.
+   */
+  readAloud(id: number, markdown: string): Promise<void>;
+  stopReadAloud(id: number): Promise<void>;
+  onReadAloudState(callback: (state: ReadAloudState) => void): () => void;
+  onReadAloud(callback: (event: ReadAloudEvent) => void): () => void;
   /** The agent CLIs as last checked, and whether newer ones are out. */
   agentVersions(): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */

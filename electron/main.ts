@@ -31,6 +31,7 @@ import { DevOps } from "./plugins/devops/service";
 import { ClockifyPlugin } from "./plugins/clockify/service";
 import { PluginSecrets } from "./plugins/secrets";
 import { Dictation } from "./dictation/service";
+import { ReadAloud } from "./read-aloud";
 import { gitExecutable, setGitPath } from "./git/git";
 import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
@@ -154,6 +155,19 @@ const updater = new Updater((state) => window.send("relay:update", state), {
 });
 const dictation = new Dictation(app.getPath("userData"), (state) =>
   window.send("relay:dictation", state),
+);
+const readAloud = new ReadAloud(
+  app.getPath("userData"),
+  {
+    get: () => store?.get().readAloud,
+    save: async (settings) => {
+      if (!store) throw new Error("Relay is still starting.");
+      await store.update((s) => {
+        s.readAloud = settings;
+      });
+    },
+  },
+  (state) => window.send("relay:read-aloud-state", state),
 );
 // Cursor's SDK isn't shipped: Relay downloads it into its data folder, and
 // runs it in a worker that, like the agent host, Node must read outside the asar.
@@ -351,6 +365,7 @@ app
       pullRequestCreation,
       updater,
       dictation,
+      readAloud,
       agentUpdates,
       agentAccounts,
     });
