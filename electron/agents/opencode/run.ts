@@ -28,6 +28,7 @@ import { editedPaths, openCodeActivity } from "./activity";
 import { openCodeFailure } from "./failure";
 import { openCodeModels, splitModel } from "./catalog";
 import { markOpenCodeTurn } from "./server";
+import { rememberWorktreeEnv } from "./worktree-env";
 import { answerLimitError, guardSteer } from "../turn-kit";
 
 const sideInstructions =
@@ -88,6 +89,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   if (!ephemeral && sessionID !== options.session?.id)
     await options.session!.onId(sessionID);
   signal.throwIfAborted();
+  if (!ephemeral) await rememberWorktreeEnv(directory, options.env);
 
   const model = splitModel(options.choice.model);
   const catalog = await openCodeModels().catch(() => []);

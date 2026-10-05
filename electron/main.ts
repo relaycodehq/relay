@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { roomProtocol } from "../shared/rooms";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
-import { hostAgents } from "./agents";
+import { hostAgents, setOpenCodeEnvRoot } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { configureCursor } from "./agents/cursor/sdk";
 import { apiContext } from "./api/context";
@@ -233,6 +233,7 @@ app
     setGitPath(loaded.get().gitPath ?? null);
     setLinkedAgents(loaded.get().agentPaths ?? {});
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
+    setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
     // Before anything starts an agent: runs ask it which account they use.
     const agentAccounts = new AgentAccounts(
       loaded,

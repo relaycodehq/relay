@@ -111,3 +111,4 @@ export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
 export const agentRuntime = (provider: AgentProvider) =>
   agentRuntimes[provider];
 export { hostAgents } from "./hosted-sessions";
+export { setOpenCodeEnvRoot } from "./opencode/worktree-env";

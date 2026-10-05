@@ -11,6 +11,8 @@ import type { AgentHosts, HostedProcess } from "../../agent-host/client";
 import type { Entry } from "../../agent-host/protocol";
 import { z } from "zod";
 import { foundSessions, inAgentHost, savedMeta } from "../hosted-sessions";
+import { withWorktreeEnv } from "../worktree-env";
+import { withWorktreeEnvPlugin } from "./worktree-env";
 
 /** A running `opencode serve`, reached over HTTP with Basic auth. */
 export interface OpenCodeServer {
@@ -54,7 +56,12 @@ async function start(): Promise<OpenCodeServer> {
   const executable = await findExecutable("opencode");
   const password = randomBytes(24).toString("base64url");
   const args = ["serve", "--hostname=127.0.0.1", "--port=0"];
-  const env = { ...process.env, OPENCODE_SERVER_PASSWORD: password };
+  // Worktree variables come per command from the plugin, never Relay's own.
+  const env = await withWorktreeEnvPlugin(
+    withWorktreeEnv(process.env as Record<string, string>, {
+      OPENCODE_SERVER_PASSWORD: password,
+    }),
+  );
   const url =
     (await inAgentHost("OpenCode", (hosts) =>
       startHosted(hosts, executable, args, env, password),
