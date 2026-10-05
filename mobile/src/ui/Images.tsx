@@ -46,32 +46,30 @@ const fileName = (path: string) => path.split("/").at(-1) || path;
 /**
  * Every image of a message, in the order the lightbox steps through them:
  * pasted ones, those its answer shows (under `root`), then, once the turn
- * ends, the rest its agent read, which `strip` holds for the row below.
+ * ends, the rest its agent read. `strip` holds the pasted and the unshown
+ * read ones for the row below.
  */
 export function messageImages(chatId: string, message: ChatMessage, root?: string) {
   const read = (path: string): LightboxImage => ({
     source: { kind: "read", chatId, messageId: message.id, path },
     name: fileName(path),
   });
+  const pasted = (message.images ?? []).map(
+    (image): LightboxImage => ({
+      source: { kind: "attached", chatId, imageId: image.id },
+      name: image.name,
+    }),
+  );
   const shown = message.role === "assistant" && root ? answerImagePaths(message.body, root) : [];
-  const strip =
+  const unshown =
     message.status === "streaming"
       ? []
       : turnImages(message)
           .filter((path) => !shown.includes(path))
           .map(read);
   return {
-    all: [
-      ...(message.images ?? []).map(
-        (image): LightboxImage => ({
-          source: { kind: "attached", chatId, imageId: image.id },
-          name: image.name,
-        }),
-      ),
-      ...(message.status === "streaming" ? [] : shown.map(read)),
-      ...strip,
-    ],
-    strip,
+    all: [...pasted, ...(message.status === "streaming" ? [] : shown.map(read)), ...unshown],
+    strip: [...pasted, ...unshown],
   };
 }
 
