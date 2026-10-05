@@ -94,7 +94,7 @@ export function spokenInline(text: string): string {
   let out = text
     .replace(/\\([\\`*_{}[\]()#+\-.!|~<>])/g, (_, c: string) => keep(c))
     .replace(/(`+)([\s\S]*?[^`])\1(?!`)/g, (_, _ticks, code: string) =>
-      keep(code.trim()),
+      keep(spokenCode(code.trim())),
     )
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[\^[^\]]+\]/g, "")
@@ -113,6 +113,25 @@ export function spokenInline(text: string): string {
     .trim();
   out = out.replace(/\u0000(\d+)\u0000/g, (_, i: string) => kept[Number(i)]);
   return out;
+}
+
+// Said as words rather than letter by letter.
+const wordExtensions = new Set(["json", "yaml", "toml", "lock", "swift", "java"]);
+
+/**
+ * A file name or path in inline code as a person would say it: just the
+ * name, which the screen shows the folders of, with its extension spelled
+ * out, since every engine reads ".ts" as "tess".
+ */
+function spokenCode(code: string) {
+  const file = /^[\w./@-]*?([\w.@-]+)\.([A-Za-z][A-Za-z0-9]{0,4})$/.exec(code);
+  if (!file || !/[/.]/.test(code) || /^\d/.test(file[2])) return code;
+  const name = file[1].replace(/[-_.]+/g, " ").trim();
+  const ext = file[2];
+  const said = wordExtensions.has(ext.toLowerCase())
+    ? ext.toLowerCase()
+    : ext.toUpperCase().split("").join(" ");
+  return `${name} dot ${said}`;
 }
 
 function hostOf(url: string) {

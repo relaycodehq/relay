@@ -81,6 +81,19 @@ describe("spokenInline", () => {
     );
   });
 
+  it("says file names in code by name, with the extension spelled out", () => {
+    expect(
+      spokenInline(
+        "Fixed `turn-run.ts`, `src/app/Main.tsx`, `package.json` and `README.md`.",
+      ),
+    ).toBe(
+      "Fixed turn run dot T S, Main dot T S X, package dot json and README dot M D.",
+    );
+    expect(spokenInline("Run `npm test`, `a.b()` or `v0.7.1`.")).toBe(
+      "Run npm test, a.b() or v0.7.1.",
+    );
+  });
+
   it("reads links and images by their text and bare URLs by their host", () => {
     expect(
       spokenInline(
