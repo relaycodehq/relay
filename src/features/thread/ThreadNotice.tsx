@@ -8,6 +8,7 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../handoff/HandoffStrip";
+import type { ThreadGoal } from "../../../shared/goal";
 import { GoalStrip } from "./GoalStrip";
 import {
   LimitStrip,
@@ -23,29 +24,27 @@ export function ThreadNotice(props: {
   stopped?: ChatPending[];
   leftBehind?: ChatPending[];
   onError: (error: unknown) => void;
+  /** Sends `/goal …` as the composer would, on its current settings. */
+  onGoal: (
+    provider: ThreadGoal["provider"],
+    action: "pause" | "resume" | "clear",
+  ) => Promise<boolean>;
 }) {
-  const { chat, onError } = props;
-  const qc = useQueryClient();
+  const { chat, onGoal, ...rest } = props;
   const goal = chat.goal && !chat.sentTo && (
     <GoalStrip
       goal={chat.goal}
       running={!!chat.running}
       onAct={async (action) => {
-        try {
-          await api.goalProjectChat(chat.id, action);
-        } catch (e) {
-          onError(e);
-          throw e;
-        } finally {
-          void qc.invalidateQueries({ queryKey: ["project-chats"] });
-        }
+        if (!(await onGoal(chat.goal!.provider, action)))
+          throw new Error("The goal command didn't go out.");
       }}
     />
   );
   return (
     <>
       {goal}
-      <PressingStrip {...props} />
+      <PressingStrip chat={chat} {...rest} />
     </>
   );
 }

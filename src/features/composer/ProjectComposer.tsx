@@ -63,6 +63,11 @@ export interface ComposerHandle {
 }
 /** What the rest of the window may do with the open thread's composer. */
 export type ComposerControls = Pick<ComposerHandle, "focus" | "submit">;
+/** What the strips above the input may send through the composer. */
+export interface ComposerNoticeActions {
+  sendGoal: ReturnType<typeof useComposerSend>["sendGoal"];
+}
+
 /** What the conversation the composer writes to is doing, and allows. */
 export interface ComposerConversation {
   /** Shared with people: a message is a note unless an agent is picked, and nothing attaches yet. */
@@ -109,8 +114,8 @@ export function ProjectComposer({
   conversation: ComposerConversation;
   /** The row above it: what the conversation is about, and where it works. */
   context?: ReactNode;
-  /** Sits on top of the input, attached to it. */
-  notice?: ReactNode;
+  /** Sits on top of the input, attached to it; given what it may send through the composer. */
+  notice?: ReactNode | ((composer: ComposerNoticeActions) => ReactNode);
   /** The context window's meter, among the controls. */
   meter?: ReactNode;
   /** Dollars this thread's answers cost, where their agent priced them. */
@@ -258,7 +263,9 @@ export function ProjectComposer({
         </p>
       )}
       <div className="thread-context-controls">{context}</div>
-      {notice}
+      {typeof notice === "function"
+        ? notice({ sendGoal: sending.sendGoal })
+        : notice}
       <QuickSwitchHud
         style={quick.style}
         open={quick.hud.open && quick.presets.length > 0}

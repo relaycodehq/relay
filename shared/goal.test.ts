@@ -39,6 +39,10 @@ it("offers Pause while a Codex goal runs and Resume once it stops short", () => 
       canPause: false,
       canResume: true,
     });
+  // As in Codex's TUI, over budget it only clears.
+  expect(
+    presentGoal({ ...codex, status: "budget_limited" }, false),
+  ).toMatchObject({ canResume: false, canClear: true });
   expect(presentGoal({ ...codex, status: "complete" }, false)).toMatchObject({
     title: "Goal complete",
     canResume: false,

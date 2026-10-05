@@ -122,10 +122,6 @@ export function chatHandlers(ctx: ApiContext) {
     setLimitResume: takes([idSchema, z.boolean()], (id, on) =>
       projectChats.setLimitResume(id, on),
     ),
-    goalProjectChat: takes(
-      [idSchema, z.enum(["pause", "resume", "clear"])],
-      (id, command) => projectChats.goal(id, command),
-    ),
     stopProjectChatPending: takes([idSchema, agentIdSchema], (id, pendingId) =>
       projectChats.stopPending(id, pendingId),
     ),

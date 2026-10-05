@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { AccountProvider } from "../../shared/agent-accounts";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
@@ -23,7 +22,7 @@ import type {
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
-import { agentAsked, sentAgent } from "../../shared/recipient";
+import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import { agentRuntimes } from "../agents";
 import type { PullInfo } from "../deep-review";
@@ -266,32 +265,6 @@ export class ProjectChats {
   armWakeups() {
     this.schedule.armAll();
     this.limits.armAll();
-  }
-  /**
-   * The goal row's buttons: `/goal pause|resume|clear` as the thread's last
-   * message went, to the agent that holds the goal. A running Codex goal
-   * takes a pause or clear at once; see `send`.
-   */
-  async goal(id: string, command: "pause" | "resume" | "clear") {
-    const chat = await this.storage.load(id);
-    const provider = chat.goal?.provider;
-    const last = chat.lastInput;
-    if (!provider || !last) throw new Error("This thread has no goal.");
-    const same = sentAgent(last) === provider;
-    return this.send(id, {
-      id: randomUUID(),
-      body: `@${provider} /goal ${command}`,
-      to: provider,
-      provider,
-      choice: same
-        ? last.choice
-        : { model: "", reasoningEffort: "", fast: false },
-      ...(same && last.contextWindow
-        ? { contextWindow: last.contextWindow }
-        : {}),
-      runtimeMode: last.runtimeMode,
-      interactionMode: last.interactionMode,
-    });
   }
   /** Turns off carrying on the answer a usage limit stopped, or back on. */
   setLimitResume(id: string, on: boolean) {

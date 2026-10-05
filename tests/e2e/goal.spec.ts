@@ -50,6 +50,7 @@ test("shows a Codex goal above the composer and on its card, and pauses, resumes
         // Long enough to look at each state.
         RELAY_GOAL_TURNS: "40",
         RELAY_GOAL_TURN_MS: "700",
+        RELAY_GOAL_LOG: join(root, "codex.jsonl"),
       },
     });
     const page = await app.firstWindow();
@@ -117,6 +118,15 @@ test("shows a Codex goal above the composer and on its card, and pauses, resumes
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toBeVisible();
+    // Resume runs a turn of its own on the composer's settings first.
+    const starts = (await readFile(join(root, "codex.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((r) => r.method === "turn/start");
+    expect(starts.at(-1).params.input.at(-1).text).toBe(
+      "Continue toward the goal.",
+    );
 
     // Stop pauses the goal first, so Codex starts no turn of its own after.
     await page

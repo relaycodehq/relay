@@ -16,7 +16,11 @@ afterEach(() => void vi.unstubAllEnvs());
 async function run(
   job: AgentJob,
   /** How many turns the goal takes, and the goal the thread starts with. */
-  wire: { turns?: number; goal?: Record<string, unknown> } = {},
+  wire: {
+    turns?: number;
+    goal?: Record<string, unknown>;
+    failTurn?: number;
+  } = {},
   more: Partial<AgentOptions> = {},
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-goal-")));
@@ -24,6 +28,7 @@ async function run(
   vi.stubEnv("RELAY_GOAL_LOG", log);
   vi.stubEnv("RELAY_GOAL_TURNS", String(wire.turns ?? 3));
   vi.stubEnv("RELAY_GOAL", wire.goal ? JSON.stringify(wire.goal) : "");
+  vi.stubEnv("RELAY_GOAL_FAIL_TURN", String(wire.failTurn ?? 0));
   vi.mocked(findExecutable).mockResolvedValue(
     await fakeCli(
       join(root, "codex"),
@@ -161,25 +166,68 @@ it("answers /goal pause, clear and show without starting a turn", async () => {
     );
 });
 
-it("resumes a paused goal on the turn Codex starts for it", async () => {
+const stopped = (status: string) => ({
+  threadId: "thread",
+  objective,
+  status,
+  tokenBudget: null,
+  tokensUsed: 0,
+  timeUsedSeconds: 0,
+});
+
+it("resumes a goal with a turn of its own on this message's settings, then lets Codex go on", async () => {
   const { answer, goals, requests } = await run(
     { kind: "goal", command: { type: "resume" } },
+    { turns: 2, goal: stopped("paused") },
     {
-      turns: 2,
-      goal: {
-        threadId: "thread",
-        objective,
-        status: "paused",
-        tokenBudget: null,
-        tokensUsed: 0,
-        timeUsedSeconds: 0,
-      },
+      choice: { model: "gpt-6-sol", reasoningEffort: "high", fast: false },
+      runtimeMode: "approval-required",
     },
   );
   expect(await answer).toBe("Turn 2 done.");
   expect(goals.at(-1)).toMatchObject({ status: "complete" });
-  // Codex refuses an empty turn; setting the goal active starts one.
+  const sent = await requests();
+  expect(
+    sent.map((r) =>
+      r.method === "thread/goal/set" ? `set ${r.params.status}` : r.method,
+    ),
+  ).toEqual(["thread/start", "thread/goal/get", "turn/start", "set active"]);
+  // Codex refuses an empty turn, and one it starts takes the last turn's settings.
+  const start = sent.find((r) => r.method === "turn/start")!.params;
+  expect(start.input).toEqual([
+    { type: "text", text: "Continue toward the goal.", text_elements: [] },
+  ]);
+  expect(start).toMatchObject({
+    model: "gpt-6-sol",
+    effort: "high",
+    approvalPolicy: "untrusted",
+    sandboxPolicy: { type: "readOnly" },
+  });
+});
+
+it("doesn't resume a goal past its token budget", async () => {
+  const { answer, requests } = await run(
+    { kind: "goal", command: { type: "resume" } },
+    { goal: stopped("budgetLimited") },
+  );
+  expect(await answer).toBe(`Goal budget limited: ${objective}`);
   expect((await requests()).some((r) => r.method === "turn/start")).toBe(false);
+});
+
+it("leaves the goal paused when a turn pursuing it fails", async () => {
+  // The resumed goal's own turn, and one Codex starts for it later.
+  for (const failTurn of [1, 2]) {
+    const { answer, goals, requests } = await run(
+      { kind: "goal", command: { type: "resume" } },
+      { turns: 5, failTurn, goal: stopped("paused") },
+    );
+    await expect(answer).rejects.toThrow();
+    expect(goals.at(-1)).toMatchObject({ status: "paused" });
+    const sets = (await requests()).filter(
+      (r) => r.method === "thread/goal/set",
+    );
+    expect(sets.at(-1)!.params.status).toBe("paused");
+  }
 });
 
 it("pauses a goal left active before loading the thread for a prompt", async () => {

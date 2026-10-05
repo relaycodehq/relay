@@ -181,5 +181,20 @@ export function useComposerSend({
         sending.current = false;
       }
     },
+    /**
+     * The goal row's Pause, Resume and Clear, as `/goal …` typed here would
+     * go: to the agent holding the goal, on this composer's settings for it.
+     * The draft stays.
+     */
+    sendGoal(provider: AgentProvider, action: "pause" | "resume" | "clear") {
+      if (!runs.codex) return Promise.resolve(false);
+      return onSend(
+        buildSend(
+          runs.sendSettings(provider)!,
+          `/goal ${action}`,
+          running ? { running: { steer: false } } : {},
+        ),
+      );
+    },
   };
 }

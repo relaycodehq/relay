@@ -114,7 +114,13 @@ export function presentGoal(goal: ThreadGoal, running: boolean) {
     detail:
       goal.status === "failed" || goal.gaveUp ? goal.lastCheck : undefined,
     canPause: codex && goal.status === "active",
-    canResume: codex && !running && goal.status !== "active" && !settled,
+    // As in Codex's TUI: a goal over its token budget goes on only once the budget does.
+    canResume:
+      codex &&
+      !running &&
+      goal.status !== "active" &&
+      goal.status !== "budget_limited" &&
+      !settled,
     // Claude reads a clear only between turns; a running Codex goal takes it at once.
     canClear: !settled && (codex || !running),
     /** Pursued right now: the thread works on it. */

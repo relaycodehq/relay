@@ -241,22 +241,29 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     if (n.method === "turn/completed") {
       if (holds && n.params.turn.status === "completed" && goals.completed())
         return;
-      if (n.params.turn.status === "completed")
+      if (n.params.turn.status === "completed") {
         watcher?.ended(plan || review || stream.answer);
-      finish(
-        n.params.turn.status === "completed"
-          ? undefined
-          : codexFailure(
-              n.params.turn.error,
-              "Codex did not finish this answer.",
-              spentUntil,
-            ),
-      );
+        finish();
+      } else
+        failed(
+          codexFailure(
+            n.params.turn.error,
+            "Codex did not finish this answer.",
+            spentUntil,
+          ),
+        );
     }
     if (n.method === "error" && !n.params.willRetry)
-      finish(
+      failed(
         codexFailure(n.params.error, "Codex failed to answer.", spentUntil),
       );
+  };
+  /** A failed run leaves its goal paused, not working where no run shows it. */
+  const failed = (error: Error) => {
+    if (settled) return;
+    if (!goals.active || options.signal.aborted) return finish(error);
+    goals.dispose();
+    void pauseGoal().finally(() => finish(error));
   };
   let interruptTimeout: ReturnType<typeof setTimeout> | undefined;
   const abort = () => {
@@ -474,7 +481,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       threadId = started.thread.id;
       await options.session?.onId(threadId);
       options.signal.throwIfAborted();
-      let objective: string | undefined;
+      // A goal's own turn: its text, and the goal goes active once it runs.
+      let goalTurn: string | undefined;
       if (job.kind === "goal") {
         const goal = codexGoals(transport, threadId);
         const { command } = job;
@@ -510,28 +518,17 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           return result;
         }
         if (command.type === "resume") {
-          // Codex starts the goal's turn itself, on the last turn's settings.
-          connection.mark("start");
-          steerable();
+          // Over its token budget, a goal goes on only once the budget does.
+          if (current?.status === "budget_limited") {
+            said = goalReply("show", current, false);
+            options.onText(said);
+            finish();
+            return result;
+          }
+          // A turn of its own first, on this message's model and permissions:
+          // one Codex starts by itself takes the last turn's.
+          goalTurn = "Continue toward the goal.";
           goals.activating = true;
-          let now: Awaited<ReturnType<typeof goal.set>> = null;
-          try {
-            now = await goal.set({ status: "active" });
-            goals.seen(now);
-          } finally {
-            goals.activated();
-          }
-          if (!turnId) {
-            if (goals.active) goals.wait();
-            else {
-              // Not active again (over budget, say): no turn will come.
-              said = goalReply("show", now, false);
-              options.onText(said);
-              finish();
-            }
-          }
-          if (options.signal.aborted) abort();
-          return result;
         }
         // A new objective replaces the goal and its accounting, as in Codex's
         // TUI. Paused until the first turn runs on this thread's settings,
@@ -541,7 +538,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           goals.seen(
             await goal.set({ objective: command.objective, status: "paused" }),
           );
-          objective = command.objective;
+          goalTurn = command.objective;
           goals.activating = true;
         }
       }
@@ -574,11 +571,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           cwd: options.cwd,
           input: [
             ...(note ? [{ type: "text", text: note, text_elements: [] }] : []),
-            ...((objective ?? options.prompt)
+            ...((goalTurn ?? options.prompt)
               ? [
                   {
                     type: "text",
-                    text: objective ?? options.prompt,
+                    text: goalTurn ?? options.prompt,
                     text_elements: [],
                   },
                 ]
@@ -621,10 +618,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       options.session?.onPoint?.(turnId);
       // Before the goal is on, so a pause can't miss the turn pursuing it.
       steerable();
-      if (objective) {
+      if (goalTurn) {
         activation = (async () => {
           try {
-            if (!options.signal.aborted)
+            // A turn that already failed leaves the goal off: no run would show it.
+            if (!options.signal.aborted && !settled)
               goals.seen(
                 await codexGoals(transport, threadId).set({ status: "active" }),
               );

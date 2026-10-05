@@ -312,13 +312,14 @@ export function ThreadComposer({
           />
         </>
       }
-      notice={
+      notice={({ sendGoal }) =>
         chat && (
           <ThreadNotice
             chat={chat}
             stopped={stopped}
             leftBehind={leftBehind}
             onError={setError}
+            onGoal={sendGoal}
           />
         )
       }

@@ -2,12 +2,14 @@
 // idle thread starts a turn, and while it stays active each finished turn is
 // followed at once by the next, until the goal is met after
 // RELAY_GOAL_TURNS turns. RELAY_GOAL holds the goal the thread starts with;
-// every request goes to RELAY_GOAL_LOG, in order.
+// turn RELAY_GOAL_FAIL_TURN fails, leaving the goal as it was; every request
+// goes to RELAY_GOAL_LOG, in order.
 const fs = require("node:fs");
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\n");
 const threadId = "thread";
 const turns = Number(process.env.RELAY_GOAL_TURNS ?? 3);
 const turnMs = Number(process.env.RELAY_GOAL_TURN_MS ?? 40);
+const failTurn = Number(process.env.RELAY_GOAL_FAIL_TURN ?? 0);
 let goal = process.env.RELAY_GOAL ? JSON.parse(process.env.RELAY_GOAL) : null;
 let turn = 0,
   running = null;
@@ -23,6 +25,20 @@ function startTurn() {
   send({ method: "turn/started", params: { threadId, turn: { id } } });
   setTimeout(() => {
     if (running !== id) return;
+    if (turn === failTurn) {
+      running = null;
+      return send({
+        method: "turn/completed",
+        params: {
+          threadId,
+          turn: {
+            id,
+            status: "failed",
+            error: { message: "You've hit your usage limit." },
+          },
+        },
+      });
+    }
     send({
       method: "item/completed",
       params: {

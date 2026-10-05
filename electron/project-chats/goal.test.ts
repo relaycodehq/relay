@@ -93,7 +93,11 @@ it("pauses a running goal at once instead of queueing the pause behind it", asyn
     async () => expect((await chats.get(chat.id)).goal?.status).toBe("active"),
     { timeout: 10_000 },
   );
-  await chats.goal(chat.id, "pause");
+  // As the goal row sends it while the thread works.
+  await chats.send(chat.id, {
+    ...input("@codex /goal pause"),
+    delivery: "queue",
+  });
   const done = await answered(chat.id);
   expect(done.goal).toMatchObject({ status: "paused" });
   expect(done.queue ?? []).toEqual([]);
