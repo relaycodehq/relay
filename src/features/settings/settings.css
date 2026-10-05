@@ -597,6 +597,87 @@
   background: none;
   accent-color: var(--accent);
 }
+.chat-width-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chat-width-slider input[type="range"] {
+  width: 200px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.chat-width-slider .settings-row-value {
+  min-width: 52px;
+}
+.chat-width-reset {
+  height: 28px;
+  padding: 0 8px;
+}
+.chat-width-preview {
+  margin: 0;
+}
+.chat-width-window {
+  display: flex;
+  height: 104px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.chat-width-beside {
+  flex: none;
+  background: var(--sidebar);
+}
+.chat-width-beside.left {
+  border-right: 1px solid var(--border);
+}
+.chat-width-beside.right {
+  border-left: 1px solid var(--border);
+}
+.chat-width-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.chat-width-column {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 0 10px;
+  box-sizing: border-box;
+  border-inline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.chat-width-column > span {
+  flex: none;
+  height: 6px;
+  margin-inline: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.chat-width-column > .chat-width-message {
+  height: 12px;
+  border-radius: 4px;
+  background: var(--toolbar);
+  border: 1px solid var(--border);
+}
+.chat-width-column > .chat-width-line.short {
+  width: 60%;
+}
+.chat-width-column > .chat-width-composer {
+  height: 22px;
+  margin-top: auto;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--toolbar);
+}
+.chat-width-preview figcaption {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .settings-row-value {
   min-width: 34px;
   font-size: 12px;

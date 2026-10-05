@@ -21,6 +21,7 @@ import type {
 import type { LineQuestion } from "../../../shared/questions";
 import { contextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
+import { useRecordChatPane } from "../../lib/chat-width";
 import { readDraft, writeDraft } from "../composer/drafts";
 import { useNavigationLock } from "../../lib/navigation-lock";
 import { threadDraftKey, threadStorage } from "../../lib/thread-storage";
@@ -145,6 +146,8 @@ export function ProjectChat({
     { setSelection, workItem, setWorkItem } = attachments;
   const place = `${id}:${rootId ?? ""}`;
   const composer = useRef<ComposerHandle>(null);
+  const pane = useRef<HTMLElement>(null);
+  useRecordChatPane(pane);
   useImperativeHandle(
     ref,
     () => ({
@@ -268,6 +271,7 @@ export function ProjectChat({
   );
   return (
     <section
+      ref={pane}
       className={`project-chat ${isEmpty ? "empty-thread" : ""}${chat && agentView ? " agent-open" : ""}`}
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}

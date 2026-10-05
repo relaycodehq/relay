@@ -24,6 +24,7 @@ import {
   ComposerToolbarSettings,
 } from "../../composer/ComposerToolbarSettings";
 import { ThemeImportSettings } from "../ThemeImportSettings";
+import { ChatWidthPreview, ChatWidthSlider } from "../ChatWidthSlider";
 import {
   TypographyAdvancedSwitch,
   TypographySettings,
@@ -107,6 +108,18 @@ export function useAppearanceEntries(): SettingEntry[] {
       block: true,
       accessory: () => <TypographyAdvancedSwitch />,
       render: () => <TypographySettings />,
+    },
+    {
+      id: "chat-width",
+      category: "appearance",
+      title: "Chat width",
+      description:
+        "How wide the conversation grows in a wide window. Messages, the composer and the new-thread page follow it.",
+      keywords:
+        "chat thread conversation column reading width wide narrow monitor screen layout composer messages",
+      block: true,
+      accessory: () => <ChatWidthSlider />,
+      render: () => <ChatWidthPreview />,
     },
     {
       id: "vscode-themes",

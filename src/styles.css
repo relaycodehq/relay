@@ -1,5 +1,6 @@
 :root {
-  /* Reading column shared by the thread, its composer and new-thread cards. */
+  /* Reading column shared by the thread, its composer and new-thread cards;
+     Settings → Appearance → Chat width overrides it (src/lib/chat-width.ts). */
   --thread-width: 1040px;
   font-family: var(--font-sans);
   color: #303237;
