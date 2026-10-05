@@ -6,7 +6,7 @@ import { persistedStore } from "./persisted-store";
  * new-thread page all follow --thread-width. A per-device preference like the
  * theme; a window narrower than the column still fits it.
  */
-export const chatWidths = { min: 720, max: 1600, step: 10, default: 1040 };
+export const chatWidths = { min: 800, max: 1600, step: 10, default: 1040 };
 
 /** The chat pane's side padding (.project-messages, .thread-bottom-composer). */
 export const THREAD_GUTTER = 56;
