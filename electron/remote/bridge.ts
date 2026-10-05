@@ -351,6 +351,7 @@ function summary(c: ChatSummary): RemoteChatSummary {
     ...(c.pending?.length ? { pending: c.pending } : {}),
     ...(c.nextSend ? { nextSend: c.nextSend } : {}),
     ...(c.empty ? { empty: true } : {}),
+    ...(c.goal ? { goal: c.goal } : {}),
   };
 }
 

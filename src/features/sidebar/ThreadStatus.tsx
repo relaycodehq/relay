@@ -53,7 +53,13 @@ export function StatusMark({
     return (
       <span
         className="sb-status running"
-        title={chat.running ? "Working" : pendingTitle(chat.pending!)}
+        title={
+          chat.running
+            ? chat.goal?.status === "active"
+              ? `Working on its goal: ${chat.goal.objective}`
+              : "Working"
+            : pendingTitle(chat.pending!)
+        }
       >
         <Spinner size={11} steady />
       </span>
@@ -111,14 +117,22 @@ export function CardState({
       </span>
     );
   const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
+  // A native /goal keeps the agent going across turns until it's met.
+  const goal = chat.running && chat.goal?.status === "active";
   if (chat.running || since)
     return (
       <span
         className="sb-card-state running"
-        title={chat.running ? undefined : pendingTitle(chat.pending!)}
+        title={
+          goal
+            ? `Goal: ${chat.goal!.objective}`
+            : chat.running
+              ? undefined
+              : pendingTitle(chat.pending!)
+        }
       >
         <Spinner size={11} steady />
-        Working
+        {goal ? "Goal" : "Working"}
         {since && <Elapsed since={since} />}
       </span>
     );

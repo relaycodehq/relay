@@ -11,6 +11,7 @@ import type {
   SessionReload,
 } from "../../shared/projects";
 import type { CodexReviewTarget } from "../../shared/deep-review";
+import type { GoalCommand, ThreadGoal } from "../../shared/goal";
 import type { ProviderCommand } from "../../shared/commands";
 import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
@@ -25,6 +26,8 @@ export type AgentJob =
   | { kind: "adopt" }
   /** Run Codex's own `/review` of this target instead of sending `prompt`. */
   | { kind: "review"; target: CodexReviewTarget }
+  /** Codex's own `/goal`, through its goal API: set, resume, pause, clear or show. */
+  | { kind: "goal"; command: GoalCommand }
   /** A `/btw` side thread, forked from the main one while that may still be working. */
   | { kind: "side" }
   /** A one-off helper job (a thread title, a commit message): no tools, no session, these instructions in place of the chat's own. */
@@ -52,6 +55,8 @@ export interface AgentOptions {
       id?: string,
       images?: AgentOptions["images"],
     ) => Promise<void>;
+    /** Pauses or clears the goal the running turn pursues, without stopping the turn. */
+    goal?: (command: "pause" | "clear") => Promise<void>;
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
@@ -73,6 +78,10 @@ export interface AgentOptions {
   onTitle?: (title: string) => void;
   onPlan?: (text: string) => void;
   onContext?: (usage: ContextUsage) => void;
+  /** The thread's native `/goal` changed, as the agent reports it; null once it's gone. */
+  onGoal?: (goal: ThreadGoal | null) => void;
+  /** The goal the thread showed last, for an agent that reports only its changes. */
+  goal?: ThreadGoal;
   /** Dollars the turn cost since the last call, as the agent prices it. */
   onCost?: (usd: number) => void;
   /** Private context for this turn: the agent reads it, the transcript never shows it. */

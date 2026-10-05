@@ -1,5 +1,6 @@
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type { CodexSkill } from "../agents/provider-commands";
+import type { GoalCommand } from "../../shared/goal";
 import type { AgentJob } from "../agents/types";
 
 /** Why an agent runs a turn in a thread; each kind follows its own rules. */
@@ -12,6 +13,8 @@ export type ChatTurn =
       caughtUp?: boolean;
       /** Crosses off what the prompt told the agent, once the turn didn't fail. */
       briefed?: () => void;
+      /** A `/goal` Codex runs through its goal API rather than as a prompt. */
+      goal?: GoalCommand;
     }
   /** The outgoing agent writes a note for the one taking over. */
   | { kind: "handoff" }
@@ -81,5 +84,7 @@ export function agentJob(
   if (chat.reviewer?.codex && turnRules(turn).reviews)
     return { kind: "review", target: chat.reviewer.codex };
   if (turn.kind === "side") return { kind: "side" };
+  if (turn.kind === "reply" && turn.goal)
+    return { kind: "goal", command: turn.goal };
   return { kind: "prompt" };
 }

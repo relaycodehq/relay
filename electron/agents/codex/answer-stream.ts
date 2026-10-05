@@ -71,6 +71,20 @@ export class CodexAnswerStream {
     this.visibleCommentary.clear();
     this.answer = "";
   }
+  /**
+   * Codex went on with a goal in a turn of its own: what the last turn
+   * answered stays above as a note, and is forgotten like a finished one.
+   */
+  nextTurn() {
+    for (const [id, message] of this.messages) {
+      if (message.text && this.visibleCommentary.get(id) !== message.text)
+        this.onCommentary(id, message.text);
+    }
+    this.messages.clear();
+    this.visibleCommentary.clear();
+    if (this.answer) this.onText("");
+    this.answer = "";
+  }
   private publish() {
     const entries = [...this.messages.entries()];
     const final =

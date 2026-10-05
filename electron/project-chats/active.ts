@@ -14,6 +14,8 @@ export interface ActiveChat {
   job?: Promise<unknown>;
   input?: ProjectChatSend;
   steer?: AgentControl["steer"];
+  /** Pauses or clears the goal the turn pursues; Codex only. */
+  goal?: AgentControl["goal"];
   /** Settles once the turn gives the thread back; see `release`. */
   ended: Promise<void>;
   /** The answer is written; the turn only saves before giving the thread back. */

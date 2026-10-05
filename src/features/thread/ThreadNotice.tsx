@@ -8,6 +8,7 @@ import {
   HandoffStrip,
   ReturnedStrip,
 } from "../handoff/HandoffStrip";
+import { GoalStrip } from "./GoalStrip";
 import {
   LimitStrip,
   SettledStrip,
@@ -15,10 +16,44 @@ import {
   WaitingStrip,
 } from "./WaitingStrip";
 
+/** What sits on top of a thread's composer: its goal, while one is set,
+ * above the one strip that's most pressing. */
+export function ThreadNotice(props: {
+  chat: ChatSummary;
+  stopped?: ChatPending[];
+  leftBehind?: ChatPending[];
+  onError: (error: unknown) => void;
+}) {
+  const { chat, onError } = props;
+  const qc = useQueryClient();
+  const goal = chat.goal && !chat.sentTo && (
+    <GoalStrip
+      goal={chat.goal}
+      running={!!chat.running}
+      onAct={async (action) => {
+        try {
+          await api.goalProjectChat(chat.id, action);
+        } catch (e) {
+          onError(e);
+          throw e;
+        } finally {
+          void qc.invalidateQueries({ queryKey: ["project-chats"] });
+        }
+      }}
+    />
+  );
+  return (
+    <>
+      {goal}
+      <PressingStrip {...props} />
+    </>
+  );
+}
+
 /** The strip on top of a thread's composer, the most pressing first: the
  * thread is on another computer or back from one, a usage limit stopped its
  * answer, its agent left work stopped or waiting, or the thread is settled. */
-export function ThreadNotice({
+function PressingStrip({
   chat,
   stopped,
   leftBehind,

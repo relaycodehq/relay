@@ -150,6 +150,11 @@ export interface ProjectChatApi {
   resolveStoppedWork(id: string, action: "resume" | "dismiss"): Promise<void>;
   /** Turns off resuming the answer a usage limit stopped once it lifts, or back on. */
   setLimitResume(id: string, on: boolean): Promise<void>;
+  /** The goal row's Pause, Resume and Clear; see shared/goal. */
+  goalProjectChat(
+    id: string,
+    command: "pause" | "resume" | "clear",
+  ): Promise<void>;
   /** Stops a background task Claude left running, or cancels its wake-up. */
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   /** The subagents Claude started in the thread's live sessions. */

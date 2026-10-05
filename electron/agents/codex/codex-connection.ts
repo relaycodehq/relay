@@ -9,6 +9,8 @@ import type { CodexWatch } from "./codex-watch";
 import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { threadStartedSchema, type CodexThreadStarted } from "./codex-schemas";
 import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
+import type { ThreadGoal } from "../../../shared/goal";
+import { codexGoal } from "./codex-goal";
 
 /** What a hosted app server keeps for the next Relay: the thread it started. */
 export const codexMetaSchema = z
@@ -37,6 +39,8 @@ class CodexConnection {
   threadSettings?: Record<string, unknown>;
   /** Side checks' forks by thread id: what they say goes to them, never to the turn. */
   private sides = new Map<string, (method: string, params: any) => void>();
+  /** Its thread's `/goal` as Codex last reported it, between runs too. */
+  goal?: ThreadGoal | null;
   /** Watch state for "Flag what I'd miss", made the first time a turn asks. */
   watch?: CodexWatch;
   private release!: () => void;
@@ -77,8 +81,12 @@ class CodexConnection {
           child as ChildProcessWithoutNullStreams,
           (method, params) => {
             const side = this.sides.get(threadOf(params));
-            if (side) side(method, params);
-            else this.onNotification?.(method, params);
+            if (side) return side(method, params);
+            if (method === "thread/goal/cleared") this.goal = null;
+            if (method === "thread/goal/updated")
+              this.goal = codexGoal((params as { goal?: unknown })?.goal) ?? this.goal;
+            if (this.onNotification) this.onNotification(method, params);
+            else this.unheard(method, params);
           },
           fail,
           async (wire) => {
@@ -100,6 +108,23 @@ class CodexConnection {
         );
       })
       .catch(fail);
+  }
+  /**
+   * A goal turn no run shows, one Codex started after the run let go: it
+   * stops, and the goal waits paused for /goal resume rather than working
+   * where nobody sees it.
+   */
+  private unheard(method: string, params: unknown) {
+    if (method !== "turn/started" || this.goal?.status !== "active") return;
+    const threadId = threadOf(params);
+    const turnId = (params as { turn?: { id?: unknown } })?.turn?.id;
+    void this.ready
+      .then(async (wire) => {
+        await wire.request("thread/goal/set", { threadId, status: "paused" });
+        if (typeof turnId === "string")
+          await wire.request("turn/interrupt", { threadId, turnId });
+      })
+      .catch((e) => console.warn("Could not stop a Codex goal turn:", e));
   }
   /** Sends one thread's notifications and requests to `listen` until the returned function stops it. */
   side(threadId: string, listen: (method: string, params: any) => void) {

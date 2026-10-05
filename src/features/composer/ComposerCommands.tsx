@@ -283,6 +283,12 @@ export function useComposerCommands({
   function interceptSend() {
     if (!draft.trim().startsWith("/")) return false;
     const action = relayCommand(draft);
+    // The agent runs `/goal` itself; it goes out as a message.
+    if (action?.name === "goal") {
+      if (provider === "codex" || provider === "claude") return false;
+      setError("Pick Codex or Claude Code to set a goal.");
+      return true;
+    }
     if (action) {
       run(action.name, action.args);
       return true;

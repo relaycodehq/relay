@@ -48,10 +48,13 @@ export function ThreadRow({
   const t = useTheme();
   const agents = chat.running ? undefined : agentsSince(chat.pending);
   const working = chat.running || !!agents;
+  // A native /goal keeps the agent going across turns until it's met.
+  const goal =
+    chat.running && chat.goal?.status === "active" ? chat.goal : undefined;
   const state = chat.waiting
     ? "Waiting for you"
     : working
-      ? `Working · ${ago(agents ?? chat.runningSince ?? chat.updated)}`
+      ? `${goal ? "Goal" : "Working"} · ${ago(agents ?? chat.runningSince ?? chat.updated)}`
       : ago(chat.updated);
   return (
     <Pressable
@@ -84,7 +87,11 @@ export function ThreadRow({
             {state}
           </Text>
           {project ? ` · ${project}` : ""}
-          {chat.branch ? ` · ${chat.branch}` : ""}
+          {goal
+            ? ` · ${goal.objective}`
+            : chat.branch
+              ? ` · ${chat.branch}`
+              : ""}
         </Text>
       </View>
     </Pressable>

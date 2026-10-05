@@ -1,3 +1,4 @@
+import type { ThreadGoal } from "./goal";
 import type { DictationModelState } from "./dictation";
 import type { ComputerInfo, HandBack, HandoffRemoteStatus } from "./handoff";
 import type { UpdateState } from "./updates";
@@ -111,6 +112,8 @@ export interface RemoteChatSummary {
   /** When its next scheduled message goes out. */
   nextSend?: number;
   empty?: boolean;
+  /** Its native `/goal`; older desktops leave it out. */
+  goal?: ThreadGoal;
 }
 
 export interface RemoteProject {

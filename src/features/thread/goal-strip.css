@@ -1,0 +1,20 @@
+.goal-strip-usage {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* Why Claude's checks found it unmet, under the goal. */
+.goal-strip-detail {
+  margin: -4px 0 0;
+  padding: 0 14px 6px 38px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A goal shares the composer's top edge with the strip under it. */
+.goal-strip + .waiting-strip {
+  border-radius: 0;
+}

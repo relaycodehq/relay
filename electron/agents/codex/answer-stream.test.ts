@@ -88,3 +88,31 @@ it("lets a long turn write any number of progress notes", () => {
   expect(commentary.size).toBe(150);
   expect(commentary.get("note-149")).toBe("Checking step 149.");
 });
+
+it("keeps each goal turn's answer above as a note once Codex goes on", () => {
+  const bodies: string[] = [];
+  const commentary = new Map<string, string>();
+  const stream = new CodexAnswerStream(
+    (body) => bodies.push(body),
+    (id, text) =>
+      text === null ? commentary.delete(id) : commentary.set(id, text),
+  );
+  const answer = (id: string, text: string) =>
+    stream.update("item/completed", {
+      item: { id, type: "agentMessage", phase: "final_answer", text },
+    });
+  answer("first", "Created one.txt.");
+  stream.nextTurn();
+  expect(commentary.get("first")).toBe("Created one.txt.");
+  expect(stream.answer).toBe("");
+  answer("second", "Created two.txt.");
+  expect(stream.answer).toBe("Created two.txt.");
+  expect(bodies).toEqual(["Created one.txt.", "", "Created two.txt."]);
+  // Forgotten: a long goal never fills the stream's message limit.
+  for (let turn = 0; turn < 150; turn++) {
+    answer(`turn-${turn}`, "Done.");
+    stream.nextTurn();
+  }
+  answer("last", "All three files exist.");
+  expect(stream.answer).toBe("All three files exist.");
+});

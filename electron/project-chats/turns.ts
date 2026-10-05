@@ -10,6 +10,7 @@ import { replyRoot, sentBy } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agents, helperProviders } from "../../shared/agents";
+import { parseGoalCommand } from "../../shared/goal";
 import { agentRuntime, agentRuntimes } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatTurn } from "./chat-turn";
@@ -196,6 +197,23 @@ export class ChatTurns {
       active.input = input;
       if (asked && !asked.question && !input.images?.length)
         throw new Error("Add a question after the agent mention.");
+      const goal = asked && parseGoalCommand(asked.question);
+      if (goal) {
+        if (asked.provider !== "codex" && asked.provider !== "claude")
+          throw new Error(
+            "Only Codex and Claude Code keep working toward a goal.",
+          );
+        // Claude would take the word for a new objective.
+        if (
+          asked.provider === "claude" &&
+          (goal.type === "pause" || goal.type === "resume")
+        )
+          throw new Error(
+            "Claude Code can't pause or resume a goal. /goal clear ends it.",
+          );
+        if (parent || chat.shared)
+          throw new Error("Set a goal in the thread's main conversation.");
+      }
       if (input.ultraplan) {
         if (!asked) throw new Error("Ultraplan needs an agent to lead it.");
         if (parent || chat.shared || chat.scope.kind === "review")
@@ -234,6 +252,13 @@ export class ChatTurns {
       chat.messages.push(user);
       // Anything said after a limit stopped the answer replaces carrying it on.
       delete chat.limitResume;
+      // A goal that ended shows until the conversation moves on.
+      if (
+        asked &&
+        !input.parentId &&
+        (chat.goal?.status === "complete" || chat.goal?.status === "failed")
+      )
+        delete chat.goal;
       this.councils.sent(chat, input);
       chat.updated = Date.now();
       chat.branch = await currentBranchOr(root, chat.branch);
@@ -309,10 +334,13 @@ export class ChatTurns {
       );
       const onBranch = (m: ChatMessage) =>
         parent ? m.parentId === parent.id || upToParent.has(m.id) : !m.parentId;
+      // Codex runs `/goal` through its goal API; Claude reads it as its own command.
+      const goal =
+        asked.provider === "codex" ? parseGoalCommand(asked.question) : null;
       // Some agents only run a command or skill when the message starts with
       // it, so a command goes out alone.
       const command =
-        agents[asked.provider].commandsAlone &&
+        (agents[asked.provider].commandsAlone || !!goal) &&
         !chat.shared &&
         /^\/[a-zA-Z0-9_.:-]+(?:\s|$)/.test(asked.question);
       // Another agent answered last on this branch: let it brief the new one
@@ -379,6 +407,7 @@ export class ChatTurns {
         skills,
         caughtUp,
         briefed,
+        ...(goal ? { goal } : {}),
       });
     } catch (e) {
       // The send already went through, so the thread shows the failure.

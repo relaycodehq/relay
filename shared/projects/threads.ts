@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AgentProvider } from "../agents";
 import type { AccountProvider } from "../agent-accounts";
 import type { ReviewerTask } from "../deep-review";
+import type { ThreadGoal } from "../goal";
 import type {
   ChatAbandonedHandoff,
   ChatCameFrom,
@@ -83,6 +84,8 @@ export interface ChatSummary {
   nextSend?: number;
   /** The answer a usage limit stopped, resumed once the limit lifts; see limit-resume. */
   limitResume?: LimitResume;
+  /** The main conversation's native `/goal`, as its agent last reported it; see shared/goal. */
+  goal?: ThreadGoal;
   /** A deep review's reviewer; its thread shows inside the review, never on its own. */
   reviewer?: ReviewerTask;
   /** An Ultraplan's thinker; its thread shows inside the council, never on its own. */

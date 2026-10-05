@@ -486,6 +486,9 @@ if (args.includes("--permission-prompt-tool")) {
       });
     } else if (m.method === "config/read")
       send({ id: m.id, result: { config: {} } });
+    // Codex 0.160 reads a thread's goal; these threads set none.
+    else if (m.method === "thread/goal/get")
+      send({ id: m.id, result: { goal: null } });
     else if (
       m.method === "thread/start" ||
       m.method === "thread/resume" ||

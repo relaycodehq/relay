@@ -57,6 +57,7 @@ import { MessageView } from "../ui/MessageView";
 import { RequestCard } from "../ui/RequestCard";
 import { MenuSheet, Sheet, type MenuItem } from "../ui/Sheet";
 import {
+  GoalStrip,
   QueueList,
   StoppedStrip,
   UnsentStrip,
@@ -671,6 +672,9 @@ export function Thread({ id, rootId }: { id: string; rootId?: string }) {
           keyboardShouldPersistTaps="handled"
           onTouchStart={Keyboard.dismiss}
         />
+      )}
+      {!rootId && summary?.goal && (
+        <GoalStrip goal={summary.goal} running={running} />
       )}
       {!rootId && !!thread?.stopped?.items.length && (
         <StoppedStrip

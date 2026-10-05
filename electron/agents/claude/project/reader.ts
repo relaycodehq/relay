@@ -15,6 +15,7 @@ import type { SDKMessage } from "./sdk";
 import { watchOf, type ClaudeSession } from "./session";
 import { ToolRows } from "./tool-rows";
 import { TurnWatcher } from "../../watch/watcher";
+import { ClaudeGoalWatch } from "./goal";
 
 /**
  * What a frame leaves the turn to do: read on, see whether Claude runs a
@@ -47,6 +48,7 @@ export class ClaudeTurnReader {
   private rows: ToolRows;
   private meter: ContextMeter;
   private watcher?: TurnWatcher;
+  private goal: ClaudeGoalWatch;
 
   constructor(
     private options: ClaudeRunOptions,
@@ -54,6 +56,8 @@ export class ClaudeTurnReader {
   ) {
     this.rows = new ToolRows(options);
     this.meter = new ContextMeter(options, session);
+    this.goal = session.goal ??= new ClaudeGoalWatch(options.goal);
+    this.goal.listen(options.onGoal);
     if (options.watch)
       this.watcher = new TurnWatcher(
         options.watch,
@@ -100,6 +104,7 @@ export class ClaudeTurnReader {
           : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
     }
     this.failures.see(message);
+    if (this.goal.see(message) === "checked") this.goalUnmet();
     if (message.type === "assistant") this.said(message);
     if (message.type === "user" && Array.isArray(message.message.content))
       this.rows.results(message.message.content, message.parent_tool_use_id);
@@ -107,6 +112,15 @@ export class ClaudeTurnReader {
       this.rows.progress(message);
     if (message.type === "result") return this.result(message);
     return "more";
+  }
+
+  /** Claude found its goal unmet and works on: what it said was a step, not the answer. */
+  private goalUnmet() {
+    if (!this.answer.trim()) return;
+    const id = this.currentMessage || randomUUID();
+    this.commentary.add(id);
+    this.options.onCommentary?.(id, this.answer);
+    this.publish("");
   }
 
   private publish(text: string) {
@@ -217,13 +231,20 @@ export class ClaudeTurnReader {
     this.steerable = false;
     const failed = message.is_error || message.subtype !== "success";
     const stopped = this.failures.failure(failed);
+    this.goal.ended(
+      !failed &&
+        (message.terminal_reason === undefined ||
+          message.terminal_reason === "completed"),
+      this.session.work.any,
+    );
     if (stopped) throw stopped;
     if (failed) throw new Error("Claude could not complete this turn.");
     this.meter.finished(message.modelUsage);
     if (this.options.job.kind === "compact")
       return { answer: this.compacted ?? "" };
     const plan = this.session.plan;
-    const final = plan || message.result || this.answer;
+    const final =
+      plan || message.result || this.answer || this.goal.gaveUpNote() || "";
     const written = plan ? undefined : answeredFindings(final);
     this.publish(
       written ??

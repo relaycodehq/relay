@@ -338,7 +338,7 @@ function CardState({
           style={styles.spinner}
         />
         <Text style={[styles.stateText, { color: t.accent }]}>
-          Working
+          {chat.running && chat.goal?.status === "active" ? "Goal" : "Working"}
           {since ? <Elapsed since={since} /> : null}
         </Text>
       </View>

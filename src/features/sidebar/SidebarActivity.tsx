@@ -325,6 +325,10 @@ function ThreadCard({
                 )}
                 {familyLine(family.started)}
               </button>
+            ) : c.running && c.goal?.status === "active" ? (
+              <span className="sb-card-goal" title={c.goal.objective}>
+                {c.goal.objective}
+              </span>
             ) : (
               <MiddleTruncate
                 className="sb-card-branch"

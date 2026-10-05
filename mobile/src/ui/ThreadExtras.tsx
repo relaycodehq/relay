@@ -8,8 +8,10 @@ import {
   ChevronUp,
   CircleStop,
   SquareTerminal,
+  Target,
   X,
 } from "lucide-react-native";
+import { presentGoal, type ThreadGoal } from "../../../shared/goal";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { summary, timing, wakeupTitle } from "../../../shared/waiting";
 import type { ChatPending } from "../../../shared/projects";
@@ -109,6 +111,46 @@ export function WaitingStrip({
             </View>
           );
         })}
+    </View>
+  );
+}
+
+/**
+ * The thread's native `/goal`, as the desktop's row shows it. `/goal pause`,
+ * `resume` and `clear` typed here act on it.
+ */
+export function GoalStrip({
+  goal,
+  running,
+}: {
+  goal: ThreadGoal;
+  running: boolean;
+}) {
+  const t = useTheme();
+  const shown = presentGoal(goal, running);
+  return (
+    <View
+      style={[
+        styles.strip,
+        { borderColor: t.border, backgroundColor: t.raised },
+      ]}
+    >
+      <View style={styles.item}>
+        <Target size={15} color={shown.working ? t.accent : t.muted} />
+        <Text numberOfLines={3} style={[styles.text, { color: t.text }]}>
+          {shown.title}
+          <Text style={{ color: t.muted }}>
+            {" · "}
+            {shown.objective}
+            {shown.usage ? ` · ${shown.usage}` : ""}
+          </Text>
+        </Text>
+      </View>
+      {shown.detail ? (
+        <Text numberOfLines={2} style={[styles.hint, { color: t.muted }]}>
+          {shown.detail}
+        </Text>
+      ) : null}
     </View>
   );
 }

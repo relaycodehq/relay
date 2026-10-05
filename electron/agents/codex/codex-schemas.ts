@@ -59,6 +59,9 @@ const notificationSchema = z.discriminatedUnion("method", [
     tokenUsage: z.unknown().optional(),
   }),
   notification("thread/name/updated", { threadName: lenient(z.string()) }),
+  // Read with codexGoal: one Relay can't read is skipped, not a failed turn.
+  notification("thread/goal/updated", { goal: z.unknown() }),
+  notification("thread/goal/cleared", {}),
   notification("item/started", { item: itemSchema }),
   notification("item/completed", { item: itemSchema }),
   notification("item/plan/delta", { delta: z.string() }),

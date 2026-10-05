@@ -8,6 +8,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
+import { goalChanged, type ThreadGoal } from "../../shared/goal";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
 import { accountFor, accountLabel } from "../agents/accounts";
@@ -159,6 +160,7 @@ export class TurnRunner {
       },
     );
     let point: string | undefined,
+      goalSaved = 0,
       committed = false,
       limit: AgentError | undefined;
     // The thread's own turns, including the ones Claude starts when a
@@ -186,7 +188,24 @@ export class TurnRunner {
       const options = {
         onControl: (control: AgentControl) => {
           const active = this.core.active.get(chat.id);
-          if (active?.abort === abort) active.steer = control.steer;
+          if (active?.abort !== abort) return;
+          active.steer = control.steer;
+          active.goal = control.goal;
+        },
+        ...(!branch && chat.goal?.provider === provider ? { goal: chat.goal } : {}),
+        onGoal: (goal: ThreadGoal | null) => {
+          // A goal belongs to the main conversation; side ones run their own.
+          if (branch || rules.side) return;
+          const before = chat.goal;
+          if (goal) chat.goal = goal;
+          else delete chat.goal;
+          // Token counts tick with every tool call; the thread file holds every message.
+          const now = Date.now();
+          if (!goalChanged(before, goal) && now - goalSaved < 15_000) return;
+          goalSaved = now;
+          void this.core.storage
+            .save(chat)
+            .catch((e) => console.warn("Could not save the goal:", e));
         },
         onSteered: (id: string) => answer.continueBelow(id),
         skills: turn.kind === "reply" ? (turn.skills ?? []) : [],

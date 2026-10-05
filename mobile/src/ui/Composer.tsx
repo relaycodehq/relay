@@ -339,7 +339,10 @@ export const Composer = forwardRef<
     const draft = written.trim();
     if (draft.startsWith("/")) {
       const command = relayCommand(draft);
-      if (command && command.name !== "btw") return void run(command.name, command.args);
+      // The agent runs `/goal` itself; it goes out as a message.
+      if (command?.name === "goal" && provider !== "codex" && provider !== "claude")
+        return setError("Pick Codex or Claude Code to set a goal.");
+      if (command && command.name !== "btw" && command.name !== "goal") return void run(command.name, command.args);
       if (command?.name === "btw" && !command.args) return setError("Add a question after /btw.");
       const name = /^\/([^\s]+)/.exec(draft)?.[1];
       const agentCommand = agents[provider].commandsAlone && commands.some((c) => c.name === name);

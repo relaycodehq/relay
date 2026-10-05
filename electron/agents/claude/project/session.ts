@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ClaudeGoalWatch } from "./goal";
 import type {
   EffortLevel,
   Options,
@@ -91,6 +92,8 @@ export type ClaudeSession = {
   work: ClaudeWork;
   /** The subagents it started, followed between turns too. */
   agents: SubagentTracker;
+  /** Its `/goal`, read across turns; made the first time a turn runs. */
+  goal?: ClaudeGoalWatch;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
   watch?: { checks: WatchChecks; meter: ClaudeMeter; subagents: SubagentWatch };
 };
