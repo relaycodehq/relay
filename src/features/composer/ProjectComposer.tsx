@@ -125,7 +125,8 @@ export function ProjectComposer({
     /** Called as the message goes out; the composer empties then, not once it's accepted. */
     dispatch?: () => void,
   ) => Promise<boolean>;
-  onStop: () => void;
+  /** Left out while what runs can't be stopped, as a compaction. */
+  onStop?: () => void;
   /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
   /** Takes the newest queued message back into the composer; false when none waits. */
@@ -141,7 +142,7 @@ export function ProjectComposer({
     planner,
     ultraplan: ultraplanOffered = false,
   } = conversation;
-  const stop = useStopKeys(running, onStop);
+  const stop = useStopKeys(running && !!onStop, () => onStop?.());
   const form = useRef<HTMLFormElement>(null);
   const composer = useComposerSettings({
     key: keys.settings,
@@ -473,10 +474,13 @@ export function ProjectComposer({
               ),
             }}
           />
-          {running && (
+          {running && onStop && (
             <StopButton armed={stop.armed} keys={stop.keys} onStop={onStop} />
           )}
-          {(!running || !!draft.text.trim() || !!draft.attached.length) && (
+          {(!running ||
+            !onStop ||
+            !!draft.text.trim() ||
+            !!draft.attached.length) && (
             <SendButton
               disabled={sending.disabled}
               running={running}

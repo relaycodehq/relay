@@ -323,9 +323,13 @@ export function ThreadComposer({
       onEditQueued={onEditQueued}
       // A thread not made yet opens itself once its first message is in.
       onNextThread={chat ? () => void runCommand("new", "") : undefined}
-      onStop={() => {
-        if (chat) void api.cancelProjectChat(chat.id).catch(setError);
-      }}
+      onStop={
+        compacting
+          ? undefined
+          : () => {
+              if (chat) void api.cancelProjectChat(chat.id).catch(setError);
+            }
+      }
       onCommand={runCommand}
     />
   );
