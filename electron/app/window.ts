@@ -221,7 +221,10 @@ export class AppWindow {
       }
     });
     if (dev && !app.isPackaged) {
-      if (dev !== "http://127.0.0.1:5177") throw new Error("Invalid dev URL");
+      // scripts/dev.mjs's URL: Vite's port, moved up in a worktree.
+      const port = 5177 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
+      if (dev !== `http://127.0.0.1:${port}`)
+        throw new Error("Invalid dev URL");
       void win.loadURL(dev);
     } else void win.loadFile(root);
   }
