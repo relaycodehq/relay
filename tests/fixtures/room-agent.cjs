@@ -141,9 +141,10 @@ if (args.includes("--permission-prompt-tool")) {
         },
       });
     }
-    if (m.type === "user" && m.priority === "next") {
+    if (m.type === "user" && (m.priority === "next" || m.priority === "now")) {
       record({ provider: "claude", prompt: JSON.stringify(m) });
       // Like Claude Code: queue the steer, read it at the next step, answer it.
+      // "now" cuts the running turn short first, with a result of its own.
       const lifecycle = (state) =>
         emit({
           type: "command_lifecycle",
@@ -156,6 +157,23 @@ if (args.includes("--permission-prompt-tool")) {
       // A steer that arrives after the last step runs as a turn of its own.
       if (lateSteer) finish("Done before your note.");
       setTimeout(() => {
+        if (m.priority === "now" && !lateSteer)
+          emit({
+            type: "result",
+            subtype: "success",
+            uuid: "fixture-aborted",
+            session_id: "fixture-claude",
+            is_error: false,
+            terminal_reason: "aborted_streaming",
+            result: "Looking into it.",
+            duration_ms: 1,
+            duration_api_ms: 1,
+            num_turns: 1,
+            total_cost_usd: 0,
+            usage: { input_tokens: 1, output_tokens: 1 },
+            modelUsage: {},
+            permission_denials: [],
+          });
         lifecycle("started");
         emit({
           type: "stream_event",
