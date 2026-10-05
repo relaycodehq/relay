@@ -113,10 +113,10 @@ export function StartedChip({
   const view = useStartedThreads();
   const [open, setOpen] = useState(false);
   const [focus, setFocus] = useState<string>();
-  const started = (view?.threads ?? [])
-    .filter(
-      (c) => c.startedBy?.chatId === view?.lead && (!ids || ids.includes(c.id)),
-    )
+  const lead = view?.lead;
+  // Without a lead (a new thread's draft) undefined would match every thread.
+  const started = (view && lead ? view.threads : [])
+    .filter((c) => c.startedBy?.chatId === lead && (!ids || ids.includes(c.id)))
     .sort((a, b) => a.created - b.created);
   if (!view || !started.length || (live && !started.some((c) => c.running)))
     return null;
