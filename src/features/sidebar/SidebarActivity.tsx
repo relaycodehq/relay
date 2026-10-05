@@ -103,8 +103,28 @@ export function ActivityView({
             onSendOpen={onSendDraft}
           />
         ))}
-        {families.top.map((c, index) => {
+        {families.top.map((c) => {
           const started = families.started.get(c.id) ?? [];
+          if (families.headers.has(c.id))
+            return (
+              <Fragment key={c.id}>
+                <SettledLead chat={c} rows={rows} />
+                <div className="sb-started">
+                  {started.map((s, i) => (
+                    <ThreadCard
+                      key={s.id}
+                      chat={s}
+                      rows={rows}
+                      away={away[s.id]}
+                      jump={undefined}
+                      index={i}
+                      compact
+                    />
+                  ))}
+                </div>
+              </Fragment>
+            );
+          const index = families.cards.indexOf(c);
           const open =
             started.length > 0 &&
             (toggled.get(c.id) ?? !familySettled(started, rows.unread));
@@ -162,7 +182,7 @@ export function ActivityView({
       <Shelf
         kind="settled"
         label="Settled"
-        items={sections.settled}
+        items={sections.settled.filter((c) => !families.headers.has(c.id))}
         rows={rows}
         shelves={shelves}
       />
@@ -333,6 +353,52 @@ function ThreadCard({
           </div>
         </ContextMenu.Trigger>
       </AwayPeek>
+      <ThreadRowMenu chat={c} rows={rows} />
+    </ContextMenu.Root>
+  );
+}
+
+/**
+ * A settled lead whose threads still show: one muted line above them, so
+ * they keep their place. It goes once they're settled too.
+ */
+function SettledLead({
+  chat: c,
+  rows,
+}: {
+  chat: ChatSummary;
+  rows: SidebarRows;
+}) {
+  const { chatId, projects, actions } = rows;
+  const p = projects.get(c.projectId);
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger
+        role="button"
+        tabIndex={0}
+        className={`sb-compact ${chatId === c.id ? "selected" : ""}`}
+        onClick={() => actions.open(c)}
+        onKeyDown={rowKeys(() => actions.open(c))}
+      >
+        <ProjectBadge id={p?.id} name={p?.name ?? "?"} />
+        <ThreadTitle
+          className="sb-compact-title"
+          title={c.title}
+          regenerating={actions.regenerating.has(c.id)}
+        />
+        <small>Settled</small>
+        <button
+          className="sb-card-action icon"
+          title="Move back to activity"
+          aria-label={`Unsettle ${c.title}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            void actions.triage(c, { kind: "unsettle" });
+          }}
+        >
+          <RotateCcw size={13} />
+        </button>
+      </ContextMenu.Trigger>
       <ThreadRowMenu chat={c} rows={rows} />
     </ContextMenu.Root>
   );

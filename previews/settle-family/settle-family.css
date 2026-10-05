@@ -1,0 +1,82 @@
+/* Preview stage: the sidebar at its real width, the rest of the window empty. */
+.sf-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.sf-sidebar {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+.sf-sidebar .sb {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.sf-heading {
+  padding: 2px 10px 4px;
+}
+.sf-about {
+  flex: 1 1 360px;
+  min-width: 240px;
+}
+.sf-about em {
+  font-style: normal;
+  color: var(--text);
+}
+.sf-bar-button {
+  padding: 3px 9px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* B: a settled lead keeps one muted line above the threads still working. */
+.sf-settled-lead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sf-settled-lead:hover,
+.sf-settled-lead.selected {
+  background: var(--hover);
+}
+.sf-settled-lead .sb-project-badge {
+  opacity: 0.6;
+}
+.sf-settled-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sf-settled-lead small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.sf-settled-lead .sb-card-action {
+  display: none;
+}
+.sf-settled-lead:hover .sb-card-action {
+  display: inline-flex;
+}
+.sf-settled-lead:hover small {
+  display: none;
+}
+
+/* C: the lead's top row says it's waiting on its threads. */
+.sb-card-state.sf-pending {
+  color: var(--muted);
+}

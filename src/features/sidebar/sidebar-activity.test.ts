@@ -104,6 +104,21 @@ describe("startedFamilies", () => {
     expect(top.map((c) => c.id)).toEqual(["o", "lead"]);
     expect(started.get("lead")!.map((c) => c.id)).toEqual(["a", "b"]);
   });
+
+  it("keeps a settled lead's working threads under it, as a header where the first of them stood", () => {
+    const lead = chat({ id: "lead", settledAt: 4_000 });
+    const loose = chat({ id: "x" });
+    const kid = (id: string, created: number) =>
+      chat({ id, created, startedBy: { chatId: "lead", agent: "claude" } });
+    const families = startedFamilies(
+      [loose, kid("b", 3_000), kid("a", 2_000)],
+      [lead],
+    );
+    expect(families.top.map((c) => c.id)).toEqual(["x", "lead"]);
+    expect(families.cards.map((c) => c.id)).toEqual(["x"]);
+    expect(families.headers).toEqual(new Set(["lead"]));
+    expect(families.started.get("lead")!.map((c) => c.id)).toEqual(["a", "b"]);
+  });
 });
 
 describe("familyLine", () => {

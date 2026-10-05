@@ -62,21 +62,40 @@ export function attention(
 
 /**
  * Activity's cards: threads another thread's agent started sit under their
- * lead, in the order they were started, while the lead is listed too.
+ * lead, in the order they were started. A settled lead whose threads still
+ * show comes back as a header above them, where the first of them would be;
+ * `cards` is `top` without those headers.
  */
-export function startedFamilies(active: ChatSummary[]) {
+export function startedFamilies(
+  active: ChatSummary[],
+  settled: ChatSummary[] = [],
+) {
   const listed = new Set(active.map((c) => c.id));
+  const resting = new Map(settled.map((c) => [c.id, c]));
   const started = new Map<string, ChatSummary[]>();
   for (const c of active) {
     const lead = c.startedBy?.chatId;
-    if (lead && listed.has(lead))
+    if (lead && (listed.has(lead) || resting.has(lead)))
       started.set(lead, [...(started.get(lead) ?? []), c]);
   }
   for (const children of started.values())
     children.sort((a, b) => a.created - b.created);
+  const top: ChatSummary[] = [];
+  const headers = new Set<string>();
+  for (const c of active) {
+    const lead = c.startedBy?.chatId ?? "";
+    if (!started.has(lead)) top.push(c);
+    else if (resting.has(lead) && !headers.has(lead)) {
+      headers.add(lead);
+      top.push(resting.get(lead)!);
+    }
+  }
   return {
-    top: active.filter((c) => !started.has(c.startedBy?.chatId ?? "")),
+    top,
+    cards: top.filter((c) => !headers.has(c.id)),
     started,
+    /** Settled leads shown as headers, which the Settled shelf leaves out. */
+    headers,
   };
 }
 export type StartedFamilies = ReturnType<typeof startedFamilies>;

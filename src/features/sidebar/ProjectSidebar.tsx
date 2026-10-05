@@ -107,7 +107,7 @@ export function ProjectSidebar({
   const unread = useUnread(chatId, all);
   const search = useThreadSearch(all, byId);
   const sections = chatActivitySections(all, now);
-  const families = startedFamilies(sections.active);
+  const families = startedFamilies(sections.active, sections.settled);
   const actions = useThreadActions({
     chatId,
     active: sections.active,
@@ -120,8 +120,8 @@ export function ProjectSidebar({
   });
   const activity = view === "activity" && !search.query;
   const cmdHeld = useActivityKeys({
-    // The shortcuts count the cards, which started threads don't get.
-    active: families.top,
+    // The shortcuts count the cards, which started threads and settled leads don't get.
+    active: families.cards,
     chatId,
     jumping: activity,
     actions,
