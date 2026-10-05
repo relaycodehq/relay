@@ -203,6 +203,11 @@ export class ReadAloud {
     return engine;
   }
 
+  /** Whether a voice is downloaded and can read now. */
+  ready() {
+    return this.supported && !!readAloudChoice(this.current);
+  }
+
   /**
    * Reads an answer's markdown aloud with the chosen engine and voice. One
    * reading at a time, across the desktop and the phone: starting one ends

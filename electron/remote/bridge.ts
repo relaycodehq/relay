@@ -32,6 +32,7 @@ import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/rooms";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SpeechService } from "./phone-dictation";
+import type { VoiceService } from "./phone-read-aloud";
 
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
@@ -52,6 +53,8 @@ export interface RemoteHost {
   };
   /** The speech engine phones dictate with. */
   dictation?: SpeechService;
+  /** The voice phones hear answers in. */
+  readAloud?: VoiceService;
   /** Takes threads other computers hand over; see ../handoff/receiver. */
   handoffs?: {
     handle(
@@ -114,7 +117,10 @@ export class RemoteBridge {
     private broadcast: (event: RemoteEvent) => void,
   ) {}
   /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
-  private api: Omit<RemoteApi, "reportApp" | "dictate" | ComputerMethod> = {
+  private api: Omit<
+    RemoteApi,
+    "reportApp" | "dictate" | "readAloud" | ComputerMethod
+  > = {
     overview: async () => {
       const [projects, phoneApp] = await Promise.all([
         this.host.projects(),
@@ -128,6 +134,9 @@ export class RemoteBridge {
         ...(phoneApp ? { phoneApp } : {}),
         ...(this.host.dictation
           ? { dictation: this.host.dictation.status() }
+          : {}),
+        ...(this.host.readAloud
+          ? { readAloud: this.host.readAloud.ready() }
           : {}),
         ...(this.host.appearance?.()
           ? { appearance: this.host.appearance() }

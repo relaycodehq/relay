@@ -14,7 +14,7 @@ import {
   type HandoffView,
 } from "../../shared/handoff";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
-import { remoteBridgeVersion, type HandoffPart } from "../../shared/remote";
+import { handoffBridge, type HandoffPart } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
 import { git } from "../git/git";
@@ -586,9 +586,9 @@ function readReturned(text: string, computer: string): ChatMessage[] {
   );
 }
 
-/** Too old to take threads from this computer: before bridge 10, or behind this one's. */
+/** Too old to take threads from this computer: before bridge 10, or before the handoffs this one makes. */
 export const outdated = (info: ComputerInfo | null | undefined) =>
-  info === null || (!!info && info.bridge < remoteBridgeVersion);
+  info === null || (!!info && info.bridge < handoffBridge);
 
 async function upload(
   client: RemoteClient,

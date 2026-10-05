@@ -26,6 +26,7 @@ import {
 import { Lightbox, type LightboxImage } from "./Lightbox";
 import { Markdown, type OpenLink, type ShowImage } from "./Markdown";
 import { ProviderIcon, agentNames } from "./ProviderIcon";
+import { ReadAloudButton } from "./ReadAloudButton";
 import { mono, type, useTheme } from "./theme";
 
 export type Rewind = (
@@ -241,7 +242,7 @@ export const MessageView = memo(function MessageView({
 });
 
 /** A line across the thread with a note in the middle, for compactions and handoffs. */
-/** The desktop's MessageActions: when it was sent, copy, fork, reply. */
+/** The desktop's MessageActions: when it was sent, copy, read aloud, fork, reply. */
 function MessageActions({
   message,
   onReply,
@@ -269,6 +270,9 @@ function MessageActions({
       >
         {copied ? <Check size={16} color={t.muted} /> : <Copy size={16} color={t.muted} />}
       </Pressable>
+      {message.status === "complete" && !!message.body.trim() && (
+        <ReadAloudButton messageId={message.id} text={message.body} />
+      )}
       {onFork && (
         <Pressable accessibilityRole="button" accessibilityLabel="Fork into a new thread" hitSlop={8} onPress={onFork}>
           <Split size={16} color={t.muted} />

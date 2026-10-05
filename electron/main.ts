@@ -424,6 +424,10 @@ app
           status: () => dictation.current.status,
           open: () => dictation.open(),
         },
+        readAloud: {
+          ready: () => readAloud.ready(),
+          speak: (markdown, sink) => readAloud.speak(markdown, sink),
+        },
         handoffs: new HandoffReceiver({
           projects: () => projects.list(login.client),
           root: (id) => projects.root(id),

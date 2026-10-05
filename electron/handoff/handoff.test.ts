@@ -20,7 +20,7 @@ import { Computers } from "./computers";
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
 import { awaitsReturn } from "../project-chats/handoff";
-import { remoteBridgeVersion } from "../../shared/remote";
+import { handoffBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import type { UpdateState } from "../../shared/updates";
 import { findExecutable } from "../platform/executables";
@@ -874,19 +874,19 @@ it("updates the other computer's Relay from here, and tells an older one apart",
   await vi.waitFor(() =>
     expect(updater.calls).toEqual(["check", "download", "install"]),
   );
-  // A Relay from before bridge 10 can't say, and one behind this one's can't take threads.
+  // A Relay from before bridge 10 can't say, and one from before this one's handoffs can't take threads.
   expect(outdated(null)).toBe(true);
   expect(
     outdated({
       version: "0.8.0",
-      bridge: remoteBridgeVersion - 1,
+      bridge: handoffBridge - 1,
       update: { status: "idle", current: "0.8.0" },
     }),
   ).toBe(true);
   expect(
     outdated({
       version: "0.9.0",
-      bridge: remoteBridgeVersion,
+      bridge: handoffBridge,
       update: { status: "idle", current: "0.9.0" },
     }),
   ).toBe(false);

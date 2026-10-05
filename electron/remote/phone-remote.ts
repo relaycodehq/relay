@@ -7,6 +7,7 @@ import {
   computerMethods,
   defaultRemotePort,
   maxDictationChunk,
+  maxReadAloudText,
   pairingUrl,
   type PhoneAppearance,
   type PhonePairing,
@@ -16,6 +17,7 @@ import {
 import { RemoteBridge, type RemoteHost } from "./bridge";
 import { RemoteDevices } from "./devices";
 import { PhoneDictations } from "./phone-dictation";
+import { PhoneReadings } from "./phone-read-aloud";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 
@@ -52,6 +54,19 @@ const dictationSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("stop"), id: dictationId }).strict(),
   z.object({ type: z.literal("cancel"), id: dictationId }).strict(),
+]);
+
+const readingId = z.number().int().nonnegative();
+const readAloudSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("start"),
+      id: readingId,
+      markdown: z.string().max(maxReadAloudText),
+    })
+    .strict(),
+  z.object({ type: z.literal("pull"), id: readingId }).strict(),
+  z.object({ type: z.literal("stop"), id: readingId }).strict(),
 ]);
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
@@ -92,6 +107,7 @@ export class PhoneRemote {
   private bridge: RemoteBridge;
   private server: RemoteServer;
   private dictations?: PhoneDictations;
+  private readings?: PhoneReadings;
   private error?: string;
   private watch?: NodeJS.Timeout;
   private syncing = Promise.resolve();
@@ -110,6 +126,7 @@ export class PhoneRemote {
       (event) => this.server.broadcast(event, (id) => !this.isComputer(id)),
     );
     if (host.dictation) this.dictations = new PhoneDictations(host.dictation);
+    if (host.readAloud) this.readings = new PhoneReadings(host.readAloud);
     this.server = new RemoteServer({
       devices: this.devices,
       port,
@@ -137,6 +154,11 @@ export class PhoneRemote {
             deviceId,
             dictationSchema.parse(args[0]),
           );
+        }
+        if (method === "readAloud") {
+          if (!this.readings)
+            throw new Error("Read aloud isn't available on this computer.");
+          return this.readings.handle(deviceId, readAloudSchema.parse(args[0]));
         }
         return this.bridge.handle(method, args);
       },
@@ -249,6 +271,7 @@ export class PhoneRemote {
     this.watch = undefined;
     this.bridge.dispose();
     this.dictations?.dispose();
+    this.readings?.dispose();
     await this.server.close();
   }
   /** Listens now, and keeps up as Tailscale goes off, comes back or moves. */
