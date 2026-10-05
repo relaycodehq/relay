@@ -34,8 +34,8 @@ export function WatchSpendLine() {
   if (!data?.checks)
     return (
       <p className="watch-cost">
-        Checks every 6 tool calls and when a subagent ends · about 2–4¢ a check
-        on Opus 5.5
+        One look back after each answer that did some work · about 7¢ a check on
+        a long Opus 5.5 thread
       </p>
     );
   const part = share(data.usd, data.threadUsd);

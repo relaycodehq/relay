@@ -168,6 +168,7 @@ export class TurnRunner {
     // in a throwaway fork of the thread, as its own /side does.
     const { watchThreads: scope = "off", watchKnown: known = [] } =
       this.core.store.get();
+    const threadNotes = chat.messages.flatMap((m) => m.notes ?? []);
     const watch: AgentWatch | undefined =
       scope !== "off" &&
       (provider === "claude" || provider === "codex") &&
@@ -178,6 +179,11 @@ export class TurnRunner {
         ? {
             scope,
             known,
+            shown: threadNotes.map((n) => `${n.title}: ${n.line}`),
+            // Older notes don't carry the flag; their title in the known list says it.
+            topics: threadNotes
+              .filter((n) => n.known || (n.closed && known.includes(n.title)))
+              .map((n) => `${n.title}: ${n.line}`),
             onNote: (note) => answer.note(note),
             onSpend: (spend) => this.core.watchSpend?.add(chat.id, spend),
           }

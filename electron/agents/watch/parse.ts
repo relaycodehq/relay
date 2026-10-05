@@ -6,6 +6,8 @@ export type ParsedNote = {
   points: string[];
   diff?: { file: string; lines: string[] };
   steer?: string;
+  /** Where the agent already said it, in its own words; absent when it never did. */
+  said?: string;
 };
 
 const limits = { line: 300, title: 80, point: 400, points: 5, diffLines: 6 };
@@ -33,6 +35,7 @@ export function parseNote(reply: string): ParsedNote | null {
   let tag: ParsedNote["tag"] = "You should know";
   let title = "";
   let steer: string | undefined;
+  let said: string | undefined;
   let file: string | undefined;
   const points: string[] = [];
   const diff: string[] = [];
@@ -68,6 +71,11 @@ export function parseNote(reply: string): ParsedNote | null {
       case "ask":
         steer = isNone(value) ? undefined : value;
         break;
+      case "said":
+        said = /^(never|none)\b/i.test(value)
+          ? undefined
+          : value.replace(/^["“']|["”']$/g, "");
+        break;
     }
   }
   return {
@@ -77,7 +85,25 @@ export function parseNote(reply: string): ParsedNote | null {
     points,
     ...(file && diff.length ? { diff: { file, lines: diff } } : {}),
     ...(steer ? { steer } : {}),
+    ...(said ? { said } : {}),
   };
+}
+
+const plain = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[*_`>#"“”'’]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * The note's own quote of where the agent said it is in the answer the
+ * person is about to read. A quote too short to mean anything, or one the
+ * model got wrong, keeps the note: a bad quote must not hide a real point.
+ */
+export function saidInAnswer(said: string | undefined, answer: string) {
+  const quote = plain(said ?? "");
+  return quote.length >= 20 && plain(answer).includes(quote);
 }
 
 /** Two notes about the same thing, worded nearly alike. */

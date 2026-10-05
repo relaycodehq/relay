@@ -23,6 +23,8 @@ export type WatchNote = {
   created: number;
   /** Dismissed, answered with Tell Claude, or known: it stays out of the turn. */
   closed?: true;
+  /** Closed with "I know this": the thread's checks skip its whole topic. */
+  known?: true;
 };
 
 /** How many "I know this" topics the watcher keeps passing on. */

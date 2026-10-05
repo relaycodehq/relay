@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { WatchNote, WatchTokens } from "../../../shared/watch";
 import type { AgentWatch } from "../types";
-import { parseNote, sameNote, type ParsedNote } from "./parse";
+import { parseNote, sameNote, saidInAnswer, type ParsedNote } from "./parse";
 
 /** What one check cost, as its agent measured it; no `usd` without a list price. */
 export type CheckCost = {
@@ -27,6 +27,8 @@ export type WatchCheck = {
   signal: AbortSignal;
   agent?: { id: string; label: string };
   onShown?: () => void;
+  /** The answer the person is about to read; a point it makes isn't news. */
+  answer?: string;
 };
 
 /**
@@ -60,13 +62,23 @@ export class WatchChecks {
     try {
       for (let check; (check = this.queue.shift());) {
         if (check.signal.aborted) continue;
+        const shown = [
+          ...new Set([...(check.watch.shown ?? []), ...this.shown]),
+        ];
         // Asked for at once: a subagent's digest counts as seen from here.
-        const question = check.prompt(this.shown);
+        const question = check.prompt(shown);
         const { reply, cost } = await this.ask(question, check.signal).catch(
           () => ({ reply: null, cost: undefined }),
         );
         const parsed = reply ? parseNote(reply) : null;
-        const noted = !!parsed && !this.seen(parsed, check.watch.known);
+        const noted =
+          !!parsed &&
+          !saidInAnswer(parsed.said, check.answer ?? "") &&
+          !this.seen(parsed, [
+            ...shown,
+            ...check.watch.known,
+            ...(check.watch.topics ?? []),
+          ]);
         if (noted) this.show(parsed, check);
         if (cost)
           check.watch.onSpend?.({
@@ -84,17 +96,23 @@ export class WatchChecks {
     }
   }
 
-  private seen(note: ParsedNote, known: string[]) {
-    return [...this.shown, ...known].some(
-      (line) => sameNote(line, note.line) || sameNote(line, note.title),
-    );
+  /** Entries read "title: line", or a bare title from before they did. */
+  private seen(note: ParsedNote, before: string[]) {
+    return before.some((entry) => {
+      const [title, ...rest] = entry.split(": ");
+      const line = rest.join(": ");
+      return [entry, title, line]
+        .filter(Boolean)
+        .some((t) => sameNote(t, note.line) || sameNote(t, note.title));
+    });
   }
 
   private show(parsed: ParsedNote, check: WatchCheck) {
-    this.shown.push(parsed.line);
+    this.shown.push(`${parsed.title}: ${parsed.line}`);
+    const { said: _, ...shown } = parsed;
     const note: WatchNote = {
       id: randomUUID(),
-      ...parsed,
+      ...shown,
       ...(check.agent ? { agent: check.agent } : {}),
       created: Date.now(),
     };

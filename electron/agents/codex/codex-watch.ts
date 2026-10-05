@@ -187,6 +187,8 @@ export type CodexTurnWatch = {
   item(item: { id?: string | null; type?: string }): void;
   /** The thread's `thread/tokenUsage/updated`. */
   requested(tokenUsage: unknown): void;
+  /** The turn completed with `answer`. */
+  ended(answer: string): void;
 };
 
 /** The turn's link to its thread's checks; none when the turn isn't watched. */
@@ -213,6 +215,7 @@ export function codexTurnWatcher(
     item: (item) => {
       if (item.id && item.type && TOOLS.has(item.type)) turn.called([item.id]);
     },
+    ended: (answer) => turn.ended(answer),
     requested: (tokenUsage) => {
       const last = (tokenUsage as { last?: Usage } | null)?.last;
       const model = options.choice.model || connection.started?.model || "";

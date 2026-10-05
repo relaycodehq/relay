@@ -63,6 +63,7 @@ export class ClaudeTurnReader {
         options.watch,
         watchOf(session).checks,
         options.signal,
+        () => watchOf(session).subagents.take(),
       );
   }
 
@@ -269,6 +270,8 @@ export class ClaudeTurnReader {
       this.steering.clear();
       return "follow-up";
     }
+    // One look back, once the answer is in.
+    this.watcher?.ended(this.text);
     return { answer: this.text };
   }
 }

@@ -241,6 +241,8 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     if (n.method === "turn/completed") {
       if (holds && n.params.turn.status === "completed" && goals.completed())
         return;
+      if (n.params.turn.status === "completed")
+        watcher?.ended(plan || review || stream.answer);
       finish(
         n.params.turn.status === "completed"
           ? undefined

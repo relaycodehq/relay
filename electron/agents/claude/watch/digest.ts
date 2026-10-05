@@ -81,6 +81,11 @@ export class SubagentLog {
     this.entries.push({ kind: "failed", text: output });
   }
 
+  /** It changed a file at some point. */
+  get edited() {
+    return this.entries.some((e) => e.kind === "edit");
+  }
+
   /** Calls and edits since the last check. */
   get fresh() {
     return this.entries.length - this.checked;

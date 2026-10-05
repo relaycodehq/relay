@@ -38,8 +38,12 @@ export type AgentJob =
 /** A thread turn's side check; see shared/watch. Claude reads it, the others ignore it. */
 export type AgentWatch = {
   scope: Exclude<WatchScope, "off">;
-  /** Topics the person said they already know. */
+  /** Notes the person said they know, in any thread: skipped only when a note says the same. */
   known: string[];
+  /** The thread's earlier notes, closed or not, so a restart doesn't forget them. */
+  shown?: string[];
+  /** Notes this thread's person closed with "I know this": their whole topic is skipped. */
+  topics?: string[];
   onNote: (note: WatchNote) => void;
   /** What a check spent, or what the watched session did in a turn. */
   onSpend?: (spend: WatchSpend) => void;

@@ -1,12 +1,6 @@
 import type { AgentWatch } from "../../types";
-import type { WatchChecks } from "../../watch/checks";
+import type { SubagentRun } from "../../watch/prompt";
 import { SubagentLog } from "./digest";
-import { subagentCheckPrompt } from "../../watch/prompt";
-
-/** A subagent's calls between checks of its work, besides the one when it ends. */
-const AGENT_EVERY = 8;
-/** Checks of one subagent's work, its last one included. */
-const MAX_PER_AGENT = 4;
 
 /** The frames this reads, loosely: it only looks for what it needs. */
 type Frame = {
@@ -34,24 +28,29 @@ type Block = {
 
 type Run = {
   log: SubagentLog;
-  /** The turn that started it: its note lands there, even after that turn ended. */
-  watch: AgentWatch;
-  signal: AbortSignal;
   background?: boolean;
-  checks: number;
 };
 
 /**
  * Follows the subagents a session's turns start, for as long as the session
  * lives: Claude runs most in the background, so their work goes on after the
- * turn that started them ended. Each is checked every few calls and once more
- * when it ends.
+ * turn that started them ended. One that changed files waits, once it ends,
+ * for the look back at the end of the next watched turn.
  */
 export class SubagentWatch {
   private runs = new Map<string, Run>();
   private tasks = new Map<string, string>();
+  private ended = new Set<Run>();
 
-  constructor(private queue: WatchChecks) {}
+  /** Subagents that changed files and finished since the last look; each is handed over once. */
+  take(): SubagentRun[] {
+    const runs = [...this.ended].filter((run) => run.log.edited);
+    this.ended.clear();
+    return runs.map((run) => ({
+      task: run.log.label,
+      digest: run.log.digest(),
+    }));
+  }
 
   /**
    * One frame of the session; `turn` is the running turn's watch, if any.
@@ -77,7 +76,6 @@ export class SubagentWatch {
       for (const block of content)
         if (block.type === "tool_use" && block.name)
           run.log.called(block.name, block.input);
-      if (run.log.fresh >= AGENT_EVERY) this.check(run);
     } else if (frame.type === "user") {
       for (const block of content) {
         if (block.type !== "tool_result" || !block.tool_use_id) continue;
@@ -85,15 +83,12 @@ export class SubagentWatch {
           this.runs.get(parent)?.log.failed(textOf(block.content));
         // A foreground agent's result is its report; a background one's is a placeholder.
         const run = parent ? undefined : this.runs.get(block.tool_use_id);
-        if (run && run.background === false) this.ended(run);
+        if (run && run.background === false) this.finish(run);
       }
     } else if (frame.type === "system") this.task(frame);
   }
 
-  private start(
-    block: Block,
-    turn: { watch?: AgentWatch; signal: AbortSignal },
-  ) {
+  private start(block: Block, turn: { watch?: AgentWatch }) {
     if (!block.id || this.runs.has(block.id)) return;
     if (turn.watch?.scope !== "subagents") return;
     const input = (block.input ?? {}) as {
@@ -107,9 +102,6 @@ export class SubagentWatch {
           "Subagent",
         typeof input.prompt === "string" ? input.prompt : "",
       ),
-      watch: turn.watch,
-      signal: turn.signal,
-      checks: 0,
     });
   }
 
@@ -125,31 +117,12 @@ export class SubagentWatch {
       if (frame.patch?.is_backgrounded !== undefined)
         run.background = frame.patch.is_backgrounded;
       if (["completed", "failed", "killed"].includes(frame.patch?.status ?? ""))
-        this.ended(run);
-    } else if (frame.subtype === "task_notification") this.ended(run);
+        this.finish(run);
+    } else if (frame.subtype === "task_notification") this.finish(run);
   }
 
-  private ended(run: Run) {
-    if (run.log.fresh) this.check(run);
-  }
-
-  private check(run: Run) {
-    if (run.checks >= MAX_PER_AGENT) return;
-    run.checks++;
-    const { log } = run;
-    this.queue.enqueue({
-      key: log.id,
-      agent: { id: log.id, label: log.label },
-      prompt: (shown) =>
-        subagentCheckPrompt({
-          task: log.label,
-          digest: log.digest(),
-          shown,
-          known: run.watch.known,
-        }),
-      watch: run.watch,
-      signal: run.signal,
-    });
+  private finish(run: Run) {
+    if (run.log.fresh) this.ended.add(run);
   }
 }
 
