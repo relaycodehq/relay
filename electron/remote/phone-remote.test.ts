@@ -433,3 +433,88 @@ it("says who answers in `to` only to desktops that take it", async () => {
   ).toEqual(older);
   expect(recipient(older as typeof send)).toBe("codex");
 });
+
+/** A phone from before `compactBridge`: base64 text both ways, and it never says its bridge. */
+async function olderPhone(port: number, key: string, credentials: RemoteCredentials) {
+  const handshake = clientHandshake(fromBase64Url(key));
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/`);
+  cleanup.push(async () => socket.close());
+  const frames: any[] = [];
+  let binary = 0;
+  let channel: ReturnType<typeof handshake.finish> | undefined;
+  const send = (frame: unknown) =>
+    socket.send(toBase64Url(channel!.seal(JSON.stringify(frame))));
+  socket.onopen = () => socket.send(JSON.stringify(handshake.hello));
+  socket.onmessage = (m) => {
+    if (typeof m.data !== "string") return void binary++;
+    if (!channel) {
+      channel = handshake.finish(JSON.parse(m.data));
+      const { deviceId, token } = credentials;
+      return send({ t: "auth", deviceId, token });
+    }
+    const frame = JSON.parse(channel.open(fromBase64Url(m.data)));
+    frames.push(frame);
+    if (frame.t === "ready") send({ t: "call", id: 1, method: "overview", args: [] });
+  };
+  await vi.waitFor(() => expect(frames.some((f) => f.t === "result")).toBe(true));
+  return {
+    binary: () => binary,
+    events: () => frames.flatMap((f) => (f.t === "event" ? [f.event] : [])),
+  };
+}
+
+it("streams patches to a current phone that add up to what an older one gets whole", async () => {
+  const chats: ChatSummary[] = [];
+  const { remote, summary } = await desktop(undefined, undefined, {
+    chats: () => chats,
+  });
+  chats.push(summary);
+  const pair = async (device: string) => {
+    const link = parsePairingUrl((await remote.pairing()).url)!;
+    const p = phone({ link, device });
+    await p.until("online");
+    return { link, credentials: p.credentials()!, p };
+  };
+  const old = await pair("Old phone");
+  old.p.client.close();
+  const current = await pair("Pixel");
+  await current.p.client.call("overview");
+  const older = await olderPhone(old.link.port, old.link.key, old.credentials);
+
+  const id = randomUUID();
+  const words = "Looked at the flaky test and found a race in the watcher. ".repeat(40);
+  const trace: NonNullable<ChatMessage["trace"]> = [];
+  const snapshot = (n: number, status: ChatMessage["status"]): ChatMessage => ({
+    id,
+    role: "assistant",
+    body: words.slice(0, n * 400),
+    status,
+    created: 3,
+    provider: "claude",
+    version: 1,
+    trace: structuredClone(trace),
+  });
+  for (let n = 1; n <= 5; n++) {
+    trace.push({ kind: "commentary", id: `c${n}`, text: `Step ${n}: reading the watcher.` });
+    remote.chatEvent({ chatId, message: snapshot(n, "streaming") });
+    // Past the bridge's throttle, so each step goes out on its own.
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  remote.chatEvent({ chatId, message: snapshot(6, "complete") });
+  chats.push({ ...summary, id: randomUUID(), title: "Another", updated: 5 });
+  remote.chatsEvent({ projectId, chats });
+  summary.title = "Fixed the flaky test";
+  summary.updated = 6;
+  remote.chatsEvent({ projectId, chats });
+
+  const done = (events: RemoteEvent[]) =>
+    events.filter((e) => e.kind === "chats").length === 2 &&
+    events.some((e) => e.kind === "message" && e.message.status === "complete");
+  await vi.waitFor(() => {
+    expect(done(current.p.events)).toBe(true);
+    expect(done(older.events())).toBe(true);
+  });
+  expect(current.p.events).toEqual(older.events());
+  expect(current.p.events.filter((e) => e.kind === "message")).toHaveLength(6);
+  expect(older.binary()).toBe(0);
+});

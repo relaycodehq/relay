@@ -2,12 +2,14 @@
  * The phone's connection to the desktop bridge. No React Native here: the
  * desktop's tests drive this exact client against the real bridge.
  */
+import type { ChatMessage } from "./projects";
 import {
   clientHandshake,
   fromBase64Url,
-  toBase64Url,
   type Channel,
 } from "./remote-crypto";
+import { applyChatsPatch, applyMessagePatch } from "./remote-delta";
+import { jsCodec, openFrame, sealFrame, type Codec } from "./remote-wire";
 import type {
   ClientFrame,
   DesktopCall,
@@ -18,10 +20,18 @@ import type {
   RemoteCredentials,
   RemoteEvent,
   RemoteMethod,
+  WireEvent,
   PhoneDesktopMethod,
+  RemoteChatSummary,
   ServerFrame,
 } from "./remote";
-import { recipientBridge, slowPhoneMethods, slowRemoteMethods } from "./remote";
+import {
+  compactBridge,
+  recipientBridge,
+  remoteBridgeVersion,
+  slowPhoneMethods,
+  slowRemoteMethods,
+} from "./remote";
 
 export type RemoteStatus = "connecting" | "online" | "offline" | "denied";
 
@@ -41,6 +51,7 @@ export interface RemoteClientOptions {
   slowTimeoutMs?: number;
   /** Silence after which a link counts as dead; the desktop ticks every 15s. */
   staleMs?: number;
+  codec?: Codec;
 }
 
 type Result<M extends RemoteMethod> = Awaited<ReturnType<RemoteApi[M]>>;
@@ -65,6 +76,9 @@ export class RemoteClient {
   private attempt = 0;
   /** The connected desktop's bridge version; older desktops don't say. */
   private bridge?: number;
+  /** What the desktop patches next, from this connection's events: answers still streaming and the thread list. */
+  private streaming = new Map<string, ChatMessage>();
+  private chats?: RemoteChatSummary[];
   constructor(private options: RemoteClientOptions) {
     this.target = options.start;
   }
@@ -205,6 +219,7 @@ export class RemoteClient {
     const url = `ws://${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}/`;
     return new Promise<void>((resolve, reject) => {
       const socket = new Socket(url);
+      socket.binaryType = "arraybuffer";
       this.socket = socket;
       const handshake = clientHandshake(serverKey);
       let settled = false;
@@ -225,12 +240,16 @@ export class RemoteClient {
         if (this.socket === socket) this.lost();
       };
       socket.onmessage = (message) => {
-        if (typeof message.data !== "string") return socket.close();
+        const data =
+          message.data instanceof ArrayBuffer
+            ? new Uint8Array(message.data)
+            : message.data;
+        if (typeof data !== "string" && !(data instanceof Uint8Array))
+          return socket.close();
         try {
           if (!this.channel) {
-            this.channel = handshake.finish(
-              JSON.parse(message.data) as HelloFrame,
-            );
+            if (typeof data !== "string") throw new Error();
+            this.channel = handshake.finish(JSON.parse(data) as HelloFrame);
             this.sendFrame(
               "link" in this.target
                 ? {
@@ -238,17 +257,21 @@ export class RemoteClient {
                     code: this.target.link.code,
                     device: this.target.device,
                     ...(this.target.kind ? { kind: this.target.kind } : {}),
+                    bridge: remoteBridgeVersion,
                   }
                 : {
                     t: "auth",
                     deviceId: this.target.deviceId,
                     token: this.target.token,
+                    bridge: remoteBridgeVersion,
                   },
             );
             return;
           }
-          const frame = JSON.parse(
-            this.channel.open(fromBase64Url(message.data)),
+          const frame = openFrame(
+            this.channel,
+            data,
+            this.options.codec ?? jsCodec,
           ) as ServerFrame;
           this.keepAlive(socket);
           if (!settled) {
@@ -293,12 +316,33 @@ export class RemoteClient {
       clearTimeout(call.timer);
       if (frame.ok) call.resolve(frame.value);
       else call.reject(new Error(frame.error));
-    } else if (frame.t === "event") this.options.onEvent?.(frame.event);
-    else if (frame.t === "denied") {
+    } else if (frame.t === "event") {
+      if (frame.s !== undefined) this.sendFrame({ t: "got", s: frame.s });
+      const event = this.rebuild(frame.event);
+      if (event) this.options.onEvent?.(event);
+    } else if (frame.t === "denied") {
       this.closed = true;
       this.drop(frame.reason);
       this.setStatus("denied", frame.reason);
     }
+  }
+  private rebuild(event: WireEvent): RemoteEvent | undefined {
+    if (event.kind === "messagePatch") {
+      const prev = this.streaming.get(event.patch.id);
+      // Can't be, both ends start over with each connection; the final answer comes whole.
+      if (!prev) return;
+      const { patch, ...rest } = event;
+      event = { ...rest, kind: "message", message: applyMessagePatch(prev, patch) };
+    } else if (event.kind === "chatsPatch") {
+      if (!this.chats) return;
+      event = { kind: "chats", chats: applyChatsPatch(this.chats, event.patch) };
+    }
+    if (event.kind === "message") {
+      if (event.message.status === "streaming")
+        this.streaming.set(event.message.id, event.message);
+      else this.streaming.delete(event.message.id);
+    } else if (event.kind === "chats") this.chats = event.chats;
+    return event;
   }
   private lost() {
     this.drop("Connection lost.");
@@ -316,13 +360,19 @@ export class RemoteClient {
     }, this.options.staleMs ?? 40000);
   }
   private sendFrame(frame: ClientFrame) {
-    this.socket?.send(toBase64Url(this.channel!.seal(JSON.stringify(frame))));
+    const compact = (this.bridge ?? 0) >= compactBridge;
+    this.socket?.send(
+      sealFrame(this.channel!, frame, compact, this.options.codec ?? jsCodec),
+    );
   }
   private drop(reason: string) {
     clearTimeout(this.watchdog);
     const socket = this.socket;
     this.socket = undefined;
     this.channel = undefined;
+    this.bridge = undefined;
+    this.streaming.clear();
+    this.chats = undefined;
     if (socket) {
       socket.onclose = socket.onmessage = socket.onerror = socket.onopen = null;
       try {

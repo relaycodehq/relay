@@ -30,6 +30,7 @@ import {
   type RemoteProjectIcon,
 } from "../../shared/remote";
 import { sentAgent } from "../../shared/recipient";
+import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/rooms";
 import type { ApiMethod, FilePair } from "../../shared/types";
@@ -53,6 +54,8 @@ export interface RemoteHost {
     release(): Promise<PhoneAppRelease | undefined>;
     chunk(path: string, offset: number): Promise<string>;
   };
+  /** `dataUrl` at most `max` pixels on its longer side; without it phones get images whole. */
+  shrinkImage?(dataUrl: string, max: number): string;
   /** The speech engine phones dictate with. */
   dictation?: SpeechService;
   /** The voice phones hear answers in. */
@@ -72,6 +75,19 @@ const activityIdSchema = z.string().min(1).max(200);
 const knownIconsSchema = z
   .record(idSchema, z.string().max(64).nullable())
   .refine((known) => Object.keys(known).length <= 1000);
+const imageSourceSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("attached"), chatId: idSchema, imageId: idSchema })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("read"),
+      chatId: idSchema,
+      messageId: idSchema,
+      path: pathSchema,
+    })
+    .strict(),
+]);
 const diffSourceSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -208,6 +224,17 @@ export class RemoteBridge {
         null
       );
     },
+    image: async (source, max) => {
+      const dataUrl = (await this.host.dispatch(
+        ...((source.kind === "attached"
+          ? ["projectChatImage", [source.chatId, source.imageId]]
+          : [
+              "projectChatReadImage",
+              [source.chatId, source.messageId, source.path],
+            ]) as [ApiMethod, unknown[]]),
+      )) as string;
+      return this.host.shrinkImage?.(dataUrl, max) ?? dataUrl;
+    },
     diff: async (source) => {
       const [method, args]: [ApiMethod, unknown[]] =
         source.kind === "turn"
@@ -273,6 +300,11 @@ export class RemoteBridge {
         );
       case "diff":
         return a.diff(diffSourceSchema.parse(args[0]));
+      case "image":
+        return a.image(
+          imageSourceSchema.parse(args[0]),
+          z.number().int().min(16).max(4096).parse(args[1]),
+        );
       case "desktop":
         return a.desktop(
           z.enum(phoneDesktopMethods).parse(args[0]) as PhoneDesktopMethod,
@@ -359,7 +391,9 @@ export class RemoteBridge {
       .filter((c) => !c.archivedAt && !chatIsEmpty(c))
       .sort((a, b) => b.updated - a.updated)
       .slice(0, 300)
-      .map(summary);
+      .map(summary)
+      // Ties included, the order a phone rebuilds a patched list in.
+      .sort(chatOrder);
   }
 }
 

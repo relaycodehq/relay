@@ -27,6 +27,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "fflate": "0.8.3",
     "lucide-react-native": "1.48.0",
     "marked": "18.0.14",
     "prism-react-renderer": "2.4.1",

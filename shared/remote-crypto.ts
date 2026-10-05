@@ -35,19 +35,22 @@ export class Channel {
     private sendKey: Uint8Array,
     private receiveKey: Uint8Array,
   ) {}
-  seal(text: string): Uint8Array {
+  seal(plain: string | Uint8Array): Uint8Array {
     return chacha20poly1305(this.sendKey, nonce(this.sent++)).encrypt(
-      utf8ToBytes(text),
+      typeof plain === "string" ? utf8ToBytes(plain) : plain,
     );
   }
   /** Throws on a forged, reordered or replayed frame. */
-  open(frame: Uint8Array): string {
+  openBytes(frame: Uint8Array): Uint8Array {
     const plain = chacha20poly1305(
       this.receiveKey,
       nonce(this.received),
     ).decrypt(frame);
     this.received++;
-    return decoder.decode(plain);
+    return plain;
+  }
+  open(frame: Uint8Array): string {
+    return decodeUtf8Bytes(this.openBytes(frame));
   }
 }
 
@@ -138,6 +141,7 @@ const decoder =
   typeof TextDecoder === "function"
     ? new TextDecoder("utf-8", { fatal: true })
     : { decode: decodeUtf8 };
+export const decodeUtf8Bytes = (bytes: Uint8Array) => decoder.decode(bytes);
 
 /** For runtimes without TextDecoder; the bytes already passed authentication. */
 function decodeUtf8(bytes: Uint8Array) {

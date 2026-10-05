@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet } from "react-native";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  PixelRatio,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+} from "react-native";
 import { answerImagePaths } from "../../../shared/answer-images";
 import { turnImages, type ChatMessage } from "../../../shared/projects";
+import { imageBridge } from "../../../shared/remote";
 import { outgoingImage } from "../remote/outbox";
 import { useRemote } from "../remote/RemoteProvider";
 import type { LightboxImage } from "./Lightbox";
@@ -13,24 +22,36 @@ export type Source =
   /** Pasted into a message still on its way; the outbox holds it. */
   | { kind: "pending"; messageId: string; index: number };
 
-// Data URLs by source, so scrolling back doesn't fetch them again.
+// Data URLs by source and size, so scrolling back doesn't fetch them again.
 const cache = new Map<string, string>();
 // Ones the desktop refused, so the lightbox skips them as the desktop's does.
 const failed = new Set<string>();
 export const keyOf = (s: Source) => JSON.stringify(s);
 export const imageFailed = (s: Source) => failed.has(keyOf(s));
 
-export function useImage(source: Source) {
+/**
+ * The image as a data URL; with `max`, at most that many pixels on its longer
+ * side, which the desktop shrinks it to from `imageBridge` on. Older desktops
+ * send it whole.
+ */
+export function useImage(source: Source, max?: number) {
   const remote = useRemote();
-  const key = keyOf(source);
+  const bridge = remote.overview?.bridge;
+  const shrunk = !!max && (bridge ?? 1) >= imageBridge;
+  const key = keyOf(source) + (shrunk ? `@${max}` : "");
   const [uri, setUri] = useState(() =>
     source.kind === "pending" ? outgoingImage(source.messageId, source.index) : cache.get(key),
   );
-  const [error, setError] = useState(failed.has(key) || (source.kind === "pending" && !uri));
+  const [error, setError] = useState(
+    failed.has(keyOf(source)) || (source.kind === "pending" && !uri),
+  );
   useEffect(() => {
     if (uri || error || source.kind === "pending" || remote.status !== "online") return;
-    const load =
-      source.kind === "attached"
+    // Until the overview says which bridge it is, a thumbnail could come whole.
+    if (max && bridge === undefined) return;
+    const load = shrunk
+      ? remote.call("image", source, max)
+      : source.kind === "attached"
         ? remote.desktop("projectChatImage", source.chatId, source.imageId)
         : remote.desktop("projectChatReadImage", source.chatId, source.messageId, source.path);
     void load
@@ -39,12 +60,16 @@ export function useImage(source: Source) {
         setUri(data);
       })
       .catch(() => {
-        failed.add(key);
+        failed.add(keyOf(source));
         setError(true);
       });
-  }, [key, uri, error, remote.status]);
+  }, [key, uri, error, remote.status, bridge]);
   return { uri, failed: error };
 }
+
+const thumbSize = 88;
+const answerHeight = 420;
+const pixels = (points: number) => Math.round(points * PixelRatio.get());
 
 const fileName = (path: string) => path.split("/").at(-1) || path;
 
@@ -100,7 +125,8 @@ export function MessageImages({
 
 function Thumb({ image, onPress }: { image: LightboxImage; onPress: () => void }) {
   const t = useTheme();
-  const { uri } = useImage(image.source);
+  // Covers a square, so its shorter side is what has to fill it.
+  const { uri } = useImage(image.source, pixels(thumbSize * 2));
   return (
     <Pressable
       accessibilityRole="imagebutton"
@@ -128,7 +154,10 @@ export function AnswerImage({
   onOpen: (source: Source) => void;
 }) {
   const t = useTheme();
-  const { uri } = useImage(source);
+  const { uri } = useImage(
+    source,
+    pixels(Math.max(answerHeight, Dimensions.get("window").width)),
+  );
   const [ratio, setRatio] = useState<number>();
   if (!uri) return null;
   // Measured out of the layout before it's drawn, so it takes its height once instead of
@@ -150,7 +179,7 @@ export function AnswerImage({
       accessibilityLabel={alt || (source.kind === "read" ? fileName(source.path) : "Image")}
       onPress={() => onOpen(source)}
       // A tall screenshot narrows instead of running screens long.
-      style={[styles.answer, { borderColor: t.border, maxWidth: 420 * ratio }]}
+      style={[styles.answer, { borderColor: t.border, maxWidth: answerHeight * ratio }]}
     >
       <Image source={{ uri }} style={{ width: "100%", aspectRatio: ratio }} />
     </Pressable>
@@ -160,8 +189,8 @@ export function AnswerImage({
 const styles = StyleSheet.create({
   row: { gap: 8 },
   thumb: {
-    width: 88,
-    height: 88,
+    width: thumbSize,
+    height: thumbSize,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",

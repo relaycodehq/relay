@@ -376,3 +376,22 @@ it("lets a phone fetch a queued message's screenshots through the desktop", asyn
     { method: "projectChatQueuedImages", args: [chatId, "a"] },
   ]);
 });
+
+it("sends a thread's image shrunk to what the phone shows, through the desktop's own calls", async () => {
+  const { b, dispatched } = bridge();
+  const shrunk: [unknown, number][] = [];
+  (b as unknown as { host: RemoteHost }).host.shrinkImage = (url, max) => {
+    shrunk.push([url, max]);
+    return "small";
+  };
+  const messageId = randomUUID(),
+    imageId = randomUUID();
+  expect(await b.handle("image", [{ kind: "attached", chatId, imageId }, 264])).toBe("small");
+  await b.handle("image", [{ kind: "read", chatId, messageId, path: "/r/shot.png" }, 1200]);
+  expect(dispatched).toEqual([
+    { method: "projectChatImage", args: [chatId, imageId] },
+    { method: "projectChatReadImage", args: [chatId, messageId, "/r/shot.png"] },
+  ]);
+  expect(shrunk.map(([, max]) => max)).toEqual([264, 1200]);
+  await expect(b.handle("image", [{ kind: "attached", chatId, imageId }, 1e6])).rejects.toThrow();
+});

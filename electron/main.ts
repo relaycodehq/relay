@@ -47,6 +47,7 @@ import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { questionContext } from "./pull-requests/questions";
 import { PhoneAppFiles } from "./remote/phone-app";
 import { PhoneRemote } from "./remote/phone-remote";
+import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
 import { Handoffs } from "./handoff/sender";
@@ -420,6 +421,7 @@ app
         // The bridge forwards only its allowlist; see shared/remote.ts.
         dispatch,
         phoneApp: new PhoneAppFiles(join(__dirname, "../dist-phone")),
+        shrinkImage,
         dictation: {
           status: () => dictation.current.status,
           open: () => dictation.open(),

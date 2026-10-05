@@ -1,12 +1,13 @@
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
-  fromBase64Url,
   serverHandshake,
-  toBase64Url,
   type Channel,
   type KeyPair,
 } from "../../shared/remote-crypto";
+import { openFrame, sealFrame, type Codec } from "../../shared/remote-wire";
 import {
+  compactBridge,
   remoteBridgeVersion,
   remoteMethods,
   type ClientFrame,
@@ -16,6 +17,7 @@ import {
   type ServerFrame,
 } from "../../shared/remote";
 import type { RemoteDevices } from "./devices";
+import { LinkSender } from "./link-sender";
 import { tailnetPeer } from "./tailscale";
 
 export interface RemoteServerOptions {
@@ -37,11 +39,20 @@ interface Connection {
   channel?: Channel;
   deviceId?: string;
   alive: boolean;
+  /** Binary frames and patches, once both ends speak `compactBridge`. */
+  link?: LinkSender;
 }
 
 /** Unauthenticated sockets get this long to finish the handshake. */
 const handshakeMs = 10_000;
 const maxConnections = 24;
+
+export const nodeCodec: Codec = {
+  deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
+  // Inflated past this is no frame we'd send.
+  inflate: (bytes) => inflateRawSync(bytes, { maxOutputLength: 32 * 1024 * 1024 }),
+  deflateUpTo: Infinity,
+};
 
 /** The desktop end of the phone remote; see shared/remote-crypto for the channel. */
 export class RemoteServer {
@@ -114,7 +125,8 @@ export class RemoteServer {
   broadcast(event: RemoteEvent, to?: (deviceId: string) => boolean) {
     for (const c of this.connections)
       if (c.deviceId && this.stillPaired(c) && (!to || to(c.deviceId)))
-        this.send(c, { t: "event", event });
+        if (c.link) c.link.event(event);
+        else this.send(c, { t: "event", event });
   }
   /**
    * Ends the session of a device removed since it signed in, as the removal
@@ -149,13 +161,12 @@ export class RemoteServer {
     });
     socket.on("error", () => socket.terminate());
     socket.on("message", (data, binary) => {
-      if (binary) return socket.terminate();
-      const text = data.toString();
+      if (binary && !c.link) return socket.terminate();
       if (!c.channel) {
         try {
           const handshake = serverHandshake(
             key,
-            JSON.parse(text) as HelloFrame,
+            JSON.parse(data.toString()) as HelloFrame,
           );
           c.channel = handshake.channel;
           socket.send(JSON.stringify(handshake.hello));
@@ -166,7 +177,11 @@ export class RemoteServer {
       }
       let frame: ClientFrame;
       try {
-        frame = JSON.parse(c.channel.open(fromBase64Url(text)));
+        frame = openFrame(
+          c.channel,
+          binary ? (data as Buffer) : data.toString(),
+          nodeCodec,
+        ) as ClientFrame;
       } catch {
         // Not sealed with this session's key: someone else is talking.
         return socket.terminate();
@@ -206,6 +221,9 @@ export class RemoteServer {
             bridge: remoteBridgeVersion,
           });
         } else throw new Error("Pair this phone first.");
+        // `paired` and `ready` went as text, which every client reads.
+        if (Number(frame.bridge) >= compactBridge)
+          c.link = new LinkSender((f) => this.send(c, f));
         this.options.onPresence?.();
       } catch (e) {
         this.send(c, {
@@ -217,6 +235,7 @@ export class RemoteServer {
       return;
     }
     if (!this.stillPaired(c)) return;
+    if (frame.t === "got") return c.link?.got(Number(frame.s));
     if (frame.t !== "call" || !Number.isSafeInteger(frame.id)) return;
     const { id, method, args } = frame;
     try {
@@ -246,8 +265,11 @@ export class RemoteServer {
       if (c.deviceId) this.send(c, { t: "tick" });
     }
   }
+  /** The bytes it took on the wire. */
   private send(c: Connection, frame: ServerFrame) {
-    if (!c.channel || c.socket.readyState !== c.socket.OPEN) return;
-    c.socket.send(toBase64Url(c.channel.seal(JSON.stringify(frame))));
+    if (!c.channel || c.socket.readyState !== c.socket.OPEN) return 0;
+    const data = sealFrame(c.channel, frame, !!c.link, nodeCodec);
+    c.socket.send(data);
+    return data.length;
   }
 }

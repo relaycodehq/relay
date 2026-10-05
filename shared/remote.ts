@@ -22,6 +22,7 @@ import type {
 } from "./projects";
 import type { Api, ApiMethod } from "./types";
 import type { ChangeArea } from "./working-tree";
+import type { ChatsPatch, MessagePatch } from "./remote-delta";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -142,7 +143,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 13;
+export const remoteBridgeVersion = 14;
 /**
  * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
  * older ones report none and refuse fields they don't know.
@@ -156,11 +157,26 @@ export const readAloudBridge = 12;
  */
 export const activityDetailBridge = 13;
 export const phoneDetailPreview = 600;
+/** From here a desktop sends a thread's images shrunk to the size a phone shows them (`image`). */
+export const imageBridge = 14;
+
+/** A thread's image, as the phone asks for it with `image`. */
+export type RemoteImageSource =
+  | { kind: "attached"; chatId: string; imageId: string }
+  | { kind: "read"; chatId: string; messageId: string; path: string };
 /**
  * From here a desktop tells phones which thread started which and when a
  * limited answer resumes, and takes `setLimitResume` and `closeWatchNote`.
  */
 export const awayBridge = 13;
+/**
+ * From here both ends, once each has said it speaks this bridge, send frames
+ * as deflated binary instead of base64 text, the desktop sends streaming
+ * answers and thread lists as patches on the last ones (shared/remote-delta),
+ * and the phone acknowledges streaming frames so the desktop never sends
+ * them faster than the link carries them.
+ */
+export const compactBridge = 14;
 /** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
 export const handoffBridge = 11;
 
@@ -431,6 +447,8 @@ export interface RemoteApi {
     messageId: string,
     activityId: string,
   ): Promise<string | null>;
+  /** The image as a data URL at most `max` pixels on its longer side; missing before `imageBridge`. */
+  image(source: RemoteImageSource, max: number): Promise<string>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /** Appends base64 `data` at `offset` of the handoff's thread or bundle; a repeat is ignored. */
@@ -481,6 +499,7 @@ export const remoteMethods = [
   "dictate",
   "readAloud",
   "activityDetail",
+  "image",
   "computerProjects",
   "handoffUpload",
   "receiveHandoff",
@@ -550,13 +569,24 @@ export type RemoteEvent =
   | { kind: "chats"; chats: RemoteChatSummary[] }
   | { kind: "appearance"; appearance: PhoneAppearance };
 
+/** What goes over the wire: events, or from `compactBridge` patches the client turns back into them. */
+export type WireEvent =
+  | RemoteEvent
+  | { kind: "messagePatch"; chatId: string; patch: MessagePatch; title?: string }
+  | { kind: "chatsPatch"; patch: ChatsPatch };
+
 /** Phones leave the kind out; a computer pairs to hand threads over. */
 export type DeviceKind = "computer";
-/** Frames inside the encrypted channel. */
+/**
+ * Frames inside the encrypted channel. `bridge` is the client's own
+ * `remoteBridgeVersion`; clients before `compactBridge` send none.
+ */
 export type ClientFrame =
-  | { t: "pair"; code: string; device: string; kind?: DeviceKind }
-  | { t: "auth"; deviceId: string; token: string }
-  | { t: "call"; id: number; method: RemoteMethod; args: unknown[] };
+  | { t: "pair"; code: string; device: string; kind?: DeviceKind; bridge?: number }
+  | { t: "auth"; deviceId: string; token: string; bridge?: number }
+  | { t: "call"; id: number; method: RemoteMethod; args: unknown[] }
+  /** The streaming frame numbered `s` arrived; from `compactBridge`. */
+  | { t: "got"; s: number };
 export type ServerFrame =
   /** `bridge` is the desktop's `remoteBridgeVersion`; desktops before `to` send none. */
   | {
@@ -570,7 +600,8 @@ export type ServerFrame =
   | { t: "denied"; reason: string }
   | { t: "result"; id: number; ok: true; value: unknown }
   | { t: "result"; id: number; ok: false; error: string }
-  | { t: "event"; event: RemoteEvent }
+  /** `s` numbers a streaming frame the client acknowledges with `got`. */
+  | { t: "event"; event: WireEvent; s?: number }
   /** Keepalive: a phone that stops hearing these treats the link as dead. */
   | { t: "tick" };
 
