@@ -105,6 +105,22 @@ export class ThreadTriage {
       await this.core.storage.save(child);
     }
   }
+  /**
+   * Makes a started thread its own: its lead's tools no longer reach it and
+   * settling the lead leaves it be. Not while the lead works, since a
+   * wait_for_threads would stop counting it halfway.
+   */
+  async detach(id: string) {
+    const chat = await this.core.storage.load(id);
+    if (!chat.startedBy) return chatSummary(chat);
+    if (this.core.active.has(chat.startedBy.chatId))
+      throw new Error(
+        "The thread that started it is working; detach once it's done.",
+      );
+    delete chat.startedBy;
+    await this.core.storage.save(chat);
+    return chatSummary(chat);
+  }
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
     const chat = await this.core.storage.load(id);

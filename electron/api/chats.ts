@@ -58,6 +58,7 @@ export function chatHandlers(ctx: ApiContext) {
     renameProjectChat: takes([idSchema, z.string()], (id, title) =>
       projectChats.rename(id, title),
     ),
+    detachProjectChat: takes([idSchema], (id) => projectChats.detach(id)),
     markProjectChatSeen: takes(
       [idSchema, z.number().int().min(0)],
       (id, seenAt) => projectChats.markSeen(id, seenAt),

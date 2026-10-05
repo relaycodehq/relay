@@ -20,6 +20,7 @@ export type ThreadMenuAction =
   | { kind: "rename" }
   | { kind: "regenerate" }
   | { kind: "reload" }
+  | { kind: "detach" }
   | { kind: "project-settings" }
   | { kind: "triage"; triage: ChatTriage };
 
@@ -190,6 +191,18 @@ export function useThreadActions({
       });
     }
   };
+  /** Takes a started thread out from under its lead, for good. */
+  const detach = async (c: ChatSummary) => {
+    setError(undefined);
+    patch(c, (entry) => ({ ...entry, startedBy: undefined }));
+    try {
+      await api.detachProjectChat(c.id);
+    } catch (e) {
+      failed(e);
+    } finally {
+      void refresh(c);
+    }
+  };
   /** Forks from the latest answer and opens the fork on that answer's agent. */
   const fork = async (c: ChatSummary) => {
     setError(undefined);
@@ -229,6 +242,8 @@ export function useThreadActions({
           return void regenerate(c);
         case "reload":
           return void reload(c);
+        case "detach":
+          return void detach(c);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "triage":

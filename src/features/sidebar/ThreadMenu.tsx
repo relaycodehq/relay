@@ -15,6 +15,7 @@ import {
   Split,
   SquarePen,
   Sunrise,
+  Unlink,
 } from "lucide-react";
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
 import {
@@ -156,6 +157,14 @@ export function ThreadMenu({
             ))}
           </MenuPopup>
         </Menu.SubmenuRoot>
+      )}
+      {chat.startedBy && (
+        <MenuAction
+          icon={<Unlink size={13} />}
+          onClick={() => onAction({ kind: "detach" })}
+        >
+          Detach from lead
+        </MenuAction>
       )}
       <Menu.Separator className="sb-menu-separator" />
       <MenuAction

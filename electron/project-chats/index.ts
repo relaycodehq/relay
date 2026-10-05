@@ -267,6 +267,9 @@ export class ProjectChats {
   markSeen(id: string, seenAt: number) {
     return this.triaging.markSeen(id, seenAt);
   }
+  detach(id: string) {
+    return this.triaging.detach(id);
+  }
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
   }

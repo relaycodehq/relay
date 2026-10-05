@@ -81,3 +81,15 @@ it("a started thread settled on its own stays settled when its lead's settle is 
   });
   expect((await chats.get(child.id)).settledAt).toBe(own);
 });
+
+it("a detached thread stands alone: settling its old lead leaves it be", async () => {
+  const lead = await chats.create(projectId, scope);
+  const startedBy = { chatId: lead.id, agent: "claude" as const };
+  const child = await chats.create(projectId, scope, "checkout", startedBy);
+
+  const detached = await chats.detach(child.id);
+  expect(detached.startedBy).toBeUndefined();
+
+  await chats.triage(lead.id, { kind: "settle" });
+  expect((await chats.get(child.id)).settledAt).toBeUndefined();
+});

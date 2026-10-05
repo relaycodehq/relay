@@ -130,6 +130,8 @@ export interface ProjectChatApi {
   reloadProjectChatSession(id: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
+  /** A thread another thread's agent started stands on its own from now on. */
+  detachProjectChat(id: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
   markProjectChatSeen(id: string, seenAt: number): Promise<void>;
   /** A new thread holding the conversation up to this answer, or up to the latest finished one. */
