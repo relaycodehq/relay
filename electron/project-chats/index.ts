@@ -98,8 +98,10 @@ export class ProjectChats {
     this.storage = new ChatStorage(store, dir, (chatId, branch) =>
       this.sessions.isResuming(chatId, branch),
     );
-    this.sessions = new ProviderSessions(dir, (id) =>
-      this.storage.chatChanged(id),
+    this.sessions = new ProviderSessions(
+      dir,
+      (id) => this.storage.chatChanged(id),
+      (id) => this.active.has(id) || this.active.hasSide(id),
     );
     this.active = new ActiveTurns((id) => this.storage.chatChanged(id));
     const core: ChatCore = {

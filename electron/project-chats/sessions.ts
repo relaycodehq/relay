@@ -94,21 +94,37 @@ export function parseSessionKey(key: string) {
 }
 
 /**
+ * How long a session may sit unused before its agent process ends. The
+ * thread resumes its conversation with the next message, which only costs
+ * that message the agent's startup. Kept open, every thread ever touched
+ * held a process (~150 MB for Claude), and the agent host that ran it,
+ * until Relay quit.
+ */
+export const IDLE_CLOSE = 30 * 60_000;
+
+/**
  * The agent sessions Relay's threads have open, by key, and what Claude's
  * hold: background work, wake-ups, subagents.
  */
 export class ProviderSessions {
   private keys = new Set<string>();
+  /** When each key was last seen at work. */
+  private used = new Map<string, number>();
   /** Sessions still in the turn a restart cut off; their answers stay streaming. */
   private resuming = new Set<string>();
   /** Claude's background work and wake-ups show in its threads' summaries. */
   private unhear = onClaudePending(() => {
     for (const key of this.keys) this.changed(parseSessionKey(key).chatId);
   });
+  private sweep = setInterval(() => this.closeIdle(), 60_000);
   constructor(
     private dir: string,
     private changed: (chatId: string) => void,
-  ) {}
+    /** A turn or side question is running in the thread. */
+    private busy: (chatId: string) => boolean = () => false,
+  ) {
+    this.sweep.unref?.();
+  }
 
   /**
    * A provider session's key: Relay's data folder, the chat, and its branch
@@ -131,10 +147,12 @@ export class ProviderSessions {
 
   add(key: string) {
     this.keys.add(key);
+    this.used.set(key, Date.now());
   }
   /** A session the agent host kept through a restart; `open` if a turn was running in it. */
   reattached(key: string, open: boolean) {
     this.keys.add(key);
+    this.used.set(key, Date.now());
     if (open) this.resuming.add(key);
   }
   isResuming(chatId: string, branch?: string) {
@@ -147,6 +165,7 @@ export class ProviderSessions {
   lost(key: string) {
     this.resuming.delete(key);
     this.keys.delete(key);
+    this.used.delete(key);
   }
 
   of(chatId: string) {
@@ -158,12 +177,34 @@ export class ProviderSessions {
   /** Ends a hidden thread's agent processes; they resume their sessions if it runs again. */
   close(chatId: string) {
     for (const key of this.keys)
-      if (parseSessionKey(key).chatId === chatId) {
-        this.keys.delete(key);
-        for (const runtime of Object.values(agentRuntimes))
-          void runtime.closeSession(key).catch(() => {});
-        this.changed(chatId);
-      }
+      if (parseSessionKey(key).chatId === chatId) this.end(key);
+  }
+
+  /**
+   * Ends the sessions nothing has used for `IDLE_CLOSE`. Running turns, side
+   * questions, Claude's background work and wake-ups, and turns a restart
+   * cut off count as use.
+   */
+  closeIdle(now = Date.now()) {
+    for (const key of this.keys) {
+      const { chatId } = parseSessionKey(key);
+      if (
+        this.busy(chatId) ||
+        this.resuming.has(key) ||
+        claudePending(key).length ||
+        !this.used.has(key)
+      )
+        this.used.set(key, now);
+      else if (now - this.used.get(key)! >= IDLE_CLOSE) this.end(key);
+    }
+  }
+
+  private end(key: string) {
+    this.keys.delete(key);
+    this.used.delete(key);
+    for (const runtime of Object.values(agentRuntimes))
+      void runtime.closeSession(key).catch(() => {});
+    this.changed(parseSessionKey(key).chatId);
   }
 
   /**
@@ -200,10 +241,12 @@ export class ProviderSessions {
       ),
     );
     this.keys.clear();
+    this.used.clear();
   }
 
   stopListening() {
     this.unhear();
+    clearInterval(this.sweep);
   }
 
   /**
