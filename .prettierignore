@@ -1,5 +1,3 @@
-src/vendor/
-electron/vendor/
 dist/
 dist-electron/
 dist-server/

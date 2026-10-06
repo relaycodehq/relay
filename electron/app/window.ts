@@ -117,7 +117,6 @@ export class AppWindow {
       show: false,
       title: "Relay",
       backgroundColor: nativeTheme.shouldUseDarkColors ? "#202124" : "#f6f6f6",
-      // Adapted from T3 Code DesktopWindow.getWindowTitleBarOptions (MIT).
       ...(process.platform === "darwin"
         ? {
             titleBarStyle: "hiddenInset" as const,

@@ -26,7 +26,7 @@ npm run package:omarchy
 
 `npm run test:e2e` runs the real Electron renderer against an isolated local Gitea fixture, with native windows hidden and activation suppressed. It does not steal desktop focus, open Keychain prompts, or call your private server. The test launcher uses synthetic credential storage; the shipped app always uses its real OS storage. Native window-focus tests require an explicit `RELAY_TEST_HEADED=1`, and OS credential integration requires `RELAY_TEST_NATIVE_STORAGE=1`; leave both unset for normal runs. Linux CI runs under Xvfb in `.github/workflows/checks.yml` for pull requests and branches.
 
-Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); `src/vendor/t3code/` contains the attributed upstream components; unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
+Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
 
 ## Releases and automatic updates
 
@@ -50,6 +50,4 @@ Development builds never check. Set `RELAY_UPDATE_FEED` to a feed URL to exercis
 ## Release status
 
 This is an implemented and locally tested first release, not a claim of production certification. Before distributing broadly: verify the real private Gitea review flow, run Linux desktop tests on the target distribution, validate a real interactive Codex launch, and configure Developer ID signing/notarization. Multi-account switching, browser SSO, merge controls, image previews, and an embedded terminal are not included.
-
-T3 Code provenance and its MIT license are in `THIRD_PARTY_NOTICES.md`.
 

@@ -1,7 +1,6 @@
 import type { ChatMessage, ChatSummary, ChatTriageState } from "./projects";
 
-// Activity triage follows T3 Code's settle/snooze model (thread-settled.ts):
-// settling and snoozing are overlays on an open thread, and newer activity
+// Settling and snoozing are overlays on an open thread, and newer activity
 // always outranks them. `updated` moves on every sent message and finished
 // answer, so comparing against it is the "raised hand" check.
 export type ChatActivitySection = "active" | "snoozed" | "settled";
@@ -62,8 +61,8 @@ type AutoSettled = Triaged &
   >;
 
 /**
- * When a thread settles by itself, like T3 Code's auto-settle: once its PR
- * merged after the last activity, or after `days` without any; `days` null
+ * When a thread settles by itself: once its PR merged after the last
+ * activity, or after `days` without any; `days` null
  * turns both off. `onCommit` also settles it once its latest turn committed
  * and it stayed quiet for `COMMIT_QUIET_MS`.
  * Undefined while anything is still going on in it or about to, and after
@@ -194,39 +193,42 @@ export interface SnoozePreset {
   until: number;
 }
 
-/** `hour`:00 local time, `days` after `base`'s date. */
-function atHour(base: Date, days: number, hour: number): number {
-  // Calendar-day advance keeps the wake hour stable across DST changes.
-  const next = new Date(base);
-  next.setDate(next.getDate() + days);
-  next.setHours(hour, 0, 0, 0);
-  return next.getTime();
+const HOUR_MS = 3_600_000;
+
+/**
+ * Local `hour`:00 on the day `days` calendar days after `from`. Counting
+ * calendar days rather than 24-hour steps keeps the hour across DST changes.
+ */
+function dayAt(from: Date, days: number, hour: number): number {
+  return new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate() + days,
+    hour,
+  ).getTime();
 }
 
+/** Days to the coming Monday; a Monday waits for the next one. */
+const daysToMonday = (date: Date) => 7 - ((date.getDay() + 6) % 7);
+
 export function snoozePresets(now: Date): SnoozePreset[] {
-  const presets: SnoozePreset[] = [
-    { id: "hour", label: "1 hour", until: now.getTime() + 3_600_000 },
-    { id: "three-hours", label: "3 hours", until: now.getTime() + 10_800_000 },
-  ];
-  // Only offer "this evening" while it is still meaningfully ahead.
-  if (now.getHours() < 17)
-    presets.push({
+  const choices: (SnoozePreset | false)[] = [
+    { id: "hour", label: "1 hour", until: now.getTime() + HOUR_MS },
+    { id: "three-hours", label: "3 hours", until: now.getTime() + 3 * HOUR_MS },
+    // Past five the evening is too close to be worth a choice of its own.
+    now.getHours() < 17 && {
       id: "evening",
       label: "This evening",
-      until: atHour(now, 0, 18),
-    });
-  presets.push({
-    id: "tomorrow",
-    label: "Tomorrow",
-    until: atHour(now, 1, 9),
-  });
-  const toMonday = (8 - now.getDay()) % 7 || 7;
-  presets.push({
-    id: "next-week",
-    label: "Next week",
-    until: atHour(now, toMonday, 9),
-  });
-  return presets;
+      until: dayAt(now, 0, 18),
+    },
+    { id: "tomorrow", label: "Tomorrow", until: dayAt(now, 1, 9) },
+    {
+      id: "next-week",
+      label: "Next week",
+      until: dayAt(now, daysToMonday(now), 9),
+    },
+  ];
+  return choices.filter((choice) => choice !== false);
 }
 
 /**
@@ -293,26 +295,34 @@ export function sendLaterPresets(now: Date): { label: string; at: number }[] {
     { label: "In 3 hours", at: now.getTime() + 10_800_000 },
   ];
   if (now.getHours() < 17)
-    presets.push({ label: "This evening", at: atHour(now, 0, 18) });
-  presets.push({ label: "Tomorrow morning", at: atHour(now, 1, 9) });
+    presets.push({ label: "This evening", at: dayAt(now, 0, 18) });
+  presets.push({ label: "Tomorrow morning", at: dayAt(now, 1, 9) });
   return presets;
+}
+
+/** Midnights from `from`'s date to `to`'s, negative when `to` is earlier. */
+function calendarDays(from: Date, to: Date) {
+  const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
+  // Rounded: a day the clocks change on lasts 23 or 25 hours.
+  return Math.round((midnight(to) - midnight(from)) / 86_400_000);
 }
 
 /** "17:30", "tomorrow 9:00", "Mon 9:00", "Oct 3, 9:00". */
 export function wakeLabel(until: number, now: Date): string {
   const wake = new Date(until);
-  const time = wake.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
-  // Rounded: a day the clocks change on lasts 23 or 25 hours.
-  const days = Math.round((midnight(wake) - midnight(now)) / 86_400_000);
-  if (days <= 0) return time;
-  if (days === 1) return `tomorrow ${time}`;
-  if (days < 7)
-    return `${wake.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
-  return `${wake.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+  const ahead = calendarDays(now, wake);
+  const day =
+    ahead <= 0
+      ? ""
+      : ahead === 1
+        ? "tomorrow "
+        : ahead < 7
+          ? `${wake.toLocaleDateString(undefined, { weekday: "short" })} `
+          : `${wake.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, `;
+  return (
+    day +
+    wake.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+  );
 }
 
 /** When a message was sent: "13:25", "Yesterday 13:25", "Tuesday 13:25", "Sep 3, 13:25". */
@@ -322,8 +332,7 @@ export function sentLabel(sent: number, now: Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
-  const days = Math.round((midnight(now) - midnight(at)) / 86_400_000);
+  const days = calendarDays(at, now);
   if (days <= 0) return time;
   if (days === 1) return `Yesterday ${time}`;
   if (days < 7)

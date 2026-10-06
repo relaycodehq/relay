@@ -385,7 +385,7 @@ function App() {
             <header>
               <div>
                 <h3>About</h3>
-                <p>Version and credits.</p>
+                <p>Version and changelog.</p>
               </div>
               <IconButton label="Close dialog">
                 <X size={17} />
@@ -398,17 +398,6 @@ function App() {
                   <p>{updateLine(updates)}</p>
                 </div>
                 <div className="setting-control">{control}</div>
-              </section>
-              <section className="setting" aria-label="Credits">
-                <div className="setting-text">
-                  <h4>Credits</h4>
-                  <p>Built with code from T3 Code.</p>
-                </div>
-                <div className="setting-control">
-                  <a href="https://github.com/pingdotgg/t3code">
-                    T3 Code on GitHub
-                  </a>
-                </div>
               </section>
             </div>
           </main>

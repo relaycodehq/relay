@@ -1,4 +1,3 @@
-// Adapted from T3 Code's packages/shared/src/shell.ts and apps/server/src/os-jank.ts (MIT).
 import { execFile } from "node:child_process";
 import { userInfo } from "node:os";
 import { delimiter } from "node:path";

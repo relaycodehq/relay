@@ -43,15 +43,15 @@ const HOUR = 60 * 60 * 1000;
 // Points behind the pace mark before an early run-out turns red.
 const BEHIND_HOT = 10;
 
+/** Rounded up to the minute, two units at most: "7m", "3h", "3h 20m", "2d 5h". */
 function compactDuration(ms: number): string | null {
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const totalMinutes = Math.max(1, Math.ceil(ms / 60_000));
-  const days = Math.floor(totalMinutes / (24 * 60));
-  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-  const minutes = totalMinutes % 60;
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-  return `${minutes}m`;
+  if (!(ms > 0 && ms < Infinity)) return null;
+  const minutes = Math.ceil(ms / 60_000) || 1;
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
 export function resetsIn(at: number, now: number): string | null {

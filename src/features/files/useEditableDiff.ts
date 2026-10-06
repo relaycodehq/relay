@@ -53,7 +53,13 @@ export function useEditableDiff(
     };
   }, []);
   useEffect(() => {
-    viewer.current?.getEditor(path)?.setMarkers(markers);
+    try {
+      viewer.current?.getEditor(path)?.setMarkers(markers);
+    } catch (error) {
+      // The editor exists before its document does; onAttach applies the
+      // latest markers once it is there.
+      if (!/Text document is not initialized/.test(String(error))) throw error;
+    }
   }, [markers, path, diff]);
   const editorOptions = useMemo<
     CodeViewProps<undefined, undefined>["editorOptions"]

@@ -1,160 +1,203 @@
 import {
   createFileTreeIconResolver,
   getBuiltInSpriteSheet,
-  type FileTreeIcons,
 } from "@pierre/trees";
 
-// Ported from T3 Code's pierre-icons.ts: Pierre's colored file-type icons,
-// plus a few names its built-in set leaves generic.
-const SPRITE_ID = "relay-file-icon-sprite";
-
-const EXTRA_SPRITE = `
-<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true">
-  <symbol id="relay-file-icon-agents" viewBox="0 0 32 32">
-    <path fill="currentColor" d="M27.2 16c0-6.19-5.01-11.2-11.2-11.2C9.81 4.8 4.8 9.81 4.8 16S9.81 27.2 16 27.2c6.19 0 11.2-5.01 11.2-11.2Zm-5.6 2.1a1.4 1.4 0 1 1 0 2.8h-4.2a1.4 1.4 0 1 1 0-2.8Zm-11.2-6.8c.622-.373 1.42-.208 1.84.361l.079.119 2.1 3.5.088.171c.15.351.15.748 0 1.1l-.088.171-2.1 3.5a1.4 1.4 0 0 1-2.4-1.44L11.59 16l-1.67-2.78-.067-.127c-.302-.642-.075-1.42.547-1.79ZM30 16c0 7.73-6.27 14-14 14S2 23.73 2 16 8.27 2 16 2s14 6.27 14 14Z" />
-  </symbol>
-  <symbol id="relay-file-icon-pnpm" viewBox="0 0 32 32">
-    <path fill="#f9ad00" d="M30 10.75h-8.749V2H30Zm-9.626 0h-8.75V2h8.75Zm-9.625 0H2V2h8.749ZM30 20.375h-8.749v-8.75H30Z" />
-    <path fill="currentColor" d="M20.374 20.375h-8.75v-8.75h8.75Zm0 9.625h-8.75v-8.75h8.75ZM30 30h-8.749v-8.75H30Zm-19.251 0H2v-8.75h8.749Z" />
-  </symbol>
-</svg>`;
-
-const ICONS = {
-  set: "complete",
-  colored: true,
-  spriteSheet: EXTRA_SPRITE,
-  byFileName: {
-    "package.json": "file-tree-builtin-npm",
-    "tsconfig.json": "file-tree-builtin-typescript",
-    "agents.md": "relay-file-icon-agents",
-    "pnpm-lock.yaml": "relay-file-icon-pnpm",
-    "pnpm-workspace.yaml": "relay-file-icon-pnpm",
-  },
-} satisfies FileTreeIcons;
-
-const resolver = createFileTreeIconResolver(ICONS);
-
-/** Icon tints as [light, dark], keyed by the resolver's token. */
-const ICON_COLORS: Record<string, readonly [string, string]> = {
-  astro: ["#a631be", "#d568ea"],
-  babel: ["#d5a910", "#ffd452"],
-  bash: ["#199f43", "#5ecc71"],
-  biome: ["#1a85d4", "#69b1ff"],
-  bootstrap: ["#693acf", "#9d6afb"],
-  browserslist: ["#d5a910", "#ffd452"],
-  bun: ["#594c5b", "#79697b"],
-  c: ["#1a85d4", "#69b1ff"],
-  claude: ["#d47628", "#ffa359"],
-  cpp: ["#1a85d4", "#69b1ff"],
-  css: ["#693acf", "#9d6afb"],
-  database: ["#a631be", "#d568ea"],
-  default: ["#84848a", "#adadb1"],
-  docker: ["#1a85d4", "#69b1ff"],
-  eslint: ["#693acf", "#9d6afb"],
-  git: ["#ff8c5b", "#d5512f"],
-  go: ["#1ca1c7", "#68cdf2"],
-  graphql: ["#d32a61", "#ff678d"],
-  html: ["#d47628", "#ffa359"],
-  image: ["#d32a61", "#ff678d"],
-  javascript: ["#d5a910", "#ffd452"],
-  json: ["#d47628", "#ffa359"],
-  markdown: ["#199f43", "#5ecc71"],
-  mcp: ["#17a5af", "#64d1db"],
-  nextjs: ["#84848a", "#adadb1"],
-  npm: ["#d52c36", "#ff6762"],
-  oxc: ["#1ca1c7", "#68cdf2"],
-  postcss: ["#d52c36", "#ff6762"],
-  prettier: ["#17a5af", "#64d1db"],
-  python: ["#1a85d4", "#69b1ff"],
-  react: ["#1ca1c7", "#68cdf2"],
-  ruby: ["#d52c36", "#ff6762"],
-  rust: ["#d47628", "#ffa359"],
-  sass: ["#d32a61", "#ff678d"],
-  stylelint: ["#84848a", "#adadb1"],
-  svelte: ["#d52c36", "#ff6762"],
-  svg: ["#d47628", "#ffa359"],
-  svgo: ["#199f43", "#5ecc71"],
-  swift: ["#d47628", "#ffa359"],
-  table: ["#17a5af", "#64d1db"],
-  tailwind: ["#1ca1c7", "#68cdf2"],
-  terraform: ["#693acf", "#9d6afb"],
-  text: ["#84848a", "#adadb1"],
-  typescript: ["#1a85d4", "#69b1ff"],
-  vite: ["#a631be", "#d568ea"],
-  vscode: ["#1a85d4", "#69b1ff"],
-  vue: ["#199f43", "#5ecc71"],
-  wasm: ["#693acf", "#9d6afb"],
-  webpack: ["#1a85d4", "#69b1ff"],
-  yml: ["#d52c36", "#ff6762"],
-  zig: ["#d47628", "#ffa359"],
-  zip: ["#d47628", "#ffa359"],
-};
-
 export type FileIcon = {
-  /** Sprite symbol id. */
+  /** Sprite symbol id to reference with <use href="#name">. */
   name: string;
+  /** Tint as [light-theme colour, dark-theme colour]. */
   colors: readonly [light: string, dark: string];
 };
 
+const builtIn = "file-tree-builtin-";
+const agentsIcon = "relay-file-icon-agents";
+const pnpmIcon = "relay-file-icon-pnpm";
+
+const pnpmCells = [
+  [2, 2, true],
+  [11.625, 2, true],
+  [21.25, 2, true],
+  [21.25, 11.625, true],
+  [11.625, 11.625, false],
+  [2, 21.25, false],
+  [11.625, 21.25, false],
+  [21.25, 21.25, false],
+] as const;
+
+/** Symbols the library has no icon for, in its sprite format. */
+const extraSprite = `<svg aria-hidden="true" width="0" height="0"><symbol id="${agentsIcon}" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.6" fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M10.5 11.5 15 16l-4.5 4.5M17.5 20.5h4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="${pnpmIcon}" viewBox="0 0 32 32">${pnpmCells
+  .map(
+    ([x, y, amber]) =>
+      `<rect x="${x}" y="${y}" width="8.75" height="8.75" fill="${amber ? "#f9ad00" : "currentColor"}"/>`,
+  )
+  .join("")}</symbol></svg>`;
+
+const icon = (token: string) => builtIn + token;
+
+const resolver = createFileTreeIconResolver({
+  set: "complete",
+  colored: true,
+  byFileName: {
+    "package.json": icon("npm"),
+    "package-lock.json": icon("npm"),
+    ".npmrc": icon("npm"),
+    "tsconfig.json": icon("typescript"),
+    "jsconfig.json": icon("typescript"),
+    "agents.md": agentsIcon,
+    "pnpm-lock.yaml": pnpmIcon,
+    "pnpm-workspace.yaml": pnpmIcon,
+    ".mcp.json": icon("mcp"),
+    "compose.yml": icon("docker"),
+    "compose.yaml": icon("docker"),
+    "cargo.toml": icon("rust"),
+    "cargo.lock": icon("rust"),
+    "go.mod": icon("go"),
+    "go.sum": icon("go"),
+    "gemfile.lock": icon("ruby"),
+    "pyproject.toml": icon("python"),
+    "requirements.txt": icon("python"),
+  },
+  byFileExtension: {
+    heic: icon("image"),
+  },
+});
+
+const palette = {
+  grey: ["#687079", "#9aa2ab"],
+  blue: ["#2f6fc0", "#6ea8f2"],
+  cyan: ["#0a7d99", "#5cc6e4"],
+  teal: ["#0d7a6c", "#4cc3ae"],
+  green: ["#2d7f3e", "#6cc47e"],
+  yellow: ["#8f6c00", "#e5c54a"],
+  amber: ["#a85d06", "#eea64a"],
+  orange: ["#c24d26", "#ef8a60"],
+  red: ["#c0352f", "#f0726b"],
+  pink: ["#b8377f", "#ec80bc"],
+  purple: ["#6a4ccc", "#a993f5"],
+} as const satisfies Record<string, readonly [string, string]>;
+
+/** Each built-in token's brand hue; anything not listed is neutral grey. */
+const tints: Record<string, keyof typeof palette> = {
+  astro: "orange",
+  babel: "yellow",
+  bash: "green",
+  biome: "blue",
+  bootstrap: "purple",
+  browserslist: "amber",
+  bun: "amber",
+  c: "blue",
+  claude: "orange",
+  cpp: "blue",
+  css: "blue",
+  database: "teal",
+  docker: "blue",
+  eslint: "purple",
+  git: "orange",
+  go: "cyan",
+  graphql: "pink",
+  html: "orange",
+  image: "purple",
+  javascript: "yellow",
+  json: "yellow",
+  markdown: "green",
+  mcp: "teal",
+  npm: "red",
+  oxc: "cyan",
+  postcss: "red",
+  prettier: "teal",
+  python: "blue",
+  react: "cyan",
+  ruby: "red",
+  rust: "orange",
+  sass: "pink",
+  svelte: "orange",
+  svg: "amber",
+  svgo: "blue",
+  swift: "orange",
+  table: "green",
+  tailwind: "cyan",
+  terraform: "purple",
+  typescript: "blue",
+  vite: "purple",
+  vscode: "blue",
+  vue: "green",
+  wasm: "purple",
+  webpack: "blue",
+  yml: "red",
+  zig: "amber",
+  zip: "amber",
+};
+
+const tintOf = (name: string) =>
+  palette[
+    (name.startsWith(builtIn) && tints[name.slice(builtIn.length)]) || "grey"
+  ];
+
+/**
+ * Whole-name families the resolver can't express: its "name contains" rules
+ * win over extensions, so `docker-compose.test.ts` would get the Docker icon.
+ */
+const nameFamilies: [RegExp, string][] = [
+  // The library knows a few .env variants; every one of them is plain text.
+  [/^\.env(\..+)?$/, icon("text")],
+  [/^(dockerfile(\..+)?|.+\.dockerfile)$/, icon("docker")],
+  [/^docker-compose(\.[\w-]+)*\.ya?ml$/, icon("docker")],
+  [/^tsconfig\..+\.json$/, icon("typescript")],
+];
+
+/** Icon for a file path; only the file name and extension count. */
 export function fileIcon(path: string): FileIcon {
-  const icon = resolver.resolveIcon("file-tree-icon-file", path);
-  // Name overrides (package.json → npm) come back without a token.
-  const token = icon.token ?? icon.name.replace(/^file-tree-builtin-/, "");
-  return {
-    name: icon.name,
-    colors: ICON_COLORS[token] ?? ICON_COLORS.default!,
-  };
+  const base = (path.split("/").at(-1) ?? path).toLowerCase();
+  const name =
+    nameFamilies.find(([pattern]) => pattern.test(base))?.[1] ??
+    resolver.resolveIcon("file-tree-icon-file", path).name;
+  return { name, colors: tintOf(name) };
 }
 
-/** Mounts the shared sprite once; icons reference its symbols with <use>. */
+const spriteId = "relay-file-icon-sprite";
+
+/** Mounts the shared sprite once; does nothing without a document. */
 export function ensureFileIconSprite() {
-  if (typeof document === "undefined" || document.getElementById(SPRITE_ID))
+  if (typeof document === "undefined" || document.getElementById(spriteId))
     return;
-  const container = document.createElement("div");
-  container.id = SPRITE_ID;
-  container.setAttribute("aria-hidden", "true");
-  container.style.cssText =
+  const holder = document.createElement("div");
+  holder.id = spriteId;
+  holder.setAttribute("aria-hidden", "true");
+  holder.style.cssText =
     "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none";
-  container.innerHTML = `${getBuiltInSpriteSheet("complete")}${EXTRA_SPRITE}`;
-  document.body.prepend(container);
+  holder.innerHTML = getBuiltInSpriteSheet("complete") + extraSprite;
+  document.body.prepend(holder);
 }
 
 /**
- * For file names that appear under more than one path, the shortest parent
- * suffix (at least two folders) that tells them apart. Unique names get none.
+ * For files that share a name, the shortest run of parent folders that tells
+ * each apart (at least two when it has them). Unique names, and files in the
+ * root, get no entry.
  */
 export function parentSuffixes(paths: Iterable<string>): Map<string, string> {
-  const byName = new Map<string, Set<string>>();
-  for (const path of paths) {
-    const name = path.split("/").at(-1);
-    if (!name) continue;
-    byName.set(name, (byName.get(name) ?? new Set()).add(path));
+  const byName = new Map<string, string[][]>();
+  for (const path of new Set(paths)) {
+    const parts = path.split("/");
+    const name = parts.pop()!;
+    byName.set(name, [...(byName.get(name) ?? []), parts]);
   }
   const suffixes = new Map<string, string>();
-  for (const group of byName.values()) {
-    if (group.size < 2) continue;
-    const parents = new Map(
-      [...group].map((path) => [path, path.split("/").slice(0, -1)]),
-    );
-    for (const [path, segments] of parents) {
-      if (!segments.length) continue;
-      let depth = 1;
+  for (const [name, folders] of byName) {
+    if (folders.length < 2) continue;
+    for (const parents of folders) {
+      if (!parents.length) continue;
+      const tail = (of: string[], depth: number) => of.slice(-depth).join("/");
+      let depth = Math.min(2, parents.length);
       while (
-        depth < segments.length &&
-        [...parents].some(
-          ([other, otherSegments]) =>
-            other !== path &&
-            otherSegments.slice(-depth).join("/") ===
-              segments.slice(-depth).join("/"),
+        depth < parents.length &&
+        folders.some(
+          (other) =>
+            other !== parents && tail(other, depth) === tail(parents, depth),
         )
       )
         depth++;
-      suffixes.set(
-        path,
-        segments
-          .slice(-Math.min(segments.length, Math.max(depth, 2)))
-          .join("/"),
-      );
+      suffixes.set([...parents, name].join("/"), tail(parents, depth));
     }
   }
   return suffixes;

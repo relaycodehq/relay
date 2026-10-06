@@ -1,5 +1,3 @@
-// Searchable picker adapted from T3 Code's ref and pull-request candidate pickers.
-// See THIRD_PARTY_NOTICES.md.
 import { useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";

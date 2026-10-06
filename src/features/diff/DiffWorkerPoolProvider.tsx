@@ -1,67 +1,93 @@
-// Worker lifetime pattern adapted from T3 Code (MIT); see THIRD_PARTY_NOTICES.md.
+import { useEffect, useState, type ReactNode } from "react";
 import { WorkerPoolContext } from "@pierre/diffs/react";
 import { WorkerPoolManager } from "@pierre/diffs/worker";
-import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
-import { useEffect, useState, type ReactNode } from "react";
+import DiffWorker from "@pierre/diffs/worker/worker.js?worker";
 import { useSyntaxThemes } from "../../lib/appearance";
-let shared:
-  | {
-      pool: WorkerPoolManager;
-      users: number;
-      timer?: ReturnType<typeof setTimeout>;
-    }
-  | undefined;
+import { sharedResource } from "./shared-pool";
+
+type SyntaxThemes = ReturnType<typeof useSyntaxThemes>;
+
+let themesForNewPool: SyntaxThemes = {
+  light: "pierre-light",
+  dark: "pierre-dark",
+};
+
+const pool = sharedResource(
+  () =>
+    new WorkerPoolManager(
+      {
+        workerFactory: () => new DiffWorker(),
+        // Relay shows one file at a time and workers are heavy.
+        poolSize: 2,
+        // Relay re-renders from its own items, so a big AST cache only costs memory.
+        totalASTLRUCacheSize: 1,
+      },
+      {
+        theme: themesForNewPool,
+        preferredHighlighter: "shiki-js",
+        useTokenTransformer: true,
+        tokenizeMaxLineLength: 1000,
+      },
+    ),
+);
+
+type PoolState =
+  | { status: "loading" }
+  | { status: "ready"; manager: WorkerPoolManager }
+  | { status: "failed"; message: string };
+
+function readyState(): PoolState {
+  const existing = pool.peek();
+  return existing?.isInitialized()
+    ? { status: "ready", manager: existing }
+    : { status: "loading" };
+}
+
+/** Shares one syntax-highlighting worker pool between every mounted diff view. */
 export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
-  const [pool, setPool] = useState<WorkerPoolManager>();
-  const [error, setError] = useState("");
-  const syntaxThemes = useSyntaxThemes();
+  const themes = useSyntaxThemes();
+  const [state, setState] = useState<PoolState>(readyState);
+
   useEffect(() => {
-    const entry = (shared ??= {
-      pool: new WorkerPoolManager(
-        {
-          workerFactory: () => new DiffsWorker(),
-          poolSize: 2,
-          totalASTLRUCacheSize: 1,
-        },
-        {
-          theme: syntaxThemes,
-          preferredHighlighter: "shiki-js",
-          tokenizeMaxLineLength: 1000,
-          useTokenTransformer: true,
-        },
-      ),
-      users: 0,
-    });
-    clearTimeout(entry.timer);
-    entry.users++;
-    let alive = true;
-    entry.pool
-      .initialize()
-      .then(() => {
-        if (alive) setPool(entry.pool);
-      })
-      .catch((e) => {
-        if (alive) setError(String(e));
-      });
+    themesForNewPool = themes;
+    const manager = pool.acquire();
+    let live = true;
+    // Resolves once the pool is set up; renders queue until workers are warm.
+    manager.initialize().then(
+      () => {
+        if (live) setState({ status: "ready", manager });
+      },
+      (error: unknown) => {
+        if (live)
+          setState({
+            status: "failed",
+            message: error instanceof Error ? error.message : String(error),
+          });
+      },
+    );
     return () => {
-      alive = false;
-      entry.users--;
-      if (!entry.users)
-        entry.timer = setTimeout(() => {
-          entry.pool.terminate();
-          if (shared === entry) shared = undefined;
-        }, 10000);
+      live = false;
+      pool.release();
     };
+    // Mount once; theme changes go through setRenderOptions below.
   }, []);
-  // Workers highlight with the pool's theme; switching themes re-tokenizes.
+
+  const manager = state.status === "ready" ? state.manager : undefined;
   useEffect(() => {
-    void pool?.setRenderOptions({ theme: syntaxThemes }).catch(() => {});
-  }, [pool, syntaxThemes]);
-  if (error)
-    return <div className="empty small">Syntax worker failed: {error}</div>;
-  return pool ? (
-    <WorkerPoolContext value={pool}>{children}</WorkerPoolContext>
-  ) : (
-    <div className="empty small">Preparing syntax highlighting…</div>
+    themesForNewPool = themes;
+    // A failed switch keeps the old colours.
+    manager?.setRenderOptions({ theme: themes }).catch(() => {});
+  }, [manager, themes]);
+
+  if (state.status === "failed")
+    return (
+      <div className="empty small">Syntax worker failed: {state.message}</div>
+    );
+  if (!manager)
+    return <div className="empty small">Preparing syntax highlighting…</div>;
+  return (
+    <WorkerPoolContext.Provider value={manager}>
+      {children}
+    </WorkerPoolContext.Provider>
   );
 }

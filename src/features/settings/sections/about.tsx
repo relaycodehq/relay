@@ -1,4 +1,3 @@
-import { api } from "../../../lib/api";
 import type { SettingEntry } from "../settings-search";
 import { useUpdates } from "../../updates/updates";
 import { Changelog } from "../../updates/Changelog";
@@ -24,24 +23,6 @@ export function useAboutEntries(): SettingEntry[] {
       keywords: "changelog release notes what's new version history",
       block: true,
       render: () => <Changelog />,
-    },
-    {
-      id: "credits",
-      category: "about",
-      title: "Credits",
-      description: "Built with code from T3 Code.",
-      keywords: "license open source t3 code",
-      render: () => (
-        <a
-          href="https://github.com/pingdotgg/t3code"
-          onClick={(e) => {
-            e.preventDefault();
-            void api.openExternal(e.currentTarget.href);
-          }}
-        >
-          T3 Code on GitHub
-        </a>
-      ),
     },
   ];
 }

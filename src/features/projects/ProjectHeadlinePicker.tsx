@@ -1,5 +1,3 @@
-// Inline project switcher adapted from T3 Code's DraftHeroHeadline.
-// See THIRD_PARTY_NOTICES.md.
 import { useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { FolderPlus } from "lucide-react";

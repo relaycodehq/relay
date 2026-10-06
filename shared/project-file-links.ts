@@ -1,8 +1,5 @@
 import { filePathSchema } from "./validation";
-import {
-  inlineCodeFilePathCandidate,
-  parseMarkdownFileLink,
-} from "./vendor/t3code/markdownLinks";
+import { filePathInInlineCode, resolveFileLink } from "./markdown-links";
 
 export type ProjectFileLink = {
   path: string;
@@ -15,15 +12,15 @@ export function linksTo(link: ProjectFileLink, path: string) {
   return link.directory ? path.startsWith(link.path + "/") : path === link.path;
 }
 
-/** Resolve T3-style code links inside the linked clone, never outside it. */
+/** Resolve file links and inline code paths inside the linked clone, never outside it. */
 export function projectFileLink(
   value: string,
   root: string,
   inline = false,
 ): ProjectFileLink | null {
-  const candidate = inline ? inlineCodeFilePathCandidate(value) : value;
-  // T3 deliberately declines extensionless inline paths. A trailing slash is
-  // unambiguous enough for Relay's folder browser and stays within this clone.
+  const candidate = inline ? filePathInInlineCode(value) : value;
+  // Inline paths without an extension are declined as too ambiguous, but a
+  // trailing slash is clear enough for the folder browser and stays in the clone.
   const directoryCandidate =
     inline &&
     value.endsWith("/") &&
@@ -32,7 +29,7 @@ export function projectFileLink(
     !/[\s`?#]/.test(value)
       ? value
       : null;
-  const parsed = candidate ? parseMarkdownFileLink(candidate) : null;
+  const parsed = candidate ? resolveFileLink(candidate) : null;
   const target =
     parsed ?? (directoryCandidate ? { path: directoryCandidate } : null);
   if (!target || !root) return null;

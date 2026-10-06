@@ -53,8 +53,7 @@ const readOnlyCommands = [
 ];
 
 /**
- * A session's rules for a runtime mode; later rules win in OpenCode. Adapted
- * from T3 Code's opencodeRuntime.ts (MIT); see THIRD_PARTY_NOTICES.
+ * A session's rules for a runtime mode; later rules win in OpenCode.
  * `auto` asks like Supervised: OpenCode has no reviewer to approve routine
  * actions for the user.
  *

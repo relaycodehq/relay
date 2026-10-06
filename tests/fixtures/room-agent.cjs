@@ -626,7 +626,7 @@ if (args.includes("--permission-prompt-tool")) {
       const titling = m.params.input[0].text;
       if (
         titling.startsWith("Generate a short title") ||
-        titling.startsWith("Regenerate the title")
+        titling.startsWith("This coding-agent thread already has the title")
       ) {
         send({
           method: "item/completed",
@@ -636,7 +636,7 @@ if (args.includes("--permission-prompt-tool")) {
               id: "fixture-title",
               type: "agentMessage",
               phase: "final_answer",
-              text: titling.startsWith("Regenerate")
+              text: titling.startsWith("This coding-agent thread")
                 ? '{"title":"Cache guard rework"}'
                 : '{"title":"Cache guard behavior"}',
             },

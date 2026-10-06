@@ -2,7 +2,7 @@ import { EditProvider } from "@pierre/diffs/react";
 import type { useEditableDiff } from "../useEditableDiff";
 import { useSyntaxThemes } from "../../../lib/appearance";
 import { useTheme } from "../../../lib/useTheme";
-import { StyledDiffCodeView } from "../../../vendor/t3code/StyledDiffCodeView";
+import { DiffCodeView } from "../../diff/DiffCodeView";
 import type { useSymbolNavigation } from "../../diff/SymbolNavigation";
 import { createEditor } from "./create-editor";
 
@@ -22,7 +22,7 @@ export function EditCode({
   const syntaxThemes = useSyntaxThemes();
   return (
     <EditProvider createEditor={createEditor}>
-      <StyledDiffCodeView
+      <DiffCodeView
         viewerRef={view.viewer}
         className="diff-code-view local-edit-code"
         scrollPastEnd

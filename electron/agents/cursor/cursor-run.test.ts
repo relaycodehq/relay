@@ -397,7 +397,7 @@ describe("what Cursor may do", () => {
     );
     expect(runtimeModesFor("codex")).toEqual(runtimeModesFor());
     expect(runtimeModesFor("codex")[0].description).toMatch(
-      /Ask before commands/,
+      /^Asks before running commands/,
     );
   });
 

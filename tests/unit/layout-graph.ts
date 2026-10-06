@@ -62,8 +62,7 @@ const toPosix = (path: string) => path.split("\\").join("/");
 /**
  * `from folder -> to folder -> one example import`, for the relative imports of
  * the non-test files in `group`'s subfolders (the folder is the first segment
- * under `group`). `vendor/` is skipped, and so are type imports when
- * `valuesOnly` is set.
+ * under `group`). Type imports are skipped when `valuesOnly` is set.
  */
 export function folderEdges(
   files: Source[],
@@ -72,9 +71,7 @@ export function folderEdges(
 ): Map<string, Map<string, string>> {
   const folderOf = (path: string) => {
     const [folder, ...rest] = posix.relative(group, path).split("/");
-    return rest.length && !folder.startsWith(".") && folder !== "vendor"
-      ? folder
-      : undefined;
+    return rest.length && !folder.startsWith(".") ? folder : undefined;
   };
   const edges = new Map<string, Map<string, string>>();
   for (const { path: raw, text } of files) {

@@ -15,7 +15,7 @@ import Markdown, {
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Position } from "unist";
-import { createIncrementalMarkdownPlugin } from "../vendor/t3code/markdown-incremental";
+import { streamingMarkdownTail } from "./markdown-incremental";
 import {
   projectFileLink,
   type ProjectFileLink,
@@ -106,7 +106,7 @@ function linkedProjectFiles(text: string, root: string): string[] {
   return [...paths];
 }
 
-/** T3-style file chip: type icon, file name, and a line when there is one. */
+/** File chip: type icon, file name, and a line when there is one. */
 function FileLinkChip({
   target,
   onOpen,
@@ -147,10 +147,7 @@ const MarkdownBlock = memo(function MarkdownBlock({
   components: Components;
 }) {
   // GFM parses tables, task lists, strikethrough and bare links before the incremental pass.
-  const remarkPlugins = useMemo(
-    () => [remarkGfm, createIncrementalMarkdownPlugin()],
-    [],
-  );
+  const remarkPlugins = useMemo(() => [remarkGfm, streamingMarkdownTail()], []);
   return (
     <MarkdownSource.Provider value={text}>
       <Markdown

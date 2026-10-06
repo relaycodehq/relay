@@ -65,7 +65,7 @@
   background: var(--send);
   color: var(--send-foreground);
 }
-/* T3 Code ComposerCommandMenu: single-line labels, descriptions and source badges. */
+/* Command menu: single-line labels, descriptions and source badges. */
 .composer-command-menu {
   position: fixed;
   z-index: 350;

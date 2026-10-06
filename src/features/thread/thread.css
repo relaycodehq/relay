@@ -1,5 +1,5 @@
 /* The thread: its messages and their actions, the start screen, and the
-   composer docked at the bottom. Proportions follow T3 Code's ChatView. */
+   composer docked at the bottom. */
 .project-chat {
   display: flex;
   flex-direction: column;

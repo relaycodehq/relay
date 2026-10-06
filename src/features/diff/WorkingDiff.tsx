@@ -10,7 +10,7 @@ import type { CodeViewHandle } from "@pierre/diffs/react";
 import { clickedLine, selectedSpan } from "./diff-selection";
 import { Columns2, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../../shared/types";
-import { StyledDiffCodeView } from "../../vendor/t3code/StyledDiffCodeView";
+import { DiffCodeView } from "./DiffCodeView";
 import { useFileDiff } from "./useFileDiff";
 import { useTheme } from "../../lib/useTheme";
 import { useSyntaxThemes } from "../../lib/appearance";
@@ -148,7 +148,7 @@ export function WorkingDiff({
         </div>
       );
     return (
-      <StyledDiffCodeView
+      <DiffCodeView
         className="working-diff"
         scrollPastEnd
         viewerRef={setViewer}

@@ -1,5 +1,3 @@
-// Searchable project list adapted from T3 Code's DraftHeroHeadline.
-// See THIRD_PARTY_NOTICES.md.
 import { useRef, useState, type RefObject } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, Search } from "lucide-react";

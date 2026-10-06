@@ -1,4 +1,3 @@
-// Adapted from T3 Code's apps/server/src/provider/providerMaintenance.ts (MIT).
 import { access, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
@@ -38,7 +37,9 @@ interface AgentPackage {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const slashed = (path: string) => path.replaceAll("\\", "/").toLowerCase();
+const forwardSlashes = (path: string) => path.replace(/\\/g, "/");
+/** A path as two spellings of it compare equal: one separator, one case. */
+const foldPath = (path: string) => forwardSlashes(path.toLowerCase());
 
 const agentPackages: Record<CliProvider, AgentPackage> = {
   claude: {
@@ -46,8 +47,8 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     native: {
       args: ["update"],
       owns: (path) =>
-        /\/\.local\/bin\/claude(\.exe)?$/.test(slashed(path)) ||
-        slashed(path).includes("/.local/share/claude/"),
+        /\/\.local\/bin\/claude(\.exe)?$/.test(foldPath(path)) ||
+        foldPath(path).includes("/.local/share/claude/"),
     },
   },
   codex: {
@@ -55,7 +56,7 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     // The standalone installer lays out `<CODEX_HOME>/packages/standalone/…`.
     native: {
       args: ["update"],
-      owns: (path) => slashed(path).includes("/packages/standalone/"),
+      owns: (path) => foldPath(path).includes("/packages/standalone/"),
     },
   },
   opencode: {
@@ -63,7 +64,7 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     native: {
       args: ["upgrade"],
       owns: (path) =>
-        /\/\.opencode\/bin\/opencode(\.exe)?$/.test(slashed(path)),
+        /\/\.opencode\/bin\/opencode(\.exe)?$/.test(foldPath(path)),
     },
   },
 };
@@ -103,13 +104,13 @@ export function installOf(
   const paths = [path, real];
   if (paths.some(native.owns))
     return { installer: "native", program: path, args: native.args };
-  if (paths.some((p) => slashed(p).includes("/.bun/bin/")))
+  if (paths.some((p) => foldPath(p).includes("/.bun/bin/")))
     return {
       installer: "bun",
       program: "bun",
       args: ["add", "-g", `${npm}@${tag}`],
     };
-  if (paths.some((p) => pnpmGlobal.some((dir) => slashed(p).includes(dir))))
+  if (paths.some((p) => pnpmGlobal.some((dir) => foldPath(p).includes(dir))))
     return {
       installer: "pnpm",
       program: "pnpm",
@@ -133,21 +134,48 @@ export function installOf(
       ],
       npmPrefix,
     };
-  const keg = /^(.*)\/(cellar|caskroom)\/([^/]+)\/[^/]+\//i.exec(
-    real.replaceAll("\\", "/"),
-  );
+  const keg = brewKegOf(real);
   // Mise's shims resolve to mise itself, not the agent.
-  if (keg && keg[3].toLowerCase() !== "mise") {
-    const kind = keg[2].toLowerCase() === "cellar" ? "formula" : "cask";
+  if (!keg || keg.name.toLowerCase() === "mise") return undefined;
+  return {
+    installer: "homebrew",
+    program: "brew",
+    args: ["upgrade", ...(keg.kind === "cask" ? ["--cask"] : []), keg.name],
+    brew: keg,
+  };
+}
+
+type BrewKeg = NonNullable<Install["brew"]>;
+
+/**
+ * The keg a path lies inside: `<prefix>/Cellar/<name>/<version>/…` for a
+ * formula, `<prefix>/Caskroom/<name>/<version>/…` for a cask. The deepest one
+ * wins when a path passes through several.
+ */
+function brewKegOf(path: string): BrewKeg | undefined {
+  const parts = forwardSlashes(path).split("/");
+  for (let at = parts.length - 4; at >= 1; at--) {
+    const room = parts[at].toLowerCase();
+    const [name, version] = [parts[at + 1], parts[at + 2]];
+    if ((room !== "cellar" && room !== "caskroom") || !name || !version)
+      continue;
     return {
-      installer: "homebrew",
-      program: "brew",
-      args:
-        kind === "cask" ? ["upgrade", "--cask", keg[3]] : ["upgrade", keg[3]],
-      brew: { kind, name: keg[3], prefix: keg[1] },
+      kind: room === "cellar" ? "formula" : "cask",
+      name,
+      prefix: parts.slice(0, at).join("/"),
     };
   }
   return undefined;
+}
+
+/** The tool a `…/mise/installs/<tool>/<version>` folder belongs to. */
+function miseToolAt(dir: string) {
+  const parts = dir.split("/");
+  if (parts.length < 5) return undefined;
+  const [mise, installs, tool, version] = parts.slice(-4);
+  const isMise =
+    mise.toLowerCase() === "mise" && installs.toLowerCase() === "installs";
+  return isMise && tool && version ? tool : undefined;
 }
 
 /**
@@ -156,7 +184,7 @@ export function installOf(
  * a global install.
  */
 function npmPrefixOf(real: string, pkg: string, platform: NodeJS.Platform) {
-  const path = real.replaceAll("\\", "/");
+  const path = forwardSlashes(real);
   const segment =
     `${platform === "win32" ? "" : "/lib"}/node_modules/${pkg}/`.toLowerCase();
   const at = path.toLowerCase().lastIndexOf(segment);
@@ -164,9 +192,7 @@ function npmPrefixOf(real: string, pkg: string, platform: NodeJS.Platform) {
     return undefined;
   // Mise's npm backend looks global inside a tool version; only its Node's
   // globals belong to npm.
-  const tool = /\/mise\/installs\/([^/]+)\/[^/]+$/i.exec(
-    path.slice(0, at),
-  )?.[1];
+  const tool = miseToolAt(path.slice(0, at));
   if (tool && tool.toLowerCase() !== "node") return undefined;
   return at === 0 ? "/" : path.slice(0, at);
 }
@@ -175,8 +201,28 @@ function npmPrefixOf(real: string, pkg: string, platform: NodeJS.Platform) {
 function describeInstall(install: Install) {
   const program = basename(install.program, extname(install.program));
   return [program, ...install.args]
-    .map((word) => (/^[\w./:@=-]+$/.test(word) ? word : `'${word}'`))
+    .map((word) => (needsQuotes(word) ? `'${word}'` : word))
     .join(" ");
+}
+
+/** Anything past letters, digits and `_ . / : @ = -` would read differently in a shell. */
+const needsQuotes = (word: string) => !word || /[^\w./:@=-]/.test(word);
+
+/** The version `brew upgrade` would bring, out of `brew info --json=v2`. */
+function brewVersionIn(info: unknown, kind: BrewKeg["kind"]) {
+  const list = isRecord(info)
+    ? info[kind === "formula" ? "formulae" : "casks"]
+    : undefined;
+  const entry = isRecord(list) ? list[0] : undefined;
+  if (!isRecord(entry)) return undefined;
+  if (kind === "formula") {
+    const stable = isRecord(entry.versions) ? entry.versions.stable : undefined;
+    return typeof stable === "string" ? stable : undefined;
+  }
+  // A cask's version may carry a build after a comma, e.g. `1.4.2,8812`.
+  if (typeof entry.version !== "string") return undefined;
+  const comma = entry.version.indexOf(",");
+  return comma < 0 ? entry.version : entry.version.slice(0, comma);
 }
 
 export type { Exec };
@@ -431,7 +477,7 @@ export class AgentUpdates {
       const prefix = answer.code === 0 ? answer.stdout.trim() : "";
       const real =
         prefix && (await this.io.realpath(prefix).catch(() => prefix));
-      if (!real || slashed(real) !== slashed(install.brew.prefix))
+      if (!real || foldPath(real) !== foldPath(install.brew.prefix))
         return undefined;
       return { ...install, program: brew };
     }
@@ -469,23 +515,20 @@ export class AgentUpdates {
     return version as string | undefined;
   }
 
-  private async brewLatest(brew: string, keg: NonNullable<Install["brew"]>) {
+  private async brewLatest(brew: string, keg: BrewKeg) {
     const info = await this.io.exec(
       brew,
       ["info", "--json=v2", keg.name],
       probeTimeout,
     );
     if (info.code !== 0) return undefined;
+    let parsed: unknown;
     try {
-      const json = JSON.parse(info.stdout);
-      const version =
-        keg.kind === "formula"
-          ? json.formulae?.[0]?.versions?.stable
-          : json.casks?.[0]?.version?.split(",")[0];
-      return typeof version === "string" && version ? version : undefined;
+      parsed = JSON.parse(info.stdout);
     } catch {
       return undefined;
     }
+    return brewVersionIn(parsed, keg.kind) || undefined;
   }
 
   private async runUpdate(provider: AgentProvider) {

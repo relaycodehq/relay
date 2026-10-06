@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { AgentProvider } from "./agents";
-// T3 Code runtimeModeConfig and CodexSessionRuntime (MIT); see THIRD_PARTY_NOTICES.
 export const runtimeModeSchema = z.enum([
   "approval-required",
   "auto-accept-edits",
@@ -14,28 +13,28 @@ export const runtimeModes = [
   {
     value: "approval-required",
     label: "Supervised",
-    description: "Ask before commands and file changes.",
+    description: "Asks before running commands or changing files.",
   },
   {
     value: "auto-accept-edits",
     label: "Auto-accept edits",
-    description: "Auto-approve edits, ask before other actions.",
+    description: "Edits files freely, asks before anything else.",
   },
   {
     value: "auto",
     label: "Auto",
     description:
-      "Supported providers approve routine actions; others still ask.",
+      "The agent's own reviewer clears routine actions; agents without one ask.",
   },
   {
     value: "full-access",
     label: "Full access",
-    description: "Allow commands and edits without prompts.",
+    description: "Runs commands and edits files without asking.",
   },
 ] as const;
 /**
  * What a mode means for an agent whose SDK can limit what it does but can't
- * stop to ask, where "Ask before commands" would be untrue.
+ * stop to ask, where "Asks before running commands" would be untrue.
  */
 const limitedModes: Partial<
   Record<AgentProvider, Partial<Record<RuntimeMode, string>>>
@@ -55,7 +54,7 @@ export const runtimeModesFor = (provider?: AgentProvider) =>
     description:
       (provider && limitedModes[provider]?.[mode.value]) || mode.description,
   }));
-/** Upgrade persisted Relay choices without resetting them to T3's full-access default. */
+/** Older saved choices map to their closest mode; anything unknown becomes full access. */
 export function savedRuntimeMode(value: unknown): RuntimeMode {
   if (value === "ask") return "approval-required";
   if (value === "edit") return "auto-accept-edits";

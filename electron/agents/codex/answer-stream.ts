@@ -11,7 +11,7 @@ interface AnswerParams {
     text?: string | null;
   };
 }
-/** T3 Code's turn timeline separates commentary, work and the terminal answer.
+/** A turn shows commentary, work and the terminal answer separately.
  * Codex message phases are optional, so an unphased last message is provisional
  * until the next message or turn completion establishes the terminal message. */
 export class CodexAnswerStream {

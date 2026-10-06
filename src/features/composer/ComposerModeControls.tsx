@@ -45,7 +45,7 @@ const modes: { value: Mode; label: string; hint: string; icon: ReactNode }[] = [
     icon: <Orbit size={14} />,
   },
 ];
-// T3's ComposerFooterModeControls: permissions and planning are independent.
+// Permissions and planning are independent controls.
 export const ComposerModeControls = memo(function ComposerModeControls({
   provider,
   runtimeMode,

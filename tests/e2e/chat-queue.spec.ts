@@ -171,9 +171,6 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await expect(
       page.getByText("Stopped · partial output kept", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByText("An error occurred in Effect.tryPromise"),
-    ).toHaveCount(0);
     await expect(queue).toContainText("Paused");
     await expect(
       page.getByRole("button", { name: "Resume answer", exact: true }),

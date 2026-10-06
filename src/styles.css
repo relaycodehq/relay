@@ -719,11 +719,16 @@ small {
 .diff-code-view,
 .working-diff {
   --diffs-font-size: var(--code-font-size, 12px);
-  /* StyledDiffCodeView's virtual row height repeats this sum. */
+  /* DiffCodeView's row metrics (diff-metrics.ts) repeat this sum. */
   --diffs-line-height: calc(var(--code-font-size, 12px) + 10px);
   font-family: var(--font-mono);
   /* The blank space past the last line continues the code surface. */
   background: var(--code-background);
+}
+/* Focusable so the keyboard can scroll it; a ring would sit outside the
+   panel's clip. Controls inside keep their own. */
+.diff-render-surface:focus {
+  outline: none;
 }
 .diff-code-view {
   height: 100%;

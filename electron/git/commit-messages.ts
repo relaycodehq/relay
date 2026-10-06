@@ -87,16 +87,14 @@ export async function generateCommitMessage(
 ): Promise<string> {
   const context = await commitContext(root, paths);
   const recent = await git(root, ["log", "-8", "--format=%s"]).catch(() => "");
-  // T3 Code's commit-message prompt plus the repository's own style; the
-  // helper instructions below keep it to JSON and the patch untrusted.
+  // The helper instructions below keep the answer to JSON and the patch untrusted.
   const prompt = [
-    "You write concise git commit messages.",
-    "Return a JSON object with keys: subject, body.",
-    "Rules:",
-    "- subject must be imperative, <= 72 chars, and no trailing period",
-    "- body can be empty string or short bullet points",
-    "- capture the primary user-visible or developer-visible change",
-    "- match the style of the recent subjects",
+    "Write a git commit message for the changes below.",
+    'Reply with JSON only: {"subject": "...", "body": "..."}.',
+    "The subject says what the change does, in the imperative, at most 72 characters, without a full stop.",
+    "The body may be an empty string, or a few short lines on why or what else changed.",
+    "Lead with the change a user or developer would notice most.",
+    "Write it the way the recent subjects are written.",
     "",
     `Branch: ${context.branch || "(detached)"}`,
     "",

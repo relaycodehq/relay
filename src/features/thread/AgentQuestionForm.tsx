@@ -1,4 +1,3 @@
-// Adapted from T3's ComposerPendingUserInputPanel (MIT); see THIRD_PARTY_NOTICES.
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { AgentQuestion, AgentResponse } from "../../../shared/agent-modes";

@@ -2781,8 +2781,10 @@ it("regenerates a title from the whole thread, even over a name you typed", asyn
     .split("\n")
     .map((line) => JSON.parse(line))
     .map((r) => r.turn?.input[0].text ?? "")
-    .find((text: string) => text.startsWith("Regenerate the title"));
-  expect(prompt).toContain('The previous title was "My name for it"');
+    .find((text: string) =>
+      text.startsWith("This coding-agent thread already has the title"),
+    );
+  expect(prompt).toContain('already has the title "My name for it"');
   expect(prompt).toContain("USER:\nExplain the cache guard");
 }, 15000);
 

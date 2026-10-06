@@ -6,7 +6,7 @@ import {
   type AgentModel,
   type AgentProvider,
 } from "../../../shared/agents";
-import { scoreModelPickerSearch } from "../../vendor/t3code/model-picker/modelPickerSearch";
+import { fuzzyBase, rankModelQuery } from "./model-search";
 
 export type MessageProvider = AgentProvider | "message";
 export type Category = MessageProvider | "favorites";
@@ -35,8 +35,6 @@ export const providerNames: Record<MessageProvider, string> = {
   ) as Record<AgentProvider, string>),
   message: "No agent",
 };
-/** Search scores from here per word come from fuzzy matches; see modelPickerSearch. */
-const fuzzyScore = 100;
 const searchWords = (query: string) =>
   Math.max(1, query.trim().split(/\s+/).filter(Boolean).length);
 export const modelKey = (m: PickerModel) => JSON.stringify([m.provider, m.id]);
@@ -130,7 +128,7 @@ export function pickerRows(
       model: m,
       index,
       pinned: pinned.includes(modelKey(m)),
-      score: scoreModelPickerSearch(
+      score: rankModelQuery(
         {
           driverKind: m.provider,
           providerDisplayName: providerNames[m.provider],
@@ -146,7 +144,7 @@ export function pickerRows(
     .filter(
       (r) =>
         r.score !== null &&
-        (!grouped || r.score < fuzzyScore * searchWords(query)),
+        (!grouped || r.score < fuzzyBase * searchWords(query)),
     );
   const groups = grouped
     ? [

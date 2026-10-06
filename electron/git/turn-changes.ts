@@ -18,8 +18,8 @@ import { git, gitBytes } from "./git";
 import type { FilePair } from "../../shared/types";
 import type { TurnFileChange } from "../../shared/projects";
 
-// Adapted from T3 Code's Git checkpoints: each agent turn snapshots the whole
-// worktree before and after; its card lists the changes the agent made itself.
+// Each agent turn snapshots the whole worktree before and after; its card
+// lists the changes the agent made itself.
 const identity = {
   GIT_AUTHOR_NAME: "Relay",
   GIT_AUTHOR_EMAIL: "relay@localhost",
@@ -126,18 +126,31 @@ async function snapshot(root: string, parent?: string) {
   );
 }
 
-/** Reads `git diff --numstat -z`; binary files report no line counts. */
+/** A numstat count: digits, or `-` where Git counted no lines; null for anything else. */
+function numstatCount(field: string): number | "-" | null {
+  if (field === "-") return "-";
+  return /^\d+$/.test(field) ? Number(field) : null;
+}
+
+/**
+ * Reads `git diff --numstat -z`: NUL-separated `added<TAB>deleted<TAB>path`
+ * records, where a binary file's counts are `-`. The path is taken whole,
+ * tabs and all, since `-z` leaves it unquoted.
+ */
 export function parseNumstat(output: string): TurnFileChange[] {
   const files: TurnFileChange[] = [];
   for (const record of output.split("\0")) {
-    const counts = /^(\d+|-)\t(\d+|-)\t/.exec(record);
-    const path = counts && record.slice(counts[0].length);
-    if (!counts || !path) continue;
+    const [added, deleted, ...rest] = record.split("\t");
+    const path = rest.join("\t");
+    const additions = numstatCount(added);
+    const deletions = numstatCount(deleted ?? "");
+    if (additions === null || deletions === null || !path) continue;
+    const binary = additions === "-";
     files.push({
       path,
-      additions: counts[1] === "-" ? 0 : Number(counts[1]),
-      deletions: counts[2] === "-" ? 0 : Number(counts[2]),
-      ...(counts[1] === "-" ? { binary: true } : {}),
+      additions: binary ? 0 : additions,
+      deletions: deletions === "-" ? 0 : deletions,
+      ...(binary ? { binary: true } : {}),
     });
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));

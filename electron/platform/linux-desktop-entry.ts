@@ -1,4 +1,3 @@
-// Modelled on T3 Code's apps/desktop/src/app/DesktopLinuxUrlHandler.ts (MIT).
 import { roomProtocol } from "../../shared/rooms";
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -10,22 +9,31 @@ export const desktopId = "relay-experimental.desktop";
 const installerMarker = "X-Relay-Experimental-Installer=1";
 const appImageMarker = "X-Relay-AppImage=1";
 
+// Each table is applied in one pass, so the backslashes an escape adds are never escaped again.
+/** The spec's string type: backslash, newline, carriage return and tab. */
+const stringEscapes: Record<string, string> = {
+  "\\": "\\\\",
+  "\n": "\\n",
+  "\r": "\\r",
+  "\t": "\\t",
+};
 const escapeString = (value: string) =>
-  value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("\n", "\\n")
-    .replaceAll("\r", "\\r")
-    .replaceAll("\t", "\\t");
+  value.replace(/[\\\n\r\t]/g, (c) => stringEscapes[c]);
+
+/** Inside an Exec argument's double quotes; a bare `%` would start a field code. */
+const quotedEscapes: Record<string, string> = {
+  "\\": "\\\\",
+  "`": "\\`",
+  $: "\\$",
+  '"': '\\"',
+  "%": "%%",
+};
+const escapeQuoted = (value: string) =>
+  value.replace(/[\\`$"%]/g, (c) => quotedEscapes[c]);
 
 // Exec is unescaped twice: string rules first, then Exec quoting, so write in reverse.
 export function escapeExecArgument(value: string) {
-  const quoted = value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("`", "\\`")
-    .replaceAll("$", "\\$")
-    .replaceAll('"', '\\"')
-    .replaceAll("%", "%%");
-  return escapeString(`"${quoted}"`);
+  return escapeString(`"${escapeQuoted(value)}"`);
 }
 
 function renderAppImageEntry(appImage: string, icon: string) {

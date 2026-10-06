@@ -102,7 +102,7 @@ export const categories: {
   {
     id: "about",
     label: "About",
-    description: "Version, changelog and credits.",
+    description: "Version and changelog.",
     icon: Info,
   },
 ];

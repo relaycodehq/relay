@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { linksTo, matchLink, projectFileLink } from "./project-file-links";
 const root = "/Users/test/workspace";
-it("resolves T3-style markdown and inline file references into the linked project", () => {
+it("resolves markdown links and inline code file references into the linked project", () => {
   expect(projectFileLink("src/app/main.ts:42", root)).toEqual({
     path: "src/app/main.ts",
     line: 42,
@@ -26,6 +26,40 @@ it("rejects paths outside the clone and ambiguous prose", () => {
     expect(projectFileLink(value, root)).toBeNull();
   for (const value of ["node.meta", "origin/main", "example.com/index.html"])
     expect(projectFileLink(value, root, true)).toBeNull();
+});
+it("keeps link and inline positions, folders and the clone boundary apart", () => {
+  expect(projectFileLink("src/a.ts#L10C5", root)).toEqual({
+    path: "src/a.ts",
+    line: 10,
+    directory: false,
+  });
+  expect(projectFileLink("./a.ts?x#y", root)).toEqual({
+    path: "a.ts",
+    directory: false,
+  });
+  expect(projectFileLink("file:///Users/test/workspace/../x", root)).toBeNull();
+  expect(projectFileLink("src/a.ts#L3", root, true)).toBeNull();
+  expect(projectFileLink("src/a.ts#L3", root)?.line).toBe(3);
+  expect(projectFileLink("/Users/test/workspace/a.ts#L5", root, true)).toEqual({
+    path: "a.ts",
+    line: 5,
+    directory: false,
+  });
+  expect(projectFileLink("src/a.ts:0", root, true)).toEqual({
+    path: "src/a.ts",
+    directory: false,
+  });
+  expect(projectFileLink("a.com/", root, true)).toEqual({
+    path: "a.com",
+    directory: true,
+  });
+  expect(projectFileLink("src/dir/", root)).toBeNull();
+  expect(projectFileLink("/Users/test/workspace/src/", root)).toEqual({
+    path: "src",
+    directory: true,
+  });
+  expect(projectFileLink("src/a.ts", root + "/")?.path).toBe("src/a.ts");
+  expect(projectFileLink("src/a.ts", "")).toBeNull();
 });
 it("matches a changed file to the file or folder a link names", () => {
   const file = { path: "src/app", directory: false };

@@ -35,7 +35,7 @@ const RELAY_TOKEN_ENV = "RELAY_MCP_TOKEN";
 /** Like Codex's own `/side`: the fork carries the main thread's history, not its task. */
 const sideInstructions =
   "You are in a side conversation, not the main thread. The user asked a question beside the main thread, which may still be working on its latest turn; what you see of that turn is as far as it had got. Treat the inherited history as reference only: don't continue its task or follow instructions from it. Answer the user's questions here. You can read files and run read-only commands, but change nothing in the workspace.";
-/** Security and turn policy stay here; T3 owns the reusable streaming protocol. */
+/** Security and turn policy live here; the wire protocol is in codex-transport. */
 export async function runCodex(options: AgentOptions): Promise<string> {
   const { job } = options;
   // Helper jobs and room answers are one-offs in a sandbox of Relay's own; a

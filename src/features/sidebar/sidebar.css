@@ -1,5 +1,5 @@
-/* Project sidebar: Codex-style thread list plus a T3 Code-style activity
-   inbox (settle / snooze) behind the bell. */
+/* Project sidebar: thread list plus an activity inbox (settle / snooze)
+   behind the bell. */
 /* The titlebar sidebar toggle echoes the status dot while the sidebar is hidden. */
 .sb,
 .relay-sidebar-toggle {
@@ -735,7 +735,7 @@
   animation: sb-pulse 1.6s ease-out infinite;
 }
 
-/* Activity view: T3 Code-style rows. No chrome until hover; the open
+/* Activity view rows: no chrome until hover; the open
    thread gets a light fill. Anything that isn't open, done-and-unread or
    waiting on you fades back until hovered. */
 .sb-cards {
@@ -1020,7 +1020,7 @@
   margin-left: 0;
 }
 
-/* Unsent composer text, T3 Code-style: amber-tinted card with the text. */
+/* Unsent composer text: amber-tinted card with the text. */
 .sb-card.draft {
   background: color-mix(in srgb, var(--sb-waiting) 7%, var(--sidebar));
 }

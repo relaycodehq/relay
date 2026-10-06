@@ -1,4 +1,4 @@
-/* T3 Code's file chip: a faintly tinted pill whose metrics are in em, so it
+/* File chip: a faintly tinted pill whose metrics are in em, so it
    sits the same in 14px answers and 12px trace notes. */
 .chat-file-link {
   --chip-accent: oklch(0.62 0.11 215);

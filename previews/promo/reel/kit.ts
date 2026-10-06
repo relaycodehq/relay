@@ -5,7 +5,7 @@ import {
   ClaudeAI,
   OpenAI,
   OpenCode,
-} from "../../../src/vendor/t3code/model-picker/ProviderIcons";
+} from "../../../src/features/agents/ProviderLogos";
 import { CursorGlyph } from "../../../src/features/agents/CursorGlyph";
 import { DeviceIcon } from "../../../src/features/handoff/DeviceIcon";
 

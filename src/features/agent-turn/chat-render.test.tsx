@@ -41,7 +41,7 @@ it("shows only inline code through inlineCode, like a finding's F1", () => {
   expect(html).toContain('title="src/util.ts:3"');
 });
 
-it("labels file chips T3-style: type icon, file name, line, and parents only on a clash", () => {
+it("labels file chips with a type icon, file name, line, and parents only on a clash", () => {
   const html = renderToStaticMarkup(
     <RichText
       text={
@@ -59,7 +59,7 @@ it("labels file chips T3-style: type icon, file name, line, and parents only on 
   expect(html).toContain(">index.ts · src/lib · L4</span>");
 });
 
-it("renders an active T3-style turn, then folds its trace after completion", () => {
+it("renders an active turn, then folds its trace after completion", () => {
   const message: ChatMessage = {
     id: "answer",
     role: "assistant",

@@ -181,7 +181,7 @@ export function TypographySettings() {
       {t.advanced && (
         <FontRow
           label="Prompt font"
-          hint="Only the box you write prompts in. Mono works well here."
+          hint="Used only in the composer. A monospace font suits it."
           picker={
             <FontPicker
               label="Prompt font"

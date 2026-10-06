@@ -30,7 +30,7 @@ const looks: { id: Look; label: string; note: string }[] = [
   {
     id: "name",
     label: "File name",
-    note: "Picked and built. T3 Code's way: thumbnail, file name and size; the agent still reads [Image #n].",
+    note: "Picked and built: thumbnail, file name and size; the agent still reads [Image #n].",
   },
   {
     id: "compact",

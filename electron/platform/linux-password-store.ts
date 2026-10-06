@@ -1,19 +1,19 @@
-// Adapted from T3 Code's apps/desktop/src/linuxSecretStorage.ts (MIT).
-
-// Chromium matches XDG_CURRENT_DESKTOP case-sensitively, stops at the first name it
-// recognises, and picks a real keyring only for these. KDE selects its own KWallet.
-const PROTECTED = new Set([
-  "Deepin",
-  "GNOME",
-  "KDE",
-  "Pantheon",
-  "UKUI",
-  "Unity",
-  "X-Cinnamon",
-  "XFCE",
+/**
+ * Desktop names Chromium knows in XDG_CURRENT_DESKTOP, matched case-sensitively,
+ * and whether it then keeps secrets in a real keyring (KDE's being KWallet).
+ * LXQt is known but still gets basic text.
+ */
+const chromiumKeyring = new Map<string, boolean>([
+  ["GNOME", true],
+  ["Unity", true],
+  ["X-Cinnamon", true],
+  ["Pantheon", true],
+  ["Deepin", true],
+  ["UKUI", true],
+  ["XFCE", true],
+  ["KDE", true],
+  ["LXQt", false],
 ]);
-// Recognised, but Chromium still stores basic text for it.
-const UNPROTECTED = new Set(["LXQt"]);
 
 /**
  * The --password-store Relay has to force so the login persists, or null when
@@ -24,10 +24,12 @@ const UNPROTECTED = new Set(["LXQt"]);
 export function linuxPasswordStore(
   env: NodeJS.ProcessEnv,
 ): "gnome-libsecret" | null {
-  for (const name of env.XDG_CURRENT_DESKTOP?.split(":") ?? []) {
-    const desktop = name.trim();
-    if (PROTECTED.has(desktop)) return null;
-    if (UNPROTECTED.has(desktop)) break;
-  }
-  return "gnome-libsecret";
+  // Chromium settles on the first name in the list it recognises.
+  const known = (env.XDG_CURRENT_DESKTOP ?? "")
+    .split(":")
+    .map((name) => name.trim())
+    .find((name) => chromiumKeyring.has(name));
+  return known !== undefined && chromiumKeyring.get(known)
+    ? null
+    : "gnome-libsecret";
 }

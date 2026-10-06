@@ -35,7 +35,7 @@ it("builds a folder tree with totals and merged single-child folders", () => {
   expect(compactCount(45_000)).toBe("45k");
 });
 
-it("renders the card header, folders and file rows like T3", () => {
+it("renders the card header, folders and file rows", () => {
   const many = [
     ...files,
     { path: "docs/a.md", additions: 1, deletions: 0 },

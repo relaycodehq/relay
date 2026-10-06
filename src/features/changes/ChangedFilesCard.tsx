@@ -1,6 +1,5 @@
-// Adapted from T3 Code's ChangedFilesCard: what one agent turn changed, as a
-// folder tree with line counts. Rows open that turn's diff in the Changes pane;
-// hovering one offers to roll it back.
+// What one agent turn changed, as a folder tree with line counts. Rows open
+// that turn's diff in the Changes pane; hovering one offers to roll it back.
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { memo, useMemo, useState } from "react";
 import {
@@ -20,7 +19,7 @@ import { IconButton } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import "./changed-files.css";
 
-// Short lists read best open; longer ones start as folders, like T3.
+// Short lists read best open; longer ones start as folders.
 const EXPAND_UP_TO = 5;
 
 type Mode = "revert" | "redo";

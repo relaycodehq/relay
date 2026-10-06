@@ -22,8 +22,8 @@
   until then it lives in the feature it grew out of.
 - **Move files with `node scripts/move-files.mjs <mapping.json> --dry`**, which
   rewrites imports, mocks, worker URLs, CSS and HTML references. Leave
-  `tests/fixtures`, the `vendor/` folders and the build entry points in
-  `scripts/build-electron.mjs` where they are.
+  `tests/fixtures` and the build entry points in `scripts/build-electron.mjs`
+  where they are.
 - **Check types with `npm run typecheck`.** The renderer, the main process,
   the preload script and the tests are separate projects, so `src/` can't
   reach for Node and `electron/` can't reach for the DOM. A bare

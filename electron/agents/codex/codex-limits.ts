@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CodexAppServerRequestError } from "../../vendor/t3code/codex/errors";
+import { CodexRequestError } from "./codex-transport";
 import { signedOutError, usageLimitError } from "../errors";
 import { latestReset, resetMs } from "../usage-limit";
 
@@ -53,7 +53,7 @@ export function codexFailure(
  * HTTP 401 in the message when it isn't; anything else stays as it came.
  */
 export function codexRequestFailure(error: unknown) {
-  if (!(error instanceof CodexAppServerRequestError)) return error;
+  if (!(error instanceof CodexRequestError)) return error;
   const data = turnErrorSchema.safeParse(error.data);
   if (
     (data.success && data.data.codexErrorInfo === "unauthorized") ||

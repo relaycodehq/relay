@@ -42,7 +42,7 @@ function autoSettleLabel(days: number | null | undefined, onCommit?: boolean) {
 }
 
 /**
- * A thread's right-click menu, after T3 Code's: triage, naming, auto-settle
+ * A thread's right-click menu: triage, naming, auto-settle
  * and copying, plus Fork from its latest answer on that answer's agent and
  * reloading the agent holding the conversation.
  */

@@ -11,7 +11,7 @@ export type TraitSection = {
   onChange: (value: string) => void;
 };
 /**
- * T3's TraitsPicker: related choices behind one trigger that names them all,
+ * Related choices behind one trigger that names them all,
  * e.g. "High · 200k".
  */
 export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({

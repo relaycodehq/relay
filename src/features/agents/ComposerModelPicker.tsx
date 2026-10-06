@@ -1,4 +1,3 @@
-// Adapted from T3 Code's chat model picker. See THIRD_PARTY_NOTICES.md.
 import {
   Fragment,
   memo,
@@ -25,11 +24,7 @@ import {
   reportsUsage,
   type UsageProvider,
 } from "../../../shared/agents";
-import {
-  OpenAI,
-  ClaudeAI,
-  OpenCode,
-} from "../../vendor/t3code/model-picker/ProviderIcons";
+import { OpenAI, ClaudeAI, OpenCode } from "./ProviderLogos";
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
 import { UsageMeters } from "./UsageMeters";

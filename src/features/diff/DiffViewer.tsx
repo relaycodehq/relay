@@ -17,7 +17,7 @@ import type {
 } from "../../../shared/types";
 import { revisionOf } from "../../../shared/types";
 import { api } from "../../lib/api";
-import { StyledDiffCodeView } from "../../vendor/t3code/StyledDiffCodeView";
+import { DiffCodeView } from "./DiffCodeView";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { useTheme } from "../../lib/useTheme";
 import { useAISettings } from "../agents/useAISettings";
@@ -254,7 +254,7 @@ export function DiffViewer({
         onEditLine={onEditLine}
         onProblem={setProblemLine}
       />
-      <StyledDiffCodeView<LineNotes>
+      <DiffCodeView<LineNotes>
         viewerRef={viewer}
         className="diff-code-view"
         scrollPastEnd

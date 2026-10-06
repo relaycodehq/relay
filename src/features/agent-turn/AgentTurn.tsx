@@ -1,5 +1,5 @@
-// Adapted from T3 Code's MessagesTimeline activity group: one summary line per turn,
-// and a flat list of tool rows named by what they touched.
+// One summary line per turn, and a flat list of tool rows named by what they
+// touched.
 import {
   createContext,
   useContext,
@@ -304,7 +304,7 @@ export function AgentTurn({
 }) {
   const turn = readTurn(message);
   const { live, entries, shown, calls, thinking } = turn;
-  // Open while the turn runs, like T3 Code's work log; fold back once it ends
+  // Open while the turn runs; fold back once it ends
   // unless the reader opened or closed it themselves.
   const [toggled, setToggled] = useState<boolean | undefined>(
     open || undefined,

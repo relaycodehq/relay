@@ -18,7 +18,7 @@ import { keys } from "../../lib/mod-key";
 import { useTheme } from "../../lib/useTheme";
 import { useSyntaxThemes } from "../../lib/appearance";
 import { useTypography } from "../../lib/typography";
-import { StyledDiffCodeView } from "../../vendor/t3code/StyledDiffCodeView";
+import { DiffCodeView } from "./DiffCodeView";
 import { ErrorBox, IconButton, Loading, Modal } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
@@ -444,7 +444,7 @@ function SymbolPreview({
       ) : !source ? (
         <Loading text="Loading source…" />
       ) : (
-        <StyledDiffCodeView
+        <DiffCodeView
           viewerRef={viewer}
           className="diff-code-view symbol-code"
           unsafeCSSExtra={`:host {color-scheme:${theme} !important;} [data-file] {transition:none !important; opacity:1 !important;}`}

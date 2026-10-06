@@ -86,7 +86,7 @@ function sample(now: number): Thread[] {
     {
       id: "lead",
       project: "Relay",
-      title: "List projects similar to Relay and T3",
+      title: "List projects similar to Relay",
       branch: "main",
       provider: "claude",
       updated: now - 2 * min,
@@ -124,7 +124,7 @@ function sample(now: number): Thread[] {
       id: "goal",
       project: "Relay",
       title: "Native /goal support in Relay threads",
-      branch: "relay/native-goal-the-way-t3",
+      branch: "relay/native-goal-like-the-cli",
       provider: "claude",
       parent: "lead",
       running: true,

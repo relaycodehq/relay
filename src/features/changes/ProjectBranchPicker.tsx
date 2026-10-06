@@ -1,4 +1,3 @@
-// Searchable branch menu follows T3 Code's BranchToolbarBranchSelector.
 import { memo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
