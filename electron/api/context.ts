@@ -27,6 +27,7 @@ import type { RoomService } from "../rooms/service";
 import type { Store } from "../app/store";
 import type { TriageService } from "../triage/service";
 import type { Updater } from "../app/updater";
+import type { DevBuild } from "../app/dev-build";
 import type { AgentAccounts } from "../agents/accounts";
 
 export interface Services {
@@ -51,6 +52,7 @@ export interface Services {
   liveSyncs: LiveSyncs;
   pullRequestCreation: PullRequestCreation;
   updater: Updater;
+  devBuild: DevBuild;
   dictation: Dictation;
   readAloud: ReadAloud;
   agentUpdates: AgentUpdates;

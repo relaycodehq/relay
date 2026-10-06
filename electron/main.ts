@@ -65,6 +65,7 @@ import { projectTasks } from "./terminal/tasks";
 import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
+import { DevBuild } from "./app/dev-build";
 import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
 import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
@@ -159,6 +160,15 @@ const updater = new Updater((state) => window.send("relay:update", state), {
     quit.detaching = true;
   },
 });
+const devBuild = new DevBuild(
+  (stale) => window.send("relay:dev-build", stale),
+  {
+    beforeQuit: () => {
+      quit.confirmed = true;
+      quit.detaching = true;
+    },
+  },
+);
 const dictation = new Dictation(app.getPath("userData"), (state) =>
   window.send("relay:dictation", state),
 );
@@ -371,6 +381,7 @@ app
       liveSyncs,
       pullRequestCreation,
       updater,
+      devBuild,
       dictation,
       readAloud,
       agentUpdates,
@@ -472,6 +483,7 @@ app
       .catch((e) => console.warn("Could not reconcile thread summaries:", e));
     rearmOnWake(powerMonitor, () => chats.armWakeups());
     updater.start();
+    devBuild.start();
     // Tests' stand-in agents only answer what a test expects of them.
     if (!process.env.RELAY_TEST_DATA) agentUpdates.start();
     setApplicationMenu(window);

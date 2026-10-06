@@ -198,6 +198,8 @@ export function settingsHandlers(ctx: ApiContext) {
     downloadUpdate: () => updater.download(),
     installUpdate: () => updater.installAndRestart(),
     releaseNotes: () => fetchReleaseNotes(),
+    devBuildState: () => ctx.devBuild.stale,
+    restartDevBuild: () => ctx.devBuild.restart(),
     agentVersions: () => agentUpdates.current,
     checkAgentVersions: () => agentUpdates.check(true),
     updateAgent: takes([agentProviderSchema], (provider) =>

@@ -449,6 +449,11 @@ export interface Api
   /** Every published release's notes, newest first. */
   releaseNotes(): Promise<ReleaseNote[]>;
   onUpdate(callback: (state: UpdateState) => void): () => void;
+  /** Under `npm run dev`, the main process's bundles this run is behind on, by name. */
+  devBuildState(): Promise<string[]>;
+  /** Quits so `npm run dev` writes the new bundles and starts Relay again. */
+  restartDevBuild(): Promise<void>;
+  onDevBuild(callback: (stale: string[]) => void): () => void;
   dictationState(): Promise<DictationModelState>;
   downloadDictationModel(): Promise<DictationModelState>;
   cancelDictationDownload(): Promise<void>;
