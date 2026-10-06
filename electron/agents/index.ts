@@ -34,6 +34,7 @@ import {
   openCodeModels,
 } from "./opencode/catalog";
 import type { AgentRuntime } from "./types";
+import { counted } from "./usage-count";
 import {
   claudeAgentDefaults,
   codexAgentDefaults,
@@ -103,10 +104,10 @@ const cursor: AgentRuntime = {
 };
 
 export const agentRuntimes: Record<AgentProvider, AgentRuntime> = {
-  codex,
-  claude,
-  opencode,
-  cursor,
+  codex: counted("codex", codex),
+  claude: counted("claude", claude),
+  opencode: counted("opencode", opencode),
+  cursor: counted("cursor", cursor),
 };
 export const agentRuntime = (provider: AgentProvider) =>
   agentRuntimes[provider];

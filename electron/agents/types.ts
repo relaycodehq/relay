@@ -15,6 +15,15 @@ import type { GoalCommand, ThreadGoal } from "../../shared/goal";
 import type { ProviderCommand } from "../../shared/commands";
 import type { AgentDefaults, AgentModel } from "../../shared/agents";
 import type { ModelChoice } from "../../shared/settings";
+import type { UsageJob, UsageTokens } from "../../shared/usage";
+
+/** What one request of a run used, as the agent reported it. */
+export type UsageReport = {
+  model: string;
+  tokens: UsageTokens;
+  /** The agent's own price; left out, Relay prices it at list rates. */
+  usd?: number;
+};
 
 /** What the run is for; each runtime handles every kind. */
 export type AgentJob =
@@ -88,6 +97,10 @@ export interface AgentOptions {
   goal?: ThreadGoal;
   /** Dollars the turn cost since the last call, as the agent prices it. */
   onCost?: (usd: number) => void;
+  /** Each request the run made, subagents' too; see agents/usage-count. */
+  onUsage?: (usage: UsageReport) => void;
+  /** Where the Usage page counts the run; left out, `job` decides. */
+  usage?: { job?: UsageJob; chat?: string; project?: string };
   /** Private context for this turn: the agent reads it, the transcript never shows it. */
   context?: () => Promise<string | undefined>;
   images?: {
@@ -149,6 +162,9 @@ export interface AgentRuntime {
     question: string;
     history: { question: string; response: string }[];
     signal: AbortSignal;
+    /** What answering it cost, when the agent can tell. */
+    onUsage?: (usage: UsageReport) => void;
+    usage?: { chat?: string; project?: string };
   }): Promise<string>;
   /**
    * Takes back the sessions that kept running while Relay restarted: those

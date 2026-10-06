@@ -141,6 +141,7 @@ export class SideQuestions {
         question,
         history,
         signal: abort.signal,
+        usage: { chat: chat.id, project: chat.projectId },
       });
       answer.status = "complete";
     } catch (e) {

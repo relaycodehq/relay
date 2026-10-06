@@ -2,7 +2,11 @@ import { dirname } from "node:path";
 import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
-import { codexTurnWatcher, type CodexTurnWatch } from "./codex-watch";
+import {
+  codexTokens,
+  codexTurnWatcher,
+  type CodexTurnWatch,
+} from "./codex-watch";
 import { findExecutable } from "../../platform/executables";
 import { runAccount } from "../accounts";
 import { codexModelArgs } from "../../../shared/settings";
@@ -164,6 +168,11 @@ export async function runCodex(options: AgentOptions): Promise<string> {
       const usage = codexContextUsage(n.params.tokenUsage);
       if (usage) options.onContext?.(usage);
       watcher?.requested(n.params.tokenUsage);
+      // `last` is the one request that just finished.
+      const last = (n.params.tokenUsage as { last?: object } | null)?.last;
+      const model = options.choice.model || connection.started?.model;
+      if (last && model)
+        options.onUsage?.({ model, tokens: codexTokens(last) });
     }
     if (n.method === "thread/name/updated" && n.params.threadName != null)
       options.onTitle?.(n.params.threadName);

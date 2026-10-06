@@ -174,6 +174,7 @@ export class WatchReviews {
           choice: { ...choice, fast: false },
           signal: new AbortController().signal,
           onText: () => {},
+          usage: { job: "watch" as const },
           job: {
             kind: "helper",
             instructions:

@@ -16,6 +16,9 @@ import { sdk as claudeSdk } from "../agents/claude/project";
 import { agentName } from "../../shared/agents";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
 import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";
+import { logUsage } from "../usage";
+import { codexTokens } from "../agents/codex/codex-watch";
+import { listCost } from "../agents/watch/prices";
 
 /** Why a file the agent failed to classify stays in individual review. */
 export const incompleteHunksReason = (agent: string) =>
@@ -209,6 +212,7 @@ async function classifyWithClaude(
       ),
     180_000,
   );
+  const started = Date.now();
   const stream = query({
     prompt,
     options: {
@@ -235,6 +239,28 @@ async function classifyWithClaude(
           "Claude could not complete the analysis. Check its sign-in, the selected model and usage limits, then retry.",
         );
       const u = m.usage;
+      logUsage({
+        at: started,
+        ms: Date.now() - started,
+        provider: "claude",
+        job: "triage",
+        answer: true,
+        models: Object.fromEntries(
+          Object.entries(m.modelUsage).map(([name, mu]) => [
+            name,
+            {
+              tokens: {
+                input: mu.inputTokens,
+                cacheWrite: mu.cacheCreationInputTokens,
+                cacheRead: mu.cacheReadInputTokens,
+                output: mu.outputTokens,
+              },
+              usd: mu.costUSD,
+              requests: 1,
+            },
+          ]),
+        ),
+      });
       return {
         output: m.structured_output,
         usage: {
@@ -411,6 +437,7 @@ export async function classifyChanges(
         ([k]) => !/TOKEN|SECRET|PASSWORD|API_KEY|ELECTRON_RUN_AS_NODE/i.test(k),
       ),
     );
+    const started = Date.now();
     return await new Promise((resolve, reject) => {
       const child = spawnExecutable(executable, args, {
         cwd: dir,
@@ -476,6 +503,22 @@ export async function classifyChanges(
           if (e.type === "turn.completed") {
             usage.inputTokens = e.usage?.input_tokens ?? 0;
             usage.outputTokens = e.usage?.output_tokens ?? 0;
+            const model = choice.model || TRIAGE_MODEL;
+            const tokens = codexTokens({
+              inputTokens: usage.inputTokens,
+              cachedInputTokens: e.usage?.cached_input_tokens ?? 0,
+              outputTokens: usage.outputTokens,
+            });
+            logUsage({
+              at: started,
+              ms: Date.now() - started,
+              provider: "codex",
+              job: "triage",
+              answer: true,
+              models: {
+                [model]: { tokens, usd: listCost(model, tokens), requests: 1 },
+              },
+            });
           }
           if (e.type === "turn.failed" || e.type === "error")
             stop(

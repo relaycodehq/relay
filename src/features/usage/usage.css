@@ -1,0 +1,374 @@
+/* The Usage page. Relay's greys and one lavender; no pills, no brand colours. */
+.us-page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 30px 36px 48px;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.us-page > * {
+  max-width: 1040px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.us-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 22px;
+}
+.us-head h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.us-head p {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.us-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.us-range {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.us-range button {
+  border: 0;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.us-range button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px #0000001a;
+}
+.us-share-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+.us-empty,
+.us-since {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.us-since {
+  margin: 0 0 14px;
+}
+
+/* Charts */
+.us-chart {
+  position: relative;
+}
+.us-chart svg {
+  display: block;
+  overflow: visible;
+}
+.us-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.us-axis {
+  fill: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.us-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+.us-tip {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px #0000001f;
+  font-size: 11.5px;
+  pointer-events: none;
+}
+.us-tip strong {
+  font-weight: 600;
+}
+.us-tip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.us-tip b {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.us-tip-total {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+/* Heatmap: one hue, surface to accent. */
+.us-heat {
+  fill: color-mix(in srgb, var(--accent) var(--heat), var(--surface));
+}
+.us-heat.l0 {
+  --heat: 0%;
+  fill: color-mix(in srgb, var(--text) 6%, var(--surface));
+}
+.us-heat.l1 {
+  --heat: 22%;
+}
+.us-heat.l2 {
+  --heat: 40%;
+}
+.us-heat.l3 {
+  --heat: 58%;
+}
+.us-heat.l4 {
+  --heat: 78%;
+}
+.us-heat.l5 {
+  --heat: 100%;
+}
+.us-heat:hover {
+  stroke: var(--text);
+  stroke-width: 1;
+}
+/* Share dialog */
+.modal.us-share {
+  width: min(860px, 92vw);
+  max-width: 860px;
+}
+.us-card-frame {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.us-card-frame > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.us-share-options {
+  display: flex;
+  gap: 20px;
+  margin-top: 14px;
+}
+.us-share-options label {
+  display: inline-flex;
+  flex-direction: row;
+  white-space: nowrap;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+}
+.us-share-options input {
+  width: auto;
+  margin: 0;
+}
+.us-share .modal-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Shared marks: one lavender, the rest greys. */
+.us-mark {
+  flex: none;
+  color: var(--text);
+}
+.us-col {
+  fill: color-mix(in srgb, var(--accent) 70%, var(--surface));
+}
+.us-col.on {
+  fill: var(--accent);
+}
+.us-line-a,
+.us-line-b {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.us-line-a {
+  stroke: var(--accent);
+}
+.us-line-b {
+  stroke: color-mix(in srgb, var(--muted) 70%, var(--surface));
+}
+.us-dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.us-dot.us-line-a {
+  fill: var(--accent);
+}
+.us-dot.us-line-b {
+  fill: var(--muted);
+}
+.us-end-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.us-rows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.us-rows tr + tr > * {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.us-rows th {
+  width: 46%;
+  max-width: 0;
+  padding: 7px 14px 7px 0;
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.us-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.us-rows th small {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.us-row-bar {
+  padding: 7px 0;
+}
+.us-row-bar span {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+.us-rows tr.lead .us-row-bar span {
+  background: var(--accent);
+}
+.us-num {
+  width: 1%;
+  padding: 7px 0 7px 14px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The page */
+.us-quiet {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.us-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 48px;
+  margin-bottom: 14px;
+}
+.us-figure strong {
+  display: block;
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.us-figure span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.us-facts {
+  display: flex;
+  gap: 36px;
+  margin: 0;
+}
+.us-facts dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.us-facts dd {
+  margin: 3px 0 0;
+  font-size: 17px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.us-block {
+  min-width: 0;
+  padding: 24px 0 4px;
+}
+.us-block > header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.us-block h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.us-block > header span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.us-block .us-chart {
+  margin-top: 12px;
+}
+.us-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 40px;
+}
+.us-list {
+  margin: 0;
+  font-size: 12.5px;
+}
+.us-list div {
+  display: flex;
+  padding: 7px 0;
+}
+.us-list div + div {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.us-list dd {
+  margin: 0 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.us-list small {
+  margin-left: 6px;
+  color: var(--muted);
+}

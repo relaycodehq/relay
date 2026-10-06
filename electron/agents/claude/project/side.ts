@@ -2,9 +2,10 @@ import { findExecutable } from "../../../platform/executables";
 import { runAccount } from "../../accounts";
 import { AsyncQueue } from "../../../util/async-queue";
 import { withTimeout } from "../../../util/timeout";
-import type { SessionTotals } from "../watch/spend";
 import { sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
-import { sessions } from "./session";
+import type { UsageReport } from "../../types";
+import { ClaudeMeter, type SessionTotals } from "../watch/spend";
+import { meterOf, sessions } from "./session";
 
 /** An earlier question in a side thread, and what Claude said to it. */
 export type SideExchange = { question: string; response: string };
@@ -29,18 +30,28 @@ export async function askClaudeSide(options: {
   question: string;
   history: SideExchange[];
   signal: AbortSignal;
+  onUsage?: (usage: UsageReport) => void;
 }): Promise<string> {
-  const ask = async (stream: ClaudeStream) => {
-    const answer = await (stream as SideAsking).askSideQuestion(
-      options.question,
-      { history: options.history, signal: options.signal },
-    );
-    if (!answer?.response.trim())
-      throw new Error("Claude had no answer. Try again.");
-    return answer.response;
+  // The answer carries no counts; the session's totals moving around it do.
+  const ask = async (stream: ClaudeStream, meter: ClaudeMeter) => {
+    const { reply, cost } = await meter.measure(async () => {
+      const answer = await (stream as SideAsking).askSideQuestion(
+        options.question,
+        { history: options.history, signal: options.signal },
+      );
+      return answer?.response ?? null;
+    });
+    if (cost)
+      options.onUsage?.({
+        model: cost.model,
+        tokens: cost.tokens,
+        usd: cost.usd,
+      });
+    if (!reply?.trim()) throw new Error("Claude had no answer. Try again.");
+    return reply;
   };
   const live = sessions.get(options.key);
-  if (live && !live.frames.ended) return ask(live.stream);
+  if (live && !live.frames.ended) return ask(live.stream, meterOf(live));
   const [{ query }, executable, { env }] = await Promise.all([
     sdk(),
     findExecutable("claude"),
@@ -63,11 +74,12 @@ export async function askClaudeSide(options: {
       ...(options.model ? { model: options.model } : {}),
     },
   });
+  const meter = new ClaudeMeter(() => sessionTotals(stream));
   void (async () => {
-    for await (const _ of stream);
+    for await (const frame of stream) meter.observe(frame);
   })().catch(() => {});
   try {
-    return await ask(stream);
+    return await ask(stream, meter);
   } finally {
     input.close();
     stream.close();

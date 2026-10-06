@@ -310,6 +310,12 @@ export interface Api
     force?: boolean,
     account?: string,
   ): Promise<ProviderUsage>;
+  /** What the agents used, as this computer counted it; see shared/usage. */
+  usageSummary(
+    range: import("./usage").UsageRange,
+  ): Promise<import("./usage").UsageSummary>;
+  /** Saves the usage share card through a save dialog; null when cancelled. */
+  saveUsageImage(pngDataUrl: string, name: string): Promise<string | null>;
   /** Claude Code and Codex accounts; see shared/agent-accounts. */
   agentAccounts(): Promise<import("./agent-accounts").AgentAccountsState>;
   /** Opens the CLI's browser sign-in for a new account; it's listed once that finishes. */

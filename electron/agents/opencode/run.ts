@@ -188,6 +188,25 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
     stepCosts.set(part.id, part.cost);
     if (delta) options.onCost?.(delta);
   };
+  /** Each step's tokens once, the first time OpenCode reports them finished. */
+  const counted = new Set<string>();
+  const count = (part: Extract<OpenCodePart, { type: "step-finish" }>) => {
+    const t = part.tokens;
+    if (!t || counted.has(part.id)) return;
+    counted.add(part.id);
+    options.onUsage?.({
+      model: lastModel || "opencode",
+      tokens: {
+        input: t.input ?? 0,
+        cacheWrite: t.cache?.write ?? 0,
+        cacheRead: t.cache?.read ?? 0,
+        output: (t.output ?? 0) + (t.reasoning ?? 0),
+      },
+      ...(typeof part.cost === "number" && Number.isFinite(part.cost)
+        ? { usd: part.cost }
+        : {}),
+    });
+  };
   let lastModel = options.choice.model;
   let retrying = false;
 
@@ -315,6 +334,7 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
         if (part.type === "step-finish") {
           report(part.tokens);
           charge(part);
+          count(part);
         }
         return;
       }

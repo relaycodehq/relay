@@ -59,3 +59,8 @@ export async function recordUsage(
   }
   return activeHours(samples);
 }
+
+/** Every account's readings so far: by provider for its usual sign-in. */
+export async function usageSamples(): Promise<History> {
+  return path ? load() : {};
+}

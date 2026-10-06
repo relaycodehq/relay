@@ -331,6 +331,7 @@ export async function planCommitSplit(
         choice,
         signal,
         onText: () => {},
+        usage: { job: "commit" as const },
         job: {
           kind: "helper",
           instructions:

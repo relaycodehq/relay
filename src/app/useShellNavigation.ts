@@ -20,6 +20,9 @@ import { openThread } from "../lib/thread-storage";
 import type { ThreadView } from "../features/thread/useThreadView";
 import { useWorkspacePanes } from "../lib/workspace-panes";
 
+/** What the main pane shows: a project, the Pull requests page or Usage. */
+export type Surface = "project" | "inbox" | "usage";
+
 export type ShellNavigation = ReturnType<typeof useShellNavigation>;
 
 /**
@@ -42,10 +45,13 @@ export function useShellNavigation(
   /** Where the unsent thread will work, as its picker changes. */
   const [draftWorkspace, setDraftWorkspace] =
     useState<ChatWorkspace>("checkout");
-  /** The Pull requests page shows instead of a project. */
-  const [inbox, setInbox] = useState(
-    () => localStorage.getItem("relay-surface") === "inbox",
-  );
+  /** A page shown instead of a project: Pull requests or Usage. */
+  const [surface, setSurface] = useState<Surface>(() => {
+    const saved = localStorage.getItem("relay-surface");
+    return saved === "inbox" || saved === "usage" ? saved : "project";
+  });
+  const inbox = surface === "inbox";
+  const setInbox = (on: boolean) => setSurface(on ? "inbox" : "project");
   const project =
     projects?.find((p) => p.id === selected) ??
     projects?.find((p) => !p.scratch) ??
@@ -79,8 +85,8 @@ export function useShellNavigation(
       saveDraftScope(draftId, draftScope);
   }, [draftScope, draftId, restoredProject]);
   useEffect(() => {
-    localStorage.setItem("relay-surface", inbox ? "inbox" : "project");
-  }, [inbox]);
+    localStorage.setItem("relay-surface", surface);
+  }, [surface]);
   useEffect(() => {
     if (project && project.id === restoredProject)
       openThread.save(project.id, chatId);
@@ -143,7 +149,11 @@ export function useShellNavigation(
     setDraftWorkspace,
     scope,
     pull,
+    surface,
+    setSurface,
+    /** The Pull requests page shows. */
     inbox,
+    /** Shows the Pull requests page, or with false the project. */
     setInbox,
     panes,
     navigate,

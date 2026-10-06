@@ -20,6 +20,7 @@ import { SubagentTracker } from "../claude-agents";
 import { WatchChecks } from "../../watch/checks";
 import { SubagentWatch } from "../watch/subagents";
 import { ClaudeMeter } from "../watch/spend";
+import { RequestUsage } from "../request-usage";
 import { askLive, sessionTotals } from "./side";
 import { claudePermissionMode, type ClaudeRunOptions } from "./config";
 import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
@@ -92,20 +93,35 @@ export type ClaudeSession = {
   work: ClaudeWork;
   /** The subagents it started, followed between turns too. */
   agents: SubagentTracker;
+  /** Its requests as they finish, for the Usage page. */
+  requests: RequestUsage;
   /** Its `/goal`, read across turns; made the first time a turn runs. */
   goal?: ClaudeGoalWatch;
+  /** What its side questions cost; made with the first frame it reads. */
+  meter?: ClaudeMeter;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
-  watch?: { checks: WatchChecks; meter: ClaudeMeter; subagents: SubagentWatch };
+  watch?: { checks: WatchChecks; subagents: SubagentWatch };
 };
+
+/**
+ * Measures the session's side questions, `/btw` and the watcher's checks.
+ * It reads every frame from the first, so a question asked mid-turn can
+ * take the turn's own requests back out.
+ */
+export function meterOf(session: ClaudeSession) {
+  session.meter ??= new ClaudeMeter(() => sessionTotals(session.stream));
+  return session.meter;
+}
 
 /** The session's side checks; they ask whatever stream the session has at the time. */
 export function watchOf(session: ClaudeSession) {
   if (!session.watch) {
-    const meter = new ClaudeMeter(() => sessionTotals(session.stream));
     const checks = new WatchChecks((question, signal) =>
-      meter.measure(() => askLive(session.stream, question, signal)),
+      meterOf(session).measure(() =>
+        askLive(session.stream, question, signal),
+      ),
     );
-    session.watch = { checks, meter, subagents: new SubagentWatch() };
+    session.watch = { checks, subagents: new SubagentWatch() };
   }
   return session.watch;
 }
@@ -199,6 +215,7 @@ export function newSession(
     busy: true,
     work: new ClaudeWork(),
     agents: new SubagentTracker(),
+    requests: new RequestUsage(),
     // Set as the session starts.
     stream: undefined as unknown as ClaudeStream,
   };
@@ -343,6 +360,7 @@ function restoreSession(
     busy: false,
     work: new ClaudeWork(),
     agents: new SubagentTracker(),
+    requests: new RequestUsage(),
     threadId: info.threadId,
     ready: { promise, resolve },
   } as unknown as ClaudeSession;

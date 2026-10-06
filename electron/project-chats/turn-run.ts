@@ -216,6 +216,11 @@ export class TurnRunner {
         onSteered: (id: string) => answer.continueBelow(id),
         skills: turn.kind === "reply" ? (turn.skills ?? []) : [],
         job: agentJob(turn, chat),
+        // A reviewer's or thinker's work counts toward the thread it serves.
+        usage: {
+          chat: (chat.reviewer ?? chat.thinker)?.parent ?? chat.id,
+          project: chat.projectId,
+        },
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
         cwd: root,

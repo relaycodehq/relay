@@ -19,6 +19,7 @@ import { roomHandlers } from "./rooms";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { terminalHandlers } from "./terminals";
+import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
 
@@ -40,6 +41,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     pluginHandlers(ctx),
     desktopHandlers(ctx),
     computerHandlers(ctx),
+    usageHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   ]) satisfies Required<Handlers>;
   return async (method, args) => {

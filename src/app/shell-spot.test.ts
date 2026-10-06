@@ -5,7 +5,7 @@ const draft: ShellSpot = {
   projectId: "p1",
   chatId: null,
   draftId: "d1",
-  inbox: false,
+  surface: "project",
 };
 
 describe("sameSpot", () => {
@@ -13,11 +13,12 @@ describe("sameSpot", () => {
     expect(sameSpot(draft, { ...draft })).toBe(true);
   });
 
-  it("moves with another thread, draft, project or the Pull requests page", () => {
+  it("moves with another thread, draft, project or page", () => {
     expect(sameSpot(draft, { ...draft, chatId: "c1" })).toBe(false);
     expect(sameSpot(draft, { ...draft, draftId: "d2" })).toBe(false);
     expect(sameSpot(draft, { ...draft, projectId: "p2" })).toBe(false);
-    expect(sameSpot(draft, { ...draft, inbox: true })).toBe(false);
+    expect(sameSpot(draft, { ...draft, surface: "inbox" })).toBe(false);
+    expect(sameSpot(draft, { ...draft, surface: "usage" })).toBe(false);
   });
 
   it("ignores the draft once a thread is open", () => {

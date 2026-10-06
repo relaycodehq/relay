@@ -232,6 +232,8 @@ const methods = [
   "submitClockifyReview",
   "discardClockifyReview",
   "providerUsage",
+  "usageSummary",
+  "saveUsageImage",
   "agentAccounts",
   "addAgentAccount",
   "signInAgentAccount",

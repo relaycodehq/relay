@@ -66,6 +66,7 @@ import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
 import { keepUsageHistory } from "./agents/usage-history";
+import { keepUsageLog } from "./usage";
 import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
 import { readProviderUsage } from "./agents/provider-usage";
 import { flushWorkingFiles } from "./git/working-files";
@@ -278,6 +279,7 @@ app
       join(app.getPath("userData"), "devops-relevance.json"),
     );
     keepUsageHistory(join(app.getPath("userData"), "usage-history.json"));
+    keepUsageLog(join(app.getPath("userData"), "usage.jsonl"));
     const chats = new ProjectChats(
       loaded,
       projects,

@@ -51,11 +51,11 @@ export class RequestTally {
     if (event.type === "message_start") {
       this.open.set(key, {
         model: event.message.model,
-        usage: event.message.usage,
+        usage: event.message.usage ?? {},
       });
       if (key === "main") {
         this.mainModel = event.message.model;
-        const written = event.message.usage.cache_creation;
+        const written = event.message.usage?.cache_creation;
         if (written?.ephemeral_5m_input_tokens) this.longCache = false;
         if (written?.ephemeral_1h_input_tokens) this.longCache = true;
       }

@@ -1,0 +1,7 @@
+.preview-usage-sidebar {
+  width: 248px;
+  flex: none;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+}

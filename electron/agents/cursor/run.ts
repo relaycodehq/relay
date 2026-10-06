@@ -186,6 +186,16 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         if (plan) options.onPlan?.(plan);
         return;
       }
+      case "token-delta": {
+        // Cursor counts tokens as they stream, without a split or a model.
+        const tokens = Number(update.tokens);
+        if (tokens > 0)
+          options.onUsage?.({
+            model: options.choice.model || "cursor",
+            tokens: { input: 0, cacheWrite: 0, cacheRead: 0, output: tokens },
+          });
+        return;
+      }
       case "summary-started":
         options.onCommentary?.(
           "cursor-summary",

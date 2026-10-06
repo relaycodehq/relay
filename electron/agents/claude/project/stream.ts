@@ -3,7 +3,7 @@
 import { AsyncQueue } from "../../../util/async-queue";
 import type { HookFrame } from "../../../agent-host/protocol";
 import type { SDKMessage } from "./sdk";
-import { watchOf, type ClaudeSession } from "./session";
+import { meterOf, watchOf, type ClaudeSession } from "./session";
 import { pendingChanged } from "./pending";
 
 /** Frames read off the stream, waiting for the turn they belong to. */
@@ -43,11 +43,10 @@ export async function pump(
       if (seq !== undefined && seq < session.hosted!.split)
         restore(session, next.value);
       else {
-        if (session.options.watch || session.watch) {
-          const watch = watchOf(session);
-          watch.meter.observe(next.value, session.options.watch);
-          watch.subagents.observe(next.value, session.options);
-        }
+        session.requests.observe(next.value, session.options.onUsage);
+        meterOf(session).observe(next.value, session.options.watch);
+        if (session.options.watch || session.watch)
+          watchOf(session).subagents.observe(next.value, session.options);
         receive(session, next.value);
       }
     }

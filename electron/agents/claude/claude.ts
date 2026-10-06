@@ -5,6 +5,7 @@ import { ANSWER_LIMIT, answerLimitError } from "../turn-kit";
 import { findExecutable, spawnExecutable } from "../../platform/executables";
 import { ClaudeFailureWatch, claudeReason } from "./claude-failure";
 import { runAccount } from "../accounts";
+import { RequestUsage } from "./request-usage";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   const { job } = options;
   // Only one-off jobs run as a bare `--print`; the rest are a thread's session.
@@ -49,6 +50,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
       { cwd: options.cwd, env, stdio: ["pipe", "pipe", "pipe"] },
     );
     const failures = new ClaudeFailureWatch();
+    const requests = new RequestUsage();
     let buffer = "",
       answer = "",
       settled = false;
@@ -104,6 +106,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
         try {
           const m = JSON.parse(line);
           failures.see(m);
+          requests.observe(m, options.onUsage);
           if (
             m.type === "stream_event" &&
             m.event?.type === "content_block_delta" &&

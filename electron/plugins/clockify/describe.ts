@@ -104,6 +104,7 @@ export async function describeBlocks(
         choice,
         signal,
         onText: () => {},
+        usage: { job: "plugin" as const },
         job: {
           kind: "helper",
           instructions:

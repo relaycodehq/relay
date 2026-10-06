@@ -3,12 +3,12 @@ import type { SettingsCategory } from "../../lib/settings-page";
 
 /**
  * Settings is a page over the workspace: going anywhere else, a ⌘1 jump
- * say, leaves it. `projectId`, `chatId` and `inbox` are where the shell is.
+ * say, leaves it. `projectId`, `chatId` and `surface` are where the shell is.
  */
 export function useSettingsPage(
   projectId: string | null,
   chatId: string | null,
-  inbox: boolean,
+  surface: string,
 ) {
   const [open, setOpen] = useState(false),
     [category, setCategory] = useState<SettingsCategory>(),
@@ -17,7 +17,7 @@ export function useSettingsPage(
   useEffect(() => {
     setOpen(false);
     setCategory(undefined);
-  }, [projectId, chatId, inbox]);
+  }, [projectId, chatId, surface]);
   return {
     open,
     /** Opens or leaves the page, keeping the category it was last opened at. */

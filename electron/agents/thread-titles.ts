@@ -67,6 +67,7 @@ export async function generateThreadTitle(input: {
     choice: { ...input.choice, reasoningEffort: "low" as const, fast: false },
     signal: input.signal,
     onText: () => {},
+    usage: { job: "title" as const },
     job: {
       kind: "helper" as const,
       instructions:
@@ -168,6 +169,7 @@ export async function regenerateThreadTitle(input: {
     choice: { ...input.choice, reasoningEffort: "low" as const, fast: false },
     signal: input.signal,
     onText: () => {},
+    usage: { job: "title" as const },
     job: {
       kind: "helper",
       instructions:

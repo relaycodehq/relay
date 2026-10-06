@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, GitPullRequest, Plus } from "lucide-react";
+import { Bell, ChartColumn, GitPullRequest, Plus } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { chatActivitySections } from "../../../shared/chat-activity";
@@ -36,12 +36,13 @@ interface SidebarShowing {
   draftId?: string;
   /** The Pull requests page. */
   inbox?: boolean;
+  usage?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox },
+  showing: { projectId, chatId, draftId, inbox, usage },
   account,
   onOpen,
   onPickNew,
@@ -50,6 +51,7 @@ export function ProjectSidebar({
   onAdd,
   onShared,
   onInbox,
+  onUsage,
   onSettings,
   onAccount,
   onAttention,
@@ -71,6 +73,7 @@ export function ProjectSidebar({
   onAdd: () => void;
   onShared: (p: Project) => void;
   onInbox: () => void;
+  onUsage?: () => void;
   /** Opens Settings, at `category` when given, on `projectId` under Projects. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   onAccount: () => void;
@@ -197,6 +200,14 @@ export function ProjectSidebar({
                 <GitPullRequest size={15} />
                 Pull requests
               </button>
+              <button
+                className={`sb-nav-item ${usage ? "selected" : ""}`}
+                aria-current={usage ? "page" : undefined}
+                onClick={onUsage}
+              >
+                <ChartColumn size={15} />
+                Usage
+              </button>
             </nav>
             <Scratchpad
               chats={all.filter((c) => scratchIds.has(c.projectId))}
@@ -230,7 +241,9 @@ export function ProjectSidebar({
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}
         chatId={chatId}
+        usage={usage}
         onAccount={onAccount}
+        onUsage={onUsage}
         onSettings={onSettings}
       />
     </div>

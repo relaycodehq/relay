@@ -53,6 +53,7 @@ import {
 } from "../features/projects/ProjectSharingDialogs";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
 import { PullsTitle } from "../features/pulls/PullRequestsPage";
+import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
 import { RunningTasks } from "../features/terminal/RunningTasks";
 import { Settings } from "../features/settings/Settings";
 import {
@@ -91,11 +92,14 @@ export default function ProjectShell() {
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);
   const { project, chats, chat, draftId, pull, panes, inbox, navigate } = nav;
-  // The Pull requests page stands in for the chat alone.
+  const usage = nav.surface === "usage";
+  // Pull requests or Usage instead of a project.
+  const elsewhere = nav.surface !== "project";
+  // A page stands in for the chat alone.
   const sidebar = useSidebarVisibility(
-    !inbox && panes.visible.some((id) => id !== "chat"),
+    !elsewhere && panes.visible.some((id) => id !== "chat"),
   );
-  const settings = useSettingsPage(nav.selected, nav.chatId, inbox);
+  const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
   const [share, setShare] = useState<ChatSummary>(),
@@ -128,7 +132,7 @@ export default function ProjectShell() {
     setError,
   );
   useShortcut("settings", true, () => settings.setOpen(true));
-  useShortcut("new-thread", !!project && !inbox && !error, starts.pick);
+  useShortcut("new-thread", !!project && !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
   function runCommand(command: RelayCommand) {
     if (lock.blocked()) return false;
@@ -182,11 +186,13 @@ export default function ProjectShell() {
             </div>
           ) : inbox ? (
             <PullsTitle where={pullsPage.where} onNav={pullsPage.go} />
+          ) : usage ? (
+            <UsageTitle />
           ) : (
             <ProjectTitle project={project} chat={chat} onError={setError} />
           )}
           <span className="spacer" />
-          {!settings.open && !inbox && project && (
+          {!settings.open && !elsewhere && project && (
             <div className="thread-header-actions">
               <ProjectChecksButton
                 quiet
@@ -259,8 +265,8 @@ export default function ProjectShell() {
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
             showing={
-              inbox
-                ? { inbox: true }
+              elsewhere
+                ? { inbox, usage }
                 : {
                     projectId: project?.id,
                     chatId: chat?.id,
@@ -290,6 +296,9 @@ export default function ProjectShell() {
               else if (inbox) pullsPage.go({ to: "board" });
               else nav.setInbox(true);
             }}
+            onUsage={() => {
+              if (!lock.blocked()) nav.setSurface("usage");
+            }}
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
@@ -312,6 +321,10 @@ export default function ProjectShell() {
                 settings.show(category === "rooms" ? category : undefined)
               }
             />
+          </div>
+        ) : usage ? (
+          <div className="project-legacy" hidden={settings.open}>
+            <UsagePage />
           </div>
         ) : !project ? (
           <NoProject
@@ -377,7 +390,7 @@ export default function ProjectShell() {
                         projectId: project.id,
                         chatId: null,
                         draftId,
-                        inbox: false,
+                        surface: "project",
                       };
                       if (!c.worktree && sameSpot(spotNow(), from))
                         adoptDraftTerminal(project.id, c.id);
@@ -388,7 +401,7 @@ export default function ProjectShell() {
                         projectId: project.id,
                         chatId: chat?.id ?? null,
                         draftId,
-                        inbox: false,
+                        surface: "project",
                       })
                     }
                     onOpenThread={(c) =>
@@ -396,7 +409,7 @@ export default function ProjectShell() {
                         projectId: project.id,
                         chatId: chat?.id ?? null,
                         draftId,
-                        inbox: false,
+                        surface: "project",
                       })
                     }
                     onSwitchProject={(next) => navigate(next, undefined, true)}

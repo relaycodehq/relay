@@ -23,7 +23,7 @@ export function useNewThreads(
     | "project"
     | "chatId"
     | "draftId"
-    | "inbox"
+    | "surface"
     | "setSelected"
     | "setInbox"
     | "navigate"

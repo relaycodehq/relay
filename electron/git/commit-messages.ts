@@ -120,6 +120,7 @@ export async function generateCommitMessage(
       choice,
       signal,
       onText: () => {},
+      usage: { job: "commit" as const },
       job: {
         kind: "helper" as const,
         instructions:
