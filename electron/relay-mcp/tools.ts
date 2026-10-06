@@ -8,13 +8,15 @@ import { reasoningEffortSchema } from "../../shared/settings";
 
 /** How many threads one thread may have working at once. */
 export const STARTED_LIMIT = 6;
+/** The most threads find_threads returns. */
+const FIND_LIMIT = 50;
 /** The longest wait_for_threads holds its call. */
 export const WAIT_LIMIT_SECONDS = 600;
 
 const threadId = z
   .string()
   .uuid()
-  .describe("A thread id from start_threads or list_threads.");
+  .describe("A thread id from start_threads, list_threads or find_threads.");
 
 const projectId = z
   .string()
@@ -80,6 +82,27 @@ export const relayToolSchemas = {
     })
     .strict(),
   list_threads: z.object({}).strict(),
+  find_threads: z
+    .object({
+      project: projectId
+        .optional()
+        .describe("Only this project's threads. Left out: every project's."),
+      query: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe("Words that must all be in the title or branch name."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(FIND_LIMIT)
+        .optional()
+        .describe("How many, newest first. Default 20."),
+    })
+    .strict(),
   read_thread: z
     .object({
       id: threadId,
@@ -144,8 +167,10 @@ const descriptions: Record<RelayToolName, string> = {
   start_threads: `Start new Relay threads in this project, or with \`project\` in another one, each working on its own task while you go on. Each is an ordinary thread the user sees under yours and can talk to directly. Up to ${STARTED_LIMIT} of yours can work at once. Returns their ids; then use wait_for_threads, read_thread and send_to_thread.`,
   list_threads:
     "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer.",
+  find_threads:
+    "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, and which thread started it. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread:
-    "A thread you started: its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
+    "Any thread, from list_threads or find_threads: its messages in order, each answer cut to its last 4000 characters. Pass `after` to get only what's new.",
   send_to_thread:
     "Send a message to a thread you started, as its user would. It answers in its own turn. The first message to a thread in another project needs the user's go-ahead.",
   wait_for_threads:
@@ -163,7 +188,12 @@ const descriptions: Record<RelayToolName, string> = {
 
 /** Where a thread started by another reaches the tools: only reading ones. */
 export const STARTED_PATH = "/mcp/started";
-const startedTools = new Set<string>(["usage_limits"]);
+export const startedTools = new Set<string>([
+  "usage_limits",
+  "find_threads",
+  "read_thread",
+  "list_projects",
+]);
 
 /** What tools/list returns. */
 export const relayToolList = Object.entries(relayToolSchemas).map(

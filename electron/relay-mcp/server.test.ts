@@ -80,6 +80,7 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
   expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
     "start_threads",
     "list_threads",
+    "find_threads",
     "read_thread",
     "send_to_thread",
     "wait_for_threads",
@@ -132,7 +133,10 @@ test("a started thread's path lists and answers only the reading tools", async (
     await post(started, { jsonrpc: "2.0", id: 1, method: "tools/list" })
   ).json();
   expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
+    "find_threads",
+    "read_thread",
     "usage_limits",
+    "list_projects",
   ]);
   const refused = await (
     await post(started, {

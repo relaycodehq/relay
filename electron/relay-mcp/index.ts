@@ -17,6 +17,7 @@ export {
   STARTED_PATH,
   toolText,
   STARTED_LIMIT,
+  startedTools,
   WAIT_LIMIT_SECONDS,
   type RelayToolName,
   type RelayToolArgs,

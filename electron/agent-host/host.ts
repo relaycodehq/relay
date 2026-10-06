@@ -153,6 +153,7 @@ let nextTool = 1;
 const replayable = new Set([
   "list_threads",
   "read_thread",
+  "find_threads",
   "wait_for_threads",
   "list_projects",
 ]);

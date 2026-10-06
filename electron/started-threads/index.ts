@@ -1,8 +1,8 @@
 // What Relay's tools do: a thread's agent starts threads of its own and
 // drives them, in its project or another the user has or lets it add. A
-// started thread is an ordinary thread that remembers who started it; its lead
-// may only touch its own, and a started thread only gets usage_limits, so
-// nothing starts threads of threads.
+// started thread is an ordinary thread that remembers who started it. Any
+// thread may read any other; a lead drives only its own, and a started thread
+// only reads, so nothing starts threads of threads.
 import { randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 import {
@@ -31,6 +31,7 @@ import {
   relayToolSchemas,
   toolText,
   STARTED_LIMIT,
+  startedTools,
   type RelayToolArgs,
   type RelayToolName,
 } from "../relay-mcp";
@@ -52,6 +53,7 @@ const POLL_MS = 1000;
 
 type Chats = Pick<
   ProjectChats,
+  | "list"
   | "startedThreads"
   | "allowLeadSends"
   | "get"
@@ -167,7 +169,7 @@ export class StartedThreads {
         true,
       );
     const lead = await this.chats.get(chatId);
-    if (lead.startedBy && name !== "usage_limits")
+    if (lead.startedBy && !startedTools.has(name))
       return toolText(
         "A thread started by another thread can't start or drive threads of its own.",
         true,
@@ -178,6 +180,8 @@ export class StartedThreads {
         return this.start(lead, input, signal);
       case "list_threads":
         return json(await this.list(lead));
+      case "find_threads":
+        return this.find(lead, input);
       case "read_thread":
         return this.read(lead, input);
       case "send_to_thread":
@@ -568,11 +572,58 @@ export class StartedThreads {
     );
   }
 
-  private async read(
+  private async find(
     lead: ProjectChat,
+    { project, query, limit = 20 }: RelayToolArgs<"find_threads">,
+  ) {
+    const projects = (await this.reachProjects().list()).filter(
+      (p) => !project || p.id === project,
+    );
+    if (!projects.length)
+      return toolText("There's no such project; see list_projects.", true);
+    const words = query?.toLowerCase().split(/\s+/) ?? [];
+    const found = projects
+      .flatMap((p) => this.chats.list(p.id).map((summary) => ({ summary, p })))
+      .filter(
+        ({ summary: c }) =>
+          !c.archivedAt &&
+          !c.empty &&
+          words.every((w) =>
+            `${c.title} ${c.branch ?? ""}`.toLowerCase().includes(w),
+          ),
+      )
+      .sort((a, b) => b.summary.updated - a.summary.updated)
+      .slice(0, limit);
+    return json(
+      found.map(({ summary: c, p }) => ({
+        id: c.id,
+        title: c.title,
+        project: p.scratch ? "Scratchpad" : p.name,
+        ...(c.id === lead.id ? { you: true } : {}),
+        status: c.waiting
+          ? "needs-input"
+          : c.running
+            ? "working"
+            : c.settledAt || c.autoSettled
+              ? "settled"
+              : "idle",
+        updated: new Date(c.updated).toISOString(),
+        ...(c.contextAgent || c.provider
+          ? { agent: agentName(c.contextAgent ?? c.provider!) }
+          : {}),
+        ...(c.branch ? { branch: c.branch } : {}),
+        ...(c.startedBy ? { startedBy: c.startedBy.chatId } : {}),
+      })),
+    );
+  }
+
+  private async read(
+    _lead: ProjectChat,
     { id, after }: RelayToolArgs<"read_thread">,
   ) {
-    const { chat } = await this.own(lead, id);
+    const chat = await this.chats.get(id).catch(() => {
+      throw new Error("There's no such thread; see find_threads.");
+    });
     const main = chat.messages.filter((m) => !m.parentId);
     const from = after ? main.findIndex((m) => m.id === after) + 1 : 0;
     const messages = main.slice(from).map((m) => ({

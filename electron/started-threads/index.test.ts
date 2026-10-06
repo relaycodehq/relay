@@ -59,6 +59,10 @@ function fakeChats() {
     sent,
     chats,
     api: {
+      list: (projectId: string) =>
+        [...chats.values()].filter(
+          (c) => c.projectId === projectId,
+        ) as ChatSummary[],
       startedThreads: (leadId: string) =>
         [...chats.values()].filter(
           (c) => c.startedBy?.chatId === leadId,
@@ -175,23 +179,72 @@ test("starts threads on the lead's agent and settings, each saying who sent it",
   });
 });
 
-test("a lead only sees and drives its own threads", async () => {
+test("any thread finds and reads every other, but a lead drives only its own", async () => {
   const { lead, chats, api } = fakeChats();
-  const threads = new StartedThreads(api);
+  const site = "00000000-0000-4000-8000-0000000000b1";
+  const threads = new StartedThreads(api, {
+    projects: {
+      list: async () =>
+        [
+          { id: "p", name: "Lead" },
+          { id: site, name: "Site" },
+        ] as Project[],
+    } as AgentProjects,
+  });
   const stranger = await api.create("p", { kind: "project" });
-  chats.get(stranger.id)!.title = "Someone else's";
+  Object.assign(chats.get(stranger.id)!, {
+    title: "Someone else's cache fix",
+    updated: 50,
+    running: true,
+  });
+  const elsewhere = await api.create(site, { kind: "project" });
+  Object.assign(chats.get(elsewhere.id)!, { title: "Landing page", updated: 40 });
+  const archived = await api.create(site, { kind: "project" });
+  chats.get(archived.id)!.archivedAt = 1;
   const [mine] = parse(
     await call(threads, lead.id, "start_threads", {
       threads: [{ prompt: "Mine" }],
     }),
   );
+  await api.send(stranger.id, { ...lead.lastInput!, id: "m1", body: "Fix it" });
+
   expect(
     parse(await call(threads, lead.id, "list_threads", {})).map(
       (t: any) => t.id,
     ),
   ).toEqual([mine.id]);
-  const refused = await call(threads, lead.id, "read_thread", {
+  const all = parse(await call(threads, lead.id, "find_threads", {}));
+  expect(all.map((t: any) => t.id)).toEqual([
+    stranger.id,
+    elsewhere.id,
+    mine.id,
+    lead.id,
+  ]);
+  expect(all[0]).toMatchObject({ project: "Lead", status: "working" });
+  expect(all[3]).toMatchObject({ you: true });
+  expect(all[2]).toMatchObject({ startedBy: lead.id });
+  expect(
+    parse(
+      await call(threads, lead.id, "find_threads", { query: "CACHE someone" }),
+    ).map((t: any) => t.id),
+  ).toEqual([stranger.id]);
+  expect(
+    parse(
+      await call(threads, lead.id, "find_threads", { project: site }),
+    ).map((t: any) => t.title),
+  ).toEqual(["Landing page"]);
+
+  const read = parse(
+    await call(threads, lead.id, "read_thread", { id: stranger.id }),
+  );
+  expect(read.messages.map((m: any) => m.body)).toEqual(["Fix it"]);
+  // A started thread reads too, but sends nowhere.
+  expect(
+    await call(threads, mine.id, "read_thread", { id: stranger.id }),
+  ).not.toHaveProperty("isError");
+  const refused = await call(threads, lead.id, "send_to_thread", {
     id: stranger.id,
+    message: "Hi",
   });
   expect(refused).toMatchObject({ isError: true });
 });

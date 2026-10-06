@@ -63,7 +63,8 @@ export function codexActivity(
 const relayToolLabels: Record<string, string> = {
   start_threads: "Started threads",
   list_threads: "Checked on started threads",
-  read_thread: "Read a started thread",
+  find_threads: "Looked through threads",
+  read_thread: "Read a thread",
   send_to_thread: "Messaged a started thread",
   wait_for_threads: "Waited for started threads",
   stop_thread: "Stopped a started thread",
