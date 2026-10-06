@@ -19,28 +19,36 @@ export function fenceClosed(source: string, position?: Position): boolean {
   return lines.length > 1 && closing.test(lines[lines.length - 1]!);
 }
 /**
+ * Lines that make every split unsafe, also inside quotes and list items: a
+ * link or footnote definition is used from the whole text, and raw HTML can
+ * run across blank lines (`<pre>`, `<script>`, comments) or swallow a fence.
+ * An autolink like `<https://…>` is not a tag.
+ */
+const unsplittable =
+  /^(?:[ \t>]|(?:[*+-]|\d{1,9}[.)])[ \t])*(?:\[[^\]]+\]:|<(?:[!?/]|[A-Za-z][A-Za-z0-9-]*(?:[ \t/>]|$)))/;
+
+/**
  * Splits Markdown into top-level blocks at blank lines no construct spans:
  * outside fenced code, and before an unindented line that doesn't continue a
  * list. A streaming answer then re-parses only its last block.
  */
 export function markdownBlocks(text: string): string[] {
-  // Definitions, footnotes and HTML comments reach across blank lines.
-  if (/^ {0,3}\[[^\]]+\]:|<!--/m.test(text)) return [text];
   const lines = text.split("\n"),
     blocks: string[] = [];
   let start = 0,
     content = false,
     blank = false,
     fence: RegExp | undefined;
-  lines.forEach((line, i) => {
+  for (const [i, line] of lines.entries()) {
     if (fence) {
       if (fence.test(line)) fence = undefined;
-      return;
+      continue;
     }
     if (!line.trim()) {
       blank = content;
-      return;
+      continue;
     }
+    if (unsplittable.test(line)) return [text];
     if (blank && /^\S/.test(line) && !/^([*+-]|\d{1,9}[.)])(\s|$)/.test(line)) {
       blocks.push(lines.slice(start, i).join("\n"));
       start = i;
@@ -49,7 +57,7 @@ export function markdownBlocks(text: string): string[] {
     content = true;
     const open = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
     if (open) fence = new RegExp(`^ {0,3}${open[0]}{${open.length},}[ \\t]*$`);
-  });
+  }
   blocks.push(lines.slice(start).join("\n"));
   return blocks;
 }

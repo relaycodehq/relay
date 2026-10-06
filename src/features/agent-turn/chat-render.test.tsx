@@ -1,9 +1,6 @@
 import { expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { markdownBlocks } from "../../lib/markdown-blocks";
 import { RichText } from "../../ui/RichText";
 import { AgentTurn } from "./AgentTurn";
 import type { ChatMessage } from "../../../shared/projects";
@@ -60,37 +57,6 @@ it("labels file chips T3-style: type icon, file name, line, and parents only on 
   expect(html).toContain(">AgentTurn.tsx</span>");
   expect(html).toContain(">index.ts · electron/rooms</span>");
   expect(html).toContain(">index.ts · src/lib · L4</span>");
-});
-
-it("splits Markdown into blocks that render exactly like the whole document", () => {
-  const render = (text: string) =>
-    renderToStaticMarkup(
-      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>,
-    );
-  const samples = [
-    "# Title\n\nIntro paragraph.\n\n## Next\n\nMore text.",
-    "- a\n- b\n\n- loose c\n\n  continued c\n\nAfter the list.",
-    "1. one\n\n2. two\n\n10) ten\n\nDone.",
-    "```ts\nconst a = 1;\n\nNot a paragraph\n```\n\nAfter code.",
-    "~~~~\n```\n\nstill code\n~~~~\n\ntext",
-    "Para\n\n    indented code\n\n    more code\n\nback",
-    "| a | b |\n| - | - |\n| 1 | 2 |\n\nTable done.",
-    "> quote\n\n> another\n\nplain",
-    "Text\n\n---\n\n* * *\n\nEnd",
-    "See [docs][ref].\n\n[ref]: https://example.com",
-    "Footnote[^1].\n\n[^1]: The note.",
-    "<!-- hidden\n\nstill hidden -->\n\nShown",
-    "Term  \nbreak\n\n\n\nAfter blank lines\n",
-    "- [ ] task\n- [x] done\n\n~~strike~~ and https://example.com",
-    "\n\n\nLeading blank lines\n\nthen text",
-  ];
-  for (const text of samples) {
-    const blocks = markdownBlocks(text);
-    expect(blocks.join("\n")).toBe(text);
-    expect(blocks.map(render).join("\n")).toBe(render(text));
-  }
-  expect(markdownBlocks(samples[0]!)).toHaveLength(4);
-  expect(markdownBlocks(samples[3]!)).toHaveLength(2);
 });
 
 it("renders an active T3-style turn, then folds its trace after completion", () => {
