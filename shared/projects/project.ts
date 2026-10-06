@@ -17,6 +17,8 @@ export interface Project {
   /** A Scratchpad chat's own folder in Relay's data, listed under Scratchpad instead of Projects. */
   scratch?: true;
   settings?: ProjectSettings;
+  /** When it was removed from Relay; hidden until its folder is added again, threads and all. */
+  removed?: number;
 }
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>

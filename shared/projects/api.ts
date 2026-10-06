@@ -91,6 +91,8 @@ export interface ProjectListApi {
   moveProjectGroup(path: string, before: string | null): Promise<void>;
   moveProject(id: string, folder: string, before: string | null): Promise<void>;
   renameProject(id: string, name: string): Promise<Project>;
+  /** Takes the project out of Relay; its folder on disk is left alone. */
+  removeProject(id: string): Promise<void>;
   saveProjectSettings(id: string, settings: ProjectSettings): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;

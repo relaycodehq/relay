@@ -82,6 +82,14 @@ export function projectHandlers(ctx: ApiContext) {
     renameProject: takes([idSchema, projectNameSchema], (id, name) =>
       projects.rename(id, name),
     ),
+    removeProject: takes([idSchema], async (id) => {
+      const running = projectChats.list(id).filter((c) => c.running).length;
+      if (running)
+        throw new Error(
+          `Stop the ${running === 1 ? "running thread" : `${running} running threads`} first.`,
+        );
+      await projects.remove(id);
+    }),
     saveProjectSettings: takes(
       [idSchema, projectSettingsSchema],
       async (id, settings) => {

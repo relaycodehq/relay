@@ -39,6 +39,7 @@ const methods = [
   "moveProjectGroup",
   "moveProject",
   "renameProject",
+  "removeProject",
   "saveProjectSettings",
   "revealProject",
   "linkProject",

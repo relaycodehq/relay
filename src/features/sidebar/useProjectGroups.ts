@@ -128,6 +128,10 @@ export function useProjectGroups(
         await api.renameProject(id, name);
       });
     },
+    removeProject: (id: string) =>
+      void change(async () => {
+        await api.removeProject(id);
+      }),
     moveProject: (id: string, target: ProjectPlace) =>
       void change(() => place(id, target)),
     reveal: (id: string) =>

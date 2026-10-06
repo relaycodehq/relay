@@ -123,6 +123,14 @@ export class Projects {
     if (!to) throw new Error("Name the group.");
     return this.rebaseGroup(from, to);
   }
+  /** Hides the project; its folder, threads and worktrees stay for when it's added again. */
+  async remove(id: string) {
+    this.get(id);
+    await this.store.update((s) => {
+      const p = s.projects?.find((p) => p.id === id);
+      if (p) p.removed = Date.now();
+    });
+  }
   /** Removes a group; what was inside moves up one level. */
   removeGroup(path: string) {
     return this.rebaseGroup(path, parentGroup(path));
@@ -198,7 +206,9 @@ export class Projects {
         s.projects = [...(s.projects ?? []), ...additions];
       });
     const projects = await Promise.all(
-      (this.store.get().projects ?? []).map((p) => withKind(this.named(p))),
+      (this.store.get().projects ?? [])
+        .filter((p) => !p.removed)
+        .map((p) => withKind(this.named(p))),
     );
     if (client)
       for (const p of projects)
@@ -245,7 +255,12 @@ export class Projects {
     if (repository && repository !== root)
       throw new Error("Choose the root of its Git repository.");
     const existing = this.store.get().projects?.find((p) => p.path === root);
-    if (existing) return withKind(this.named(existing));
+    if (existing?.removed)
+      await this.store.update((s) => {
+        const p = s.projects?.find((p) => p.id === existing.id);
+        if (p) delete p.removed;
+      });
+    if (existing) return withKind(this.get(existing.id));
     const project: Project = {
       id: randomUUID(),
       path: root,

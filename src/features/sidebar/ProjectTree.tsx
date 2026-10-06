@@ -12,6 +12,7 @@ import {
   FolderMinus,
   FolderOpen,
   FolderPlus,
+  FolderX,
   Pencil,
   Plus,
   Settings2,
@@ -449,6 +450,14 @@ function ProjectMenu({
         </Menu.SubmenuTrigger>
         <MoveMenu project={p} groups={groups} />
       </Menu.SubmenuRoot>
+      <Menu.Separator className="sb-menu-separator" />
+      <MenuAction
+        icon={<FolderX size={13} />}
+        hint="Folder stays"
+        onClick={() => groups.removeProject(p.id)}
+      >
+        Remove from Relay
+      </MenuAction>
     </MenuPopup>
   );
 }

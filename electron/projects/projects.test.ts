@@ -270,3 +270,26 @@ it("an exact add refuses a path that resolves elsewhere than it was checked", as
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("hides a removed project and brings it back, same id, when its folder is added again", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const root = join(dir, "app");
+    await mkdir(root);
+    await writeFile(join(root, "keep.txt"), "x");
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const project = await projects.add(root, null);
+    await projects.remove(project.id);
+    expect(await projects.list(null)).toEqual([]);
+    expect(await readFile(join(root, "keep.txt"), "utf8")).toBe("x");
+    // Its threads still find the folder while it is hidden.
+    expect(projects.get(project.id).path).toBe(root);
+    const back = await projects.add(root, null);
+    expect(back.id).toBe(project.id);
+    expect((await projects.list(null)).map((p) => p.id)).toEqual([project.id]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
