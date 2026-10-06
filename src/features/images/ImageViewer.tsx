@@ -440,7 +440,7 @@ export function ImageViewer({
         {source && !imageBroken && (
           <CopyImageMenu
             source={source}
-            inDialog
+            within="dialog"
             className="image-viewer-frame"
           >
             <img

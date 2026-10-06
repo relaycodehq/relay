@@ -1,5 +1,6 @@
 import { PreviewCard } from "@base-ui/react/preview-card";
 import "../agents/composer-model-picker.css";
+import { CopyImageMenu } from "./CopyImageMenu";
 
 /** How long a pointer rests on a screenshot pill before its picture grows. */
 export const PEEK_DELAY = 80;
@@ -7,15 +8,10 @@ export const PEEK_DELAY = 80;
 /**
  * A screenshot pill's picture, grown above it on hover like a colour swatch.
  * Portalled so neither the thread nor the composer clips it. Goes inside a
- * `PreviewCard.Root`; `anchor` places it when there is no trigger.
+ * `PreviewCard.Root`; `anchor` places it when there is no trigger. Right-click
+ * on it copies the picture.
  */
-export function ImagePeek({
-  src,
-  anchor,
-}: {
-  src: string;
-  anchor?: Element;
-}) {
+export function ImagePeek({ src, anchor }: { src: string; anchor?: Element }) {
   return (
     <PreviewCard.Portal>
       <PreviewCard.Positioner
@@ -27,7 +23,13 @@ export function ImagePeek({
         collisionPadding={8}
       >
         <PreviewCard.Popup className="image-chip-peek" aria-hidden>
-          <img src={src} alt="" />
+          <CopyImageMenu
+            source={src}
+            within=".image-chip-peek"
+            className="image-chip-peek-copy"
+          >
+            <img src={src} alt="" />
+          </CopyImageMenu>
         </PreviewCard.Popup>
       </PreviewCard.Positioner>
     </PreviewCard.Portal>

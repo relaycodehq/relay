@@ -6,31 +6,36 @@ import { api } from "../../lib/api";
 /** Right-click menu that copies the image itself to the clipboard. */
 export function CopyImageMenu({
   source,
-  inDialog = false,
+  within,
   inline = false,
   className = "copy-image-trigger",
   children,
 }: {
   /** A data URL, or a function that builds one when the menu item is picked. */
   source: string | (() => Promise<string>);
-  inDialog?: boolean;
+  /**
+   * The ancestor the menu renders inside: a modal dialog, whose top layer
+   * hides anything outside it, or a hover peek, which closes once the pointer
+   * leaves it.
+   */
+  within?: string;
   /** Wraps in a span, for an image inside a paragraph. */
   inline?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   const trigger = useRef<HTMLDivElement>(null);
-  const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
-  // A modal dialog sits in the top layer, so its menu has to render inside it to show.
+  const [container, setContainer] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    if (inDialog) setDialog(trigger.current?.closest("dialog") ?? null);
-  }, [inDialog]);
+    if (within)
+      setContainer(trigger.current?.closest<HTMLElement>(within) ?? null);
+  }, [within]);
   const copy = async () =>
     api.writeClipboardImage(
       typeof source === "string" ? source : await source(),
     );
   return (
-    <ContextMenu.Root disabled={inDialog && !dialog}>
+    <ContextMenu.Root disabled={!!within && !container}>
       <ContextMenu.Trigger
         ref={trigger}
         className={className}
@@ -38,7 +43,7 @@ export function CopyImageMenu({
       >
         {children}
       </ContextMenu.Trigger>
-      <ContextMenu.Portal container={dialog ?? undefined}>
+      <ContextMenu.Portal container={container ?? undefined}>
         <ContextMenu.Positioner className="sb-menu-positioner">
           <ContextMenu.Popup className="sb-menu">
             <ContextMenu.Item

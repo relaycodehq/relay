@@ -127,7 +127,6 @@
     0 0 0 1px color-mix(in srgb, var(--text) 24%, transparent),
     0 12px 30px -12px #0009;
   outline: none;
-  pointer-events: none;
   transform-origin: var(--transform-origin);
   transition:
     opacity 120ms ease,
