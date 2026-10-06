@@ -1252,6 +1252,21 @@ body {
 .usage-demo-card .usage-meters {
   grid-template-columns: minmax(0, 1fr);
 }
+/* The demo runs a week in half a minute: digits keep their width and the
+   bars move between the hourly readings. */
+.usage-demo-card .usage-meter {
+  font-variant-numeric: tabular-nums;
+}
+/* As wide as "Resets in 4d 23h", so the words stay put when the hours lose a digit. */
+.usage-demo-card .usage-meter:last-child .usage-meter-bottom > span:last-child {
+  min-width: 8.15em;
+}
+.usage-demo-card .usage-fill {
+  transition: width 0.27s linear;
+}
+.usage-demo-card .usage-pace-mark {
+  transition: left 0.27s linear;
+}
 /* The week ruler under the meters. */
 .week {
   grid-column: 1 / -1;

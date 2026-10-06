@@ -47,8 +47,7 @@ function worked(at: number) {
 
 /** What a provider would report `at` ms into the week, burning `rate` percent per worked hour. */
 function usageAt(provider: ProviderUsage["provider"], start: number, at: number, rate: number): ProviderUsage {
-  const now = start + at;
-  const sessionStart = Math.floor(now / SESSION_MS) * SESSION_MS;
+  const sessionStart = start + Math.floor(at / SESSION_MS) * SESSION_MS;
   const inSession = worked(at) - worked(Math.max(sessionStart - start, 0));
   return {
     provider,
@@ -135,7 +134,9 @@ export function UsageDemo() {
     const timer = window.setInterval(() => setAt((value) => (value >= 760 ? 50 : value + 2)), 90);
     return () => window.clearInterval(timer);
   }, [active, held]);
-  const offset = (at / 1000) * WEEK_MS;
+  // The meters read whole hours, so "Resets in 3h" counts down one digit at a
+  // time and the bars glide between steps, instead of flickering through minutes.
+  const offset = Math.round(((at / 1000) * WEEK_MS) / HOUR) * HOUR;
   const now = start + offset;
   const providers = [
     { usage: usageAt("claude", start, offset, 1.5), provider: "claude" as const },
