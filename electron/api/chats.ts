@@ -16,6 +16,7 @@ import {
   resumeSettingsSchema,
 } from "../../shared/projects";
 import { idSchema, presenceSchema } from "../../shared/rooms";
+import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
@@ -64,6 +65,19 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     forkProjectChat: takes([idSchema, optional(idSchema)], (id, messageId) =>
       projectChats.fork(id, messageId),
+    ),
+    terminalSessions: takes([idSchema], (id) =>
+      projectChats.terminalSessions(id),
+    ),
+    continueTerminalSession: takes(
+      [
+        idSchema,
+        terminalSessionPickSchema,
+        optional(chatWorkspaceSchema),
+        optional(branchSchema),
+      ],
+      (id, pick, workspace, branch) =>
+        projectChats.continueTerminalSession(id, pick, workspace, branch),
     ),
     regenerateProjectChatTitle: takes([idSchema], (id) =>
       projectChats.regenerateTitle(id),

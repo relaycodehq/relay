@@ -383,6 +383,14 @@ export default function ProjectShell() {
                         inbox: false,
                       })
                     }
+                    onOpenThread={(c) =>
+                      openCreated(c, {
+                        projectId: project.id,
+                        chatId: chat?.id ?? null,
+                        draftId,
+                        inbox: false,
+                      })
+                    }
                     onSwitchProject={(next) => navigate(next, undefined, true)}
                     onAddProject={() => void starts.addProject()}
                   />

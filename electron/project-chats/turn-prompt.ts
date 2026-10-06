@@ -101,7 +101,11 @@ export function turnPrompt({
       (chat.scopeHeard?.[heardKey] ?? scopeKey) !== scopeKey;
   const side = !parent
     ? fork
-      ? "\nThis thread was forked from another after your answer above. Work may have continued there since; re-read files before relying on what you saw."
+      ? chat.fromTerminal?.how === "forked" && chat.forkedAt === fork.from.id
+        ? chat.fromTerminal.open
+          ? "\nThis thread continues a copy of your session from a terminal, where it is still open, cut after your answer above. Work may continue there; re-read files before relying on what you saw."
+          : "\nThis thread continues a copy of your session from a terminal, cut after your answer above. Re-read files before relying on what you saw."
+        : "\nThis thread was forked from another after your answer above. Work may have continued there since; re-read files before relying on what you saw."
       : ""
     : fork
       ? "\nThis is a side conversation branching off your answer above. The main conversation may have continued since; re-read files before relying on what you saw."
@@ -122,7 +126,9 @@ export function turnPrompt({
   const movedIn = chat.movedIn;
   const moved =
     !command && movedIn?.owed.includes(heardKey)
-      ? `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
+      ? movedIn.copied
+        ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
+        : `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
       : "";
   const setupNote = !command && !parent ? chat.setupNote : undefined;
   const setup = setupNote ? `\n\n${setupNote}` : "";

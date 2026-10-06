@@ -55,6 +55,7 @@ import { ThreadComposer } from "./ThreadComposer";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMessages } from "./ThreadMessages";
 import { ThreadTimeline } from "./ThreadTimeline";
+import { ContinueSessionPicker } from "../continue-session/ContinueSessionPicker";
 import {
   ScopeButtons,
   ThreadIntroduction,
@@ -85,6 +86,7 @@ export function ProjectChat({
   onShare,
   onCreated,
   onForked,
+  onOpenThread,
   scopes,
   onSwitchProject,
   onAddProject,
@@ -113,6 +115,8 @@ export function ProjectChat({
   onCreated: (c: ChatSummary) => Promise<void>;
   /** A fork of the open thread was made. */
   onForked: (c: ChatSummary) => Promise<void>;
+  /** Another thread that already exists should open in place of this one. */
+  onOpenThread: (c: ChatSummary) => Promise<void>;
   scopes: ScopeChoice;
   onSwitchProject: (project: Project) => void;
   onAddProject: () => void;
@@ -271,6 +275,18 @@ export function ProjectChat({
       choosing={isEmpty}
       {...scopes}
       onReviewChanges={openChanges}
+      continueSession={
+        <ContinueSessionPicker
+          project={project}
+          settingsKey={id}
+          workspace={
+            scope.kind === "project" && !project.plain ? workspace : "checkout"
+          }
+          branch={worktree.newBranch.trim() || undefined}
+          onContinued={onCreated}
+          onOpenThread={onOpenThread}
+        />
+      }
     />
   );
   return (

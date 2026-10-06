@@ -28,6 +28,7 @@ import { UnreadDivider } from "./UnreadDivider";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { UltraplanCouncil } from "../deep-review/council/Ultraplan";
 import { WorktreeLanded, WorktreeRenamed } from "./WorktreeControls";
+import { TerminalOrigin } from "../continue-session/TerminalOrigin";
 
 const isAnswer = (m: ChatMessage) =>
   m.role === "assistant" &&
@@ -244,6 +245,9 @@ export function ThreadMessages({
               key="worktree-renamed"
               worktree={chat!.worktree!}
             />
+          ),
+          !root && m.id === chat?.fromTerminal?.through && (
+            <TerminalOrigin key="terminal-origin" from={chat.fromTerminal} />
           ),
         ])}
         {!root && worktree.status && (

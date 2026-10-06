@@ -13,7 +13,13 @@ import {
 import type { ProviderUsage } from "../../../shared/provider-usage";
 import type { Store } from "../../app/store";
 import { readIdentity } from "./identity";
-import { accountEnv, prepareProfile, removeProfile } from "./profiles";
+import {
+  accountEnv,
+  prepareProfile,
+  profileDir,
+  removeProfile,
+  usualHome,
+} from "./profiles";
 import { startSignIn, type SignIn } from "./sign-in";
 
 export { setProfilesRoot } from "./profiles";
@@ -57,6 +63,25 @@ export const accountFor = (provider: AccountProvider, pinned?: string) =>
 
 export const accountLabel = (provider: AccountProvider, id: string) =>
   current?.label(provider, id) ?? "Default";
+
+/**
+ * Each saved account's config folder, each agent's usual sign-in first
+ * whatever order the user put them in: other accounts' folders link back to
+ * the usual one, and the first to claim a folder owns what is in it.
+ */
+export function accountHomes() {
+  const accounts = [
+    ...(current?.list() ??
+      accountProviders.map((provider) => ({ provider, id: SYSTEM_ACCOUNT }))),
+  ].sort(
+    (a, b) => Number(b.id === SYSTEM_ACCOUNT) - Number(a.id === SYSTEM_ACCOUNT),
+  );
+  return accounts.map(({ provider, id }) => ({
+    provider,
+    account: id,
+    home: id === SYSTEM_ACCOUNT ? usualHome(provider) : profileDir(provider, id),
+  }));
+}
 
 /** See `AgentAccounts.moveOn`. */
 export const moveAccountOn = (
@@ -138,6 +163,11 @@ export class AgentAccounts {
 
   resolve(provider: AccountProvider, pinned?: string) {
     return threadAccount(this.stored(), provider, pinned);
+  }
+
+  /** The saved accounts, in the order the user put them. */
+  list(): readonly StoredAccount[] {
+    return this.stored().accounts;
   }
 
   /** Signs a new account in; it joins the list once the CLI has saved its sign-in. */

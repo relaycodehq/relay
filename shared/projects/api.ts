@@ -28,6 +28,10 @@ import type {
   PullRequestPlan,
 } from "../pull-request-create";
 import type { Presence } from "../rooms";
+import type {
+  TerminalSession,
+  TerminalSessionPick,
+} from "../terminal-sessions";
 import type { SubagentDetail, SubagentRun } from "../subagents";
 import type {
   BlameQuery,
@@ -93,6 +97,12 @@ export interface ProjectListApi {
 }
 
 /** A project's threads: the list, the conversation and its turns. */
+/** The thread carrying on a terminal session; `created` when it was just made. */
+export interface ContinuedSession {
+  chat: ChatSummary;
+  created: boolean;
+}
+
 export interface ProjectChatApi {
   projectChats(id: string): Promise<ChatSummary[]>;
   createProjectChat(
@@ -140,6 +150,15 @@ export interface ProjectChatApi {
   markProjectChatSeen(id: string, seenAt: number): Promise<void>;
   /** A new thread holding the conversation up to this answer, or up to the latest finished one. */
   forkProjectChat(id: string, messageId?: string): Promise<ChatSummary>;
+  /** Claude Code and Codex sessions run in a terminal in the project's folder, newest first. */
+  terminalSessions(projectId: string): Promise<TerminalSession[]>;
+  /** A thread carrying on a terminal session; the one that already does, if any. */
+  continueTerminalSession(
+    projectId: string,
+    pick: TerminalSessionPick,
+    workspace?: ChatWorkspace,
+    branch?: string,
+  ): Promise<ContinuedSession>;
   /** Names the thread again from the whole conversation; replaces a name you typed too. */
   regenerateProjectChatTitle(id: string): Promise<ChatSummary>;
   projectCommands(

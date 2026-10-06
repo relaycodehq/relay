@@ -339,6 +339,7 @@ export async function copyIntoWorktree(
   name: string,
   source: string,
   chatId: string,
+  branch?: string,
 ): Promise<{ worktree: MadeWorktree; copied: number }> {
   const { head, tree, files } = await uncommitted(source);
   const from =
@@ -347,6 +348,7 @@ export async function copyIntoWorktree(
     from,
     start: head,
     includeFrom: source,
+    ...(branch ? { branch } : {}),
   });
   if (files.length)
     try {
@@ -359,7 +361,7 @@ export async function copyIntoWorktree(
           root,
           tree,
           head,
-          "Relay: the edits a started thread's worktree began with",
+          "Relay: the edits a thread's worktree began with",
         ),
       ]);
     } catch (e) {

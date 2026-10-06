@@ -14,8 +14,10 @@ vi.mock("./profiles", () => ({
   prepareProfile: async () => "",
   removeProfile: async () => {},
   setProfilesRoot: () => {},
+  usualHome: (provider: string) => `/home/.${provider}`,
+  profileDir: (provider: string, id: string) => `/profiles/${provider}/${id}`,
 }));
-const { AgentAccounts, accountFor } = await import(".");
+const { AgentAccounts, accountFor, accountHomes } = await import(".");
 
 function fakeStore(saved: StoredAccounts) {
   let state = { agentAccounts: saved } as ReturnType<Store["get"]>;
@@ -106,4 +108,21 @@ it("keeps a thread on its account, and moves one whose account is gone to the on
   // The usual sign-in is always there, and takes over what was in use.
   expect(accountFor("claude")).toBe("default");
   expect(accountFor("codex")).toBe("default");
+});
+
+it("lists the usual sign-in's folder first however the accounts are ordered", async () => {
+  const accounts = new AgentAccounts(fakeStore(three), () => {}, usage({}));
+  await accounts.move("claude", "default", 1);
+  await accounts.move("claude", "default", 1);
+  expect(
+    accounts
+      .list()
+      .filter((a) => a.provider === "claude")
+      .map((a) => a.id),
+  ).toEqual(["work", "client", "default"]);
+  expect(
+    accountHomes()
+      .filter((h) => h.provider === "claude")
+      .map((h) => h.home),
+  ).toEqual(["/home/.claude", "/profiles/claude/work", "/profiles/claude/client"]);
 });

@@ -62,21 +62,37 @@ export class ThreadWorktrees {
 
   /**
    * Makes `chat`'s worktree now rather than with its first message: at the
-   * commit `source` is on, with a copy of what `source` hasn't committed.
-   * Resolves to how many files came along.
+   * commit `source` is on, with a copy of what `source` hasn't committed,
+   * on `branch` when the user named one. Resolves to how many files came along.
    */
-  async copyFrom(chat: ProjectChat, source: string, prompt: string) {
+  async copyFrom(
+    chat: ProjectChat,
+    source: string,
+    prompt: string,
+    branch?: string,
+  ) {
+    const { worktree, copied } = await this.copyFor(chat, source, prompt, branch);
+    chat.worktree = worktree;
+    await this.core.storage.save(chat);
+    return copied;
+  }
+
+  /** `copyFrom`'s worktree, for a chat not saved yet; it stays the caller's to keep. */
+  async copyFor(
+    chat: Pick<ProjectChat, "id" | "projectId">,
+    source: string,
+    prompt: string,
+    branch?: string,
+  ) {
     const root = await this.core.projects.root(chat.projectId);
-    const { worktree, copied } = await copyIntoWorktree(
+    return copyIntoWorktree(
       root,
       this.folder,
       promptTitle(prompt),
       source,
       chat.id,
+      branch,
     );
-    chat.worktree = worktree;
-    await this.core.storage.save(chat);
-    return copied;
   }
 
   /**

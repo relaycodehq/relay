@@ -47,6 +47,8 @@ const methods = [
   "detachProjectChat",
   "markProjectChatSeen",
   "forkProjectChat",
+  "terminalSessions",
+  "continueTerminalSession",
   "regenerateProjectChatTitle",
   "projectCommands",
   "projectBranchPulls",

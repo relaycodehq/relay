@@ -32,8 +32,12 @@ export interface ProjectChat extends ChatSummary {
   checkoutNotes?: string[];
   /** Local: the scope each agent session last heard, by `provider:branch`. */
   scopeHeard?: Record<string, string>;
-  /** Local: moved from the project folder into its worktree; `owed` are the sessions not yet told. */
-  movedIn?: { from: string; to: string; owed: string[] };
+  /**
+   * Local: moved from the project folder into its worktree; `owed` are the
+   * sessions not yet told. `copied` when the worktree got a copy of the
+   * folder's edits and the folder kept its own.
+   */
+  movedIn?: { from: string; to: string; owed: string[]; copied?: true };
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
   deepReview?: DeepReviewState;

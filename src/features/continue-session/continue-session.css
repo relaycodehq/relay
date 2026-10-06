@@ -1,0 +1,35 @@
+/* The new thread's terminal session picker; built on the PR picker's popup. */
+.continue-session-popup {
+  width: 420px;
+}
+.continue-session-popup .project-pull-search {
+  padding-right: 0;
+}
+.continue-session-note {
+  margin: 0;
+  padding: 7px 14px 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.continue-session-row {
+  min-width: 0;
+}
+.continue-session-row[data-disabled] {
+  cursor: default;
+}
+.continue-session-row[aria-busy="true"] .continue-session-detail {
+  color: var(--text);
+}
+.continue-session-detail {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.continue-session-detail .provider-glyph {
+  width: 12px;
+  height: 12px;
+}

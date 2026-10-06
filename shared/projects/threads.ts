@@ -8,6 +8,7 @@ import type {
   ChatCameFrom,
   ChatSentTo,
 } from "../handoff";
+import type { FromTerminal } from "../terminal-sessions";
 import type { ThinkerTask } from "../ultraplan";
 import { refSchema } from "../validation";
 import type { AgentWorktree, ChatWorktree } from "./worktrees";
@@ -92,6 +93,8 @@ export interface ChatSummary {
   thinker?: ThinkerTask;
   /** Started by another thread's agent through Relay's tools; listed under that thread. */
   startedBy?: StartedBy;
+  /** Continues a Claude Code or Codex session started in a terminal. */
+  fromTerminal?: FromTerminal;
   /** Live state added by list(); never persisted. */
   running?: boolean;
   runningSince?: number;

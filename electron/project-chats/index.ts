@@ -22,13 +22,16 @@ import type {
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
+import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import { agentRuntimes } from "../agents";
+import { accountHomes } from "../agents/accounts";
 import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
 import type { ProjectSharing } from "../projects/project-sharing";
 import type { Store } from "../app/store";
+import { TerminalSessions } from "../terminal-sessions";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -44,6 +47,7 @@ import { ChatSharing } from "./sharing";
 import { ChatStorage } from "./storage";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
+import { TerminalContinue } from "./terminal-continue";
 import { ThreadCreate } from "./thread-create";
 import { ThreadList } from "./thread-list";
 import { ThreadTriage } from "./thread-triage";
@@ -84,6 +88,7 @@ export class ProjectChats {
   private threads: ThreadList;
   private triaging: ThreadTriage;
   private creating: ThreadCreate;
+  private terminal: TerminalContinue;
   constructor(
     private store: Store,
     projects: Projects,
@@ -154,6 +159,11 @@ export class ProjectChats {
     this.threads = new ThreadList(core);
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
     this.creating = new ThreadCreate(core);
+    this.terminal = new TerminalContinue(
+      core,
+      this.worktrees,
+      new TerminalSessions(async () => accountHomes()),
+    );
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>
@@ -305,6 +315,17 @@ export class ProjectChats {
    */
   fork(id: string, messageId?: string) {
     return this.creating.fork(id, messageId);
+  }
+  terminalSessions(projectId: string) {
+    return this.terminal.list(projectId);
+  }
+  continueTerminalSession(
+    projectId: string,
+    pick: TerminalSessionPick,
+    workspace?: ChatWorkspace,
+    branch?: string,
+  ) {
+    return this.terminal.continue(projectId, pick, workspace, branch);
   }
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
     return this.handoffs.mark(id, sentTo);

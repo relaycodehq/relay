@@ -4,6 +4,7 @@ import {
   GitPullRequest,
   ScanSearch,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ChatScope, Project } from "../../../shared/projects";
 import type { PullRef } from "../../../shared/types";
 import { ProjectHeadlinePicker } from "../projects/ProjectHeadlinePicker";
@@ -31,6 +32,7 @@ export function ScopeButtons({
   onSelectPR,
   onDeepReview,
   onReviewChanges,
+  continueSession,
 }: ScopeChoice & {
   project: Project;
   scope: ChatScope;
@@ -38,6 +40,8 @@ export function ScopeButtons({
   choosing: boolean;
   /** A PR thread's way to its diff. */
   onReviewChanges: () => void;
+  /** The terminal session picker, offered while choosing. */
+  continueSession?: ReactNode;
 }) {
   return (
     <>
@@ -76,6 +80,7 @@ export function ScopeButtons({
           </button>
         </>
       )}
+      {choosing && !project.scratch && continueSession}
       {scope.kind === "pr" && (
         <button className="thread-review-action" onClick={onReviewChanges}>
           Review changes →
