@@ -276,6 +276,22 @@
 .usage-meters[data-count="1"] {
   grid-template-columns: 1fr;
 }
+.usage-credits {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.usage-credits > span:first-child {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
 .usage-meter-top,
 .usage-meter-bottom {
   display: flex;

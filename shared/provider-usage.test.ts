@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   SESSION_MS,
   WEEK_MS,
+  creditsLabel,
+  creditsReach,
   mapClaudeUsage,
+  mapCodexCredits,
   mapCodexUsage,
   paceGap,
   presentWindow,
@@ -151,5 +154,47 @@ describe("provider usage windows", () => {
     expect(paceGap(week(53))).toBe("3% behind");
     expect(paceGap(week(50))).toBe("On pace");
     expect(paceGap(week(100))).toBeNull();
+  });
+});
+
+describe("Codex credits", () => {
+  // As wham/usage answered for a Free account with bought credits.
+  const body = (credits: Record<string, unknown>) => ({
+    plan_type: "free",
+    credits: {
+      has_credits: true,
+      unlimited: false,
+      overage_limit_reached: false,
+      balance: "62500",
+      approx_local_messages: [15625, 81250],
+      ...credits,
+    },
+  });
+
+  it("reads the balance and what it buys", () => {
+    const credits = mapCodexCredits(body({}))!;
+    expect(credits).toEqual({
+      balance: 62500,
+      unlimited: false,
+      messages: [15625, 81250],
+    });
+    expect(creditsLabel(credits)).toBe("62,500 credits");
+    expect(creditsReach(credits)).toBe("~15,625–81,250 messages");
+  });
+
+  it("has nothing to show for an empty or capped balance", () => {
+    expect(
+      mapCodexCredits(body({ has_credits: false, balance: "0" })),
+    ).toBeNull();
+    expect(mapCodexCredits(body({ overage_limit_reached: true }))).toBeNull();
+    expect(mapCodexCredits({ rate_limit: {} })).toBeNull();
+  });
+
+  it("keeps unlimited credits without a balance", () => {
+    const credits = mapCodexCredits(
+      body({ unlimited: true, balance: null, approx_local_messages: null }),
+    )!;
+    expect(creditsLabel(credits)).toBe("Unlimited credits");
+    expect(creditsReach(credits)).toBeNull();
   });
 });

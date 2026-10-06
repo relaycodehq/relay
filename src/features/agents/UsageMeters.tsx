@@ -1,8 +1,11 @@
 import { Flame } from "lucide-react";
 import {
+  creditsLabel,
+  creditsReach,
   paceGap,
   presentWindow,
   type ProviderUsage,
+  type UsageCredits,
 } from "../../../shared/provider-usage";
 
 export function UsageMeters({
@@ -25,12 +28,22 @@ export function UsageMeters({
         <p className="usage-status">
           {usage.message ?? "No usage limits reported"}
         </p>
+        {usage.credits && <CreditsRow credits={usage.credits} />}
       </div>
     );
   }
-  const meters = usage.windows.map((window) =>
-    presentWindow(window, now, usage.activeHours),
-  );
+  const meters = usage.windows.map((window) => {
+    const meter = presentWindow(window, now, usage.activeHours);
+    // A spent window with credits behind it isn't a stop, so no alarm.
+    return meter.pace === "spent" && usage.credits
+      ? {
+          ...meter,
+          pace: "ok" as const,
+          paceLeftPercent: null,
+          limitLabel: "On credits",
+        }
+      : meter;
+  });
   return (
     <div className="usage-footer">
       <div className="usage-meters" data-count={meters.length}>
@@ -86,6 +99,17 @@ export function UsageMeters({
           );
         })}
       </div>
+      {usage.credits && <CreditsRow credits={usage.credits} />}
+    </div>
+  );
+}
+
+function CreditsRow({ credits }: { credits: UsageCredits }) {
+  const reach = creditsReach(credits);
+  return (
+    <div className="usage-credits" title="Spent once the limits run out">
+      <span>{creditsLabel(credits)}</span>
+      {reach && <span>{reach}</span>}
     </div>
   );
 }

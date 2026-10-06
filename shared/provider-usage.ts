@@ -14,6 +14,12 @@ const usageWindowSchema = z.object({
   resetsAt: z.number().finite().nullable(),
   periodMs: z.number().finite().positive(),
 });
+const usageCreditsSchema = z.object({
+  balance: z.number().finite().min(0),
+  unlimited: z.boolean(),
+  /** Codex's guess at how many local messages the balance buys, low to high. */
+  messages: z.tuple([z.number(), z.number()]).nullish(),
+});
 export const providerUsageSchema = z
   .object({
     provider: usageProviderSchema,
@@ -21,11 +27,14 @@ export const providerUsageSchema = z
     message: z.string().max(160).nullable(),
     /** Learned from Relay's own readings; see usage-history. */
     activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
+    /** Bought credits that carry turns once the windows run out; Codex only. */
+    credits: usageCreditsSchema.nullish(),
   })
   .strict();
 type UsageKind = "session" | "weekly";
 export type UsageWindow = z.infer<typeof usageWindowSchema>;
 export type ProviderUsage = z.infer<typeof providerUsageSchema>;
+export type UsageCredits = z.infer<typeof usageCreditsSchema>;
 export type MeterPace = "ok" | "warn" | "hot" | "spent";
 export type UsageMeter = {
   kind: UsageKind;
@@ -375,4 +384,40 @@ export function mapCodexUsage(
       ),
     ];
   });
+}
+
+/** Credits that can still carry turns; null when there are none to spend. */
+export function mapCodexCredits(body: unknown): UsageCredits | null {
+  const credits = asRecord(asRecord(body)?.credits);
+  // Past the account's spend cap, the balance can't carry anything.
+  if (!credits || credits.overage_limit_reached === true) return null;
+  const unlimited = credits.unlimited === true;
+  const balance = num(credits.balance) ?? 0;
+  if (!unlimited && (credits.has_credits !== true || balance <= 0)) return null;
+  const range = Array.isArray(credits.approx_local_messages)
+    ? credits.approx_local_messages.map(num)
+    : [];
+  const [low, high] = range;
+  return {
+    balance: Math.max(0, balance),
+    unlimited,
+    messages:
+      range.length === 2 && low != null && high != null ? [low, high] : null,
+  };
+}
+
+/** "62,500 credits", or "Unlimited credits". */
+export function creditsLabel(credits: UsageCredits) {
+  return credits.unlimited
+    ? "Unlimited credits"
+    : `${credits.balance.toLocaleString("en-US")} credits`;
+}
+
+/** "~15,625–81,250 messages", Codex's own estimate of what the credits buy. */
+export function creditsReach(credits: UsageCredits) {
+  if (credits.unlimited || !credits.messages) return null;
+  const [low, high] = credits.messages.map((n) =>
+    Math.round(n).toLocaleString("en-US"),
+  );
+  return low === high ? `~${low} messages` : `~${low}–${high} messages`;
 }

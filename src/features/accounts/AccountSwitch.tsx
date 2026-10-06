@@ -6,6 +6,7 @@ import {
   hasAccounts,
   type AccountProvider,
 } from "../../../shared/agent-accounts";
+import { creditsLabel } from "../../../shared/provider-usage";
 import { UsageMeters } from "../agents/UsageMeters";
 import { AccountBars, AccountDial, headroom } from "./AccountBars";
 import type { ThreadAccounts } from "./useThreadAccounts";
@@ -54,6 +55,13 @@ function AccountTabs({
       >
         {list.map((account) => {
           const left = headroom(usage[account.id]);
+          const credits = usage[account.id]?.credits;
+          const detail = [
+            left !== null && `${left}% left`,
+            credits && creditsLabel(credits),
+          ]
+            .filter(Boolean)
+            .join(" · ");
           return (
             <button
               key={account.id}
@@ -66,7 +74,7 @@ function AccountTabs({
             >
               <AccountDial usage={usage[account.id]} />
               {account.label}
-              {left !== null && <small>{left}% left</small>}
+              {detail && <small>{detail}</small>}
             </button>
           );
         })}
@@ -130,6 +138,7 @@ function AccountMenu({
               >
                 {list.map((account) => {
                   const left = headroom(usage[account.id]);
+                  const credits = usage[account.id]?.credits;
                   return (
                     <Menu.RadioItem
                       key={account.id}
@@ -141,7 +150,11 @@ function AccountMenu({
                       <span className="account-menu-text">
                         <b>{account.label}</b>
                         <small>
-                          {[account.plan, left !== null && `${left}% left`]
+                          {[
+                            account.plan,
+                            left !== null && `${left}% left`,
+                            credits && creditsLabel(credits),
+                          ]
                             .filter(Boolean)
                             .join(" · ")}
                         </small>

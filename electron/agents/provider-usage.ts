@@ -9,9 +9,11 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import {
   mapClaudeUsage,
+  mapCodexCredits,
   mapCodexUsage,
   providerUsageSchema,
   type ProviderUsage,
+  type UsageCredits,
   type UsageWindow,
 } from "../../shared/provider-usage";
 import { readClaudeUsage } from "./claude/project";
@@ -145,12 +147,14 @@ async function loadCodex(account: string): Promise<ProviderUsage> {
       "https://chatgpt.com/backend-api/wham/usage",
       headers,
     );
+    const body = await jsonBody(response);
     return {
       response,
-      windows: mapCodexUsage(await jsonBody(response), Date.now(), {
+      windows: mapCodexUsage(body, Date.now(), {
         primary: headerNumber(response, "x-codex-primary-used-percent"),
         secondary: headerNumber(response, "x-codex-secondary-used-percent"),
       }),
+      credits: mapCodexCredits(body),
     };
   });
 }
@@ -160,7 +164,11 @@ async function probe(
   fetchUsage: (
     token: string,
     accountId: string | null,
-  ) => Promise<{ response: Response; windows: UsageWindow[] }>,
+  ) => Promise<{
+    response: Response;
+    windows: UsageWindow[];
+    credits: UsageCredits | null;
+  }>,
 ): Promise<ProviderUsage> {
   let message = "Sign in with codex";
   for (const cred of credentials) {
@@ -193,6 +201,7 @@ async function probe(
         provider: "codex",
         windows: result.windows,
         message: result.windows.length ? null : "No usage limits reported",
+        credits: result.credits,
       };
     } catch {
       message = "Couldn't reach the usage service";
