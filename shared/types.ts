@@ -347,7 +347,6 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<void>;
-  setAccountAutoSwitch(on: boolean): Promise<void>;
   /** Runs the thread's `provider` on another account from its next turn. */
   setThreadAccount(
     chatId: string,

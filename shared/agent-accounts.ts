@@ -28,12 +28,10 @@ export interface StoredAccount {
   label: string;
 }
 export interface StoredAccounts {
-  /** In each agent's order: when one runs out, the next one down takes over. */
+  /** In the order the user put each agent's accounts. */
   accounts: StoredAccount[];
   /** The account new threads start on. */
   inUse?: Partial<Record<AccountProvider, string>>;
-  /** Move an answer on to the next account when a limit stops it; unset is on. */
-  autoSwitch?: boolean;
 }
 
 export interface AgentAccount extends StoredAccount {
@@ -46,7 +44,6 @@ export interface AgentAccount extends StoredAccount {
 export interface AgentAccountsState {
   accounts: AgentAccount[];
   inUse: Record<AccountProvider, string>;
-  autoSwitch: boolean;
   /** A sign-in Relay started and is waiting on, in the browser. */
   signingIn: { provider: AccountProvider; id: string; label: string } | null;
   /** Why the last sign-in didn't finish. */
@@ -81,11 +78,3 @@ export const pinnedAccount = (
   accounts: Partial<Record<AccountProvider, string>> | undefined,
   provider: string,
 ) => (hasAccounts(provider) ? accounts?.[provider] : undefined);
-
-/** An answer a usage limit stopped, carried on with another account. */
-export interface AccountMove {
-  provider: AccountProvider;
-  /** Labels as they were then, so a rename later doesn't rewrite history. */
-  from: string;
-  to: string;
-}

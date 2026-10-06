@@ -21,7 +21,7 @@ export function useThreadAccounts(chatId?: string, pinned?: Pinned) {
   const [error, setError] = useState<string>();
   /** Each agent's latest pick, so an older one failing leaves it be. */
   const latest = useRef<Partial<Record<AccountProvider, number>>>({});
-  // The thread's own word wins once it changes, e.g. after a limit moved it.
+  // The thread's saved account wins again whenever it changes.
   const saved = JSON.stringify(pinned ?? {});
   useEffect(() => {
     setPicked({});

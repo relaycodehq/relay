@@ -37,9 +37,6 @@ export function accountHandlers(ctx: ApiContext) {
       [accountProviderSchema, accountIdSchema],
       (provider, id) => accounts.use(provider, id),
     ),
-    setAccountAutoSwitch: takes([z.boolean()], (on) =>
-      accounts.setAutoSwitch(on),
-    ),
     setThreadAccount: takes(
       [idSchema, accountProviderSchema, accountIdSchema],
       (chatId, provider, id) => projectChats.setAccount(chatId, provider, id),

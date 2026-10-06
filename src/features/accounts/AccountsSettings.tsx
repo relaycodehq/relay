@@ -17,7 +17,7 @@ import {
   type AgentAccountsState,
 } from "../../../shared/agent-accounts";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { SettingsCard, SettingsRow, Switch } from "../../ui/SettingsCard";
+import { SettingsCard } from "../../ui/SettingsCard";
 import { AccountBars, headroom } from "./AccountBars";
 import { useAgentAccounts } from "./agent-accounts";
 import { useAccountsUsage } from "./useAccountUsage";
@@ -31,18 +31,6 @@ export function AccountsSettings({ onError }: { onError: OnError }) {
   if (!state) return null;
   return (
     <div className="accounts-settings">
-      <SettingsCard>
-        <SettingsRow
-          label="Move on when an account runs out"
-          hint="An answer that hits a limit carries on with the next account down the list, and new threads start there too. Off, it waits for the reset."
-        >
-          <Switch
-            label="Move on when an account runs out"
-            checked={state.autoSwitch}
-            onChange={(on) => api.setAccountAutoSwitch(on).catch(onError)}
-          />
-        </SettingsRow>
-      </SettingsCard>
       {accountProviders.map((provider) => (
         <ProviderAccounts
           key={provider}

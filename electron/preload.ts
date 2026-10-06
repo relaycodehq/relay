@@ -235,7 +235,6 @@ const methods = [
   "removeAgentAccount",
   "moveAgentAccount",
   "useAgentAccount",
-  "setAccountAutoSwitch",
   "setThreadAccount",
   "openRouterCredit",
   "agentModels",

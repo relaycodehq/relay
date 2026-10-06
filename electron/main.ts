@@ -68,7 +68,6 @@ import { DevBuild } from "./app/dev-build";
 import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
 import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
-import { readProviderUsage } from "./agents/provider-usage";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
 // The name is also the instance lock and the OS credential namespace; set it before
@@ -267,7 +266,6 @@ app
     const agentAccounts = new AgentAccounts(
       loaded,
       (state) => window.send("relay:agent-accounts", state),
-      (provider, account) => readProviderUsage(provider, true, account),
     );
     applyLinkedTools(loaded);
     // Found once up front, every Git call after starts right away.

@@ -1,5 +1,4 @@
 import type { AgentProvider } from "../agents";
-import type { AccountMove } from "../agent-accounts";
 import { isImagePath } from "../answer-images";
 import type { TurnModel } from "../turn-model";
 import type { WatchNote } from "../watch";
@@ -88,8 +87,6 @@ export interface ChatMessage {
   forkPoint?: ForkPoint;
   /** Local: the turn failed because this agent's login is missing, expired or was revoked. */
   signIn?: AgentProvider;
-  /** Local: a usage limit stopped this answer and it carried on with another account. */
-  accountMove?: AccountMove;
   ended?: number;
   author?: string;
   authorId?: string;

@@ -6,11 +6,7 @@ import type {
 import type { AgentError } from "../agents/errors";
 import { usageResetsAt } from "../agents/usage-limit";
 import { hasAccounts } from "../../shared/agent-accounts";
-import {
-  accountFor,
-  accountLabel,
-  moveAccountOn,
-} from "../agents/accounts";
+import { accountFor } from "../agents/accounts";
 import type { ChatCore } from "./core";
 
 /** Resumes this long after the limit lifts, in case the provider's clock runs behind. */
@@ -63,8 +59,8 @@ export class LimitResumes {
   }
 
   /**
-   * A usage limit stopped the answer `messageId`: it carries on at once with
-   * the next account that has room, or plans its resume for the reset.
+   * A usage limit stopped the answer `messageId`: it plans its resume for the
+   * reset, on the same account.
    */
   async stopped(chatId: string, messageId: string, limit: AgentError) {
     const chat = await this.core.storage.load(chatId);
@@ -75,8 +71,6 @@ export class LimitResumes {
     const account = hasAccounts(provider)
       ? accountFor(provider, chat.accounts?.[provider])
       : undefined;
-    if (account && (await this.moveOn(chatId, messageId, limit, account)))
-      return;
     const at =
       limit.resetsAt ??
       (await usageResetsAt(provider, account).catch(() => undefined));
@@ -88,51 +82,6 @@ export class LimitResumes {
       await this.core.storage.save(chat);
       this.arm(chatId, chat.limitResume);
     });
-  }
-
-  /**
-   * Carries the answer on with the next account down the list, when
-   * auto-switch is on and one has room. The thread keeps that account.
-   */
-  private async moveOn(
-    chatId: string,
-    messageId: string,
-    limit: AgentError,
-    from: string,
-  ) {
-    const provider = limit.provider;
-    if (!hasAccounts(provider)) return false;
-    const to = await moveAccountOn(provider, from, limit.resetsAt);
-    if (!to) return false;
-    let moved = false;
-    await this.core.control(chatId, async () => {
-      const chat = await this.core.storage.load(chatId);
-      const message = chat.messages.find((m) => m.id === messageId);
-      if (!message || !stillLast(chat, message)) return;
-      chat.accounts = { ...chat.accounts, [provider]: to };
-      message.accountMove = {
-        provider,
-        from: accountLabel(provider, from),
-        to: accountLabel(provider, to),
-      };
-      message.version++;
-      // The limit paused the queue behind the answer; carrying on picks it up.
-      const unpause = !!chat.queuePaused;
-      delete chat.queuePaused;
-      await this.core.storage.save(chat);
-      this.core.emit({ chatId, message: structuredClone(message) });
-      moved = true;
-      try {
-        await this.host.resume(chatId);
-      } catch (e) {
-        if (unpause) {
-          chat.queuePaused = true;
-          await this.core.storage.save(chat);
-        }
-        throw e;
-      }
-    });
-    return moved;
   }
 
   /** Turns the planned resume off for this answer, or back on. */

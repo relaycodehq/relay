@@ -429,12 +429,6 @@ export const Message = memo(function Message({
           {m.error}
         </p>
       )}
-      {m.accountMove && (
-        <p className="muted" role="status">
-          Continued on {m.accountMove.to}: {m.accountMove.from} hit its usage
-          limit.
-        </p>
-      )}
       {onSignIn && m.signIn && (
         <SignIn provider={m.signIn} onSignIn={onSignIn} />
       )}
