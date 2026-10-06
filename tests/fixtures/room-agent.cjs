@@ -52,9 +52,33 @@ function record(data) {
         // A worktree thread's dev-server port offset; see project-chats/worktree-setup.
         portOffset: process.env.RELAY_PORT_OFFSET,
         ...data,
-      }) +
-        "\n",
+      }) + "\n",
     );
+}
+// "fixture relay <tool> <json>": calls one of Relay's own tools as the agent
+// would, with the server Relay gave it, and answers what came back. Claude
+// Code gets it as --mcp-config, Codex in its thread's config.
+let codexRelayUrl;
+async function callRelayTool(tool, input) {
+  const relay = args.includes("--mcp-config")
+    ? JSON.parse(args[args.indexOf("--mcp-config") + 1]).mcpServers?.relay
+    : codexRelayUrl && {
+        url: codexRelayUrl,
+        headers: { authorization: `Bearer ${process.env.RELAY_MCP_TOKEN}` },
+      };
+  if (!relay) return "No relay server.";
+  const response = await fetch(relay.url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...relay.headers },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: tool, arguments: input },
+    }),
+  });
+  const { result, error } = await response.json();
+  return error ? `Error: ${error.message}` : result.content[0].text;
 }
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,
@@ -290,6 +314,11 @@ if (args.includes("--permission-prompt-tool")) {
             ],
           },
         });
+      } else if (text.includes("fixture relay ")) {
+        const [, tool, input] = /fixture relay (\w+) (.*)/.exec(text);
+        callRelayTool(tool, JSON.parse(input)).then(finish, (e) =>
+          finish(`Failed: ${e.message}`),
+        );
       } else if (
         text.includes("fixture wait for steer") ||
         text.includes("fixture late steer")
@@ -513,6 +542,7 @@ if (args.includes("--permission-prompt-tool")) {
       m.method === "thread/fork"
     ) {
       record({ provider: "codex", thread: m.params, method: m.method });
+      codexRelayUrl = m.params.config?.["mcp_servers.relay.url"];
       send({
         id: m.id,
         result: {
@@ -701,6 +731,43 @@ if (args.includes("--permission-prompt-tool")) {
           codexErrorInfo: "unauthorized",
           additionalDetails: null,
         });
+        return;
+      }
+      if (said.includes("fixture relay ")) {
+        const [, tool, input] = /fixture relay (\w+) (.*)/.exec(said);
+        const answer = (text) => {
+          const item = {
+            id: "fixture-relay",
+            type: "agentMessage",
+            phase: "final_answer",
+          };
+          send({
+            method: "item/started",
+            params: { threadId: "fixture-thread", item },
+          });
+          send({
+            method: "item/agentMessage/delta",
+            params: {
+              threadId: "fixture-thread",
+              itemId: item.id,
+              delta: text,
+            },
+          });
+          send({
+            method: "item/completed",
+            params: { threadId: "fixture-thread", item: { ...item, text } },
+          });
+          send({
+            method: "turn/completed",
+            params: {
+              threadId: "fixture-thread",
+              turn: { id: "fixture-turn", status: "completed" },
+            },
+          });
+        };
+        callRelayTool(tool, JSON.parse(input)).then(answer, (e) =>
+          answer(`Failed: ${e.message}`),
+        );
         return;
       }
       const echo = said.indexOf("fixture echo:");

@@ -28,10 +28,12 @@ export function followChatEvents(qc: QueryClient) {
       .getQueriesData<Project[]>({ queryKey: ["projects"] })
       .flatMap(([, list]) => list ?? [])
       .find((p) => p.id === projectId);
-    // One the window hasn't listed yet may be a new Scratchpad chat's.
-    if (!project)
+    // One the window hasn't listed yet may be a new Scratchpad chat's, or
+    // a project an agent just added.
+    if (!project) {
       void qc.invalidateQueries({ queryKey: SCRATCH_CHATS, exact: true });
-    else if (project.scratch)
+      void qc.invalidateQueries({ queryKey: ["projects"] });
+    } else if (project.scratch)
       qc.setQueryData<ChatSummary[]>(SCRATCH_CHATS, (list) =>
         list
           ?.filter((c) => c.projectId !== projectId)

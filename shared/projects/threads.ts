@@ -108,6 +108,8 @@ export interface StartedBy {
   chatId: string;
   /** The agent that started it. */
   agent: AgentProvider;
+  /** The user let the lead message it, in another project than the lead's. */
+  sendsApproved?: true;
 }
 export interface HeldWakeup {
   id: string;

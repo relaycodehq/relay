@@ -131,6 +131,13 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }
+  /** Remembers the user let the lead message this thread in another project. */
+  async allowLeadSends(id: string) {
+    const chat = await this.core.storage.load(id);
+    if (!chat.startedBy || chat.startedBy.sendsApproved) return;
+    chat.startedBy.sendsApproved = true;
+    await this.core.storage.save(chat);
+  }
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
     const chat = await this.core.storage.load(id);

@@ -1,11 +1,22 @@
-import { expect, test } from "vitest";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rename,
+  rm,
+  symlink,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
+import { afterEach, expect, test } from "vitest";
 import type {
   ChatSummary,
+  Project,
   ProjectChat,
   ProjectChatSend,
   StartedBy,
 } from "../../shared/projects";
-import { StartedThreads } from ".";
+import { StartedThreads, type AgentProjects } from ".";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -48,10 +59,13 @@ function fakeChats() {
     sent,
     chats,
     api: {
-      list: (projectId: string) =>
+      startedThreads: (leadId: string) =>
         [...chats.values()].filter(
-          (c) => c.projectId === projectId,
+          (c) => c.startedBy?.chatId === leadId,
         ) as ChatSummary[],
+      allowLeadSends: async (id: string) => {
+        chats.get(id)!.startedBy!.sendsApproved = true;
+      },
       get: async (id: string) => {
         const chat = chats.get(id);
         if (!chat) throw new Error("No such thread.");
@@ -184,11 +198,9 @@ test("a lead only sees and drives its own threads", async () => {
 
 test("a started thread can't start threads of its own, only read usage", async () => {
   const { lead, api } = fakeChats();
-  const threads = new StartedThreads(api, async (provider) => ({
-    provider,
-    windows: [],
-    message: null,
-  }));
+  const threads = new StartedThreads(api, {
+    readUsage: async (provider) => ({ provider, windows: [], message: null }),
+  });
   const [child] = parse(
     await call(threads, lead.id, "start_threads", {
       threads: [{ prompt: "Child" }],
@@ -433,18 +445,20 @@ test("usage limits read each agent on the account the thread pinned for it", asy
   const { lead, api } = fakeChats();
   const reads: unknown[][] = [];
   const resetsAt = Date.now() + 3 * 60 * 60 * 1000;
-  const threads = new StartedThreads(api, async (provider, force, account) => {
-    reads.push([provider, force, account]);
-    return provider === "claude"
-      ? {
-          provider,
-          windows: [
-            { kind: "session", usedPercent: 41.6, resetsAt, periodMs: 1 },
-            { kind: "weekly", usedPercent: 12, resetsAt: null, periodMs: 1 },
-          ],
-          message: null,
-        }
-      : { provider, windows: [], message: "Sign in with codex" };
+  const threads = new StartedThreads(api, {
+    readUsage: async (provider, force, account) => {
+      reads.push([provider, force, account]);
+      return provider === "claude"
+        ? {
+            provider,
+            windows: [
+              { kind: "session", usedPercent: 41.6, resetsAt, periodMs: 1 },
+              { kind: "weekly", usedPercent: 12, resetsAt: null, periodMs: 1 },
+            ],
+            message: null,
+          }
+        : { provider, windows: [], message: "Sign in with codex" };
+    },
   });
   expect(parse(await call(threads, lead.id, "usage_limits", {}))).toEqual([
     { agent: "codex", account: "work", note: "Sign in with codex" },
@@ -462,4 +476,307 @@ test("usage limits read each agent on the account the thread pinned for it", asy
     ["codex", false, "work"],
     ["claude", false, undefined],
   ]);
+});
+
+const folders: string[] = [];
+afterEach(async () => {
+  for (const f of folders.splice(0)) await rm(f, { recursive: true });
+});
+
+/** The user's projects over a real temp folder, with the lead's "p" in it. */
+async function fakeProjects({ git = [] as string[] } = {}) {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-agent-projects-")),
+  );
+  folders.push(root);
+  const home = join(root, "home");
+  await mkdir(join(home, "lead"), { recursive: true });
+  const list: Project[] = [
+    { id: "p", name: "lead", path: join(home, "lead") } as Project,
+    {
+      id: "00000000-0000-4000-8000-0000000000c1",
+      name: "Scratchpad",
+      path: join(root, "data", "Scratchpad", "a"),
+      scratch: true,
+    } as Project,
+  ];
+  const projects: AgentProjects = {
+    list: async () => list,
+    add: async (folder) => {
+      const project = {
+        id: `00000000-0000-4000-8000-${String(list.length).padStart(12, "0")}`,
+        name: basename(folder),
+        path: folder,
+        plain: !git.includes(folder),
+      } as Project;
+      list.push(project);
+      return project;
+    },
+    repositoryRoot: async (dir) =>
+      git.find((r) => dir === r || dir.startsWith(`${r}/`)) ?? null,
+    rules: async () => ({
+      home,
+      userData: join(root, "data"),
+      temp: tmpdir(),
+      platform: process.platform,
+    }),
+  };
+  return { root, home, list, projects };
+}
+
+test("adding a project always asks, full access or not, and shows the folder first", async () => {
+  const { lead, api, asked } = fakeChats();
+  lead.lastInput!.runtimeMode = "full-access";
+  const { home, list, projects } = await fakeProjects();
+  const folder = join(home, "code", "site");
+  await mkdir(folder, { recursive: true });
+  const threads = new StartedThreads(api, { projects });
+  const added = parse(await call(threads, lead.id, "add_project", { folder }));
+  expect(asked).toEqual([
+    {
+      id: lead.id,
+      request: {
+        kind: "approval",
+        title: "Add “site” to Relay as a project?",
+        detail: `${folder}\nPlain folder, no Git. Agents in its threads can read and change everything in this folder.`,
+        decisions: ["accept", "decline", "cancel"],
+      },
+    },
+  ]);
+  expect(added).toMatchObject({ name: "site", folder, git: false });
+  expect(list.map((p) => p.path)).toContain(folder);
+});
+
+test("a link to a folder is added as the folder, saying what was asked", async () => {
+  const { lead, api, asked } = fakeChats();
+  const { root, home, projects } = await fakeProjects();
+  const folder = join(home, "code", "relay-site");
+  await mkdir(folder, { recursive: true });
+  // A newline in the name the agent picked can't forge a line on the card.
+  const link = join(root, "link\n/Users/ana/safe");
+  await mkdir(dirname(link), { recursive: true });
+  await symlink(folder, link);
+  const threads = new StartedThreads(api, { projects });
+  await call(threads, lead.id, "add_project", { folder: link });
+  expect((asked[0]!.request as { detail: string }).detail).toBe(
+    `${folder}\nPlain folder, no Git. Agents in its threads can read and change everything in this folder.\n(Asked for ${JSON.stringify(link)}, a link to this folder.)`,
+  );
+  expect(
+    (asked[0]!.request as { detail: string }).detail.split("\n"),
+  ).toHaveLength(3);
+});
+
+test("a declined folder isn't added", async () => {
+  const { lead, api, answer } = fakeChats();
+  const { home, list, projects } = await fakeProjects();
+  const folder = join(home, "code");
+  await mkdir(folder);
+  answer.decision = "decline";
+  const threads = new StartedThreads(api, { projects });
+  expect(await call(threads, lead.id, "add_project", { folder })).toMatchObject(
+    { isError: true },
+  );
+  expect(list).toHaveLength(2);
+});
+
+test("a folder that is a project already answers with it, without asking", async () => {
+  const { lead, api, asked } = fakeChats();
+  const { home, projects } = await fakeProjects();
+  const threads = new StartedThreads(api, { projects });
+  expect(
+    parse(
+      await call(threads, lead.id, "add_project", {
+        folder: join(home, "lead"),
+      }),
+    ),
+  ).toMatchObject({ id: "p", alreadyAdded: true });
+  expect(asked).toEqual([]);
+});
+
+test("refused folders never reach the user", async () => {
+  const { lead, api, asked } = fakeChats();
+  const { root, home, projects } = await fakeProjects({ git: [] });
+  const repo = join(home, "repo");
+  await mkdir(join(repo, "src"), { recursive: true });
+  const threads = new StartedThreads(api, {
+    projects: {
+      ...projects,
+      repositoryRoot: async (d) => (d.startsWith(repo) ? repo : null),
+    },
+  });
+  const refusal = async (folder: string) => {
+    const result = await call(threads, lead.id, "add_project", { folder });
+    expect(result).toMatchObject({ isError: true });
+    return result.content[0]!.text;
+  };
+  expect(await refusal(home)).toMatch(/home folder/);
+  expect(await refusal("/")).toMatch(/whole disk/);
+  expect(await refusal(join(root, "nothing"))).toMatch(/no folder/);
+  expect(await refusal("relative/path")).toMatch(/absolute/);
+  expect(await refusal(join(repo, "src"))).toBe(
+    `That's inside the Git repository at ${repo}; add that folder instead.`,
+  );
+  expect(asked).toEqual([]);
+});
+
+test("list_projects lists the user's projects but Scratchpad's, marking the lead's", async () => {
+  const { lead, api } = fakeChats();
+  const { home, projects } = await fakeProjects();
+  const threads = new StartedThreads(api, { projects });
+  expect(parse(await call(threads, lead.id, "list_projects", {}))).toEqual([
+    {
+      id: "p",
+      name: "lead",
+      folder: join(home, "lead"),
+      git: true,
+      current: true,
+    },
+  ]);
+});
+
+test("threads in another project always ask, start there, and stay the lead's", async () => {
+  const { lead, api, asked, copies, chats } = fakeChats();
+  lead.lastInput!.runtimeMode = "full-access";
+  const { home, projects, list } = await fakeProjects();
+  const other = await projects.add(join(home, "site"));
+  const threads = new StartedThreads(api, { projects });
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      project: other.id,
+      threads: [{ prompt: "Match the new header" }],
+    }),
+  );
+  expect(asked.map((a) => a.request)).toEqual([
+    {
+      kind: "approval",
+      title: "Start 1 thread in “site”?",
+      detail: `In ${join(home, "site")}, with full access: edits and commands run without asking.\n\n1. Claude\nMatch the new header`,
+      decisions: ["accept", "decline", "cancel"],
+    },
+  ]);
+  expect(child).toMatchObject({ project: "site", worktree: true });
+  expect(chats.get(child.id)).toMatchObject({
+    projectId: other.id,
+    startedBy: { chatId: lead.id },
+  });
+  // The lead's uncommitted work belongs to another repository.
+  expect(copies).toEqual([]);
+  expect(parse(await call(threads, lead.id, "list_threads", {}))).toMatchObject(
+    [{ id: child.id, project: "site" }],
+  );
+  expect(list).toHaveLength(3);
+});
+
+test("another project's threads can't take the lead's uncommitted work, nor start in an unknown one", async () => {
+  const { lead, api, asked } = fakeChats();
+  const { home, projects } = await fakeProjects();
+  const other = await projects.add(join(home, "site"));
+  const threads = new StartedThreads(api, { projects });
+  expect(
+    await call(threads, lead.id, "start_threads", {
+      project: other.id,
+      threads: [{ prompt: "x", uncommitted: true }],
+    }),
+  ).toMatchObject({ isError: true });
+  expect(
+    await call(threads, lead.id, "start_threads", {
+      project: "00000000-0000-4000-8000-0000000000c1",
+      threads: [{ prompt: "x" }],
+    }),
+  ).toMatchObject({ isError: true });
+  expect(asked).toEqual([]);
+});
+
+test("messaging a thread in another project asks in full access until approved once", async () => {
+  const { lead, api, asked, answer, chats } = fakeChats();
+  lead.lastInput!.runtimeMode = "full-access";
+  const { home, projects } = await fakeProjects();
+  const other = await projects.add(join(home, "site"));
+  const threads = new StartedThreads(api, { projects });
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      project: other.id,
+      threads: [{ prompt: "Match the new header" }],
+    }),
+  );
+  chats.get(child.id)!.title = "Header";
+  const send = () =>
+    call(threads, lead.id, "send_to_thread", {
+      id: child.id,
+      message: "Now the footer",
+    });
+  answer.decision = "decline";
+  expect(await send()).toMatchObject({ isError: true });
+  expect(chats.get(child.id)!.startedBy).not.toHaveProperty("sendsApproved");
+  // Approved but never sent: the next message asks again.
+  answer.decision = "accept";
+  const deliver = api.send;
+  api.send = async () => {
+    throw new Error("The thread can't take messages now.");
+  };
+  expect(await send()).toMatchObject({ isError: true });
+  expect(chats.get(child.id)!.startedBy).not.toHaveProperty("sendsApproved");
+  api.send = deliver;
+  await send();
+  expect(
+    asked.slice(1).map((a) => (a.request as { title: string }).title),
+  ).toEqual(Array(3).fill("Send to “Header” in “site”?"));
+  await send();
+  expect(asked).toHaveLength(4);
+});
+
+test("a folder swapped for a link while the card waits isn't added", async () => {
+  const { lead, api } = fakeChats();
+  const { home, list, projects } = await fakeProjects();
+  const folder = join(home, "code", "x");
+  await mkdir(folder, { recursive: true });
+  let added = false;
+  const threads = new StartedThreads(
+    {
+      ...api,
+      // The agent's background shell: mv x x.bak; ln -s ~ x
+      askInTurn: async () => {
+        await rename(folder, `${folder}.bak`);
+        await symlink(home, folder);
+        return { kind: "approval", decision: "accept" };
+      },
+    },
+    {
+      projects: {
+        ...projects,
+        add: async (f) => {
+          added = true;
+          return projects.add(f);
+        },
+      },
+    },
+  );
+  const result = await call(threads, lead.id, "add_project", { folder });
+  expect(result).toMatchObject({ isError: true });
+  expect(result.content[0]!.text).toBe(
+    `${folder} changed while the user was asked; nothing was added.`,
+  );
+  expect(added).toBe(false);
+  expect(list).toHaveLength(2);
+});
+
+test("a folder that became a project's parent while the card waits isn't added", async () => {
+  const { lead, api } = fakeChats();
+  const { home, list, projects } = await fakeProjects();
+  const folder = join(home, "code");
+  await mkdir(join(folder, "site"), { recursive: true });
+  const threads = new StartedThreads(
+    {
+      ...api,
+      askInTurn: async () => {
+        // The user adds a repository inside it by hand meanwhile.
+        await projects.add(join(folder, "site"));
+        return { kind: "approval", decision: "accept" };
+      },
+    },
+    { projects },
+  );
+  const result = await call(threads, lead.id, "add_project", { folder });
+  expect(result.content[0]!.text).toMatch(/holds the project “site”/);
+  expect(list.map((p) => p.path)).not.toContain(folder);
 });

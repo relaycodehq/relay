@@ -46,6 +46,17 @@ export class ThreadList {
         : listed;
     });
   }
+  /** The threads `leadId`'s agent started, in whichever project. */
+  started(leadId: string): ChatSummary[] {
+    const projects = new Set(
+      (this.core.store.get().chats ?? [])
+        .filter((c) => c.startedBy?.chatId === leadId)
+        .map((c) => c.projectId),
+    );
+    return [...projects].flatMap((p) =>
+      this.list(p).filter((c) => c.startedBy?.chatId === leadId),
+    );
+  }
   /** The project's threads as saved, with what runs or waits in each now. */
   private live(projectId: string): ChatSummary[] {
     const chats = (this.core.store.get().chats ?? []).filter(

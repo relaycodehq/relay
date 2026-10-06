@@ -37,7 +37,11 @@ import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { LiveSyncs } from "./projects/live-sync";
 import { ProjectChats } from "./project-chats";
-import { answerRelayTools, prepareRelayTools } from "./started-threads/serve";
+import {
+  agentProjects,
+  answerRelayTools,
+  prepareRelayTools,
+} from "./started-threads/serve";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
 import { ProjectSharing } from "./projects/project-sharing";
@@ -453,7 +457,13 @@ app
     serveApi(window, dispatch);
     // Agent sessions that kept running through a restart come back before the window does.
     await chats.reattach();
-    if (relayTools) void answerRelayTools(relayTools, chats, agentHosts);
+    if (relayTools)
+      void answerRelayTools(
+        relayTools,
+        chats,
+        agentHosts,
+        agentProjects(projects, () => login.client, app.getPath("userData")),
+      );
     chats.armWakeups();
     void chats
       .reconcileSummaries()

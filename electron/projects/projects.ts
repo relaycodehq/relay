@@ -41,7 +41,7 @@ function repositoryFromRemote(
 }
 const unique = (values: string[]) => [...new Set(values)];
 /** The root of the repository `dir` is in; null when it's in none. */
-async function repositoryRoot(dir: string) {
+export async function repositoryRoot(dir: string) {
   try {
     return await realpath(
       (await git(dir, ["rev-parse", "--show-toplevel"])).trim(),
@@ -236,9 +236,12 @@ export class Projects {
     const { path } = this.get(id);
     return realpath(path).catch(() => path);
   }
-  async add(path: string, client: Gitea | null) {
-    const root = await realpath(path),
-      repository = await repositoryRoot(root);
+  /** `exact` refuses a path that resolves elsewhere, as one checked before can by now. */
+  async add(path: string, client: Gitea | null, { exact = false } = {}) {
+    const root = await realpath(path);
+    if (exact && root !== path)
+      throw new Error(`${path} now leads to ${root}; nothing was added.`);
+    const repository = await repositoryRoot(root);
     if (repository && repository !== root)
       throw new Error("Choose the root of its Git repository.");
     const existing = this.store.get().projects?.find((p) => p.path === root);

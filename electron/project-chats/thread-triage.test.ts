@@ -8,6 +8,7 @@ import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { triageState } from "../../shared/chat-activity";
+import { StartedThreads } from "../started-threads";
 
 let root: string, store: Store, chats: ProjectChats, projectId: string;
 beforeEach(async () => {
@@ -91,5 +92,27 @@ it("a detached thread stands alone: settling its old lead leaves it be", async (
   expect(detached.startedBy).toBeUndefined();
 
   await chats.triage(lead.id, { kind: "settle" });
+  expect((await chats.get(child.id)).settledAt).toBeUndefined();
+});
+
+it("a lead sees a started thread that settled by itself as settled", async () => {
+  const lead = await chats.create(projectId, scope);
+  const startedBy = { chatId: lead.id, agent: "claude" as const };
+  const child = await chats.create(projectId, scope, "checkout", startedBy);
+  const quiet = Date.now() - 30 * 86_400_000;
+  await store.update((s) => {
+    s.chats!.find((c) => c.id === child.id)!.updated = quiet;
+  });
+  expect(chats.startedThreads(lead.id)).toEqual([
+    expect.objectContaining({ id: child.id, settledAt: quiet }),
+  ]);
+  const tools = new StartedThreads(chats);
+  const settle = await tools.handle(
+    lead.id,
+    "settle_thread",
+    { id: child.id },
+    new AbortController().signal,
+  );
+  expect(settle.content[0]!.text).toBe("Already settled.");
   expect((await chats.get(child.id)).settledAt).toBeUndefined();
 });

@@ -69,6 +69,8 @@ const relayToolLabels: Record<string, string> = {
   stop_thread: "Stopped a started thread",
   settle_thread: "Settled a started thread",
   usage_limits: "Checked usage limits",
+  list_projects: "Listed projects",
+  add_project: "Added a project",
 };
 
 /** An MCP call's label and which server's tool it was. */

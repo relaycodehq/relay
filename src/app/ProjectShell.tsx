@@ -43,6 +43,7 @@ import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
 import { ProjectChat } from "../features/thread/ProjectChat";
 import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
+import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import {
@@ -101,6 +102,7 @@ export default function ProjectShell() {
     [browseShared, setBrowseShared] = useState(false);
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
+  const everyThread = useEveryThread(realProjects);
   const terminal = useThreadTerminal(nav);
   const folder = useThreadFolder(nav);
   const opens = usePaneOpens(nav, view, folder, lock, setError);
@@ -329,8 +331,14 @@ export default function ProjectShell() {
                 <StartedThreadsContext.Provider
                   value={{
                     lead: chat?.id,
-                    threads: chats.data ?? [],
-                    open: (c) => navigate(project, c),
+                    // A lead and the threads it started may be in different projects.
+                    threads: everyThread,
+                    open: (c) =>
+                      navigate(
+                        projects.data?.find((p) => p.id === c.projectId) ??
+                          project,
+                        c,
+                      ),
                   }}
                 >
                   <ProjectChat

@@ -1,8 +1,10 @@
 // What Relay's tools do: a thread's agent starts threads of its own and
-// drives them. A started thread is an ordinary thread that remembers who
-// started it; its lead may only touch its own, and a started thread only gets
-// usage_limits, so nothing starts threads of threads.
+// drives them, in its project or another the user has or lets it add. A
+// started thread is an ordinary thread that remembers who started it; its lead
+// may only touch its own, and a started thread only gets usage_limits, so
+// nothing starts threads of threads.
 import { randomUUID } from "node:crypto";
+import { basename, resolve } from "node:path";
 import {
   agentName,
   usageProviders,
@@ -15,6 +17,7 @@ import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
 import {
   projectChatSendSchema,
   type ChatSummary,
+  type Project,
   type ProjectChat,
   type ProjectChatSend,
 } from "../../shared/projects";
@@ -31,6 +34,7 @@ import {
   type RelayToolArgs,
   type RelayToolName,
 } from "../relay-mcp";
+import { folderVerdict, realFolder, type FolderRules } from "./project-folder";
 
 /** What a thread looks like to the agent that started it. */
 export type StartedStatus =
@@ -48,7 +52,8 @@ const POLL_MS = 1000;
 
 type Chats = Pick<
   ProjectChats,
-  | "list"
+  | "startedThreads"
+  | "allowLeadSends"
   | "get"
   | "create"
   | "send"
@@ -117,11 +122,27 @@ type ReadUsage = (
   account?: string,
 ) => Promise<ProviderUsage>;
 
+/** The user's projects as the tools see and add them. */
+export interface AgentProjects {
+  list(): Promise<Project[]>;
+  /** Adds the real folder the user approved, as the user's + does; refuses it once it resolves elsewhere. */
+  add(folder: string): Promise<Project>;
+  /** The root of the Git repository `dir` is in; null when it's in none. */
+  repositoryRoot(dir: string): Promise<string | null>;
+  /** Where home, Relay's data and the system's folders are, for the refusals. */
+  rules(): Promise<Omit<FolderRules, "projects">>;
+}
+
 export class StartedThreads {
+  private readUsage: ReadUsage;
+  private projects: AgentProjects | undefined;
   constructor(
     private chats: Chats,
-    private readUsage: ReadUsage = readProviderUsage,
-  ) {}
+    options: { readUsage?: ReadUsage; projects?: AgentProjects } = {},
+  ) {
+    this.readUsage = options.readUsage ?? readProviderUsage;
+    this.projects = options.projects;
+  }
 
   /** Answers one tool call made by the agent in `chatId`. */
   handle: ToolHandler = (chatId, name, args, signal) =>
@@ -172,20 +193,26 @@ export class StartedThreads {
         return this.settle(lead, input.id);
       case "usage_limits":
         return json(await this.usage(lead));
+      case "list_projects":
+        return json(await this.listProjects(lead));
+      case "add_project":
+        return this.addProject(lead, input, signal);
     }
   }
 
   /**
    * Whether the user lets the lead start or message a thread: a new turn
-   * spends usage and may edit the project. A lead with full access may.
+   * spends usage and may edit the project. A lead with full access may,
+   * unless `always`: its full access was given for its own project.
    */
   private async approve(
     lead: ProjectChat,
     title: string,
     detail: string,
     signal: AbortSignal,
+    always = false,
   ) {
-    if (this.leadSide(lead).last.runtimeMode === "full-access") return true;
+    if (!always && this.fullAccess(lead)) return true;
     const response = await this.chats.askInTurn(
       lead.id,
       {
@@ -199,10 +226,108 @@ export class StartedThreads {
     return response.kind === "approval" && response.decision === "accept";
   }
 
+  private fullAccess(lead: ProjectChat) {
+    return this.leadSide(lead).last.runtimeMode === "full-access";
+  }
+
+  /** The threads the lead started, in whichever project. */
   private children(lead: ProjectChat) {
-    return this.chats
-      .list(lead.projectId)
-      .filter((c) => c.startedBy?.chatId === lead.id && !c.archivedAt);
+    return this.chats.startedThreads(lead.id).filter((c) => !c.archivedAt);
+  }
+
+  private reachProjects() {
+    if (!this.projects)
+      throw new Error("Relay's projects can't be reached from here.");
+    return this.projects;
+  }
+
+  /** The user's projects an agent may start threads in: all but Scratchpad's. */
+  private async realProjects() {
+    return (await this.reachProjects().list()).filter((p) => !p.scratch);
+  }
+
+  private async listProjects(lead: ProjectChat) {
+    return (await this.realProjects()).map((p) => ({
+      id: p.id,
+      name: p.name,
+      folder: p.path,
+      git: !p.plain,
+      ...(p.id === lead.projectId ? { current: true } : {}),
+    }));
+  }
+
+  private async addProject(
+    lead: ProjectChat,
+    { folder }: RelayToolArgs<"add_project">,
+    signal: AbortSignal,
+  ) {
+    const projects = this.reachProjects();
+    const rules = await projects.rules();
+    const found = await realFolder(folder, rules.platform);
+    if ("refused" in found) return toolText(found.refused, true);
+    const { real } = found;
+    const listed = await projects.list();
+    const verdict = folderVerdict(real, { ...rules, projects: listed });
+    if (verdict.kind === "refused") return toolText(verdict.reason, true);
+    if (verdict.kind === "existing") {
+      const p = listed.find((p) => p.id === verdict.id)!;
+      return json({
+        id: p.id,
+        name: p.name,
+        folder: p.path,
+        git: !p.plain,
+        alreadyAdded: true,
+      });
+    }
+    const repository = await projects.repositoryRoot(real);
+    if (repository && repository !== real) {
+      const outer = folderVerdict(repository, { ...rules, projects: listed });
+      return toolText(
+        outer.kind === "ok"
+          ? `That's inside the Git repository at ${repository}; add that folder instead.`
+          : `That's inside the Git repository at ${repository}, which can't be added: ${outer.kind === "refused" ? outer.reason : "it's a project already."}`,
+        true,
+      );
+    }
+    const linked = resolve(folder) !== real;
+    const approved = await this.approve(
+      lead,
+      `Add “${basename(real)}” to Relay as a project?`,
+      [
+        real,
+        `${repository ? "Git repository." : "Plain folder, no Git."} Agents in its threads can read and change everything in this folder.`,
+        ...(linked
+          ? [`(Asked for ${JSON.stringify(folder)}, a link to this folder.)`]
+          : []),
+      ].join("\n"),
+      signal,
+      true,
+    );
+    if (!approved)
+      return toolText(
+        "The user didn't add this folder. Ask them what they want instead.",
+        true,
+      );
+    // The card can wait for minutes; meanwhile the agent may swap the folder
+    // for a link to home, or the user may add it or a folder around it.
+    const now = await realFolder(real, rules.platform);
+    if (!("real" in now) || now.real !== real)
+      return toolText(
+        `${real} changed while the user was asked; nothing was added.`,
+        true,
+      );
+    const recheck = folderVerdict(real, {
+      ...rules,
+      projects: await projects.list(),
+    });
+    if (recheck.kind === "refused") return toolText(recheck.reason, true);
+    const project = await projects.add(real);
+    return json({
+      id: project.id,
+      name: project.name,
+      folder: project.path,
+      git: !project.plain,
+    });
   }
 
   private async own(lead: ProjectChat, id: string) {
@@ -242,9 +367,21 @@ export class StartedThreads {
 
   private async start(
     lead: ProjectChat,
-    { threads }: RelayToolArgs<"start_threads">,
+    { project, threads }: RelayToolArgs<"start_threads">,
     signal: AbortSignal,
   ) {
+    const elsewhere =
+      project && project !== lead.projectId
+        ? (await this.realProjects()).find((p) => p.id === project)
+        : undefined;
+    if (project && project !== lead.projectId && !elsewhere)
+      return toolText("There's no such project; see list_projects.", true);
+    // The lead's uncommitted work belongs to another repository.
+    if (elsewhere && threads.some((t) => t.uncommitted === true))
+      return toolText(
+        "`uncommitted` only works in your own project; leave it out for another one.",
+        true,
+      );
     const working = this.children(lead).filter((c) => c.running).length;
     if (working + threads.length > STARTED_LIMIT)
       return toolText(
@@ -252,16 +389,21 @@ export class StartedThreads {
         true,
       );
     const { last, agent: caller, from } = this.leadSide(lead);
+    const count = `${threads.length} thread${threads.length === 1 ? "" : "s"}`;
+    const listed = threads
+      .map(
+        (t, i) =>
+          `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
+      )
+      .join("\n\n");
     const approved = await this.approve(
       lead,
-      `Start ${threads.length} thread${threads.length === 1 ? "" : "s"}?`,
-      threads
-        .map(
-          (t, i) =>
-            `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
-        )
-        .join("\n\n"),
+      elsewhere ? `Start ${count} in “${elsewhere.name}”?` : `Start ${count}?`,
+      elsewhere
+        ? `In ${elsewhere.path}${this.fullAccess(lead) ? ", with full access: edits and commands run without asking" : ""}.\n\n${listed}`
+        : listed,
       signal,
+      !!elsewhere,
     );
     if (!approved)
       return toolText(
@@ -318,10 +460,15 @@ export class StartedThreads {
         continue;
       }
       try {
-        const chat = await this.create(lead, spec.worktree, caller);
+        const chat = await this.create(
+          lead,
+          elsewhere?.id ?? lead.projectId,
+          spec.worktree,
+          caller,
+        );
         // A worktree made from the commit alone would miss the work in progress it's about.
         const copied =
-          chat.worktree && spec.uncommitted !== false
+          chat.worktree && !elsewhere && spec.uncommitted !== false
             ? await this.chats.worktreeFrom(chat.id, lead.id, spec.prompt)
             : undefined;
         await this.chats.send(chat.id, send.data);
@@ -330,6 +477,7 @@ export class StartedThreads {
           title: promptTitle(spec.prompt),
           agent,
           ...(spec.plan ? { plan: true } : {}),
+          ...(elsewhere ? { project: elsewhere.name } : {}),
           worktree: !!chat.worktree,
           ...(copied ? { uncommittedFilesCopied: copied } : {}),
         });
@@ -375,23 +523,19 @@ export class StartedThreads {
   /** A worktree unless asked otherwise or the project isn't a repository. */
   private async create(
     lead: ProjectChat,
+    projectId: string,
     worktree: boolean | undefined,
     agent: AgentProvider,
   ) {
     const startedBy = { chatId: lead.id, agent };
     const scope = { kind: "project" } as const;
     if (worktree === false)
-      return this.chats.create(lead.projectId, scope, "checkout", startedBy);
+      return this.chats.create(projectId, scope, "checkout", startedBy);
     try {
-      return await this.chats.create(
-        lead.projectId,
-        scope,
-        "worktree",
-        startedBy,
-      );
+      return await this.chats.create(projectId, scope, "worktree", startedBy);
     } catch (error) {
       if (worktree === true) throw error;
-      return this.chats.create(lead.projectId, scope, "checkout", startedBy);
+      return this.chats.create(projectId, scope, "checkout", startedBy);
     }
   }
 
@@ -399,6 +543,9 @@ export class StartedThreads {
     const listed = this.children(lead).filter(
       (c) => !ids || ids.includes(c.id),
     );
+    const names = listed.some((c) => c.projectId !== lead.projectId)
+      ? new Map((await this.realProjects()).map((p) => [p.id, p.name]))
+      : undefined;
     return Promise.all(
       listed.map(async (summary) => {
         const chat = await this.chats.get(summary.id);
@@ -408,6 +555,9 @@ export class StartedThreads {
           id: summary.id,
           title: summary.title,
           status: startedStatus(summary, chat),
+          ...(summary.projectId !== lead.projectId
+            ? { project: names?.get(summary.projectId) ?? summary.projectId }
+            : {}),
           ...(asks.length ? { asks } : {}),
           ...(summary.branch ? { branch: summary.branch } : {}),
           ...(chat.worktree?.path ? { folder: chat.worktree.path } : {}),
@@ -444,11 +594,20 @@ export class StartedThreads {
     const { chat } = await this.own(lead, id);
     const previous = chat.lastInput;
     if (!previous) return toolText("That thread hasn't started yet.", true);
+    // Another project's thread asks until the user approves a message to it once.
+    const elsewhere =
+      chat.projectId !== lead.projectId && !chat.startedBy?.sendsApproved
+        ? ((await this.realProjects()).find((p) => p.id === chat.projectId)
+            ?.name ?? "another project")
+        : undefined;
     const approved = await this.approve(
       lead,
-      `${steer ? "Steer" : "Send to"} “${chat.title}”?`,
-      head(message),
+      `${steer ? "Steer" : "Send to"} “${chat.title}”${elsewhere ? ` in “${elsewhere}”` : ""}?`,
+      elsewhere
+        ? `${head(message)}\n\nApproving once lets it message this thread from now on as freely as one in its own project.`
+        : head(message),
       signal,
+      !!elsewhere,
     );
     if (!approved)
       return toolText(
@@ -471,6 +630,7 @@ export class StartedThreads {
       ...(steer ? { delivery: "steer" as const } : {}),
       fromThread: from,
     });
+    if (elsewhere) await this.chats.allowLeadSends(id);
     return toolText(
       steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
     );

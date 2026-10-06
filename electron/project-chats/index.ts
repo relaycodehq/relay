@@ -293,6 +293,12 @@ export class ProjectChats {
   detach(id: string) {
     return this.triaging.detach(id);
   }
+  startedThreads(leadId: string) {
+    return this.threads.started(leadId);
+  }
+  allowLeadSends(id: string) {
+    return this.triaging.allowLeadSends(id);
+  }
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
   }

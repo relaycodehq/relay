@@ -150,7 +150,12 @@ type ToolCall = {
 const toolCalls = new Map<number, ToolCall>();
 let nextTool = 1;
 /** Calls that only read or wait; anything else may have happened already. */
-const replayable = new Set(["list_threads", "read_thread", "wait_for_threads"]);
+const replayable = new Set([
+  "list_threads",
+  "read_thread",
+  "wait_for_threads",
+  "list_projects",
+]);
 let tools: ReturnType<typeof serveRelayTools> | undefined;
 
 function serveTools() {

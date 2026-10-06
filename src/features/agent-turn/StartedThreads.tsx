@@ -14,7 +14,7 @@ import "./subagents.css";
 import "./started-threads.css";
 import "../changes/branch-picker.css";
 
-/** The open thread, its project's threads and how to open one; absent where nothing can open. */
+/** The open thread, every project's threads and how to open one; absent where nothing can open. */
 export interface StartedThreadsView {
   lead: string | undefined;
   threads: ChatSummary[];

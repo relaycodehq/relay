@@ -6,6 +6,7 @@ import {
   readFile,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -244,6 +245,27 @@ it("still names the folder of a project deleted outside Relay, so its processes 
     await rm(root, { recursive: true });
     await expect(projects.root(project.id)).rejects.toThrow("ENOENT");
     expect(await projects.taskFolder(project.id)).toBe(root);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("an exact add refuses a path that resolves elsewhere than it was checked", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    await mkdir(join(dir, "home"));
+    await symlink(join(dir, "home"), join(dir, "x"));
+    await expect(
+      projects.add(join(dir, "x"), null, { exact: true }),
+    ).rejects.toThrow(`${join(dir, "x")} now leads to ${join(dir, "home")}`);
+    expect(store.get().projects ?? []).toEqual([]);
+    // The user's + still follows the link.
+    expect((await projects.add(join(dir, "x"), null)).path).toBe(
+      join(dir, "home"),
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

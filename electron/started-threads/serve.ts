@@ -1,8 +1,10 @@
 // Where Relay's tools are served: from the agent host, so a call outlives a
 // restart of Relay, or from Relay itself when it runs without one.
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import type { AgentHosts } from "../agent-host/client";
 import type { ProjectChats } from "../project-chats";
+import { repositoryRoot, type Projects } from "../projects/projects";
 import {
   loadRelayMcp,
   serveRelayTools,
@@ -10,7 +12,7 @@ import {
   verifyRelayToken,
   type RelayMcpConfig,
 } from "../relay-mcp";
-import { StartedThreads } from ".";
+import { StartedThreads, type AgentProjects } from ".";
 
 /** Finds or makes the tools' port and secret before any agent session starts. */
 export async function prepareRelayTools(dir: string) {
@@ -25,13 +27,35 @@ export async function prepareRelayTools(dir: string) {
   }
 }
 
+/** The user's projects as the tools reach them; `client` links a new one to its forge, as + does. */
+export function agentProjects(
+  projects: Projects,
+  client: () => Parameters<Projects["add"]>[1],
+  userData: string,
+): AgentProjects {
+  // Real paths, as the folders asked for are compared after links are followed.
+  const real = (p: string) => realpath(p).catch(() => p);
+  return {
+    list: () => projects.list(client()),
+    add: (folder) => projects.add(folder, client(), { exact: true }),
+    repositoryRoot,
+    rules: async () => ({
+      home: await real(homedir()),
+      userData: await real(userData),
+      temp: await real(tmpdir()),
+      platform: process.platform,
+    }),
+  };
+}
+
 /** Answers the tools' calls from now on; resolves to how to stop serving them here. */
 export async function answerRelayTools(
   config: RelayMcpConfig,
   chats: ProjectChats,
   hosts: AgentHosts | undefined,
+  projects: AgentProjects,
 ) {
-  const started = new StartedThreads(chats);
+  const started = new StartedThreads(chats, { projects });
   if (hosts) {
     hosts.tools = started.handle;
     // The host serves them; this makes sure one of this version runs.

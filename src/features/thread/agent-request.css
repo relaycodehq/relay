@@ -26,7 +26,7 @@
   font-size: 11px;
 }
 .agent-request pre {
-  max-height: 80px;
+  max-height: 200px;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
