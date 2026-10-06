@@ -58,6 +58,7 @@ const stub: Partial<Api> = {
     return (smartProjectNames = enabled);
   },
   saveSidebarView: async () => {},
+  onReadAloudState: () => () => {},
   agentModels: (async (provider: string) =>
     provider === "claude"
       ? claudeModels

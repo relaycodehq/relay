@@ -54,6 +54,7 @@ import { SubagentThread } from "../agent-turn/SubagentThread";
 import { ThreadComposer } from "./ThreadComposer";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMessages } from "./ThreadMessages";
+import { ThreadTimeline } from "./ThreadTimeline";
 import {
   ScopeButtons,
   ThreadIntroduction,
@@ -304,6 +305,14 @@ export function ProjectChat({
             onSteer={steerFromNote}
           />
         </RunCommand.Provider>
+      )}
+      {!isEmpty && (
+        <ThreadTimeline
+          listed={thread.listed}
+          scroll={scroll}
+          bottomInset={dockHeight}
+          onJump={view.jumpTo}
+        />
       )}
       <SelectionQuote
         container={scroll}

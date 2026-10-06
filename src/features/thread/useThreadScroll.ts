@@ -13,6 +13,8 @@ const readingPlaces = new Map<string, ReadingPlace>();
 const FIRST_MESSAGES = 20,
   MESSAGE_WINDOW = 80,
   MESSAGE_STEP = 20;
+/** A message jumped to lands this far below the top of the view. */
+const JUMP_OFFSET = 12;
 /** The message at the top of the thread's view, and how far below it starts. */
 function placeInView(view: HTMLElement): ReadingPlace | undefined {
   const top = view.getBoundingClientRect().top;
@@ -213,6 +215,18 @@ export function useThreadScroll({
       // They go in above the message being read, which stays put.
       returning.current = placeInView(scroll.current!);
       setVisible((v) => v + MESSAGE_WINDOW);
+    },
+    /** Brings message `id` to the top of the view, mounting back to it if it
+     * is further up than the messages shown, and holds it there. */
+    jumpTo(id: string) {
+      const view = scroll.current,
+        index = shown.findIndex((m) => m.id === id);
+      if (!view || index < 0) return;
+      follow.current = false;
+      returning.current = { id, offset: JUMP_OFFSET };
+      if (shown.length - index > visible) setVisible(shown.length - index);
+      else if (scrollToPlace(view, returning.current))
+        placed.current = view.scrollTop;
     },
     /** The reader is far enough up that the composer folds away. */
     scrolledUp,
