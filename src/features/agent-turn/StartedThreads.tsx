@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, MessagesSquare } from "lucide-react";
 import type { AgentActivity, ChatSummary } from "../../../shared/projects";
 import { agentName } from "../../../shared/agents";
+import { chatSettled } from "../../../shared/chat-activity";
 import { chatKey, fetchChat } from "../../lib/chat-events";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import "./subagents.css";
@@ -41,6 +42,10 @@ export function startedIds(result: string | undefined) {
     return undefined;
   }
 }
+
+/** Asking first, then working, then done, then settled. */
+const standing = (c: ChatSummary) =>
+  c.waiting ? 0 : c.running ? 1 : chatSettled(c) ? 3 : 2;
 
 /** Still while it works, like a subagent: the turn's own row is what moves. */
 function StartedStatus({ chat }: { chat: ChatSummary }) {
@@ -117,7 +122,7 @@ export function StartedChip({
   // Without a lead (a new thread's draft) undefined would match every thread.
   const started = (view && lead ? view.threads : [])
     .filter((c) => c.startedBy?.chatId === lead && (!ids || ids.includes(c.id)))
-    .sort((a, b) => a.created - b.created);
+    .sort((a, b) => standing(a) - standing(b) || a.created - b.created);
   if (!view || !started.length || (live && !started.some((c) => c.running)))
     return null;
   const done = started.filter((c) => !c.running).length;
