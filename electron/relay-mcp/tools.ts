@@ -1,4 +1,5 @@
-// The tools Relay offers an agent for starting and driving threads of its own.
+// The tools Relay offers an agent for starting and driving threads of its own,
+// and for reading its plans' usage limits.
 // The agent host lists them without asking Relay, so they stay put while it
 // restarts; Relay answers the calls (electron/started-threads).
 import { z } from "zod";
@@ -110,6 +111,7 @@ export const relayToolSchemas = {
     .strict(),
   stop_thread: z.object({ id: threadId }).strict(),
   settle_thread: z.object({ id: threadId }).strict(),
+  usage_limits: z.object({}).strict(),
 };
 
 export type RelayToolName = keyof typeof relayToolSchemas;
@@ -130,7 +132,13 @@ const descriptions: Record<RelayToolName, string> = {
   stop_thread: "Stop the answer a thread you started is working on.",
   settle_thread:
     "Settle a thread you started once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user.",
+  usage_limits:
+    "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
 };
+
+/** Where a thread started by another reaches the tools: only reading ones. */
+export const STARTED_PATH = "/mcp/started";
+const startedTools = new Set<string>(["usage_limits"]);
 
 /** What tools/list returns. */
 export const relayToolList = Object.entries(relayToolSchemas).map(
@@ -153,3 +161,8 @@ export const toolText = (text: string, isError = false): ToolResult => ({
   content: [{ type: "text", text }],
   ...(isError ? { isError: true } : {}),
 });
+
+/** What tools/list returns at STARTED_PATH. */
+export const startedToolList = relayToolList.filter((t) =>
+  startedTools.has(t.name),
+);

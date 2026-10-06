@@ -1,5 +1,11 @@
 import { afterEach, expect, test } from "vitest";
-import { relayToken, serveRelayTools, toolText, verifyRelayToken } from ".";
+import {
+  relayToken,
+  serveRelayTools,
+  STARTED_PATH,
+  toolText,
+  verifyRelayToken,
+} from ".";
 
 const secret = "a".repeat(64);
 let close: (() => Promise<void>) | undefined;
@@ -79,6 +85,7 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
     "wait_for_threads",
     "stop_thread",
     "settle_thread",
+    "usage_limits",
   ]);
   expect(list.result.tools[0].inputSchema.properties.threads.type).toBe(
     "array",
@@ -110,6 +117,31 @@ test("turns away a caller without a thread's token", async () => {
       )
     ).status,
   ).toBe(401);
+});
+
+test("a started thread's path lists and answers only the reading tools", async () => {
+  const calls: string[] = [];
+  const url = await serve(async (_chat, name) => {
+    calls.push(name);
+    return toolText("ok");
+  });
+  const started = url.replace(/\/mcp$/, STARTED_PATH);
+  const list = await (
+    await post(started, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+  ).json();
+  expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
+    "usage_limits",
+  ]);
+  const refused = await (
+    await post(started, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "start_threads", arguments: {} },
+    })
+  ).json();
+  expect(refused.error.code).toBe(-32602);
+  expect(calls).toEqual([]);
 });
 
 test("a failing call comes back as a tool error, not a dead request", async () => {

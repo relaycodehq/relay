@@ -1,11 +1,17 @@
 // What Relay's tools do: a thread's agent starts threads of its own and
 // drives them. A started thread is an ordinary thread that remembers who
-// started it; its lead may only touch its own, and a started thread gets no
-// tools, so nothing starts threads of threads.
+// started it; its lead may only touch its own, and a started thread only gets
+// usage_limits, so nothing starts threads of threads.
 import { randomUUID } from "node:crypto";
-import { agentName, type AgentProvider } from "../../shared/agents";
-import { hasAccounts } from "../../shared/agent-accounts";
+import {
+  agentName,
+  usageProviders,
+  type AgentProvider,
+  type UsageProvider,
+} from "../../shared/agents";
+import { hasAccounts, pinnedAccount } from "../../shared/agent-accounts";
 import { fitModel } from "../../shared/model-fit";
+import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
 import {
   projectChatSendSchema,
   type ChatSummary,
@@ -16,6 +22,7 @@ import { sentAgent } from "../../shared/recipient";
 import type { ModelChoice } from "../../shared/settings";
 import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
+import { readProviderUsage } from "../agents/provider-usage";
 import type { ProjectChats } from "../project-chats";
 import {
   relayToolSchemas,
@@ -104,8 +111,17 @@ const sleep = (ms: number, signal: AbortSignal) =>
     }
   });
 
+type ReadUsage = (
+  provider: UsageProvider,
+  force: boolean,
+  account?: string,
+) => Promise<ProviderUsage>;
+
 export class StartedThreads {
-  constructor(private chats: Chats) {}
+  constructor(
+    private chats: Chats,
+    private readUsage: ReadUsage = readProviderUsage,
+  ) {}
 
   /** Answers one tool call made by the agent in `chatId`. */
   handle: ToolHandler = (chatId, name, args, signal) =>
@@ -130,7 +146,7 @@ export class StartedThreads {
         true,
       );
     const lead = await this.chats.get(chatId);
-    if (lead.startedBy)
+    if (lead.startedBy && name !== "usage_limits")
       return toolText(
         "A thread started by another thread can't start or drive threads of its own.",
         true,
@@ -154,6 +170,8 @@ export class StartedThreads {
       }
       case "settle_thread":
         return this.settle(lead, input.id);
+      case "usage_limits":
+        return json(await this.usage(lead));
     }
   }
 
@@ -322,6 +340,36 @@ export class StartedThreads {
       }
     }
     return json(started);
+  }
+
+  /** Each agent's limits on the accounts the calling thread uses. */
+  private usage(caller: ProjectChat) {
+    const now = Date.now();
+    return Promise.all(
+      usageProviders.map(async (agent) => {
+        const account = pinnedAccount(caller.accounts, agent);
+        const usage = await this.readUsage(agent, false, account);
+        return {
+          agent,
+          ...(account ? { account } : {}),
+          ...Object.fromEntries(
+            usage.windows.map((w) => [
+              w.kind,
+              {
+                usedPercent: Math.round(w.usedPercent),
+                ...(w.resetsAt
+                  ? {
+                      resetsAt: new Date(w.resetsAt).toISOString(),
+                      resetsIn: resetsIn(w.resetsAt, now),
+                    }
+                  : {}),
+              },
+            ]),
+          ),
+          ...(usage.message ? { note: usage.message } : {}),
+        };
+      }),
+    );
   }
 
   /** A worktree unless asked otherwise or the project isn't a repository. */

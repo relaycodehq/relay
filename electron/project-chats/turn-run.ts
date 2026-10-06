@@ -189,7 +189,7 @@ export class TurnRunner {
           }
         : undefined;
     try {
-      const relayTools = relayToolsFor(chat.id);
+      const relayTools = relayToolsFor(chat.id, !!chat.startedBy);
       const env = await this.host.env(chat);
       const options = {
         onControl: (control: AgentControl) => {
@@ -262,12 +262,11 @@ export class TurnRunner {
         ...(chat.thinker || chat.reviewer || rules.side
           ? { readOnly: true }
           : {}),
-        // A started thread gets none, so nothing starts threads of threads.
+        // A started thread only gets the reading ones: no threads of threads.
         ...(relayTools &&
         !chat.thinker &&
         !chat.reviewer &&
         !rules.side &&
-        !chat.startedBy &&
         !chat.shared
           ? { relayTools }
           : {}),

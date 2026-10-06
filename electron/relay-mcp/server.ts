@@ -2,9 +2,20 @@
 // with JSON, no event streams, no sessions. The agent host serves it so a
 // call outlives a restart of Relay; Relay serves it itself when there's no host.
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { relayToolList, toolText, type ToolResult } from "./tools";
+import {
+  relayToolList,
+  startedToolList,
+  STARTED_PATH,
+  toolText,
+  type ToolResult,
+} from "./tools";
 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+type ToolList = typeof relayToolList;
+const toolsAt: Record<string, ToolList> = {
+  "/mcp": relayToolList,
+  [STARTED_PATH]: startedToolList,
+};
 const BODY_LIMIT = 1 << 20;
 
 export interface McpHandlers {
@@ -47,6 +58,7 @@ async function answer(
   request: Request,
   chatId: string,
   handlers: McpHandlers,
+  tools: ToolList,
   signal: AbortSignal,
 ): Promise<Response | undefined> {
   if (request?.jsonrpc !== "2.0" || typeof request.method !== "string")
@@ -70,10 +82,10 @@ async function answer(
     case "ping":
       return reply({});
     case "tools/list":
-      return reply({ tools: relayToolList });
+      return reply({ tools });
     case "tools/call": {
       const name = request.params?.name;
-      if (!relayToolList.some((t) => t.name === name))
+      if (!tools.some((t) => t.name === name))
         return failure(request.id, -32602, `There is no tool ${String(name)}.`);
       try {
         return reply(
@@ -129,8 +141,8 @@ export function serveRelayTools(port: number, handlers: McpHandlers) {
       });
       res.end(body === undefined ? undefined : JSON.stringify(body));
     };
-    if (new URL(req.url ?? "/", "http://relay").pathname !== "/mcp")
-      return send(404);
+    const tools = toolsAt[new URL(req.url ?? "/", "http://relay").pathname];
+    if (!tools) return send(404);
     if (req.method !== "POST") return send(405, undefined, { allow: "POST" });
     const token = /^Bearer\s+(\S+)$/i.exec(
       req.headers.authorization ?? "",
@@ -152,7 +164,7 @@ export function serveRelayTools(port: number, handlers: McpHandlers) {
     const requests = (batch ? parsed : [parsed]) as Request[];
     const responses = (
       await Promise.all(
-        requests.map((r) => answer(r, chatId, handlers, abort.signal)),
+        requests.map((r) => answer(r, chatId, handlers, tools, abort.signal)),
       )
     ).filter((r): r is Response => !!r);
     if (!responses.length) return send(202);

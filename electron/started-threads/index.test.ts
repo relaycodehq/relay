@@ -182,9 +182,13 @@ test("a lead only sees and drives its own threads", async () => {
   expect(refused).toMatchObject({ isError: true });
 });
 
-test("a started thread can't start threads of its own", async () => {
+test("a started thread can't start threads of its own, only read usage", async () => {
   const { lead, api } = fakeChats();
-  const threads = new StartedThreads(api);
+  const threads = new StartedThreads(api, async (provider) => ({
+    provider,
+    windows: [],
+    message: null,
+  }));
   const [child] = parse(
     await call(threads, lead.id, "start_threads", {
       threads: [{ prompt: "Child" }],
@@ -194,6 +198,9 @@ test("a started thread can't start threads of its own", async () => {
     threads: [{ prompt: "Grandchild" }],
   });
   expect(refused).toMatchObject({ isError: true });
+  expect(await call(threads, child.id, "usage_limits", {})).not.toHaveProperty(
+    "isError",
+  );
 });
 
 test("no more than six of a lead's threads work at once", async () => {
@@ -420,4 +427,39 @@ test("settling a started thread waits until it's done and never asks", async () 
   expect(
     await call(threads, lead.id, "settle_thread", { id: lead.id }),
   ).toMatchObject({ isError: true });
+});
+
+test("usage limits read each agent on the account the thread pinned for it", async () => {
+  const { lead, api } = fakeChats();
+  const reads: unknown[][] = [];
+  const resetsAt = Date.now() + 3 * 60 * 60 * 1000;
+  const threads = new StartedThreads(api, async (provider, force, account) => {
+    reads.push([provider, force, account]);
+    return provider === "claude"
+      ? {
+          provider,
+          windows: [
+            { kind: "session", usedPercent: 41.6, resetsAt, periodMs: 1 },
+            { kind: "weekly", usedPercent: 12, resetsAt: null, periodMs: 1 },
+          ],
+          message: null,
+        }
+      : { provider, windows: [], message: "Sign in with codex" };
+  });
+  expect(parse(await call(threads, lead.id, "usage_limits", {}))).toEqual([
+    { agent: "codex", account: "work", note: "Sign in with codex" },
+    {
+      agent: "claude",
+      session: {
+        usedPercent: 42,
+        resetsAt: new Date(resetsAt).toISOString(),
+        resetsIn: "Resets in 3h",
+      },
+      weekly: { usedPercent: 12 },
+    },
+  ]);
+  expect(reads).toEqual([
+    ["codex", false, "work"],
+    ["claude", false, undefined],
+  ]);
 });
