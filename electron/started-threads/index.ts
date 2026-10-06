@@ -107,6 +107,24 @@ const tail = (text: string, limit = ANSWER_TAIL) =>
 
 const json = (value: unknown) => toolText(JSON.stringify(value, null, 1));
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * The user's wall-clock time with its offset, like 2026-10-08T16:00:00+02:00.
+ * Agents read a UTC `Z` stamp's hours out to the user as if they were local.
+ */
+export function localTime(at: number) {
+  const d = new Date(at);
+  const offset = -d.getTimezoneOffset();
+  const sign = offset < 0 ? "-" : "+";
+  const abs = Math.abs(offset);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
     const timer = setTimeout(done, ms);
@@ -511,7 +529,7 @@ export class StartedThreads {
                 usedPercent: Math.round(w.usedPercent),
                 ...(w.resetsAt
                   ? {
-                      resetsAt: new Date(w.resetsAt).toISOString(),
+                      resetsAt: localTime(w.resetsAt),
                       resetsIn: resetsIn(w.resetsAt, now),
                     }
                   : {}),
@@ -607,7 +625,7 @@ export class StartedThreads {
             : c.settledAt || c.autoSettled
               ? "settled"
               : "idle",
-        updated: new Date(c.updated).toISOString(),
+        updated: localTime(c.updated),
         ...(c.contextAgent || c.provider
           ? { agent: agentName(c.contextAgent ?? c.provider!) }
           : {}),

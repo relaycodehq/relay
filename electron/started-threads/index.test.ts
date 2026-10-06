@@ -16,7 +16,7 @@ import type {
   ProjectChatSend,
   StartedBy,
 } from "../../shared/projects";
-import { StartedThreads, type AgentProjects } from ".";
+import { localTime, StartedThreads, type AgentProjects } from ".";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -519,7 +519,7 @@ test("usage limits read each agent on the account the thread pinned for it", asy
       agent: "claude",
       session: {
         usedPercent: 42,
-        resetsAt: new Date(resetsAt).toISOString(),
+        resetsAt: localTime(resetsAt),
         resetsIn: "Resets in 3h",
       },
       weekly: { usedPercent: 12 },
@@ -832,4 +832,23 @@ test("a folder that became a project's parent while the card waits isn't added",
   const result = await call(threads, lead.id, "add_project", { folder });
   expect(result.content[0]!.text).toMatch(/holds the project “site”/);
   expect(list.map((p) => p.path)).not.toContain(folder);
+});
+
+test("times for agents are local with their offset and the same instant", () => {
+  const tz = process.env.TZ;
+  try {
+    process.env.TZ = "Europe/Bratislava";
+    expect(localTime(Date.UTC(2026, 9, 8, 14))).toBe(
+      "2026-10-08T16:00:00+02:00",
+    );
+    expect(localTime(Date.UTC(2026, 11, 1, 23, 30))).toBe(
+      "2026-12-02T00:30:00+01:00",
+    );
+    process.env.TZ = "America/St_Johns";
+    const at = Date.UTC(2026, 0, 5, 12, 0, 7);
+    expect(localTime(at)).toBe("2026-01-05T08:30:07-03:30");
+    expect(Date.parse(localTime(at))).toBe(at);
+  } finally {
+    process.env.TZ = tz;
+  }
 });
