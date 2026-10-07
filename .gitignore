@@ -2,6 +2,7 @@ node_modules
 .vite/
 dist/
 dist-electron/
+dist-headless/
 dist-phone/
 release/
 test-results/

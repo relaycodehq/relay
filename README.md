@@ -23,6 +23,7 @@ Grab the file for your system from the [latest release](https://github.com/relay
 | Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` |
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then run `python3 install.py` inside it (no sudo) |
 | Intel Mac | No package yet, so [build from source](#for-contributors) |
+| A server or a computer you only reach remotely | `relay`, the [headless Relay](docs/headless.md): one command to install, any OS with Node.js 22 |
 
 Then:
 
@@ -88,6 +89,7 @@ A pull request can have a room: a conversation with coworkers beside the review,
 - [Project workspace](docs/project-workspace.md): threads, panes, agents, permissions, queues and composer commands.
 - [Pull request review](docs/pr-review.md): Gitea sign-in, the review workflow, grouping, live checks and local data.
 - [Phone app](docs/phone.md): pairing a phone to follow and answer threads, and how the connection is secured.
+- [Headless Relay](docs/headless.md): Relay without its window on a server or a spare computer, reached from your phone and handed threads by your laptop.
 - [Development and releases](docs/development.md): tests, packaging, automatic updates and release status.
 
 ## For contributors

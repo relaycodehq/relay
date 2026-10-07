@@ -27,11 +27,17 @@ const idleUnload = 3 * 60_000;
 // Native files can't load from inside the asar; they ship unpacked beside it.
 const unpacked = (path: string) =>
   path.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
-const sherpaDir = unpacked(join(__dirname, "sherpa"));
-const platformDir = join(
-  sherpaDir,
-  `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`,
-);
+let sherpaDir = unpacked(join(__dirname, "sherpa"));
+const platformDir = () =>
+  join(
+    sherpaDir,
+    `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`,
+  );
+
+/** Where a headless Relay downloaded the engine to, instead of beside the bundle. */
+export function setSherpaDir(dir: string) {
+  sherpaDir = dir;
+}
 
 export class Dictation {
   private state: DictationModelState = { status: "missing" };
@@ -59,8 +65,9 @@ export class Dictation {
     this.emit(state);
   }
 
-  private async refresh() {
-    if (!existsSync(platformDir)) return this.set({ status: "unsupported" });
+  /** Looks again at the engine and the model, e.g. once the engine is downloaded. */
+  async refresh() {
+    if (!existsSync(platformDir())) return this.set({ status: "unsupported" });
     if (await modelComplete(this.dir, dictationModel.files))
       return this.set({ status: "ready" });
     const received = await modelReceived(this.dir, dictationModel.files);

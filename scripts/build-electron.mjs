@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
-import { chmodSync, cpSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { bundles } from "./electron-bundles.mjs";
+import { bundles, onnxRuntimeBundle } from "./electron-bundles.mjs";
 
 for (const { options } of bundles) await build(options);
 
@@ -83,34 +83,7 @@ if (existsSync(join("node_modules", sherpaNative)))
 const ortOut = "dist-electron/onnxruntime",
   ortNative = `bin/napi-v6/${process.platform}/${process.arch}`;
 rmSync(ortOut, { recursive: true, force: true });
-await build({
-  entryPoints: ["node_modules/onnxruntime-node/dist/index.js"],
-  bundle: true,
-  platform: "node",
-  target: "node22",
-  format: "cjs",
-  outfile: join(ortOut, "dist/index.cjs"),
-  plugins: [
-    {
-      name: "onnxruntime-binding",
-      setup(build) {
-        build.onLoad(
-          { filter: /onnxruntime-node[\\/]dist[\\/]binding\.js$/ },
-          ({ path }) => {
-            const source = readFileSync(path, "utf8");
-            const contents = source.replace(
-              /require\(`\.\.\/bin\/([^`]*onnxruntime_binding\.node)`\)/,
-              "require(require('node:path').join(__dirname, `../bin/$1`))",
-            );
-            if (contents === source)
-              throw new Error("onnxruntime-node's binding.js changed shape.");
-            return { contents, loader: "js" };
-          },
-        );
-      },
-    },
-  ],
-});
+await build(onnxRuntimeBundle(join(ortOut, "dist/index.cjs")));
 cpSync(
   join("node_modules/onnxruntime-node", ortNative),
   join(ortOut, ortNative),

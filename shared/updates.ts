@@ -25,7 +25,7 @@ export type UpdateTarget =
   | "linux-x64-appimage"
   | "linux-x64-omarchy";
 
-const file = z.object({
+export const updateFileSchema = z.object({
   name: z.string().regex(/^[\w.-]+$/),
   // Plain HTTP only for a feed served on this machine while testing.
   url: z.url({ protocol: /^https?$/ }).refine((u) => {
@@ -47,11 +47,11 @@ export const manifestSchema = z.object({
       "linux-x64-appimage",
       "linux-x64-omarchy",
     ]),
-    file,
+    updateFileSchema,
   ),
 });
 export type UpdateManifest = z.infer<typeof manifestSchema>;
-export type UpdateFile = z.infer<typeof file>;
+export type UpdateFile = z.infer<typeof updateFileSchema>;
 
 export type UpdateState =
   /** Development builds and platforms without a download never show the button. */

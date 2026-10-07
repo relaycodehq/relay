@@ -13,6 +13,7 @@ import { cursorSetup } from "./sdk";
 import type { InstalledSdk } from "./sdk-install";
 import {
   isEvent,
+  isLoginUrl,
   isReply,
   type CursorMethod,
   type CursorMethods,
@@ -53,6 +54,8 @@ export class CursorConnection {
   /** Replies nobody asked for yet: a turn that finished while Relay was away. */
   private orphans = new Map<number, { result?: unknown; error?: Error }>();
   private listeners = new Map<string, (update: CursorUpdate) => void>();
+  /** Hears the sign-in page of an `auth.login` asked not to open a browser. */
+  onLoginUrl?: (url: string) => void;
 
   constructor(
     readonly child: ChildProcessWithoutNullStreams | HostedChild,
@@ -76,6 +79,8 @@ export class CursorConnection {
     }
     if (isEvent(said)) {
       this.listeners.get(said.run)?.(said.update);
+    } else if (isLoginUrl(said)) {
+      this.onLoginUrl?.(said.url);
     } else if (isReply(said)) {
       const settled =
         "error" in said
@@ -262,6 +267,7 @@ export async function cursorCall<M extends CursorMethod>(
   method: M,
   params: CursorMethods[M]["params"],
   timeout = 60_000,
+  onLoginUrl?: (url: string) => void,
 ): Promise<CursorMethods[M]["result"]> {
   const spec = command(sdk);
   const connection = new CursorConnection(
@@ -270,6 +276,7 @@ export async function cursorCall<M extends CursorMethod>(
       stdio: ["pipe", "pipe", "pipe"],
     }) as ChildProcessWithoutNullStreams,
   );
+  connection.onLoginUrl = onLoginUrl;
   try {
     return await withTimeout(
       connection.request(method, params),

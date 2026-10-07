@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { hostname } from "node:os";
 import type { PairedComputer } from "../../shared/handoff";
 import { parsePairingUrl, type RemoteCredentials } from "../../shared/remote";
 import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import type { SavedComputer } from "../app/store-types";
+import { computerName } from "../platform/computer-name";
 
 export type { SavedComputer };
-
-export const computerName = () => hostname().replace(/\.local$/, "") || "Relay";
+export { computerName };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

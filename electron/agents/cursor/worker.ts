@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import type { SDKAgent, SDKModel, Run } from "@cursor/sdk";
 import type {
+  CursorLoginUrl,
   CursorMethod,
   CursorMethods,
   CursorModel,
@@ -309,9 +310,18 @@ const auth = async () => {
 const handlers: Handlers = {
   models: modelList,
   "auth.status": auth,
-  "auth.login": async () => {
+  "auth.login": async ({ browser }) => {
     const { Cursor } = await sdk();
-    await Cursor.auth.login({ apiKeyName: "Relay" });
+    await Cursor.auth.login({
+      apiKeyName: "Relay",
+      ...(browser === false
+        ? {
+            openBrowser: false,
+            onLoginUrl: (url: string) =>
+              write({ event: "login-url", url } satisfies CursorLoginUrl),
+          }
+        : {}),
+    });
     listed = undefined;
     return auth();
   },

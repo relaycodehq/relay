@@ -205,19 +205,24 @@ export function settingsHandlers(ctx: ApiContext) {
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),
     ),
-    linkAgent: takes([agentProviderSchema], async (agent) => {
-      const provider = cliProvider(agent);
-      const { cli } = agents[provider];
-      const path = await chooseProgram(cli);
-      if (!path) return null;
-      const run = await runExecutable(path, ["--version"], 15_000);
-      if (run.code !== 0 || !parseVersion(run.stdout))
-        throw new Error(
-          `That doesn't look like ${cli}: it didn't say which version it is.${run.output.trim() ? `\n${run.output.trim().slice(-300)}` : ""}`,
-        );
-      await relinkAgents(provider, path);
-      return agentUpdates.check(true);
-    }),
+    linkAgent: takes(
+      [agentProviderSchema, typedPathSchema],
+      async (agent, typed) => {
+        const provider = cliProvider(agent);
+        const { cli } = agents[provider];
+        const path = typed
+          ? await resolveCliPath(provider, typed)
+          : await chooseProgram(cli);
+        if (!path) return null;
+        const run = await runExecutable(path, ["--version"], 15_000);
+        if (run.code !== 0 || !parseVersion(run.stdout))
+          throw new Error(
+            `That doesn't look like ${cli}: it didn't say which version it is.${run.output.trim() ? `\n${run.output.trim().slice(-300)}` : ""}`,
+          );
+        await relinkAgents(provider, path);
+        return agentUpdates.check(true);
+      },
+    ),
     unlinkAgent: takes([agentProviderSchema], async (provider) => {
       await relinkAgents(cliProvider(provider), undefined);
       return agentUpdates.check(true);

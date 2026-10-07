@@ -114,6 +114,11 @@ python3 -m unittest discover -s tests/packaging
 step "Phone bundle"
 node scripts/export-phone-bundle.mjs "$version"
 
+step "Headless"
+# One archive for every platform, carrying the phone bundle just exported.
+node scripts/package-headless.mjs "$version"
+cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
+
 step "Mac"
 npx electron-builder --mac --publish never
 cp "release/Relay-$version-mac-arm64.zip" "release/Relay-$version-mac-arm64.dmg" "$out/"

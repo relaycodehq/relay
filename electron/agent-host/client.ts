@@ -199,6 +199,8 @@ export class AgentHosts {
         cwd: this.dir,
         detached: true,
         stdio: "ignore",
+        // Under plain Node (a headless Relay) Windows would give it a console window.
+        windowsHide: true,
         env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
       },
     );
