@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Public feed written by the release workflow. */
-export const releasesRepo = "lubomirmolin/relay-releases";
+export const releasesRepo = "relaycodehq/relay-releases";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
 /** The phone app, built with every release; the unversioned name always points at the newest. */

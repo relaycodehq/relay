@@ -41,7 +41,7 @@ describe("update feed", () => {
       "scripts/release-manifest.mjs",
       dir,
       "0.1.7",
-      "lubomirmolin/relay-releases",
+      "relaycodehq/relay-releases",
       'Fix "quotes" & more',
     ]);
     const manifest = manifestSchema.parse(
@@ -57,14 +57,14 @@ describe("update feed", () => {
       "Relay-0.1.7-omarchy-x86_64.tar.gz",
     );
     expect(manifest.files["win-x64"]?.url).toBe(
-      "https://github.com/lubomirmolin/relay-releases/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
+      "https://github.com/relaycodehq/relay-releases/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
     );
   });
 
   it("accepts the manifest the release workflow writes and rejects insecure links", () => {
     const file = {
       name: "Relay-0.1.3-mac-arm64.zip",
-      url: "https://github.com/lubomirmolin/relay-releases/releases/download/v0.1.3/Relay-0.1.3-mac-arm64.zip",
+      url: "https://github.com/relaycodehq/relay-releases/releases/download/v0.1.3/Relay-0.1.3-mac-arm64.zip",
       sha512: "A".repeat(86) + "==",
       size: 1024,
     };

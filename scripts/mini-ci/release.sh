@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT="$HOME/relay-ci.noindex"
 REPO_URL="git@github.com:relaycodehq/relay.git"
-RELEASES_REPO="lubomirmolin/relay-releases"
+RELEASES_REPO="relaycodehq/relay-releases"
 SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
 

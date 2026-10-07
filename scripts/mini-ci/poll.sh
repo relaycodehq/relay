@@ -8,7 +8,7 @@ set -uo pipefail
 
 ROOT="$HOME/relay-ci.noindex"
 REPO="relaycodehq/relay"
-RELEASES_REPO="lubomirmolin/relay-releases"
+RELEASES_REPO="relaycodehq/relay-releases"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 state="$ROOT/state"
 mkdir -p "$state" "$ROOT/logs"
