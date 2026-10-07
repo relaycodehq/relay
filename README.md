@@ -9,7 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/lubomirmolin/relay-releases/releases/latest"><strong>Download Relay</strong></a>
+  <a href="https://relaycode.io/download/"><strong>Download Relay</strong></a>
+  ·
+  <a href="https://relaycode.io">Website</a>
   ·
   <a href="#what-can-it-do">See what it can do</a>
   ·
@@ -154,6 +156,10 @@ Output goes to `test-results/teaser/`. Copy the result to `docs/media/relay-teas
 - **The update doesn't install on macOS:** move `Relay.app` into **Applications** (or any writable folder) and try again.
 - **Linux won't start:** check that user namespaces are enabled for Chromium's sandbox. Don't disable the sandbox to work around it.
 - **Corrupt state:** Relay preserves the unreadable file and reports an error instead of overwriting it. Back up the data folder above before repairing it.
+
+## Contact
+
+Questions, ideas or anything else: [hello@relaycode.io](mailto:hello@relaycode.io). For a bug, please [open an issue](https://github.com/lubomirmolin/relay/issues) with the steps, your platform and your Relay version. Pull requests are welcome; small, focused ones are easiest to review.
 
 ## License
 

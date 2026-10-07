@@ -3,13 +3,26 @@
 // ("thread", never "chat" or "conversation"). Product facts follow README.md,
 // docs/phone.md and shared/shortcuts.ts. Keep them in step when those change.
 
-export const RELEASES = "https://github.com/lubomirmolin/relay-releases/releases/latest";
+export const REPO = "https://github.com/lubomirmolin/relay";
+export const ISSUES = `${REPO}/issues`;
+export const BUILD_GUIDE = `${REPO}#for-contributors`;
+export const LICENSE = `${REPO}/blob/main/LICENSE`;
+export const RELEASES =
+  "https://github.com/lubomirmolin/relay-releases/releases/latest";
+export const EMAIL = "hello@relaycode.io";
 // The build sets the version from the latest v* tag (previews/website/vite.config.ts).
 declare const __RELAY_VERSION__: string | undefined;
-export const VERSION = typeof __RELAY_VERSION__ === "string" ? __RELAY_VERSION__ : "dev";
+export const VERSION =
+  typeof __RELAY_VERSION__ === "string" ? __RELAY_VERSION__ : "dev";
 const download = (file: string) =>
-  VERSION === "dev" ? RELEASES : `https://github.com/lubomirmolin/relay-releases/releases/download/v${VERSION}/${file}`;
+  VERSION === "dev"
+    ? RELEASES
+    : `https://github.com/lubomirmolin/relay-releases/releases/download/v${VERSION}/${file}`;
 
+export const releaseNotes =
+  VERSION === "dev"
+    ? RELEASES
+    : `https://github.com/lubomirmolin/relay-releases/releases/tag/v${VERSION}`;
 export const macDownload = download(`Relay-${VERSION}-mac-arm64.dmg`);
 
 export const features: { title: string; text: string; detail: string }[] = [
@@ -89,12 +102,17 @@ export const promises: { title: string; text: string }[] = [
     text: "Relay does not check out, reset, pull, force-push or stage files by itself. A Git action occurs only when you click it.",
   },
   {
-    title: "MIT license",
-    text: "You can use, change and distribute Relay. Relay needs no account.",
+    title: "Open source",
+    text: "The code is on GitHub under the MIT license. You can read it, change it and share it.",
   },
 ];
 
-export const platforms: { system: string; file: string; href: string; status: string }[] = [
+export const platforms: {
+  system: string;
+  file: string;
+  href: string;
+  status: string;
+}[] = [
   {
     system: "macOS (Apple Silicon)",
     file: `Relay-${VERSION}-mac-arm64.dmg`,
@@ -118,6 +136,81 @@ export const platforms: { system: string; file: string; href: string; status: st
     file: `Relay-${VERSION}-omarchy-x86_64.tar.gz`,
     href: download(`Relay-${VERSION}-omarchy-x86_64.tar.gz`),
     status: "Run python3 install.py. No sudo.",
+  },
+];
+
+/** Builds outside the desktop list: the phone app and the Macs without a package. */
+export const otherBuilds: {
+  system: string;
+  file: string;
+  href: string;
+  status: string;
+}[] = [
+  {
+    system: "Android phone app",
+    file: "Relay-Android.apk",
+    href: download("Relay-Android.apk"),
+    status: "Follow and answer threads from your phone.",
+  },
+  {
+    system: "Intel Mac",
+    file: "Build from source",
+    href: BUILD_GUIDE,
+    status: "No package yet. Node.js 22 and npm.",
+  },
+];
+
+/** What to do after the download. The builds have no code signature yet. */
+export const firstStart: { system: string; text: string }[] = [
+  {
+    system: "macOS",
+    text: "Move Relay to Applications. At the first start, macOS cannot verify the app. Open System Settings → Privacy & Security and click Open Anyway.",
+  },
+  {
+    system: "Windows",
+    text: "SmartScreen shows “Windows protected your PC”. Click More info, then Run anyway.",
+  },
+  {
+    system: "Linux",
+    text: "Make the AppImage executable with chmod +x. Some distributions also need their FUSE package.",
+  },
+];
+
+export const steps: string[] = [
+  "Install one agent CLI and sign in: Claude Code, Codex or OpenCode. For Cursor, use Settings → AI models in Relay.",
+  "Open Relay and add a project folder.",
+  "Type a task, select the agent and the model, and press Send.",
+];
+
+export const openSource: {
+  title: string;
+  text: string;
+  href: string;
+  link: string;
+}[] = [
+  {
+    title: "Read the code",
+    text: "The desktop app, the phone app and the server are in one repository.",
+    href: REPO,
+    link: "lubomirmolin/relay",
+  },
+  {
+    title: "Report a problem",
+    text: "Open an issue. Write the steps, your platform and your Relay version.",
+    href: ISSUES,
+    link: "Issues",
+  },
+  {
+    title: "Build it yourself",
+    text: "Clone the repository, then run npm ci and npm run dev. You need Node.js 22.",
+    href: BUILD_GUIDE,
+    link: "Build guide",
+  },
+  {
+    title: "Send a change",
+    text: "Fork the repository and open a pull request. Small changes with one purpose are easy to review.",
+    href: `${REPO}/pulls`,
+    link: "Pull requests",
   },
 ];
 
@@ -145,6 +238,14 @@ export const faq: { q: string; a: string }[] = [
   {
     q: "Which platforms does Relay support?",
     a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use. For an Intel Mac, build Relay from source.",
+  },
+  {
+    q: "Is Relay open source?",
+    a: "Yes. The code is on GitHub under the MIT license. Issues and pull requests are welcome.",
+  },
+  {
+    q: "How do I contact the team?",
+    a: `Send an email to ${EMAIL}. For a bug, open an issue on GitHub.`,
   },
   {
     q: "Is Relay finished?",

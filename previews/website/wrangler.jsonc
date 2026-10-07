@@ -5,6 +5,6 @@
   "assets": { "directory": "../../dist-website" },
   "routes": [
     { "pattern": "relaycode.io", "custom_domain": true },
-    { "pattern": "www.relaycode.io", "custom_domain": true }
-  ]
+    { "pattern": "www.relaycode.io", "custom_domain": true },
+  ],
 }

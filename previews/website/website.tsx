@@ -3,10 +3,10 @@
 // the app draws. Product facts follow README.md and docs/phone.md.
 // Open http://127.0.0.1:5177/previews/website/
 import "../_shared/desktop-stub";
-import { StrictMode, useEffect, useRef, useState, type CSSProperties } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowRight } from "lucide-react";
+import { ArrowDownToLine, ArrowRight, ArrowUpRight } from "lucide-react";
 import "../../src/styles.css";
 import "../_shared/app-styles";
 import "../../src/features/sidebar/sidebar.css";
@@ -20,10 +20,10 @@ import { agentName, type AgentProvider } from "../../shared/agents";
 import { AppWindow, scriptMs, type Stop } from "./app-window";
 import { PhoneSync, QuickSwitchDemo, UsageDemo, WorktreeGraph } from "./sections";
 import { startLanes } from "./hero-lanes";
-import { Reveal, reducedMotion, useActive, useScrollProgress } from "./motion";
-import { Faq, Mark } from "./parts";
+import { Reveal, reducedMotion, useActive } from "./motion";
+import { Faq, GitHubMark, SiteFooter, SiteHeader } from "./parts";
 import { installStubs } from "./stubs";
-import { faq, features, macDownload, platforms, promises, RELEASES, VERSION } from "./content";
+import { faq, features, macDownload, openSource, promises, REPO, VERSION } from "./content";
 
 // The site always wears Relay's own dark theme, whatever the previews were left on.
 applyToDocument(resolveChoice("dark", { theme: "relay" } as ThemeChoice));
@@ -210,33 +210,14 @@ const rows = [
 ];
 
 function Site() {
-  const nav = useScrollProgress<HTMLElement>();
   return (
     <div className="site">
-      <header className="nav" ref={nav}>
-        <a className="logo" href="#top">
-          <Mark size={22} />
-          Relay
-        </a>
-        <nav>
-          <a href="#tour">Product</a>
-          <a href="#phone">Phone</a>
-          <a href="#features">Features</a>
-          <a href="#faq">FAQ</a>
-          <a href={RELEASES} target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-        </nav>
-        <a className="cta small" href={RELEASES} target="_blank" rel="noreferrer">
-          Download
-          <ArrowDownToLine size={14} />
-        </a>
-      </header>
+      <SiteHeader home="" />
 
       <section className="hero" id="top">
         <Lanes />
-        <a className="hero-notice" href="#phone">
-          v{VERSION} <i>·</i> Relay on your phone
+        <a className="hero-notice" href={REPO}>
+          v{VERSION} <i>·</i> Relay is open source
           <ArrowRight size={12} />
         </a>
         <h1>
@@ -249,15 +230,20 @@ function Site() {
             Download for macOS
             <ArrowDownToLine size={15} />
           </a>
-          <a className="cta ghost" href="#download">
-            Windows &amp; Linux
+          <a className="cta ghost" href={REPO}>
+            <GitHubMark />
+            View on GitHub
           </a>
         </div>
+        <a className="hero-more" href="download/">
+          Windows, Linux and Android downloads
+          <ArrowRight size={12} />
+        </a>
         <ul className="hero-facts">
           <li>4 agents</li>
           <li>No Relay account</li>
           <li>No API keys</li>
-          <li>MIT license</li>
+          <li>Open source, MIT</li>
         </ul>
       </section>
 
@@ -327,6 +313,31 @@ function Site() {
         </div>
       </section>
 
+      <section className="block" id="open-source">
+        <Reveal>
+          <span className="eyebrow">Open source</span>
+          <h2>Built in the open</h2>
+          <p className="lede">
+            Relay is free and open source under the MIT license. Read the code, report a problem or send a
+            change. We want Relay to grow with the people who use it.
+          </p>
+        </Reveal>
+        <div className="grid oss">
+          {openSource.map((item, index) => (
+            <Reveal key={item.title} delay={index * 70}>
+              <a href={item.href}>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+                <code>
+                  {item.link}
+                  <ArrowUpRight size={12} />
+                </code>
+              </a>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
       <section className="faq-block" id="faq">
         <h2>Common questions</h2>
         <Faq items={faq} />
@@ -334,42 +345,21 @@ function Site() {
 
       <section className="centered final" id="download">
         <Reveal>
-          <h2>Download Relay</h2>
+          <h2>Try Relay</h2>
+          <p>Free and open source. For macOS, Windows and Linux.</p>
         </Reveal>
-        <a className="cta" href={macDownload}>
-          Download for macOS
-          <ArrowDownToLine size={15} />
-        </a>
-        <div className="files">
-          {platforms.map((platform, index) => (
-            <a
-              key={platform.system}
-              href={platform.href}
-              style={{ "--i": index } as CSSProperties}
-            >
-              <strong>{platform.system}</strong>
-              <code>{platform.file}</code>
-              <span>{platform.status}</span>
-              <ArrowDownToLine size={14} />
-            </a>
-          ))}
+        <div className="hero-actions">
+          <a className="cta" href={macDownload}>
+            Download for macOS
+            <ArrowDownToLine size={15} />
+          </a>
+          <a className="cta ghost" href="download/">
+            All downloads
+          </a>
         </div>
-        <p className="fine">
-          Relay is an early preview. The builds have no code signature. Relay is an independent project. It
-          has no affiliation with OpenAI, Anthropic, OpenCode or Cursor.
-        </p>
       </section>
 
-      <footer className="footer">
-        <span className="logo">
-          <Mark size={18} />
-          Relay
-        </span>
-        <span>v{VERSION} · MIT</span>
-        <a href={RELEASES} target="_blank" rel="noreferrer">
-          Releases
-        </a>
-      </footer>
+      <SiteFooter home="" />
     </div>
   );
 }
