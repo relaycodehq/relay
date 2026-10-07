@@ -396,7 +396,6 @@ function Preview() {
                 onNewScratch={() => {}}
                 onSendDraft={() => {}}
                 onAdd={() => {}}
-                onShared={() => {}}
                 onSettings={() => {}}
                 onAccount={() => {}}
                 onInbox={() => {

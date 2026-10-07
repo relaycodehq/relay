@@ -9,7 +9,6 @@ import { agentAsked } from "../../shared/recipient";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
-import type { ChatSharing } from "./sharing";
 
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
@@ -20,12 +19,11 @@ export interface QueueHost {
  * Whether a queued message can join the answer running for `prior` instead of
  * waiting for it: the same agent, conversation and settings, and nothing the
  * agent only takes at the start of a turn (a selection, a skill, a command,
- * or a screenshot in a shared thread).
+ * or a command).
  */
 export function steers(
   next: ProjectChatSend,
   prior: ProjectChatSend | undefined,
-  shared: boolean,
 ) {
   const asked = agentAsked(next);
   return !(
@@ -37,7 +35,6 @@ export function steers(
     next.interactionMode !== prior.interactionMode ||
     JSON.stringify(next.choice) !== JSON.stringify(prior.choice) ||
     next.contextWindow !== prior.contextWindow ||
-    (shared && next.images?.length) ||
     next.selection ||
     /(?:^|\s)(?:\$|\/skill:)/.test(asked.question) ||
     /^\s*\//.test(asked.question)
@@ -49,7 +46,6 @@ export class ChatQueue {
   constructor(
     private core: ChatCore,
     private schedule: ChatSchedule,
-    private sharing: ChatSharing,
     private councils: Pick<Councils, "busy">,
     private host: QueueHost,
   ) {}
@@ -132,11 +128,7 @@ export class ChatQueue {
       return this.drain(chat.id);
     }
     const asked = agentAsked(next.input);
-    if (
-      !asked ||
-      !active.steer ||
-      !steers(next.input, active.input, !!chat.shared)
-    )
+    if (!asked || !active.steer || !steers(next.input, active.input))
       return this.core.storage.save(chat);
     const images = next.input.images?.length
       ? await this.core.storage.saveImages(chat.id, next.input.images)
@@ -153,7 +145,6 @@ export class ChatQueue {
       version: 1,
       ...(images.length ? { images } : {}),
       ...(next.input.parentId ? { parentId: next.input.parentId } : {}),
-      ...(chat.shared ? { pending: true } : {}),
       ...sentBy(next.input),
     };
     // In the thread before the agent hears it: Codex can say it read the
@@ -185,7 +176,6 @@ export class ChatQueue {
     chat.queue = chat.queue!.filter((q) => q !== next);
     await this.core.storage.save(chat);
     this.core.emit({ chatId: chat.id, message });
-    if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
   }
 
   async action(

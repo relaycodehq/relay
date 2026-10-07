@@ -19,18 +19,11 @@ import type { SyncWorkspace } from "../projects/live-sync";
 import { validateRepo } from "../git/working-tree";
 import { takes, type ApiContext, type Handlers } from "./context";
 
-const syncTargetSchema = z.union([
-  z.object({ chatId: idSchema }).strict(),
-  refSchema,
-]);
-type SyncTarget = z.infer<typeof syncTargetSchema>;
-
 /** Shared pull-request rooms, their hosting, and live file sync with them. */
 export function roomHandlers(ctx: ApiContext) {
   const {
     store,
     projects,
-    projectChats,
     rooms,
     liveSyncs,
     requireClient,
@@ -47,11 +40,11 @@ export function roomHandlers(ctx: ApiContext) {
     dir: linkedFolder(ref),
   });
 
-  function syncOf(target: SyncTarget) {
-    const key = "chatId" in target ? "chat:" + target.chatId : prKey(target);
+  function syncOf(target: PullRef) {
+    const key = prKey(target);
     return { key, sync: liveSyncs.get(key) };
   }
-  function activeSync(target: SyncTarget) {
+  function activeSync(target: PullRef) {
     const { sync } = syncOf(target);
     if (!sync?.status().active)
       throw new Error("Resume live sync before resolving files.");
@@ -132,48 +125,42 @@ export function roomHandlers(ctx: ApiContext) {
       rooms.revoke(roomOf(ref), id),
     ),
     liveSyncState: takes(
-      [syncTargetSchema],
+      [refSchema],
       (target) => syncOf(target).sync?.status() ?? idleSync,
     ),
-    liveSyncStop: takes([syncTargetSchema], async (target) => {
+    liveSyncStop: takes([refSchema], async (target) => {
       await syncOf(target).sync?.stop();
     }),
-    liveSyncStart: takes([syncTargetSchema], async (target) => {
+    liveSyncStart: takes([refSchema], async (target) => {
       const { key, sync } = syncOf(target);
       if (sync?.status().active) return sync.status();
-      let workspace: SyncWorkspace;
-      if ("chatId" in target)
-        workspace = await projectChats.workspace(target.chatId);
-      else {
-        const client = requireClient();
-        const root = await validateRepo(
-          requireFolder(target),
-          client.account.server,
-          target,
-        );
-        workspace = {
-          ...(await rooms.workspace({
-            client,
-            ref: target,
-            key: repoKey(target),
-            dir: root,
-          })),
-          root,
-          validate: () => validateRepo(root, client.account.server, target),
-        };
-      }
+      const client = requireClient();
+      const root = await validateRepo(
+        requireFolder(target),
+        client.account.server,
+        target,
+      );
+      const workspace: SyncWorkspace = {
+        ...(await rooms.workspace({
+          client,
+          ref: target,
+          key: repoKey(target),
+          dir: root,
+        })),
+        root,
+        validate: () => validateRepo(root, client.account.server, target),
+      };
       for (const project of store.get().projects ?? [])
         if (project.path === workspace.root)
           projects.assertCheckoutAvailable(project.id);
       return liveSyncs.start(key, workspace);
     }),
-    liveSyncConflict: takes(
-      [syncTargetSchema, workingPathSchema],
-      (target, path) => activeSync(target).conflict(path),
+    liveSyncConflict: takes([refSchema, workingPathSchema], (target, path) =>
+      activeSync(target).conflict(path),
     ),
     liveSyncResolve: takes(
       [
-        syncTargetSchema,
+        refSchema,
         workingPathSchema,
         z.enum(["local", "shared"]),
         z.number().int().positive(),

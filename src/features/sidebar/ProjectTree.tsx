@@ -17,7 +17,6 @@ import {
   Plus,
   Settings2,
   SquarePen,
-  Users,
 } from "lucide-react";
 import {
   parentGroup,
@@ -55,7 +54,6 @@ export interface ProjectTree {
   /** The project the main pane is in, open until it's folded here. */
   current: string | undefined;
   onNew: (p: Project) => void;
-  onShared: (p: Project) => void;
   /** Opens the project's page in Settings. */
   onProjectSettings: (p: Project) => void;
 }
@@ -259,7 +257,6 @@ function ProjectSection({
     threads,
     current,
     onNew,
-    onShared,
     onProjectSettings,
   },
 }: {
@@ -358,12 +355,6 @@ function ProjectSection({
                   onSettings={onProjectSettings}
                 />
               </Menu.Root>
-              <IconButton
-                label={`Shared conversations in ${p.name}`}
-                onClick={() => onShared(p)}
-              >
-                <Users size={13} />
-              </IconButton>
               <IconButton
                 label={`New thread in ${p.name}`}
                 onClick={() => onNew(p)}

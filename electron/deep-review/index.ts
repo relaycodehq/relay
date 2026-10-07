@@ -61,7 +61,6 @@ export class DeepReviews {
       throw new Error("Start a deep review from a new deep review thread.");
     if (chat.deepReview || chat.messages.length)
       throw new Error("This thread already holds a review.");
-    if (chat.shared) throw new Error("Deep reviews can't be shared yet.");
     const project = this.host.project(chat.projectId);
     if (
       config.target.kind === "pr" &&

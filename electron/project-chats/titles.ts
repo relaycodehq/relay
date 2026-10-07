@@ -100,7 +100,7 @@ export class ThreadTitles {
   /** Retries titles for threads whose first title run failed earlier. */
   ensure(id: string) {
     const chat = this.core.storage.cached(id);
-    if (!chat || chat.shared) return;
+    if (!chat) return;
     const firstUser = chat.messages.find((m) => m.role === "user");
     const answer = chat.messages.find(
       (m) => m.role === "assistant" && m.status === "complete" && !m.parentId,

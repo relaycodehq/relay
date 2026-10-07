@@ -38,7 +38,6 @@ export interface ChatSummary {
   scope: ChatScope;
   created: number;
   updated: number;
-  shared?: { roomId: string; server: string; memberId: string };
   /** Provider of the latest answer, for the activity card. */
   provider?: AgentProvider;
   /** The agent holding the main conversation's context; see shared/recipient. */

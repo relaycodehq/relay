@@ -14,7 +14,6 @@ const worktreeFirst =
 
 /** Why this thread can't move to another computer, if it can't. */
 function handoffBlocked(chat: ChatSummary) {
-  if (chat.shared) return "Shared conversations stay on this computer.";
   if (chat.scope.kind === "review")
     return "A deep review stays on this computer.";
   if (chat.cameFrom?.abandonedAt)

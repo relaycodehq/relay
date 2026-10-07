@@ -17,7 +17,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Eye, LockKeyhole, Plus, RotateCcw } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Plus, RotateCcw } from "lucide-react";
 import "../../src/styles.css";
 import "../_shared/app-styles";
 import "../../src/features/sidebar/sidebar.css";
@@ -481,11 +481,6 @@ function ThreadView({
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dock}px` } as CSSProperties}
     >
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
       <div className="ud-stage">
         {design === "b" && (
           <JumpLine

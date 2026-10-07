@@ -13,7 +13,6 @@ import {
   GitBranch,
   GitCompareArrows,
   GitPullRequest,
-  LockKeyhole,
   MessageSquare,
   PanelBottom,
   PanelLeft,
@@ -447,11 +446,6 @@ function Composer({
 function Home({ state }: { state: WindowState }) {
   return (
     <section className="project-chat empty-thread">
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
       <div className="thread-start">
         <div className="thread-introduction">
           <h1>What should we work on in relay?</h1>
@@ -497,11 +491,6 @@ function Thread({
 }) {
   return (
     <section className="project-chat">
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
       <div className="project-messages tz-messages">
         <div
           className="thread-message-column tz-column"

@@ -67,16 +67,10 @@ export function followChatEvents(qc: QueryClient) {
 export async function fetchChat(
   qc: QueryClient,
   id: string,
-  { shared = false } = {},
 ): Promise<ProjectChat> {
   const previous = qc.getQueryData<ProjectChat>(chatKey(id));
   const known = knownOf(previous);
-  const fetched = applyChatPatch(
-    await (shared
-      ? api.syncProjectChat(id, known)
-      : api.projectChat(id, known)),
-    previous,
-  );
+  const fetched = applyChatPatch(await api.projectChat(id, known), previous);
   // A push that overtook the reply holds a newer copy than the reply does.
   const held = new Map(
     qc.getQueryData<ProjectChat>(chatKey(id))?.messages.map((m) => [m.id, m]),

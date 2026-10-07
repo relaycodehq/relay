@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { RoomsDatabase, token } from "./database";
 import { createRoomsServer } from "./http";
 import { GiteaRepositoryVerifier } from "./repository-access";
-import { Conversations } from "./conversations";
 const project = {
   server: "https://gitea.test/prefix",
   owner: "Web",
@@ -86,26 +85,6 @@ it("gates every shared resource on verified repo access, binds identity, and rej
     expect(created.status).toBe(200);
     const owner = await created.json();
     expect(owner.member.name).toBe("alice");
-    const roomId = randomUUID(),
-      message = {
-        id: randomUUID(),
-        body: "Private work",
-        role: "user",
-        provider: "codex",
-        created: Date.now(),
-        status: "complete",
-        version: 1,
-      };
-    expect(
-      (
-        await request("/v1/conversations", alice, {
-          id: roomId,
-          title: "General project chat",
-          scope: { kind: "project" },
-          messages: [message],
-        })
-      ).status,
-    ).toBe(200);
     const invite = await (await request("/v1/invites", alice, {})).json(),
       bob = token();
     expect(
@@ -132,37 +111,15 @@ it("gates every shared resource on verified repo access, binds identity, and rej
         })
       ).status,
     ).toBe(200);
-    const page = await (
-      await request(`/v1/conversations/${roomId}/messages?after=0`, bob)
-    ).json();
-    expect(page.messages[0]).toMatchObject({
-      body: "Private work",
-      author: "alice",
-    });
     expect(
       (await request("/v1/access", bob, { giteaToken: "alice" })).status,
     ).toBe(403);
-    expect(
-      (
-        await request(`/v1/conversations/${roomId}/messages`, bob, {
-          messages: [{ ...message, body: "Forged rewrite" }],
-        })
-      ).status,
-    ).toBe(409);
-    expect(
-      (
-        await request(`/v1/conversations/${roomId}/messages`, bob, {
-          messages: [{ ...message, id: randomUUID(), status: "streaming" }],
-        })
-      ).status,
-    ).toBe(400);
-    const now = Date.now();
+    const roomId = randomUUID(),
+      now = Date.now();
     vi.spyOn(Date, "now").mockReturnValue(now + 61000);
     v.revoke();
     for (const path of [
       "/v1/me",
-      "/v1/conversations",
-      `/v1/conversations/${roomId}/messages?after=0`,
       `/v1/rooms/${roomId}/workspace`,
       `/v1/rooms/${roomId}/presence`,
     ])
@@ -176,7 +133,7 @@ it("gates every shared resource on verified repo access, binds identity, and rej
     db.close();
   }
 });
-it("migrates populated legacy rooms without losing content and supports multiple chats for the same PR", () => {
+it("migrates populated legacy rooms without losing content", () => {
   const db = new RoomsDatabase(":memory:");
   try {
     const s = db.create(project, "Alice", token()),
@@ -188,20 +145,8 @@ it("migrates populated legacy rooms without losing content and supports multiple
         context: { head: "a".repeat(40), base: "b".repeat(40) },
       };
     db.post(s, room.id, old);
-    const chats = new Conversations(db);
     expect(db.page(s, room.id, 0).messages[0].body).toBe("Existing message");
     expect(db.open(s, 7, "Updated title").id).toBe(room.id);
-    for (let i = 0; i < 2; i++)
-      chats.share(s, {
-        id: randomUUID(),
-        title: "PR discussion " + i,
-        scope: {
-          kind: "pr",
-          ref: { owner: project.owner, name: project.name, number: 7 },
-        },
-        messages: [],
-      });
-    expect(chats.list(s)).toHaveLength(2);
     expect(db.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   } finally {
     db.close();

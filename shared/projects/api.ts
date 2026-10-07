@@ -27,7 +27,6 @@ import type {
   CreatePullRequest,
   PullRequestPlan,
 } from "../pull-request-create";
-import type { Presence } from "../rooms";
 import type {
   TerminalSession,
   TerminalSessionPick,
@@ -65,7 +64,6 @@ export interface ProjectApi
   extends
     ProjectListApi,
     ProjectChatApi,
-    ProjectSharingApi,
     ProjectCouncilApi,
     ProjectWorktreeApi,
     ProjectFilesApi,
@@ -228,29 +226,6 @@ export interface ProjectChatApi {
   onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
   /** A project's thread list, pushed whenever any of its threads reads differently. */
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
-}
-
-/** Threads shared through a room on a Relay server. */
-export interface ProjectSharingApi {
-  projectChatPresence(
-    id: string,
-    value: { path: string | null; viewed: number; total: number } | null,
-  ): Promise<Presence[]>;
-  joinProjectConversation(
-    projectId: string,
-    url: string,
-  ): Promise<ChatSummary | null>;
-  shareProjectChat(id: string): Promise<ChatSummary>;
-  projectChatShareInfo(
-    id: string,
-  ): Promise<{ server: string | null; project: string; messages: number }>;
-  syncProjectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
-  projectChatInvite(id: string): Promise<{ url: string; expiresAt: number }>;
-  sharedProjectChats(id: string): Promise<ChatSummary[]>;
-  openSharedProjectChat(
-    projectId: string,
-    roomId: string,
-  ): Promise<ChatSummary>;
 }
 
 /** Deep reviews and Ultraplan councils, run inside a thread. */

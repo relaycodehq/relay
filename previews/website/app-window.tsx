@@ -4,7 +4,13 @@
 // through it, and the visitor's pointer and wheel pass straight through.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, ChevronDown, GitCompareArrows, LockKeyhole, MessageSquare, SquareTerminal } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronDown,
+  GitCompareArrows,
+  MessageSquare,
+  SquareTerminal,
+} from "lucide-react";
 import { ProjectSidebar } from "../../src/features/sidebar/ProjectSidebar";
 import { Message } from "../../src/features/thread/ProjectMessage";
 import { AgentRequestCard } from "../../src/features/thread/AgentRequestCard";
@@ -20,7 +26,15 @@ import { UsageDial } from "../../src/features/agents/UsageDial";
 import { agentName } from "../../shared/agents";
 import type { ChatMessage } from "../../shared/projects";
 import type { DeepReviewState } from "../../shared/deep-review";
-import { chats, projectRoot, projects, review, trace, turnMessages, turns } from "./sample";
+import {
+  chats,
+  projectRoot,
+  projects,
+  review,
+  trace,
+  turnMessages,
+  turns,
+} from "./sample";
 import { playing } from "./stubs";
 import { ChangesPane, TerminalDrawer } from "./panes";
 import { Mark } from "./parts";
@@ -38,7 +52,12 @@ interface Act {
 }
 
 /** Folds the Running panel back to its count when an interrupted shell stop left it open. */
-const tidy: Act = { to: ".running-tasks:not(.collapsed) .running-tasks-header", click: true, rest: 500, optional: true };
+const tidy: Act = {
+  to: ".running-tasks:not(.collapsed) .running-tasks-header",
+  click: true,
+  rest: 500,
+  optional: true,
+};
 
 const scripts: Record<Stop, Act[]> = {
   threads: [
@@ -66,7 +85,12 @@ const scripts: Record<Stop, Act[]> = {
   // Start a dev server in the thread's shell, then open Running to find it listed.
   terminal: [
     { to: "[data-rw='terminal']", click: true, rest: 3600 },
-    { to: ".running-tasks.collapsed .running-tasks-header", click: true, rest: 900, optional: true },
+    {
+      to: ".running-tasks.collapsed .running-tasks-header",
+      click: true,
+      rest: 900,
+      optional: true,
+    },
     { to: ".running-tasks-list li:first-child", rest: 3400 },
     { to: ".running-tasks-header", click: true, rest: 900 },
   ],
@@ -89,7 +113,11 @@ function useAutopilot(
   run: number,
   onDone: () => void,
 ) {
-  const [pointer, setPointer] = useState<{ x: number; y: number; down: boolean } | null>(null);
+  const [pointer, setPointer] = useState<{
+    x: number;
+    y: number;
+    down: boolean;
+  } | null>(null);
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {
@@ -114,7 +142,10 @@ function useAutopilot(
             const view = scroller.getBoundingClientRect();
             const spot = target.getBoundingClientRect();
             if (spot.bottom > view.bottom - 150 || spot.top < view.top + 24) {
-              scroller.scrollTo({ top: scroller.scrollTop + spot.top - view.top - view.height / 3, behavior: "smooth" });
+              scroller.scrollTo({
+                top: scroller.scrollTop + spot.top - view.top - view.height / 3,
+                behavior: "smooth",
+              });
               await wait(420);
               if (cancelled) return;
             }
@@ -151,7 +182,8 @@ const approval = {
   id: "a1",
   kind: "approval" as const,
   title: "Claude wants to run a command",
-  detail: "git mv electron/project-chats/project-chats.ts electron/project-chats/store.ts",
+  detail:
+    "git mv electron/project-chats/project-chats.ts electron/project-chats/store.ts",
   decisions: ["decline" as const, "accept" as const],
 };
 
@@ -159,7 +191,10 @@ function Composer({ id }: { id: string }) {
   const turn = turns[id] ?? turns.shortcuts;
   return (
     <div className="thread-compose-wrap">
-      <form className="project-composer" onSubmit={(event) => event.preventDefault()}>
+      <form
+        className="project-composer"
+        onSubmit={(event) => event.preventDefault()}
+      >
         <textarea
           className="composer-prompt-input"
           readOnly
@@ -174,7 +209,9 @@ function Composer({ id }: { id: string }) {
             <ChevronDown size={12} />
           </span>
           <span className="rw-pick">
-            {turn.model.effort ? turn.model.effort[0].toUpperCase() + turn.model.effort.slice(1) : "Default"}
+            {turn.model.effort
+              ? turn.model.effort[0].toUpperCase() + turn.model.effort.slice(1)
+              : "Default"}
             <ChevronDown size={12} />
           </span>
           <span className="spacer" />
@@ -197,8 +234,14 @@ function Composer({ id }: { id: string }) {
 const REVIEW_MS = { reviewing: 6400, handover: 1500, leading: 2400 };
 const leadSteps = [
   { text: "Seven findings between them, three of them the same bug twice." },
-  { kind: "read" as const, label: `${projectRoot}/src/features/thread/ProjectChat.tsx` },
-  { kind: "command" as const, label: "npx vitest run src/features/thread/queue.test.ts" },
+  {
+    kind: "read" as const,
+    label: `${projectRoot}/src/features/thread/ProjectChat.tsx`,
+  },
+  {
+    kind: "command" as const,
+    label: "npx vitest run src/features/thread/queue.test.ts",
+  },
 ];
 
 /**
@@ -213,7 +256,12 @@ function ReviewThread() {
   const [started] = useState(Date.now);
   useEffect(() => {
     if (phase === 0 || phase === 4) return;
-    const ms = phase === 1 ? REVIEW_MS.reviewing : phase === 2 ? REVIEW_MS.handover : REVIEW_MS.leading;
+    const ms =
+      phase === 1
+        ? REVIEW_MS.reviewing
+        : phase === 2
+          ? REVIEW_MS.handover
+          : REVIEW_MS.leading;
     const timer = window.setTimeout(() => setPhase(phase + 1), ms);
     return () => window.clearTimeout(timer);
   }, [phase]);
@@ -223,8 +271,11 @@ function ReviewThread() {
     const scroller = messages.current;
     if (!scroller || phase < 2) return;
     const frame = requestAnimationFrame(() => {
-      const lead = scroller.querySelector<HTMLElement>(".project-message.assistant:last-of-type");
-      const top = phase === 4 && lead ? lead.offsetTop - 12 : scroller.scrollHeight;
+      const lead = scroller.querySelector<HTMLElement>(
+        ".project-message.assistant:last-of-type",
+      );
+      const top =
+        phase === 4 && lead ? lead.offsetTop - 12 : scroller.scrollHeight;
       scroller.scrollTo({ top, behavior: reducedMotion() ? "auto" : "smooth" });
     });
     return () => cancelAnimationFrame(frame);
@@ -259,12 +310,11 @@ function ReviewThread() {
     version: 1,
   };
   return (
-    <section className="project-chat rw-thread" data-setup={phase === 0 || undefined} aria-label="Thread">
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
+    <section
+      className="project-chat rw-thread"
+      data-setup={phase === 0 || undefined}
+      aria-label="Thread"
+    >
       <div className="project-messages" ref={messages}>
         <div className="thread-message-column">
           {phase > 0 ? (
@@ -376,11 +426,6 @@ function Thread({
   }
   return (
     <section className="project-chat rw-thread" aria-label="Thread">
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
       <div className="project-messages">
         <div className="thread-message-column">{body}</div>
       </div>
@@ -425,7 +470,8 @@ export function AppWindow({
 
   const pointer = useAutopilot(frame, scripts[stop], active, run, onDone);
   const chat = chats.find((c) => c.id === open) ?? chats[0];
-  const settled = stop === "review" || stop === "terminal" || changes || terminal;
+  const settled =
+    stop === "review" || stop === "terminal" || changes || terminal;
 
   return (
     <div className="rw" ref={frame} inert aria-label="Relay, playing a demo">
@@ -446,13 +492,23 @@ export function AppWindow({
           <button type="button" aria-pressed={!changes}>
             <MessageSquare size={13} /> Chat
           </button>
-          <button type="button" data-rw="changes" aria-pressed={changes} onClick={() => setChanges(!changes)}>
+          <button
+            type="button"
+            data-rw="changes"
+            aria-pressed={changes}
+            onClick={() => setChanges(!changes)}
+          >
             <GitCompareArrows size={13} /> Changes
             <span className="rw-delta">
               <b>+103</b> <i>−3</i>
             </span>
           </button>
-          <button type="button" data-rw="terminal" aria-pressed={terminal} onClick={() => setTerminal(!terminal)}>
+          <button
+            type="button"
+            data-rw="terminal"
+            aria-pressed={terminal}
+            onClick={() => setTerminal(!terminal)}
+          >
             <SquareTerminal size={13} /> Terminal
           </button>
         </span>
@@ -469,7 +525,6 @@ export function AppWindow({
             onNewScratch={() => {}}
             onSendDraft={() => {}}
             onAdd={() => {}}
-            onShared={() => {}}
             onSettings={() => {}}
             onAccount={() => {}}
             onInbox={() => {}}
@@ -491,7 +546,11 @@ export function AppWindow({
               )}
               {/* Project-wide, as in the app: it floats over whichever of the project's threads is open. */}
               {chat.projectId === "relay" ? (
-                <RunningTasks project={projects[0]} chats={chats} onOpenChat={() => {}} />
+                <RunningTasks
+                  project={projects[0]}
+                  chats={chats}
+                  onOpenChat={() => {}}
+                />
               ) : null}
             </div>
             {changes ? <ChangesPane /> : null}

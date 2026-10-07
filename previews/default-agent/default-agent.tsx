@@ -60,7 +60,7 @@ function Preview() {
           <ProjectComposer
             projectId={id}
             keys={{ draft: `preview-draft:${id}`, settings: `new:${id}` }}
-            conversation={{ shared: false, running: false, busy: false }}
+            conversation={{ running: false, busy: false }}
             context={<ProjectBranchPicker projectId={id} disabled={false} />}
             onSend={async () => false}
             onStop={() => {}}

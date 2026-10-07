@@ -23,7 +23,6 @@ import {
   GitBranch,
   GitCommitHorizontal,
   GitPullRequest,
-  LockKeyhole,
   MessageSquareReply,
   Plus,
   ScanSearch,
@@ -768,11 +767,6 @@ function App() {
       <div className="project-chat-pane">
         {stage === "setup" ? (
           <section className="project-chat empty-thread">
-            <div className="thread-subheader">
-              <span className="thread-privacy">
-                <LockKeyhole size={13} /> Private thread
-              </span>
-            </div>
             <div className="thread-start">
               <div className="thread-introduction">
                 {/* Same headline as a new thread, with the app's project picker. */}

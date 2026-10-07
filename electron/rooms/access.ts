@@ -34,9 +34,7 @@ export class RoomAccess {
   }
   async clone(c: ProjectRoomContext) {
     if (!c.dir)
-      throw new Error(
-        "Link a matching local clone before opening shared conversations.",
-      );
+      throw new Error("Link a matching local clone before opening a room.");
     const local = await inspectRepository(
       c.dir,
       c.client.account.server,

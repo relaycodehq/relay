@@ -28,7 +28,6 @@ import { threadDraftKey, threadStorage } from "../../lib/thread-storage";
 import type { TurnDiffTarget } from "../changes/turn-diff";
 import { useAgentSwitch } from "./useAgentSwitch";
 import { useBackgroundWork } from "./useBackgroundWork";
-import { useChatPresence } from "./useChatPresence";
 import { useChatThread } from "./useChatThread";
 import { useComposerAttachments } from "./useComposerAttachments";
 import { useCouncils } from "./useCouncils";
@@ -83,7 +82,6 @@ export function ProjectChat({
   draftScope,
   contextText,
   onContextUsed,
-  onShare,
   onCreated,
   onForked,
   onOpenThread,
@@ -110,7 +108,6 @@ export function ProjectChat({
     code?: CodeReference;
   };
   onContextUsed: () => void;
-  onShare: () => void;
   /** The unsent thread was made by its first write. */
   onCreated: (c: ChatSummary) => Promise<void>;
   /** A fork of the open thread was made. */
@@ -146,7 +143,6 @@ export function ProjectChat({
     { history, messages, root, shown, running } = thread;
   const handle = useThreadHandle(chat, id, project.id, history.refetch),
     { busy, error } = handle;
-  const presence = useChatPresence(chat, viewing);
   const attachments = useComposerAttachments(id),
     { setSelection, workItem, setWorkItem } = attachments;
   const place = `${id}:${rootId ?? ""}`;
@@ -296,14 +292,7 @@ export function ProjectChat({
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
-      <ThreadHeader
-        chat={chat}
-        plain={project.plain}
-        presence={presence}
-        screenshots={messages.some((message) => message.images?.length)}
-        onShare={onShare}
-        onBack={root ? () => setRootId(null) : undefined}
-      />
+      <ThreadHeader onBack={root ? () => setRootId(null) : undefined} />
       {!isEmpty && (
         <RunCommand.Provider value={runCommand}>
           <ThreadMessages

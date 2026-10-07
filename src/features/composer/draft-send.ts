@@ -71,7 +71,6 @@ export async function sendDraft(
   const holder = chat && threadContextAgent(chat);
   const provider = composerProvider(
     lastAgent || settings.provider,
-    !!chat?.shared,
     holder ?? ai.threadProvider,
   );
   const recipient = draftRecipient(text, provider);
@@ -89,10 +88,7 @@ export async function sendDraft(
   const choice = messageChoice(recipient, settings.models, selected, pick);
   if (!choice) return null;
   const council =
-    settings.ultraplan &&
-    recipient !== "message" &&
-    !chat?.shared &&
-    scope.kind !== "review";
+    settings.ultraplan && recipient !== "message" && scope.kind !== "review";
   const draftImages = await loadDraftImages(key);
   const outgoing = numberImages(text, draftImages);
   const images = await Promise.all(outgoing.images.map(flattenSketch));

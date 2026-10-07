@@ -80,18 +80,10 @@ describe("chat activity", () => {
     expect(settled.map((c) => c.id)).not.toContain("recent-15");
   });
 
-  it("treats unused threads as empty but keeps shared ones", () => {
+  it("treats unused threads as empty", () => {
     expect(chatIsEmpty(chat({ empty: true }))).toBe(true);
     expect(chatIsEmpty(chat({ updated: 1_000 }))).toBe(true);
     expect(chatIsEmpty(chat())).toBe(false);
-    expect(
-      chatIsEmpty(
-        chat({
-          empty: true,
-          shared: { roomId: "r", server: "s", memberId: "m" },
-        }),
-      ),
-    ).toBe(false);
   });
 
   it("offers future snooze presets and skips a passed evening", () => {

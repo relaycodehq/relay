@@ -17,14 +17,12 @@ const send = (
 const running = send("@codex Fix the cache guard");
 
 it("steers with a follow-up to the same agent on the same settings", () => {
-  expect(steers(send("@codex Also check the tests"), running, false)).toBe(
-    true,
-  );
+  expect(steers(send("@codex Also check the tests"), running)).toBe(true);
 });
 
 it("waits when nothing runs or the message isn't for an agent", () => {
-  expect(steers(send("@codex Also"), undefined, false)).toBe(false);
-  expect(steers(send("A note to self"), running, false)).toBe(false);
+  expect(steers(send("@codex Also"), undefined)).toBe(false);
+  expect(steers(send("A note to self"), running)).toBe(false);
 });
 
 it("waits for a different agent, conversation or setting", () => {
@@ -38,7 +36,7 @@ it("waits for a different agent, conversation or setting", () => {
     }),
     send("@codex Also", { contextWindow: "1m" as never }),
   ])
-    expect(steers(next, running, false)).toBe(false);
+    expect(steers(next, running)).toBe(false);
 });
 
 it("waits for what an agent only takes at the start of a turn", () => {
@@ -47,14 +45,12 @@ it("waits for what an agent only takes at the start of a turn", () => {
     mimeType: "image/png" as const,
     dataUrl: "data:image/png;base64,",
   };
-  expect(steers(send("@codex /review"), running, false)).toBe(false);
-  expect(steers(send("@codex run $deploy now"), running, false)).toBe(false);
-  expect(steers(send("@codex use /skill:lint"), running, false)).toBe(false);
-  expect(
-    steers(send("@codex this", { selection: {} as never }), running, false),
-  ).toBe(false);
-  // A screenshot can steer a private thread, not a shared one.
-  const shot = send("@codex look", { images: [image] });
-  expect(steers(shot, running, false)).toBe(true);
-  expect(steers(shot, running, true)).toBe(false);
+  expect(steers(send("@codex /review"), running)).toBe(false);
+  expect(steers(send("@codex run $deploy now"), running)).toBe(false);
+  expect(steers(send("@codex use /skill:lint"), running)).toBe(false);
+  expect(steers(send("@codex this", { selection: {} as never }), running)).toBe(
+    false,
+  );
+  // A screenshot can steer.
+  expect(steers(send("@codex look", { images: [image] }), running)).toBe(true);
 });

@@ -19,18 +19,16 @@ export function useChatThread(
   const qc = useQueryClient();
   const history = useQuery({
     queryKey: chatKey(chat?.id),
-    queryFn: () => fetchChat(qc, chat!.id, { shared: !!chat!.shared }),
+    queryFn: () => fetchChat(qc, chat!.id),
     enabled: !!chat,
     // Events for a thread that isn't open are ignored, so a cached copy can
     // still say "streaming" after the answer ended; the patch is cheap.
     refetchOnMount: "always",
     refetchInterval: (query) =>
-      chat?.shared
-        ? 2000
-        : query.state.data?.queue?.length ||
-            query.state.data?.messages.some((m) => m.status === "streaming")
-          ? 1000
-          : false,
+      query.state.data?.queue?.length ||
+      query.state.data?.messages.some((m) => m.status === "streaming")
+        ? 1000
+        : false,
   });
   const messages = useMemo(
     () => [...(history.data?.messages ?? [])].sort(threadOrder),

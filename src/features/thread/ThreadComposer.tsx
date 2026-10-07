@@ -249,7 +249,6 @@ export function ThreadComposer({
           : undefined,
       }}
       conversation={{
-        shared: !!chat?.shared,
         running: waiting,
         busy: held,
         agent: chat && threadContextAgent(chat),
@@ -259,7 +258,7 @@ export function ThreadComposer({
           shown.at(-1)?.proposedPlan
             ? shown.at(-1)?.provider
             : undefined,
-        ultraplan: !root && !chat?.shared && scope.kind !== "review",
+        ultraplan: !root && scope.kind !== "review",
         chatId: chat?.id,
         accounts: chat?.accounts,
       }}

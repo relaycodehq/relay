@@ -44,7 +44,6 @@ import {
 } from "./started-threads/serve";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
-import { ProjectSharing } from "./projects/project-sharing";
 import { Projects } from "./projects/projects";
 import { mergedPulls } from "./pull-requests/merged";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
@@ -298,7 +297,6 @@ app
         window.send("relay:project-chat", event);
         phoneRemote?.chatEvent(event);
       },
-      new ProjectSharing(projects, roomService, () => login.require()),
       async (chat, selection) => {
         if (chat.scope.kind !== "pr")
           throw new Error("This is not a pull request conversation.");

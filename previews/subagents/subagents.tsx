@@ -19,7 +19,6 @@ import {
   ChevronDown,
   FolderGit2,
   GitBranch,
-  LockKeyhole,
   Pause,
   Play,
   RotateCcw,
@@ -274,11 +273,6 @@ function App() {
             className="project-chat"
             style={{ "--composer-dock-height": `${dock}px` } as CSSProperties}
           >
-            <div className="thread-subheader">
-              <span className="thread-privacy">
-                <LockKeyhole size={13} /> Private thread
-              </span>
-            </div>
             <Thread>
               <article className="project-message user">
                 <header>

@@ -154,7 +154,6 @@ export class AnswerRecorder {
       this.message = streamingAnswer(above.provider, {
         ...(this.model ? { model: this.model } : {}),
         ...(above.parentId ? { parentId: above.parentId } : {}),
-        ...(chat.shared ? { pending: true } : {}),
       });
     } else chat.messages.splice(chat.messages.indexOf(above), 1);
     // Messages sort by time: this lands right after the steer, above any sent later.

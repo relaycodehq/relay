@@ -5,7 +5,7 @@ import "../_shared/desktop-stub";
 import { StrictMode, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ArrowUp, LockKeyhole, Rows3 } from "lucide-react";
+import { ArrowUp, Rows3 } from "lucide-react";
 import "../../src/styles.css";
 import "../_shared/app-styles";
 import "../../src/features/sidebar/sidebar.css";
@@ -128,11 +128,6 @@ function Thread() {
         { "--composer-dock-height": `${view.dockHeight}px` } as CSSProperties
       }
     >
-      <div className="thread-subheader">
-        <span className="thread-privacy">
-          <LockKeyhole size={13} /> Private thread
-        </span>
-      </div>
       <div
         className="project-messages"
         ref={view.scroll}

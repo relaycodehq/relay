@@ -24,15 +24,6 @@
   line-height: 1.8;
   color: var(--muted);
 }
-.shared-chat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.shared-chat-list button {
-  justify-content: flex-start;
-  text-align: left;
-}
 .thread-introduction .headline-project-trigger {
   display: inline-flex;
   align-items: baseline;

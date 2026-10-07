@@ -12,7 +12,6 @@ import {
 import { projectFor } from "../features/pulls/pull-board";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useShortcut } from "../lib/shortcuts";
-import { openThread } from "../lib/thread-storage";
 import {
   adoptDraftTerminal,
   terminalFor,
@@ -46,11 +45,6 @@ import { StartedThreadsContext } from "../features/agent-turn/StartedThreads";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
-import {
-  BrowseShared,
-  JoinConversation,
-  ShareConversation,
-} from "../features/projects/ProjectSharingDialogs";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
 import { PullsTitle } from "../features/pulls/PullRequestsPage";
 import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
@@ -102,8 +96,6 @@ export default function ProjectShell() {
   const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
   // The sidebar's unread / needs-input dot, echoed on the brand while hidden.
   const [attention, setAttention] = useState<"waiting" | "unread">();
-  const [share, setShare] = useState<ChatSummary>(),
-    [browseShared, setBrowseShared] = useState(false);
   // Scratchpad chats have their own sidebar section and never show as projects.
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
   const everyThread = useEveryThread(realProjects);
@@ -279,9 +271,6 @@ export default function ProjectShell() {
             onNewScratch={() => void starts.scratch()}
             onSendDraft={() => composer.current?.submit()}
             onAdd={() => void starts.addProject()}
-            onShared={(p) => {
-              if (navigate(p)) setBrowseShared(true);
-            }}
             onAttention={setAttention}
             onSettings={settings.show}
             onAccount={() => {
@@ -380,9 +369,6 @@ export default function ProjectShell() {
                       onOpenTurnDiff: opens.openTurnDiff,
                     }}
                     onCommand={runCommand}
-                    onShare={() => {
-                      if (chat) void signIn.withAccount(() => setShare(chat));
-                    }}
                     onDraftWorkspace={nav.setDraftWorkspace}
                     onStartThread={starts.start}
                     onCreated={async (c) => {
@@ -535,47 +521,6 @@ export default function ProjectShell() {
           signIn={signIn}
           invitationUrl={links.incoming?.url}
           onRestored={boot.refetch}
-        />
-      )}
-      {links.invitation && (
-        <JoinConversation
-          url={links.invitation}
-          projects={projects.data ?? []}
-          account={account ?? null}
-          onAdd={starts.addProject}
-          onSignIn={() => void signIn.withAccount()}
-          onClose={() => links.setInvitation(undefined)}
-          onJoined={async (p, c) => {
-            if (c) openThread.save(p, c.id);
-            nav.setSelected(p);
-            await chats.refetch();
-            if (c) nav.openChat(c.id);
-            nav.setInbox(false);
-            panes.show("chat");
-            links.setInvitation(undefined);
-          }}
-        />
-      )}
-      {browseShared && project && (
-        <BrowseShared
-          project={project}
-          onClose={() => setBrowseShared(false)}
-          onOpen={async (c) => {
-            await chats.refetch();
-            nav.openChat(c.id);
-            panes.show("chat");
-            setBrowseShared(false);
-          }}
-        />
-      )}
-      {share && project && (
-        <ShareConversation
-          chat={share}
-          project={project}
-          account={account ?? null}
-          onClose={() => setShare(undefined)}
-          onSignIn={() => void signIn.withAccount()}
-          onShared={() => void chats.refetch()}
         />
       )}
     </div>

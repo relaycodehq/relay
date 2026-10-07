@@ -49,7 +49,6 @@ export function ProjectSidebar({
   onNewScratch,
   onSendDraft,
   onAdd,
-  onShared,
   onInbox,
   onUsage,
   onSettings,
@@ -71,7 +70,6 @@ export function ProjectSidebar({
   /** Sends the open unsent thread's draft from its composer. */
   onSendDraft: () => void;
   onAdd: () => void;
-  onShared: (p: Project) => void;
   onInbox: () => void;
   onUsage?: () => void;
   /** Opens Settings, at `category` when given, on `projectId` under Projects. */
@@ -225,7 +223,6 @@ export function ProjectSidebar({
                 threads: all,
                 current: projectId,
                 onNew: newThread,
-                onShared,
                 onProjectSettings: (p) => onSettings("projects", p.id),
               }}
               error={error}

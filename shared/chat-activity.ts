@@ -184,7 +184,7 @@ export function chatActivitySections<C extends Triaged>(
 
 /** Empty threads (e.g. an unused PR thread) only clutter the lists. */
 export function chatIsEmpty(chat: ChatSummary): boolean {
-  return (chat.empty ?? chat.updated === chat.created) && !chat.shared;
+  return chat.empty ?? chat.updated === chat.created;
 }
 
 export interface SnoozePreset {

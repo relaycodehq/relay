@@ -150,8 +150,6 @@ export class ComputerHandoff {
         throw new Error(
           `This thread came from ${chat.cameFrom.computer}. Bring it back there instead.`,
         );
-      if (chat.shared)
-        throw new Error("Shared conversations stay on this computer.");
       if (chat.scope.kind === "review" || chat.reviewer || chat.thinker)
         throw new Error("A deep review can't move to another computer.");
       if (!chat.messages.length)

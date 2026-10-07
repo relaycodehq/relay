@@ -56,7 +56,6 @@ export interface DraftEditor {
  */
 export function useComposerDraft(
   key: string,
-  shared: boolean,
   editor: RefObject<DraftEditor | null>,
 ) {
   const text = useDraft(key);
@@ -99,10 +98,6 @@ export function useComposerDraft(
   }, [key]);
   async function addImages(files: File[], point?: Point) {
     if (!files.length) return;
-    if (shared) {
-      setError("Screenshots in shared conversations are not supported yet.");
-      return;
-    }
     if (preparation.current) return;
     preparation.current = true;
     setPreparing(true);
@@ -145,10 +140,6 @@ export function useComposerDraft(
     void addImages(files.filter(isScreenshot), point);
   }
   function insertPaths(files: File[], point?: Point) {
-    if (shared) {
-      setError("Files in shared conversations are not supported yet.");
-      return;
-    }
     const paths = files.map((file) => api.pathForFile(file));
     const missing = files.find((_, i) => !paths[i]);
     if (missing) {

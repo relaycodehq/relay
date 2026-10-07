@@ -217,9 +217,8 @@ it("keeps Ultraplan and its council, and reads anything else as off", () => {
 });
 
 it("follows the default agent until one is picked", () => {
-  expect(composerProvider(undefined, false, "claude")).toBe("claude");
-  expect(composerProvider(undefined, true, "claude")).toBe("message");
-  expect(composerProvider("codex", false, "claude")).toBe("codex");
+  expect(composerProvider(undefined, "claude")).toBe("claude");
+  expect(composerProvider("codex", "claude")).toBe("codex");
   saveComposerSettings("new:project", { ...modes, models: {} });
   expect(loadComposerSettings("new:project").provider).toBeUndefined();
 });

@@ -26,7 +26,6 @@ import { relayToolsFor } from "../relay-mcp";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
-import type { ChatSharing } from "./sharing";
 import type { ThreadTitles } from "./titles";
 
 /**
@@ -83,7 +82,6 @@ export class TurnRunner {
   constructor(
     private core: ChatCore,
     private titles: ThreadTitles,
-    private sharing: ChatSharing,
     /** The folder Relay makes threads' worktrees in. */
     private worktreesFolder: string,
     private host: TurnRunnerHost,
@@ -271,8 +269,7 @@ export class TurnRunner {
         ...(relayTools &&
         !chat.thinker &&
         !chat.reviewer &&
-        !rules.side &&
-        !chat.shared
+        !rules.side
           ? { relayTools }
           : {}),
         // The thread's running answer owns its requests; a side turn asks none.
@@ -406,7 +403,6 @@ export class TurnRunner {
       // The sidebar hears of the finished answer once the turn lets go of the thread.
       await this.core.storage.save(chat, { holdSummary: true });
       if (limit) this.host.limited(chat.id, ended.id, limit);
-      if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (
         ended.status === "complete" &&
         rules.titles &&

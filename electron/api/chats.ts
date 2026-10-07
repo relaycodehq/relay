@@ -15,7 +15,7 @@ import {
   projectChatSendSchema,
   resumeSettingsSchema,
 } from "../../shared/projects";
-import { idSchema, presenceSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/rooms";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
@@ -219,26 +219,6 @@ export function chatHandlers(ctx: ApiContext) {
     revealAgentWorktree: takes(
       [idSchema, z.string().max(4096)],
       (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
-    ),
-    projectChatPresence: takes(
-      [idSchema, presenceSchema.omit({ head: true }).nullable()],
-      (id, value) => projectChats.presence(id, value),
-    ),
-    projectChatShareInfo: takes([idSchema], (id) => projectChats.shareInfo(id)),
-    shareProjectChat: takes([idSchema], (id) => projectChats.share(id)),
-    syncProjectChat: takes(
-      [idSchema, optional(knownMessagesSchema)],
-      (id, known) =>
-        known ? projectChats.syncChanges(id, known) : projectChats.sync(id),
-    ),
-    projectChatInvite: takes([idSchema], (id) => projectChats.invite(id)),
-    sharedProjectChats: takes([idSchema], (id) => projectChats.sharedList(id)),
-    openSharedProjectChat: takes([idSchema, idSchema], (projectId, roomId) =>
-      projectChats.openShared(projectId, roomId),
-    ),
-    joinProjectConversation: takes(
-      [idSchema, z.string().max(16384)],
-      (projectId, url) => projectChats.join(projectId, url),
     ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],

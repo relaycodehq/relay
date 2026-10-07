@@ -40,7 +40,6 @@ export function chatSummary({
   lastInput,
   sessions,
   forkedAt,
-  sharedCursor,
   replySessions,
   checkoutNotes,
   scopeHeard,

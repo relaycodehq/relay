@@ -291,7 +291,6 @@ export class ThreadWorktrees {
     if (chat.worktree) return "This thread already has its own worktree.";
     if (chat.scope.kind !== "project" || chat.reviewer || chat.thinker)
       return "Only repository threads can work in a worktree.";
-    if (chat.shared) return "Shared conversations stay in the project folder.";
     if ((await this.core.projects.inspect(chat.projectId)).plain)
       return "Worktrees need a Git repository.";
     await this.core.active.finished(chat.id);

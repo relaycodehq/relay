@@ -29,8 +29,6 @@ export class SideQuestions {
    * without tools; the others work in a read-only fork of the main thread.
    */
   async ask(chat: ProjectChat, input: ProjectChatSend) {
-    if (chat.shared)
-      throw new Error("Side questions work in private threads only.");
     if (chat.messages.some((m) => m.id === input.id)) return;
     const root = input.side
       ? undefined

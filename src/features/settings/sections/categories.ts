@@ -64,7 +64,7 @@ export const categories: {
   {
     id: "rooms",
     label: "Shared rooms",
-    description: "Host rooms for shared conversations.",
+    description: "Host rooms for pull request conversations.",
     icon: Users,
   },
   {

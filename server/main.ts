@@ -15,7 +15,7 @@ const hosts = (process.env.RELAY_ROOMS_GITEA_SERVERS ?? "")
   .filter(Boolean);
 if (!hosts.length)
   throw new Error(
-    "Set RELAY_ROOMS_GITEA_SERVERS to the trusted Gitea base URLs (including any path prefix). Sharing stays unavailable without verification.",
+    "Set RELAY_ROOMS_GITEA_SERVERS to the trusted Gitea base URLs (including any path prefix). Rooms stay unavailable without verification.",
   );
 const db = new RoomsDatabase(
   process.env.RELAY_ROOMS_DB ?? "./room-data/rooms.sqlite",

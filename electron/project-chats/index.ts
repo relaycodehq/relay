@@ -29,7 +29,6 @@ import { agentRuntimes } from "../agents";
 import { accountHomes } from "../agents/accounts";
 import type { PullInfo } from "../deep-review";
 import type { Projects } from "../projects/projects";
-import type { ProjectSharing } from "../projects/project-sharing";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
 import { ActiveTurns } from "./active";
@@ -43,7 +42,6 @@ import { LimitResumes } from "./limit-resume";
 import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
-import { ChatSharing } from "./sharing";
 import { ChatStorage } from "./storage";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
@@ -71,7 +69,6 @@ export class ProjectChats {
   private schedule: ChatSchedule;
   private limits: LimitResumes;
   private titles: ThreadTitles;
-  private sharing: ChatSharing;
   private worktrees: ThreadWorktrees;
   private cleanup: WorktreeCleanup;
   private files: TurnFiles;
@@ -98,7 +95,6 @@ export class ProjectChats {
       message: ChatMessage;
       title?: string;
     }) => void,
-    sharing?: ProjectSharing,
     evidence?: (chat: ProjectChat, selection: LineQuestion) => Promise<unknown>,
   ) {
     this.storage = new ChatStorage(store, dir, (chatId, branch) =>
@@ -141,9 +137,6 @@ export class ProjectChats {
       resume: (id) => this.turns.resumeHeld(id),
     });
     this.titles = new ThreadTitles(core);
-    this.sharing = new ChatSharing(core, sharing, {
-      sync: (id) => this.sync(id),
-    });
     this.worktrees = new ThreadWorktrees(
       core,
       join(dirname(dir), "worktrees"),
@@ -177,41 +170,27 @@ export class ProjectChats {
           computer,
         ),
     });
-    this.runner = new TurnRunner(
-      core,
-      this.titles,
-      this.sharing,
-      this.worktrees.folder,
-      {
-        unprompted: (chat, root, provider, parentId) =>
-          this.turns.unprompted(chat, root, provider, parentId),
-        limited: (id, messageId, limit) =>
-          void this.limits
-            .stopped(id, messageId, limit)
-            .catch((e) => console.warn("Could not plan the resume:", e)),
-        env: (chat) => this.worktrees.setup.env(chat),
-      },
-    );
+    this.runner = new TurnRunner(core, this.titles, this.worktrees.folder, {
+      unprompted: (chat, root, provider, parentId) =>
+        this.turns.unprompted(chat, root, provider, parentId),
+      limited: (id, messageId, limit) =>
+        void this.limits
+          .stopped(id, messageId, limit)
+          .catch((e) => console.warn("Could not plan the resume:", e)),
+      env: (chat) => this.worktrees.setup.env(chat),
+    });
     this.asides = new SideQuestions(core, this.worktrees, this.runner);
-    this.queue = new ChatQueue(
-      core,
-      this.schedule,
-      this.sharing,
-      this.councils,
-      {
-        sendNow: (id, input) => this.turns.sendNow(id, input),
-      },
-    );
+    this.queue = new ChatQueue(core, this.schedule, this.councils, {
+      sendNow: (id, input) => this.turns.sendNow(id, input),
+    });
     this.turns = new ChatTurns(
       core,
       this.worktrees,
-      this.sharing,
       this.runner,
       this.titles,
       this.councils,
       this.queue,
       evidence,
-      { sync: (id) => this.sync(id) },
     );
   }
   /**
@@ -641,42 +620,6 @@ export class ProjectChats {
   regenerateTitle(id: string) {
     return this.titles.regenerate(id);
   }
-  shareInfo(id: string) {
-    return this.sharing.info(id);
-  }
-  share(id: string) {
-    return this.sharing.share(id);
-  }
-  async sync(id: string) {
-    await this.sharing.pull(id);
-    return this.get(id);
-  }
-  /** Sync, answering like changes. */
-  async syncChanges(id: string, known: KnownMessages) {
-    await this.sharing.pull(id);
-    return this.changes(id, known);
-  }
-  presence(
-    id: string,
-    value: { path: string | null; viewed: number; total: number } | null,
-  ) {
-    return this.sharing.presence(id, value);
-  }
-  workspace(id: string) {
-    return this.sharing.workspace(id);
-  }
-  invite(id: string) {
-    return this.sharing.invite(id);
-  }
-  sharedList(projectId: string) {
-    return this.sharing.list(projectId);
-  }
-  openShared(projectId: string, roomId: string) {
-    return this.sharing.open(projectId, roomId);
-  }
-  join(projectId: string, url: string) {
-    return this.sharing.join(projectId, url);
-  }
   /** Asks the user in the thread's running turn, as its agent would; see electron/started-threads. */
   askInTurn(
     id: string,
@@ -755,10 +698,7 @@ export class ProjectChats {
     // A send already inside validation can attach its job while shutdown waits.
     await Promise.allSettled(this.active.all().map((a) => a.job));
     await Promise.allSettled(this.councils.stepping());
-    await Promise.allSettled([
-      ...this.sharing.pulling(),
-      ...this.storage.busy().loads,
-    ]);
+    await Promise.allSettled(this.storage.busy().loads);
     await Promise.all(this.storage.busy().writes);
     // A finished answer refreshes its sidebar summary without waiting for it.
     await this.store.flush();

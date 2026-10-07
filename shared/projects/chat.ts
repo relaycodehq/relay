@@ -27,7 +27,6 @@ export interface ProjectChat extends ChatSummary {
   sessions?: AgentSessions;
   /** Local: a forked thread's last copied answer, whose session its agent continues. */
   forkedAt?: string;
-  sharedCursor?: number;
   /** Local: checkout rollbacks the next agent turn should hear about. */
   checkoutNotes?: string[];
   /** Local: the scope each agent session last heard, by `provider:branch`. */

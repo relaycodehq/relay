@@ -13,9 +13,7 @@ export function RoomHostingSettings() {
   const changed = () =>
     qc.invalidateQueries({
       predicate: (q) =>
-        ["roomHosting", "room-access-info", "chat-share-info"].includes(
-          String(q.queryKey[0]),
-        ),
+        ["roomHosting", "room-access-info"].includes(String(q.queryKey[0])),
     });
   const hosting = useQuery({
     queryKey: ["roomHosting"],

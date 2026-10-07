@@ -50,9 +50,8 @@ function pickedProvider(key: string, saved: any): Provider | undefined {
 /** The agent a composer runs: its pick, else the default for its kind. */
 export const composerProvider = (
   picked: Provider | undefined,
-  shared: boolean,
   fallback: AgentProvider = "codex",
-): Provider => picked ?? (shared ? "message" : fallback);
+): Provider => picked ?? fallback;
 /**
  * Every project's new-thread composer starts on the same models, kept on the
  * desktop and shared with the phone. This copy opens a composer on them at once.

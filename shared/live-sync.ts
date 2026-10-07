@@ -55,13 +55,12 @@ export const idleSync: SyncState = {
   conflicts: [],
   excluded: [],
 };
-type SyncTarget = PullRef | { chatId: string };
 export interface LiveSyncApi {
-  liveSyncState(ref: SyncTarget): Promise<SyncState>;
-  liveSyncStart(ref: SyncTarget): Promise<SyncState>;
-  liveSyncStop(ref: SyncTarget): Promise<void>;
+  liveSyncState(ref: PullRef): Promise<SyncState>;
+  liveSyncStart(ref: PullRef): Promise<SyncState>;
+  liveSyncStop(ref: PullRef): Promise<void>;
   liveSyncConflict(
-    ref: SyncTarget,
+    ref: PullRef,
     path: string,
   ): Promise<{
     local: SyncValue;
@@ -71,7 +70,7 @@ export interface LiveSyncApi {
     author: string;
   }>;
   liveSyncResolve(
-    ref: SyncTarget,
+    ref: PullRef,
     path: string,
     choice: "local" | "shared",
     revision: number,

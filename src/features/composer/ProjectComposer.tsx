@@ -70,8 +70,6 @@ export interface ComposerNoticeActions {
 
 /** What the conversation the composer writes to is doing, and allows. */
 export interface ComposerConversation {
-  /** Shared with people: a message is a note unless an agent is picked, and nothing attaches yet. */
-  shared: boolean;
   /** An answer is coming; a message now queues, or steers it. */
   running: boolean;
   /** Nothing can go out now. */
@@ -140,7 +138,6 @@ export function ProjectComposer({
   onNextThread?: () => void;
 }) {
   const {
-    shared,
     running,
     busy,
     agent,
@@ -152,12 +149,11 @@ export function ProjectComposer({
   const composer = useComposerSettings({
     key: keys.settings,
     inherit: keys.inherit,
-    shared,
     agent,
   });
   const catalogs = useModelCatalogs(projectId);
   const promptInput = useRef<PromptInputHandle>(null);
-  const draft = useComposerDraft(keys.draft, shared, promptInput);
+  const draft = useComposerDraft(keys.draft, promptInput);
   const recall = usePromptHistory(promptInput, sent);
   const mounted = useRef(false);
   useEffect(() => {
@@ -453,12 +449,7 @@ export function ProjectComposer({
                   type="button"
                   className="composer-control"
                   aria-label="Attach files"
-                  title={
-                    shared
-                      ? "Files in shared conversations are not supported yet"
-                      : "Attach screenshots or files"
-                  }
-                  disabled={shared}
+                  title="Attach screenshots or files"
                   onClick={() => filePick.current?.click()}
                 >
                   <Paperclip size={15} />

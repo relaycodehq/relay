@@ -1,6 +1,5 @@
 import { it, expect } from "vitest";
 import { claudeActivity, claudeEditedPaths, codexActivity } from "./activity";
-import { publicMessage } from "../projects/project-sharing";
 it("caps a failed command's output and keeps its arguments out", () => {
   const activity = codexActivity("item/completed", {
     id: "a",
@@ -13,31 +12,6 @@ it("caps a failed command's output and keeps its arguments out", () => {
   expect(activity.status).toBe("failed");
   expect(activity.detail).toHaveLength(8000);
   expect(JSON.stringify(activity)).not.toContain("hidden");
-});
-it("leaves local activity and traces out of a shared message", () => {
-  const message = {
-    id: "message",
-    role: "assistant",
-    provider: "codex",
-    status: "complete",
-    body: "The check failed.",
-    created: 1,
-    version: 1,
-  } as const;
-  const activity = codexActivity("item/started", {
-    id: "a",
-    type: "commandExecution",
-    command: "npm test",
-  })!;
-  expect(
-    publicMessage({ ...message, activity: [activity] }),
-  ).not.toHaveProperty("activity");
-  expect(
-    publicMessage({
-      ...message,
-      trace: [{ kind: "commentary", id: "secret", text: "private work" }],
-    }),
-  ).not.toHaveProperty("trace");
 });
 it("names a file change by its path, never its patch, and skips reasoning", () => {
   expect(

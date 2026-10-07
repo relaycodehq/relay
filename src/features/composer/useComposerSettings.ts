@@ -34,13 +34,11 @@ export type ComposerState = ReturnType<typeof useComposerSettings>;
 export function useComposerSettings({
   key,
   inherit,
-  shared,
   agent,
 }: {
   key: string;
   /** With nothing saved under `key` yet: start from these settings. */
   inherit?: InheritedSettings;
-  shared: boolean;
   /** The agent holding the thread's context; the composer runs it until one is picked here. */
   agent?: AgentProvider;
 }) {
@@ -54,18 +52,14 @@ export function useComposerSettings({
   // Until an agent is picked here, the default agent setting decides, even
   // when it loads after the composer does.
   const [picked, setProvider] = useState(saved.provider);
-  const provider = composerProvider(
-    picked,
-    shared,
-    agent ?? ai.data?.threadProvider,
-  );
+  const provider = composerProvider(picked, agent ?? ai.data?.threadProvider);
   // A new thread starts on the agent last picked for one, here or on the
   // phone; picking one here makes it that agent for both.
-  const followsLastAgent = key.startsWith("new:") && !shared;
+  const followsLastAgent = key.startsWith("new:");
   useFollowLastAgent(followsLastAgent, picked, setProvider);
   const [models, setModels] = useState(saved.models);
   const saveLastModel = useFollowLastModels(
-    followsLastAgent || (unsaved && !shared),
+    followsLastAgent || unsaved,
     followsLastAgent,
     models,
     setModels,

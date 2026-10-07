@@ -65,7 +65,7 @@ export interface ChatMessage {
   cost?: number;
   /** Local: the model and settings this answer ran on. */
   model?: TurnModel;
-  /** Local proposed-plan action; shared chats receive the final text only. */
+  /** Local proposed-plan action. */
   proposedPlan?: boolean;
   /** Local marker: the saved Codex session already received this steering prompt. */
   steered?: boolean;
@@ -141,7 +141,7 @@ export interface AgentActivity {
   /** An MCP tool call: which server's tool it was. */
   mcp?: { server: string; tool: string };
 }
-/** Private turn events. Sharing serializes only the final answer body. */
+/** Private turn events. */
 export type AgentTrace =
   | { kind: "commentary"; id: string; text: string }
   | { kind: "activity"; id: string; activity: AgentActivity };

@@ -25,7 +25,6 @@ import { assertHere } from "./handoff";
 import type { ChatQueue } from "./queue";
 import { interrupt } from "./revive";
 import { agentSession, parseSessionKey, sessionInput } from "./sessions";
-import type { ChatSharing } from "./sharing";
 import type { ThreadTitles } from "./titles";
 import { forkFor, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
@@ -40,11 +39,6 @@ const handoffPrompt = (to: AgentProvider, computer?: string) =>
       : `${agentName(to)} is taking over this conversation from here and cannot see your session.`
   } Write a handoff note for it: the user's goal, what you did (files read or changed, commands run), what you found, decisions and their reasons, and what remains or should be verified next. Use concrete file paths. Answer from what you already know without running tools or changing anything. Keep it under 500 words.`;
 
-export interface TurnsHost {
-  /** Pulls a shared thread's messages and reads it back. */
-  sync(id: string): Promise<unknown>;
-}
-
 /**
  * Starts and ends a thread's turns: a message going out, the agent that
  * answered last briefing the next, Claude's own turns, a council's lead,
@@ -56,7 +50,6 @@ export class ChatTurns {
   constructor(
     private core: ChatCore,
     private worktrees: ThreadWorktrees,
-    private sharing: ChatSharing,
     private runner: TurnRunner,
     private titles: ThreadTitles,
     private councils: Councils,
@@ -64,7 +57,6 @@ export class ChatTurns {
     private evidence:
       | ((chat: ProjectChat, selection: LineQuestion) => Promise<unknown>)
       | undefined,
-    private host: TurnsHost,
   ) {}
 
   starting() {
@@ -150,7 +142,6 @@ export class ChatTurns {
       if (!chat.worktree && !chat.thinker)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.worktrees.root(chat, input.body);
-      if (chat.shared) await this.host.sync(id);
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;
@@ -182,14 +173,6 @@ export class ChatTurns {
             .map(agentName)
             .join(" or ")}. Select it to run the skill.`,
         );
-      if (chat.shared && asked && !agents[asked.provider].helper)
-        throw new Error(
-          `${agentName(asked.provider)} can't answer in shared conversations yet. Pick ${helperProviders.map(agentName).join(" or ")}, or start a private thread.`,
-        );
-      if (chat.shared && input.images?.length)
-        throw new Error(
-          "Screenshots cannot be sent to shared conversations yet. Start a private thread for image questions.",
-        );
       const parent = input.parentId
         ? replyRoot(chat.messages, input.parentId)
         : undefined;
@@ -211,14 +194,14 @@ export class ChatTurns {
           throw new Error(
             "Claude Code can't pause or resume a goal. /goal clear ends it.",
           );
-        if (parent || chat.shared)
+        if (parent)
           throw new Error("Set a goal in the thread's main conversation.");
       }
       if (input.ultraplan) {
         if (!asked) throw new Error("Ultraplan needs an agent to lead it.");
-        if (parent || chat.shared || chat.scope.kind === "review")
+        if (parent || chat.scope.kind === "review")
           throw new Error(
-            "Ultraplan runs in the main conversation of a private thread.",
+            "Ultraplan runs in the main conversation of a thread.",
           );
         if (/^\//.test(asked.question))
           throw new Error("Ultraplan can't run a command. Ask a question.");
@@ -246,7 +229,6 @@ export class ChatTurns {
           ? { images: await this.core.storage.saveImages(id, input.images) }
           : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
-        ...(chat.shared ? { pending: true } : {}),
         ...sentBy(input),
       };
       chat.messages.push(user);
@@ -268,7 +250,6 @@ export class ChatTurns {
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: user });
       if (chat.messages.length === 1) this.titles.generate(chat, input.choice);
-      if (chat.shared) await this.sharing.deliver(chat).catch(() => {});
       if (!asked) {
         this.core.active.release(id, active);
         return;
@@ -341,7 +322,6 @@ export class ChatTurns {
       // it, so a command goes out alone.
       const command =
         (agents[asked.provider].commandsAlone || !!goal) &&
-        !chat.shared &&
         /^\/[a-zA-Z0-9_.:-]+(?:\s|$)/.test(asked.question);
       // Another agent answered last on this branch: let it brief the new one
       // first, unless a command leaves no room for the note.
@@ -378,7 +358,6 @@ export class ChatTurns {
         // With a council, the lead's first answer is its brief.
         ...(input.ultraplan ? { brief: true } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {}),
-        ...(chat.shared ? { pending: true } : {}),
       });
       chat.lastInput = { ...input, images: undefined };
       chat.messages.push(answer);
@@ -523,7 +502,6 @@ export class ChatTurns {
       streamingAnswer(provider, {
         unprompted: true,
         ...(parentId ? { parentId } : {}),
-        ...(chat.shared ? { pending: true } : {}),
       });
     try {
       if (!resumed) {

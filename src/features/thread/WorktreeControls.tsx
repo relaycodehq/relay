@@ -53,7 +53,7 @@ export function WorkspaceControl({
         onReveal={(path) =>
           void api.revealAgentWorktree(chat.id, path).catch(onError)
         }
-        onMove={chat.shared ? undefined : () => worktree.setDialog("move")}
+        onMove={() => worktree.setDialog("move")}
       />
     );
   const { status } = worktree;

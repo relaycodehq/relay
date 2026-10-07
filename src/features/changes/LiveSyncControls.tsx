@@ -10,14 +10,8 @@ import "./working-tree.css";
 type Conflict = Awaited<ReturnType<LiveSyncApi["liveSyncConflict"]>> & {
   path: string;
 };
-export function LiveSyncControls({
-  pull,
-  chatId,
-}: {
-  pull?: Pull;
-  chatId?: string;
-}) {
-  const target = chatId ? { chatId } : pull!;
+export function LiveSyncControls({ pull }: { pull: Pull }) {
+  const target = pull;
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),

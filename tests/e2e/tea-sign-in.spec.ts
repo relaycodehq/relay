@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("Share signs in through tea's login, asks only without one, and the avatar opens Settings", async () => {
+test("The avatar signs in through tea's login, asks only without one, and then opens Settings", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-tea-"))),
     repo = join(root, "project"),
     bin = join(root, "bin"),
@@ -87,42 +87,34 @@ else if (cmd === "logins" && sub === "helper") {
     });
     await page.reload();
     const signInForm = page.getByLabel("Gitea server", { exact: true });
-    const share = page.getByRole("dialog", { name: "Share conversation" });
     const avatar = page.locator(".sb-account");
 
-    // Signed out, but tea has a login: Share goes straight to sharing.
+    // Signed out, but tea has a login: the avatar signs in without a form.
     await expect(avatar).not.toHaveClass(/signed-in/);
-    await page
-      .getByRole("button", { name: "Share conversation", exact: true })
-      .click();
-    await expect(share).toBeVisible();
-    await expect(signInForm).toHaveCount(0);
+    await avatar.click();
     await expect(avatar).toHaveClass(/signed-in/);
-    await share.getByRole("button", { name: "Close dialog" }).click();
+    await expect(signInForm).toHaveCount(0);
 
     // Signed in, the avatar is the account in Settings, not a token form.
     await avatar.click();
     await expect(page.locator(".settings-account")).toBeVisible();
     await expect(signInForm).toHaveCount(0);
 
-    // Without a token or a tea login, Share asks, then carries on.
+    // Without a token or a tea login, the avatar asks.
     await writeFile(logins, "[]");
     await page
       .getByRole("button", { name: "Disconnect account", exact: true })
       .click();
     await expect(avatar).not.toHaveClass(/signed-in/);
-    await page
-      .getByRole("button", { name: "Share conversation", exact: true })
-      .click();
+    await avatar.click();
     await expect(signInForm).toBeVisible();
-    await expect(share).toHaveCount(0);
     await signInForm.fill(fixture.serverUrl);
     await page
       .getByLabel("Personal access token", { exact: true })
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
-    await expect(share).toBeVisible();
     await expect(signInForm).toHaveCount(0);
+    await expect(avatar).toHaveClass(/signed-in/);
   } finally {
     await app.close().catch(() => {});
     await fixture.close();

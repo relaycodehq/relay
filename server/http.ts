@@ -4,11 +4,6 @@ import {
   type RepositoryVerifier,
   type RepositoryIdentity,
 } from "./repository-access";
-import {
-  Conversations,
-  shareConversationSchema,
-  sharedMessagesSchema,
-} from "./conversations";
 import { SharedWorkspace } from "./workspace";
 import { shaSchema } from "../shared/validation";
 import { createServer, type IncomingMessage } from "node:http";
@@ -83,7 +78,6 @@ export function createRoomsServer(
 ) {
   secretSchema.parse(adminSecret);
   const adminHash = hash(adminSecret);
-  const conversations = new Conversations(database);
   const workspace = new SharedWorkspace(database);
   const grants = new Map<string, number>();
   const grant = (
@@ -227,29 +221,7 @@ export function createRoomsServer(
               428,
               "Verify current Gitea repository access before opening this project.",
             );
-          if (path === "/v1/conversations" && method === "GET")
-            value = conversations.list(session);
-          else if (path === "/v1/conversations" && method === "POST")
-            value = conversations.share(
-              session,
-              shareConversationSchema.parse(await body(req, 8 * 1024 * 1024)),
-            );
-          else if (/^\/v1\/conversations\/[^/]+\/messages$/.test(path)) {
-            const id = idSchema.parse(path.split("/")[3]);
-            if (method === "GET")
-              value = conversations.poll(
-                session,
-                id,
-                numberSchema.parse(url.searchParams.get("after") ?? 0),
-              );
-            else if (method === "POST")
-              value = conversations.post(
-                session,
-                id,
-                sharedMessagesSchema.parse(await body(req, 8 * 1024 * 1024)),
-              );
-            else throw new HttpError(405, "Method not allowed.");
-          } else if (path === "/v1/me" && method === "GET")
+          if (path === "/v1/me" && method === "GET")
             value = {
               projectId: session.projectId,
               project: database.project(session.projectId),
