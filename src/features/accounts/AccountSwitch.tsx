@@ -16,17 +16,14 @@ import "./accounts.css";
 /**
  * The model picker's footer for an agent with several accounts: each one as
  * a tab with what it has left, and the meters of the one this thread runs on.
- * Null with one account, where the picker's own meters do.
+ * Null with one account, so the picker falls back to its own meters; a plain
+ * function rather than a component, since an element is never null.
  */
-export function AccountUsageFooter({
-  provider,
-  accounts,
-  now,
-}: {
-  provider: string;
-  accounts: ThreadAccounts;
-  now: number;
-}) {
+export function accountUsageFooter(
+  provider: string,
+  accounts: ThreadAccounts,
+  now: number,
+) {
   if (!hasAccounts(provider) || !accounts.several(provider)) return null;
   return <AccountTabs provider={provider} accounts={accounts} now={now} />;
 }

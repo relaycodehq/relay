@@ -49,7 +49,7 @@ import {
 import { OpenRouterCreditButton } from "./OpenRouterCredit";
 import { UsageRing } from "./UsageRing";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
-import { AccountControl, AccountUsageFooter } from "../accounts/AccountSwitch";
+import { AccountControl, accountUsageFooter } from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import "./composer.css";
 export interface ComposerHandle {
@@ -408,13 +408,8 @@ export function ProjectComposer({
                   defaultNames={catalogs.defaultNames}
                   account={{
                     of: accounts.of,
-                    footer: (provider, now) => (
-                      <AccountUsageFooter
-                        provider={provider}
-                        accounts={accounts}
-                        now={now}
-                      />
-                    ),
+                    footer: (provider, now) =>
+                      accountUsageFooter(provider, accounts, now),
                   }}
                 />
               ),
