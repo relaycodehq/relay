@@ -14,6 +14,8 @@ REPO_URL="git@github.com:relaycodehq/relay.git"
 RELEASES_REPO="relaycodehq/relay-releases"
 SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
+# Signs latest.json; installs refuse a feed without a signature from it.
+UPDATE_KEY="$HOME/.config/relay-ci/update-signing-key.pem"
 
 dry_run=0
 args=()
@@ -79,6 +81,10 @@ if [[ -n "$latest" ]] &&
 fi
 git tag -l --format='%(contents)' "$tag" | sed '/^-----BEGIN PGP SIGNATURE-----$/,$d' >"$ROOT/notes.md"
 grep -q '[^[:space:]]' "$ROOT/notes.md" || fail "has an empty message; it's the release notes."
+# A dry run without the key builds unsigned; a real one fails here, before the build.
+if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
+  node scripts/sign-update-feed.mjs --check --key "$UPDATE_KEY"
+fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
 
@@ -196,6 +202,9 @@ fi
 rm -rf "$previous_apk"
 
 node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$(cat "$ROOT/notes.md")"
+if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
+  node scripts/sign-update-feed.mjs "$out/latest.json" --key "$UPDATE_KEY"
+fi
 ls -l "$out"
 
 tidy
@@ -208,8 +217,10 @@ step "Publishing $version"
 gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1 ||
   gh release create "$tag" --repo "$RELEASES_REPO" --draft --title "Relay $version" --notes ""
 # Nobody sees the draft until the edit below publishes it.
-(cd "$out" && gh release upload "$tag" --repo "$RELEASES_REPO" --clobber $(ls | grep -v '^latest\.json$'))
-gh release upload "$tag" "$out/latest.json" --repo "$RELEASES_REPO" --clobber
+(cd "$out" && gh release upload "$tag" --repo "$RELEASES_REPO" --clobber $(ls | grep -v -E '^latest\.json(\.sig)?$'))
+# The feed goes up only with its signature, after the files it points at.
+[[ -s "$out/latest.json.sig" ]] || fail "has no latest.json.sig; installs would refuse latest.json."
+gh release upload "$tag" "$out/latest.json.sig" "$out/latest.json" --repo "$RELEASES_REPO" --clobber
 gh release edit "$tag" --repo "$RELEASES_REPO" --draft=false --latest \
   --title "Relay $version" --notes-file "$ROOT/notes.md"
 rm -rf "$out"

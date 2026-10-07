@@ -4,6 +4,16 @@ import { z } from "zod";
 export const releasesRepo = "relaycodehq/relay-releases";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
+/**
+ * Ed25519 public keys (raw 32 bytes, base64) Relay accepts for latest.json.sig,
+ * the release build's signature over latest.json's exact bytes. More than one
+ * so a new key can ship here before the build switches to signing with it.
+ * scripts/sign-update-feed.mjs reads this list too; keep it a plain array of
+ * string literals.
+ */
+export const updateKeys: readonly string[] = [
+  "83EmHV/Q5V1spYrUP+1S8Kuke5rUt2gAPVQJ1r45YL4=",
+];
 /** The phone app, built with every release; the unversioned name always points at the newest. */
 export const androidAppDownload = `https://github.com/${releasesRepo}/releases/latest/download/Relay-Android.apk`;
 

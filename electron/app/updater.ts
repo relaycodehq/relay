@@ -21,11 +21,13 @@ import {
   manifestSchema,
   newerVersion,
   updateFeed,
+  updateKeys,
   type UpdateFile,
   type UpdateManifest,
   type UpdateState,
   type UpdateTarget,
 } from "../../shared/updates";
+import { signedByAny } from "./update-signature";
 
 const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;
@@ -89,6 +91,8 @@ export class Updater {
   private checking?: Promise<UpdateState>;
   private checkedAt = 0;
   private readonly feed: string;
+  /** Public keys whose signature over the feed Relay trusts. */
+  private readonly keys: readonly string[];
 
   private waiting?: NodeJS.Timeout;
 
@@ -104,6 +108,13 @@ export class Updater {
     // Development builds stay quiet unless a feed is set to exercise the UI.
     const override = process.env.RELAY_UPDATE_FEED;
     this.feed = override || updateFeed;
+    // A test feed may bring its own key, but only to a development build;
+    // a packaged copy trusts the pinned keys and nothing else.
+    const testKey = process.env.RELAY_UPDATE_KEY;
+    this.keys =
+      !app.isPackaged && override && testKey
+        ? [...updateKeys, testKey]
+        : updateKeys;
     this.state =
       app.isPackaged || override
         ? { status: "idle", current }
@@ -165,21 +176,32 @@ export class Updater {
     // Pressing Update or Restart mid-check hands the state to that instead.
     const asked = this.state;
     try {
-      const response = await net
-        .fetch(this.feed, {
-          cache: "no-store",
-          signal: AbortSignal.timeout(checkTimeout),
-        })
-        .catch((error) => {
-          throw new Error(`Couldn't reach ${new URL(this.feed).host}.`, {
-            cause: error,
-          });
-        });
+      const [response, signed] = await Promise.all([
+        this.fetchFeed(this.feed),
+        this.fetchFeed(`${this.feed}.sig`),
+      ]);
       if (!response.ok)
         throw new Error(`The update feed answered ${response.status}.`);
-      const parsed = manifestSchema.safeParse(
-        await response.json().catch(() => undefined),
-      );
+      if (!signed.ok && signed.status !== 404)
+        throw new Error(
+          `The update feed's signature answered ${signed.status}.`,
+        );
+      // Nothing in the feed counts until its exact bytes check out.
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const signature = signed.ok ? await signed.text() : "";
+      if (!signature.trim())
+        throw new Error(
+          "The update feed isn't signed, so Relay won't install from it.",
+        );
+      if (!signedByAny(bytes, signature, this.keys))
+        throw new Error(
+          "The update feed's signature doesn't check out, so Relay won't install from it.",
+        );
+      let data: unknown;
+      try {
+        data = JSON.parse(new TextDecoder().decode(bytes));
+      } catch {}
+      const parsed = manifestSchema.safeParse(data);
       if (!parsed.success)
         throw new Error("The update feed sent something Relay can't read.", {
           cause: parsed.error,
@@ -211,6 +233,19 @@ export class Updater {
       throw error;
     }
     return this.state;
+  }
+
+  private fetchFeed(url: string) {
+    return net
+      .fetch(url, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(checkTimeout),
+      })
+      .catch((error) => {
+        throw new Error(`Couldn't reach ${new URL(url).host}.`, {
+          cause: error,
+        });
+      });
   }
 
   private dropStaged() {

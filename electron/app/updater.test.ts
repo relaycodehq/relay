@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,26 +34,73 @@ afterEach(() => {
   vi.mocked(net.fetch).mockReset();
 });
 
+/** The test feed's signing key, which only a development build accepts. */
+function keyPair() {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const x = publicKey.export({ format: "jwk" }).x!;
+  return { privateKey, key: Buffer.from(x, "base64url").toString("base64") };
+}
+const testKey = keyPair();
+
 /** An updater on a test feed, for a copy that can replace itself. */
 function checker(emit: (state: UpdateState) => void = () => {}) {
   process.env.RELAY_UPDATE_FEED = "https://example.test/latest.json";
+  process.env.RELAY_UPDATE_KEY = testKey.key;
   const updater = new Updater(emit);
   delete process.env.RELAY_UPDATE_FEED;
+  delete process.env.RELAY_UPDATE_KEY;
   Object.assign(updater as any, { install: { target: "linux-x64-appimage" } });
   return updater;
 }
-const feed = (version: string) =>
-  Response.json({ version, files: { "linux-x64-appimage": release() } });
+const feedBytes = (version: string) =>
+  Buffer.from(
+    JSON.stringify(
+      { version, files: { "linux-x64-appimage": release() } },
+      null,
+      2,
+    ),
+  );
+const signed = (bytes: Buffer, by = testKey.privateKey) =>
+  sign(null, bytes, by).toString("base64");
+/**
+ * Serves latest.json and latest.json.sig: `version`'s feed signed by the test
+ * key unless `bytes` or `signature` (null: no .sig at all) say otherwise.
+ */
+function answer(
+  version: string,
+  {
+    bytes = feedBytes(version),
+    signature = signed(bytes),
+    feed,
+  }: {
+    bytes?: Buffer;
+    signature?: string | null;
+    feed?: Promise<Response>;
+  } = {},
+) {
+  vi.mocked(net.fetch).mockImplementation(async (url) =>
+    String(url).endsWith(".sig")
+      ? signature === null
+        ? new Response("Not Found", { status: 404 })
+        : new Response(signature)
+      : (feed ?? new Response(new Uint8Array(bytes))),
+  );
+}
+/** How many times the feed itself was fetched, leaving out its signature. */
+const feedFetches = () =>
+  vi
+    .mocked(net.fetch)
+    .mock.calls.filter(([url]) => !String(url).endsWith(".sig")).length;
 
 it("offers a newer release, and notes the time when there's none", async () => {
   const updater = checker();
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  answer("0.2.0");
   expect(await updater.check()).toMatchObject({
     status: "available",
     version: "0.2.0",
     install: "auto",
   });
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.1.0"));
+  answer("0.1.0");
   expect(await updater.check()).toMatchObject({
     status: "idle",
     checkedAt: expect.any(Number),
@@ -62,35 +109,64 @@ it("offers a newer release, and notes the time when there's none", async () => {
 
 it("joins a check already under way", async () => {
   const updater = checker();
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.1.0"));
+  answer("0.1.0");
   const [first, second] = await Promise.all([updater.check(), updater.check()]);
-  expect(net.fetch).toHaveBeenCalledTimes(1);
+  expect(feedFetches()).toBe(1);
   expect(second).toBe(first);
 });
 
 it("says why a check failed and goes back to idle", async () => {
   const seen: string[] = [];
   const updater = checker((s) => seen.push(s.status));
-  vi.mocked(net.fetch).mockRejectedValueOnce(
+  vi.mocked(net.fetch).mockRejectedValue(
     new Error("net::ERR_INTERNET_DISCONNECTED"),
   );
   await expect(updater.check()).rejects.toThrow("Couldn't reach example.test.");
   expect(updater.current).toEqual({ status: "idle", current: "0.1.0" });
   expect(seen).toEqual(["checking", "idle"]);
-  vi.mocked(net.fetch).mockResolvedValueOnce(new Response("<!doctype html>"));
+  answer("0.2.0", { bytes: Buffer.from("<!doctype html>") });
   await expect(updater.check()).rejects.toThrow("can't read");
+});
+
+it("refuses a feed that isn't signed by a trusted key", async () => {
+  const updater = checker();
+  answer("0.2.0", { signature: null });
+  await expect(updater.check()).rejects.toThrow("isn't signed");
+  const bytes = feedBytes("0.2.0");
+  answer("0.2.0", { signature: signed(bytes, keyPair().privateKey) });
+  await expect(updater.check()).rejects.toThrow("signature doesn't check out");
+  // Signed, then changed on the way.
+  const tampered = Buffer.from(bytes);
+  tampered[tampered.indexOf("0.2.0") + 2] = "9".charCodeAt(0);
+  answer("0.2.0", { bytes: tampered, signature: signed(bytes) });
+  await expect(updater.check()).rejects.toThrow("signature doesn't check out");
+  expect(updater.current).toEqual({ status: "idle", current: "0.1.0" });
+  expect((updater as any).manifest).toBeUndefined();
+});
+
+it("trusts a test key only in a development build", async () => {
+  Object.assign(app, { isPackaged: true });
+  try {
+    const updater = checker();
+    answer("0.2.0");
+    await expect(updater.check()).rejects.toThrow(
+      "signature doesn't check out",
+    );
+  } finally {
+    Object.assign(app, { isPackaged: false });
+  }
 });
 
 it("keeps an offer in place while looking for a newer one", async () => {
   const seen: string[] = [];
   const updater = checker((s) => seen.push(s.status));
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  answer("0.2.0");
   const offer = await updater.check();
   seen.length = 0;
-  vi.mocked(net.fetch).mockRejectedValueOnce(new Error("offline"));
+  vi.mocked(net.fetch).mockRejectedValue(new Error("offline"));
   await expect(updater.check()).rejects.toThrow();
   expect(updater.current).toEqual(offer);
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.3.0"));
+  answer("0.3.0");
   expect(await updater.check()).toMatchObject({ version: "0.3.0" });
   expect(seen).not.toContain("checking");
 });
@@ -102,12 +178,12 @@ it("skips a downloaded release once a newer one is out", async () => {
     state: { status: "ready", current: "0.1.0", version: "0.2.0" },
     staged: { version: "0.2.0", path: join(dir, "Relay.AppImage"), dir },
   });
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.2.0"));
+  answer("0.2.0");
   expect(await updater.check()).toMatchObject({
     status: "ready",
     version: "0.2.0",
   });
-  vi.mocked(net.fetch).mockResolvedValueOnce(feed("0.3.0"));
+  answer("0.3.0");
   expect(await updater.check()).toMatchObject({
     status: "available",
     version: "0.3.0",
@@ -125,13 +201,11 @@ it("leaves the state to a restart pressed while a check is out", async () => {
     state: ready,
     staged: { version: "0.2.0", path: join(dir, "Relay.AppImage"), dir },
   });
-  let answer!: (response: Response) => void;
-  vi.mocked(net.fetch).mockReturnValueOnce(
-    new Promise((resolve) => (answer = resolve)),
-  );
+  let respond!: (response: Response) => void;
+  answer("0.3.0", { feed: new Promise((resolve) => (respond = resolve)) });
   const check = updater.check();
   (updater as any).set({ ...ready, status: "waiting", tasks: 1 });
-  answer(feed("0.3.0"));
+  respond(new Response(new Uint8Array(feedBytes("0.3.0"))));
   expect(await check).toMatchObject({ status: "waiting", version: "0.2.0" });
   expect((updater as any).staged).toMatchObject({ version: "0.2.0" });
 });
@@ -140,7 +214,7 @@ it("checks again on coming back to Relay once the last check is old", async () =
   vi.useFakeTimers();
   vi.mocked(app.on).mockClear();
   const updater = checker();
-  vi.mocked(net.fetch).mockImplementation(async () => feed("0.1.0"));
+  answer("0.1.0");
   updater.start();
   const calls = vi.mocked(app.on).mock.calls as unknown as [
     string,
@@ -148,16 +222,16 @@ it("checks again on coming back to Relay once the last check is old", async () =
   ][];
   const focus = calls.find(([event]) => event === "browser-window-focus")![1];
   focus();
-  expect(net.fetch).not.toHaveBeenCalled();
+  expect(feedFetches()).toBe(0);
   await vi.advanceTimersByTimeAsync(15_000);
-  expect(net.fetch).toHaveBeenCalledTimes(1);
+  expect(feedFetches()).toBe(1);
   await vi.advanceTimersByTimeAsync(29 * 60_000);
   focus();
-  expect(net.fetch).toHaveBeenCalledTimes(1);
+  expect(feedFetches()).toBe(1);
   await vi.advanceTimersByTimeAsync(60_000);
   focus();
   await vi.advanceTimersByTimeAsync(0);
-  expect(net.fetch).toHaveBeenCalledTimes(2);
+  expect(feedFetches()).toBe(2);
 });
 
 it("writes a verified download and reports progress", async () => {
