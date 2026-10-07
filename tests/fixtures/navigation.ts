@@ -50,7 +50,7 @@ export const panelToggle = (page: Page) =>
 /** Brings a surface to the front of the panel, opening the panel and the surface as needed. */
 export async function openSurface(
   page: Page,
-  name: "Files" | "History" | "Terminal",
+  name: "Files" | "History" | "Terminal" | "Browser",
 ) {
   const toggle = panelToggle(page);
   if ((await toggle.getAttribute("aria-pressed")) !== "true")

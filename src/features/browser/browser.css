@@ -1,0 +1,79 @@
+.browser-surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+.browser-address {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0 4px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.browser-address:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: transparent;
+}
+.browser-address[aria-invalid] {
+  border-color: var(--danger);
+}
+.browser-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.browser-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.browser-notice p {
+  margin: 0;
+  color: var(--text);
+}
+.browser-notice small {
+  max-width: 320px;
+}
+.browser-output {
+  max-width: 100%;
+  max-height: 50%;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--hover);
+  font-size: 11px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+.browser-snapshot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+}

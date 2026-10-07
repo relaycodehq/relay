@@ -300,6 +300,14 @@
   font-family: var(--font-mono);
   font-size: 12px;
 }
+.settings-dev-port {
+  width: 90px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.settings-dev-port[aria-invalid] {
+  border-color: var(--danger);
+}
 .settings-project-path {
   max-width: 280px;
   overflow: hidden;

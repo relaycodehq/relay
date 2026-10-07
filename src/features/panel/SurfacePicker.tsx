@@ -13,15 +13,17 @@ export const SURFACE_LABELS: Record<Surface, string> = {
   files: "Files",
   history: "History",
   terminal: "Terminal",
+  browser: "Browser",
 };
 export const SURFACE_ICONS: Record<Surface, ReactNode> = {
   files: <Files size={13} />,
   history: <GitGraph size={13} />,
   terminal: <SquareTerminal size={13} />,
+  browser: <Globe size={13} />,
 };
 
 interface Item {
-  id: Surface | "browser" | "pull";
+  id: Surface | "pull";
   label: string;
   icon: ReactNode;
   letter: string;
@@ -58,7 +60,6 @@ export function SurfacePicker({
       label: "Browser",
       icon: <Globe size={14} />,
       letter: "B",
-      disabled: true,
     },
     {
       id: "pull",

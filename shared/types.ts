@@ -5,6 +5,7 @@ import type { ClockifyApi } from "./clockify";
 import type { PluginsApi } from "./plugins";
 import type { TaskApi } from "./tasks";
 import type { TerminalApi } from "./terminals";
+import type { PreviewApi } from "./preview";
 import type { WorkingTreeApi } from "./working-tree";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
@@ -261,6 +262,7 @@ export interface Api
     ClockifyApi,
     TaskApi,
     TerminalApi,
+    PreviewApi,
     PhoneRemoteApi,
     ComputersApi {
   inspectSymbol(

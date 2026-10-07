@@ -45,6 +45,8 @@ export class AppWindow {
     private hooks: {
       closed(): void;
       quitCancelled(): void;
+      /** The page is going; whatever it laid over itself goes too. */
+      reloaded(): void;
       rendererGone(details: Electron.RenderProcessGoneDetails): void;
     },
   ) {}
@@ -159,6 +161,7 @@ export class AppWindow {
     win.webContents.on("did-start-navigation", (details) => {
       if (!details.isMainFrame || details.isSameDocument) return;
       threadTerminals.detach();
+      this.hooks.reloaded();
       // Settings may have been recording a shortcut when the page went.
       win.webContents.setIgnoreMenuShortcuts(false);
     });

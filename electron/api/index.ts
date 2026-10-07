@@ -18,6 +18,7 @@ import { reviewHandlers } from "./reviews";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
 import { terminalHandlers } from "./terminals";
+import { previewHandlers } from "./previews";
 import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
@@ -34,6 +35,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     gitHandlers(ctx),
     chatHandlers(ctx),
     terminalHandlers(ctx),
+    previewHandlers(ctx),
     settingsHandlers(ctx),
     readAloudHandlers(ctx),
     pluginHandlers(ctx),

@@ -3,8 +3,8 @@ import { legacyTabs } from "../../lib/workspace-panes";
 import { newTerminalSlot } from "../terminal/terminal-dock";
 
 /** What the panel can show. Terminals stack as several tabs; the rest open once. */
-export type Surface = "files" | "history" | "terminal";
-const SURFACES: Surface[] = ["files", "history", "terminal"];
+export type Surface = "files" | "history" | "terminal" | "browser";
+const SURFACES: Surface[] = ["files", "history", "terminal", "browser"];
 
 export interface PanelTab {
   key: string;

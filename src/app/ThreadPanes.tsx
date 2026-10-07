@@ -30,6 +30,12 @@ import {
 } from "../features/terminal/thread-terminals";
 import { terminalLabel } from "../features/terminal/TerminalDrawer";
 import { TerminalView } from "../features/terminal/TerminalView";
+import { BrowserSurface } from "../features/browser/BrowserSurface";
+import {
+  closePreview,
+  previewKey,
+  usePreviewState,
+} from "../features/browser/previews";
 
 /**
  * The working tree's changes, or in a PR thread the PR's Review, which
@@ -168,6 +174,7 @@ export function ThreadPanel({
       [],
     );
   const front = panel.front;
+  const preview = usePreviewState(previewKey(project.id, chatId));
   let terminals = 0;
   const tabs = panel.tabs.map((tab) => ({
     key: tab.key,
@@ -175,12 +182,15 @@ export function ThreadPanel({
     label:
       tab.surface === "terminal"
         ? terminalLabel(terminals++)
-        : SURFACE_LABELS[tab.surface],
+        : tab.surface === "browser" && preview?.worktree
+          ? preview.worktree
+          : SURFACE_LABELS[tab.surface],
     closeDisabled: tab.surface === "files" && locked,
   }));
   const close = (key: string) => {
     const tab = panel.tabs.find((t) => t.key === key);
     if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
+    if (tab?.surface === "browser") closePreview(previewKey(project.id, chatId));
     panel.close(key);
   };
   const folderShown =
@@ -248,6 +258,15 @@ export function ThreadPanel({
             onOpenFile={(path) =>
               opens.openInEditor({ path, directory: false })
             }
+          />
+        </div>
+      )}
+      {panel.has("browser") && (
+        <div className="panel-body" hidden={front?.surface !== "browser"}>
+          <BrowserSurface
+            projectId={project.id}
+            chatId={chatId}
+            front={front?.surface === "browser"}
           />
         </div>
       )}
