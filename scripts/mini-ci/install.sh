@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copies the release pipeline to the Mac mini and (re)loads its launchd job.
 #
-#   scripts/mini-ci/install.sh [user@host]
+#   scripts/mini-ci/install.sh <user@host>
 #
 # The toolchain (Node 22, JDK 17, Android SDK, Docker Desktop) and the secrets
 # in ~/.config/relay-ci and ~/.config/relay-android are set up once by hand.
 set -euo pipefail
-host="${1:-you@mac-mini.local}"
+host="${1:?usage: scripts/mini-ci/install.sh <user@host>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 
 ssh "$host" 'mkdir -p ~/relay-ci.noindex/bin ~/relay-ci.noindex/logs'

@@ -26,11 +26,11 @@ it("finds answers saved before, so the questions' shape stays put", async () => 
     JSON.stringify({
       version: 1,
       keys: {
-        "8037f9b18384d63105c1212c30fb318e2162063160d264dc86b5e5d1a4f43201": {
+        "cf905f0bafddf03a12e93a596b20f01656f3f7c4b400903ed4e7ffa60bf0978d": {
           at: Date.now(),
           answers: {
             d58d27366db182321d4a652b08a6bd874867cef62a3cf3a3fb657e1faee362df: 0.75,
-            b4c621bd2a1780c3c072e0910a03a8e52327926bf7d0dfc520ee8e75c767d19e: 0.25,
+            f0e9b657e2860fed68cb8932739f924b40b919529a761b14960ed30564b800b5: 0.25,
           },
         },
       },

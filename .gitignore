@@ -19,3 +19,4 @@ __pycache__/
 .claude/skills/
 .idea/
 dist-website/
+.wrangler/

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Public feed written by the release workflow; source code stays private. */
+/** Public feed written by the release workflow. */
 export const releasesRepo = "lubomirmolin/relay-releases";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
