@@ -18,3 +18,4 @@ server/.secrets/
 __pycache__/
 .claude/skills/
 .idea/
+dist-website/

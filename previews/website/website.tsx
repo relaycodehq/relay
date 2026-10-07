@@ -23,7 +23,7 @@ import { startLanes } from "./hero-lanes";
 import { Reveal, reducedMotion, useActive, useScrollProgress } from "./motion";
 import { Faq, Mark } from "./parts";
 import { installStubs } from "./stubs";
-import { faq, features, platforms, promises, RELEASES, VERSION } from "./content";
+import { faq, features, macDownload, platforms, promises, RELEASES, VERSION } from "./content";
 
 // The site always wears Relay's own dark theme, whatever the previews were left on.
 applyToDocument(resolveChoice("dark", { theme: "relay" } as ThemeChoice));
@@ -245,7 +245,7 @@ function Site() {
         </h1>
         <p>Relay runs your coding agents on your computer. You see each step. You review each edit.</p>
         <div className="hero-actions">
-          <a className="cta" href={RELEASES} target="_blank" rel="noreferrer">
+          <a className="cta" href={macDownload}>
             Download for macOS
             <ArrowDownToLine size={15} />
           </a>
@@ -336,7 +336,7 @@ function Site() {
         <Reveal>
           <h2>Download Relay</h2>
         </Reveal>
-        <a className="cta" href={RELEASES} target="_blank" rel="noreferrer">
+        <a className="cta" href={macDownload}>
           Download for macOS
           <ArrowDownToLine size={15} />
         </a>
@@ -344,9 +344,7 @@ function Site() {
           {platforms.map((platform, index) => (
             <a
               key={platform.system}
-              href={RELEASES}
-              target="_blank"
-              rel="noreferrer"
+              href={platform.href}
               style={{ "--i": index } as CSSProperties}
             >
               <strong>{platform.system}</strong>

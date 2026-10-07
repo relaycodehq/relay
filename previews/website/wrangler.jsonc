@@ -1,0 +1,10 @@
+// Serves the built website as static files on Cloudflare: npm run deploy:website
+{
+  "name": "relay-site",
+  "compatibility_date": "2026-10-06",
+  "assets": { "directory": "../../dist-website" },
+  "routes": [
+    { "pattern": "relaycode.io", "custom_domain": true },
+    { "pattern": "www.relaycode.io", "custom_domain": true }
+  ]
+}

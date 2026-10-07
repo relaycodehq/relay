@@ -4,7 +4,13 @@
 // docs/phone.md and shared/shortcuts.ts. Keep them in step when those change.
 
 export const RELEASES = "https://github.com/lubomirmolin/relay-releases/releases/latest";
-export const VERSION = "0.6.0";
+// The build sets the version from the latest v* tag (previews/website/vite.config.ts).
+declare const __RELAY_VERSION__: string | undefined;
+export const VERSION = typeof __RELAY_VERSION__ === "string" ? __RELAY_VERSION__ : "dev";
+const download = (file: string) =>
+  VERSION === "dev" ? RELEASES : `https://github.com/lubomirmolin/relay-releases/releases/download/v${VERSION}/${file}`;
+
+export const macDownload = download(`Relay-${VERSION}-mac-arm64.dmg`);
 
 export const features: { title: string; text: string; detail: string }[] = [
   {
@@ -88,25 +94,29 @@ export const promises: { title: string; text: string }[] = [
   },
 ];
 
-export const platforms: { system: string; file: string; status: string }[] = [
+export const platforms: { system: string; file: string; href: string; status: string }[] = [
   {
     system: "macOS (Apple Silicon)",
     file: `Relay-${VERSION}-mac-arm64.dmg`,
+    href: download(`Relay-${VERSION}-mac-arm64.dmg`),
     status: "Primary platform. Used each day.",
   },
   {
     system: "Windows 10/11 (x64)",
     file: `Relay-${VERSION}-win-x64.exe`,
+    href: download(`Relay-${VERSION}-win-x64.exe`),
     status: "Built with each release. Less use.",
   },
   {
     system: "Linux (x86-64)",
     file: `Relay-${VERSION}-linux-x86_64.AppImage`,
+    href: download(`Relay-${VERSION}-linux-x86_64.AppImage`),
     status: "Cross-built. Few runtime tests.",
   },
   {
     system: "Omarchy",
     file: `Relay-${VERSION}-omarchy-x86_64.tar.gz`,
+    href: download(`Relay-${VERSION}-omarchy-x86_64.tar.gz`),
     status: "Run python3 install.py. No sudo.",
   },
 ];
