@@ -4,13 +4,7 @@
 // through it, and the visitor's pointer and wheel pass straight through.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowUp,
-  ChevronDown,
-  GitCompareArrows,
-  MessageSquare,
-  SquareTerminal,
-} from "lucide-react";
+import { GitCompareArrows, MessageSquare, SquareTerminal } from "lucide-react";
 import { ProjectSidebar } from "../../src/features/sidebar/ProjectSidebar";
 import { Message } from "../../src/features/thread/ProjectMessage";
 import { AgentRequestCard } from "../../src/features/thread/AgentRequestCard";
@@ -21,8 +15,13 @@ import {
   DeepReviewSetup,
 } from "../../src/features/deep-review/DeepReview";
 import { RunningTasks } from "../../src/features/terminal/RunningTasks";
-import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
-import { UsageDial } from "../../src/features/agents/UsageDial";
+import { ComposerToolbar } from "../../src/features/composer/ComposerToolbar";
+import { useSampleControls } from "../../src/features/composer/ComposerToolbarSample";
+import { defaultToolbar } from "../../src/features/composer/composer-toolbar";
+import {
+  SendButton,
+  StopButton,
+} from "../../src/features/composer/ComposerSendButtons";
 import { agentName } from "../../shared/agents";
 import type { ChatMessage } from "../../shared/projects";
 import type { DeepReviewState } from "../../shared/deep-review";
@@ -187,8 +186,15 @@ const approval = {
   decisions: ["decline" as const, "accept" as const],
 };
 
-function Composer({ id }: { id: string }) {
+function Composer({ id, running }: { id: string; running?: boolean }) {
   const turn = turns[id] ?? turns.shortcuts;
+  const effort = turn.model.effort || "";
+  const controls = useSampleControls({
+    agent: turn.provider,
+    name: turn.model.name || `${agentName(turn.provider)} default`,
+    effort: effort ? effort[0].toUpperCase() + effort.slice(1) : "Default",
+    window: 200_000,
+  });
   return (
     <div className="thread-compose-wrap">
       <form
@@ -203,27 +209,17 @@ function Composer({ id }: { id: string }) {
           placeholder={`Steer ${agentName(turn.provider)}, or /btw to ask on the side…`}
         />
         <div className="composer-tools">
-          <span className="rw-pick">
-            <ProviderIcon provider={turn.provider} />
-            {turn.model.name || `${agentName(turn.provider)} default`}
-            <ChevronDown size={12} />
-          </span>
-          <span className="rw-pick">
-            {turn.model.effort
-              ? turn.model.effort[0].toUpperCase() + turn.model.effort.slice(1)
-              : "Default"}
-            <ChevronDown size={12} />
-          </span>
-          <span className="spacer" />
-          <UsageDial
-            meters={[
-              { kind: "weekly", leftPercent: 61, pace: "ok" },
-              { kind: "session", leftPercent: 38, pace: "ok" },
-            ]}
-          />
-          <button type="submit" className="send-message" aria-label="Send">
-            <ArrowUp size={16} />
-          </button>
+          <ComposerToolbar layout={defaultToolbar} controls={controls} />
+          {running ? (
+            <StopButton armed={false} keys="" onStop={() => {}} />
+          ) : (
+            <SendButton
+              disabled
+              running={false}
+              sendKey="enter"
+              onSendLater={() => {}}
+            />
+          )}
         </div>
       </form>
     </div>
@@ -430,7 +426,7 @@ function Thread({
         <div className="thread-message-column">{body}</div>
       </div>
       <div className="thread-bottom-composer">
-        <Composer id={id} />
+        <Composer id={id} running={running} />
       </div>
     </section>
   );
@@ -472,6 +468,11 @@ export function AppWindow({
   const chat = chats.find((c) => c.id === open) ?? chats[0];
   const settled =
     stop === "review" || stop === "terminal" || changes || terminal;
+  // Set before the sidebar's first fetch, which runs ahead of this component's effects.
+  playing.settled = settled;
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: ["project-chats"] });
+  }, [settled]);
 
   return (
     <div className="rw" ref={frame} inert aria-label="Relay, playing a demo">

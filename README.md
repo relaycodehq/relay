@@ -1,12 +1,4 @@
-<p align="center">
-  <img src="assets/icon.png" width="96" alt="Relay icon">
-</p>
-
-<h1 align="center">Relay</h1>
-
-<p align="center">
-  Your agents, your code and your reviews. One workspace.
-</p>
+![Relay: one workspace for your coding agents. Claude, Codex, OpenCode and Cursor. Open source, MIT, on macOS, Windows and Linux with an Android remote. Next to it, the app with a finished Claude thread and its changed files.](docs/media/relay-preview.png)
 
 <p align="center">
   <a href="https://relaycode.io/download/"><strong>Download Relay</strong></a>
@@ -17,12 +9,6 @@
   ·
   <a href="#for-contributors">Build it yourself</a>
 </p>
-
-![Relay with a Claude thread, its changes side by side and a terminal under the thread](docs/media/relay-preview.png)
-
-<p align="center"><sub>A thread, its changes and its terminal, on sample data from the teaser.</sub></p>
-
-[Watch the 58-second teaser](docs/media/relay-teaser.mp4)
 
 ## Download, sign in, and go
 
@@ -143,6 +129,8 @@ node scripts/record-teaser.mjs --stills 28  # a PNG of one moment
 ```
 
 Output goes to `test-results/teaser/`. Copy the result to `docs/media/relay-teaser.mp4` when the UI changes, and refresh the screenshots in `docs/media/` with it.
+
+The image at the top of this README is `previews/readme-hero/`. Open it with `?shot` in a 1280×640 window and screenshot it at 2x into `docs/media/relay-preview.png`.
 
 </details>
 

@@ -15,6 +15,8 @@ export const playing = {
   reviewStarted: 0,
   /** The terminal demo's dev server is up. */
   serving: false,
+  /** The ⌘1–9 thread shows its finished answer, so its card stops working. */
+  settled: false,
 };
 
 const loaded = Date.now();
@@ -130,7 +132,19 @@ export function installStubs() {
   // The Running panel opens folded to its count; the shell demo unfolds it.
   localStorage.setItem("relay-tasks-collapsed", "true");
   Object.assign(window.relay, {
-    projectChats: async (id: string) => chats.filter((c) => c.projectId === id),
+    projectChats: async (id: string) =>
+      chats
+        .filter((c) => c.projectId === id)
+        .map((c) =>
+          c.id === "shortcuts" && playing.settled
+            ? {
+                ...c,
+                running: false,
+                runningSince: undefined,
+                runningAgents: [],
+              }
+            : c,
+        ),
     projectChat: async (id: string) => reviewerChat(id),
     scratchChats: async () => [],
     projectGroups: async () => [],
