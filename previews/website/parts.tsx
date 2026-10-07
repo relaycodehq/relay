@@ -206,7 +206,7 @@ export function SiteFooter({ home }: { home: string }) {
         </span>
         <p>
           One workspace for your coding agents. Open source under the MIT
-          license.
+          license, built in the Czech Republic.
         </p>
       </div>
       <div>

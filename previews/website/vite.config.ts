@@ -39,7 +39,7 @@ const builds = [...platforms, ...otherBuilds].map((p) => ({
   href: p.href,
   text: `${p.system}: ${p.file}`,
 }));
-const contact = `<p>Source code: <a href="${REPO}">${REPO}</a>. Contact: <a href="mailto:${EMAIL}">${EMAIL}</a>.</p>`;
+const contact = `<p>Source code: <a href="${REPO}">${REPO}</a>. Contact: <a href="mailto:${EMAIL}">${EMAIL}</a>. Built in the Czech Republic.</p>`;
 
 // Each page draws itself with React, so crawlers and link previews that run
 // no script would find an empty root. This puts the page's words there as
