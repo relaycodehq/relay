@@ -8,7 +8,7 @@ export const ISSUES = `${REPO}/issues`;
 export const BUILD_GUIDE = `${REPO}#for-contributors`;
 export const LICENSE = `${REPO}/blob/main/LICENSE`;
 export const RELEASES =
-  "https://github.com/relaycodehq/relay-releases/releases/latest";
+  "https://github.com/relaycodehq/relay/releases/latest";
 export const EMAIL = "hello@relaycode.io";
 // The build sets the version from the latest v* tag (previews/website/vite.config.ts).
 declare const __RELAY_VERSION__: string | undefined;
@@ -17,12 +17,12 @@ export const VERSION =
 const download = (file: string) =>
   VERSION === "dev"
     ? RELEASES
-    : `https://github.com/relaycodehq/relay-releases/releases/download/v${VERSION}/${file}`;
+    : `https://github.com/relaycodehq/relay/releases/download/v${VERSION}/${file}`;
 
 export const releaseNotes =
   VERSION === "dev"
     ? RELEASES
-    : `https://github.com/relaycodehq/relay-releases/releases/tag/v${VERSION}`;
+    : `https://github.com/relaycodehq/relay/releases/tag/v${VERSION}`;
 
 export const features: { title: string; text: string; detail: string }[] = [
   {

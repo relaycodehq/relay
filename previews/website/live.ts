@@ -37,7 +37,7 @@ export type Release = {
 };
 
 const RELEASES_API =
-  "https://api.github.com/repos/relaycodehq/relay-releases/releases/latest";
+  "https://api.github.com/repos/relaycodehq/relay/releases/latest";
 const REPO_API = REPO.replace(
   "https://github.com/",
   "https://api.github.com/repos/",

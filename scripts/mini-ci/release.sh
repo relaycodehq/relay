@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT="$HOME/relay-ci.noindex"
 REPO_URL="git@github.com:relaycodehq/relay.git"
-RELEASES_REPO="relaycodehq/relay-releases"
+RELEASES_REPO="relaycodehq/relay"
 SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
 # Signs latest.json; installs refuse a feed without a signature from it.

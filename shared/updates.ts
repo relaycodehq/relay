@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Public feed written by the release workflow. */
-export const releasesRepo = "relaycodehq/relay-releases";
+export const releasesRepo = "relaycodehq/relay";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
 /**

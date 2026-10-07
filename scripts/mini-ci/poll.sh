@@ -8,7 +8,6 @@ set -uo pipefail
 
 ROOT="$HOME/relay-ci.noindex"
 REPO="relaycodehq/relay"
-RELEASES_REPO="relaycodehq/relay-releases"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 state="$ROOT/state"
 mkdir -p "$state" "$ROOT/logs"
@@ -38,14 +37,14 @@ report() { # <state> <description> [<url>]
 # Failed logs go to a draft release: only people who can push see drafts.
 upload_log() {
   local tag=ci-logs
-  gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1 ||
-    gh release create "$tag" --repo "$RELEASES_REPO" --draft --title "CI logs" \
+  gh release view "$tag" --repo "$REPO" >/dev/null 2>&1 ||
+    gh release create "$tag" --repo "$REPO" --draft --title "CI logs" \
       --notes "Logs of failed Mac mini builds. A draft, so only collaborators see it." >/dev/null
-  gh release upload "$tag" "$log" --repo "$RELEASES_REPO" --clobber >/dev/null &&
-    gh release view "$tag" --repo "$RELEASES_REPO" --json url --jq .url
+  gh release upload "$tag" "$log" --repo "$REPO" --clobber >/dev/null &&
+    gh release view "$tag" --repo "$REPO" --json url --jq .url
   # Keep the last 10.
-  gh release view "$tag" --repo "$RELEASES_REPO" --json assets --jq '.assets | sort_by(.createdAt) | reverse | .[10:][].name' |
-    while read -r name; do gh release delete-asset "$tag" "$name" --repo "$RELEASES_REPO" --yes >/dev/null; done
+  gh release view "$tag" --repo "$REPO" --json assets --jq '.assets | sort_by(.createdAt) | reverse | .[10:][].name' |
+    while read -r name; do gh release delete-asset "$tag" "$name" --repo "$REPO" --yes >/dev/null; done
 }
 
 log="$ROOT/logs/$(date +%Y-%m-%d-%H%M)-$tag.log"
@@ -55,7 +54,7 @@ if "$ROOT/bin/release.sh" "$tag" >"$log" 2>&1; then
   echo "$build" >"$state/released"
   rm -f "$state/failed"
   version="$(cat "$state/version")"
-  report success "Published $version" "https://github.com/$RELEASES_REPO/releases/tag/v$version"
+  report success "Published $version" "https://github.com/$REPO/releases/tag/v$version"
   echo "$(date '+%F %T') released $tag (${head:0:7})"
 else
   echo "$build" >"$state/failed"

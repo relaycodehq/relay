@@ -28,7 +28,7 @@
 
 Relay is an **early preview**, built and used daily on macOS. Windows and Linux builds ship from the same release, with less mileage.
 
-Grab the file for your system from the [latest release](https://github.com/relaycodehq/relay-releases/releases/latest):
+Grab the file for your system from the [latest release](https://github.com/relaycodehq/relay/releases/latest):
 
 | System | Download |
 | --- | --- |
@@ -127,7 +127,7 @@ npm run test:e2e
 
 `npm test` runs the whole unit suite; pass a file path to run just one. `npm run test:e2e` drives the real Electron app against an isolated local Gitea fixture, with windows hidden and synthetic credential storage.
 
-`npm run package:mac`, `package:win`, `package:linux` and `package:omarchy` build installers into `release/`. Every new `v*` tag on `main` builds and publishes all of them to [relay-releases](https://github.com/relaycodehq/relay-releases); pushing to `main` alone ships nothing.
+`npm run package:mac`, `package:win`, `package:linux` and `package:omarchy` build installers into `release/`. Every new `v*` tag on `main` builds and publishes all of them to this repository's [releases](https://github.com/relaycodehq/relay/releases); pushing to `main` alone ships nothing.
 
 </details>
 
