@@ -3,7 +3,7 @@
 // ("thread", never "chat" or "conversation"). Product facts follow README.md,
 // docs/phone.md and shared/shortcuts.ts. Keep them in step when those change.
 
-export const REPO = "https://github.com/lubomirmolin/relay";
+export const REPO = "https://github.com/relaycodehq/relay";
 export const ISSUES = `${REPO}/issues`;
 export const BUILD_GUIDE = `${REPO}#for-contributors`;
 export const LICENSE = `${REPO}/blob/main/LICENSE`;
@@ -201,7 +201,7 @@ export const openSource: {
     title: "Read the code",
     text: "The desktop app, the phone app and the server are in one repository.",
     href: REPO,
-    link: "lubomirmolin/relay",
+    link: "relaycodehq/relay",
   },
   {
     title: "Report a problem",

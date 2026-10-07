@@ -4,6 +4,15 @@
   "version": "0.1.0",
   "description": "A project workspace for agent chats, code changes and pull request reviews",
   "author": "Relay contributors",
+  "homepage": "https://relaycode.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/relaycodehq/relay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/relaycodehq/relay/issues",
+    "email": "hello@relaycode.io"
+  },
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",

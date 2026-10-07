@@ -157,7 +157,7 @@ Output goes to `test-results/teaser/`. Copy the result to `docs/media/relay-teas
 
 ## Contact
 
-Questions, ideas or anything else: [hello@relaycode.io](mailto:hello@relaycode.io). For a bug, please [open an issue](https://github.com/lubomirmolin/relay/issues) with the steps, your platform and your Relay version. Pull requests are welcome; small, focused ones are easiest to review.
+Questions, ideas or anything else: [hello@relaycode.io](mailto:hello@relaycode.io). For a bug, please [open an issue](https://github.com/relaycodehq/relay/issues) with the steps, your platform and your Relay version. Pull requests are welcome; small, focused ones are easiest to review.
 
 ## License
 

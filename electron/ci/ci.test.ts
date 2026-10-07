@@ -165,10 +165,10 @@ it("reads host and repository off origin, scp-style and under a subpath", async 
       owner: "else",
       name: "where",
     });
-    git("remote", "add", "origin", "git@github.com:lubomirmolin/relay.git");
+    git("remote", "add", "origin", "git@github.com:relaycodehq/relay.git");
     expect(await remoteRepo(root)).toEqual({
       host: "github.com",
-      owner: "lubomirmolin",
+      owner: "relaycodehq",
       name: "relay",
     });
     git(
