@@ -23,7 +23,6 @@ export const releaseNotes =
   VERSION === "dev"
     ? RELEASES
     : `https://github.com/lubomirmolin/relay-releases/releases/tag/v${VERSION}`;
-export const macDownload = download(`Relay-${VERSION}-mac-arm64.dmg`);
 
 export const features: { title: string; text: string; detail: string }[] = [
   {
@@ -107,25 +106,32 @@ export const promises: { title: string; text: string }[] = [
   },
 ];
 
-export const platforms: {
+export type Build = {
   system: string;
   file: string;
   href: string;
   status: string;
-}[] = [
+  /** Which visitors this build is for; see live.ts. */
+  os?: "mac" | "win" | "linux" | "android";
+};
+
+export const platforms: Build[] = [
   {
+    os: "mac",
     system: "macOS (Apple Silicon)",
     file: `Relay-${VERSION}-mac-arm64.dmg`,
     href: download(`Relay-${VERSION}-mac-arm64.dmg`),
     status: "Primary platform. Used each day.",
   },
   {
+    os: "win",
     system: "Windows 10/11 (x64)",
     file: `Relay-${VERSION}-win-x64.exe`,
     href: download(`Relay-${VERSION}-win-x64.exe`),
     status: "Built with each release. Less use.",
   },
   {
+    os: "linux",
     system: "Linux (x86-64)",
     file: `Relay-${VERSION}-linux-x86_64.AppImage`,
     href: download(`Relay-${VERSION}-linux-x86_64.AppImage`),
@@ -140,13 +146,9 @@ export const platforms: {
 ];
 
 /** Builds outside the desktop list: the phone app and the Macs without a package. */
-export const otherBuilds: {
-  system: string;
-  file: string;
-  href: string;
-  status: string;
-}[] = [
+export const otherBuilds: Build[] = [
   {
+    os: "android",
     system: "Android phone app",
     file: "Relay-Android.apk",
     href: download("Relay-Android.apk"),
@@ -161,10 +163,16 @@ export const otherBuilds: {
 ];
 
 /** What to do after the download. The builds have no code signature yet. */
-export const firstStart: { system: string; text: string }[] = [
+export const firstStart: {
+  system: string;
+  text: string;
+  /** The terminal route to the same end, for those who prefer it. */
+  command?: string;
+}[] = [
   {
     system: "macOS",
-    text: "Move Relay to Applications. At the first start, macOS cannot verify the app. Open System Settings → Privacy & Security and click Open Anyway.",
+    text: "Move Relay to Applications. At the first start, macOS cannot verify the app. Open System Settings → Privacy & Security and click Open Anyway. Or clear the quarantine flag in Terminal:",
+    command: "xattr -cr /Applications/Relay.app",
   },
   {
     system: "Windows",
@@ -172,7 +180,8 @@ export const firstStart: { system: string; text: string }[] = [
   },
   {
     system: "Linux",
-    text: "Make the AppImage executable with chmod +x. Some distributions also need their FUSE package.",
+    text: "Make the AppImage executable. Some distributions also need their FUSE package.",
+    command: `chmod +x Relay-${VERSION}-linux-x86_64.AppImage`,
   },
 ];
 
@@ -233,7 +242,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "What needs Gitea?",
-    a: "Pull request review and shared threads need a Gitea server. All other functions work with a local folder.",
+    a: "Pull request review and its shared rooms need a Gitea server. All other functions work with a local folder.",
   },
   {
     q: "Which platforms does Relay support?",

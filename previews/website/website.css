@@ -125,7 +125,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 18px;
+  height: 44px;
+  padding: 0 18px;
   border: 1px solid transparent;
   border-radius: 9px;
   background: var(--send);
@@ -152,9 +153,19 @@ body {
   background: var(--hover);
 }
 .cta.small {
-  padding: 6px 12px;
+  height: 32px;
+  padding: 0 12px;
   border-radius: 7px;
   font-size: 13px;
+}
+/* A size or count beside a button's label. */
+.cta small {
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.8;
 }
 
 /* Hero */
@@ -387,7 +398,8 @@ body {
 }
 .tour-window > .rw {
   transform-origin: 50% 0;
-  transform: rotateX(calc((1 - var(--risen)) * 14deg)) scale(calc(0.93 + var(--risen) * 0.07));
+  transform: rotateX(calc((1 - var(--risen)) * 14deg))
+    scale(calc(0.93 + var(--risen) * 0.07));
   opacity: calc(0.35 + var(--risen) * 0.65);
 }
 
@@ -915,7 +927,9 @@ body {
   height: 34px;
   border-radius: 0 2px 2px 0;
   background: var(--frame);
-  box-shadow: 0 50px 0 var(--frame), 0 72px 0 var(--frame);
+  box-shadow:
+    0 50px 0 var(--frame),
+    0 72px 0 var(--frame);
 }
 /* Folded, the flap lies flat behind the phone; it swings out around the hinge. */
 .fold-flap {
@@ -998,7 +1012,8 @@ body {
   background: none;
   font-size: 13px;
   color: var(--muted);
-  text-decoration: underline dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  text-decoration: underline dashed
+    color-mix(in srgb, var(--accent) 70%, transparent);
   text-underline-offset: 5px;
   transition: color 0.15s;
 }
@@ -1502,7 +1517,7 @@ body {
 }
 .files a {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  grid-template-columns: 200px minmax(0, 1.2fr) minmax(0, 1fr) 56px auto;
   gap: 16px;
   align-items: center;
   padding: 13px 6px;
@@ -1524,7 +1539,30 @@ body {
   transform: translateY(2px);
 }
 .files strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 500;
+}
+.files strong em {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.files a[data-yours] {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.files small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  color: var(--muted);
 }
 .files code {
   overflow: hidden;
@@ -1591,6 +1629,131 @@ body {
 }
 .nav .cta.ghost {
   padding-inline: 10px;
+}
+.nav nav a {
+  position: relative;
+  transition: color 0.15s;
+}
+/* The section on screen gets a dot under its link. */
+.nav nav a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%) scale(0);
+  transition: transform 0.2s;
+}
+.nav nav a[data-current] {
+  color: var(--text);
+}
+.nav nav a[data-current]::after {
+  transform: translateX(-50%) scale(1);
+}
+.nav-only,
+.nav-menu {
+  display: none;
+}
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.skip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 40;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: var(--send);
+  color: var(--send-foreground) !important;
+  font-size: 13px;
+  transform: translateY(-200%);
+}
+.skip:focus-visible {
+  transform: none;
+}
+
+/* What's new, under the download page's buttons. */
+.whats-new {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 680px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sidebar);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--muted) !important;
+  transition: border-color 0.15s;
+}
+.whats-new:hover {
+  border-color: var(--accent);
+}
+.whats-new svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--accent);
+}
+.whats-new b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* A command with its copy button. */
+.command {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.command code {
+  flex: 1;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.command button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.command button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.command button[data-copied] {
+  color: var(--accent);
 }
 
 /* Hero: the way to the other platforms. */
@@ -1732,17 +1895,62 @@ body {
   .footer-brand {
     grid-column: 1 / -1;
   }
-  .nav .nav-label {
+  .nav .nav-label,
+  .nav .stars {
     display: none;
   }
   .nav {
-    gap: 10px;
+    gap: 8px;
   }
   .nav .cta.ghost {
     margin-left: auto;
   }
   .nav .cta.ghost + .cta {
     margin-left: 0;
+  }
+  .nav-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+  }
+  /* The menu drops below the bar, over the page. */
+  .nav nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 6px 12px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 16px;
+  }
+  .nav[data-open] nav {
+    display: flex;
+  }
+  .nav nav a {
+    padding: 12px;
+    border-radius: 8px;
+  }
+  .nav nav a:hover,
+  .nav nav a[data-current] {
+    background: var(--hover);
+  }
+  .nav nav a::after {
+    display: none;
+  }
+  .nav nav .nav-only {
+    display: block;
   }
   .grid.oss,
   .dl-after,
@@ -1815,11 +2023,14 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
   .files a {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
   .files code,
   .files span {
     display: none;
+  }
+  .files strong {
+    flex-wrap: wrap;
   }
   .hero-facts li + li::before {
     display: none;

@@ -13,17 +13,35 @@ import "../../src/features/sidebar/sidebar.css";
 import "../../src/features/agents/composer-model-picker.css";
 import "../../src/features/changes/changed-files.css";
 import "./website.css";
-import { applyToDocument, resolveChoice, type ThemeChoice } from "../../src/lib/themes";
+import {
+  applyToDocument,
+  resolveChoice,
+  type ThemeChoice,
+} from "../../src/lib/themes";
 import { initWindowFocus } from "../../src/lib/window-focus";
 import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../shared/agents";
 import { AppWindow, scriptMs, type Stop } from "./app-window";
-import { PhoneSync, QuickSwitchDemo, UsageDemo, WorktreeGraph } from "./sections";
+import {
+  PhoneSync,
+  QuickSwitchDemo,
+  UsageDemo,
+  WorktreeGraph,
+} from "./sections";
 import { startLanes } from "./hero-lanes";
 import { Reveal, reducedMotion, useActive } from "./motion";
 import { Faq, GitHubMark, SiteFooter, SiteHeader } from "./parts";
 import { installStubs } from "./stubs";
-import { faq, features, macDownload, openSource, promises, REPO, VERSION } from "./content";
+import {
+  faq,
+  features,
+  openSource,
+  platforms,
+  promises,
+  REPO,
+  VERSION,
+} from "./content";
+import { osName, useOs } from "./live";
 
 // The site always wears Relay's own dark theme, whatever the previews were left on.
 applyToDocument(resolveChoice("dark", { theme: "relay" } as ThemeChoice));
@@ -38,12 +56,21 @@ function AgentWord() {
   const [index, setIndex] = useState(0);
   useEffect(() => {
     if (reducedMotion()) return;
-    const timer = window.setInterval(() => setIndex((value) => (value + 1) % agentOrder.length), 2300);
+    const timer = window.setInterval(
+      () => setIndex((value) => (value + 1) % agentOrder.length),
+      2300,
+    );
     return () => window.clearInterval(timer);
   }, []);
   return (
-    <span className="hero-word" aria-label={agentOrder.map(agentName).join(", ")}>
-      <span style={{ transform: `translateY(${-index * 1.2}em)` }} aria-hidden="true">
+    <span
+      className="hero-word"
+      aria-label={agentOrder.map(agentName).join(", ")}
+    >
+      <span
+        style={{ transform: `translateY(${-index * 1.2}em)` }}
+        aria-hidden="true"
+      >
         {agentOrder.map((agent, i) => (
           <span key={agent} data-on={i === index || undefined}>
             <ProviderIcon provider={agent} />
@@ -140,7 +167,13 @@ function Tour() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
-      if (event.metaKey || event.ctrlKey || event.altKey || target.closest("input, textarea")) return;
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        target.closest("input, textarea")
+      )
+        return;
       const slot = Number(event.key);
       if (slot >= 1 && slot <= tour.length) setIndex(slot - 1);
     };
@@ -209,156 +242,193 @@ const rows = [
   },
 ];
 
+/** The hero's download button, for the visitor's own system. */
+function HeroDownload() {
+  const os = useOs();
+  // Android visitors get the desktop list: Relay itself runs on a computer.
+  const build =
+    platforms.find((p) => p.os === (os === "android" ? "mac" : os)) ??
+    platforms[0];
+  const others = [
+    ...platforms.filter((p) => p.os && p !== build).map((p) => osName[p.os!]),
+    "Android",
+  ];
+  const list = `${others.slice(0, -1).join(", ")} and ${others.at(-1)}`;
+  return (
+    <>
+      <div className="hero-actions">
+        <a className="cta" href={build.href}>
+          Download for {osName[build.os!]}
+          <ArrowDownToLine size={15} />
+        </a>
+        <a className="cta ghost" href={REPO}>
+          <GitHubMark />
+          View on GitHub
+        </a>
+      </div>
+      <a className="hero-more" href="download/">
+        Also for {list}
+        <ArrowRight size={12} />
+      </a>
+    </>
+  );
+}
+
 function Site() {
+  // The sections render after the page loads, too late for the browser to
+  // scroll to the address's #hash by itself.
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (!id) return;
+    document
+      .getElementById(id)
+      ?.scrollIntoView({ behavior: "instant", block: "start" });
+  }, []);
   return (
     <div className="site">
       <SiteHeader home="" />
 
-      <section className="hero" id="top">
-        <Lanes />
-        <a className="hero-notice" href={REPO}>
-          v{VERSION} <i>·</i> Relay is open source
-          <ArrowRight size={12} />
-        </a>
-        <h1>
-          One workspace for
-          <AgentWord />
-        </h1>
-        <p>Relay runs your coding agents on your computer. You see each step. You review each edit.</p>
-        <div className="hero-actions">
-          <a className="cta" href={macDownload}>
-            Download for macOS
-            <ArrowDownToLine size={15} />
+      <main id="main">
+        <section className="hero" id="top">
+          <Lanes />
+          <a className="hero-notice" href={REPO}>
+            v{VERSION} <i>·</i> Relay is open source
+            <ArrowRight size={12} />
           </a>
-          <a className="cta ghost" href={REPO}>
-            <GitHubMark />
-            View on GitHub
-          </a>
-        </div>
-        <a className="hero-more" href="download/">
-          Windows, Linux and Android downloads
-          <ArrowRight size={12} />
-        </a>
-        <ul className="hero-facts">
-          <li>4 agents</li>
-          <li>No Relay account</li>
-          <li>No API keys</li>
-          <li>Open source, MIT</li>
-        </ul>
-      </section>
-
-      <section className="wide" id="tour">
-        <Tour />
-      </section>
-
-      <section className="centered" id="phone">
-        <Reveal>
-          <span className="eyebrow">Phone</span>
-          <h2>Your threads, on your phone</h2>
-          <p>The Android app shows your threads live. You answer approvals and commit from the phone.</p>
-        </Reveal>
-        <Reveal delay={120} className="sync-wrap">
-          <PhoneSync />
-        </Reveal>
-      </section>
-
-      <section className="rows">
-        {rows.map((row) => (
-          <div className="row" key={row.title}>
-            <Reveal>
-              <span className="eyebrow">{row.eyebrow}</span>
-              <h2>{row.title}</h2>
-              <p>{row.text}</p>
-            </Reveal>
-            <Reveal delay={120} className="row-demo">
-              {row.demo}
-            </Reveal>
-          </div>
-        ))}
-      </section>
-
-      <section className="block" id="features">
-        <Reveal>
-          <span className="eyebrow">Features</span>
-          <h2>The full list</h2>
-        </Reveal>
-        <div className="grid">
-          {features.map((feature, index) => (
-            <Reveal key={feature.title} delay={(index % 3) * 70}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-              <code>{feature.detail}</code>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      <section className="block">
-        <Reveal>
-          <span className="eyebrow">Good to know</span>
-          <h2>
-            Runs on your computer,
-            <br />
-            with your accounts
-          </h2>
-        </Reveal>
-        <div className="promises">
-          {promises.map((item, index) => (
-            <Reveal key={item.title} delay={index * 70}>
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      <section className="block" id="open-source">
-        <Reveal>
-          <span className="eyebrow">Open source</span>
-          <h2>Built in the open</h2>
-          <p className="lede">
-            Relay is free and open source under the MIT license. Read the code, report a problem or send a
-            change. We want Relay to grow with the people who use it.
+          <h1>
+            One workspace for
+            <AgentWord />
+          </h1>
+          <p>
+            Relay runs your coding agents on your computer. You see each step.
+            You review each edit.
           </p>
-        </Reveal>
-        <div className="grid oss">
-          {openSource.map((item, index) => (
-            <Reveal key={item.title} delay={index * 70}>
-              <a href={item.href}>
+          <HeroDownload />
+          <ul className="hero-facts">
+            <li>4 agents</li>
+            <li>No Relay account</li>
+            <li>No API keys</li>
+            <li>Open source, MIT</li>
+          </ul>
+        </section>
+
+        <section className="wide" id="tour">
+          <Tour />
+        </section>
+
+        <section className="centered" id="phone">
+          <Reveal>
+            <span className="eyebrow">Phone</span>
+            <h2>Your threads, on your phone</h2>
+            <p>
+              The Android app shows your threads live. You answer approvals and
+              commit from the phone.
+            </p>
+          </Reveal>
+          <Reveal delay={120} className="sync-wrap">
+            <PhoneSync />
+          </Reveal>
+        </section>
+
+        <section className="rows">
+          {rows.map((row) => (
+            <div className="row" key={row.title}>
+              <Reveal>
+                <span className="eyebrow">{row.eyebrow}</span>
+                <h2>{row.title}</h2>
+                <p>{row.text}</p>
+              </Reveal>
+              <Reveal delay={120} className="row-demo">
+                {row.demo}
+              </Reveal>
+            </div>
+          ))}
+        </section>
+
+        <section className="block" id="features">
+          <Reveal>
+            <span className="eyebrow">Features</span>
+            <h2>The full list</h2>
+          </Reveal>
+          <div className="grid">
+            {features.map((feature, index) => (
+              <Reveal key={feature.title} delay={(index % 3) * 70}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <h3>{feature.title}</h3>
+                <p>{feature.text}</p>
+                <code>{feature.detail}</code>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        <section className="block">
+          <Reveal>
+            <span className="eyebrow">Good to know</span>
+            <h2>
+              Runs on your computer,
+              <br />
+              with your accounts
+            </h2>
+          </Reveal>
+          <div className="promises">
+            {promises.map((item, index) => (
+              <Reveal key={item.title} delay={index * 70}>
                 <h3>{item.title}</h3>
                 <p>{item.text}</p>
-                <code>
-                  {item.link}
-                  <ArrowUpRight size={12} />
-                </code>
-              </a>
-            </Reveal>
-          ))}
-        </div>
-      </section>
+              </Reveal>
+            ))}
+          </div>
+        </section>
 
-      <section className="faq-block" id="faq">
-        <h2>Common questions</h2>
-        <Faq items={faq} />
-      </section>
+        <section className="block" id="open-source">
+          <Reveal>
+            <span className="eyebrow">Open source</span>
+            <h2>Built in the open</h2>
+            <p className="lede">
+              Relay is free and open source under the MIT license. Read the
+              code, report a problem or send a change. We want Relay to grow
+              with the people who use it.
+            </p>
+          </Reveal>
+          <div className="grid oss">
+            {openSource.map((item, index) => (
+              <Reveal key={item.title} delay={index * 70}>
+                <a href={item.href}>
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                  <code>
+                    {item.link}
+                    <ArrowUpRight size={12} />
+                  </code>
+                </a>
+              </Reveal>
+            ))}
+          </div>
+        </section>
 
-      <section className="centered final" id="download">
-        <Reveal>
-          <h2>Try Relay</h2>
-          <p>Free and open source. For macOS, Windows and Linux.</p>
-        </Reveal>
-        <div className="hero-actions">
-          <a className="cta" href={macDownload}>
-            Download for macOS
-            <ArrowDownToLine size={15} />
-          </a>
-          <a className="cta ghost" href="download/">
-            All downloads
-          </a>
-        </div>
-      </section>
+        <section className="faq-block" id="faq">
+          <h2>Common questions</h2>
+          <Faq items={faq} />
+        </section>
 
+        <section className="centered final" id="download">
+          <Reveal>
+            <h2>Try Relay</h2>
+            <p>Free and open source. For macOS, Windows and Linux.</p>
+          </Reveal>
+          <div className="hero-actions">
+            <a className="cta" href="download/">
+              Download Relay
+              <ArrowDownToLine size={15} />
+            </a>
+            <a className="cta ghost" href={REPO}>
+              <GitHubMark />
+              Star on GitHub
+            </a>
+          </div>
+        </section>
+      </main>
       <SiteFooter home="" />
     </div>
   );

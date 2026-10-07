@@ -1,8 +1,17 @@
 // Small pieces the page uses in several places.
-import { useMemo, useState } from "react";
-import { ArrowDownToLine, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDownToLine,
+  Check,
+  Copy,
+  Menu,
+  Plus,
+  Star,
+  X,
+} from "lucide-react";
 import { relayMarkSvg, svgDataUrl } from "../../src/lib/relay-icon";
 import { useScrollProgress } from "./motion";
+import { formatCount, useStars } from "./live";
 import {
   BUILD_GUIDE,
   EMAIL,
@@ -73,6 +82,46 @@ export function GitHubMark({ size = 16 }: { size?: number }) {
   );
 }
 
+const sections = [
+  { id: "tour", label: "Product" },
+  { id: "features", label: "Features" },
+  { id: "open-source", label: "Open source" },
+  { id: "faq", label: "FAQ" },
+];
+
+/** The id of the section under the top of the window, for the nav to mark. */
+function useCurrentSection(enabled: boolean): string | null {
+  const [current, setCurrent] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let found: string | null = null;
+      for (const { id } of sections) {
+        const top = document.getElementById(id)?.getBoundingClientRect().top;
+        if (top !== undefined && top <= window.innerHeight * 0.4) found = id;
+      }
+      setCurrent(found);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    // The browser scrolls to the address's #hash after this runs; look again then.
+    const settle = window.setTimeout(update, 300);
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("hashchange", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("hashchange", onScroll);
+      window.clearTimeout(settle);
+      cancelAnimationFrame(frame);
+    };
+  }, [enabled]);
+  return current;
+}
+
 /**
  * `home` is the way back to the main page from the current one ("" on the
  * main page, "../" on the download page), so the links work both on the site
@@ -80,26 +129,63 @@ export function GitHubMark({ size = 16 }: { size?: number }) {
  */
 export function SiteHeader({ home }: { home: string }) {
   const nav = useScrollProgress<HTMLElement>();
+  const current = useCurrentSection(home === "");
+  const stars = useStars();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) =>
+      event.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   return (
-    <header className="nav" ref={nav}>
+    <header className="nav" ref={nav} data-open={open || undefined}>
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
       <a className="logo" href={home || "#top"}>
         <Mark size={22} />
         Relay
       </a>
-      <nav>
-        <a href={`${home}#tour`}>Product</a>
-        <a href={`${home}#features`}>Features</a>
-        <a href={`${home}#open-source`}>Open source</a>
-        <a href={`${home}#faq`}>FAQ</a>
+      <nav id="site-nav" aria-label="Site" onClick={() => setOpen(false)}>
+        {sections.map(({ id, label }) => (
+          <a
+            key={id}
+            href={`${home}#${id}`}
+            data-current={current === id || undefined}
+          >
+            {label}
+          </a>
+        ))}
+        <a className="nav-only" href={`${home}download/`}>
+          Download
+        </a>
       </nav>
-      <a className="cta ghost small" href={REPO}>
+      <a className="cta ghost small" href={REPO} aria-label="Relay on GitHub">
         <GitHubMark size={14} />
         <span className="nav-label">GitHub</span>
+        {stars !== null ? (
+          <span className="stars">
+            <Star size={11} />
+            {formatCount(stars)}
+          </span>
+        ) : null}
       </a>
       <a className="cta small" href={`${home}download/`}>
         Download
         <ArrowDownToLine size={14} />
       </a>
+      <button
+        type="button"
+        className="nav-menu"
+        aria-expanded={open}
+        aria-controls="site-nav"
+        aria-label={open ? "Close menu" : "Open menu"}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? <X size={18} /> : <Menu size={18} />}
+      </button>
     </header>
   );
 }
@@ -134,11 +220,43 @@ export function SiteFooter({ home }: { home: string }) {
         <h4>Contact</h4>
         <a href={`mailto:${EMAIL}`}>{EMAIL}</a>
         <a href={ISSUES}>Report a problem</a>
+        <a href={`${REPO}/tree/main/previews/website`}>This website's source</a>
       </div>
       <p className="footer-base">
         Relay {VERSION} · Relay is an independent project. It has no affiliation
         with OpenAI, Anthropic, OpenCode or Cursor.
       </p>
     </footer>
+  );
+}
+
+/** A terminal command with a button that copies it. */
+export function Command({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const code = useRef<HTMLElement>(null);
+  return (
+    <div className="command">
+      <code ref={code}>{text}</code>
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : "Copy command"}
+        data-copied={copied || undefined}
+        onClick={() =>
+          navigator.clipboard
+            .writeText(text)
+            .then(() => setCopied(true))
+            .catch(() =>
+              window.getSelection()?.selectAllChildren(code.current!),
+            )
+        }
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+    </div>
   );
 }
