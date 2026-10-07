@@ -68,10 +68,12 @@ ${contact}`,
 const staticCopy = (): Plugin => ({
   name: "static-copy",
   transformIndexHtml: (html, { path }) =>
-    html.replace(
-      '<div id="root"></div>',
-      `<div id="root"><div class="static-copy">${copy[path.includes("download") ? "download" : "home"]}</div></div>`,
-    ),
+    html
+      .replace(
+        '<div id="root"></div>',
+        `<div id="root"><div class="static-copy">${copy[path.includes("download") ? "download" : "home"]}</div></div>`,
+      )
+      .replaceAll("%RELAY_VERSION%", version),
 });
 
 export default defineConfig({

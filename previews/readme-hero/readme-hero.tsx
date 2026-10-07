@@ -1,6 +1,7 @@
 // The README's hero image: the website's Relay window on sample data, with the
 // name and what it is next to it, on a 1280×640 stage (GitHub's social preview
-// size). ?shot drops the switcher so a headless browser can photograph it.
+// size). ?shot drops the switcher so a headless browser can photograph it;
+// ?w=1200&h=630 sizes the stage for the website's link preview.
 import "../_shared/desktop-stub";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -77,7 +78,14 @@ function Words() {
 
 function Hero({ layout }: { layout: Layout }) {
   return (
-    <div className="rh-stage site" data-layout={layout}>
+    <div
+      className="rh-stage site"
+      data-layout={layout}
+      style={{
+        width: Number(params.get("w")) || undefined,
+        height: Number(params.get("h")) || undefined,
+      }}
+    >
       <Lanes />
       <Words />
       <div className="rh-window">
