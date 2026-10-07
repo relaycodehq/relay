@@ -1,20 +1,58 @@
 #!/bin/sh
 # Installs the headless Relay for this user: the newest release (or
-# RELAY_VERSION) into ~/.local/share/relay, and `relay` into ~/.local/bin.
-# Then `relay setup` does the rest. Run it again to reinstall or update.
+# RELAY_VERSION) into ~/.local/share/relay and `relay` into ~/.local/bin,
+# then runs `relay setup` when there's a terminal to ask in. Run it again to
+# reinstall or update.
 #
-#   curl -fsSL https://github.com/relaycodehq/relay-releases/releases/latest/download/install-relay.sh | sh
+#   curl -fsSL https://relaycode.io/install.sh | sh
+#
+# RELAY_NO_SETUP=1 skips the setup, RELAY_NO_MODIFY_PATH=1 leaves your shell's
+# startup file alone, RELAY_NODE picks the Node.js to run with.
 set -eu
-repo=relaycodehq/relay-releases
+repo=relaycodehq/relay
 dest=${RELAY_INSTALL:-$HOME/.local/share/relay}
 bindir=${RELAY_BIN:-$HOME/.local/bin}
+home=${RELAY_HOME:-$HOME/.relay}
 
 say() { printf '%s\n' "$*"; }
 fail() { say "$*" >&2; exit 1; }
 
-command -v node >/dev/null 2>&1 || fail "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
-major=$(node -p 'process.versions.node.split(".")[0]')
-[ "$major" -ge 22 ] || fail "Relay needs Node.js 22 or newer; this is $(node --version)."
+# A Node.js 22 or newer that actually runs: a Homebrew `node` can be broken
+# by an upgrade while a keg-only node@22 beside it still works.
+works() {
+  [ -x "$1" ] || return 1
+  major=$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null) || return 1
+  [ "$major" -ge 22 ] 2>/dev/null
+}
+find_node() {
+  if [ -n "${RELAY_NODE:-}" ]; then
+    works "$RELAY_NODE" && say "$RELAY_NODE"
+    return
+  fi
+  for candidate in "$(command -v node 2>/dev/null || true)" \
+    /opt/homebrew/opt/node@26/bin/node /opt/homebrew/opt/node@24/bin/node \
+    /opt/homebrew/opt/node@22/bin/node /usr/local/opt/node@24/bin/node \
+    /usr/local/opt/node@22/bin/node "$HOME/.volta/bin/node"; do
+    if [ -n "$candidate" ] && works "$candidate"; then
+      say "$candidate"
+      return
+    fi
+  done
+  # nvm's, newest first.
+  for candidate in $(ls -rd "${NVM_DIR:-$HOME/.nvm}"/versions/node/v*/bin/node 2>/dev/null); do
+    if works "$candidate"; then
+      say "$candidate"
+      return
+    fi
+  done
+}
+node=$(find_node)
+if [ -z "$node" ]; then
+  if command -v node >/dev/null 2>&1; then
+    fail "Relay needs Node.js 22 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
+  fi
+  fail "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
+fi
 command -v tar >/dev/null 2>&1 || fail "Relay's installer needs tar."
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
@@ -35,7 +73,7 @@ else
 fi
 fetch "$feed" "$tmp/latest.json" || fail "Couldn't reach $feed."
 # The feed names the headless download and its SHA-512.
-eval "$(node -e '
+eval "$("$node" -e '
   const feed = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   const file = feed.headless;
   if (!file) { console.log("missing=1"); process.exit(); }
@@ -46,7 +84,7 @@ eval "$(node -e '
 
 say "Downloading Relay $version…"
 fetch "$url" "$tmp/$name" || fail "Couldn't download $url."
-node -e '
+"$node" -e '
   const [file, want] = process.argv.slice(1);
   const got = require("crypto").createHash("sha512").update(require("fs").readFileSync(file)).digest("base64");
   if (got !== want) { console.error("The download does not match the release."); process.exit(1); }
@@ -57,13 +95,49 @@ mkdir -p "$(dirname "$dest")" "$bindir"
 rm -rf "$dest.new" && mv "$tmp/relay-$version" "$dest.new"
 [ ! -e "$dest" ] || mv "$dest" "$dest.old"
 mv "$dest.new" "$dest" && rm -rf "$dest.old"
-ln -sf "$dest/bin/relay" "$bindir/relay"
 
+# bin/relay runs with this Node from now on, through updates too.
+(umask 077 && mkdir -p "$home")
+printf '%s\n' "$node" >"$home/node"
+# The desktop app's `relay` hands everything but folders to this one; keep it.
+if ! grep -qs "relay-desktop-command" "$bindir/relay"; then
+  ln -sf "$dest/bin/relay" "$bindir/relay"
+fi
+relay="$dest/bin/relay"
 say "Relay $version is installed in $dest."
+
+# On PATH for the next terminal, in the startup file of the shell you use.
 case ":$PATH:" in
-  *":$bindir:"*) say "Next: relay setup" ;;
-  *) say "Add $bindir to your PATH, then run: relay setup" ;;
+  *":$bindir:"*) ;;
+  *)
+    if [ -z "${RELAY_NO_MODIFY_PATH:-}" ]; then
+      case "$(basename "${SHELL:-sh}")" in
+        zsh) rc="${ZDOTDIR:-$HOME}/.zshrc" line="export PATH=\"$bindir:\$PATH\"" ;;
+        bash)
+          rc="$HOME/.bashrc"
+          [ "$(uname)" != Darwin ] || rc="$HOME/.bash_profile"
+          line="export PATH=\"$bindir:\$PATH\""
+          ;;
+        fish) rc="$HOME/.config/fish/conf.d/relay.fish" line="fish_add_path $bindir" ;;
+        *) rc="$HOME/.profile" line="export PATH=\"$bindir:\$PATH\"" ;;
+      esac
+      if ! grep -qsF "$line" "$rc"; then
+        mkdir -p "$(dirname "$rc")"
+        printf '\n# Relay\n%s\n' "$line" >>"$rc"
+        say "Added $bindir to your PATH in $rc; new terminals find relay."
+      fi
+    else
+      say "Add $bindir to your PATH to run relay from anywhere."
+    fi
+    ;;
 esac
-if "$bindir/relay" status --json 2>/dev/null | grep -q '"running": true'; then
-  "$bindir/relay" restart
+
+if "$relay" status --json 2>/dev/null | grep -q '"running": true'; then
+  "$relay" restart
+elif [ -z "${RELAY_NO_SETUP:-}" ] && (exec </dev/tty) 2>/dev/null; then
+  # Piped into sh, stdin is this script; setup asks its questions on the terminal.
+  say ""
+  "$relay" setup </dev/tty
+else
+  say "Next: relay setup"
 fi

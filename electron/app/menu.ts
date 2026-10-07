@@ -5,6 +5,7 @@ import {
   type MenuShortcutId,
 } from "../../shared/shortcuts";
 import { reportBug } from "../bug-report";
+import { installShellCommand, shellCommandSupported } from "./shell-command";
 import type { AppWindow } from "./window";
 
 /** Accelerators the user picked in Settings; the rest keep their defaults. */
@@ -50,6 +51,12 @@ export function setApplicationMenu(
         submenu: [
           { role: "about" },
           { type: "separator" },
+          {
+            label: 'Install "relay" Command…',
+            visible: shellCommandSupported,
+            click: () => void installShellCommand(),
+          },
+          { type: "separator", visible: shellCommandSupported },
           { role: "hide" },
           { role: "hideOthers" },
           { role: "unhide" },

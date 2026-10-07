@@ -149,7 +149,17 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Relay listens while you dictate a message. Speech is transcribed on this computer."
+        "NSMicrophoneUsageDescription": "Relay listens while you dictate a message. Speech is transcribed on this computer.",
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Folder",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "None",
+            "LSItemContentTypes": [
+              "public.folder"
+            ]
+          }
+        ]
       }
     },
     "linux": {

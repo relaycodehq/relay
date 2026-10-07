@@ -23,13 +23,21 @@ Grab the file for your system from the [latest release](https://github.com/relay
 | Linux (x86-64) | `Relay-<version>-linux-x86_64.AppImage` |
 | Omarchy | `Relay-<version>-omarchy-x86_64.tar.gz`, then run `python3 install.py` inside it (no sudo) |
 | Intel Mac | No package yet, so [build from source](#for-contributors) |
-| A server or a computer you only reach remotely | `relay`, the [headless Relay](docs/headless.md): one command to install, any OS with Node.js 22 |
+| A server or a computer you only reach remotely | `relay`, the [headless Relay](docs/headless.md): see below, any OS with Node.js 22 |
+
+For a server or a computer you only reach remotely, like a Mac mini in a cupboard, install the [headless Relay](docs/headless.md) with one command. It sets itself up, starts with the computer and pairs with your phone:
+
+```console
+curl -fsSL https://relaycode.io/install.sh | sh
+```
 
 Then:
 
 1. Install and sign in to at least one agent CLI: [Codex](https://github.com/openai/codex), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), or [OpenCode](https://opencode.ai). Or use Cursor: under **Settings → AI models**, choose **Set up…** to download Cursor's SDK and sign in.
 2. Open Relay and add a project folder.
 3. Type what you want done, pick the agent and model, and press **Send**.
+
+In a terminal, `relay .` opens the folder you're in as a project: choose **Relay → Install "relay" Command…** once on macOS or Linux.
 
 Relay runs the agents on your computer with your own subscriptions. No Relay account is required, and it updates itself when a new release is out.
 

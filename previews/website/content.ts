@@ -162,6 +162,20 @@ export const otherBuilds: Build[] = [
   },
 ];
 
+export const HEADLESS_GUIDE = `${REPO}/blob/main/docs/headless.md`;
+
+/** The headless Relay's one-line installs, which also run its setup. */
+export const headlessInstall: { system: string; command: string }[] = [
+  {
+    system: "macOS and Linux",
+    command: "curl -fsSL https://relaycode.io/install.sh | sh",
+  },
+  {
+    system: "Windows, in PowerShell",
+    command: "irm https://relaycode.io/install.ps1 | iex",
+  },
+];
+
 /** What to do after the download. The builds have no code signature yet. */
 export const firstStart: {
   system: string;

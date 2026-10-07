@@ -9,20 +9,24 @@ It is the desktop's own code, so threads, worktrees, approvals, questions, queue
 You need **Node.js 22 or newer**, **Git**, **[Tailscale](https://tailscale.com)** signed in to the same tailnet as your phone and laptop, and at least one agent CLI signed in as the user Relay runs as: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude auth login`), [Codex](https://github.com/openai/codex) (`codex login`) or [OpenCode](https://opencode.ai) (`opencode auth login`).
 
 ```console
-curl -fsSL https://github.com/relaycodehq/relay-releases/releases/latest/download/install-relay.sh | sh
-relay setup
+curl -fsSL https://relaycode.io/install.sh | sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://github.com/relaycodehq/relay-releases/releases/latest/download/install-relay.ps1 | iex
-relay setup
+irm https://relaycode.io/install.ps1 | iex
 ```
 
-The installer puts the newest release in `~/.local/share/relay` and `relay` in `~/.local/bin` (on Windows, `%LOCALAPPDATA%\Programs\Relay` with its `bin` on your PATH), checking the download against the release's SHA-512. `RELAY_INSTALL` and `RELAY_BIN` move them; `RELAY_VERSION=0.9.1` installs that release instead. One archive serves macOS, Linux and Windows: nothing in it is native.
+That's the whole setup: the installer puts the newest release in `~/.local/share/relay` and `relay` in `~/.local/bin`, adds that to your shell's PATH, and runs `relay setup`. On Windows it goes to `%LOCALAPPDATA%\Programs\Relay Headless`, with its `bin` on your PATH, beside the desktop app rather than over it. The download is checked against the release's SHA-512, and updates Relay installs later only come from a feed signed with Relay's release key.
+
+It looks for a Node.js that actually runs, so a Homebrew `node` broken by an upgrade doesn't stop it while a `node@22` beside it works, and Relay keeps using the one it found. `RELAY_NODE` picks one yourself, `RELAY_INSTALL` and `RELAY_BIN` move the install, `RELAY_VERSION=0.9.1` installs that release instead, `RELAY_NO_SETUP=1` leaves `relay setup` for later and `RELAY_NO_MODIFY_PATH=1` leaves your shell's startup file alone. Run it again to reinstall. One archive serves macOS, Linux and Windows: nothing in it is native.
 
 `relay setup` checks Node, Git, Tailscale and the agents, sets Relay up to start with the computer, offers to add the folder you run it in as a project, and shows a code to pair your phone.
+
+## Next to the desktop app
+
+The desktop app has its own `relay`: **Relay → Install "relay" Command…** writes one to `~/.local/bin` that opens a folder in the app (`relay .`, or `relay` alone to bring the app up) and hands every other command to the headless Relay when it's installed too. The installer leaves that one in place.
 
 ## Pair a phone or a computer
 
@@ -58,6 +62,7 @@ The speech engines come from npm, each checked against the SHA-512 Relay's lockf
 | --- | --- |
 | `relay setup` | Check this computer, start Relay with it, pair a phone. `--no-service`, `--no-pair`, `--project <folder>`, `--yes` skip the questions. |
 | `relay pair` | Show a code for a phone or another computer. `--json` prints the link instead. |
+| `relay <folder>` | On a Mac, open the folder in Relay's desktop app, as a project (`relay .`). A word that is also a command runs the command; `relay ./logs` opens the folder. |
 | `relay status` | Whether it runs, where it's reached, what's paired, threads working or waiting on you, agents and their sign-in, updates. |
 | `relay start` / `stop` / `restart` | `stop` refuses while threads are working unless `--force`; `restart` leaves running agents to carry on. |
 | `relay logs [-f] [-n <lines>]` | The log, `~/.relay/logs/relay.log`. |

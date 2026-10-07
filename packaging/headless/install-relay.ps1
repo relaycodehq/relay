@@ -1,14 +1,15 @@
 # Installs the headless Relay for this user on Windows: the newest release
-# (or $env:RELAY_VERSION) into %LOCALAPPDATA%\Programs\Relay, with its bin
-# folder on the user's PATH. Then `relay setup` does the rest. Run it again
-# to reinstall or update.
+# (or $env:RELAY_VERSION) into %LOCALAPPDATA%\Programs\Relay Headless, with
+# its bin folder on the user's PATH, then runs `relay setup`. Not in
+# Programs\Relay: that's where the desktop app installs. Run it again to
+# reinstall or update; $env:RELAY_NO_SETUP skips the setup.
 #
-#   irm https://github.com/relaycodehq/relay-releases/releases/latest/download/install-relay.ps1 | iex
+#   irm https://relaycode.io/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-$repo = "relaycodehq/relay-releases"
-$dest = if ($env:RELAY_INSTALL) { $env:RELAY_INSTALL } else { Join-Path $env:LOCALAPPDATA "Programs\Relay" }
+$repo = "relaycodehq/relay"
+$dest = if ($env:RELAY_INSTALL) { $env:RELAY_INSTALL } else { Join-Path $env:LOCALAPPDATA "Programs\Relay Headless" }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
@@ -57,6 +58,9 @@ Write-Host "Relay $($release.version) is installed in $dest."
 $relay = Join-Path $bin "relay.cmd"
 if ((& $relay status --json 2>$null | Out-String) -match '"running": true') {
   & $relay restart
+} elseif (-not $env:RELAY_NO_SETUP -and [Environment]::UserInteractive) {
+  Write-Host ""
+  & $relay setup
 } else {
   Write-Host "Next: relay setup   (open a new terminal first if relay isn't found)"
 }

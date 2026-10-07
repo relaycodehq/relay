@@ -1,5 +1,6 @@
 #!/bin/sh
-# Runs the headless Relay with the Node.js on PATH (or RELAY_NODE); it needs 22 or newer.
+# Runs the headless Relay with Node.js 22 or newer: RELAY_NODE, else the one
+# the installer found (kept in ~/.relay/node), else the node on PATH.
 set -eu
 self=$0
 # Follow the link ~/.local/bin/relay is, to the install it belongs to.
@@ -11,7 +12,11 @@ while [ -L "$self" ]; do
   esac
 done
 root=$(cd "$(dirname "$self")/.." && pwd -P)
-node=${RELAY_NODE:-node}
+node=${RELAY_NODE:-}
+if [ -z "$node" ]; then
+  found=$(cat "${RELAY_HOME:-$HOME/.relay}/node" 2>/dev/null || true)
+  if [ -n "$found" ] && [ -x "$found" ]; then node=$found; else node=node; fi
+fi
 if ! command -v "$node" >/dev/null 2>&1; then
   echo "Relay needs Node.js 22 or newer: https://nodejs.org/en/download" >&2
   exit 1

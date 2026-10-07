@@ -44,7 +44,8 @@ import {
 } from "./started-threads/serve";
 import { ChatSummaryFeed } from "./project-chats/chat-summaries";
 import { PullMerges } from "./project-chats/pull-merges";
-import { Projects } from "./projects/projects";
+import { Projects, repositoryRoot } from "./projects/projects";
+import { projectForFolder } from "./app/open-folder";
 import { mergedPulls } from "./pull-requests/merged";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { questionContext } from "./pull-requests/questions";
@@ -271,6 +272,22 @@ app
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});
     const projects = new Projects(loaded);
+    links.onFolder((folder) => {
+      void projectForFolder(folder, {
+        list: () => projects.list(login.client),
+        add: (root) => projects.add(root, login.client),
+        repositoryRoot,
+      })
+        .then((found) => {
+          if ("project" in found) return links.openProject(found.project.id);
+          void dialog.showMessageBox({
+            type: "info",
+            message: "Relay can't open that folder",
+            detail: found.refused,
+          });
+        })
+        .catch((e) => console.warn("Could not open", folder, e));
+    });
     const roomService = new RoomService(
       loaded,
       (url, init) => net.fetch(url, init),

@@ -6,6 +6,7 @@ import { existsSync, openSync, readSync, statSync, closeSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { relayCommands } from "../app/open-folder";
 import { tailnetProbe } from "../remote/tailscale";
 import type { AgentVersion } from "../../shared/agent-updates";
 import { agents as agentInfo, type AgentProvider } from "../../shared/agents";
@@ -56,6 +57,8 @@ const agentName = (provider: string) =>
 /** This bundle; the service and background starts run it again. */
 const script = __filename;
 const minimumNode = 22;
+/** The desktop app's bundle id, which `relay <folder>` opens on macOS. */
+const desktopAppId = "dev.relay.experimental";
 
 interface Flags {
   home?: string;
@@ -184,6 +187,7 @@ the Relay desktop app on another computer.
 ${bold("Getting started")}
   relay setup                  Check this computer, run Relay at every start, pair a phone
   relay pair                   Show a code to pair a phone or another computer
+  relay <folder>               On a Mac, open a folder in Relay's desktop app (relay .)
 
 ${bold("Running")}
   relay status                 What runs, where phones reach it, who is paired
@@ -221,11 +225,15 @@ ${bold("Options")}
   --json           Print machine-readable output
 `;
 
+const commands = new Set<string>(relayCommands);
+
 async function main(argv: string[]) {
   const { flags, words } = parse(argv);
   if (flags.version) return console.log(headlessVersion);
   const [command = flags.help ? "help" : "help", ...rest] = words;
   if (flags.help || command === "help") return console.log(help);
+  if (!commands.has(command) && isFolder(command))
+    return openInDesktop(resolve(command));
   const major = Number(process.versions.node.split(".")[0]);
   if (major < minimumNode)
     throw new Error(
@@ -282,6 +290,29 @@ async function main(argv: string[]) {
       return call(home, rest);
     default:
       throw new Usage(`Unknown command “${command}”. See relay --help.`);
+  }
+}
+
+function isFolder(path: string) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Opens `folder` as a project in the desktop app, the way `relay .` does where that's installed. */
+function openInDesktop(folder: string) {
+  if (process.platform !== "darwin")
+    throw new Error(
+      "This is the headless Relay; it can't open folders. To work in one here, run relay projects add <folder> and start threads from your phone or another computer.",
+    );
+  try {
+    execFileSync("open", ["-b", desktopAppId, folder], { stdio: "ignore" });
+  } catch {
+    throw new Error(
+      "Relay's desktop app isn't installed on this Mac: https://relaycode.io/download",
+    );
   }
 }
 

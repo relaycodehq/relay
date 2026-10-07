@@ -6,8 +6,10 @@ import {
   newerVersion,
   updateFeed,
   updateFileSchema,
+  updateKeys,
   type UpdateState,
 } from "../../shared/updates";
+import { signedByAny } from "../app/update-signature";
 import { download, extract, renameSoon } from "./archive";
 
 /**
@@ -50,6 +52,8 @@ export class HeadlessUpdater {
     private current: string,
     private options: {
       feed?: string;
+      /** Public keys trusted for the feed's signature; tests bring their own. */
+      keys?: readonly string[];
       fetch?: typeof fetch;
       /** Runs once the new version is in place. */
       restart?: () => void;
@@ -70,14 +74,38 @@ export class HeadlessUpdater {
     const current = this.current;
     this.state = { status: "checking", current };
     try {
-      const response = await (this.options.fetch ?? fetch)(
-        // RELAY_UPDATE_FEED stands in a feed served on this machine, as for the desktop.
-        this.options.feed ?? (process.env.RELAY_UPDATE_FEED || updateFeed),
-        { signal: AbortSignal.timeout(20_000) },
-      );
+      // RELAY_UPDATE_FEED stands in a feed served on this machine, as for the desktop.
+      const url =
+        this.options.feed ?? (process.env.RELAY_UPDATE_FEED || updateFeed);
+      const get = (at: string) =>
+        (this.options.fetch ?? fetch)(at, {
+          signal: AbortSignal.timeout(20_000),
+        });
+      const [response, signed] = await Promise.all([
+        get(url),
+        get(`${url}.sig`),
+      ]);
       if (!response.ok)
         throw new Error(`The update feed answered ${response.status}.`);
-      const feed = feedSchema.parse(await response.json());
+      if (!signed.ok && signed.status !== 404)
+        throw new Error(
+          `The update feed's signature answered ${signed.status}.`,
+        );
+      // As on the desktop, nothing in the feed counts until its exact bytes
+      // check out; a headless Relay installs updates with nobody watching.
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const signature = signed.ok ? await signed.text() : "";
+      if (!signature.trim())
+        throw new Error(
+          "The update feed isn't signed, so Relay won't install from it.",
+        );
+      if (!signedByAny(bytes, signature, this.options.keys ?? updateKeys))
+        throw new Error(
+          "The update feed's signature doesn't check out, so Relay won't install from it.",
+        );
+      const feed = feedSchema.parse(
+        JSON.parse(new TextDecoder().decode(bytes)),
+      );
       if (!feed.headless || !newerVersion(feed.version, current)) {
         this.state = { status: "idle", current, checkedAt: Date.now() };
         return this.state;

@@ -17,6 +17,7 @@ import {
   terminalFor,
 } from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
+import { useOpenedFolders } from "./useOpenedFolders";
 import { useNewThreads } from "./useNewThreads";
 import { usePaneOpens } from "./usePaneOpens";
 import { useProjects } from "./useProjects";
@@ -123,6 +124,7 @@ export default function ProjectShell() {
     () => composer.current?.focus(),
     setError,
   );
+  useOpenedFolders(boot.data, projects, lock, starts.open);
   useShortcut("settings", true, () => settings.setOpen(true));
   useShortcut("new-thread", !!project && !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
