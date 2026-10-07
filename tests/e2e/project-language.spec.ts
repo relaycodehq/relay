@@ -3,7 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { languageProject, reviewPath } from "../fixtures/language-project";
-import { openInFileTree } from "../fixtures/navigation";
+import {
+  openInFileTree,
+  openSurface,
+  panelToggle,
+} from "../fixtures/navigation";
 test("local Angular projects run checks and symbol navigation without a Gitea account", async () => {
   const repo = await languageProject("https://gitea.example.invalid", true),
     data = await mkdtemp(join(tmpdir(), "relay-local-language-ui-"));
@@ -32,7 +36,7 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     await expect(page.locator(".checks-button")).toContainText("2 errors", {
       timeout: 30000,
     });
@@ -67,9 +71,10 @@ test("local Angular projects run checks and symbol navigation without a Gitea ac
       (process.platform === "darwin" ? "Meta" : "Control") + "+End",
     );
     await editor.pressSequentially("// Keep my unsaved edit");
-    // An unsaved buffer keeps the Files pane open.
+    // An unsaved buffer keeps Files and the panel open.
+    await expect(panelToggle(page)).toBeDisabled();
     await expect(
-      page.getByRole("button", { name: "Files", exact: true }),
+      page.getByRole("button", { name: "Close files", exact: true }),
     ).toBeDisabled();
     await app.evaluate(({ app }) =>
       app.emit(

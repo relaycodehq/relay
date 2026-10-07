@@ -1,58 +1,47 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { RotateCw, SquareTerminal, X } from "lucide-react";
-import { useAppearance } from "../../lib/appearance";
-import { terminalTheme } from "./terminal-theme";
-import {
-  setTerminalFont,
-  setTerminalTheme,
-  type ThreadTerminal,
-} from "./thread-terminals";
-import { terminalFont, useTypography } from "../../lib/typography";
 import { IconButton } from "../../ui/ui";
-import "./terminal-drawer.css";
+import { PaneTabs } from "../../ui/PaneTabs";
 import { dragFrom } from "../../lib/dragFrom";
+import {
+  newTerminalSlot,
+  setDockTabs,
+  setTerminalOpen,
+  useDockTabs,
+} from "./terminal-dock";
+import { closeTerminal, terminalFor, terminalKey } from "./thread-terminals";
+import { TerminalView, terminalFolder } from "./TerminalView";
 
 const heightKey = "relay-terminal-height";
 const defaultHeight = 260,
   minHeight = 120;
 
-/** The thread's shell, docked under the workspace panes. */
+/** "Terminal", "Terminal 2", …: by place, since slots aren't numbers. */
+export const terminalLabel = (index: number) =>
+  index ? `Terminal ${index + 1}` : "Terminal";
+
+/** The thread's shells, docked under the workspace panes as tabs. */
 export function TerminalDrawer({
-  terminal,
+  projectId,
+  chatId,
   worktree,
   onClose,
 }: {
-  terminal: ThreadTerminal;
-  /** The shell works in the thread's worktree, not the checkout. */
+  projectId: string;
+  chatId: string | null;
+  /** The shells work in the thread's worktree, not the checkout. */
   worktree: boolean;
   onClose: () => void;
 }) {
+  const key = terminalKey(projectId, chatId);
+  const tabs = useDockTabs(key);
+  const terminal = terminalFor(projectId, chatId, tabs.front);
   useSyncExternalStore(terminal.subscribe, terminal.snapshot);
-  const { palette, accent } = useAppearance();
   const section = useRef<HTMLElement>(null);
-  const body = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(() => {
     const stored = Number(localStorage.getItem(heightKey));
     return stored >= minHeight ? stored : defaultHeight;
   });
-  // Before the terminal draws, so it never shows xterm's own colors first.
-  useLayoutEffect(
-    () => setTerminalTheme(terminalTheme(palette, accent)),
-    [palette, accent],
-  );
-  const { family, size } = terminalFont(useTypography());
-  useLayoutEffect(() => setTerminalFont(family, size), [family, size]);
-  useLayoutEffect(() => {
-    const host = body.current!;
-    host.appendChild(terminal.element);
-    terminal.show();
-    const observer = new ResizeObserver(() => terminal.fitSoon());
-    observer.observe(host);
-    return () => {
-      observer.disconnect();
-      terminal.hide();
-    };
-  }, [terminal]);
   const resize = (value: number) => {
     // Leave the panes above room to stay usable.
     const room = (section.current?.parentElement?.clientHeight ?? 800) - 160;
@@ -62,7 +51,30 @@ export function TerminalDrawer({
     setHeight(next);
     localStorage.setItem(heightKey, String(next));
   };
-  const folder = terminal.cwd?.split(/[\\/]/).filter(Boolean).pop();
+  const add = () => {
+    const slot = newTerminalSlot();
+    terminalFor(projectId, chatId, slot).focusOnShow = true;
+    setDockTabs(key, { slots: [...tabs.slots, slot], front: slot });
+  };
+  const close = (slot: string) => {
+    closeTerminal(projectId, chatId, slot);
+    const slots = tabs.slots.filter((s) => s !== slot);
+    if (!slots.length) {
+      // The next open starts afresh with a first shell.
+      setDockTabs(key, { slots: [""], front: "" });
+      setTerminalOpen(key, false);
+      return;
+    }
+    const at = tabs.slots.indexOf(slot);
+    setDockTabs(key, {
+      slots,
+      front:
+        tabs.front === slot
+          ? slots[Math.min(at, slots.length - 1)]!
+          : tabs.front,
+    });
+  };
+  const folder = terminalFolder(terminal);
   return (
     <section
       ref={section}
@@ -91,15 +103,23 @@ export function TerminalDrawer({
         }}
       />
       <header className="terminal-drawer-header">
-        <SquareTerminal size={14} aria-hidden />
-        <span className="terminal-drawer-title">Terminal</span>
+        <PaneTabs
+          tabs={tabs.slots.map((slot, i) => ({
+            key: slot,
+            label: terminalLabel(i),
+            icon: <SquareTerminal size={13} />,
+          }))}
+          front={tabs.front}
+          onFront={(front) => setDockTabs(key, { ...tabs, front })}
+          onClose={close}
+          add={{ label: "New terminal", onClick: add }}
+        />
         {folder && (
           <span className="terminal-drawer-cwd" title={terminal.cwd}>
             {folder}
           </span>
         )}
         {worktree && <small className="terminal-drawer-where">worktree</small>}
-        <span className="spacer" />
         <IconButton
           label="Restart shell"
           disabled={terminal.status === "starting"}
@@ -111,15 +131,7 @@ export function TerminalDrawer({
           <X size={14} />
         </IconButton>
       </header>
-      <div className="terminal-drawer-body" ref={body} />
-      {terminal.error && (
-        <div className="terminal-drawer-error" role="alert">
-          <p>{terminal.error}</p>
-          <button type="button" onClick={() => void terminal.start()}>
-            Try again
-          </button>
-        </div>
-      )}
+      <TerminalView key={terminal.key} terminal={terminal} />
     </section>
   );
 }

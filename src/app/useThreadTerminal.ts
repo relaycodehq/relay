@@ -1,11 +1,14 @@
 import { useShortcut } from "../lib/shortcuts";
 import { terminalBlocked } from "./thread-folder";
 import {
-  setTerminalOpen,
   terminalFor,
   terminalKey,
-  useTerminalOpen,
 } from "../features/terminal/thread-terminals";
+import {
+  dockTabs,
+  setTerminalOpen,
+  useTerminalOpen,
+} from "../features/terminal/terminal-dock";
 import type { ShellNavigation } from "./useShellNavigation";
 
 export type ThreadTerminalDrawer = ReturnType<typeof useThreadTerminal>;
@@ -26,7 +29,12 @@ export function useThreadTerminal({
   const blocked = terminalBlocked(chat, scope, draftWorkspace);
   function toggle() {
     if (!project || inbox || blocked) return;
-    if (!open) terminalFor(project.id, chat?.id ?? null).focusOnShow = true;
+    if (!open)
+      terminalFor(
+        project.id,
+        chat?.id ?? null,
+        dockTabs(key).front,
+      ).focusOnShow = true;
     setTerminalOpen(key, !open);
   }
   useShortcut("terminal", true, toggle);

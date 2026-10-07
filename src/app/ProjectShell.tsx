@@ -12,10 +12,8 @@ import {
 import { projectFor } from "../features/pulls/pull-board";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useShortcut } from "../lib/shortcuts";
-import {
-  adoptDraftTerminal,
-  terminalFor,
-} from "../features/terminal/thread-terminals";
+import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
+import { usePanelTabs } from "../features/panel/panel-tabs";
 import { useIncomingLinks } from "./useIncomingLinks";
 import { useOpenedFolders } from "./useOpenedFolders";
 import { useNewThreads } from "./useNewThreads";
@@ -64,7 +62,7 @@ import {
 } from "./ShellTitlebar";
 import { SignInDialog } from "../features/settings/SignInDialog";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
-import { ThreadChanges, ThreadFiles, ThreadHistory } from "./ThreadPanes";
+import { ThreadChanges, ThreadPanel } from "./ThreadPanes";
 import { ErrorBox, IconButton, Loading } from "../ui/ui";
 import { Pane } from "../ui/WorkspacePanes";
 import { useUndoShortcut } from "./useUndoShortcut";
@@ -107,7 +105,8 @@ export default function ProjectShell() {
   const everyThread = useEveryThread(realProjects);
   const terminal = useThreadTerminal(nav);
   const folder = useThreadFolder(nav);
-  const opens = usePaneOpens(nav, view, folder, lock, setError);
+  const panel = usePanelTabs(panes.layout.thread);
+  const opens = usePaneOpens(nav, panel, view, folder, lock, setError);
   const links = useIncomingLinks(boot.data, nav, signIn, lock, setError);
   const prs = usePullThreads(nav, lock, setError);
   const pullsPage = usePullsPage(
@@ -167,7 +166,9 @@ export default function ProjectShell() {
   if (boot.error) return <ErrorBox error={boot.error} />;
   if (!boot.data) return <Loading text="Opening your workspace…" />;
   const account = boot.data.account;
-  const codeOpen = panes.layout.open.changes || panes.layout.open.files;
+  const codeOpen =
+    panes.layout.open.changes ||
+    (panes.layout.open.panel && panel.has("files"));
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
@@ -233,6 +234,7 @@ export default function ProjectShell() {
                   plain={project.plain}
                   pull={pull}
                   lines={folder.tree?.lines}
+                  filesOpen={panel.has("files")}
                   onToggle={opens.togglePane}
                 />
                 <span className="header-strip-sep" aria-hidden="true" />
@@ -454,25 +456,23 @@ export default function ProjectShell() {
                   />
                 )}
               </Pane>
-              <Pane id="files" label="Files" {...frame("files")}>
-                {panes.layout.open.files && (
-                  <ThreadFiles
+              <Pane id="panel" label="Panel" {...frame("panel")}>
+                {panes.layout.open.panel && (
+                  <ThreadPanel
                     project={project}
+                    chatId={chat?.id ?? null}
                     folder={folder}
                     view={view}
                     opens={opens}
+                    panel={panel}
                   />
-                )}
-              </Pane>
-              <Pane id="history" label="History" {...frame("history")}>
-                {panes.layout.open.history && (
-                  <ThreadHistory folder={folder} opens={opens} />
                 )}
               </Pane>
             </div>
             {terminal.shown && (
               <TerminalDrawer
-                terminal={terminalFor(project.id, chat?.id ?? null)}
+                projectId={project.id}
+                chatId={chat?.id ?? null}
                 worktree={!!chat?.worktree}
                 onClose={() => terminal.close()}
               />

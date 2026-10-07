@@ -79,6 +79,7 @@ const methods = [
   "stopProjectTask",
   "restartProjectTask",
   "openTerminal",
+  "closeTerminal",
   "writeTerminal",
   "prefillSignIn",
   "prefillTerminal",

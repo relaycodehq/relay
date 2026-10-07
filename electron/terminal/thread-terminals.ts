@@ -1,6 +1,10 @@
 import { basename, join, sep } from "node:path";
 import type * as NodePty from "node-pty";
-import type { TerminalEvent, TerminalOpened } from "../../shared/terminals";
+import {
+  terminalBaseKey,
+  type TerminalEvent,
+  type TerminalOpened,
+} from "../../shared/terminals";
 import { inheritedEnv, userShell } from "./env";
 import { projectTasks } from "./tasks";
 
@@ -38,8 +42,8 @@ interface Session {
 }
 
 /**
- * One shell per thread, keyed by chat id (`draft:<projectId>` before the
- * thread exists). Shells outlive the window's view of them: switching threads
+ * Shells per thread, keyed by chat id (`draft:<projectId>` before the thread
+ * exists), extra ones with a `~<slot>` suffix. Shells outlive the window's view of them: switching threads
  * or reloading the window leaves them running.
  */
 class ThreadTerminals {
@@ -196,15 +200,24 @@ class ThreadTerminals {
     if (session.paused && session.unacked < resumeAt) this.resume(session);
   }
 
-  /** A draft's shell carries over to the thread its first message started. */
+  /** A draft's shells carry over to the thread its first message started. */
   adopt(from: string, to: string) {
-    const session = this.sessions.get(from);
-    if (!session || this.sessions.has(to)) return;
-    this.sessions.delete(from);
-    session.key = to;
-    this.sessions.set(to, session);
-    if (session.exitCode === undefined)
-      projectTasks.trackTerminal(session.pty.pid, chatOf(to));
+    for (const [key, session] of [...this.sessions]) {
+      if (terminalBaseKey(key) !== from) continue;
+      const next = to + key.slice(from.length);
+      if (this.sessions.has(next)) continue;
+      this.sessions.delete(key);
+      session.key = next;
+      this.sessions.set(next, session);
+      if (session.exitCode === undefined)
+        projectTasks.trackTerminal(session.pty.pid, chatOf(next));
+    }
+  }
+
+  /** Ends the key's shell; its tab is gone, so nothing needs telling. */
+  close(key: string) {
+    const session = this.sessions.get(key);
+    if (session) this.kill(session);
   }
 
   /** Ends the shells working in a folder about to go away. */
@@ -288,6 +301,7 @@ class ThreadTerminals {
   }
 }
 
-const chatOf = (key: string) => (key.startsWith("draft:") ? undefined : key);
+const chatOf = (key: string) =>
+  key.startsWith("draft:") ? undefined : terminalBaseKey(key);
 
 export const threadTerminals = new ThreadTerminals();

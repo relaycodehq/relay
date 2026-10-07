@@ -75,6 +75,23 @@ test("a thread's terminal runs in its folder and follows the thread", async () =
     await expect(screen).toContainText("relay-42 npm-vars-0");
     await expect(screen).toContainText(repo);
 
+    // More shells open as tabs beside it; closing one ends only that shell.
+    await drawer
+      .getByRole("button", { name: "New terminal", exact: true })
+      .click();
+    await expect(drawer.getByRole("tab")).toHaveText([
+      "Terminal",
+      "Terminal 2",
+    ]);
+    await run("echo second-$((1+1))");
+    await expect(screen).toContainText("second-2");
+    await drawer
+      .getByRole("button", { name: "Close terminal 2", exact: true })
+      .click();
+    await expect(drawer.getByRole("tab")).toHaveText(["Terminal"]);
+    await expect(screen).toContainText("relay-42 npm-vars-0");
+    await drawer.locator(".xterm-screen").click();
+
     // A server started in it is listed as the terminal's.
     await run(
       `${JSON.stringify(process.execPath)} -e "require('http').createServer().listen(0);setInterval(()=>{},1000)"`,

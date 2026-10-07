@@ -15,7 +15,11 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openInFileTree } from "../fixtures/navigation";
+import {
+  openInFileTree,
+  openSurface,
+  panelToggle,
+} from "../fixtures/navigation";
 
 test("a worktree thread is its own branch: the header follows it, commits there and merges into main", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-worktree-")));
@@ -120,7 +124,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await expect(page.locator(".pane-header-detail").first()).toHaveText(
       "worktree",
     );
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     const fileList = page.locator(".project-file-list");
     await openInFileTree(page, "src/guard.ts");
     await expect(
@@ -128,7 +132,7 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     ).toBeVisible();
     await expect(fileList).not.toContainText("notes.txt");
     await screenshot(page, { path: "test-results/worktree-header.png" });
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await panelToggle(page).click();
 
     // What the branch has that main doesn't opens like a turn's diff.
     const menu = page.getByRole("button", { name: /^Worktree/ });

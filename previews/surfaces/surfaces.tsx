@@ -1070,8 +1070,8 @@ function Sidebar() {
   );
 }
 
-/** The layout model has a spare pane id; the panel borrows it so order and widths are the app's own. */
-const PANEL: PaneId = "files";
+/** Use the app's panel id so order and widths share its layout model. */
+const PANEL: PaneId = "panel";
 
 /** E: terminals under the panes, like the app's terminal drawer, with tabs and a height handle. */
 function TerminalDock({

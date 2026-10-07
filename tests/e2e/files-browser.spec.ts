@@ -12,7 +12,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openInFileTree } from "../fixtures/navigation";
+import { openInFileTree, openSurface } from "../fixtures/navigation";
 
 // A 1×1 PNG, so the picture views have a real image to decode.
 const png = Buffer.from(
@@ -80,7 +80,7 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
 
     // What Git ignores is still there to browse, and looks it.
     const tree = page.locator(".file-tree");

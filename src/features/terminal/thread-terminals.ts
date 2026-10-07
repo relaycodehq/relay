@@ -1,21 +1,24 @@
-import { useSyncExternalStore } from "react";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import {
   draftTerminalKey,
+  terminalBaseKey,
+  terminalSlotKey,
   type TerminalEvent,
 } from "../../../shared/terminals";
 import type { AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { matches } from "../../lib/shortcuts";
+import { frontInDock, moveDock, setTerminalOpen } from "./terminal-dock";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
 
 /**
- * A thread's terminal in this window. The xterm instance outlives the drawer:
- * switching threads detaches its element and keeps the screen as it was.
+ * One of a thread's shells in this window. The xterm instance outlives the
+ * tab showing it: switching threads detaches its element and keeps the screen
+ * as it was.
  */
 export class ThreadTerminal {
   readonly term: Terminal;
@@ -29,6 +32,8 @@ export class ThreadTerminal {
   private opened = false;
   /** Output that arrived while the shell was still being opened. */
   private early: string[] = [];
+  /** Keys typed while it was, sent once it runs. */
+  private typed = "";
   private drawn = 0;
   private ackTimer?: number;
   private fitFrame?: number;
@@ -39,6 +44,8 @@ export class ThreadTerminal {
     public key: string,
     private projectId: string,
     public chatId: string | null,
+    /** Which of the thread's shells; "" is its first. */
+    readonly slot = "",
   ) {
     this.element.className = "thread-terminal";
     this.term = new Terminal({
@@ -61,6 +68,7 @@ export class ThreadTerminal {
     this.term.onData((data) => {
       if (this.status === "running")
         void api.writeTerminal(this.key, data).catch(() => {});
+      else if (this.status === "starting") this.typed += data;
       else if (this.status === "exited" && data.includes("\r")) {
         this.term.write("\r\n");
         void this.start(true);
@@ -113,15 +121,20 @@ export class ThreadTerminal {
         this.chatId,
         { cols: this.term.cols, rows: this.term.rows },
         fresh,
+        this.slot || undefined,
       );
       this.cwd = opened.cwd;
       if (opened.backlog) this.term.write(opened.backlog);
       this.status = "running";
       for (const data of this.early.splice(0)) this.output(data);
+      if (this.typed && opened.exitCode === undefined)
+        void api.writeTerminal(this.key, this.typed).catch(() => {});
+      this.typed = "";
       if (opened.exitCode !== undefined) this.exited(opened.exitCode);
     } catch (e) {
       this.status = "idle";
       this.early = [];
+      this.typed = "";
       this.error = e instanceof Error ? e.message : String(e);
     }
     this.emit();
@@ -194,6 +207,15 @@ export class ThreadTerminal {
     );
   }
 
+  /** Called once its tab closes for good. */
+  dispose() {
+    clearTimeout(this.ackTimer);
+    if (this.fitFrame) cancelAnimationFrame(this.fitFrame);
+    this.element.remove();
+    this.term.dispose();
+    this.listeners.clear();
+  }
+
   setFont(family: string, size: number) {
     this.term.options.fontFamily = family;
     this.term.options.fontSize = size;
@@ -214,8 +236,6 @@ export class ThreadTerminal {
 }
 
 const terminals = new Map<string, ThreadTerminal>();
-const openKeys = new Set<string>();
-const openListeners = new Set<() => void>();
 let currentTheme: ITheme | undefined;
 /** Set from the typography settings; an empty family reads --font-mono. */
 let currentFont = { family: "", size: 12 };
@@ -231,14 +251,30 @@ api.onTerminal((event) => {
 export const terminalKey = (projectId: string, chatId: string | null) =>
   chatId ?? draftTerminalKey(projectId);
 
-export function terminalFor(projectId: string, chatId: string | null) {
-  const key = terminalKey(projectId, chatId);
+export function terminalFor(
+  projectId: string,
+  chatId: string | null,
+  slot = "",
+) {
+  const key = terminalSlotKey(terminalKey(projectId, chatId), slot);
   let terminal = terminals.get(key);
   if (!terminal) {
-    terminal = new ThreadTerminal(key, projectId, chatId);
+    terminal = new ThreadTerminal(key, projectId, chatId, slot);
     terminals.set(key, terminal);
   }
   return terminal;
+}
+
+/** Ends one of the thread's shells: its tab was closed. */
+export function closeTerminal(
+  projectId: string,
+  chatId: string | null,
+  slot: string,
+) {
+  const key = terminalSlotKey(terminalKey(projectId, chatId), slot);
+  terminals.get(key)?.dispose();
+  terminals.delete(key);
+  void api.closeTerminal(key).catch(() => {});
 }
 
 /**
@@ -277,6 +313,7 @@ async function typeAtPrompt(
 ) {
   const terminal = terminalFor(projectId, chatId);
   terminal.focusOnShow = true;
+  frontInDock(terminal.key, "");
   setTerminalOpen(terminal.key, true);
   if (!(await terminal.running())) return false;
   const typed = await type(terminal.key).catch(() => false);
@@ -284,40 +321,20 @@ async function typeAtPrompt(
   return typed;
 }
 
-/** The draft's terminal becomes the new thread's, open or not. */
+/** The draft's terminals become the new thread's, open or not. */
 export function adoptDraftTerminal(projectId: string, chatId: string) {
   const from = draftTerminalKey(projectId);
-  const terminal = terminals.get(from);
-  if (!terminal || terminals.has(chatId)) return;
-  terminals.delete(from);
-  terminal.key = chatId;
-  terminal.chatId = chatId;
-  terminals.set(chatId, terminal);
-  if (openKeys.delete(from)) openKeys.add(chatId);
-  emitOpen();
+  for (const [key, terminal] of [...terminals]) {
+    if (terminalBaseKey(key) !== from) continue;
+    const next = terminalSlotKey(chatId, terminal.slot);
+    if (terminals.has(next)) continue;
+    terminals.delete(key);
+    terminal.key = next;
+    terminal.chatId = chatId;
+    terminals.set(next, terminal);
+  }
+  moveDock(from, chatId);
   void api.adoptTerminal(projectId, chatId).catch(() => {});
-}
-
-export function setTerminalOpen(key: string, open: boolean) {
-  if (open === openKeys.has(key)) return;
-  if (open) openKeys.add(key);
-  else openKeys.delete(key);
-  emitOpen();
-}
-
-/** Whether the thread's terminal drawer is open; each thread remembers its own. */
-export function useTerminalOpen(key: string) {
-  return useSyncExternalStore(
-    (listener) => {
-      openListeners.add(listener);
-      return () => void openListeners.delete(listener);
-    },
-    () => openKeys.has(key),
-  );
-}
-
-function emitOpen() {
-  for (const listener of openListeners) listener();
 }
 
 export function setTerminalFont(family: string, size: number) {

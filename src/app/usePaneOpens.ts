@@ -19,16 +19,18 @@ import {
   type ThreadView,
 } from "../features/thread/useThreadView";
 import type { PaneId } from "../lib/workspace-panes";
+import type { PanelTabs, Surface } from "../features/panel/panel-tabs";
 
 export type PaneOpens = ReturnType<typeof usePaneOpens>;
 
 /**
- * What the chat and the title bar ask the panes to show: a pane, a file in
- * Files, a change or a turn's diff in Changes; and the code the panes ask
- * the chat about.
+ * What the chat and the title bar ask the panes to show: a pane, a surface
+ * in the panel, a file in Files, a change or a turn's diff in Changes; and
+ * the code the panes ask the chat about.
  */
 export function usePaneOpens(
   { project, panes, pull }: Pick<ShellNavigation, "project" | "panes" | "pull">,
+  panel: PanelTabs,
   view: ThreadView,
   folder: ThreadFolder,
   lock: NavigationLock,
@@ -42,12 +44,19 @@ export function usePaneOpens(
     () => requestChannel<ProjectFileLink>(),
     [project?.id],
   );
+  /** Opens the panel with `surface` in front. */
+  function openSurface(surface: Surface) {
+    panel.show(surface);
+    panes.show("panel");
+  }
   function openCode(next: "changes" | "files") {
-    panes.show(next === "files" || project?.plain ? "files" : "changes");
+    if (next === "files" || project?.plain) openSurface("files");
+    else panes.show("changes");
   }
   function togglePane(id: PaneId) {
     const open = panes.layout.open[id];
-    if (open && id === "files" && lock.blocked()) return;
+    // Closing the panel would unmount Files and its unsaved edit.
+    if (open && id === "panel" && panel.has("files") && lock.blocked()) return;
     panes.setOpen(id, !open);
     if (open && id !== "chat") view.setViewing(NO_VIEWING);
   }
@@ -58,7 +67,7 @@ export function usePaneOpens(
   function openInEditor(target: FileTarget) {
     if (lock.blocked()) return;
     fileOpens.send(target);
-    panes.show("files");
+    openSurface("files");
   }
   function revealChange(target: ProjectFileLink) {
     changeReveals.send(target);
@@ -109,6 +118,7 @@ export function usePaneOpens(
     fileOpens,
     changeReveals,
     openCode,
+    openSurface,
     togglePane,
     openTurnDiff,
     openInEditor,
