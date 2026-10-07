@@ -49,6 +49,8 @@ const copy: Record<string, string> = {
 <p>Relay runs your coding agents on your computer. You see each step. You review each edit. Relay is free and open source under the MIT license.</p>
 <h2>Features</h2>
 ${features.map((f) => `<h3>${escape(f.title)}</h3><p>${escape(f.text)}</p>`).join("\n")}
+<h2>Themes</h2>
+<p>Relay has built-in themes and takes any VS Code theme from Open VSX, with your own fonts, sizes and accent.</p>
 <h2>Open source</h2>
 ${openSource.map((o) => `<h3>${escape(o.title)}</h3><p>${escape(o.text)} <a href="${o.href}">${escape(o.link)}</a></p>`).join("\n")}
 <h2>Common questions</h2>

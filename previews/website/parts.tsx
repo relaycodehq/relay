@@ -12,6 +12,7 @@ import {
 import { relayMarkSvg, svgDataUrl } from "../../src/lib/relay-icon";
 import { useScrollProgress } from "./motion";
 import { formatCount, useStars } from "./live";
+import { useSiteTheme } from "./theme";
 import {
   BUILD_GUIDE,
   EMAIL,
@@ -25,7 +26,11 @@ import {
 /** `size` is the ribbon's visible height; its SVG box has margins around it. */
 export function Mark({ size = 20 }: { size?: number }) {
   const box = Math.round(size * 1.45);
-  const src = useMemo(() => svgDataUrl(relayMarkSvg("#aaa8e5")), []);
+  const { resolved } = useSiteTheme();
+  const src = useMemo(
+    () => svgDataUrl(relayMarkSvg(resolved.accent)),
+    [resolved.accent],
+  );
   return (
     <img
       className="site-mark"
@@ -85,6 +90,7 @@ export function GitHubMark({ size = 16 }: { size?: number }) {
 const sections = [
   { id: "tour", label: "Product" },
   { id: "features", label: "Features" },
+  { id: "themes", label: "Themes" },
   { id: "open-source", label: "Open source" },
   { id: "faq", label: "FAQ" },
 ];

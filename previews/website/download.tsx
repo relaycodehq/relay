@@ -6,11 +6,7 @@ import { createRoot } from "react-dom/client";
 import { ArrowDownToLine, ArrowUpRight, Sparkles } from "lucide-react";
 import "../../src/styles.css";
 import "./website.css";
-import {
-  applyToDocument,
-  resolveChoice,
-  type ThemeChoice,
-} from "../../src/lib/themes";
+import { initSiteTheme } from "./theme";
 import { Command, GitHubMark, SiteFooter, SiteHeader } from "./parts";
 import {
   BUILD_GUIDE,
@@ -33,7 +29,7 @@ import {
   type Release,
 } from "./live";
 
-applyToDocument(resolveChoice("dark", { theme: "relay" } as ThemeChoice));
+initSiteTheme();
 
 type Build = (typeof platforms)[number];
 

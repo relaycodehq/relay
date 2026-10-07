@@ -13,11 +13,8 @@ import "../../src/features/sidebar/sidebar.css";
 import "../../src/features/agents/composer-model-picker.css";
 import "../../src/features/changes/changed-files.css";
 import "./website.css";
-import {
-  applyToDocument,
-  resolveChoice,
-  type ThemeChoice,
-} from "../../src/lib/themes";
+import { initSiteTheme, useSiteTheme } from "./theme";
+import { ThemesSection } from "./themes";
 import { initWindowFocus } from "../../src/lib/window-focus";
 import { ProviderIcon } from "../../src/features/agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../shared/agents";
@@ -44,7 +41,7 @@ import {
 import { osName, useOs } from "./live";
 
 // The site always wears Relay's own dark theme, whatever the previews were left on.
-applyToDocument(resolveChoice("dark", { theme: "relay" } as ThemeChoice));
+initSiteTheme();
 initWindowFocus();
 
 installStubs();
@@ -86,17 +83,18 @@ function Lanes() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [ref, active] = useActive<HTMLDivElement>(0.05);
   const lanes = useRef<ReturnType<typeof startLanes>>(undefined);
+  // Redrawn in the new colours when the visitor picks a theme.
+  const { resolved } = useSiteTheme();
   useEffect(() => {
-    const style = getComputedStyle(document.documentElement);
     lanes.current = startLanes(canvas.current!, {
-      line: style.getPropertyValue("--border").trim(),
-      run: style.getPropertyValue("--accent").trim(),
+      line: resolved.palette.border,
+      run: resolved.accent,
     });
     return () => lanes.current?.stop();
-  }, []);
+  }, [resolved]);
   useEffect(() => {
     lanes.current?.run(active && !reducedMotion());
-  }, [active]);
+  }, [active, resolved]);
   return (
     <div className="hero-lanes" ref={ref} aria-hidden="true">
       <canvas ref={canvas} />
@@ -380,6 +378,8 @@ function Site() {
             ))}
           </div>
         </section>
+
+        <ThemesSection />
 
         <section className="block" id="open-source">
           <Reveal>
