@@ -2,6 +2,7 @@ import {
   BrowserWindow,
   session,
   WebContentsView,
+  type NavigationEntry,
   type Session,
 } from "electron";
 import type {
@@ -33,8 +34,14 @@ export interface PreviewTarget {
 
 interface Preview {
   target: PreviewTarget;
-  view: WebContentsView;
+  /** Unset while unloaded; `parked` holds where it was. */
+  view?: WebContentsView;
+  parked?: { entries: NavigationEntry[]; index: number };
+  /** A parked history is loading back in; the dev server's home must not replace it. */
+  restoring?: boolean;
   shown: boolean;
+  /** When it last left the panel. */
+  hiddenAt: number;
   popOut?: BrowserWindow;
   error?: string;
   server: DevServerState;
@@ -45,6 +52,11 @@ interface Preview {
 }
 
 const KEPT_CONSOLE = 200;
+/** A preview out of sight this long gives its page's memory back. */
+const UNLOAD_MS =
+  (process.env.RELAY_TEST_DATA &&
+    Number(process.env.RELAY_TEST_PREVIEW_UNLOAD_MS)) ||
+  5 * 60_000;
 const prepared = new WeakSet<Session>();
 
 const webUrl = (url: string) => {
@@ -79,10 +91,16 @@ export class ThreadPreviews {
       }
   });
 
+  private sweep: NodeJS.Timeout;
+
   constructor(
     private window: AppWindow,
     private resolve: (projectId: string, chatId: string | null) => Promise<PreviewTarget>,
-  ) {}
+    private now = Date.now,
+  ) {
+    this.sweep = setInterval(() => this.unloadIdle(), Math.min(60_000, UNLOAD_MS));
+    this.sweep.unref();
+  }
 
   async open(projectId: string, chatId: string | null) {
     const target = await this.resolve(projectId, chatId);
@@ -94,6 +112,7 @@ export class ThreadPreviews {
     }
     if (!preview) preview = await this.create(target);
     else preview.target = target;
+    this.revive(preview);
     this.wake(preview);
     return this.state(preview);
   }
@@ -129,26 +148,37 @@ export class ThreadPreviews {
           console.warn("Copying the checkout's cookies failed:", e),
         );
     }
+    const preview: Preview = {
+      target,
+      shown: false,
+      hiddenAt: this.now(),
+      server: { state: "none" },
+      console: [],
+      placed: 0,
+    };
+    this.previews.set(target.key, preview);
+    this.mount(preview);
+    return preview;
+  }
+
+  /** A browser view for the preview, in its partition, so cookies outlive it. */
+  private mount(preview: Preview) {
     const view = new WebContentsView({
       webPreferences: {
-        session: ses,
+        session: session.fromPartition(preview.target.partition),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
       },
     });
     view.setBackgroundColor("#ffffff");
-    const preview: Preview = {
-      target,
-      view,
-      shown: false,
-      server: { state: "none" },
-      console: [],
-      placed: 0,
-    };
-    this.previews.set(target.key, preview);
+    preview.view = view;
     const wc = view.webContents;
-    const emit = () => this.emit(preview);
+    // An unloaded page's last events mustn't speak for the next one.
+    const current = () => preview.view?.webContents === wc;
+    const emit = () => {
+      if (current()) this.emit(preview);
+    };
     wc.setWindowOpenHandler(({ url }) => {
       // One browser per thread: links that open a window open here.
       if (webUrl(url)) void wc.loadURL(url);
@@ -167,11 +197,12 @@ export class ThreadPreviews {
     wc.on("page-title-updated", emit);
     wc.on("did-fail-load", (_e, code, description, url, mainFrame) => {
       // -3 is a load another one replaced.
-      if (!mainFrame || code === -3) return;
+      if (!mainFrame || code === -3 || !current()) return;
       preview.error = `${description} (${url})`;
       emit();
     });
     wc.on("render-process-gone", (_e, details) => {
+      if (!current()) return;
       preview.error = `The page stopped: ${details.reason}.`;
       emit();
     });
@@ -185,13 +216,58 @@ export class ThreadPreviews {
       });
       if (preview.console.length > KEPT_CONSOLE) preview.console.shift();
     });
-    return preview;
+    return wc;
+  }
+
+  /** The live page, loading an unloaded one back where it was. */
+  private revive(preview: Preview) {
+    if (preview.view) return preview.view.webContents;
+    const parked = preview.parked;
+    preview.parked = undefined;
+    const wc = this.mount(preview);
+    if (parked?.entries.length) {
+      // Back, forward, scroll and form fields come back with it.
+      preview.restoring = true;
+      void wc.navigationHistory
+        .restore(parked)
+        .catch(() => {})
+        .finally(() => {
+          preview.restoring = false;
+          this.emit(preview);
+        });
+    }
+    return wc;
+  }
+
+  /** Previews out of sight for a while drop their page, keeping where it was. */
+  unloadIdle() {
+    for (const preview of this.previews.values()) {
+      const wc = preview.view?.webContents;
+      if (
+        !wc ||
+        preview.shown ||
+        preview.popOut ||
+        this.now() - preview.hiddenAt < UNLOAD_MS ||
+        (!wc.isDestroyed() && wc.isDevToolsOpened())
+      )
+        continue;
+      if (!wc.isDestroyed()) {
+        const history = wc.navigationHistory;
+        preview.parked = {
+          entries: history.getAllEntries(),
+          index: history.getActiveIndex(),
+        };
+        wc.close();
+      }
+      preview.view = undefined;
+      this.emit(preview);
+    }
   }
 
   private loadDefault(preview: Preview) {
     const dev = preview.target.dev;
-    const wc = preview.view.webContents;
-    if (!dev || wc.isDestroyed()) return;
+    const wc = preview.view?.webContents;
+    if (!dev || !wc || wc.isDestroyed() || preview.restoring) return;
     const home = `http://localhost:${dev.port}/`;
     // Only an empty page or one that couldn't reach the server yet.
     const url = wc.getURL();
@@ -207,8 +283,10 @@ export class ThreadPreviews {
     if (!preview || preview.popOut || !win) return;
     const call = ++preview.placed;
     if (!bounds) return void this.hideWithSnapshot(preview, call);
+    this.revive(preview);
+    const view = preview.view!;
     const zoom = win.webContents.getZoomFactor();
-    preview.view.setBounds({
+    view.setBounds({
       x: Math.round(bounds.x * zoom),
       y: Math.round(bounds.y * zoom),
       width: Math.max(0, Math.round(bounds.width * zoom)),
@@ -218,7 +296,7 @@ export class ThreadPreviews {
     // One at a time over the panel.
     for (const other of this.previews.values())
       if (other !== preview) this.hide(other);
-    win.contentView.addChildView(preview.view);
+    win.contentView.addChildView(view);
     preview.shown = true;
     if (preview.snapshot) {
       preview.snapshot = undefined;
@@ -233,8 +311,8 @@ export class ThreadPreviews {
    */
   private async hideWithSnapshot(preview: Preview, call: number) {
     if (!preview.shown) return;
-    const wc = preview.view.webContents;
-    if (wc.getURL() && !wc.isDestroyed()) {
+    const wc = preview.view?.webContents;
+    if (wc && !wc.isDestroyed() && wc.getURL()) {
       const frame = await wc.capturePage().catch(() => null);
       if (call !== preview.placed) return;
       if (frame && !frame.isEmpty())
@@ -247,9 +325,11 @@ export class ThreadPreviews {
   private hide(preview: Preview) {
     if (!preview.shown) return;
     preview.shown = false;
+    preview.hiddenAt = this.now();
     this.servers.watch(preview.target.folder, false);
     const win = this.window.win;
-    if (win && !win.isDestroyed()) win.contentView.removeChildView(preview.view);
+    if (win && !win.isDestroyed() && preview.view)
+      win.contentView.removeChildView(preview.view);
   }
 
   /** The window reloaded or closed: whatever the panel showed is gone. */
@@ -260,13 +340,13 @@ export class ThreadPreviews {
   navigate(key: string, url: string) {
     const preview = this.previews.get(key);
     if (!preview || !webUrl(url)) return;
-    void preview.view.webContents.loadURL(url).catch(() => {});
+    void this.revive(preview).loadURL(url).catch(() => {});
   }
 
   act(key: string, action: PreviewAction) {
     const preview = this.previews.get(key);
     if (!preview) return;
-    const wc = preview.view.webContents;
+    const wc = this.revive(preview);
     const history = wc.navigationHistory;
     switch (action) {
       case "back":
@@ -301,6 +381,7 @@ export class ThreadPreviews {
   private popOut(preview: Preview) {
     if (preview.popOut) return preview.popOut.focus();
     this.hide(preview);
+    const view = preview.view!;
     const win = new BrowserWindow({
       width: 1280,
       height: 860,
@@ -310,9 +391,9 @@ export class ThreadPreviews {
     win.removeMenu?.();
     const fit = () => {
       const { width, height } = win.getContentBounds();
-      preview.view.setBounds({ x: 0, y: 0, width, height });
+      view.setBounds({ x: 0, y: 0, width, height });
     };
-    win.contentView.addChildView(preview.view);
+    win.contentView.addChildView(view);
     fit();
     win.on("resize", fit);
     preview.popOut = win;
@@ -320,10 +401,11 @@ export class ThreadPreviews {
     const retitle = () => {
       if (!win.isDestroyed()) win.setTitle(this.title(preview));
     };
-    preview.view.webContents.on("page-title-updated", retitle);
+    view.webContents.on("page-title-updated", retitle);
     win.on("closed", () => {
-      preview.view.webContents.off("page-title-updated", retitle);
+      view.webContents.off("page-title-updated", retitle);
       preview.popOut = undefined;
+      preview.hiddenAt = this.now();
       this.servers.watch(preview.target.folder, false);
       // Back in the panel, hidden until it asks for it again.
       if (this.previews.get(preview.target.key) === preview) this.emit(preview);
@@ -332,7 +414,7 @@ export class ThreadPreviews {
   }
 
   private title(preview: Preview) {
-    const page = preview.view.webContents.getTitle() || "Preview";
+    const page = this.page(preview).title || "Preview";
     return preview.target.worktree ? `[${preview.target.worktree}] ${page}` : page;
   }
 
@@ -342,14 +424,16 @@ export class ThreadPreviews {
     this.previews.delete(key);
     this.hide(preview);
     preview.popOut?.close();
-    if (!preview.view.webContents.isDestroyed()) preview.view.webContents.close();
+    const wc = preview.view?.webContents;
+    if (wc && !wc.isDestroyed()) wc.close();
   }
 
   /** The page as a PNG, as the panel shows it; null without one. */
   async screenshot(key: string) {
     const preview = this.previews.get(key);
-    if (!preview || !preview.view.webContents.getURL()) return null;
-    return (await preview.view.webContents.capturePage()).toPNG();
+    const wc = preview?.view?.webContents;
+    if (!wc || wc.isDestroyed() || !wc.getURL()) return null;
+    return (await wc.capturePage()).toPNG();
   }
 
   consoleErrors(key: string) {
@@ -357,20 +441,36 @@ export class ThreadPreviews {
   }
 
   dispose() {
+    clearInterval(this.sweep);
     for (const key of [...this.previews.keys()]) this.close(key);
     this.servers.dispose();
   }
 
+  /** Where the page is, live or parked. */
+  private page(preview: Preview) {
+    const wc = preview.view?.webContents;
+    if (wc && !wc.isDestroyed())
+      return {
+        url: wc.getURL(),
+        title: wc.getTitle(),
+        loading: wc.isLoading(),
+        canGoBack: wc.navigationHistory.canGoBack(),
+        canGoForward: wc.navigationHistory.canGoForward(),
+      };
+    const { entries = [], index = 0 } = preview.parked ?? {};
+    return {
+      url: entries[index]?.url ?? "",
+      title: entries[index]?.title ?? "",
+      loading: false,
+      canGoBack: index > 0,
+      canGoForward: index < entries.length - 1,
+    };
+  }
+
   private state(preview: Preview): PreviewState {
-    const wc = preview.view.webContents;
-    const destroyed = wc.isDestroyed();
     return {
       key: preview.target.key,
-      url: destroyed ? "" : wc.getURL(),
-      title: destroyed ? "" : wc.getTitle(),
-      loading: !destroyed && wc.isLoading(),
-      canGoBack: !destroyed && wc.navigationHistory.canGoBack(),
-      canGoForward: !destroyed && wc.navigationHistory.canGoForward(),
+      ...this.page(preview),
       ...(preview.error ? { error: preview.error } : {}),
       ...(preview.snapshot ? { snapshot: preview.snapshot } : {}),
       poppedOut: !!preview.popOut,

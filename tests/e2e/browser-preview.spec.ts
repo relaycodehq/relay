@@ -46,6 +46,7 @@ test("the Browser surface starts the project's dev server and shows its page ove
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
       RELAY_TEST_NATIVE_STORAGE: "0",
+      RELAY_TEST_PREVIEW_UNLOAD_MS: "4000",
     },
   });
   /** The pages laid over Relay's own, with where they sit. */
@@ -144,6 +145,25 @@ test("the Browser surface starts the project's dev server and shows its page ove
     await address.fill(`127.0.0.1:${port}/again`);
     await address.press("Enter");
     await expect(address).toHaveValue(`http://127.0.0.1:${port}/again`);
+
+    // Out of sight a while, the page is unloaded; back in front it returns
+    // where it was, history included.
+    const pages = () =>
+      app.evaluate(
+        ({ webContents }, port) =>
+          webContents.getAllWebContents().filter((wc) =>
+            wc.getURL().includes(`:${port}/`),
+          ).length,
+        port,
+      );
+    await openSurface(page, "Files");
+    await expect.poll(pages, { timeout: 15_000 }).toBe(0);
+    await panel.getByRole("tab", { name: "Browser" }).click();
+    await expect.poll(overlays).toEqual([
+      expect.objectContaining({ title: "Preview fixture" }),
+    ]);
+    await expect(address).toHaveValue(`http://127.0.0.1:${port}/again`);
+    await expect(panel.getByRole("button", { name: "Back" })).toBeEnabled();
 
     // Closing the tab ends the page.
     await panel.getByRole("button", { name: "Close browser" }).click();
