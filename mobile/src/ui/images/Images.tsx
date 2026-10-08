@@ -9,10 +9,10 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { answerImagePaths } from "../../../shared/answer-images";
-import { turnImages, type ChatMessage } from "../../../shared/projects";
+import { answerImagePaths } from "../../../../shared/answer-images";
+import { turnImages, type ChatMessage } from "../../../../shared/projects";
 import type { LightboxImage } from "./Lightbox";
-import { useTheme } from "./theme";
+import { useTheme } from "../theme";
 import { keyOf, useImage, type Source } from "./useImage";
 
 const thumbSize = 88;

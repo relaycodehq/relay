@@ -41,7 +41,7 @@ import {
   turnHeading,
 } from "../../../shared/agent-trace";
 import { useRemote } from "../remote/RemoteProvider";
-import { ReadPreview, ReadSwatch } from "./Images";
+import { ReadPreview, ReadSwatch } from "./images/Images";
 import { Markdown } from "./Markdown";
 import { useReducedMotion, useTick } from "./motion";
 import { Shine } from "./Shine";

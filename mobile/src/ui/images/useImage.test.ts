@@ -33,8 +33,8 @@ vi.mock("react", () => ({
     }
   },
 }));
-vi.mock("../remote/RemoteProvider", () => ({ useRemote: () => remote }));
-vi.mock("../remote/outbox", () => ({ outgoingImage: () => "pending-image" }));
+vi.mock("../../remote/RemoteProvider", () => ({ useRemote: () => remote }));
+vi.mock("../../remote/outbox", () => ({ outgoingImage: () => "pending-image" }));
 
 const render = (source: Source, max?: number) => {
   // eslint-disable-next-line react-hooks/rules-of-hooks -- This harness drives the mocked hook lifecycle.

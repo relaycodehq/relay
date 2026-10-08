@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { imageBridge } from "../../../shared/remote";
-import { outgoingImage } from "../remote/outbox";
-import { useRemote } from "../remote/RemoteProvider";
+import { imageBridge } from "../../../../shared/remote";
+import { outgoingImage } from "../../remote/outbox";
+import { useRemote } from "../../remote/RemoteProvider";
 import { ImageCache } from "./image-cache";
 
 export type Source =
