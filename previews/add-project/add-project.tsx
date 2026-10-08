@@ -74,7 +74,7 @@ function EmptyThread({
             />
             <div className="composer-tools">
               <ComposerToolbar layout={defaultToolbar} controls={controls} />
-              <SendButton disabled running={false} sendKey="enter" onSendLater={() => {}} />
+              <SendButton disabled running={false} sendKey="enter" runningAction="queue" onSendLater={() => {}} />
             </div>
           </form>
         </div>

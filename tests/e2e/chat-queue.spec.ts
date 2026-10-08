@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("queues and steers during a turn, stops cleanly, and resumes without consuming a paused queue", async () => {
+test("queues and reorders during a turn, stops cleanly, and resumes without consuming a paused queue", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-chat-queue-")),
   );
@@ -135,14 +135,13 @@ test("queues and steers during a turn, stops cleanly, and resumes without consum
     await screenshot(page, { path: "test-results/chat-queued.png" });
     await screenshot(queue, { path: "test-results/chat-queue-detail.png" });
     await expect(queue.locator(".chat-queue-hint")).toBeVisible();
+    // Immediate steering is covered separately; it stops the current turn.
     await queue
-      .getByRole("button", { name: "Steer now", exact: true })
+      .getByRole("button", { name: "Cancel and return to the composer" })
       .first()
       .click();
+    await expect(prompt).toContainText("Check the cache key first");
     await expect(queue.locator(".queued-message")).toHaveCount(1);
-    await expect
-      .poll(async () => (await readFile(capture, "utf8")).includes('"steer"'))
-      .toBe(true);
     // Escape that closes the command menu doesn't arm the stop button.
     const armed = page.getByRole("button", {
       name: "Press Escape again to stop",

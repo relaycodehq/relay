@@ -114,14 +114,7 @@ test("settings search keeps its query, opens highlighted matches and scrolls to 
     const result = settings.getByRole("button", {
       name: "Open Send messages with in Keyboard shortcuts",
     });
-    const sendHighlights = [
-      "message",
-      "Enter",
-      "message",
-      "Enter",
-      "message",
-      ...(process.platform === "darwin" ? [] : ["Enter"]),
-    ];
+    const sendHighlights = ["message", "Enter", "message", "Enter"];
     await expect(result.locator("mark")).toHaveText(sendHighlights);
     await result.click();
     await expect(send.locator("mark")).toHaveText(sendHighlights);
