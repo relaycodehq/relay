@@ -678,6 +678,14 @@ export class ProjectChats {
   ) {
     return this.questions.answer(id, messageId, itemId, response);
   }
+  setQuestionDismissed(
+    id: string,
+    messageId: string,
+    itemId: string,
+    dismissed: boolean,
+  ) {
+    return this.questions.setDismissed(id, messageId, itemId, dismissed);
+  }
   async cancel(id: string) {
     const chat = this.storage.cached(id);
     if (chat) chat.queuePaused = true;

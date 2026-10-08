@@ -19,15 +19,11 @@ export class AsyncQuestions {
 
   answer(id: string, messageId: string, itemId: string, value: AgentResponse) {
     return this.core.control(id, async () => {
-      if (this.core.closing()) throw new Error("Relay is closing.");
-      const chat = await this.core.storage.load(id);
-      assertHere(chat);
-      const message = chat.messages.find((m) => m.id === messageId);
-      const group = message?.questions?.find((q) => q.id === itemId);
-      if (!message || message.role !== "assistant" || !group)
-        throw new Error("This question is no longer available.");
-      if (group.answers)
-        throw new Error("This question has already been answered.");
+      const { chat, message, group } = await this.question(
+        id,
+        messageId,
+        itemId,
+      );
       const response = agentResponseSchema.parse(value);
       if (response.kind !== "question")
         throw new Error("Invalid response type.");
@@ -97,9 +93,52 @@ export class AsyncQuestions {
         });
       }
       group.answers = response.answers;
+      delete group.dismissed;
       message.version++;
       this.core.emit({ chatId: id, message: structuredClone(message) });
       await this.core.storage.save(chat);
     });
+  }
+
+  setDismissed(
+    id: string,
+    messageId: string,
+    itemId: string,
+    dismissed: boolean,
+  ) {
+    return this.core.control(id, async () => {
+      const { chat, message, group } = await this.question(
+        id,
+        messageId,
+        itemId,
+      );
+      if (!!group.dismissed === dismissed) return;
+      const before = group.dismissed;
+      if (dismissed) group.dismissed = true;
+      else delete group.dismissed;
+      message.version++;
+      try {
+        await this.core.storage.save(chat);
+      } catch (error) {
+        if (before) group.dismissed = before;
+        else delete group.dismissed;
+        message.version++;
+        throw error;
+      }
+      this.core.emit({ chatId: id, message: structuredClone(message) });
+    });
+  }
+
+  private async question(id: string, messageId: string, itemId: string) {
+    if (this.core.closing()) throw new Error("Relay is closing.");
+    const chat = await this.core.storage.load(id);
+    assertHere(chat);
+    const message = chat.messages.find((m) => m.id === messageId);
+    const group = message?.questions?.find((q) => q.id === itemId);
+    if (!message || message.role !== "assistant" || !group)
+      throw new Error("This question is no longer available.");
+    if (group.answers)
+      throw new Error("This question has already been answered.");
+    return { chat, message, group };
   }
 }

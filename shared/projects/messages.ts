@@ -9,6 +9,8 @@ export interface AsyncAgentQuestions {
   id: string;
   questions: AgentQuestion[];
   answers?: Record<string, string[]>;
+  /** Hidden by the user; can be reopened without answering or stopping the agent. */
+  dismissed?: boolean;
 }
 
 /** How full the provider session's context window was after this answer. */

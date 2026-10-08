@@ -87,11 +87,44 @@ test("async Codex questions allow explicit choices and free text during and afte
     await expect(composer).toHaveText("1");
     await expect(card).toBeVisible();
     await composer.fill("");
+    // Dismissing is local to the saved question; Codex keeps working.
+    await card.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await expect(
+      page.getByText("Dismissed questions", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+    const beforeReopen = (await readFile(capture, "utf8"))
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    expect(beforeReopen.some((call) => call.steer || call.interrupt)).toBe(
+      false,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("async-question-dismissed-live.png"),
+    });
+    await page.getByRole("button", { name: "Reopen", exact: true }).click();
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByRole("button", {
+        name: "Private while preparing",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
     await page.screenshot({
       path: testInfo.outputPath("async-question-live.png"),
     });
     await card.getByRole("button", { name: "Next", exact: true }).click();
     await card.getByLabel("Which account should own it?").fill("fixture-owner");
+    await card.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await page.getByRole("button", { name: "Reopen", exact: true }).click();
+    await expect(card.getByLabel("Which account should own it?")).toHaveValue(
+      "fixture-owner",
+    );
     await card
       .getByRole("button", { name: "Send answer", exact: true })
       .click();
@@ -128,6 +161,15 @@ test("async Codex questions allow explicit choices and free text during and afte
     ).toHaveCount(0);
     // Reload once the turn ended: the question comes from saved messages.
     await page.reload();
+    await expect(card).toBeVisible();
+    await card.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await page.reload();
+    await expect(card).toHaveCount(0);
+    await expect(
+      page.getByText("Dismissed questions", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Reopen", exact: true }).click();
     await expect(card).toBeVisible();
     await card
       .getByLabel("Which visibility should I use?")

@@ -332,6 +332,7 @@ export const phoneDesktopMethods = [
   "cancelProjectChat",
   "respondProjectChat",
   "answerProjectChatQuestion",
+  "setProjectChatQuestionDismissed",
   "projectChatQueueAction",
   "resumeProjectChat",
   "compactProjectChat",

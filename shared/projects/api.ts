@@ -157,6 +157,12 @@ export interface ProjectChatApi {
     itemId: string,
     response: AgentResponse,
   ): Promise<void>;
+  setProjectChatQuestionDismissed(
+    id: string,
+    messageId: string,
+    itemId: string,
+    dismissed: boolean,
+  ): Promise<void>;
   /** `move` puts the message at `index` in the queue. Scheduled messages take `remove` and `steer`, which sends them now. */
   projectChatQueueAction(
     id: string,

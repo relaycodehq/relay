@@ -137,6 +137,7 @@ const methods = [
   "projectChatQueueAction",
   "respondProjectChat",
   "answerProjectChatQuestion",
+  "setProjectChatQuestionDismissed",
   "workingTree",
   "workingDiff",
   "gitAction",
