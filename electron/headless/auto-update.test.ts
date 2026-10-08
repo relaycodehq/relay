@@ -94,3 +94,56 @@ it("only says an update is out when auto-update is off", async () => {
     keeper.stop();
   }
 });
+
+it("cancels a waiting install when disabled, and resumes the staged update when enabled", async () => {
+  let state: UpdateState = {
+    status: "available",
+    current: "1.0.0",
+    version: "2.0.0",
+    install: "auto",
+  };
+  const install = vi.fn(
+    async () =>
+      (state = {
+        status: "installing",
+        current: "1.0.0",
+        version: "2.0.0",
+      } as UpdateState),
+  );
+  const download = vi.fn(
+    async () =>
+      (state = {
+        status: "ready",
+        current: "1.0.0",
+        version: "2.0.0",
+      } as UpdateState),
+  );
+  let enabled = true,
+    busy = true;
+  const keeper = keepUpdated(
+    {
+      get now() {
+        return state;
+      },
+      check: async () => state,
+      download,
+      install,
+    },
+    { enabled: async () => enabled, busy: () => busy },
+    quick,
+  );
+  try {
+    const pass = keeper.run();
+    await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    enabled = false;
+    await pass;
+    expect(install).not.toHaveBeenCalled();
+    expect(state.status).toBe("ready");
+    enabled = true;
+    busy = false;
+    await keeper.run();
+    expect(install).toHaveBeenCalledTimes(1);
+  } finally {
+    keeper.stop();
+  }
+});

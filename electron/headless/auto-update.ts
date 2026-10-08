@@ -39,7 +39,7 @@ export function keepUpdated(
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms).unref?.());
   const pass = async () => {
     const found = await updates.check();
-    if (found.status !== "available") return;
+    if (found.status !== "available" && found.status !== "ready") return;
     if (!(await host.enabled()))
       return console.log(
         `Relay ${found.version} is out; relay update installs it.`,
@@ -54,9 +54,11 @@ export function keepUpdated(
         ready.status === "error" ? ready.message : ready.status,
       );
     for (const since = Date.now(); host.busy();) {
+      if (!(await host.enabled())) return;
       if (Date.now() - since > waitAtMost) break;
       await sleep(poll);
     }
+    if (!(await host.enabled())) return;
     console.log(`Installing Relay ${ready.version}.`);
     const done = await updates.install();
     if (done.status === "error")
