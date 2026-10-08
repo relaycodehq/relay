@@ -4,10 +4,10 @@
 }
 .html-render-head {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
   min-height: 22px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 12px;
 }
 .html-render-title {
@@ -18,49 +18,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The header's pane toggles (ui/workspace-panes.css), with words for icons. */
 .html-render-variants {
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-  padding-left: 14px;
-  border-left: 1px solid var(--border);
-}
-.html-render-variants button {
-  padding: 2px 0;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.html-render-variants button:hover {
-  color: var(--text);
-}
-.html-render-variants button[aria-selected="true"] {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-}
-.html-render-pick {
   flex: none;
-  margin-left: auto;
-  padding: 2px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.html-render-pick:hover {
-  background: var(--hover);
+.html-render-variants .pane-toggle {
+  white-space: nowrap;
 }
-.html-render-variants button:focus-visible,
-.html-render-pick:focus-visible {
+.html-render-variants .pane-toggle:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 3px;
+  outline-offset: 1px;
 }
 .html-render-frame iframe {
   display: block;

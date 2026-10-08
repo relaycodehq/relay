@@ -29,7 +29,7 @@ async function callTool(page: Page, tool: string, input: unknown) {
 const card = (name: string, height: number) =>
   `<!doctype html><html><head><style>.c{position:relative;box-sizing:border-box;height:${height}px;color:var(--text);border:1px solid var(--border)}button{position:absolute;right:8px;bottom:8px}</style></head><body><div class="c">${name} card<button onclick="relay.compose('Make ${name} wider')">Ask</button></div></body></html>`;
 
-test("an agent shows pages in its answer: fitted, themed, variants to pick from, back after a reload", async () => {
+test("an agent shows pages in its answer: fitted, themed, variants to switch between, back after a reload", async () => {
   test.setTimeout(120_000);
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-html-renders-")),
@@ -127,18 +127,14 @@ test("an agent shows pages in its answer: fitted, themed, variants to pick from,
     }, text);
     expect(color).toBe(probe);
 
-    // Variants switch in place and refit; a pick goes to the composer.
+    // Variants switch in place and refit.
     await render.getByRole("tab", { name: "Roomy" }).click();
     await expect(frame).toHaveCSS("height", "260px");
     const roomy = page.frameLocator('iframe[title="Card density: Roomy"]');
     await expect(roomy.getByText("Roomy card")).toBeVisible();
     await page.screenshot({ path: join(tmpdir(), "relay-html-render.png") });
-    await render.getByRole("button", { name: "Go with this" }).click();
+    // What the page hands over goes to the composer.
     const composer = page.getByLabel("Message project");
-    await expect(composer).toContainText(
-      'Let\'s go with "Roomy" (Card density).',
-    );
-    // And so does what the page itself hands over.
     await roomy.getByRole("button", { name: "Ask" }).click();
     await expect(composer).toContainText("Make Roomy wider");
 

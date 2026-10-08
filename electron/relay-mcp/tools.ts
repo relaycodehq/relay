@@ -224,7 +224,7 @@ export const relayToolSchemas = {
         .max(RENDER_MAX_PAGES)
         .optional()
         .describe(
-          "Alternatives to compare, each a whole page; the user switches between them and can pick one.",
+          "Alternatives to compare, each a whole page, shown as tabs the user switches between.",
         ),
     })
     .strict(),
@@ -272,7 +272,7 @@ const descriptions: Record<RelayToolName, string> = {
     "A picture of this thread's preview as the page looks now, also while the user isn't looking at it. Call open_preview first. Use it to check a change you made to a page.",
   console_errors:
     "The errors and warnings the page in this thread's preview logged, uncaught exceptions and failed requests included, oldest first (the last 200 are kept). Pass clear to empty the list after reading it.",
-  show_html: `Show the user a self-contained HTML page inside your answer, above your reply: a chart, a table they can sort or filter, a diagram, a comparison, a mockup of a component or screen. With variants, two to ${RENDER_MAX_PAGES} alternatives (like three ways to build something) as tabs the user switches between and picks from; a pick comes back as their message. Use it when seeing or trying something says more than prose, and don't restate in your reply what it shows. Check a page with scripts or a tricky layout with preview_html first; every show_html call adds another page to the answer.\n\n${RENDER_GUIDE}`,
+  show_html: `Show the user a self-contained HTML page inside your answer, above your reply: a chart, a table they can sort or filter, a diagram, a comparison, a mockup of a component or screen. With variants, two to ${RENDER_MAX_PAGES} alternatives (like three ways to build something) as tabs the user switches between; they say which they prefer in their reply. Use it when seeing or trying something says more than prose, and don't restate in your reply what it shows. Check a page with scripts or a tricky layout with preview_html first; every show_html call adds another page to the answer.\n\n${RENDER_GUIDE}`,
   preview_html:
     "Load a self-contained HTML page unseen, as show_html would show it, without showing it to the user. Returns a screenshot at `width`, the height it needs, and the errors and warnings it logged. Use it to check a page before show_html.",
   add_project:

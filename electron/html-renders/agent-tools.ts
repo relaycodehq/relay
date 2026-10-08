@@ -100,7 +100,7 @@ export async function answerRenderTool(
   return toolText(
     [
       variants
-        ? `Shown in your answer as "${title}", with ${variants.length} variants the user switches between and can pick from; a pick comes back as their message.`
+        ? `Shown in your answer as "${title}", with ${variants.length} variants as tabs the user switches between. They tell you which they prefer in their reply.`
         : `Shown in your answer as "${title}".`,
       "The user sees it above your reply, so don't repeat what it shows; point at what matters or ask what you need to know.",
       ...logs,

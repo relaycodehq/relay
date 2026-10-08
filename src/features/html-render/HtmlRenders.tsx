@@ -11,6 +11,7 @@ import {
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
 import { useRenderTheme } from "./render-theme";
+import "../../ui/workspace-panes.css";
 import "./html-render.css";
 
 /** How far outside the thread's view a page stays loaded. */
@@ -153,7 +154,7 @@ const RenderCard = memo(function RenderCard({
         <span className="html-render-title">{render.title}</span>
         {variants && (
           <div
-            className="html-render-variants"
+            className="pane-toggles html-render-variants"
             role="tablist"
             aria-label="Variants"
             onKeyDown={(e) => {
@@ -174,6 +175,7 @@ const RenderCard = memo(function RenderCard({
                 key={i}
                 type="button"
                 role="tab"
+                className={`pane-toggle ${i === index ? "active" : ""}`}
                 aria-selected={i === index}
                 tabIndex={i === index ? 0 : -1}
                 onClick={() => setIndex(i)}
@@ -182,17 +184,6 @@ const RenderCard = memo(function RenderCard({
               </button>
             ))}
           </div>
-        )}
-        {variants && onCompose && (
-          <button
-            type="button"
-            className="html-render-pick"
-            onClick={() =>
-              onCompose(`Let's go with "${label(index)}" (${render.title}).`)
-            }
-          >
-            Go with this
-          </button>
         )}
       </header>
       <div className="html-render-frame" ref={box} style={{ height }}>
