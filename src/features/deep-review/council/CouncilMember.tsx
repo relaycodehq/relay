@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { CircleCheck } from "lucide-react";
 import { clock } from "../../../../shared/waiting";
+import { hasCouncilReport } from "../../../../shared/council";
 import { agentMentionPattern, agentName } from "../../../../shared/agents";
 import type { ReviewAgent } from "../../../../shared/deep-review";
 import type { ProjectFileLink } from "../../../../shared/project-file-links";
@@ -66,10 +67,13 @@ export function CouncilMember({
             {formatTokens(tokens)} tokens
           </span>
         )}
-        {answer?.status === "complete" && (
+        {hasCouncilReport(answer) && (
           <span className="deep-review-pane-status done">
             <CircleCheck size={13} /> Done
           </span>
+        )}
+        {answer?.status === "complete" && !hasCouncilReport(answer) && (
+          <span className="deep-review-pane-status">No report</span>
         )}
         {(answer?.status === "failed" || answer?.status === "cancelled") && (
           <span className="deep-review-pane-status">
@@ -111,6 +115,11 @@ export function CouncilMember({
                     projectRoot={projectRoot}
                     onOpenFile={onOpenFile}
                   />
+                )}
+                {m.status === "complete" && !hasCouncilReport(m) && (
+                  <p className="muted" role="status">
+                    This run ended without a written report.
+                  </p>
                 )}
                 {m.status === "cancelled" && (
                   <p className="muted" role="status">
