@@ -3,6 +3,7 @@ import { join, delimiter, dirname, extname } from "node:path";
 import { homedir } from "node:os";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
+import { terminate, stopProcessTree } from "./terminate";
 import { pathReady } from "./shell-path";
 import { agentProviders, type AgentProvider } from "../../shared/agents";
 import { parseVersion } from "../../shared/agent-updates";
@@ -228,13 +229,15 @@ export interface Exec {
 
 const outputLimit = 10_000;
 
-/** Runs a path from `findExecutable` and collects what it says; never rejects. */
+/** Runs a path from `findExecutable` and collects what it says; cancellation rejects after exit. */
 export const runExecutable = (
   file: string,
   args: string[],
   timeout: number,
+  signal?: AbortSignal,
 ): Promise<Exec> =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("Cancelled."));
     let stdout = "",
       output = "",
       timedOut = false;
@@ -242,10 +245,23 @@ export const runExecutable = (
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
+      detached: !!signal && !windows,
     });
+    // gh can spawn git push: cancelling must stop that process too.
+    let stopping: Promise<void> | undefined;
+    let stopError: unknown;
+    const stop = () => {
+      if (signal)
+        stopping ??= stopProcessTree(child).catch((e) => {
+          stopError = e;
+        });
+      else terminate(child);
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    if (signal?.aborted) stop();
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      stop();
     }, timeout);
     const collect = (chunk: Buffer, isStdout: boolean) => {
       const text = chunk.toString();
@@ -254,12 +270,21 @@ export const runExecutable = (
     };
     child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
     child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      resolve({ code: null, stdout, output: error.message, timedOut });
+    let error: Error | undefined;
+    child.once("error", (e) => {
+      error = e;
     });
-    child.once("close", (code) => {
+    child.once("close", async (code) => {
       clearTimeout(timer);
-      resolve({ code, stdout, output, timedOut });
+      await stopping;
+      if (stopError) return reject(stopError);
+      signal?.removeEventListener("abort", stop);
+      if (signal?.aborted) return reject(new Error("Cancelled."));
+      resolve({
+        code: error ? null : code,
+        stdout,
+        output: error?.message ?? output,
+        timedOut,
+      });
     });
   });

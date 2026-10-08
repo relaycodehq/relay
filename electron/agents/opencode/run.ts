@@ -68,6 +68,8 @@ export async function runOpenCode(options: AgentOptions): Promise<string> {
   const rules = permissionRules(oneOff ? undefined : options.runtimeMode, {
     readOnly: options.readOnly,
     title: oneOff,
+    cwd: directory,
+    links: options.links,
   });
   // Only a thread's own turn has someone to ask; the rest is rejected.
   const ask =

@@ -9,6 +9,7 @@ import type {
   AgentActivity,
   ContextUsage,
   ForkPoint,
+  LinkedFolder,
   SessionReload,
 } from "../../shared/projects";
 import type { CodexReviewTarget } from "../../shared/deep-review";
@@ -73,6 +74,8 @@ export interface AgentOptions {
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
   cwd: string;
+  /** Folders beyond `cwd` the user linked, and whether the agent may edit them. */
+  links?: LinkedFolder[];
   /** Added to the agent process's environment, e.g. a worktree's RELAY_PORT_OFFSET; read when its process starts. */
   env?: Record<string, string>;
   prompt: string;

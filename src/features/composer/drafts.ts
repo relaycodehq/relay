@@ -4,6 +4,7 @@ import type {
   ChatWorkspace,
   ChatSummary,
   Project,
+  LinkedFolder,
 } from "../../../shared/projects";
 import {
   composerSettingsKey,
@@ -100,7 +101,8 @@ export function newThreadProject(id: string): string | undefined {
   return match?.[1];
 }
 const isSlot = (id: string) => id.split(":").length === 3;
-export const hasText = (id: string) => !!readDraft(threadDraftKey(id)).trim();
+export const hasDraft = (id: string) =>
+  !!readDraft(threadDraftKey(id)).trim() || !!loadDraftLinks(id).length;
 
 /** The new thread a project last showed. */
 export function currentNewThread(projectId: string): string {
@@ -111,6 +113,9 @@ export function currentNewThread(projectId: string): string {
 }
 export const setCurrentNewThread = (projectId: string, id: string) =>
   localStorage.setItem(currentNewThreadKey(projectId), id);
+
+export const loadDraftLinks = (id: string): LinkedFolder[] =>
+  threadStorage(id).links.load();
 
 /** The scope an unsent thread was written for; the repository by default. */
 export const loadDraftScope = (id: string): ChatScope =>
@@ -151,6 +156,7 @@ export const draftWorktreeBranch = (
 
 /** What a sent or abandoned slot leaves behind; the base keeps its settings for the next one. */
 export function forgetNewThread(id: string) {
+  threadStorage(id).links.clear();
   clearDraftScope(id);
   threadStorage(id).reply.save(null);
   if (isSlot(id)) {
@@ -165,9 +171,9 @@ export function forgetNewThread(id: string) {
  */
 export function freshNewThread(projectId: string): string {
   const current = currentNewThread(projectId);
-  if (!hasText(current)) return current;
+  if (!hasDraft(current)) return current;
   const base = newThreadId(projectId);
-  if (!hasText(base)) return base;
+  if (!hasDraft(base)) return base;
   // Composers save their settings on sight; empty slots would pile up.
   const prefix = composerSettingsKey(base + ":");
   const left: string[] = [];
@@ -176,7 +182,7 @@ export function freshNewThread(projectId: string): string {
     if (key?.startsWith(prefix))
       left.push(key.slice(composerSettingsKey("").length));
   }
-  for (const id of left) if (!hasText(id)) forgetNewThread(id);
+  for (const id of left) if (!hasDraft(id)) forgetNewThread(id);
   const slot = newThreadId(projectId, Date.now().toString(36));
   // It starts on the settings the project's new threads have.
   const settings = localStorage.getItem(composerSettingsKey(base));

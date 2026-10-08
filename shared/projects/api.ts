@@ -46,6 +46,9 @@ import type {
   RebaseResult,
   WorkingTree,
 } from "../working-tree";
+import type { AddingJob, AddingStart, GithubRepos, NewProject } from "./adding";
+import type { FolderEntry, FolderInfo, LinkSuggestion } from "./folders";
+import type { LinkedFolder } from "./links";
 import type { Project, ProjectSettings } from "./project";
 import type { ResumeSettings, ProjectChatSend } from "./send";
 import type { KnownMessages, ProjectChatPatch } from "./sync";
@@ -63,6 +66,7 @@ import type { WorktreeBranch, WorktreeMove, WorktreeStatus } from "./worktrees";
 export interface ProjectApi
   extends
     ProjectListApi,
+    ProjectFoldersApi,
     ProjectChatApi,
     ProjectCouncilApi,
     ProjectWorktreeApi,
@@ -92,8 +96,33 @@ export interface ProjectListApi {
   /** Takes the project out of Relay; its folder on disk is left alone. */
   removeProject(id: string): Promise<void>;
   saveProjectSettings(id: string, settings: ProjectSettings): Promise<Project>;
+  addProjectLinks(id: string, links: LinkedFolder[]): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;
+}
+
+/** Folders on disk, to add as projects or link to one. */
+export interface ProjectFoldersApi {
+  inspectFolder(path: string): Promise<FolderInfo>;
+  /** The folders inside `dir`, for typing a path; `~` stands for home. */
+  listFolders(dir: string): Promise<FolderEntry[]>;
+  /** Finder's folder picker; null when cancelled. Adds nothing. */
+  chooseFolder(title: string): Promise<string | null>;
+  /** Folders worth linking to the project: the repositories beside it, then the other projects. */
+  linkSuggestions(projectId: string): Promise<LinkSuggestion[]>;
+  /** What the add-project palette opens on. */
+  addingStart(): Promise<AddingStart>;
+  /** Adds the folder at `path`; `setUpGit` runs `git init` in a plain one first. */
+  addProjectAt(path: string, setUpGit?: boolean): Promise<Project>;
+  /** Clones `remote` into a folder of its name inside `into`, then adds it. */
+  cloneProject(remote: string, into: string): Promise<Project>;
+  /** Makes the folder, with git and a GitHub repository when asked, then adds it. */
+  createProject(spec: NewProject): Promise<Project>;
+  /** Stops the clone or creation under way; it rejects. */
+  cancelProjectAdding(): Promise<void>;
+  /** The repositories the `gh` login can see. */
+  githubRepos(): Promise<GithubRepos>;
+  onProjectAdding(callback: (job: AddingJob | null) => void): () => void;
 }
 
 /** A project's threads: the list, the conversation and its turns. */
@@ -111,6 +140,8 @@ export interface ProjectChatApi {
     workspace?: ChatWorkspace,
     /** The new worktree's branch, when the user named it. */
     branch?: string,
+    /** Folders linked to it with `/add-dir` before it was made. */
+    links?: LinkedFolder[],
   ): Promise<ChatSummary>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;
@@ -150,6 +181,12 @@ export interface ProjectChatApi {
   rerunWorktreeSetup(id: string, messageId: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
+  /** Replaces the folders linked to this thread alone; the agent hears of them on its next turn. */
+  setProjectChatLinks(id: string, links: LinkedFolder[]): Promise<ChatSummary>;
+  promoteProjectChatLink(
+    id: string,
+    path: string,
+  ): Promise<{ project: Project; chat: ChatSummary }>;
   /** A thread another thread's agent started stands on its own from now on. */
   detachProjectChat(id: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
@@ -164,6 +201,7 @@ export interface ProjectChatApi {
     pick: TerminalSessionPick,
     workspace?: ChatWorkspace,
     branch?: string,
+    links?: LinkedFolder[],
   ): Promise<ContinuedSession>;
   /** Names the thread again from the whole conversation; replaces a name you typed too. */
   regenerateProjectChatTitle(id: string): Promise<ChatSummary>;

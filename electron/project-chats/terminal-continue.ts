@@ -5,6 +5,7 @@ import type {
   ChatWorkspace,
   ContinuedSession,
   ProjectChat,
+  LinkedFolder,
 } from "../../shared/projects";
 import {
   continuesAsCopy,
@@ -70,6 +71,7 @@ export class TerminalContinue {
     pick: TerminalSessionPick,
     workspace: ChatWorkspace = "checkout",
     branch?: string,
+    links?: LinkedFolder[],
   ): Promise<ContinuedSession> {
     const key = `${projectId}:${pick.provider}:${pick.session}`;
     const making = this.continuing.get(key);
@@ -79,7 +81,7 @@ export class TerminalContinue {
       id: pick.session,
     });
     if (already) return { chat: already, created: false };
-    const made = this.make(projectId, pick, workspace, branch);
+    const made = this.make(projectId, pick, workspace, branch, links);
     this.continuing.set(key, made);
     try {
       return { chat: await made, created: true };
@@ -93,6 +95,7 @@ export class TerminalContinue {
     pick: TerminalSessionPick,
     workspace: ChatWorkspace,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
     const { plain } = await this.core.projects.inspect(projectId);
     if (plain && workspace === "worktree")
@@ -125,6 +128,7 @@ export class TerminalContinue {
       updated: now,
       seenAt: now,
       messages: kept,
+      ...(links?.length ? { links } : {}),
       accounts: { [session.provider]: session.account },
       fromTerminal: {
         provider: session.provider,

@@ -45,6 +45,11 @@ export const relayCommands = [
     args: "<mode>",
   },
   { name: "fast", description: "Toggle Codex Fast mode", args: "[on|off]" },
+  {
+    name: "add-dir",
+    description: "Let the agent reach another folder in this thread",
+    args: "<folder>",
+  },
 ] as const;
 export type RelayCommand = (typeof relayCommands)[number]["name"];
 /** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */
@@ -85,12 +90,16 @@ export interface CommandOption {
   source?: string;
   /** The setting's present value. */
   current?: boolean;
+  /** Picking it fills the draft with this instead, e.g. a folder to look inside. */
+  fill?: string;
+  /** It names a folder, shown with a folder's icon. */
+  folder?: boolean;
 }
 /** Relay commands take arguments only where they declare them. */
 export function relayCommand(
   text: string,
 ): { name: RelayCommand; args: string } | null {
-  const match = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  const match = /^\/([a-z]+(?:-[a-z]+)*)(?:\s+([\s\S]*))?$/i.exec(text.trim());
   const command = relayCommands.find(
     (c) => c.name === match?.[1]?.toLowerCase(),
   );
@@ -104,7 +113,10 @@ export function relayCommand(
  */
 export function argumentTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
-  const match = /(^|\s)\/([a-z]+) (\S*)$/i.exec(before);
+  // A folder's path may have spaces in it.
+  const match =
+    /(^|\s)\/([a-z]+(?:-[a-z]+)*) (\S*)$/i.exec(before) ??
+    /(^)\/(add-dir) ([^\n]*)$/i.exec(before);
   if (!match) return null;
   const start = match.index + match[1].length;
   return {

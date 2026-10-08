@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { stopProcessTree } from "../platform/terminate";
+import { execFile, spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { delimiter, dirname } from "node:path";
 import { promisify } from "node:util";
@@ -147,6 +148,14 @@ export async function git(
     signal,
   } = typeof options === "number" ? { timeout: options } : options;
   const file = resolved ?? (await gitExecutable());
+  signal?.throwIfAborted();
+  if (signal)
+    return cancellableGit(file, root, args, {
+      timeout,
+      maxBuffer,
+      env,
+      signal,
+    });
   try {
     return (
       await exec(file, ["-C", root, ...args], {
@@ -154,13 +163,79 @@ export async function git(
         maxBuffer,
         env: gitEnv(env),
         encoding: "utf8",
-        signal,
       })
     ).stdout;
-  } catch (e) {
-    throw gitError(e);
+  } catch (error) {
+    throw gitError(error);
   }
 }
+
+/** Keep pipes open until the entire cancelled Git command has stopped. */
+function cancellableGit(
+  file: string,
+  root: string,
+  args: string[],
+  options: Required<Pick<GitOptions, "timeout" | "maxBuffer" | "signal">> &
+    Pick<GitOptions, "env">,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const { signal, timeout, maxBuffer } = options;
+    const child = spawn(file, ["-C", root, ...args], {
+      env: gitEnv(options.env),
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stopping: Promise<void> | undefined;
+    let failure: Error | undefined;
+    const stop = () => {
+      stopping ??= stopProcessTree(child).catch((error) => {
+        failure = error;
+      });
+    };
+    signal.addEventListener("abort", stop, { once: true });
+    if (signal.aborted) stop();
+    const timer = timeout
+      ? setTimeout(() => {
+          failure = new Error("Git timed out.");
+          stop();
+        }, timeout)
+      : undefined;
+    const stdout: Buffer[] = [],
+      stderr: Buffer[] = [];
+    let outBytes = 0,
+      errBytes = 0;
+    const collect = (chunk: Buffer, output: boolean) => {
+      if (output) outBytes += chunk.length;
+      else errBytes += chunk.length;
+      if ((output ? outBytes : errBytes) > maxBuffer) {
+        failure = new Error("Git output exceeded the buffer limit.");
+        stop();
+      } else (output ? stdout : stderr).push(chunk);
+    };
+    child.stdout.on("data", (chunk: Buffer) => collect(chunk, true));
+    child.stderr.on("data", (chunk: Buffer) => collect(chunk, false));
+    child.once("error", (error) => {
+      failure = error;
+    });
+    child.once("close", async (code) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", stop);
+      await stopping;
+      if (signal.aborted) return reject(new Error("Cancelled."));
+      if (failure) return reject(gitError(failure));
+      if (code !== 0)
+        return reject(
+          gitError({
+            message: `Git exited with ${code}.`,
+            stderr: Buffer.concat(stderr).toString(),
+          }),
+        );
+      resolve(Buffer.concat(stdout).toString());
+    });
+  });
+}
+
 /** The checked-out branch; empty when HEAD is detached. */
 /** Paths with unresolved conflicts, as they are on disk rather than C-quoted. */
 export async function conflictedFiles(root: string) {

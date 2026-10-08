@@ -30,6 +30,7 @@ import type { TriageService } from "../triage/service";
 import type { Updater } from "../app/updater";
 import type { DevBuild } from "../app/dev-build";
 import type { AgentAccounts } from "../agents/accounts";
+import type { ProjectAdding } from "../project-add";
 
 export interface Services {
   store: Store;
@@ -57,6 +58,7 @@ export interface Services {
   readAloud: ReadAloud;
   agentUpdates: AgentUpdates;
   agentAccounts: AgentAccounts;
+  projectAdding: ProjectAdding;
 }
 
 /** What a method's promise resolves to in the page. */

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ChatScope,
   ChatWorkspace,
+  LinkedFolder,
   ProjectChat,
   StartedBy,
 } from "../../shared/projects";
@@ -18,6 +19,7 @@ export class ThreadCreate {
     workspace: ChatWorkspace = "checkout",
     startedBy?: StartedBy,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
     const { plain } = await this.core.projects.inspect(projectId);
     if (plain && (workspace === "worktree" || scope.kind !== "project"))
@@ -46,6 +48,7 @@ export class ThreadCreate {
       updated: Date.now(),
       messages: [],
       ...(startedBy ? { startedBy } : {}),
+      ...(links?.length ? { links } : {}),
     };
     await this.core.storage.add(chat);
     return chatSummary(chat);
@@ -96,6 +99,7 @@ export class ThreadCreate {
       ...(source.branch ? { branch: source.branch } : {}),
       // Its own worktree, made from the checkout with its first message.
       ...(source.worktree ? { worktree: {} } : {}),
+      ...(source.links ? { links: source.links } : {}),
       messages: kept.map(({ changes, pending, seq, parentId, ...m }) => ({
         ...structuredClone(m),
         id: randomUUID(),

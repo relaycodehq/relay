@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Repo } from "../types";
+import { linkedFoldersSchema } from "./links";
 import { chatWorkspaceSchema } from "./threads";
 
 export interface Project {
@@ -50,6 +51,8 @@ export const projectSettingsSchema = z
     worktreeSetup: worktreeCommand.optional(),
     /** Runs in a worktree before Relay removes it. */
     worktreeTeardown: worktreeCommand.optional(),
+    /** Folders beyond the project its agents may reach; see shared/projects/links. */
+    links: linkedFoldersSchema.optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;

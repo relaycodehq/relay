@@ -13,7 +13,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import type { Project } from "../../../shared/projects";
+import { tildePath, type Project } from "../../../shared/projects";
 import type { Account, Repo } from "../../../shared/types";
 import { api } from "../../lib/api";
 import {
@@ -635,5 +635,3 @@ function refOf(key: string, repo?: string): Repo {
   const [owner, name] = (repo ?? key).split("/");
   return { owner, name };
 }
-
-const tildePath = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, "~");

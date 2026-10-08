@@ -14,6 +14,7 @@ import {
 } from "../../../../shared/agent-modes";
 import { reasoningEffortSchema } from "../../../../shared/settings";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
+import { linkedFoldersSchema } from "../../../../shared/projects";
 import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
 import { SubagentTracker } from "../claude-agents";
@@ -22,7 +23,11 @@ import { SubagentWatch } from "../watch/subagents";
 import { ClaudeMeter } from "../watch/spend";
 import { RequestUsage } from "../request-usage";
 import { askLive, sessionTotals } from "./side";
-import { claudePermissionMode, type ClaudeRunOptions } from "./config";
+import {
+  claudePermissionMode,
+  linksSignature,
+  type ClaudeRunOptions,
+} from "./config";
 import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
 import { ClaudeWork } from "./pending";
 import { hostedHandlers, sessionCallbacks } from "./requests";
@@ -44,6 +49,7 @@ export const hostedMetaSchema = z
         interactionMode: interactionModeSchema.optional(),
         readOnly: z.boolean().optional(),
         account: z.string().optional(),
+        links: linkedFoldersSchema.optional().catch(undefined),
         choice: z
           .object({
             model: z.string(),
@@ -161,6 +167,8 @@ export async function retune(
     (options.account ?? SYSTEM_ACCOUNT) !==
       (session.account ?? SYSTEM_ACCOUNT) ||
     options.contextWindow !== before.contextWindow ||
+    // Folders it reaches are fixed when Claude Code starts.
+    linksSignature(options.links) !== linksSignature(before.links) ||
     (mode === "bypassPermissions" && !session.skipsPermissions)
   )
     return false;
@@ -284,6 +292,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
       interactionMode: options.interactionMode,
       readOnly: options.readOnly,
       account: options.account,
+      links: options.links,
       choice: options.choice,
     },
   };

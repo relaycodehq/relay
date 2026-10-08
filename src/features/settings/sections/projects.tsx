@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LinkedFoldersSetting } from "../../linked-folders/LinkedFoldersSetting";
 import type { SettingEntry } from "../settings-search";
 import {
   ProjectAutoSettleSelect,
@@ -52,6 +53,18 @@ export function useProjectEntries(
       title: "Folder",
       keywords: "path location finder reveal disk",
       render: () => <ProjectFolderRow project={project} />,
+    },
+    {
+      id: "project-links",
+      category: "projects",
+      section: "Linked folders",
+      title: "Folders every thread reaches",
+      description:
+        "Other folders this project's agents may read, like the backend or shared types. A note tells the agent what's in each. /add-dir links one to a single thread.",
+      keywords:
+        "linked folders link add-dir directory repository backend frontend shared types monorepo access read write outside external",
+      block: true,
+      render: () => <LinkedFoldersSetting project={project} />,
     },
     ...(project.plain
       ? []

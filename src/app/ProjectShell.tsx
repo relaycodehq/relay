@@ -41,6 +41,7 @@ import {
   type GitActionsHandle,
 } from "../features/changes/GitActions";
 import { HandoffButton } from "../features/handoff/HandoffButton";
+import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
@@ -276,7 +277,7 @@ export default function ProjectShell() {
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
             onSendDraft={() => composer.current?.submit()}
-            onAdd={() => void starts.addProject()}
+            onAdd={() => starts.addProject()}
             onAttention={setAttention}
             onSettings={settings.show}
             onAccount={() => {
@@ -335,7 +336,7 @@ export default function ProjectShell() {
         ) : !project ? (
           <NoProject
             hidden={settings.open}
-            onAdd={() => void starts.addProject()}
+            onAdd={() => starts.addProject()}
             onScratch={() => void starts.scratch()}
           />
         ) : (
@@ -419,7 +420,10 @@ export default function ProjectShell() {
                       })
                     }
                     onSwitchProject={(next) => navigate(next, undefined, true)}
-                    onAddProject={() => void starts.addProject()}
+                    onAddProject={() => starts.addProject()}
+                    onProjectSettings={() =>
+                      settings.show("projects", project.id)
+                    }
                   />
                 </StartedThreadsContext.Provider>
                 <RunningTasks
@@ -536,8 +540,15 @@ export default function ProjectShell() {
             starts.setPicking(false);
             starts.open(p);
           }}
-          onAdd={() => void starts.addProject()}
+          onAdd={() => starts.addProject()}
           onClose={() => starts.setPicking(false)}
+        />
+      )}
+      {starts.adding && (
+        <AddProjectPalette
+          projects={realProjects}
+          onClose={() => starts.setAdding(false)}
+          onDone={(p) => void starts.added(p)}
         />
       )}
       {signIn.open && (

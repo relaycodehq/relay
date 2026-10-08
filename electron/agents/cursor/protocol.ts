@@ -23,6 +23,8 @@ export interface CursorRun {
   /** The agent to resume; left out, a new one starts. */
   agentId?: string;
   cwd: string;
+  /** Linked folders it may edit, as more workspace roots; read-only ones it reads by path. */
+  dirs?: string[];
   prompt: string;
   images: { data: string; mimeType: string }[];
   model?: string;

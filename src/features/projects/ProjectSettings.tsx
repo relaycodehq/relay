@@ -27,7 +27,7 @@ export function useSettingsProjects(accountId: string | undefined) {
  * so the project follows later changes there. Each save carries the project's
  * other settings as the list holds them, changes not yet saved included.
  */
-function useProjectSetting<K extends keyof ProjectSettings>(
+export function useProjectSetting<K extends keyof ProjectSettings>(
   project: Project,
   key: K,
 ) {
