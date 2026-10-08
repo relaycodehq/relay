@@ -73,10 +73,21 @@ export async function projectForFolder(
 ): Promise<{ project: Project } | { refused: string }> {
   const real = await realpath(folder).catch(() => undefined);
   if (!real) return { refused: `There's no folder at ${folder}.` };
-  const holders = (await projects.list())
-    .filter((p) => !p.scratch && within(p.path, real))
-    .sort((a, b) => b.path.length - a.path.length);
-  if (holders[0]) return { project: holders[0] };
+  const canonical = await Promise.all(
+    (await projects.list())
+      .filter((project) => !project.scratch)
+      .map(async (project) => ({
+        project,
+        root: await realpath(project.path).catch(() => undefined),
+      })),
+  );
+  const holders = canonical
+    .filter(
+      (entry): entry is typeof entry & { root: string } =>
+        entry.root !== undefined && within(entry.root, real),
+    )
+    .sort((a, b) => b.root.length - a.root.length);
+  if (holders[0]) return { project: holders[0].project };
   const root = (await projects.repositoryRoot(real)) ?? real;
   if (root === parse(root).root)
     return { refused: "That's the whole disk; open a folder inside it." };

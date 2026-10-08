@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project } from "../../shared/projects/project";
@@ -76,4 +82,23 @@ it("won't make home or a folder around it a project", async () => {
   for (const folder of [home, dir])
     expect(await projectForFolder(folder, api, home)).toHaveProperty("refused");
   expect(added).toEqual([]);
+});
+
+it("matches canonical project roots while returning the saved project unchanged", async () => {
+  const repo = join(dir, "repo");
+  const inner = join(repo, "web");
+  mkdirSync(join(inner, "src"), { recursive: true });
+  const alias = join(dir, "a-very-long-alias");
+  symlinkSync(repo, alias, process.platform === "win32" ? "junction" : "dir");
+  const outerProject = project(alias);
+  const innerProject = project(inner);
+  const { api, added } = projects([outerProject, innerProject]);
+  expect(
+    await projectForFolder(join(alias, "web", "src"), api, dir + "-home"),
+  ).toEqual({ project: innerProject });
+  const outer = projects([outerProject]);
+  expect(
+    await projectForFolder(join(alias, "web"), outer.api, dir + "-home"),
+  ).toEqual({ project: outerProject });
+  expect([...added, ...outer.added]).toEqual([]);
 });
