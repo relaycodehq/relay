@@ -131,7 +131,12 @@ export async function buildHeadless(given) {
     `${headlessOut}/speech-runtime.json`,
     JSON.stringify(speechRuntime(), null, 2) + "\n",
   );
-  for (const name of ["agent host", "Claude SDK", "Cursor worker"]) {
+  for (const name of [
+    "agent host",
+    "Claude SDK",
+    "Cursor worker",
+    "checks worker",
+  ]) {
     const { options } = bundles.find((b) => b.name === name);
     await build({
       ...options,
