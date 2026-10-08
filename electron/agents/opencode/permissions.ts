@@ -4,6 +4,8 @@ import type {
   RuntimeMode,
 } from "../../../shared/agent-modes";
 import { relative } from "node:path";
+import { tmpdir } from "node:os";
+import { realpathSync } from "node:fs";
 import type { LinkedFolder } from "../../../shared/projects";
 import type { PermissionRequest, QuestionRequest } from "./events";
 
@@ -115,6 +117,17 @@ function modeRules(
       ...readOnlyCommands.map((pattern) => rule("bash", "allow", pattern)),
       rule("edit", "deny"),
       rule("question", "deny"),
+      // A general subagent is not guaranteed to inherit the reviewer's restrictions.
+      rule("task", "deny"),
+      // OpenCode and reviewers keep large tool output here. No access to
+      // arbitrary external folders is granted just to read a temporary diff.
+      ...[...new Set([tmpdir(), realpathSync(tmpdir())])].map((dir) =>
+        rule(
+          "external_directory",
+          "allow",
+          `${dir.replaceAll("\\", "/").replace(/\/$/, "")}/opencode/*`,
+        ),
+      ),
     ];
   // A helper job: it reads the project and answers.
   if (!mode) return [rule("*", "ask"), ...reading, rule("question", "deny")];

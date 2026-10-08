@@ -188,6 +188,15 @@ async function turn(sessionID, text) {
     },
   });
   first.time.completed = Date.now();
+  if (
+    quirk === "empty-after-tool" ||
+    text.includes("fixture empty after tool")
+  ) {
+    busy.delete(sessionID);
+    emit("session.status", { sessionID, status: { type: "idle" } });
+    emit("session.idle", { sessionID });
+    return;
+  }
   const second = {
     id: id("msg"),
     sessionID,
@@ -202,21 +211,25 @@ async function turn(sessionID, text) {
     text: "",
   };
   session.messages.push({ info: second, parts: [answer] });
-  emit("message.updated", { sessionID, info: second });
-  emit("message.part.updated", { sessionID, part: answer });
+  if (quirk !== "missing-final-message")
+    emit("message.updated", { sessionID, info: second });
+  const missingText =
+    quirk === "missing-final-message" || quirk === "missing-final-part";
+  if (!missingText) emit("message.part.updated", { sessionID, part: answer });
   for (const delta of [
     reply === "reject" ? "Skipped the edit" : "Wrote notes.md",
     ".",
   ]) {
     await tick();
     answer.text += delta;
-    emit("message.part.delta", {
-      sessionID,
-      messageID: second.id,
-      partID: answer.id,
-      field: "text",
-      delta,
-    });
+    if (!missingText)
+      emit("message.part.delta", {
+        sessionID,
+        messageID: second.id,
+        partID: answer.id,
+        field: "text",
+        delta,
+      });
   }
   const finish = {
     id: id("prt"),
@@ -232,6 +245,7 @@ async function turn(sessionID, text) {
       cache: { read: 0, write: 0 },
     },
   };
+  session.messages.at(-1).parts.push({ ...finish, cost: 0.025 });
   emit("message.part.updated", { sessionID, part: finish });
   // The same step again, repriced, as a part can be updated after it lands.
   emit("message.part.updated", {

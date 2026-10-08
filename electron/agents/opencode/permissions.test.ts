@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { permissionRules, type PermissionRule } from "./permissions";
+import { tmpdir } from "node:os";
+import { realpathSync } from "node:fs";
 
 /** OpenCode's own reading of its rules: the last one that matches wins, `*` spans slashes. */
 function decide(rules: PermissionRule[], permission: string, target: string) {
@@ -18,6 +20,24 @@ const links = [
 ];
 
 describe("linked folders under OpenCode", () => {
+  it("lets reviewers read OpenCode scratch files but not unrelated external folders or spawn agents", () => {
+    const rules = permissionRules("full-access", { readOnly: true });
+    for (const dir of [tmpdir(), realpathSync(tmpdir())])
+      expect(
+        decide(
+          rules,
+          "external_directory",
+          `${dir.replaceAll("\\", "/")}/opencode/*`,
+        ),
+      ).toBe("allow");
+    expect(decide(rules, "external_directory", `${tmpdir()}/other/*`)).toBe(
+      "ask",
+    );
+    expect(decide(rules, "task", "general")).toBe("deny");
+    expect(decide(rules, "task", "explore")).toBe("deny");
+    expect(decide(rules, "bash", "git show HEAD:src/app.ts")).toBe("allow");
+    expect(decide(rules, "bash", "rm src/app.ts")).toBe("deny");
+  });
   it("reaches linked folders without asking, and asks before editing a read-only one", () => {
     const rules = permissionRules("auto-accept-edits", {
       cwd: "/w/web",
