@@ -139,6 +139,9 @@ export function Lightbox({
               onClose={onClose}
             />
           )}
+          {bar && images.length > 1 && images.length <= maxDots && (
+            <Dots count={images.length} index={index} />
+          )}
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </Modal>
@@ -172,6 +175,25 @@ function Bar({ name, count, onClose }: { name?: string; count?: string; onClose:
   );
 }
 
+const maxDots = 12;
+
+/** Where the swipe is, down by the thumb that swipes; past `maxDots` only the bar's count says. */
+function Dots({ count, index }: { count: number; index: number }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Animated.View
+      entering={FadeIn.duration(150)}
+      exiting={FadeOut.duration(150)}
+      pointerEvents="none"
+      style={[styles.dots, { bottom: insets.bottom + 20 }]}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={[styles.dot, i === index && styles.current]} />
+      ))}
+    </Animated.View>
+  );
+}
+
 /** One image, fitted to the screen, that zooms around the fingers and drags within its edges. */
 function Page({
   image,
@@ -189,8 +211,9 @@ function Page({
   const { uri, failed } = useImage(image.source);
   const { width, height } = size;
   const [zoomed, setZoomed] = useState(false);
-  // The image's size once fitted, so a drag stops at its edges.
-  const fit = useSharedValue({ width, height });
+  // Width over height once loaded; fitted to the size of the moment, so a drag
+  // stops at its edges after the phone unfolds or turns too.
+  const ratio = useSharedValue(0);
   const scale = useSharedValue(1);
   const x = useSharedValue(0);
   const y = useSharedValue(0);
@@ -221,16 +244,24 @@ function Page({
   };
   const edge = (s: number) => {
     "worklet";
-    const f = fit.get();
+    const r = ratio.get();
+    const fitted = r ? Math.min(width, height * r) : width;
     return {
-      x: Math.max(0, (f.width * s - width) / 2),
-      y: Math.max(0, (f.height * s - height) / 2),
+      x: Math.max(0, (fitted * s - width) / 2),
+      y: Math.max(0, ((r ? fitted / r : height) * s - height) / 2),
     };
   };
   const within = (value: number, limit: number) => {
     "worklet";
     return Math.min(limit, Math.max(-limit, value));
   };
+  // A zoomed image the screen just changed around comes back within its edges.
+  useEffect(() => {
+    const limit = edge(scale.get());
+    x.set(within(x.get(), limit.x));
+    y.set(within(y.get(), limit.y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, height]);
   const zoomTo = (s: number, toX: number, toY: number) => {
     "worklet";
     const limit = edge(s);
@@ -296,10 +327,7 @@ function Page({
             style={[{ width, height }, transform]}
             onLoad={(e) => {
               const natural = e.nativeEvent.source;
-              if (!natural.width || !natural.height) return;
-              const ratio = natural.width / natural.height;
-              const fitted = Math.min(width, height * ratio);
-              fit.set({ width: fitted, height: fitted / ratio });
+              if (natural.width && natural.height) ratio.set(natural.width / natural.height);
             }}
           />
         ) : failed ? (
@@ -330,4 +358,14 @@ const styles = StyleSheet.create({
   count: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
   close: { padding: 4 },
   failed: { color: "rgba(255,255,255,0.7)", fontSize: 14 },
+  dots: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 7,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.35)" },
+  current: { backgroundColor: "#fff" },
 });
