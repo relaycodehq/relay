@@ -8,6 +8,7 @@ import {
   ProjectNameField,
   ProjectWorkspaceSelect,
   ProjectWorktreeCleanupSelect,
+  ProjectDevPortField,
   ProjectWorktreeCommandField,
 } from "../../projects/ProjectSettings";
 
@@ -43,6 +44,34 @@ export function projectEntries(project: Project | undefined): SettingEntry[] {
       block: true,
       render: () => <LinkedFoldersSetting project={project} />,
     },
+    {
+      id: "project-dev-command",
+      category: "project",
+      section: "Preview",
+      title: "Dev command",
+      description:
+        "Starts the dev server when a thread's Browser opens and nothing listens on its port yet, in the thread's folder and your login shell. It gets PORT and RELAY_PORT_OFFSET; it sleeps after half an hour nobody looked.",
+      keywords:
+        "preview browser dev server command npm run dev start vite next port localhost",
+      block: true,
+      render: () => (
+        <ProjectWorktreeCommandField
+          project={project}
+          setting="devCommand"
+          placeholder="npm run dev"
+        />
+      ),
+    } satisfies SettingEntry,
+    {
+      id: "project-dev-port",
+      category: "project",
+      section: "Preview",
+      title: "Dev port",
+      description:
+        "Where the dev server listens in the checkout. A thread in a worktree adds its RELAY_PORT_OFFSET, so each one gets its own.",
+      keywords: "preview browser dev server port localhost offset",
+      render: () => <ProjectDevPortField project={project} />,
+    } satisfies SettingEntry,
     ...(project.plain
       ? []
       : [

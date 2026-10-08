@@ -610,6 +610,7 @@ The window (bundled by Vite), the main process and its workers (bundled by esbui
 | ccount | 2.0.1 | MIT |
 | character-entities-html4 | 2.1.0 | MIT |
 | character-entities-legacy | 3.0.0 | MIT |
+| character-entities | 2.0.2 | MIT |
 | chevrotain | 11.1.2 | Apache-2.0 |
 | comma-separated-tokens | 2.0.3 | MIT |
 | cose-base | 1.0.3 | MIT |
@@ -659,6 +660,7 @@ The window (bundled by Vite), the main process and its workers (bundled by esbui
 | hast-util-whitespace | 3.0.0 | MIT |
 | html-url-attributes | 3.0.1 | MIT |
 | html-void-elements | 3.0.0 | MIT |
+| httpxy | 0.5.5 | MIT |
 | inline-style-parser | 0.2.7 | MIT |
 | internmap | 2.0.3 | ISC |
 | is-plain-obj | 4.1.0 | MIT |
@@ -692,6 +694,7 @@ The window (bundled by Vite), the main process and its workers (bundled by esbui
 | micromark-extension-gfm-footnote | 2.1.0 | MIT |
 | micromark-extension-gfm-strikethrough | 2.1.0 | MIT |
 | micromark-extension-gfm-table | 2.1.2 | MIT |
+| micromark-extension-gfm-tagfilter | 2.0.0 | MIT |
 | micromark-extension-gfm-task-list-item | 2.1.0 | MIT |
 | micromark-extension-gfm | 3.0.0 | MIT |
 | micromark-factory-destination | 2.0.1 | MIT |
@@ -705,6 +708,7 @@ The window (bundled by Vite), the main process and its workers (bundled by esbui
 | micromark-util-combine-extensions | 2.0.1 | MIT |
 | micromark-util-decode-numeric-character-reference | 2.0.2 | MIT |
 | micromark-util-decode-string | 2.0.1 | MIT |
+| micromark-util-encode | 2.0.1 | MIT |
 | micromark-util-html-tag-name | 2.0.1 | MIT |
 | micromark-util-normalize-identifier | 2.0.1 | MIT |
 | micromark-util-resolve-all | 2.0.1 | MIT |
@@ -2584,7 +2588,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### bail 2.0.2, ccount 2.0.1, character-entities-html4 2.1.0, character-entities-legacy 3.0.0, mdast-util-to-string 4.0.0, unist-util-position 5.0.0, unist-util-visit 5.1.0
+#### bail 2.0.2, ccount 2.0.1, character-entities-html4 2.1.0, character-entities-legacy 3.0.0, character-entities 2.0.2, mdast-util-to-string 4.0.0, unist-util-position 5.0.0, unist-util-visit 5.1.0
 
 ```text
 (The MIT License)
@@ -3235,7 +3239,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### decode-named-character-reference 1.3.0, hast-util-to-html 9.0.5, hast-util-to-jsx-runtime 2.3.6, markdown-table 3.0.4, mdast-util-find-and-replace 3.0.2, mdast-util-from-markdown 2.0.3, mdast-util-gfm-footnote 2.1.0, mdast-util-gfm 3.1.0, mdast-util-to-markdown 2.1.2, micromark-core-commonmark 2.0.3, micromark-extension-gfm-table 2.1.2, micromark-factory-destination 2.0.1, micromark-factory-label 2.0.1, micromark-factory-space 2.0.1, micromark-factory-title 2.0.1, micromark-factory-whitespace 2.0.1, micromark-util-character 2.1.1, micromark-util-chunked 2.0.1, micromark-util-classify-character 2.0.1, micromark-util-combine-extensions 2.0.1, micromark-util-decode-numeric-character-reference 2.0.2, micromark-util-decode-string 2.0.1, micromark-util-html-tag-name 2.0.1, micromark-util-normalize-identifier 2.0.1, micromark-util-resolve-all 2.0.1, micromark-util-sanitize-uri 2.0.1, micromark-util-subtokenize 2.1.0, micromark 4.0.2, remark-gfm 4.0.1, remark-rehype 11.1.2, vfile-message 4.0.3
+#### decode-named-character-reference 1.3.0, hast-util-to-html 9.0.5, hast-util-to-jsx-runtime 2.3.6, markdown-table 3.0.4, mdast-util-find-and-replace 3.0.2, mdast-util-from-markdown 2.0.3, mdast-util-gfm-footnote 2.1.0, mdast-util-gfm 3.1.0, mdast-util-to-markdown 2.1.2, micromark-core-commonmark 2.0.3, micromark-extension-gfm-table 2.1.2, micromark-factory-destination 2.0.1, micromark-factory-label 2.0.1, micromark-factory-space 2.0.1, micromark-factory-title 2.0.1, micromark-factory-whitespace 2.0.1, micromark-util-character 2.1.1, micromark-util-chunked 2.0.1, micromark-util-classify-character 2.0.1, micromark-util-combine-extensions 2.0.1, micromark-util-decode-numeric-character-reference 2.0.2, micromark-util-decode-string 2.0.1, micromark-util-encode 2.0.1, micromark-util-html-tag-name 2.0.1, micromark-util-normalize-identifier 2.0.1, micromark-util-resolve-all 2.0.1, micromark-util-sanitize-uri 2.0.1, micromark-util-subtokenize 2.1.0, micromark 4.0.2, remark-gfm 4.0.1, remark-rehype 11.1.2, vfile-message 4.0.3
 
 ```text
 (The MIT License)
@@ -4266,7 +4270,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-#### estree-util-is-identifier-name 3.0.0, mdast-util-gfm-autolink-literal 2.0.1, mdast-util-gfm-strikethrough 2.0.0, mdast-util-gfm-table 2.0.0, mdast-util-gfm-task-list-item 2.0.0, micromark-extension-gfm-autolink-literal 2.1.0, micromark-extension-gfm-strikethrough 2.1.0, micromark-extension-gfm-task-list-item 2.1.0, micromark-extension-gfm 3.0.0
+#### estree-util-is-identifier-name 3.0.0, mdast-util-gfm-autolink-literal 2.0.1, mdast-util-gfm-strikethrough 2.0.0, mdast-util-gfm-table 2.0.0, mdast-util-gfm-task-list-item 2.0.0, micromark-extension-gfm-autolink-literal 2.1.0, micromark-extension-gfm-strikethrough 2.1.0, micromark-extension-gfm-tagfilter 2.0.0, micromark-extension-gfm-task-list-item 2.1.0, micromark-extension-gfm 3.0.0
 
 ```text
 (The MIT License)
@@ -4534,6 +4538,57 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
+
+#### httpxy 0.5.5
+
+```text
+MIT License
+
+Copyright (c) Pooya Parsa <pooya@pi0.io>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+----
+
+Based on http-party/node-http-proxy (9b96cd7)
+
+Copyright (c) 2010-2016 Charlie Robbins, Jarrett Cruger & the Contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 #### inline-style-parser 0.2.7

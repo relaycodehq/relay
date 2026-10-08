@@ -78,7 +78,20 @@ async function callRelayTool(tool, input) {
     }),
   });
   const { result, error } = await response.json();
-  return error ? `Error: ${error.message}` : result.content[0].text;
+  if (error) return `Error: ${error.message}`;
+  // A picture says what it is: a PNG's size sits in its header.
+  const text = result.content
+    .map((part) => {
+      if (part.type === "text") return part.text;
+      const png = Buffer.from(part.data, "base64");
+      return `[${part.mimeType} ${png.readUInt32BE(16)}x${png.readUInt32BE(20)}]`;
+    })
+    .join("\n");
+  // Preserve preview tool payloads as code when echoing them into Markdown.
+  // Clickable answer links are named separately by Relay.
+  return ["open_preview", "screenshot", "console_errors"].includes(tool)
+    ? "```\n" + text + "\n```"
+    : text;
 }
 if (args.includes("--permission-prompt-tool")) {
   let approvalGranted = false,
@@ -931,6 +944,31 @@ if (args.includes("--permission-prompt-tool")) {
                   diff: "",
                 },
               ],
+            },
+          },
+        });
+      }
+      // A real manual worktree, credited through the normal command activity.
+      const madeWorktree = /fixture make worktree (\{[^\n]+\})/.exec(said)?.[1];
+      if (madeWorktree) {
+        const { folder, branch } = JSON.parse(madeWorktree);
+        require("node:child_process").execFileSync(
+          "git",
+          ["worktree", "add", "-q", "-b", branch, folder, "HEAD"],
+          { cwd: m.params.cwd },
+        );
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-manual-worktree",
+              type: "commandExecution",
+              command: `git worktree add -b ${JSON.stringify(branch)} ${JSON.stringify(folder)} HEAD`,
+              status: "completed",
+              commandActions: [],
+              aggregatedOutput: "",
+              exitCode: 0,
             },
           },
         });

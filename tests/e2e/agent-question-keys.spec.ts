@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openInFileTree } from "../fixtures/navigation";
+import { openInFileTree, openSurface } from "../fixtures/navigation";
 
 test("digits typed in the Files editor stay in the editor while the agent asks a question", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-qkeys-"))),
@@ -64,7 +64,7 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
     });
     await expect(questions).toBeVisible();
 
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     await openInFileTree(page, "notes.md");
     const editor = page.locator(
       '.project-inline-editor [contenteditable="true"]',

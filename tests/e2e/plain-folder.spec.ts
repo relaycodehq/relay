@@ -10,7 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openInFileTree } from "../fixtures/navigation";
+import { openInFileTree, openSurface } from "../fixtures/navigation";
 
 test("works in a folder without Git: threads, files and saves, no Git controls", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-plain-"))),
@@ -66,7 +66,7 @@ test("works in a folder without Git: threads, files and saves, no Git controls",
       page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
     ).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     await openInFileTree(page, "README.md");
     const editor = page
       .locator(".project-inline-editor")

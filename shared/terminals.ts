@@ -15,14 +15,30 @@ export interface TerminalOpened {
 /** A thread's shell is keyed by its chat id, a draft's by `draft:<projectId>`. */
 export const draftTerminalKey = (projectId: string) => `draft:${projectId}`;
 
+/**
+ * A thread can have more shells than its first; each extra one is a slot,
+ * keyed `<thread key>~<slot>`. The first shell's slot is "".
+ */
+export const terminalSlotKey = (key: string, slot: string) =>
+  slot ? `${key}~${slot}` : key;
+/** The thread key a shell's key belongs to. */
+export const terminalBaseKey = (key: string) => key.split("~")[0]!;
+export const TERMINAL_SLOT = /^[a-z0-9]{1,12}$/;
+
 export interface TerminalApi {
-  /** Opens the thread's shell (the draft's when `chatId` is null), starting it if needed. */
+  /**
+   * Opens the thread's shell (the draft's when `chatId` is null) in `slot`,
+   * the first one by default, starting it if needed.
+   */
   openTerminal(
     projectId: string,
     chatId: string | null,
     size: { cols: number; rows: number },
     fresh?: boolean,
+    slot?: string,
   ): Promise<TerminalOpened>;
+  /** Ends a shell for good: its tab was closed. */
+  closeTerminal(key: string): Promise<void>;
   writeTerminal(key: string, data: string): Promise<void>;
   /**
    * Types the agent's own sign-in command at the shell's prompt; false when a
@@ -36,7 +52,7 @@ export interface TerminalApi {
   prefillTerminal(key: string, text: string): Promise<boolean>;
   resizeTerminal(key: string, cols: number, rows: number): Promise<void>;
   ackTerminal(key: string, bytes: number): Promise<void>;
-  /** Hands the draft's shell to the thread its first message started. */
+  /** Hands the draft's shells to the thread its first message started. */
   adoptTerminal(projectId: string, chatId: string): Promise<void>;
   onTerminal(callback: (event: TerminalEvent) => void): () => void;
 }

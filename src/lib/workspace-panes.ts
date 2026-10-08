@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
-export type PaneId = "chat" | "changes" | "files" | "history";
-const PANE_IDS: PaneId[] = ["chat", "changes", "files", "history"];
+export type PaneId = "chat" | "changes" | "panel";
+const PANE_IDS: PaneId[] = ["chat", "changes", "panel"];
 const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   chat: 0.85,
   changes: 1.6,
-  files: 1.6,
-  history: 1.2,
+  panel: 1.4,
 };
+/** Panes that became tabs in the panel; saved layouts still name them. */
+const LEGACY = ["files", "history"];
+const paneOf = (id: unknown): PaneId | undefined =>
+  PANE_IDS.includes(id as PaneId)
+    ? (id as PaneId)
+    : LEGACY.includes(id as string)
+      ? "panel"
+      : undefined;
+/** Ids saved for a thread, legacy ones folded into the panel. */
+const panesIn = (ids: unknown[]) => [
+  ...new Set(ids.map(paneOf).filter((id) => id !== undefined)),
+];
 const STORAGE_KEY = "relay-workspace-panes";
 const THREADS_KEY = "relay-thread-panes";
 const REMEMBERED_THREADS = 200;
@@ -25,33 +36,44 @@ interface PaneLayout {
 const CHAT_ONLY: OpenPanes = {
   chat: true,
   changes: false,
-  files: false,
-  history: false,
+  panel: false,
 };
 
-/** Panes each thread had open when last on screen, least recently used first. */
+/**
+ * Panes each thread had open when last on screen, least recently used first.
+ * Files and History saved before they moved into the panel stay listed until
+ * the thread is next seen, so the panel can open them as its tabs.
+ */
 const openByThread = (() => {
   try {
     const saved = JSON.parse(localStorage.getItem(THREADS_KEY) || "[]");
-    return new Map<string, PaneId[]>(
+    return new Map<string, string[]>(
       Array.isArray(saved)
         ? saved.filter(
-            (entry): entry is [string, PaneId[]] =>
+            (entry): entry is [string, string[]] =>
               Array.isArray(entry) &&
               typeof entry[0] === "string" &&
               Array.isArray(entry[1]) &&
-              entry[1].every((id: unknown) => PANE_IDS.includes(id as PaneId)),
+              entry[1].every((id: unknown) => paneOf(id) !== undefined),
           )
         : [],
     );
   } catch {
-    return new Map<string, PaneId[]>();
+    return new Map<string, string[]>();
   }
 })();
 
+/** Files or History the thread had open as panes before the panel took them. */
+export function legacyTabs(thread: string): ("files" | "history")[] {
+  return (openByThread.get(thread) ?? []).filter(
+    (id): id is "files" | "history" => LEGACY.includes(id),
+  );
+}
+
 function recall(thread: string): OpenPanes | undefined {
-  const ids = openByThread.get(thread);
-  if (!ids?.length) return;
+  const saved = openByThread.get(thread);
+  if (!saved?.length) return;
+  const ids = panesIn(saved);
   return Object.fromEntries(
     PANE_IDS.map((id) => [id, ids.includes(id)]),
   ) as OpenPanes;
@@ -79,16 +101,16 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     const order: PaneId[] = Array.isArray(saved?.order)
-      ? saved.order.filter((id: unknown): id is PaneId =>
-          PANE_IDS.includes(id as PaneId),
-        )
+      ? panesIn(saved.order)
       : [];
     // Panes added since the layout was saved go at the end.
     if (order.length && new Set(order).size === order.length)
       order.push(...PANE_IDS.filter((id) => !order.includes(id)));
     const weights = { ...DEFAULT_WEIGHTS };
     for (const id of PANE_IDS) {
-      const value = Number(saved?.weights?.[id]);
+      const value = Number(
+        saved?.weights?.[id] ?? (id === "panel" ? saved?.weights?.files : 0),
+      );
       if (value > 0.1 && value < 10) weights[id] = value;
     }
     return {
@@ -100,13 +122,20 @@ function restore(): Pick<PaneLayout, "order" | "weights"> {
   }
 }
 
+/** What a thread starts with: the saved order and widths, and its own open panes. */
+export const restoredLayout = (thread: string): PaneLayout => ({
+  ...restore(),
+  thread,
+  open: recall(thread) ?? CHAT_ONLY,
+});
+
 /** The open panes, in order. */
 const visiblePanes = ({ order, open }: Pick<PaneLayout, "order" | "open">) =>
   order.filter((id) => open[id]);
 
-/** A folder without Git has no changes or history to show. */
+/** A folder without Git has no changes to show. */
 export const panesOf = (order: PaneId[], plain?: boolean) =>
-  plain ? order.filter((id) => id === "chat" || id === "files") : order;
+  plain ? order.filter((id) => id !== "changes") : order;
 
 /**
  * Where pane `id` sits in the row: its place in the order and its share of
@@ -134,15 +163,13 @@ export function paneFrame(
 export type WorkspacePanes = ReturnType<typeof useWorkspacePanes>;
 
 /**
- * Chat, changes and files are peers: each can be shown, hidden and reordered.
+ * Chat, changes and the panel are peers: each can be shown, hidden and reordered.
  * Which are open is the thread's own; order and widths are the same everywhere.
  */
 export function useWorkspacePanes(thread: string) {
-  const [layout, setLayout] = useState<PaneLayout>(() => ({
-    ...restore(),
-    thread,
-    open: recall(thread) ?? CHAT_ONLY,
-  }));
+  const [layout, setLayout] = useState<PaneLayout>(() =>
+    restoredLayout(thread),
+  );
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,

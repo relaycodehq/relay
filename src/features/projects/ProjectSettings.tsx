@@ -295,6 +295,45 @@ export function ProjectCommitSettleSwitch({ project }: { project: Project }) {
   );
 }
 
+const COMMAND_LABELS = {
+  worktreeSetup: "Setup command",
+  worktreeTeardown: "Teardown command",
+  devCommand: "Dev command",
+};
+
+/** The dev server's port in the checkout, saved when the field is left. */
+export function ProjectDevPortField({ project }: { project: Project }) {
+  const port = useProjectSetting(project, "devPort");
+  const saved = port.value ? String(port.value) : "";
+  const [text, setText] = useState(saved);
+  useEffect(() => setText(saved), [project.id, saved]);
+  const value = Number(text);
+  const valid = !text || (Number.isInteger(value) && value >= 1 && value <= 65535);
+  return (
+    <>
+      <input
+        className="settings-dev-port"
+        aria-label="Dev port"
+        aria-invalid={!valid || undefined}
+        inputMode="numeric"
+        placeholder="3000"
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/\D/g, "").slice(0, 5))}
+        onBlur={() => {
+          if (valid && text !== saved) port.change(text ? value : undefined);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && text !== saved) {
+            e.preventDefault();
+            setText(saved);
+          }
+        }}
+      />
+      {!!port.error && <ErrorBox error={port.error} />}
+    </>
+  );
+}
+
 /** A worktree command, saved when the field is left; Escape puts back what's saved. */
 export function ProjectWorktreeCommandField({
   project,
@@ -302,7 +341,7 @@ export function ProjectWorktreeCommandField({
   placeholder,
 }: {
   project: Project;
-  setting: "worktreeSetup" | "worktreeTeardown";
+  setting: "worktreeSetup" | "worktreeTeardown" | "devCommand";
   placeholder: string;
 }) {
   const command = useProjectSetting(project, setting);
@@ -317,9 +356,7 @@ export function ProjectWorktreeCommandField({
     <>
       <textarea
         className="settings-worktree-command"
-        aria-label={
-          setting === "worktreeSetup" ? "Setup command" : "Teardown command"
-        }
+        aria-label={COMMAND_LABELS[setting]}
         value={text}
         placeholder={placeholder}
         spellCheck={false}

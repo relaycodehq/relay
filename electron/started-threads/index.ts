@@ -28,6 +28,11 @@ import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
 import type { ProjectChats } from "../project-chats";
 import {
+  answerPreviewTool,
+  type PreviewToolName,
+  type ThreadPreviews,
+} from "../preview";
+import {
   relayToolSchemas,
   toolText,
   STARTED_LIMIT,
@@ -156,12 +161,18 @@ export interface AgentProjects {
 export class StartedThreads {
   private readUsage: ReadUsage;
   private projects: AgentProjects | undefined;
+  private previews: ThreadPreviews | undefined;
   constructor(
     private chats: Chats,
-    options: { readUsage?: ReadUsage; projects?: AgentProjects } = {},
+    options: {
+      readUsage?: ReadUsage;
+      projects?: AgentProjects;
+      previews?: ThreadPreviews;
+    } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
     this.projects = options.projects;
+    this.previews = options.previews;
   }
 
   /** Answers one tool call made by the agent in `chatId`. */
@@ -219,6 +230,18 @@ export class StartedThreads {
         return json(await this.listProjects(lead));
       case "add_project":
         return this.addProject(lead, input, signal);
+      case "open_preview":
+      case "screenshot":
+      case "console_errors":
+        if (!this.previews)
+          return toolText("Previews aren't available in this Relay.", true);
+        return answerPreviewTool(
+          this.previews,
+          { projectId: lead.projectId, chatId: lead.id },
+          name as PreviewToolName,
+          input,
+          signal,
+        );
     }
   }
 

@@ -31,6 +31,7 @@ import type { Updater } from "../app/updater";
 import type { DevBuild } from "../app/dev-build";
 import type { AgentAccounts } from "../agents/accounts";
 import type { ProjectAdding } from "../project-add";
+import type { ThreadPreviews } from "../preview";
 
 export interface Services {
   store: Store;
@@ -59,6 +60,8 @@ export interface Services {
   agentUpdates: AgentUpdates;
   agentAccounts: AgentAccounts;
   projectAdding: ProjectAdding;
+  /** Desktop browser views; absent when Relay runs headless. */
+  previews?: ThreadPreviews;
 }
 
 /** What a method's promise resolves to in the page. */

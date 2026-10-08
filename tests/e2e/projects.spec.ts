@@ -18,7 +18,11 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-import { openInFileTree } from "../fixtures/navigation";
+import {
+  openInFileTree,
+  openSurface,
+  panelToggle,
+} from "../fixtures/navigation";
 const screenshotPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
 test("matches a project remote, reviews its PR and sends pinned lines into its restored chat", async () => {
@@ -123,9 +127,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await editor
       .getByRole("button", { name: "Close file", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Close files", exact: true })
-      .click();
+    await panelToggle(page).click();
     await page
       .locator('.diff-wrapper [data-additions] [data-line="13"]')
       .click({ position: { x: 60, y: 8 } });
@@ -286,7 +288,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await expect(
       page.getByText("export const answer = 43;", { exact: false }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await openSurface(page, "Files");
     await openInFileTree(page, "example.ts");
     const surface = page
       .locator('.project-inline-editor [contenteditable="true"]')
@@ -307,10 +309,10 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Close files", exact: true })
       .click();
-    await expect(page.locator('[data-pane="files"] .pane-header')).toHaveCount(
-      0,
-    );
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await expect(
+      page.getByRole("tab", { name: "Files", exact: true }),
+    ).toHaveCount(0);
+    await openSurface(page, "Files");
     await expect(
       page.locator('.project-inline-editor [contenteditable="true"]').last(),
     ).toContainText("edited in Relay");

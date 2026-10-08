@@ -23,6 +23,8 @@ export interface PromptInputHandle extends DraftEditor {
   insertSkill: (skill: SkillPick) => void;
   /** Puts a quoted passage at the caret as a pill. */
   insertQuote: (text: string) => void;
+  /** Focuses the draft with the caret at its end. */
+  focusEnd: () => void;
   /** Drops the nth paste pill. */
   removePaste: (index: number) => void;
   /** Swaps the nth paste pill for its text. */
@@ -79,6 +81,7 @@ export function usePromptHandle(
         insertQuote(editor, quote);
       },
       insertPaste: (pasted) => !!editor && insertPaste(editor, pasted),
+      focusEnd: () => void editor?.commands.focus("end"),
       removePaste(index) {
         if (editor) removePaste(editor, index);
       },

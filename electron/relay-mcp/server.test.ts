@@ -89,6 +89,9 @@ test("speaks enough MCP for a client to list and call the tools as its thread", 
     "usage_limits",
     "list_projects",
     "add_project",
+    "open_preview",
+    "screenshot",
+    "console_errors",
   ]);
   expect(list.result.tools[0].inputSchema.properties.threads.type).toBe(
     "array",
@@ -122,7 +125,7 @@ test("turns away a caller without a thread's token", async () => {
   ).toBe(401);
 });
 
-test("a started thread's path lists and answers only the reading tools", async () => {
+test("a started thread's path lists and answers only the tools that drive no other thread", async () => {
   const calls: string[] = [];
   const url = await serve(async (_chat, name) => {
     calls.push(name);
@@ -137,6 +140,9 @@ test("a started thread's path lists and answers only the reading tools", async (
     "read_thread",
     "usage_limits",
     "list_projects",
+    "open_preview",
+    "screenshot",
+    "console_errors",
   ]);
   const refused = await (
     await post(started, {

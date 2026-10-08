@@ -53,6 +53,10 @@ export const projectSettingsSchema = z
     worktreeTeardown: worktreeCommand.optional(),
     /** Folders beyond the project its agents may reach; see shared/projects/links. */
     links: linkedFoldersSchema.optional(),
+    /** Starts its dev server; a thread's preview runs it in the thread's folder when nothing listens yet. */
+    devCommand: worktreeCommand.optional(),
+    /** Where its dev server listens in the checkout; a worktree adds its RELAY_PORT_OFFSET. */
+    devPort: z.number().int().min(1).max(65535).optional(),
   })
   .strict();
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;

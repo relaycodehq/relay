@@ -40,3 +40,40 @@ export async function openInFileTree(page: Page, path: string) {
   for (const name of path.split("/"))
     await tree.getByRole("treeitem", { name, exact: true }).click();
 }
+
+/** The panel's toggle in the title bar's strip. */
+export const panelToggle = (page: Page) =>
+  page
+    .getByRole("group", { name: "Workspace panes" })
+    .getByRole("button", { name: /^Panel\b/ });
+
+/** Brings a surface to the front of the panel, opening the panel and the surface as needed. */
+export async function openSurface(
+  page: Page,
+  name: "Files" | "History" | "Terminal" | "Browser",
+) {
+  const toggle = panelToggle(page);
+  if ((await toggle.getAttribute("aria-pressed")) !== "true")
+    await toggle.click();
+  const panel = page.locator('[data-pane="panel"]');
+  await expect(panel.locator(".pane-header")).toBeVisible();
+  const tab =
+    name === "Browser"
+      ? panel
+          .locator(".pane-tab-host")
+          .filter({
+            has: page.getByRole("button", {
+              name: "Close browser",
+              exact: true,
+            }),
+          })
+          .getByRole("tab")
+      : panel.getByRole("tab", { name, exact: true });
+  if (name !== "Terminal" && (await tab.isVisible())) return tab.click();
+  const item = panel.getByRole("menuitem", { name, exact: true });
+  if (!(await item.isVisible()))
+    await panel
+      .getByRole("button", { name: "Open another surface", exact: true })
+      .click();
+  await item.click();
+}

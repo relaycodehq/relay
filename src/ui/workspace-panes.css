@@ -79,25 +79,22 @@
   gap: 7px;
   min-width: 0;
   flex: 1;
-  cursor: grab;
   color: var(--text);
   padding: 4px 2px;
   border-radius: 6px;
 }
-.pane-header-title:active {
+.pane-header[draggable="true"] {
+  cursor: grab;
+}
+.pane-header[draggable="true"] :is(button, a, [role="tab"]) {
+  cursor: pointer;
+}
+.pane-header[draggable="true"]:active {
   cursor: grabbing;
 }
 .pane-header-title > svg {
   flex-shrink: 0;
   color: var(--muted);
-}
-.pane-header-title > .pane-grip {
-  opacity: 0;
-  margin-right: -4px;
-  transition: opacity 120ms;
-}
-.pane-header:hover .pane-grip {
-  opacity: 0.7;
 }
 .pane-header-title > strong {
   font-weight: 600;

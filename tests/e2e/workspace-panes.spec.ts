@@ -10,7 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { openInFileTree } from "../fixtures/navigation";
+import { openInFileTree, openSurface } from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("chat, changes and files are inline panes that can be reordered", async () => {
@@ -52,6 +52,10 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
+    await page
+      .getByRole("dialog", { name: "Add a project", exact: true })
+      .getByRole("option", { name: "Choose in Finder…", exact: true })
+      .click();
     const toggles = page.getByRole("group", { name: "Workspace panes" });
     // Changes carries its line counts after the label.
     const toggle = (name: string) =>
@@ -69,8 +73,13 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await expect(page.locator(".pane-header")).toHaveCount(0);
     expect(await order()).toEqual(["chat"]);
 
-    // Opening a file happens inline and is remembered.
-    await toggle("Files").click();
+    // An empty panel offers its surfaces; opening a file happens inline
+    // and is remembered.
+    await toggle("Panel").click();
+    await expect(
+      page.getByRole("menuitem", { name: "Files", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("f");
     await openInFileTree(page, "src/b.ts");
     await expect(
       page.locator(".project-inline-editor").getByRole("textbox", {
@@ -81,16 +90,14 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await page
       .getByRole("button", { name: "Close files", exact: true })
       .click();
-    await toggle("Files").click();
+    await openSurface(page, "Files");
     await expect(
       page.locator(".project-inline-editor").getByRole("textbox", {
         name: "src/b.ts",
         exact: true,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Close files", exact: true })
-      .click();
+    await toggle("Panel").click();
 
     // Regression: the Changes pane never pops the remembered file in a modal.
     await toggle("Changes").click();
@@ -111,20 +118,45 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       }),
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    expect(await order()).toEqual(["chat", "changes", "files"]);
+    expect(await order()).toEqual(["chat", "changes", "panel"]);
 
     // Drag a header toggle to reorder the panes; the order and the open
     // panes survive a reload.
-    await toggle("Files").dragTo(toggle("Chat"), {
+    await toggle("Panel").dragTo(toggle("Chat"), {
       targetPosition: { x: 2, y: 5 },
     });
-    expect(await order()).toEqual(["files", "chat", "changes"]);
+    expect(await order()).toEqual(["panel", "chat", "changes"]);
     await page.reload();
     await expect(toggles).toBeVisible();
-    await expect.poll(order).toEqual(["files", "chat", "changes"]);
+    await expect.poll(order).toEqual(["panel", "chat", "changes"]);
+
+    // So does dragging a pane by its header, anywhere along it.
+    await page
+      .locator('[data-pane="changes"] .pane-header')
+      .dragTo(page.locator('[data-pane="panel"] .pane-header'), {
+        targetPosition: { x: 4, y: 20 },
+      });
+    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
+
+    // Terminals stack as tabs; everything else opens once.
+    await openSurface(page, "Terminal");
+    await openSurface(page, "Terminal");
+    await openSurface(page, "Files");
+    const panel = page.locator('[data-pane="panel"]');
+    await expect(panel.getByRole("tab")).toHaveText([
+      "Files",
+      "Terminal",
+      "Terminal 2",
+    ]);
+    await panel.getByRole("tab", { name: "Terminal 2", exact: true }).click();
+    await expect(panel.locator(".xterm-rows")).toBeVisible();
+    await panel
+      .getByRole("button", { name: "Close terminal 2", exact: true })
+      .click();
+    await expect(panel.getByRole("tab")).toHaveText(["Files", "Terminal"]);
 
     // The last visible pane cannot be hidden.
-    await toggle("Files").click();
+    await toggle("Panel").click();
     await toggle("Changes").click();
     await expect(toggle("Chat")).toBeDisabled();
   } finally {
@@ -218,31 +250,38 @@ test("each thread keeps the panes it had open", async () => {
     const thread = (title: string) =>
       sidebar.getByRole("button", { name: new RegExp(title) });
 
+    const front = page
+      .locator('[data-pane="panel"]')
+      .locator('[role="tab"][aria-selected="true"]');
+
     // The first thread is left with History alone.
     await send("hello");
     await rename("First thread");
-    await toggle("History").click();
+    await openSurface(page, "History");
     await toggle("Chat").click();
-    await expect.poll(order).toEqual(["history"]);
+    await expect.poll(order).toEqual(["panel"]);
+    await expect(front).toHaveText("History");
 
     // A new thread starts with the chat alone, then opens Files beside it.
     await page.keyboard.press(`${mod}+N`);
     await expect.poll(order).toEqual(["chat"]);
     await send("hello again");
     await rename("Second thread");
-    await toggle("Files").click();
-    await expect.poll(order).toEqual(["chat", "files"]);
+    await openSurface(page, "Files");
+    await expect.poll(order).toEqual(["chat", "panel"]);
+    await expect(front).toHaveText("Files");
 
     // After a reload, each comes back as it was left.
     await page.reload();
     await expect(toggles).toBeVisible();
-    await expect.poll(order).toEqual(["chat", "files"]);
+    await expect.poll(order).toEqual(["chat", "panel"]);
+    await expect(front).toHaveText("Files");
     await thread("First thread").click();
-    await expect.poll(order).toEqual(["history"]);
+    await expect.poll(order).toEqual(["panel"]);
+    await expect(front).toHaveText("History");
     await thread("Second thread").click();
-    await expect.poll(order).toEqual(["chat", "files"]);
-    await thread("First thread").click();
-    await expect.poll(order).toEqual(["history"]);
+    await expect.poll(order).toEqual(["chat", "panel"]);
+    await expect(front).toHaveText("Files");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

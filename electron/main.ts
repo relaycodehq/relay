@@ -77,6 +77,12 @@ import { ProjectAdding } from "./project-add";
 import { TerminalSessions } from "./terminal-sessions";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
+import {
+  ThreadPreviews,
+  PreviewProjects,
+  ServerLinks,
+  worktreeDevPort,
+} from "./preview";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -97,6 +103,8 @@ if (
 void pathReady();
 let store: Store | undefined;
 let projectChats: ProjectChats | undefined;
+/** The threads' browsers; unset until Relay has started. */
+let previews: ThreadPreviews | undefined;
 let triage: TriageService | undefined;
 let phoneRemote: PhoneRemote | undefined;
 /** Handing threads to other computers running Relay. */
@@ -109,9 +117,11 @@ const github = new GithubLogin((url, options) => net.fetch(url, options));
 const window = new AppWindow({
   quitCancelled: () => quit.cancel(),
   closed: () => {
+    previews?.hideAll();
     blame.dispose();
     projectChecks.stop();
   },
+  reloaded: () => previews?.hideAll(),
   rendererGone: (details) => {
     projectChecks.stop();
     if (window.win) void offerWindowReport(window.win, details);
@@ -152,6 +162,7 @@ const quit = new Quit({
     menubar.destroy();
     keepAwake.dispose();
     threadTerminals.closeAll();
+    previews?.dispose();
     blame.dispose();
     login.client?.dispose();
   },
@@ -357,6 +368,26 @@ app
     });
     const triageService = new TriageService(loaded, app.getPath("userData"));
     triage = triageService;
+    const previewProjects = new PreviewProjects(
+      projects,
+      chats,
+      () => loaded.get().chats ?? [],
+    );
+    previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
+      previewProjects.target(projectId, chatId, url, serverLinks, folder),
+    );
+    const serverLinks = new ServerLinks(
+      previews.external,
+      (chat) => previewProjects.folders(chat),
+      async (chat, folder, port) => {
+        const settings = projects.get(chat.projectId).settings;
+        if (!settings?.devCommand || !settings.devPort) return;
+        const env = await previewProjects.env(chat, folder);
+        if (port !== worktreeDevPort(settings.devPort, env)) return;
+        return previews?.servers.ensure(folder, settings.devCommand, port, env);
+      },
+    );
+    chats.setPreviewLinks(serverLinks);
     const api = apiContext({
       store: loaded,
       projects,
@@ -390,6 +421,7 @@ app
         appData: app.getPath("appData"),
         send: (job) => window.send("relay:project-adding", job),
       }),
+      previews,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
@@ -480,6 +512,7 @@ app
         chats,
         agentHosts,
         agentProjects(projects, () => login.client, app.getPath("userData")),
+        previews,
       );
     chats.armWakeups();
     void chats

@@ -9,6 +9,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { triageState } from "../../shared/chat-activity";
 import { StartedThreads } from "../started-threads";
+import { resultText } from "../relay-mcp";
 
 let root: string, store: Store, chats: ProjectChats, projectId: string;
 beforeEach(async () => {
@@ -113,7 +114,7 @@ it("a lead sees a started thread that settled by itself as settled", async () =>
     { id: child.id },
     new AbortController().signal,
   );
-  expect(settle.content[0]!.text).toBe("Already settled.");
+  expect(resultText(settle)).toBe("Already settled.");
   expect((await chats.get(child.id)).settledAt).toBeUndefined();
 });
 

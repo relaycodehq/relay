@@ -1,10 +1,5 @@
-import { useState } from "react";
-import {
-  Files,
-  GitCompareArrows,
-  GitGraph,
-  GitPullRequest,
-} from "lucide-react";
+import { useCallback, useState } from "react";
+import { GitCompareArrows, GitPullRequest, X } from "lucide-react";
 import type { Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
 import type { Account, Pull, PullRef } from "../../shared/types";
@@ -15,7 +10,35 @@ import type { ThreadView } from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectChanges, ProjectFiles } from "./ProjectViews";
-import { NO_SLOTS, PaneHeader, type PaneSlots } from "../ui/WorkspacePanes";
+import {
+  NO_SLOTS,
+  PaneHeader,
+  paneDrag,
+  type PaneSlots,
+} from "../ui/WorkspacePanes";
+import { PaneTabs } from "../ui/PaneTabs";
+import { IconButton } from "../ui/ui";
+import type { PanelTabs } from "../features/panel/panel-tabs";
+import {
+  SURFACE_ICONS,
+  SURFACE_LABELS,
+  SurfacePicker,
+} from "../features/panel/SurfacePicker";
+import {
+  closeTerminal,
+  terminalFor,
+} from "../features/terminal/thread-terminals";
+import { terminalLabel } from "../features/terminal/TerminalDrawer";
+import { TerminalView } from "../features/terminal/TerminalView";
+import {
+  BrowserSurface,
+  BrowserTabIcon,
+} from "../features/browser/BrowserSurface";
+import {
+  closePreview,
+  previewKey,
+  usePreviewState,
+} from "../features/browser/previews";
 
 /**
  * The working tree's changes, or in a PR thread the PR's Review, which
@@ -122,66 +145,151 @@ export function ThreadChanges({
   );
 }
 
-/** The folder the thread works in, browsed and edited. */
-export function ThreadFiles({
+/**
+ * The third pane: the surfaces the thread opened as tabs, or the picker.
+ * Files and History stay mounted behind other tabs, so an unsaved edit and
+ * where the history was scrolled survive a look at a terminal.
+ */
+export function ThreadPanel({
   project,
+  chatId,
   folder: { where, detail, checks },
   view,
   opens,
+  panel,
 }: {
   project: Project;
+  chatId: string | null;
   folder: ThreadFolder;
   view: ThreadView;
   opens: PaneOpens;
+  panel: PanelTabs;
 }) {
   const { locked } = useNavigationLock();
+  const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
+  const historyTitle = useCallback(
+      (title: HTMLElement | null) => setHistorySlots((s) => ({ ...s, title })),
+      [],
+    ),
+    historyActions = useCallback(
+      (actions: HTMLElement | null) =>
+        setHistorySlots((s) => ({ ...s, actions })),
+      [],
+    );
+  const front = panel.front;
+  const preview = usePreviewState(previewKey(project.id, chatId));
+  let terminals = 0;
+  const tabs = panel.tabs.map((tab) => ({
+    key: tab.key,
+    icon:
+      tab.surface === "browser" ? (
+        <BrowserTabIcon
+          key={preview?.favicon ?? "globe"}
+          favicon={preview?.favicon}
+        />
+      ) : (
+        SURFACE_ICONS[tab.surface]
+      ),
+    closeLabel: tab.surface === "browser" ? "Close browser" : undefined,
+    label:
+      tab.surface === "terminal"
+        ? terminalLabel(terminals++)
+        : tab.surface === "browser"
+          ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
+          : SURFACE_LABELS[tab.surface],
+    closeDisabled: tab.surface === "files" && locked,
+  }));
+  const close = (key: string) => {
+    const tab = panel.tabs.find((t) => t.key === key);
+    if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
+    if (tab?.surface === "browser")
+      closePreview(previewKey(project.id, chatId));
+    panel.close(key);
+  };
+  const folderShown =
+    front?.surface === "files" || front?.surface === "history";
   return (
     <>
-      <PaneHeader
-        id="files"
-        icon={<Files size={14} />}
-        title="Files"
-        detail={detail}
-        closeDisabled={locked}
-        onClose={() => opens.togglePane("files")}
-      />
-      <ProjectFiles
-        key={where}
-        project={project}
-        where={where}
-        checks={checks}
-        onViewing={view.setViewing}
-        opens={opens.fileOpens}
-      />
-    </>
-  );
-}
-
-/** The commit graph of the folder the thread works in. */
-export function ThreadHistory({
-  folder: { where, detail },
-  opens,
-}: {
-  folder: ThreadFolder;
-  opens: PaneOpens;
-}) {
-  const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
-  return (
-    <>
-      <PaneHeader
-        id="history"
-        icon={<GitGraph size={14} />}
-        title="History"
-        detail={detail}
-        onSlots={setSlots}
-        onClose={() => opens.togglePane("history")}
-      />
-      <ProjectHistory
-        key={where}
-        projectId={where}
-        slots={slots}
-        onOpenFile={(path) => opens.openInEditor({ path, directory: false })}
-      />
+      <header className="pane-header panel-header" {...paneDrag("panel")}>
+        <PaneTabs
+          tabs={tabs}
+          front={front?.key ?? null}
+          onFront={panel.bring}
+          onClose={close}
+          add={
+            panel.tabs.length
+              ? {
+                  label: "Open another surface",
+                  active: !front,
+                  onClick: panel.pick,
+                }
+              : undefined
+          }
+        />
+        <div
+          className="pane-title-slot"
+          ref={historyTitle}
+          hidden={front?.surface !== "history"}
+        />
+        {folderShown && detail && (
+          <small className="pane-header-detail" title={detail.title}>
+            {detail.text}
+          </small>
+        )}
+        <div
+          className="pane-header-actions"
+          ref={historyActions}
+          hidden={front?.surface !== "history"}
+        />
+        <IconButton
+          label="Close panel"
+          disabled={locked && panel.has("files")}
+          onClick={() => opens.togglePane("panel")}
+        >
+          <X size={15} />
+        </IconButton>
+      </header>
+      {!front && <SurfacePicker plain={project.plain} onPick={panel.show} />}
+      {panel.has("files") && (
+        <div className="panel-body" hidden={front?.surface !== "files"}>
+          <ProjectFiles
+            key={where}
+            project={project}
+            where={where}
+            checks={checks}
+            onViewing={view.setViewing}
+            opens={opens.fileOpens}
+          />
+        </div>
+      )}
+      {panel.has("history") && !project.plain && (
+        <div className="panel-body" hidden={front?.surface !== "history"}>
+          <ProjectHistory
+            key={where}
+            projectId={where}
+            slots={historySlots}
+            onOpenFile={(path) =>
+              opens.openInEditor({ path, directory: false })
+            }
+          />
+        </div>
+      )}
+      {panel.has("browser") && (
+        <div className="panel-body" hidden={front?.surface !== "browser"}>
+          <BrowserSurface
+            projectId={project.id}
+            chatId={chatId}
+            front={front?.surface === "browser"}
+            onPick={opens.ask}
+          />
+        </div>
+      )}
+      {front?.slot !== undefined && (
+        <TerminalView
+          key={front.key}
+          terminal={terminalFor(project.id, chatId, front.slot)}
+        />
+      )}
     </>
   );
 }

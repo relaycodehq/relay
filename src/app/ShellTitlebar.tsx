@@ -2,13 +2,12 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   FolderGit2,
-  Files,
   GitCompareArrows,
-  GitGraph,
   GitPullRequest,
   MessageSquare,
   PanelBottom,
   PanelLeft,
+  PanelRight,
   Pencil,
 } from "lucide-react";
 import type { ChatSummary, Project } from "../../shared/projects";
@@ -195,9 +194,12 @@ export function ThreadPaneToggles({
   plain,
   pull,
   lines,
+  filesOpen,
   onToggle,
 }: {
   panes: WorkspacePanes;
+  /** The panel has Files open, which may hold an unsaved edit. */
+  filesOpen: boolean;
   plain?: boolean;
   pull: PullRef | null;
   /** Lines the working tree changed, beside Changes. */
@@ -212,26 +214,25 @@ export function ThreadPaneToggles({
       panes={panesOf(layout.order, plain).map((id) => ({
         id,
         open: layout.open[id],
-        // Files stays open over an unsaved edit, and so does the last open pane.
+        // The panel stays open over an unsaved edit in Files, and so does
+        // the last open pane.
         disabled:
-          (id === "files" && locked && layout.open.files) ||
+          (id === "panel" && locked && layout.open.panel && filesOpen) ||
           (layout.open[id] && visible.length === 1),
         ...(id === "chat"
           ? { label: "Chat", icon: <MessageSquare size={14} /> }
-          : id === "files"
-            ? { label: "Files", icon: <Files size={14} /> }
-            : id === "history"
-              ? { label: "History", icon: <GitGraph size={14} /> }
-              : pull
-                ? {
-                    label: `PR #${pull.number}`,
-                    icon: <GitPullRequest size={14} />,
-                  }
-                : {
-                    label: "Changes",
-                    icon: <GitCompareArrows size={14} />,
-                    stat: lines,
-                  }),
+          : id === "panel"
+            ? { label: "Panel", icon: <PanelRight size={14} /> }
+            : pull
+              ? {
+                  label: `PR #${pull.number}`,
+                  icon: <GitPullRequest size={14} />,
+                }
+              : {
+                  label: "Changes",
+                  icon: <GitCompareArrows size={14} />,
+                  stat: lines,
+                }),
       }))}
     />
   );

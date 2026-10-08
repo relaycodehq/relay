@@ -1,5 +1,11 @@
-import { useCallback, useState, type ReactNode, type DragEvent } from "react";
-import { GripVertical, X } from "lucide-react";
+import {
+  useCallback,
+  useState,
+  type DragEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
+import { X } from "lucide-react";
 import type { PaneId } from "../lib/workspace-panes";
 import { IconButton } from "./ui";
 import "./workspace-panes.css";
@@ -50,6 +56,21 @@ function dragSource(id: PaneId) {
     onDragStart: (e: DragEvent<HTMLElement>) => {
       e.dataTransfer.setData(DRAG_TYPE, id);
       e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+/**
+ * Makes a pane's whole header drag the pane. Text fields portaled into it
+ * still select text: the header lets go of dragging while one is pressed.
+ */
+export function paneDrag(id: PaneId) {
+  return {
+    ...dragSource(id),
+    onPointerDown: (e: PointerEvent<HTMLElement>) => {
+      e.currentTarget.draggable = !(e.target as Element).closest(
+        "input, textarea, select, [contenteditable]",
+      );
     },
   };
 }
@@ -257,13 +278,8 @@ export function PaneHeader({
       [onSlots],
     );
   return (
-    <header className="pane-header">
-      <div
-        className="pane-header-title"
-        {...dragSource(id)}
-        title="Drag to reorder"
-      >
-        <GripVertical className="pane-grip" size={13} />
+    <header className="pane-header" {...paneDrag(id)}>
+      <div className="pane-header-title">
         {icon}
         <strong>{title}</strong>
         {detail && (

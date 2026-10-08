@@ -1,15 +1,24 @@
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import { idSchema } from "../../shared/validation";
-import { draftTerminalKey } from "../../shared/terminals";
+import {
+  draftTerminalKey,
+  TERMINAL_SLOT,
+  terminalSlotKey,
+} from "../../shared/terminals";
 import { signInCommand } from "../agents/sign-in";
 import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
 
-const terminalKeySchema = z.union([
+const slotSchema = z.string().regex(TERMINAL_SLOT);
+const threadKeySchema = z.union([
   idSchema,
   z.templateLiteral(["draft:", idSchema]),
+]);
+const terminalKeySchema = z.union([
+  threadKeySchema,
+  z.templateLiteral([threadKeySchema, "~", slotSchema]),
 ]);
 const terminalSizeSchema = z.object({
   cols: z.number().int().min(2).max(1000),
@@ -42,13 +51,14 @@ export function terminalHandlers(ctx: ApiContext) {
         idSchema.nullable(),
         terminalSizeSchema,
         z.boolean().optional(),
+        slotSchema.optional(),
       ],
-      async (projectId, chatId, size, fresh) => {
+      async (projectId, chatId, size, fresh, slot) => {
         const cwd = chatId
           ? await projectChats.terminalFolder(projectId, chatId)
           : await projects.root(projectId);
         return threadTerminals.open(
-          chatId ?? draftTerminalKey(projectId),
+          terminalSlotKey(chatId ?? draftTerminalKey(projectId), slot ?? ""),
           cwd,
           size.cols,
           size.rows,
@@ -56,6 +66,9 @@ export function terminalHandlers(ctx: ApiContext) {
           chatId ? await projectChats.worktreeEnv(chatId) : {},
         );
       },
+    ),
+    closeTerminal: takes([terminalKeySchema], (key) =>
+      threadTerminals.close(key),
     ),
     writeTerminal: takes(
       [terminalKeySchema, z.string().max(1 << 20)],

@@ -32,6 +32,9 @@ Switching and restoring ask Relay to quit over IPC on macOS, Linux and Windows. 
 
 Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
 
+See the [browser preview guide](previews.md) for existing-server discovery,
+isolated pane sessions and named worktree links in external browsers.
+
 ## Releases and automatic updates
 
 A release is an annotated `v<major>.<minor>.<patch>` tag on `main`; pushing to `main` alone ships nothing. The tag's message is the changelog friends read in Settings → About and on GitHub. `scripts/tag-release.sh log` lists what landed since the last tag, and `scripts/tag-release.sh <notes.md> [version]` tags `origin/main` with those notes and pushes the tag; the version defaults to the last tag's patch plus one.
