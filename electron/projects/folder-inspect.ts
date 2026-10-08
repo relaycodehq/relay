@@ -1,6 +1,6 @@
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type {
   FolderEntry,
   FolderInfo,
@@ -8,7 +8,7 @@ import type {
   LinkSuggestion,
   Project,
 } from "../../shared/projects";
-import { linkName } from "../../shared/projects";
+import { linkedFoldersSchema, linkName } from "../../shared/projects";
 import { repositoryRoot } from "./projects";
 
 /** `~/work` → `/Users/you/work`. */
@@ -59,20 +59,42 @@ export async function siblingRepositories(path: string) {
   return entries.filter((e) => e.repository && e.path !== path);
 }
 
-/** Throws for a newly linked folder that isn't there; ones linked before may have gone since. */
+/** Canonicalizes link identities and validates new folders, retaining missing saved links. */
+export function checkNewLinks(
+  links: readonly LinkedFolder[],
+  before: readonly LinkedFolder[] | undefined,
+  own?: string,
+): Promise<LinkedFolder[]>;
+export function checkNewLinks(
+  links: readonly LinkedFolder[] | undefined,
+  before: readonly LinkedFolder[] | undefined,
+  own?: string,
+): Promise<LinkedFolder[] | undefined>;
 export async function checkNewLinks(
   links: readonly LinkedFolder[] | undefined,
   before: readonly LinkedFolder[] | undefined,
+  own?: string,
 ) {
-  const known = new Set((before ?? []).map((l) => l.path));
-  for (const link of links ?? []) {
-    if (known.has(link.path)) continue;
+  if (!links) return undefined;
+  const canonical = async (path: string) =>
+    realpath(path).catch(() => resolve(path));
+  const known = new Set(
+    await Promise.all((before ?? []).map((l) => canonical(l.path))),
+  );
+  const root = own ? await canonical(own) : undefined;
+  const normalized: LinkedFolder[] = [];
+  for (const link of links) {
     const info = await inspectFolder(link.path);
-    if (info.kind === "missing")
+    const path = await canonical(info.path);
+    if (path === root) throw new Error("That's the project's own folder.");
+    if (info.kind === "missing" && !known.has(path))
       throw new Error(`${linkName(link.path)} isn't there.`);
     if (info.kind === "file")
       throw new Error(`${linkName(link.path)} is a file, not a folder.`);
+    normalized.push({ ...link, path });
   }
+  // realpath collapses symlinks, dot segments and case aliases on the actual filesystem.
+  return linkedFoldersSchema.parse(normalized);
 }
 
 /** Folders worth linking to `project`: repositories beside it, Relay projects first, then the other projects. */

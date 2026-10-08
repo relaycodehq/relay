@@ -7,6 +7,8 @@ import type { PullHost } from "../pull-requests/host";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import {
   projectTitle,
+  linkedFoldersSchema,
+  type LinkedFolder,
   type Project,
   type ProjectSettings,
 } from "../../shared/projects";
@@ -109,6 +111,25 @@ export class Projects {
     this.get(id);
     await this.store.update((s) => {
       const project = s.projects!.find((p) => p.id === id)!;
+      if (Object.keys(settings).length) project.settings = settings;
+      else delete project.settings;
+    });
+    return withKind(this.get(id));
+  }
+  /** Changes only links, against the latest settings inside the store's write queue. */
+  async updateLinks(
+    id: string,
+    change: (links: LinkedFolder[]) => LinkedFolder[],
+  ) {
+    this.get(id);
+    await this.store.update((s) => {
+      const project = s.projects!.find((p) => p.id === id)!;
+      const links = linkedFoldersSchema.parse(
+        change(project.settings?.links ?? []),
+      );
+      const settings = { ...project.settings };
+      if (links.length) settings.links = links;
+      else delete settings.links;
       if (Object.keys(settings).length) project.settings = settings;
       else delete project.settings;
     });

@@ -57,6 +57,32 @@ Object.assign(window.relay, {
     project.settings = settings;
     return { ...project };
   },
+  addProjectLinks: async (id: string, links: LinkedFolder[]) => {
+    const project = projects.find((p) => p.id === id)!;
+    const kept = project.settings?.links ?? [];
+    project.settings = {
+      ...project.settings,
+      links: [
+        ...kept,
+        ...links.filter((l) => !kept.some((k) => k.path === l.path)),
+      ],
+    };
+    return { ...project };
+  },
+  promoteProjectChatLink: async (id: string, path: string) => {
+    const chat = chats.find((c) => c.id === id)!;
+    const project = projects.find((p) => p.id === chat.projectId)!;
+    const moving = chat.links!.find((l) => l.path === path)!;
+    project.settings = {
+      ...project.settings,
+      links: [
+        ...(project.settings?.links ?? []).filter((l) => l.path !== path),
+        moving,
+      ],
+    };
+    chat.links = chat.links!.filter((l) => l.path !== path);
+    return { project: { ...project }, chat: { ...chat } };
+  },
   revealProject: async () => {},
   // What the real composer asks on its way up.
   dictationState: async () => ({ status: "missing" }),

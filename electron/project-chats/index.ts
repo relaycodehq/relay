@@ -283,7 +283,10 @@ export class ProjectChats {
     return this.triaging.setAccount(id, provider, account);
   }
   setLinks(id: string, links: LinkedFolder[]) {
-    return this.triaging.setLinks(id, links);
+    return this.core.control(id, () => this.triaging.setLinks(id, links));
+  }
+  promoteLink(id: string, path: string) {
+    return this.core.control(id, () => this.triaging.promoteLink(id, path));
   }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
@@ -321,8 +324,9 @@ export class ProjectChats {
     pick: TerminalSessionPick,
     workspace?: ChatWorkspace,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
-    return this.terminal.continue(projectId, pick, workspace, branch);
+    return this.terminal.continue(projectId, pick, workspace, branch, links);
   }
   markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
     return this.handoffs.mark(id, sentTo);

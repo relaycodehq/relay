@@ -96,6 +96,7 @@ export interface ProjectListApi {
   /** Takes the project out of Relay; its folder on disk is left alone. */
   removeProject(id: string): Promise<void>;
   saveProjectSettings(id: string, settings: ProjectSettings): Promise<Project>;
+  addProjectLinks(id: string, links: LinkedFolder[]): Promise<Project>;
   /** Opens the project's folder in Finder. */
   revealProject(id: string): Promise<void>;
 }
@@ -176,6 +177,10 @@ export interface ProjectChatApi {
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** Replaces the folders linked to this thread alone; the agent hears of them on its next turn. */
   setProjectChatLinks(id: string, links: LinkedFolder[]): Promise<ChatSummary>;
+  promoteProjectChatLink(
+    id: string,
+    path: string,
+  ): Promise<{ project: Project; chat: ChatSummary }>;
   /** A thread another thread's agent started stands on its own from now on. */
   detachProjectChat(id: string): Promise<ChatSummary>;
   /** Marks the thread read up to `seenAt`, for the desktop and every phone. */
@@ -190,6 +195,7 @@ export interface ProjectChatApi {
     pick: TerminalSessionPick,
     workspace?: ChatWorkspace,
     branch?: string,
+    links?: LinkedFolder[],
   ): Promise<ContinuedSession>;
   /** Names the thread again from the whole conversation; replaces a name you typed too. */
   regenerateProjectChatTitle(id: string): Promise<ChatSummary>;

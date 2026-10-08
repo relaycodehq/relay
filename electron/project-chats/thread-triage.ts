@@ -4,7 +4,11 @@ import {
   setTriageState,
   triageState,
 } from "../../shared/chat-activity";
-import type { ChatTriage, LinkedFolder } from "../../shared/projects";
+import {
+  linkedFoldersSchema,
+  type ChatTriage,
+  type LinkedFolder,
+} from "../../shared/projects";
 import { accountFor } from "../agents/accounts";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
@@ -155,12 +159,46 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }
-  /** The folders linked to this thread alone, from its next turn. */
+  /** Project and thread link scopes commit together in the state file. */
+  async promoteLink(id: string, path: string) {
+    const chat = await this.core.storage.load(id);
+    await this.core.store.update((s) => {
+      const thread = s.chats!.find((c) => c.id === id)!;
+      const moving = thread.links?.find((l) => l.path === path);
+      if (!moving)
+        throw new Error("That folder is no longer linked to this thread.");
+      const project = s.projects!.find((p) => p.id === chat.projectId)!;
+      project.settings = {
+        ...project.settings,
+        links: linkedFoldersSchema.parse([
+          ...(project.settings?.links ?? []).filter((l) => l.path !== path),
+          moving,
+        ]),
+      };
+      const kept = thread.links!.filter((l) => l.path !== path);
+      if (kept.length) thread.links = kept;
+      else delete thread.links;
+    });
+    const saved = this.core.store.get().chats!.find((c) => c.id === id)!;
+    if (saved.links) chat.links = saved.links;
+    else delete chat.links;
+    this.core.storage.summariesChanged(chat.projectId);
+    return {
+      project: this.core.projects.get(chat.projectId),
+      chat: chatSummary(chat),
+    };
+  }
+  /** Thread links live in the state file, alongside project links, rather than a second write. */
   async setLinks(id: string, links: LinkedFolder[]) {
     const chat = await this.core.storage.load(id);
+    await this.core.store.update((s) => {
+      const thread = s.chats!.find((c) => c.id === id)!;
+      if (links.length) thread.links = links;
+      else delete thread.links;
+    });
     if (links.length) chat.links = links;
     else delete chat.links;
-    await this.core.storage.save(chat);
+    this.core.storage.summariesChanged(chat.projectId);
     return chatSummary(chat);
   }
 }

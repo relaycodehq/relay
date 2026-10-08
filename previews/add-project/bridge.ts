@@ -40,7 +40,9 @@ function add(path: string): Project {
   };
   projects.push(project);
   repos.add(path);
-  disk[parent(path)] = [...new Set([...(disk[parent(path)] ?? []), linkName(path)])].sort();
+  disk[parent(path)] = [
+    ...new Set([...(disk[parent(path)] ?? []), linkName(path)]),
+  ].sort();
   return project;
 }
 
@@ -57,7 +59,11 @@ function job(title: string, steps: string[], path: string) {
         return resolve(add(path));
       }
       const at = tick / ticks;
-      send({ title, step: steps[Math.min(steps.length - 1, Math.floor(at * steps.length))], progress: at });
+      send({
+        title,
+        step: steps[Math.min(steps.length - 1, Math.floor(at * steps.length))],
+        progress: at,
+      });
     }, 80);
     stop = () => {
       clearInterval(timer);
@@ -69,7 +75,11 @@ function job(title: string, steps: string[], path: string) {
 
 export const addingBridge: Partial<Api> = {
   projects: async () => projects,
-  addingStart: async () => ({ cloneFolder: workFolder, home, recent: agentFolders }),
+  addingStart: async () => ({
+    cloneFolder: workFolder,
+    home,
+    recent: agentFolders,
+  }),
   githubRepos: async () => {
     await new Promise((r) => setTimeout(r, 300));
     return { login: githubLogin, repos: githubRepos };
@@ -88,23 +98,38 @@ export const addingBridge: Partial<Api> = {
     if (repos.has(path)) return { path, kind: "repository" };
     const root = [...repos].find((r) => path.startsWith(`${r}/`));
     if (root) return { path, kind: "inside", root };
-    return { path, kind: disk[parent(path)]?.includes(linkName(path)) ? "plain" : "missing" };
+    return {
+      path,
+      kind: disk[parent(path)]?.includes(linkName(path)) ? "plain" : "missing",
+    };
   },
   addProjectAt: async (typed, setUpGit) =>
-    setUpGit ? job(`Setting up git in ${linkName(typed)}`, ["git init"], expand(typed)) : add(expand(typed)),
+    setUpGit
+      ? job(`Setting up git in ${linkName(typed)}`, ["git init"], expand(typed))
+      : add(expand(typed)),
   cloneProject: async (remote, into) => {
     const parsed = parseRemote(remote)!;
     return job(
       `Cloning ${parsed.full}`,
-      ["Counting objects", "Receiving objects", "Resolving deltas", "Updating files"],
+      [
+        "Counting objects",
+        "Receiving objects",
+        "Resolving deltas",
+        "Updating files",
+      ],
       `${expand(into)}/${repoName(parsed.full)}`,
     );
   },
   createProject: async (spec) => {
     const steps = ["Creating the folder"];
     if (spec.git) steps.push("git init", "First commit");
-    if (spec.github) steps.push(`Creating ${githubLogin}/${spec.name} on GitHub`);
-    return job(`Creating ${spec.name}`, steps, `${expand(spec.location)}/${spec.name}`);
+    if (spec.github)
+      steps.push(`Creating ${githubLogin}/${spec.name} on GitHub`);
+    return job(
+      `Creating ${spec.name}`,
+      steps,
+      `${expand(spec.location)}/${spec.name}`,
+    );
   },
   cancelProjectAdding: async () => stop?.(),
   linkSuggestions: async (id) => {
@@ -122,6 +147,18 @@ export const addingBridge: Partial<Api> = {
   saveProjectSettings: async (id, settings) => {
     const project = projects.find((p) => p.id === id)!;
     project.settings = settings;
+    return project;
+  },
+  addProjectLinks: async (id, links) => {
+    const project = projects.find((p) => p.id === id)!;
+    const kept = project.settings?.links ?? [];
+    project.settings = {
+      ...project.settings,
+      links: [
+        ...kept,
+        ...links.filter((l) => !kept.some((k) => k.path === l.path)),
+      ],
+    };
     return project;
   },
   chooseFolder: async () => `${home}/PhpstormProjects`,

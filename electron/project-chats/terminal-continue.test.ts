@@ -418,3 +418,32 @@ it("refuses a session from another folder or one that isn't there", async () => 
   ).rejects.toThrow("no longer in this project's folder");
   expect(chats.list(projectId)).toHaveLength(0);
 });
+
+it("keeps draft links when creating a continued session without changing an existing continuation", async () => {
+  await writeClaudeSession(
+    join(root, "claude-home"),
+    repo,
+    "linked-session",
+    claudeTurns(turns),
+    { ago: HOUR },
+  );
+  const links = [{ path: join(root, "backend"), access: "read" as const }];
+  const first = await chats.continueTerminalSession(
+    projectId,
+    { provider: "claude", session: "linked-session" },
+    "checkout",
+    undefined,
+    links,
+  );
+  expect(first.created).toBe(true);
+  expect((await chats.get(first.chat.id)).links).toEqual(links);
+  const again = await chats.continueTerminalSession(
+    projectId,
+    { provider: "claude", session: "linked-session" },
+    "checkout",
+    undefined,
+    [],
+  );
+  expect(again.created).toBe(false);
+  expect(again.chat.links).toEqual(links);
+});

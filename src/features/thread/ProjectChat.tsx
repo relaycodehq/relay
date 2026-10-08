@@ -243,7 +243,11 @@ export function ProjectChat({
   const councils = useCouncils({
     handle,
     data: history.data,
-    onCreated,
+    draftLinks: links.draftLinks,
+    onCreated: async (created) => {
+      await onCreated(created);
+      threadStorage(draftId).links.clear();
+    },
     onSent: followAnswer,
   });
   const newThread = useNewThread(
@@ -257,7 +261,10 @@ export function ProjectChat({
           : undefined,
         links.draftLinks,
       ),
-    onCreated,
+    async (created) => {
+      await onCreated(created);
+      threadStorage(draftId).links.clear();
+    },
   );
   const { send, resume } = useThreadSend({
     handle,
@@ -287,11 +294,15 @@ export function ProjectChat({
         <ContinueSessionPicker
           project={project}
           settingsKey={id}
+          links={links.draftLinks}
           workspace={
             scope.kind === "project" && !project.plain ? workspace : "checkout"
           }
           branch={worktree.newBranch.trim() || undefined}
-          onContinued={onCreated}
+          onContinued={async (created) => {
+            await onCreated(created);
+            threadStorage(draftId).links.clear();
+          }}
           onOpenThread={onOpenThread}
         />
       }

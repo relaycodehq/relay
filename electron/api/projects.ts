@@ -7,6 +7,7 @@ import { agentProviderSchema } from "../../shared/agents";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import { projectFolderSchema } from "../../shared/project-folders";
 import {
+  linkedFoldersSchema,
   projectNameSchema,
   projectSettingsSchema,
 } from "../../shared/projects";
@@ -119,8 +120,31 @@ export function projectHandlers(ctx: ApiContext) {
     saveProjectSettings: takes(
       [idSchema, projectSettingsSchema],
       async (id, settings) => {
-        await checkNewLinks(settings.links, projects.get(id).settings?.links);
+        const current = projects.get(id);
+        if (settings.links)
+          settings.links = await checkNewLinks(
+            settings.links,
+            current.settings?.links,
+            current.path,
+          );
         const saved = await projects.saveSettings(id, settings);
+        projectChats.summariesChanged(id);
+        return saved;
+      },
+    ),
+    addProjectLinks: takes(
+      [idSchema, linkedFoldersSchema],
+      async (id, links) => {
+        const current = projects.get(id);
+        const added = await checkNewLinks(
+          links,
+          current.settings?.links,
+          current.path,
+        );
+        const saved = await projects.updateLinks(id, (kept) => {
+          const paths = new Set(kept.map((l) => l.path));
+          return [...kept, ...added.filter((l) => !paths.has(l.path))];
+        });
         projectChats.summariesChanged(id);
         return saved;
       },

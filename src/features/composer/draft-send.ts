@@ -29,6 +29,7 @@ import {
 import { loadDraftImages, saveDraftImages } from "../images/draft-images";
 import {
   forgetNewThread,
+  loadDraftLinks,
   loadDraftScope,
   draftWorktreeBranch,
   loadDraftWorkspace,
@@ -119,6 +120,7 @@ export async function sendDraft(
       scope,
       scope.kind === "project" ? loadDraftWorkspace(id, project) : undefined,
       scope.kind === "project" ? draftWorktreeBranch(id, project) : undefined,
+      loadDraftLinks(id),
     ));
   started.set(id, target);
   const attachments = loadDraftAttachments(id);

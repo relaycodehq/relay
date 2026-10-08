@@ -116,6 +116,7 @@ export class ChatStorage {
           ) as ProjectChat;
           if (chat.id !== id)
             throw new Error("Saved chat identity does not match.");
+          this.readLinks(chat);
           const changed = reviveChat(chat, (m) =>
             this.resuming(chat.id, m.parentId ?? undefined),
           );
@@ -130,7 +131,17 @@ export class ChatStorage {
         if (this.loading.get(id) === pending) this.loading.delete(id);
       }
     }
-    return this.cache.get(id)!;
+    const chat = this.cache.get(id)!;
+    this.readLinks(chat);
+    return chat;
+  }
+
+  /** Link scopes are authoritative in the state file so promotions commit atomically. */
+  private readLinks(chat: ProjectChat) {
+    const listed = this.store.get().chats?.find((c) => c.id === chat.id);
+    if (!listed) return;
+    if (listed.links) chat.links = structuredClone(listed.links);
+    else delete chat.links;
   }
 
   /** The chat if it's loaded already. */
@@ -168,7 +179,9 @@ export class ChatStorage {
    * mustn't move yet.
    */
   async save(chat: ProjectChat, { holdSummary = false } = {}) {
-    const value = JSON.stringify(chat),
+    // Links belong to the state-file transaction, not a second persisted copy.
+    const { links: _, ...record } = chat;
+    const value = JSON.stringify(record),
       path = join(this.dir, chat.id + ".json");
     await this.writes(chat.id, async () => {
       await mkdir(this.dir, { recursive: true, mode: 0o700 });
@@ -181,12 +194,19 @@ export class ChatStorage {
 
   /** Brings the listed summary up to the thread, writing the store only if they differ. */
   async syncSummary(chat: ProjectChat) {
+    this.readLinks(chat);
     const listed = this.store.get().chats?.find((c) => c.id === chat.id);
     // A thread that isn't listed yet is `add`ed, or was taken back.
     if (!listed || same(listed, chatSummary(chat))) return;
     await this.store.update((s) => {
       const index = s.chats!.findIndex((c) => c.id === chat.id);
-      if (index >= 0) s.chats![index] = chatSummary(chat);
+      if (index >= 0) {
+        // A queued metadata write must not undo a link transaction that ran first.
+        s.chats![index] = {
+          ...chatSummary(chat),
+          links: s.chats![index].links,
+        };
+      }
     });
     this.summariesChanged(chat.projectId);
   }

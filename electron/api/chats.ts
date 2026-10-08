@@ -46,7 +46,11 @@ export function chatHandlers(ctx: ApiContext) {
         optional(linkedFoldersSchema),
       ],
       async (id, scope, workspace, branch, links) => {
-        await checkNewLinks(links, undefined);
+        links = await checkNewLinks(
+          links,
+          undefined,
+          ctx.projects.get(id).path,
+        );
         return projectChats.create(
           id,
           scope,
@@ -60,8 +64,21 @@ export function chatHandlers(ctx: ApiContext) {
     setProjectChatLinks: takes(
       [idSchema, linkedFoldersSchema],
       async (id, links) => {
-        await checkNewLinks(links, (await projectChats.get(id)).links);
+        const chat = await projectChats.get(id);
+        links = await checkNewLinks(
+          links,
+          chat.links,
+          ctx.projects.get(chat.projectId).path,
+        );
         return projectChats.setLinks(id, links);
+      },
+    ),
+    promoteProjectChatLink: takes(
+      [idSchema, z.string().min(1).max(4096)],
+      async (id, path) => {
+        const result = await projectChats.promoteLink(id, path);
+        projectChats.summariesChanged(result.project.id);
+        return result;
       },
     ),
     worktreeBranch: takes(
@@ -94,9 +111,22 @@ export function chatHandlers(ctx: ApiContext) {
         terminalSessionPickSchema,
         optional(chatWorkspaceSchema),
         optional(branchSchema),
+        optional(linkedFoldersSchema),
       ],
-      (id, pick, workspace, branch) =>
-        projectChats.continueTerminalSession(id, pick, workspace, branch),
+      async (id, pick, workspace, branch, links) => {
+        links = await checkNewLinks(
+          links,
+          undefined,
+          ctx.projects.get(id).path,
+        );
+        return projectChats.continueTerminalSession(
+          id,
+          pick,
+          workspace,
+          branch,
+          links,
+        );
+      },
     ),
     regenerateProjectChatTitle: takes([idSchema], (id) =>
       projectChats.regenerateTitle(id),

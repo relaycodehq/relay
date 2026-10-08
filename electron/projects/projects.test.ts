@@ -323,3 +323,41 @@ it("hides a removed project and brings it back, same id, when its folder is adde
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("changes links against current queued settings without replacing other preferences", async () => {
+  const dir = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-project-links-")),
+  );
+  try {
+    const root = join(dir, "web");
+    await mkdir(root);
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const project = await projects.add(root, null);
+    await Promise.all([
+      projects.saveSettings(project.id, {
+        worktreeSetup: "npm ci",
+        workspace: "worktree",
+      }),
+      projects.updateLinks(project.id, (kept) => [
+        ...kept,
+        { path: join(dir, "backend"), access: "read" },
+      ]),
+      projects.updateLinks(project.id, (kept) => [
+        ...kept,
+        { path: join(dir, "shared"), access: "write" },
+      ]),
+    ]);
+    expect(projects.get(project.id).settings).toEqual({
+      worktreeSetup: "npm ci",
+      workspace: "worktree",
+      links: [
+        { path: join(dir, "backend"), access: "read" },
+        { path: join(dir, "shared"), access: "write" },
+      ],
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

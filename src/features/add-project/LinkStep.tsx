@@ -29,13 +29,10 @@ export function LinkStep({
     if (!chosen.length) return onDone();
     setSaving(true);
     try {
-      await api.saveProjectSettings(project.id, {
-        ...project.settings,
-        links: [
-          ...(project.settings?.links ?? []),
-          ...chosen.map((path) => ({ path, access: "read" as const })),
-        ],
-      });
+      await api.addProjectLinks(
+        project.id,
+        chosen.map((path) => ({ path, access: "read" as const })),
+      );
       onDone();
     } catch (e) {
       setError(e);

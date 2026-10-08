@@ -1,7 +1,8 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import {
+  linkedFoldersSchema,
   linkName,
   threadLinks,
   tildePath,
@@ -11,6 +12,7 @@ import {
   type LinkSuggestion,
   type Project,
 } from "../../../shared/projects";
+import { threadStorage } from "../../lib/thread-storage";
 import { api } from "../../lib/api";
 
 export type ThreadLinks = ReturnType<typeof useThreadLinks>;
@@ -35,7 +37,10 @@ export function useThreadLinks({
   onError: (error: unknown) => void;
 }) {
   const qc = useQueryClient();
-  const [draft, setDraft] = useState<{ id: string; links: LinkedFolder[] }>();
+  const [draft, setDraft] = useState(() => ({
+    id: draftId,
+    links: threadStorage(draftId).links.load(),
+  }));
   // Shown at once; the thread list catches up after the save.
   const [pending, setPending] = useState<{
     id: string;
@@ -49,18 +54,33 @@ export function useThreadLinks({
     : draft?.id === draftId
       ? draft.links
       : [];
+  const current = useRef(own);
+  current.current = own;
+  const queue = useRef(Promise.resolve());
+  function enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const next = queue.current.then(work);
+    queue.current = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }
   const links = threadLinks(project.settings?.links, own, project.path);
   // Folder listings for completing a typed path; fetched as the query asks for them.
   const [, bump] = useReducer((n: number) => n + 1, 0);
 
   async function save(next: LinkedFolder[]) {
+    next = linkedFoldersSchema.parse(next);
     if (!chat) {
+      threadStorage(draftId).links.save(next);
+      current.current = next;
       setDraft({ id: draftId, links: next });
       return;
     }
     setPending({ id: chat.id, links: next });
     try {
       const saved = await api.setProjectChatLinks(chat.id, next);
+      current.current = saved.links ?? [];
       qc.setQueriesData<ChatSummary[]>(
         { queryKey: ["project-chats"] },
         (list) => list?.map((c) => (c.id === saved.id ? saved : c)),
@@ -71,16 +91,6 @@ export function useThreadLinks({
     }
   }
 
-  async function saveProject(links: LinkedFolder[]) {
-    const saved = await api.saveProjectSettings(project.id, {
-      ...project.settings,
-      links,
-    });
-    qc.setQueriesData<Project[]>({ queryKey: ["projects"] }, (list) =>
-      list?.map((p) => (p.id === project.id ? saved : p)),
-    );
-  }
-
   /** Links a folder to this thread, read only; an error says why it can't. */
   async function link(path: string): Promise<string | undefined> {
     const info = await api.inspectFolder(path);
@@ -89,36 +99,60 @@ export function useThreadLinks({
       return `${linkName(info.path)} is a file, not a folder.`;
     if (info.path === project.path)
       return `That's ${project.name}'s own folder.`;
-    if (links.some((l) => l.path === info.path))
+    if (
+      threadLinks(project.settings?.links, current.current, project.path).some(
+        (l) => l.path === info.path,
+      )
+    )
       return `${linkName(info.path)} is linked already.`;
-    await save([...own, { path: info.path, access: "read" }]);
+    await save([...current.current, { path: info.path, access: "read" }]);
   }
 
   return {
     links,
     /** What the unsent thread is made with. */
     draftLinks: chat ? undefined : own,
-    link,
+    link: (path: string) => enqueue(() => link(path)),
     async change(path: string, next: Partial<LinkedFolder>) {
-      await save(own.map((l) => (l.path === path ? { ...l, ...next } : l)));
+      await enqueue(() =>
+        save(
+          current.current.map((l) => (l.path === path ? { ...l, ...next } : l)),
+        ),
+      );
     },
     async unlink(path: string) {
-      await save(own.filter((l) => l.path !== path));
+      await enqueue(() => save(current.current.filter((l) => l.path !== path)));
     },
     /** Moves a thread's link to its project, so every thread reaches it. */
-    async linkToProject(path: string) {
-      const moving = own.find((l) => l.path === path);
-      if (!moving) return;
-      try {
-        const kept = (project.settings?.links ?? []).filter(
-          (l) => l.path !== path,
-        );
-        await saveProject([...kept, moving]);
-        await save(own.filter((l) => l.path !== path));
-      } catch (e) {
-        onError(e);
-      }
-    },
+    linkToProject: (path: string) =>
+      enqueue(async () => {
+        const moving = current.current.find((l) => l.path === path);
+        if (!moving) return;
+        try {
+          let saved: Project;
+          if (chat) {
+            const result = await api.promoteProjectChatLink(chat.id, path);
+            saved = result.project;
+            current.current = result.chat.links ?? [];
+            setPending({ id: chat.id, links: result.chat.links ?? [] });
+            qc.setQueriesData<ChatSummary[]>(
+              { queryKey: ["project-chats"] },
+              (list) =>
+                list?.map((c) => (c.id === result.chat.id ? result.chat : c)),
+            );
+          } else {
+            saved = await api.addProjectLinks(project.id, [moving]);
+            await save(current.current.filter((l) => l.path !== path));
+          }
+          qc.setQueriesData<Project[]>({ queryKey: ["projects"] }, (list) =>
+            list?.map((p) =>
+              p.id === project.id ? { ...p, settings: saved.settings } : p,
+            ),
+          );
+        } catch (e) {
+          onError(e);
+        }
+      }),
     /** `/add-dir`, typed or picked from its menu. */
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "add-dir") return undefined;
@@ -128,7 +162,7 @@ export function useThreadLinks({
         const path =
           typed === CHOOSE ? await api.chooseFolder("Link a folder") : typed;
         if (!path) return;
-        const problem = await link(path);
+        const problem = await enqueue(() => link(path));
         if (problem) onError(new Error(problem));
       })().catch(onError);
       return true;

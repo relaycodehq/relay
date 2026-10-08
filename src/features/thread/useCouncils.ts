@@ -5,6 +5,7 @@ import {
 } from "../../../shared/deep-review";
 import type {
   ChatSummary,
+  LinkedFolder,
   ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
 import { councilWorking } from "../../../shared/ultraplan";
@@ -19,11 +20,13 @@ export type Councils = ReturnType<typeof useCouncils>;
 export function useCouncils({
   handle: { chat, projectId, run, setError, refetch, listChanged },
   data,
+  draftLinks,
   onCreated,
   onSent,
 }: {
   handle: ThreadHandle;
   data?: ProjectChatData;
+  draftLinks?: LinkedFolder[];
   onCreated: (c: ChatSummary) => Promise<void>;
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
@@ -37,7 +40,14 @@ export function useCouncils({
   // A start that failed leaves its thread for the next try. Kept apart from
   // the composer's, so a message sent from this draft instead gets a thread of its own.
   const reviewThread = useNewThread(
-    () => api.createProjectChat(projectId, { kind: "review" }),
+    () =>
+      api.createProjectChat(
+        projectId,
+        { kind: "review" },
+        undefined,
+        undefined,
+        draftLinks,
+      ),
     onCreated,
   );
   async function startReview(config: DeepReviewStart) {
