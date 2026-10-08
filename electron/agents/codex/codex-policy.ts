@@ -1,4 +1,5 @@
 import type { RuntimeMode } from "../../../shared/agent-modes";
+import type { LinkedFolder } from "../../../shared/projects";
 
 /** What Codex is told about approvals and the sandbox for one of Relay's modes. */
 interface CodexPolicy {
@@ -50,3 +51,17 @@ export const codexReviewerPolicy: CodexPolicy = {
   approvalPolicy: "never",
   approvalsReviewer: "user",
 };
+
+/**
+ * The turn's sandbox: one that writes the workspace writes the folders
+ * linked for writing too. Reading takes nothing; Codex reads the whole disk.
+ */
+export function sandboxPolicyFor(
+  policy: CodexPolicy,
+  links: readonly LinkedFolder[] = [],
+) {
+  const roots = links.filter((l) => l.access === "write").map((l) => l.path);
+  return policy.sandboxPolicy.type === "workspaceWrite" && roots.length
+    ? { ...policy.sandboxPolicy, writableRoots: roots }
+    : policy.sandboxPolicy;
+}

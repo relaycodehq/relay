@@ -8,6 +8,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { resolveTurnModel } from "../../shared/turn-model";
+import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged, type ThreadGoal } from "../../shared/goal";
 import { watchAgentWorktrees } from "./agent-worktrees";
 import { agentRuntime } from "../agents";
@@ -86,6 +87,19 @@ export class TurnRunner {
     private worktreesFolder: string,
     private host: TurnRunnerHost,
   ) {}
+
+  /** What the thread reaches beyond its folder; a reviewer or thinker reaches what its thread does. */
+  private async links(chat: ProjectChat, root: string) {
+    const parent = (chat.reviewer ?? chat.thinker)?.parent;
+    const own = parent
+      ? await this.core.storage.load(parent).then(
+          (c) => c.links,
+          () => undefined,
+        )
+      : chat.links;
+    const project = this.core.projects.get(chat.projectId).settings?.links;
+    return threadLinks(project, own, root).map(({ from, ...link }) => link);
+  }
 
   /**
    * Runs `message` as the agent's answer to `prompt`. Resolves with the
@@ -193,6 +207,7 @@ export class TurnRunner {
     try {
       const relayTools = relayToolsFor(chat.id, !!chat.startedBy);
       const env = await this.host.env(chat);
+      const links = await this.links(chat, root);
       const options = {
         onControl: (control: AgentControl) => {
           const active = this.core.active.get(chat.id);
@@ -228,17 +243,23 @@ export class TurnRunner {
         onContext: (usage: ContextUsage) => answer.context(usage),
         onCost: (usd: number) => answer.cost(usd),
         cwd: root,
+        ...(links.length ? { links } : {}),
         ...(Object.keys(env).length ? { env } : {}),
         prompt,
-        context: async () =>
-          projectTasks.note(
+        context: async () => {
+          const note = await projectTasks.note(
             root,
             noteKey,
             chat.id,
             chat.worktree
               ? await this.core.projects.root(chat.projectId)
               : undefined,
-          ),
+          );
+          return (
+            [note, linksInstructions(links)].filter(Boolean).join("\n\n") ||
+            undefined
+          );
+        },
         choice: input.choice,
         account,
         signal: abort.signal,

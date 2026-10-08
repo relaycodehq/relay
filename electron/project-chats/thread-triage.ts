@@ -4,7 +4,7 @@ import {
   setTriageState,
   triageState,
 } from "../../shared/chat-activity";
-import type { ChatTriage } from "../../shared/projects";
+import type { ChatTriage, LinkedFolder } from "../../shared/projects";
 import { accountFor } from "../agents/accounts";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
@@ -152,6 +152,14 @@ export class ThreadTriage {
       throw new Error("That account is gone.");
     const chat = await this.core.storage.load(id);
     chat.accounts = { ...chat.accounts, [provider]: account };
+    await this.core.storage.save(chat);
+    return chatSummary(chat);
+  }
+  /** The folders linked to this thread alone, from its next turn. */
+  async setLinks(id: string, links: LinkedFolder[]) {
+    const chat = await this.core.storage.load(id);
+    if (links.length) chat.links = links;
+    else delete chat.links;
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }

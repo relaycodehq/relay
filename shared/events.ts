@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSummary } from "./projects";
+import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
 
 /** A thread's message as it streams or changes; `title` once the thread is named. */
@@ -20,4 +20,5 @@ export interface RelayEvents {
   "relay:project-chats": ProjectChatsEvent;
   "relay:read-aloud": ReadAloudEvent;
   "relay:read-aloud-state": ReadAloudState;
+  "relay:project-adding": AddingJob | null;
 }

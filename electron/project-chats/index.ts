@@ -15,6 +15,7 @@ import type {
   StartedBy,
   ChatWorktree,
   KnownMessages,
+  LinkedFolder,
   ProjectChat,
   ProjectChatPatch,
   ProjectChatSend,
@@ -281,6 +282,9 @@ export class ProjectChats {
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
   }
+  setLinks(id: string, links: LinkedFolder[]) {
+    return this.triaging.setLinks(id, links);
+  }
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
   }
@@ -290,8 +294,16 @@ export class ProjectChats {
     workspace?: ChatWorkspace,
     startedBy?: StartedBy,
     branch?: string,
+    links?: LinkedFolder[],
   ) {
-    return this.creating.create(projectId, scope, workspace, startedBy, branch);
+    return this.creating.create(
+      projectId,
+      scope,
+      workspace,
+      startedBy,
+      branch,
+      links,
+    );
   }
   /**
    * A new thread holding the conversation up to an answer, side conversation

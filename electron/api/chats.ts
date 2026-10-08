@@ -12,6 +12,7 @@ import {
   chatTriageSchema,
   chatWorkspaceSchema,
   knownMessagesSchema,
+  linkedFoldersSchema,
   projectChatSendSchema,
   resumeSettingsSchema,
 } from "../../shared/projects";
@@ -20,6 +21,7 @@ import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
+import { checkNewLinks } from "../projects/folder-inspect";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -41,9 +43,26 @@ export function chatHandlers(ctx: ApiContext) {
         chatScopeSchema,
         optional(chatWorkspaceSchema),
         optional(branchSchema),
+        optional(linkedFoldersSchema),
       ],
-      (id, scope, workspace, branch) =>
-        projectChats.create(id, scope, workspace, undefined, branch),
+      async (id, scope, workspace, branch, links) => {
+        await checkNewLinks(links, undefined);
+        return projectChats.create(
+          id,
+          scope,
+          workspace,
+          undefined,
+          branch,
+          links,
+        );
+      },
+    ),
+    setProjectChatLinks: takes(
+      [idSchema, linkedFoldersSchema],
+      async (id, links) => {
+        await checkNewLinks(links, (await projectChats.get(id)).links);
+        return projectChats.setLinks(id, links);
+      },
     ),
     worktreeBranch: takes(
       [idSchema, z.string(), optional(branchSchema)],

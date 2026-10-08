@@ -265,10 +265,15 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       );
       signal.throwIfAborted();
       const prompt = await expandCursorCommand(options.prompt, options.cwd);
+      const writableLinks = (options.links ?? [])
+        .filter((l) => l.access === "write")
+        .map((l) => l.path);
       params = {
         run,
         agentId: helper ? undefined : options.session?.id,
         cwd: options.cwd,
+        // Cursor's extra roots are writable; a read-only link can't be one.
+        ...(!helper && writableLinks.length ? { dirs: writableLinks } : {}),
         prompt: [note, prompt].filter(Boolean).join("\n\n"),
         images,
         model: options.choice.model || undefined,

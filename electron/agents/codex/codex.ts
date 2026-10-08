@@ -1,5 +1,9 @@
 import { dirname } from "node:path";
-import { codexPolicy, codexReviewerPolicy } from "./codex-policy";
+import {
+  codexPolicy,
+  codexReviewerPolicy,
+  sandboxPolicyFor,
+} from "./codex-policy";
 import { codexRequest } from "./codex-requests";
 import { acquireCodexConnection } from "./codex-connection";
 import {
@@ -604,7 +608,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
             ? {
                 approvalPolicy: policy.approvalPolicy,
                 approvalsReviewer: policy.approvalsReviewer,
-                sandboxPolicy: policy.sandboxPolicy,
+                sandboxPolicy: sandboxPolicyFor(policy, options.links),
                 collaborationMode: {
                   mode: options.interactionMode ?? "default",
                   settings: {

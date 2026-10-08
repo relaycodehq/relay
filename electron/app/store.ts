@@ -20,6 +20,8 @@ const roomKeys = [
 
 interface State {
   projects?: import("../../shared/projects").Project[];
+  /** Where the last clone or new project went; the add-project palette starts there. */
+  projectsFolder?: string;
   /** Sidebar group paths, kept even while no project is in them. */
   projectGroups?: string[];
   /** Prettify automatic project names; unset keeps the original default (on). */

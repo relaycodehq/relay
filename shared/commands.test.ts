@@ -37,6 +37,17 @@ describe("relay commands", () => {
       inline: false,
     });
   });
+  it("completes /add-dir paths with spaces in them", () => {
+    expect(argumentTrigger("/add-dir ~/My Projects/ap")).toMatchObject({
+      name: "add-dir",
+      query: "~/My Projects/ap",
+      start: 0,
+    });
+    expect(relayCommand("/add-dir ~/My Projects/api")).toEqual({
+      name: "add-dir",
+      args: "~/My Projects/api",
+    });
+  });
   it("finds commands typed in the middle of a message", () => {
     expect(commandTrigger("fix the bug /eff")).toMatchObject({
       prefix: "/",

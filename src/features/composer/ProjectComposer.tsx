@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Paperclip } from "lucide-react";
 import { reportsUsage, type AgentProvider } from "../../../shared/agents";
-import type { RelayCommand } from "../../../shared/commands";
+import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import type { ResumeSettings } from "../../../shared/projects";
 import type { InheritedSettings } from "../agents/composer-settings";
@@ -99,6 +99,7 @@ export function ProjectComposer({
   onSend,
   onStop,
   onCommand,
+  commandOptions,
   onEditQueued,
   onNextThread,
 }: {
@@ -132,6 +133,11 @@ export function ProjectComposer({
   onStop?: () => void;
   /** A command the composer doesn't run itself; false leaves the draft alone, a string says why it did not run. */
   onCommand: (command: RelayCommand, args: string) => boolean | string;
+  /** Values offered after a command `onCommand` runs, e.g. folders after /add-dir. */
+  commandOptions?: (
+    command: RelayCommand,
+    query: string,
+  ) => CommandOption[] | undefined;
   /** Takes the newest queued message back into the composer; false when none waits. */
   onEditQueued?: () => boolean;
   /** Opens a new thread in the project, once a message sent to go on there is in. */
@@ -216,7 +222,8 @@ export function ProjectComposer({
     projectId,
     provider: to,
     onCommand: settingCommands.run,
-    options: settingCommands.options,
+    options: (command, query) =>
+      settingCommands.options(command) ?? commandOptions?.(command, query),
     input,
     onSkillPick: (skill) => promptInput.current?.insertSkill(skill),
     onFill: (range) => promptInput.current?.insertText(range),

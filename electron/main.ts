@@ -66,7 +66,13 @@ import { Updater } from "./app/updater";
 import { DevBuild } from "./app/dev-build";
 import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
-import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
+import {
+  AgentAccounts,
+  accountHomes,
+  setProfilesRoot,
+} from "./agents/accounts";
+import { ProjectAdding } from "./project-add";
+import { TerminalSessions } from "./terminal-sessions";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
 // The name is also the instance lock and the OS credential namespace; set it before
@@ -357,6 +363,14 @@ app
       readAloud,
       agentUpdates,
       agentAccounts,
+      projectAdding: new ProjectAdding({
+        store: loaded,
+        projects,
+        client: () => login.client,
+        sessions: new TerminalSessions(async () => accountHomes()),
+        appData: app.getPath("appData"),
+        send: (job) => window.send("relay:project-adding", job),
+      }),
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

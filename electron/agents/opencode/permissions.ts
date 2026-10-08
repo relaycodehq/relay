@@ -3,6 +3,8 @@ import type {
   AskAgentRequest,
   RuntimeMode,
 } from "../../../shared/agent-modes";
+import { relative } from "node:path";
+import type { LinkedFolder } from "../../../shared/projects";
 import type { PermissionRequest, QuestionRequest } from "./events";
 
 type PermissionAction = "allow" | "ask" | "deny";
@@ -62,6 +64,45 @@ const readOnlyCommands = [
  * to ask, and the run rejects what it can't put to the user.
  */
 export function permissionRules(
+  mode: RuntimeMode | undefined,
+  options: {
+    readOnly?: boolean;
+    title?: boolean;
+    cwd?: string;
+    links?: readonly LinkedFolder[];
+  },
+): PermissionRule[] {
+  const rules = modeRules(mode, options);
+  return options.title || (mode === "full-access" && !options.readOnly)
+    ? rules
+    : [...rules, ...linkRules(options.links ?? [], options)];
+}
+
+/**
+ * Linked folders are reached without asking. Edits in a read-only one still
+ * ask; OpenCode names an edited file from the project, so the rule names the
+ * folder both ways.
+ */
+function linkRules(
+  links: readonly LinkedFolder[],
+  { cwd, readOnly }: { cwd?: string; readOnly?: boolean },
+) {
+  const under = (dir: string) => `${dir.replaceAll("\\", "/")}/*`;
+  return links.flatMap((link) => [
+    rule("external_directory", "allow", under(link.path)),
+    // A reviewer edits nothing anywhere; that rule stands.
+    ...(link.access === "read" && !readOnly
+      ? [
+          rule("edit", "ask", under(link.path)),
+          ...(cwd
+            ? [rule("edit", "ask", under(relative(cwd, link.path)))]
+            : []),
+        ]
+      : []),
+  ]);
+}
+
+function modeRules(
   mode: RuntimeMode | undefined,
   options: { readOnly?: boolean; title?: boolean },
 ): PermissionRule[] {
