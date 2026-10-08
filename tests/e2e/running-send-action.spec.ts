@@ -109,10 +109,12 @@ test("the running-action setting steers with the send key and button, keeps an e
         .split("\n")
         .map((line) => JSON.parse(line))
         .filter((call) => !/relay-helper-/.test(call.cwd));
+    const steers = async () =>
+      (await calls()).filter((call) => call.steer).length;
     const interruptions = async () =>
       (await calls()).filter((call) => call.interrupt).length;
-    const lastPrompt = async () =>
-      (await calls()).filter((call) => call.turn).at(-1)?.turn.input[0].text;
+    const lastSteer = async () =>
+      (await calls()).filter((call) => call.steer).at(-1)?.steer.input[0].text;
     // Steer is selected, but idle Enter starts an ordinary answer.
     await prompt.fill("Start normally; wait for cancellation");
     await prompt.press("Enter");
@@ -121,20 +123,20 @@ test("the running-action setting steers with the send key and button, keeps an e
         exact: true,
       }),
     ).toBeVisible();
-    expect(await interruptions()).toBe(0);
-    // A running Enter stops the active turn and sends this message next.
+    expect(await steers()).toBe(0);
+    // A running Enter hands this message to the active turn without stopping it.
     await prompt.fill("Steer with Enter; wait for cancellation");
     await expect(send).toHaveAttribute("title", /^Steer answer/);
     await prompt.press("Enter");
-    await expect.poll(interruptions).toBe(1);
-    await expect.poll(lastPrompt).toContain("Steer with Enter");
+    await expect.poll(steers).toBe(1);
+    await expect.poll(lastSteer).toContain("Steer with Enter");
     await expect(queue).toHaveCount(0);
     await prompt.fill("Steer with the button; wait for cancellation");
     await send.click();
-    await expect.poll(interruptions).toBe(2);
-    await expect.poll(lastPrompt).toContain("Steer with the button");
+    await expect.poll(steers).toBe(2);
+    await expect.poll(lastSteer).toContain("Steer with the button");
     await expect(queue).toHaveCount(0);
-    // The alternate shortcut explicitly queues without stopping the answer.
+    // The alternate shortcut explicitly queues instead of steering.
     await prompt.fill("An explicitly queued follow-up");
     await prompt.press(
       process.platform === "darwin" ? "Meta+Enter" : "Control+Enter",
@@ -145,7 +147,7 @@ test("the running-action setting steers with the send key and button, keeps an e
         ? "⌘↵ to queue · ↵ to steer"
         : "Ctrl+Enter to queue · Enter to steer",
     );
-    expect(await interruptions()).toBe(2);
+    expect(await steers()).toBe(2);
     // Switching back to Queue updates the already-mounted composer and hints.
     await openSettings();
     await behavior.getByRole("button", { name: "Queue", exact: true }).click();
@@ -159,7 +161,7 @@ test("the running-action setting steers with the send key and button, keeps an e
         ? "↵ to queue · ⌘↵ to steer"
         : "Enter to queue · Ctrl+Enter to steer",
     );
-    expect(await interruptions()).toBe(2);
+    expect(await steers()).toBe(2);
     await openSettings();
     await behavior.getByRole("button", { name: "Steer", exact: true }).click();
     await settings.getByRole("button", { name: "Back to app" }).click();
@@ -170,14 +172,16 @@ test("the running-action setting steers with the send key and button, keeps an e
       behavior.getByRole("button", { name: "Steer", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await settings.getByRole("button", { name: "Back to app" }).click();
-    // A queued message's explicit Steer now button uses the same handover.
+    // A queued message's explicit Steer now button steers the same way.
     await queue
       .getByRole("button", { name: "Steer now", exact: true })
       .first()
       .click();
-    await expect.poll(interruptions).toBe(3);
-    await expect.poll(lastPrompt).toContain("A follow-up with Queue selected");
-    await expect(queue).toHaveCount(0);
+    await expect.poll(steers).toBe(3);
+    await expect.poll(lastSteer).toContain("An explicitly queued follow-up");
+    await expect(queue.locator(".queued-message")).toHaveCount(1);
+    await expect(queue).toContainText("A follow-up with Queue selected");
+    expect(await interruptions()).toBe(0);
   } finally {
     await app?.close();
     await fixture.close();

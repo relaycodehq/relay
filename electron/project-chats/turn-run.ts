@@ -447,9 +447,7 @@ export class TurnRunner {
           if (fork.from) delete fork.from.forkPoint;
         }
       }
-      const handover = this.core.active.get(chat.id)?.handover;
-      if (rules.pausesQueue(failed) && !(abort.signal.aborted && handover))
-        chat.queuePaused = true;
+      if (rules.pausesQueue(failed)) chat.queuePaused = true;
     } finally {
       abort.signal.removeEventListener("abort", stop);
       const owner = this.core.active.get(chat.id);

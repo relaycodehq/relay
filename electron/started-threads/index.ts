@@ -723,7 +723,9 @@ export class StartedThreads {
       fromThread: from,
     });
     if (elsewhere) await this.chats.allowLeadSends(id);
-    return toolText(steer ? "Sent; a running answer stops for it." : "Sent.");
+    return toolText(
+      steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
+    );
   }
 
   private async wait(

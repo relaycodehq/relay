@@ -135,7 +135,7 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
     await screenshot(page, { path: "test-results/chat-queued.png" });
     await screenshot(queue, { path: "test-results/chat-queue-detail.png" });
     await expect(queue.locator(".chat-queue-hint")).toBeVisible();
-    // Immediate steering is covered separately; it stops the current turn.
+    // Steering is covered in running-send-action.spec.ts.
     await queue
       .getByRole("button", { name: "Cancel and return to the composer" })
       .first()

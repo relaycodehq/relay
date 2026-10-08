@@ -123,7 +123,7 @@ export const relayToolSchemas = {
         .boolean()
         .optional()
         .describe(
-          "Stop the agent's running answer and send this right after. Otherwise it waits for the answer to end.",
+          "Hand it to the agent mid-answer, if it's working. Otherwise it waits for the answer to end.",
         ),
     })
     .strict(),
