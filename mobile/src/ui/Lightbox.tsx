@@ -10,6 +10,7 @@ import Animated, {
   FadeIn,
   FadeOut,
   interpolate,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDecay,
@@ -20,6 +21,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { keyOf, useImage, type Source } from "./useImage";
+import { imageLimits } from "./lightbox-geometry";
 
 export interface LightboxImage {
   source: Source;
@@ -73,6 +75,9 @@ export function Lightbox({
     .onEnd((e) => {
       if (Math.abs(e.translationY) > 120 || Math.abs(e.velocityY) > 1000) scheduleOnRN(onClose);
       else drop.set(withSpring(0));
+    })
+    .onFinalize((_, success) => {
+      if (!success) drop.set(withSpring(0));
     });
 
   const image = images[index];
@@ -218,6 +223,8 @@ function Page({
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   const start = useSharedValue({ scale: 1, x: 0, y: 0 });
+  const focal = useSharedValue({ x: 0, y: 0 });
+  const pinching = useSharedValue(false);
   const wasZoomed = useSharedValue(false);
 
   // Swiped away from, it's fitted again for when it comes back.
@@ -244,24 +251,22 @@ function Page({
   };
   const edge = (s: number) => {
     "worklet";
-    const r = ratio.get();
-    const fitted = r ? Math.min(width, height * r) : width;
-    return {
-      x: Math.max(0, (fitted * s - width) / 2),
-      y: Math.max(0, ((r ? fitted / r : height) * s - height) / 2),
-    };
+    return imageLimits(ratio.get(), width, height, s);
   };
   const within = (value: number, limit: number) => {
     "worklet";
     return Math.min(limit, Math.max(-limit, value));
   };
-  // A zoomed image the screen just changed around comes back within its edges.
-  useEffect(() => {
-    const limit = edge(scale.get());
-    x.set(within(x.get(), limit.x));
-    y.set(within(y.get(), limit.y));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height]);
+  // Clamp on the UI thread, including when the natural ratio arrives mid-zoom.
+  useAnimatedReaction(
+    () => ({ ratio: ratio.get(), width, height }),
+    (next, previous) => {
+      if (previous && next.ratio === previous.ratio && next.width === previous.width && next.height === previous.height) return;
+      const limit = imageLimits(next.ratio, next.width, next.height, scale.get());
+      x.set(within(x.get(), limit.x));
+      y.set(within(y.get(), limit.y));
+    },
+  );
   const zoomTo = (s: number, toX: number, toY: number) => {
     "worklet";
     const limit = edge(s);
@@ -272,18 +277,25 @@ function Page({
   };
 
   const pinch = Gesture.Pinch()
-    .onStart(() => start.set({ scale: scale.get(), x: x.get(), y: y.get() }))
+    .enabled(!!uri)
+    .onStart((e) => {
+      pinching.set(true);
+      start.set({ scale: scale.get(), x: x.get(), y: y.get() });
+      focal.set({ x: e.focalX - width / 2, y: e.focalY - height / 2 });
+    })
     .onUpdate((e) => {
       const from = start.get();
       const s = Math.min(MAX_SCALE, Math.max(0.8, from.scale * e.scale));
       // The point between the fingers stays under them.
       const fx = e.focalX - width / 2;
       const fy = e.focalY - height / 2;
-      x.set(fx - (fx - from.x) * (s / from.scale));
-      y.set(fy - (fy - from.y) * (s / from.scale));
+      x.set(fx - (focal.get().x - from.x) * (s / from.scale));
+      y.set(fy - (focal.get().y - from.y) * (s / from.scale));
       scale.set(s);
     })
-    .onEnd(() => {
+    .onFinalize(() => {
+      if (!pinching.get()) return;
+      pinching.set(false);
       const s = Math.min(MAX_SCALE, Math.max(1, scale.get()));
       zoomTo(s, s === 1 ? 0 : x.get(), s === 1 ? 0 : y.get());
     });
@@ -302,6 +314,7 @@ function Page({
       y.set(withDecay({ velocity: e.velocityY, clamp: [-limit.y, limit.y] }));
     });
   const doubleTap = Gesture.Tap()
+    .enabled(!!uri)
     .numberOfTaps(2)
     .onEnd((e) => {
       if (scale.get() > 1.01) zoomTo(1, 0, 0);
