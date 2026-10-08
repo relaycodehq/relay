@@ -31,8 +31,12 @@ export function previewHandlers(ctx: ApiContext) {
       (key, bounds) => previews().place(key, bounds),
     ),
     navigatePreview: takes(
-      [previewKeySchema, z.url({ protocol: /^https?$/ }).max(8192)],
-      (key, url) => previews().navigate(key, url),
+      [
+        idSchema,
+        idSchema.nullable(),
+        z.url({ protocol: /^https?$/ }).max(8192),
+      ],
+      (projectId, chatId, url) => previews().navigate(projectId, chatId, url),
     ),
     previewAction: takes(
       [

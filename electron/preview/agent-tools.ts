@@ -120,7 +120,8 @@ export async function answerPreviewTool(
       const home = previews.home(key);
       if (input.url)
         await previews.navigate(
-          key,
+          caller.projectId,
+          caller.chatId,
           previewTarget(input.url, state.url || home),
         );
       else if (input.reload) previews.act(key, "reload");

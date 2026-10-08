@@ -1,5 +1,7 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdtemp, mkdir, writeFile, realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, realpath, rename } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
+import { once } from "node:events";
 import { createServer, connect } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -40,7 +42,10 @@ test("the Browser surface starts the project's dev server and shows its page ove
   const port = await freePort();
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
+      ([k, v]) =>
+        k !== "ELECTRON_RUN_AS_NODE" &&
+        k !== "RELAY_DEV_URL" &&
+        v !== undefined,
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
@@ -222,6 +227,75 @@ test("the Browser surface starts the project's dev server and shows its page ove
       .toEqual([expect.objectContaining({ title: "Preview fixture" })]);
     await expect(address).toHaveValue(`http://127.0.0.1:${port}/again`);
     await expect(panel.getByRole("button", { name: "Back" })).toBeEnabled();
+
+    // Choosing a second service survives switching away and reopening Browser.
+    const manual = createHttpServer((_req, res) => {
+      res.setHeader("content-type", "text/html");
+      res.end("<title>Second service</title><h1>Manual service</h1>");
+    }).listen(0, "127.0.0.1");
+    await once(manual, "listening");
+    const manualPort = (manual.address() as { port: number }).port;
+    try {
+      await address.fill(`localhost:${manualPort}/chosen`);
+      await address.press("Enter");
+      await expect
+        .poll(overlays)
+        .toEqual([expect.objectContaining({ title: "Second service" })]);
+      await openSurface(page, "Files");
+      await panel.getByRole("tab", { name: "Second service" }).click();
+      await expect(address).toHaveValue(
+        `http://localhost:${manualPort}/chosen`,
+      );
+      await expect
+        .poll(overlays)
+        .toEqual([expect.objectContaining({ title: "Second service" })]);
+
+      // A failure from the managed service must not hide this healthy service.
+      await page.evaluate(async (port) => {
+        const [project] = await window.relay.projects();
+        const tasks = await window.relay.projectTasks(project!.id);
+        const task = tasks.find((t) => t.ports.includes(port))!;
+        await window.relay.stopProjectTask(project!.id, task.id);
+      }, port);
+      await expect
+        .poll(overlays)
+        .toEqual([expect.objectContaining({ title: "Second service" })]);
+      await page.screenshot({
+        path: "test-results/browser-second-service.png",
+      });
+      const frame = await app.evaluate(async ({ webContents }, port) => {
+        const wc = webContents
+          .getAllWebContents()
+          .find((wc) => wc.getURL().includes(`:${port}/`))!;
+        return (await wc.capturePage()).toPNG().toString("base64");
+      }, manualPort);
+      await writeFile(
+        "test-results/browser-second-service-page.png",
+        Buffer.from(frame, "base64"),
+      );
+
+      // Resolver failures from submitting an address are visible and dismissible.
+      await rename(repo, repo + "-moved");
+      try {
+        await address.fill(`localhost:${manualPort}/next`);
+        await address.press("Enter");
+        await expect(panel.getByRole("alert")).toContainText(
+          /ENOENT|Git root changed/,
+        );
+        await page.screenshot({
+          path: "test-results/browser-navigation-error.png",
+        });
+        await panel
+          .getByRole("button", { name: "Dismiss browser error" })
+          .click();
+        await expect(panel.getByRole("alert")).toHaveCount(0);
+      } finally {
+        await rename(repo + "-moved", repo);
+      }
+    } finally {
+      manual.closeAllConnections();
+      await new Promise<void>((r) => manual.close(() => r()));
+    }
 
     // Closing the tab ends the page.
     await panel.getByRole("button", { name: "Close browser" }).click();

@@ -45,6 +45,8 @@ export interface PreviewTarget {
 
 interface Preview {
   target: PreviewTarget;
+  /** An explicit endpoint survives reopening the Browser tab. */
+  selectedUrl?: string;
   /** Unset while unloaded; `parked` holds where it was. */
   view?: WebContentsView;
   parked?: { entries: NavigationEntry[]; index: number };
@@ -102,6 +104,10 @@ function prepare(ses: Session) {
 export class ThreadPreviews {
   private previews = new Map<string, Preview>();
   private thumbnails = new Map<string, Buffer>();
+  private opening = new Map<
+    string,
+    { result: Promise<PreviewState>; controller: AbortController }
+  >();
   readonly external = new LocalUrls(
     process.env.RELAY_TEST_DATA
       ? Number(process.env.RELAY_TEST_PREVIEW_PROXY_PORT || 0)
@@ -109,13 +115,12 @@ export class ThreadPreviews {
   );
   readonly servers = new DevServers((folder, state) => {
     for (const preview of this.previews.values())
-      if (preview.target.folder === folder) {
+      if (
+        preview.target.folder === folder &&
+        preview.target.dev?.port === ("port" in state ? state.port : undefined)
+      ) {
         preview.server = state;
-        if (
-          state.state === "running" &&
-          preview.target.dev?.port === state.port
-        )
-          this.loadDefault(preview);
+        if (state.state === "running") this.loadDefault(preview);
         this.emit(preview);
       }
   });
@@ -139,27 +144,51 @@ export class ThreadPreviews {
     this.sweep.unref();
   }
 
-  async open(projectId: string, chatId: string | null, url?: string) {
+  open(projectId: string, chatId: string | null, url?: string) {
+    const key = chatId ?? `draft:${projectId}`;
+    const pending = this.opening.get(key);
+    const controller = pending?.controller ?? new AbortController();
+    const result = (pending?.result ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.openThread(projectId, chatId, url, controller.signal));
+    const entry = { result, controller };
+    this.opening.set(key, entry);
+    const clear = () => {
+      if (this.opening.get(key) === entry) this.opening.delete(key);
+    };
+    void result.then(clear, clear);
+    return result;
+  }
+
+  private async openThread(
+    projectId: string,
+    chatId: string | null,
+    url: string | undefined,
+    signal: AbortSignal,
+  ) {
+    signal.throwIfAborted();
     const previous = this.previews.get(chatId ?? `draft:${projectId}`);
+    const selection = url ?? previous?.selectedUrl;
     const target = await this.resolve(
       projectId,
       chatId,
-      url,
+      selection,
       previous?.target.folder,
     );
+    signal.throwIfAborted();
     let preview = this.previews.get(target.key);
     const oldPort = preview?.target.dev?.port;
     if (preview && preview.target.folder !== target.folder) {
       // The thread moved to a worktree: a fresh browser in its own partition.
-      this.close(target.key);
+      this.remove(preview);
       preview = undefined;
     }
-    if (!preview) preview = await this.create(target);
+    if (!preview) preview = await this.create(target, signal);
     else {
       preview.target = target;
       const page = this.page(preview).url;
       if (
-        !url &&
+        !selection &&
         oldPort &&
         target.dev &&
         oldPort !== target.dev.port &&
@@ -172,9 +201,11 @@ export class ThreadPreviews {
           .catch(() => {});
       }
     }
+    if (url && webUrl(url)) preview.selectedUrl = url;
     this.revive(preview);
     this.wake(preview);
     if (!url) await this.registerExternal(preview);
+    signal.throwIfAborted();
     return this.state(preview);
   }
 
@@ -201,24 +232,37 @@ export class ThreadPreviews {
   private wake(preview: Preview) {
     const { dev, folder, env } = preview.target;
     if (dev?.command) {
-      const known = this.servers.state(folder);
-      if (
-        !known ||
-        known.state === "failed" ||
-        known.state === "asleep" ||
-        ("port" in known && known.port !== dev.port)
-      ) {
-        preview.server = { state: "starting", port: dev.port };
-        void this.servers.ensure(folder, dev.command, dev.port, env);
-      } else preview.server = known;
+      // Owned children are cheap to reuse; external listeners must be rechecked.
+      void this.servers
+        .ensure(folder, dev.command, dev.port, env)
+        .catch((error: Error) => {
+          if (
+            this.previews.get(preview.target.key) !== preview ||
+            preview.target.dev?.port !== dev.port
+          )
+            return;
+          preview.server = {
+            state: "failed",
+            port: dev.port,
+            output: error.message,
+          };
+          this.emit(preview);
+        });
+      preview.server = this.servers.state(folder) ?? {
+        state: "starting",
+        port: dev.port,
+      };
       if (preview.server.state === "running") this.loadDefault(preview);
-    } else if (dev) {
+    } else {
       preview.server = { state: "none" };
-      this.loadDefault(preview);
+      if (dev) this.loadDefault(preview);
     }
   }
 
-  private async create(target: PreviewTarget): Promise<Preview> {
+  private async create(
+    target: PreviewTarget,
+    signal: AbortSignal,
+  ): Promise<Preview> {
     const ses = session.fromPartition(target.partition);
     prepare(ses);
     if (target.partition !== target.checkoutPartition) {
@@ -228,6 +272,7 @@ export class ThreadPreviews {
           console.warn("Copying the checkout's cookies failed:", e),
         );
     }
+    signal.throwIfAborted();
     const preview: Preview = {
       target,
       shown: false,
@@ -464,13 +509,11 @@ export class ThreadPreviews {
     for (const preview of this.previews.values()) this.hide(preview);
   }
 
-  async navigate(key: string, url: string) {
-    let preview = this.previews.get(key);
-    if (!preview || !webUrl(url)) return;
-    if (localPort(url)) {
-      await this.open(preview.target.projectId, preview.target.chatId, url);
-      preview = this.previews.get(key)!;
-    }
+  async navigate(projectId: string, chatId: string | null, url: string) {
+    if (!webUrl(url)) return;
+    await this.open(projectId, chatId, url);
+    const preview = this.previews.get(chatId ?? `draft:${projectId}`);
+    if (!preview) return;
     await this.revive(preview)
       .loadURL(url)
       .catch(() => {});
@@ -493,7 +536,7 @@ export class ThreadPreviews {
         if (history.canGoForward()) history.goForward();
         return;
       case "reload": {
-        const server = preview.server.state;
+        const server = this.state(preview).server.state;
         if (server === "failed" || server === "asleep") {
           this.wake(preview);
           this.emit(preview);
@@ -588,9 +631,15 @@ export class ThreadPreviews {
   }
 
   close(key: string) {
+    this.opening.get(key)?.controller.abort();
+    this.opening.delete(key);
     const preview = this.previews.get(key);
     if (!preview) return;
-    this.previews.delete(key);
+    this.remove(preview);
+  }
+
+  private remove(preview: Preview) {
+    this.previews.delete(preview.target.key);
     this.hide(preview);
     preview.popOut?.close();
     const wc = preview.view?.webContents;
@@ -618,7 +667,7 @@ export class ThreadPreviews {
       if (!preview) return;
       const wc = preview.view?.webContents;
       if (
-        preview.server.state !== "starting" &&
+        this.state(preview).server.state !== "starting" &&
         !preview.restoring &&
         !(wc && !wc.isDestroyed() && wc.isLoading())
       )
@@ -635,7 +684,9 @@ export class ThreadPreviews {
     const preview = this.previews.get(key);
     if (!preview) return null;
     const wc = this.revive(preview);
-    if (!wc.getURL()) return null;
+    await this.settled(key, 15_000);
+    if (preview.view?.webContents !== wc || wc.isDestroyed() || !wc.getURL())
+      return null;
     const view = preview.view!;
     if (!preview.shown && !preview.popOut) {
       const { width, height } = view.getBounds();
@@ -709,7 +760,11 @@ export class ThreadPreviews {
 
   dispose() {
     clearInterval(this.sweep);
-    for (const key of [...this.previews.keys()]) this.close(key);
+    for (const key of new Set([
+      ...this.previews.keys(),
+      ...this.opening.keys(),
+    ]))
+      this.close(key);
     this.servers.dispose();
     this.external.dispose();
     this.thumbnails.clear();
@@ -737,15 +792,19 @@ export class ThreadPreviews {
   }
 
   private state(preview: Preview): PreviewState {
+    const page = this.page(preview);
+    const server = preview.server;
+    const dependsOnServer =
+      !page.url || ("port" in server && localPort(page.url) === server.port);
     return {
       key: preview.target.key,
-      ...this.page(preview),
+      ...page,
       ...(preview.favicon ? { favicon: preview.favicon } : {}),
       ...(preview.error ? { error: preview.error } : {}),
       ...(preview.snapshot ? { snapshot: preview.snapshot } : {}),
       poppedOut: !!preview.popOut,
       picking: !!preview.stopPick,
-      server: preview.server,
+      server: dependsOnServer ? server : { state: "none" },
       ...(preview.target.worktree ? { worktree: preview.target.worktree } : {}),
     };
   }

@@ -100,6 +100,7 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
         RELAY_TEST_NATIVE_STORAGE: "0",
+        RELAY_TEST_PREVIEW_UNLOAD_MS: "4000",
       },
     });
     const page = await app.firstWindow();
@@ -154,6 +155,24 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
     expect(Number(width) / Number(height)).toBe(1.6);
     expect(Number(width)).toBeGreaterThanOrEqual(1280);
     expect(Number(width)).toBeLessThanOrEqual(1600);
+
+    // The first screenshot must also work after the unseen renderer unloads.
+    await expect
+      .poll(
+        () =>
+          app!.evaluate(
+            ({ webContents }, port) =>
+              webContents
+                .getAllWebContents()
+                .filter((wc) => wc.getURL().includes(`:${port}/`)).length,
+            port,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe(0);
+    expect(await callTool(page, "screenshot", {})).toMatch(
+      /^\[image\/png \d+x\d+\]/,
+    );
 
     // A path loads on the page's origin; what it logs is counted, then read.
     const broken = JSON.parse(

@@ -91,7 +91,11 @@ export interface PreviewApi {
   openPreview(projectId: string, chatId: string | null): Promise<PreviewState>;
   /** Where the panel shows it, in the page's CSS pixels; null hides it. */
   placePreview(key: string, bounds: PreviewBounds | null): Promise<void>;
-  navigatePreview(key: string, url: string): Promise<void>;
+  navigatePreview(
+    projectId: string,
+    chatId: string | null,
+    url: string,
+  ): Promise<void>;
   previewAction(key: string, action: PreviewAction): Promise<void>;
   /** Waits for the user to click an element on the page; null when they don't. */
   pickPreviewElement(key: string): Promise<PickedElement | null>;

@@ -251,7 +251,11 @@ test("discovers manual servers and keeps issued named links bound to their origi
     await page.evaluate(
       async ({ projectId, port }) => {
         const key = `draft:${projectId}`;
-        await window.relay.navigatePreview(key, `http://localhost:${port}/`);
+        await window.relay.navigatePreview(
+          projectId,
+          null,
+          `http://localhost:${port}/`,
+        );
         await window.relay.previewAction(key, "openExternal");
       },
       { projectId: project!.id, port: nextPort },
@@ -368,14 +372,15 @@ test("discovers manual servers and keeps issued named links bound to their origi
 
     const namedPage = async (p: number) => {
       await page.evaluate(
-        async ({ id, port }) => {
+        async ({ projectId, id, port }) => {
           await window.relay.navigatePreview(
+            projectId,
             id,
             `http://localhost:${port}/how-it-works`,
           );
           await window.relay.previewAction(id, "openExternal");
         },
-        { id: ordinary.id, port: p },
+        { projectId: project!.id, id: ordinary.id, port: p },
       );
       return app.evaluate(
         () =>

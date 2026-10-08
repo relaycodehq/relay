@@ -78,7 +78,12 @@ export function BrowserSurface({
       <AddressBar
         state={state}
         onAct={act}
-        onGo={(url) => void api.navigatePreview(key, url)}
+        onGo={(url) => {
+          setOpening(null);
+          void api
+            .navigatePreview(projectId, chatId, url)
+            .catch((e: Error) => setOpening(e.message));
+        }}
         onPick={async () => {
           const picked = await api.pickPreviewElement(key);
           if (picked) onPick(pickedContext(picked));
