@@ -25,6 +25,7 @@ import {
   saveCredentials,
 } from "./credentials";
 import { cameBack } from "./computer-update";
+import { newModelConnection } from "./model-catalogs";
 import {
   dropLooseCopy,
   forgetOffline,
@@ -127,6 +128,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
           setStatus(s);
           setDetail(why);
           if (s === "online") {
+            newModelConnection();
             setName(next.name);
             pairing.current?.resolve();
             pairing.current = undefined;

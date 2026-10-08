@@ -33,29 +33,37 @@ export function ModelSheet({
   onClose: () => void;
 }) {
   const t = useTheme();
-  const remote = useRemote();
+  // Not the whole `remote`, which every overview push replaces: the sheet would ask again while open.
+  const { desktop } = useRemote();
   const provider = settings.provider;
   const [models, setModels] = useState<Partial<Record<AgentProvider, AgentModel[]>>>({});
   const [defaults, setDefaults] = useState<Partial<Record<AgentProvider, AgentDefaults | null>>>({});
-  const [error, setError] = useState<string>();
+  // Lists that failed, or came back empty while the CLI starts ("" then); asked again on the next open.
+  const [missing, setMissing] = useState<Partial<Record<AgentProvider, string>>>({});
+  const asked = !!models[provider] || missing[provider] !== undefined;
   useEffect(() => {
-    if (!open || models[provider]) return;
-    setError(undefined);
+    if (!open || asked) return;
+    let live = true;
     Promise.all([
-      remote.desktop("agentModels", provider),
-      remote.desktop("agentDefaults", projectId, provider).catch(() => null),
+      desktop("agentModels", provider),
+      desktop("agentDefaults", projectId, provider).catch(() => null),
     ])
       .then(([list, fallback]) => {
-        setModels((m) => ({ ...m, [provider]: list }));
+        if (!live) return;
+        if (list.length) setModels((m) => ({ ...m, [provider]: list }));
+        else setMissing((all) => ({ ...all, [provider]: "" }));
         setDefaults((d) => ({ ...d, [provider]: fallback }));
       })
       .catch((e) => {
         // Default and the thread's own model still work without the list.
-        setModels((m) => ({ ...m, [provider]: [] }));
-        setError(e instanceof Error ? e.message : String(e));
+        if (live) setMissing((all) => ({ ...all, [provider]: e instanceof Error ? e.message : String(e) }));
       });
-  }, [open, provider, projectId, models, remote]);
-  const list = models[provider] ?? known?.[provider];
+    return () => {
+      live = false;
+    };
+  }, [open, provider, projectId, asked, desktop]);
+  const error = missing[provider];
+  const list = models[provider] ?? known?.[provider] ?? (asked ? [] : undefined);
   const model = listedModel(provider, list, settings.choice.model);
   const fallback = defaults[provider];
   const fallbackModel = fallback?.model ? listedModel(provider, list, fallback.model) : undefined;
@@ -85,7 +93,14 @@ export function ModelSheet({
   const current = (list ?? []).filter((m) => !m.legacy);
   const legacy = (list ?? []).filter((m) => m.legacy);
   return (
-    <Sheet open={open} title="Model" onClose={onClose}>
+    <Sheet
+      open={open}
+      title="Model"
+      onClose={() => {
+        setMissing({});
+        onClose();
+      }}
+    >
       <View style={styles.tabs}>
         <Segmented
           value={provider}

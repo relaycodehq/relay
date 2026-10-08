@@ -12,18 +12,31 @@ type Held = {
   /** The last lists saved for this computer, until the connection's own arrive. */
   saved: ModelCatalogs;
   read: Promise<void>;
+  connection: number;
 };
-/** By connection: a new one asks again, so models a CLI update brought show up. */
+// `desktop` lasts as long as its client, which reconnects by itself, so the
+// lists are dropped per connection rather than per `desktop`.
 const held = new WeakMap<Desktop, Held>();
+let connection = 0;
+
+/** A (re)connect: the lists are asked again, so models a CLI update brought show up. */
+export function newModelConnection() {
+  connection++;
+}
 
 function heldFor(desktop: Desktop): Held {
   let h = held.get(desktop);
   if (!h) {
-    const fresh: Held = { lists: {}, asking: new Map(), saved: {}, read: Promise.resolve() };
+    const fresh: Held = { lists: {}, asking: new Map(), saved: {}, read: Promise.resolve(), connection };
     fresh.read = loadModels().then((saved) => {
       fresh.saved = { ...saved, ...fresh.saved };
     });
     held.set(desktop, (h = fresh));
+  }
+  if (h.connection !== connection) {
+    h.connection = connection;
+    h.lists = {};
+    h.asking = new Map();
   }
   return h;
 }
@@ -37,7 +50,10 @@ export function knownModels(desktop: Desktop): ModelCatalogs {
 /** Resolves once the saved copy is read, for a first render that had none. */
 export const savedModelsRead = (desktop: Desktop) => heldFor(desktop).read;
 
-/** Asks for the lists this connection hasn't got; one the desktop couldn't list is asked again next time. */
+/**
+ * Asks for the lists this connection hasn't got. One the desktop couldn't
+ * list, or listed empty while its CLI starts, is asked again next time.
+ */
 export async function loadModelLists(
   desktop: Desktop,
   wanted: readonly AgentProvider[],
@@ -47,21 +63,21 @@ export async function loadModelLists(
     wanted
       .filter((p) => !h.lists[p])
       .map((p) => {
+        const { asking: pending } = h;
         const asking =
-          h.asking.get(p) ??
+          pending.get(p) ??
           desktop("agentModels", p)
             .then(
               (list) => {
+                if (!list.length) return;
                 h.lists[p] = list;
-                if (list.length) {
-                  h.saved = { ...h.saved, [p]: list };
-                  saveModels(h.saved);
-                }
+                h.saved = { ...h.saved, [p]: list };
+                saveModels(h.saved);
               },
               () => {},
             )
-            .finally(() => h.asking.delete(p));
-        h.asking.set(p, asking);
+            .finally(() => pending.delete(p));
+        pending.set(p, asking);
         return asking;
       }),
   );
