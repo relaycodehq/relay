@@ -30,14 +30,14 @@ const idleUnload =
 // Native files can't load from inside the asar; they ship unpacked beside it.
 const unpacked = (path: string) =>
   path.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
-const ortDir = unpacked(join(__dirname, "onnxruntime"));
-const ortBinaries = join(
-  ortDir,
-  "bin",
-  "napi-v6",
-  process.platform,
-  process.arch,
-);
+let ortDir = unpacked(join(__dirname, "onnxruntime"));
+const ortBinaries = () =>
+  join(ortDir, "bin", "napi-v6", process.platform, process.arch);
+
+/** Where a headless Relay downloaded onnxruntime to, instead of beside the bundle. */
+export function setOnnxRuntimeDir(dir: string) {
+  ortDir = dir;
+}
 
 /** What a reading hands back as it goes. */
 export type Speech =
@@ -52,7 +52,9 @@ export interface ReadAloudSettingsStore {
 }
 
 export class ReadAloud {
-  readonly supported = existsSync(ortBinaries);
+  get supported() {
+    return existsSync(ortBinaries());
+  }
   private models = new Map<string, ReadAloudModelState>();
   private downloads = new Map<string, AbortController>();
   private worker?: UtilityProcess;

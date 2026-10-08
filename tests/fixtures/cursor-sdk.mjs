@@ -1,6 +1,6 @@
 // A stand-in for @cursor/sdk, scripted by the prompt, for the Cursor worker's tests.
 // It records what it was asked to $CURSOR_FAKE_LOG, one JSON object per line.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 
 const log = (entry) => {
   if (process.env.CURSOR_FAKE_LOG)
@@ -233,7 +233,14 @@ export const Cursor = {
         ? { status: "logged-out" }
         : { status: "logged-in", backendUrl: "x", email: "dev@example.com" };
     },
-    async login() {},
+    // Asked for the page instead of a browser, it gives one and waits until
+    // $CURSOR_FAKE_LOGIN_DONE exists, as if it was signed in there.
+    async login(options) {
+      if (!options?.onLoginUrl) return;
+      options.onLoginUrl("https://cursor.com/loginDeepControl?challenge=fake");
+      const done = process.env.CURSOR_FAKE_LOGIN_DONE;
+      while (done && !existsSync(done)) await pause(100);
+    },
     async logout() {},
   },
 };

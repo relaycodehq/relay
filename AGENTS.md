@@ -24,6 +24,10 @@
   rewrites imports, mocks, worker URLs, CSS and HTML references. Leave
   `tests/fixtures` and the build entry points in `scripts/build-electron.mjs`
   where they are.
+- **The headless Relay runs the main process's services under plain Node.**
+  `electron/headless/` builds them with `electron-stand-in.ts` in place of
+  Electron. A new Electron call in something a phone or a handoff reaches
+  needs an answer there; `npm run build:headless` fails on a missing export.
 - **Check types with `npm run typecheck`.** The renderer, the main process,
   the preload script and the tests are separate projects, so `src/` can't
   reach for Node and `electron/` can't reach for the DOM. A bare

@@ -43,7 +43,6 @@ const rowsOf = (over: Partial<Parameters<typeof pickerRows>[1]> = {}) =>
     legacy: false,
     group: "",
     favorites: [],
-    pinned: [],
     allowDefault: true,
     ...over,
   });
@@ -89,12 +88,12 @@ describe("the picker's rows", () => {
     expect(open.firstLegacy).toBe(2);
   });
 
-  it("puts favorites starred before opening first, and shows a folded one", () => {
-    const pinned = [
+  it("puts current favorites first, and shows a folded one", () => {
+    const favorites = [
       modelKey({ provider: "codex", id: "gpt-old", name: "" }),
       modelKey({ provider: "codex", id: "", name: "" }),
     ];
-    expect(ids(rowsOf({ pinned }).rows)).toEqual([
+    expect(ids(rowsOf({ favorites }).rows)).toEqual([
       "codex:",
       "codex:gpt-old",
       "codex:gpt-a",
@@ -110,6 +109,26 @@ describe("the picker's rows", () => {
       "codex:gpt-a",
       "opencode:openai/gpt",
     ]);
+  });
+
+  it("reorders from live favorites and folds an unstarred legacy model again", () => {
+    const old = modelKey({ provider: "codex", id: "gpt-old", name: "" });
+    expect(ids(rowsOf({ favorites: [old] }).rows)).toEqual([
+      "codex:gpt-old",
+      "codex:gpt-a",
+      "codex:",
+    ]);
+    expect(ids(rowsOf({ favorites: [] }).rows)).toEqual([
+      "codex:gpt-a",
+      "codex:",
+    ]);
+    const unfolded = rowsOf({ favorites: [], legacy: true });
+    expect(ids(unfolded.rows)).toEqual([
+      "codex:gpt-a",
+      "codex:",
+      "codex:gpt-old",
+    ]);
+    expect(unfolded.firstLegacy).toBe(2);
   });
 
   it("leaves out Default rows where they aren't allowed", () => {

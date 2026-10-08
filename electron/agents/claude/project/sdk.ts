@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readFile } from "node:fs/promises";
 import type { Options, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -11,9 +12,12 @@ import type { AgentOptions } from "../../types";
 export async function sdk(): Promise<
   typeof import("@anthropic-ai/claude-agent-sdk")
 > {
-  // Keep the SDK's ESM runtime intact inside Electron's CommonJS main bundle.
+  // Keep the SDK's ESM runtime intact inside Electron's CommonJS main bundle,
+  // and the headless one's, which sits beside its own copy.
   const specifier =
-    typeof __dirname !== "undefined" && __dirname.endsWith("dist-electron")
+    typeof __dirname !== "undefined" &&
+    (__dirname.endsWith("dist-electron") ||
+      existsSync(join(__dirname, "claude-sdk.mjs")))
       ? pathToFileURL(join(__dirname, "claude-sdk.mjs")).href
       : "@anthropic-ai/claude-agent-sdk";
   return import(specifier);

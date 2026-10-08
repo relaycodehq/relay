@@ -38,6 +38,20 @@ for (const required of [
   if (!files[required])
     throw new Error(`Missing release file for ${required}.`);
 
+// The headless Relay's archive sits beside `files`, never in them: desktops
+// reject a feed whose files name a target they don't know.
+const headlessName = `Relay-${version}-headless.tar.gz`;
+const headless = present.has(headlessName)
+  ? {
+      name: headlessName,
+      url: `https://github.com/${repo}/releases/download/v${version}/${headlessName}`,
+      sha512: createHash("sha512")
+        .update(readFileSync(join(dir, headlessName)))
+        .digest("base64"),
+      size: statSync(join(dir, headlessName)).size,
+    }
+  : undefined;
+
 writeFileSync(
   join(dir, "latest.json"),
   JSON.stringify(
@@ -46,9 +60,12 @@ writeFileSync(
       published: new Date().toISOString(),
       notes: notes.slice(0, 4000),
       files,
+      ...(headless ? { headless } : {}),
     },
     null,
     2,
   ) + "\n",
 );
-console.log(`latest.json → ${version}: ${Object.keys(files).join(", ")}`);
+console.log(
+  `latest.json → ${version}: ${[...Object.keys(files), ...(headless ? ["headless"] : [])].join(", ")}`,
+);

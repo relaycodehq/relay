@@ -79,9 +79,7 @@ async function openProject(withOpenRouter = false) {
       filePaths: [dir],
     });
   }, repo);
-  await page
-    .getByRole("button", { name: "Add project folder", exact: true })
-    .click();
+  await page.evaluate(() => window.relay.addProject());
   return {
     page,
     close: async () => {
@@ -326,9 +324,7 @@ test("a message sent after a deep review failed to start gets a thread of its ow
         filePaths: [dir],
       });
     }, repo);
-    await page
-      .getByRole("button", { name: "Add project folder", exact: true })
-      .click();
+    await page.evaluate(() => window.relay.addProject());
     await page
       .getByRole("button", { name: "Deep review", exact: true })
       .click();
@@ -389,6 +385,73 @@ test("the next findings wait until the lead has finished a fix", async () => {
     await expect(other).toBeDisabled();
     await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
     await expect(other).toBeEnabled();
+  } finally {
+    await close();
+  }
+});
+
+test("follow-up findings get a fresh report and fix controls after the old batch is solved", async () => {
+  const { page, close } = await openProject();
+  try {
+    await page
+      .getByRole("button", { name: "Deep review", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Lead model" }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page
+      .getByRole("option", { name: "GPT-5.6-Sol", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Start deep review", exact: true })
+      .click();
+    const reports = page.locator(".deep-review-report");
+    await expect(reports).toHaveCount(1, { timeout: 20000 });
+    await reports
+      .getByRole("button", { name: "Fix all 1", exact: true })
+      .click();
+    await expect(reports.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
+    await page.evaluate(async () => {
+      const [project] = await window.relay.projects();
+      const [summary] = await window.relay.projectChats(project!.id);
+      const chat = await window.relay.projectChat(summary!.id);
+      const review = chat.deepReview!;
+      await window.relay.sendProjectChat(chat.id, {
+        id: crypto.randomUUID(),
+        body: "@codex fixture followup findings",
+        provider: review.lead.provider,
+        choice: review.lead.choice,
+        runtimeMode: review.runtimeMode,
+        interactionMode: "default",
+      });
+    });
+    await expect(reports).toHaveCount(2, { timeout: 20000 });
+    const old = reports.first(),
+      fresh = reports.nth(1);
+    await expect(old.getByLabel("Fixed")).toHaveCount(1);
+    await expect(fresh.locator(".deep-review-task")).toHaveCount(2);
+    await expect(fresh).toContainText(
+      "A busy supervisor is incorrectly treated as dead",
+    );
+    await expect(fresh).toContainText(
+      "Read-only snapshot directories prevent staging cleanup",
+    );
+    await expect(
+      fresh.getByRole("button", { name: "Fix all 2", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator(".project-message.assistant pre")).toHaveCount(0);
+    await fresh.scrollIntoViewIfNeeded();
+    await screenshot(page, { path: "test-results/deep-review-followup.png" });
+    await page.reload();
+    await expect(reports).toHaveCount(2);
+    await fresh.getByRole("checkbox").nth(1).uncheck();
+    await fresh.getByRole("button", { name: "Fix selected (1)" }).click();
+    await expect(fresh.getByLabel("Fixed")).toHaveCount(1, { timeout: 20000 });
+    await fresh.getByRole("button", { name: "Fix the other 1" }).click();
+    await expect(fresh.getByLabel("Fixed")).toHaveCount(2, { timeout: 20000 });
+    await expect(old.getByLabel("Fixed")).toHaveCount(1);
+    await screenshot(page, {
+      path: "test-results/deep-review-followup-fixed.png",
+    });
   } finally {
     await close();
   }

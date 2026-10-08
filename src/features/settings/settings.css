@@ -204,15 +204,16 @@
 }
 .settings-screen mark {
   color: inherit;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: transparent;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
-.setting[data-search-match] {
-  margin-inline: -12px;
-  padding-inline: 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  box-shadow: inset 3px 0 color-mix(in srgb, var(--accent) 65%, transparent);
+/* Keep matches in the normal row layout, including keyword-only hits. */
+.setting[data-search-match] .setting-text h4,
+.setting[data-search-match] .settings-card-title {
+  color: var(--accent);
 }
 .setting:focus-visible {
   outline: 2px solid var(--accent);

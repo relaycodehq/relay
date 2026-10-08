@@ -1,5 +1,5 @@
 // The findings a fix request covers, from when it's sent until its answer ends.
-import type { DeepReviewState } from "../../shared/deep-review";
+import { reviewReports, type DeepReviewState } from "../../shared/deep-review";
 import type { ProjectChatSend } from "../../shared/projects";
 
 /** Marks the findings `input` asks the lead to fix as being fixed. */
@@ -7,7 +7,9 @@ export function startFixing(
   state: DeepReviewState | undefined,
   input: ProjectChatSend,
 ) {
-  const known = new Set(state?.report?.findings.map((f) => f.id));
+  const known = new Set(
+    reviewReports(state).flatMap((r) => r.findings.map((f) => f.id)),
+  );
   const ids = (input.fixes ?? []).filter((id) => known.has(id));
   if (!state || !ids.length) return;
   state.statuses ??= {};

@@ -5,9 +5,13 @@ import {
 } from "../../../../shared/shortcuts";
 import { keys } from "../../../lib/mod-key";
 import {
+  queueKeyLabel,
+  setRunningSendAction,
   setSendKey,
   steerKeyLabel,
+  useRunningSendAction,
   useSendKey,
+  type RunningSendAction,
   type SendKey,
 } from "../../../lib/send-key";
 import type { SettingEntry } from "../settings-search";
@@ -22,6 +26,7 @@ import { ShortcutKeys, ShortcutsResetAll } from "../ShortcutSettings";
 
 export function useShortcutEntries(): SettingEntry[] {
   const sendKey = useSendKey();
+  const runningAction = useRunningSendAction();
   // Search finds shortcuts by their current keys.
   useShortcutOverrides();
   const sendKeyEntry: SettingEntry = {
@@ -29,15 +34,12 @@ export function useShortcutEntries(): SettingEntry[] {
     category: "shortcuts",
     section: "Composer",
     title: "Send messages with",
-    description:
-      {
-        enter: "Enter sends the message. Shift+Enter adds a new line.",
-        "shift-enter": "Shift+Enter sends the message. Enter adds a new line.",
-        "mod-enter": `${keys("⌘", "Ctrl+")}Enter sends the message. Enter adds a new line.`,
-      }[sendKey] +
-      ` While an agent is working, this queues the message and ${steerKeyLabel(sendKey)} steers the current answer instead.`,
-    keywords:
-      "enter return send submit message newline composer chat queue steer",
+    description: {
+      enter: "Enter sends the message. Shift+Enter adds a new line.",
+      "shift-enter": "Shift+Enter sends the message. Enter adds a new line.",
+      "mod-enter": `${keys("⌘", "Ctrl+")}Enter sends the message. Enter adds a new line.`,
+    }[sendKey],
+    keywords: "enter return send submit message newline composer chat",
     render: () => (
       <Segmented<SendKey>
         value={sendKey}
@@ -61,7 +63,34 @@ export function useShortcutEntries(): SettingEntry[] {
       render: () => <ShortcutsResetAll />,
     },
     ...shortcutGroups.flatMap((group): SettingEntry[] => [
-      ...(group === "Composer" ? [sendKeyEntry] : []),
+      ...(group === "Composer"
+        ? [
+            sendKeyEntry,
+            {
+              id: "running-send-action",
+              category: "shortcuts" as const,
+              section: "Composer",
+              title: "While an agent is running",
+              description:
+                runningAction === "queue"
+                  ? `Your send key queues the message for after the answer finishes. ${steerKeyLabel(sendKey, runningAction)} steers immediately.`
+                  : `Your send key steers the current answer immediately. ${queueKeyLabel(sendKey, runningAction)} queues instead.`,
+              keywords:
+                "enter return send submit message composer chat queue steer follow-up interrupt",
+              render: () => (
+                <Segmented<RunningSendAction>
+                  label="While an agent is running"
+                  value={runningAction}
+                  options={[
+                    ["queue", "Queue"],
+                    ["steer", "Steer"],
+                  ]}
+                  onChange={setRunningSendAction}
+                />
+              ),
+            },
+          ]
+        : []),
       ...shortcutIds
         .filter((id) => command(id).group === group)
         .map((id) => ({

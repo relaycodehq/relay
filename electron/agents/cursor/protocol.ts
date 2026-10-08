@@ -53,8 +53,11 @@ export interface CursorRunResult {
 export interface CursorMethods {
   models: { params: Record<string, never>; result: CursorModel[] };
   "auth.status": { params: Record<string, never>; result: CursorAuth };
-  /** Opens the browser and waits for the sign-in to finish. */
-  "auth.login": { params: Record<string, never>; result: CursorAuth };
+  /**
+   * Opens the browser and waits for the sign-in to finish. With `browser:
+   * false` none opens: a `login-url` line gives the page to open elsewhere.
+   */
+  "auth.login": { params: { browser?: false }; result: CursorAuth };
   "auth.logout": { params: Record<string, never>; result: CursorAuth };
   run: { params: CursorRun; result: CursorRunResult };
   cancel: { params: { run: string }; result: null };
@@ -85,6 +88,18 @@ export interface CursorUpdate {
   type: string;
   [field: string]: unknown;
 }
+
+/** The sign-in page, for a computer without a browser to open it on another. */
+export interface CursorLoginUrl {
+  event: "login-url";
+  url: string;
+}
+
+export const isLoginUrl = (line: unknown): line is CursorLoginUrl =>
+  !!line &&
+  typeof line === "object" &&
+  (line as CursorLoginUrl).event === "login-url" &&
+  typeof (line as CursorLoginUrl).url === "string";
 
 export const isReply = (line: unknown): line is CursorReply =>
   !!line &&

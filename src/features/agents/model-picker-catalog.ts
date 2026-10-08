@@ -96,7 +96,6 @@ export function pickerRows(
     legacy,
     group,
     favorites,
-    pinned,
     allowDefault,
   }: {
     category: Category;
@@ -106,8 +105,6 @@ export function pickerRows(
     /** The section picked in a grouped agent; "" is all of them. */
     group: string;
     favorites: string[];
-    /** Favorites as they were when the picker opened, which lead the list. */
-    pinned: string[];
     allowDefault: boolean;
   },
 ) {
@@ -121,13 +118,13 @@ export function pickerRows(
       if (category === "favorites") return favorites.includes(modelKey(m));
       return (
         m.provider === category &&
-        (!m.legacy || legacy || query.trim() || pinned.includes(modelKey(m)))
+        (!m.legacy || legacy || query.trim() || favorites.includes(modelKey(m)))
       );
     })
     .map((m, index) => ({
       model: m,
       index,
-      pinned: pinned.includes(modelKey(m)),
+      favorite: favorites.includes(modelKey(m)),
       score: rankModelQuery(
         {
           driverKind: m.provider,
@@ -135,7 +132,7 @@ export function pickerRows(
           name: m.name,
           shortName: m.id,
           subProvider: [m.group, m.description].filter(Boolean).join(" "),
-          isFavorite: pinned.includes(modelKey(m)),
+          isFavorite: favorites.includes(modelKey(m)),
         },
         query,
       ),
@@ -162,7 +159,7 @@ export function pickerRows(
     .filter((r) => !grouped || !group || r.model.group === group)
     .sort(
       (a, b) =>
-        Number(b.pinned) - Number(a.pinned) ||
+        Number(b.favorite) - Number(a.favorite) ||
         (query.trim()
           ? a.score! - b.score!
           : Number(!!a.model.legacy) - Number(!!b.model.legacy)) ||
@@ -171,7 +168,7 @@ export function pickerRows(
     .map((r) => r.model);
   const firstLegacy = query.trim()
     ? -1
-    : rows.findIndex((m) => m.legacy && !pinned.includes(modelKey(m)));
+    : rows.findIndex((m) => m.legacy && !favorites.includes(modelKey(m)));
   const customId = query.trim();
   if (
     category !== "favorites" &&

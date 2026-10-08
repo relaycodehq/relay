@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 /**
  * The main process's bundles: scripts/build-electron.mjs builds them, and
  * scripts/dev.mjs rebuilds them in memory to tell when a running Relay is
@@ -115,3 +117,36 @@ export const bundles = [
     },
   },
 ];
+
+/**
+ * onnxruntime-node's JavaScript, which read aloud's worker loads, bundled to
+ * `outfile` with its addon looked up from a bin/ folder beside it.
+ */
+export const onnxRuntimeBundle = (outfile) => ({
+  entryPoints: ["node_modules/onnxruntime-node/dist/index.js"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  outfile,
+  plugins: [
+    {
+      name: "onnxruntime-binding",
+      setup(build) {
+        build.onLoad(
+          { filter: /onnxruntime-node[\\/]dist[\\/]binding\.js$/ },
+          ({ path }) => {
+            const source = readFileSync(path, "utf8");
+            const contents = source.replace(
+              /require\(`\.\.\/bin\/([^`]*onnxruntime_binding\.node)`\)/,
+              "require(require('node:path').join(__dirname, `../bin/$1`))",
+            );
+            if (contents === source)
+              throw new Error("onnxruntime-node's binding.js changed shape.");
+            return { contents, loader: "js" };
+          },
+        );
+      },
+    },
+  ],
+});

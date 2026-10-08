@@ -11,6 +11,8 @@ import { Command, GitHubMark, SiteFooter, SiteHeader } from "./parts";
 import {
   BUILD_GUIDE,
   firstStart,
+  HEADLESS_GUIDE,
+  headlessInstall,
   otherBuilds,
   platforms,
   RELEASES,
@@ -126,6 +128,26 @@ function DownloadPage() {
           <Files builds={platforms} os={os} release={live} />
           <h2>Phone and other Macs</h2>
           <Files builds={otherBuilds} os={os} release={live} />
+        </section>
+
+        <section className="block dl-headless">
+          <span className="eyebrow">Headless</span>
+          <h2>A computer you never sit at</h2>
+          <p className="lede">
+            A Mac mini in a cupboard, a Linux box or a cloud server runs Relay
+            without its window. One command installs it, starts it with the
+            computer and pairs your phone. Then hand it threads from your
+            laptop and follow them from anywhere. It needs Node.js 22, Git and
+            Tailscale. <a href={HEADLESS_GUIDE}>How it works</a>
+          </p>
+          <div className="promises">
+            {headlessInstall.map((item) => (
+              <div key={item.system}>
+                <h3>{item.system}</h3>
+                <Command text={item.command} />
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="block dl-after">

@@ -122,7 +122,13 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
       name: "Push 1 commit to upstream/review",
     });
     await rejectedPush.click();
-    await expect(page.locator(".composer-branch-error")).toContainText(
+    const syncIssue = page.locator(".composer-branch-error");
+    await expect(syncIssue).toHaveAccessibleName(
+      /Rebase onto upstream\/review/,
+    );
+    await expect(syncIssue).toHaveText("");
+    await syncIssue.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
       "Rebase onto upstream/review",
     );
     const rebase = page.getByRole("button", {
@@ -134,6 +140,16 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
       path: "test-results/screenshots/branch-sync-push-rejected.png",
       animations: "disabled",
     });
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await rebase.focus();
+    await page.keyboard.press("Tab");
+    await expect(syncIssue).toBeFocused();
+    await expect(page.getByRole("tooltip")).toContainText(
+      "Rebase onto upstream/review",
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     await rebase.click();
     await expect(page.locator(".composer-branch-error")).toHaveCount(0);
     await expect(

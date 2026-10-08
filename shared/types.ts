@@ -226,6 +226,8 @@ export interface Bootstrap {
   /** Last sidebar view, kept in app data so it survives updates. */
   sidebarView?: SidebarView;
   pendingUrl?: string;
+  /** A project `relay <folder>` opened before the window could show it. */
+  pendingProject?: string;
   workspace: WorkspaceState;
 }
 export interface WorkspaceState {
@@ -513,8 +515,14 @@ export interface Api
   checkAgentVersions(): Promise<AgentVersions>;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
-  /** Asks for an agent CLI and links it if it says its version; null if cancelled. */
-  linkAgent(provider: AgentProvider): Promise<AgentVersions | null>;
+  /**
+   * Links an agent's CLI if it says its version: the program at `path`, or
+   * one chosen in a file dialog when it's left out. Null if cancelled.
+   */
+  linkAgent(
+    provider: AgentProvider,
+    path?: string,
+  ): Promise<AgentVersions | null>;
   /** Forgets the linked CLI and finds one again. */
   unlinkAgent(provider: AgentProvider): Promise<AgentVersions>;
   /** The source control hosts with their tools, versions and sign-ins, looked up now. */
@@ -575,6 +583,8 @@ export interface Api
   onMaximized(callback: (maximized: boolean) => void): () => void;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
+  /** A project to show: `relay <folder>` or a folder dropped on Relay. */
+  onOpenProject(callback: (id: string) => void): () => void;
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */

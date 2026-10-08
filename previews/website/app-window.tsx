@@ -217,6 +217,7 @@ function Composer({ id, running }: { id: string; running?: boolean }) {
               disabled
               running={false}
               sendKey="enter"
+              runningAction="queue"
               onSendLater={() => {}}
             />
           )}

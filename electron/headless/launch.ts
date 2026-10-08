@@ -1,0 +1,235 @@
+import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { closeSync, mkdirSync, openSync } from "node:fs";
+import {
+  lstat,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { z } from "zod";
+import { callControl, NotRunning, type DaemonStatus } from "./control";
+import { headlessPaths, privateDirectory } from "./paths";
+import { lockPath } from "./lock";
+import { installedService, serviceHome, startService } from "./service";
+
+/** What a Relay run as a service exits with to be started again. */
+export const restartCode = 75;
+/** What `relay run` exits with when this home's Relay already runs: nothing to restart. */
+export const alreadyRunningCode = 3;
+
+export class AlreadyRunning extends Error {}
+
+const configSchema = z
+  .object({
+    port: z.number().int().min(1).max(65535).optional(),
+    /** What phones and other computers call this one, instead of its host name. */
+    name: z.string().trim().min(1).max(80).optional(),
+    /** Installs releases as they come out; unset is on. */
+    autoUpdate: z.boolean().optional(),
+  })
+  .passthrough();
+/** What `relay` was told once and keeps: `headless.json` in the home folder. */
+export type HeadlessConfig = z.infer<typeof configSchema>;
+
+export async function readConfig(home: string): Promise<HeadlessConfig> {
+  const text = await readFile(headlessPaths(home).config, "utf8").catch(
+    (e: NodeJS.ErrnoException) => {
+      if (e.code === "ENOENT") return "{}";
+      throw e;
+    },
+  );
+  try {
+    return configSchema.parse(JSON.parse(text));
+  } catch {
+    throw new Error(
+      `${headlessPaths(home).config} isn't valid; fix or delete it.`,
+    );
+  }
+}
+
+/** A missing setting defaults on; unreadable or invalid config fails closed. */
+export async function autoUpdateEnabled(home: string) {
+  return (
+    (await readConfig(home).catch(() => ({ autoUpdate: false }))).autoUpdate ??
+    true
+  );
+}
+
+export async function saveConfig(home: string, patch: HeadlessConfig) {
+  await privateDirectory(home);
+  const config = headlessPaths(home).config;
+  const release = await lockPath(config);
+  const temporary = `${config}.${randomUUID()}.tmp`;
+  try {
+    const next = { ...(await readConfig(home)), ...patch };
+    const file = await open(temporary, "wx", 0o600);
+    try {
+      await file.writeFile(JSON.stringify(next, null, 2) + "\n");
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    await rename(temporary, config);
+  } finally {
+    try {
+      await rm(temporary, { force: true });
+    } finally {
+      await release();
+    }
+  }
+}
+
+/** The running Relay's status, or null when none answers. */
+export async function running(home: string): Promise<DaemonStatus | null> {
+  try {
+    return await callControl(headlessPaths(home).control, "status");
+  } catch (e) {
+    if (e instanceof NotRunning) return null;
+    throw e;
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Waits for Relay to answer, or for `exited` to say it never will. */
+async function answering(home: string, exited?: () => number | null) {
+  for (const until = Date.now() + 60_000; Date.now() < until;) {
+    const status = await running(home).catch(() => null);
+    if (status) return status;
+    const code = exited?.();
+    // Losing to another Relay starting at the same moment is no failure.
+    if (
+      code !== null &&
+      code !== undefined &&
+      !(await holding(headlessPaths(home).pid))
+    )
+      throw new Error(
+        `Relay exited (${code}) while starting. See ${join(headlessPaths(home).logs, "relay.out.log")} and \`relay logs\`.`,
+      );
+    await sleep(250);
+  }
+  throw new Error("Relay didn't answer within a minute; see `relay logs`.");
+}
+
+/** Waits for the Relay in `home` to stop answering and finish saving. */
+export async function stopped(home: string, timeoutMs = 60_000) {
+  const { pid } = headlessPaths(home);
+  for (const until = Date.now() + timeoutMs; Date.now() < until;) {
+    if (
+      !(await running(home).catch(() => null)) &&
+      !(await holding(pid)) &&
+      !(await lstat(`${pid}.lock`).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === "ENOENT") return null;
+        throw e;
+      }))
+    )
+      return;
+    await sleep(250);
+  }
+  throw new Error("Relay is still running after a minute; see `relay logs`.");
+}
+
+/**
+ * Starts Relay in the background: through the service when it's set up as
+ * one for this home folder, so there's only ever one manager of it, else
+ * as a detached process of its own.
+ */
+export async function startDetached(
+  home: string,
+  script: string,
+): Promise<{ status: DaemonStatus; via: "service" | "process" }> {
+  home = await realpath(home).catch(async (e: NodeJS.ErrnoException) => {
+    if (e.code !== "ENOENT") throw e;
+    await privateDirectory(home);
+    return realpath(home);
+  });
+  const service = installedService();
+  const configured = service ? await serviceHome(service) : undefined;
+  const managedHome = configured
+    ? await realpath(configured).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === "ENOENT") return undefined;
+        throw e;
+      })
+    : undefined;
+  if (service && managedHome === home) {
+    await startService();
+    return { status: await answering(home), via: "service" };
+  }
+  const child = spawnRelay(home, script);
+  let code: number | null = null;
+  child.once("exit", (c) => (code = c ?? 1));
+  return { status: await answering(home, () => code), via: "process" };
+}
+
+/** Relay in the background, apart from this process; what it prints goes to relay.out.log. */
+export function spawnRelay(home: string, script: string) {
+  const { logs } = headlessPaths(home);
+  mkdirSync(logs, { recursive: true, mode: 0o700 });
+  const out = openSync(join(logs, "relay.out.log"), "a", 0o600);
+  const child = spawn(process.execPath, [script, "run", "--background"], {
+    // Not wherever `relay` was typed: Windows can't rename a folder a process is in.
+    cwd: home,
+    detached: true,
+    stdio: ["ignore", out, out],
+    env: { ...process.env, RELAY_HOME: home },
+    windowsHide: true,
+  });
+  closeSync(out);
+  child.unref();
+  return child;
+}
+
+/** The lock owns the home; the PID file is only status, never a lock itself. */
+export async function claimHome(pidFile: string) {
+  await privateDirectory(dirname(pidFile));
+  if (await holding(pidFile))
+    throw new AlreadyRunning("Relay is already running here.");
+  let release: () => Promise<void>;
+  try {
+    release = await lockPath(pidFile);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ELOCKED")
+      throw new AlreadyRunning("Another Relay is starting here.");
+    throw e;
+  }
+  try {
+    if (await holding(pidFile))
+      throw new AlreadyRunning("Relay is already running here.");
+    await writeFile(pidFile, `${process.pid}\n`, { mode: 0o600 });
+  } catch (e) {
+    await release();
+    throw e;
+  }
+  return async () => {
+    await rm(pidFile, { force: true });
+    await release();
+  };
+}
+
+/** Used by both setup and service install before handing Relay to its manager. */
+export async function stopForService(home: string) {
+  if (!(await running(home))) return;
+  await callControl(headlessPaths(home).control, "stop", { detach: true });
+  await stopped(home);
+}
+
+function alive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // Someone else's process: alive, just not ours to signal.
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** The live process a pid file names, if any. */
+async function holding(pidFile: string) {
+  const pid = Number((await readFile(pidFile, "utf8").catch(() => "")).trim());
+  return pid && alive(pid) ? pid : undefined;
+}

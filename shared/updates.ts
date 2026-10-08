@@ -21,7 +21,7 @@ export const androidAppDownload = `https://github.com/${releasesRepo}/releases/l
 export type UpdateTarget =
   "mac-arm64" | "win-x64" | "linux-x64-appimage" | "linux-x64-omarchy";
 
-const file = z.object({
+export const updateFileSchema = z.object({
   name: z.string().regex(/^[\w.-]+$/),
   // Plain HTTP only for a feed served on this machine while testing.
   url: z.url({ protocol: /^https?$/ }).refine((u) => {
@@ -37,11 +37,11 @@ export const manifestSchema = z.object({
   notes: z.string().max(4000).optional(),
   files: z.partialRecord(
     z.enum(["mac-arm64", "win-x64", "linux-x64-appimage", "linux-x64-omarchy"]),
-    file,
+    updateFileSchema,
   ),
 });
 export type UpdateManifest = z.infer<typeof manifestSchema>;
-export type UpdateFile = z.infer<typeof file>;
+export type UpdateFile = z.infer<typeof updateFileSchema>;
 
 export type UpdateState =
   /** Development builds and platforms without a download never show the button. */

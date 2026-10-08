@@ -155,7 +155,7 @@ function ThreadTitle({
   if (!editing)
     return (
       <div className="thread-title">
-        <strong title="Double-click to rename" onDoubleClick={edit}>
+        <strong title={`${title}\nDouble-click to rename`} onDoubleClick={edit}>
           {title}
         </strong>
         <button

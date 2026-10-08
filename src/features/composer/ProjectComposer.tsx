@@ -16,7 +16,11 @@ import type { InheritedSettings } from "../agents/composer-settings";
 import { useComposerToolbar } from "./composer-toolbar";
 import { effortStep, quickStep } from "../quick-switch/effort-shortcut";
 import { quickItems } from "../quick-switch/quick-switch";
-import { sendAction, useSendKey } from "../../lib/send-key";
+import {
+  sendAction,
+  useRunningSendAction,
+  useSendKey,
+} from "../../lib/send-key";
 import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
@@ -208,6 +212,7 @@ export function ProjectComposer({
     ).startsWith("openrouter/");
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
+  const runningAction = useRunningSendAction();
   const quick = useQuickSwitchHud(runs, to);
   const settingCommands = useSettingCommands({
     state: composer,
@@ -289,7 +294,7 @@ export function ProjectComposer({
         className="project-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          sending.send();
+          sending.send(runningAction === "steer");
         }}
       >
         {councilOn && <UltraplanRing key={spark} />}
@@ -353,7 +358,7 @@ export function ProjectComposer({
             }
             if (!e.repeat && matches("send-new-thread", e)) {
               e.preventDefault();
-              void sending.send(false, undefined, () => {
+              void sending.send(runningAction === "steer", undefined, () => {
                 // Not if the thread was left while it sent.
                 if (mounted.current) onNextThread?.();
               });
@@ -371,7 +376,7 @@ export function ProjectComposer({
               quick.step(quickDir);
               return;
             }
-            const action = sendAction(e, sendKey);
+            const action = sendAction(e, sendKey, runningAction);
             if (action) {
               e.preventDefault();
               sending.send(action === "steer");
@@ -488,6 +493,7 @@ export function ProjectComposer({
               disabled={sending.disabled}
               running={running}
               sendKey={sendKey}
+              runningAction={runningAction}
               onSendLater={(at) => void sending.send(false, at)}
             />
           )}

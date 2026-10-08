@@ -1,4 +1,5 @@
 import { savedRuntimeMode } from "../../shared/agent-modes";
+import { reviewThreadTitle } from "../../shared/deep-review";
 import { migrateAgentSessions } from "../../shared/projects";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import { settleActivities } from "./answer-recorder";
@@ -49,6 +50,17 @@ export function reviveChat(
   // A review whose agents ran in an earlier session can only be resumed,
   // and a fix that was running then left its findings open.
   const review = chat.deepReview;
+  if (
+    review &&
+    !chat.renamed &&
+    chat.title === `Deep review · ${review.scope.label}`
+  ) {
+    const title = reviewThreadTitle(review.scope);
+    if (title !== chat.title) {
+      chat.title = title;
+      interrupted = true;
+    }
+  }
   if (review?.status === "reviewing" || review?.status === "leading") {
     review.status = review.status === "reviewing" ? "stopped" : "failed";
     interrupted = true;

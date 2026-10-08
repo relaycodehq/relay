@@ -1835,6 +1835,26 @@ body {
   gap: 24px;
   margin-top: 32px;
 }
+.dl-headless {
+  padding-top: 140px;
+}
+.dl-headless .lede {
+  max-width: 680px;
+}
+.dl-headless .lede a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+/* Break a one-liner at its spaces, not in the middle of the URL. */
+.dl-headless .command code {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+.dl-headless .promises {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 32px;
+}
 .dl-steps {
   display: flex;
   flex-direction: column;
@@ -2149,6 +2169,7 @@ body {
   .grid.oss,
   .dl-after,
   .dl-after .promises,
+  .dl-headless .promises,
   .dl-more {
     grid-template-columns: minmax(0, 1fr);
   }

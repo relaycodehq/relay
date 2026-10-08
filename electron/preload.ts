@@ -341,6 +341,7 @@ contextBridge.exposeInMainWorld("relay", {
   onTerminal: subscribe("relay:terminal"),
   onMaximized: subscribe<boolean>("relay:maximized"),
   onOpenUrl: subscribe<string>("relay:open-url"),
+  onOpenProject: subscribe<string>("relay:open-project"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

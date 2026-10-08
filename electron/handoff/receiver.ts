@@ -101,6 +101,10 @@ export class HandoffReceiver {
     Promise<{ chatId: string; project: string }>
   >();
   constructor(private host: ReceiverHost) {}
+  /** A thread is arriving or going back; an update waits for it. */
+  get busy() {
+    return this.receiving.size > 0 || this.handingBack.size > 0;
+  }
   async handle(
     method: ComputerMethod,
     args: unknown[],
@@ -176,7 +180,7 @@ export class HandoffReceiver {
   private async update(): Promise<UpdateState> {
     const updates = this.host.updates;
     if (!updates) throw new Error("This Relay can't update itself.");
-    if (this.receiving.size || this.handingBack.size)
+    if (this.busy)
       throw new Error("A thread is on its way. Try again when it's arrived.");
     let state = updates.state();
     if (state.status === "off")

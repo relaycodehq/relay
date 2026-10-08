@@ -164,6 +164,18 @@
 .model-picker-row[data-highlighted] {
   background: var(--hover);
 }
+.model-picker-row[data-reordering] {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+}
+.model-picker-row[data-reordering="active"] {
+  z-index: 2;
+}
+.model-picker-row[data-reordering]:hover,
+.model-picker-row[data-reordering][data-highlighted] {
+  background: var(--hover);
+}
 .model-picker-row-label {
   flex: 1;
   min-width: 0;

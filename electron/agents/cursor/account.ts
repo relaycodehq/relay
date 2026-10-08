@@ -23,10 +23,20 @@ export const cursorSdkIo: CursorSdkIo = {
   },
 };
 
-/** Opens Cursor's sign-in in the browser; resolves once it's done. Downloads the SDK first if needed. */
-export async function signInCursor() {
+/**
+ * Opens Cursor's sign-in in the browser; resolves once it's done. Downloads
+ * the SDK first if needed. With `onUrl` no browser opens here: it gets the
+ * page to open on another device, as a headless Relay shows it.
+ */
+export async function signInCursor(onUrl?: (url: string) => void) {
   const sdk = await ensureSdk();
-  await cursorCall(sdk, "auth.login", {}, signInTimeout);
+  await cursorCall(
+    sdk,
+    "auth.login",
+    onUrl ? { browser: false } : {},
+    signInTimeout,
+    onUrl,
+  );
   forgetCursorModels();
 }
 

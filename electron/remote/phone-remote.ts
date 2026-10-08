@@ -1,4 +1,3 @@
-import { hostname } from "node:os";
 import { z } from "zod";
 import type { Store } from "../app/store";
 import type { ProjectChatsEvent } from "../../shared/events";
@@ -20,6 +19,7 @@ import { PhoneDictations } from "./phone-dictation";
 import { PhoneReadings } from "./phone-read-aloud";
 import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
+import { computerName } from "../platform/computer-name";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+$/);
 const appReportSchema = z
@@ -120,7 +120,7 @@ export class PhoneRemote {
     private tailnet: TailnetProbe = tailnetProbe(),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
-    const name = () => hostname().replace(/\.local$/, "") || "Relay";
+    const name = computerName;
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
       (event) => this.server.broadcast(event, (id) => !this.isComputer(id)),
@@ -175,7 +175,9 @@ export class PhoneRemote {
     );
   }
   /** Resumes listening if phone access was on when Relay last quit. */
-  async start() {
+  async start(defaultEnabled = false) {
+    if (defaultEnabled && this.devices.settings.enabled === undefined)
+      await this.devices.setEnabled(true);
     if (this.devices.settings.enabled) await this.follow();
   }
   /** Keeps the window's theme for phones, and hands a change to those online. */
@@ -250,7 +252,7 @@ export class PhoneRemote {
         port: this.server.port,
         key: toBase64Url(key.public),
         code,
-        name: hostname().replace(/\.local$/, "") || "Relay",
+        name: computerName(),
       }),
       expiresAt,
     };
@@ -260,9 +262,7 @@ export class PhoneRemote {
     await this.devices.revoke(deviceId);
     this.server.disconnect(
       deviceId,
-      computer
-        ? `${hostname().replace(/\.local$/, "") || "Relay"} removed this computer.`
-        : undefined,
+      computer ? `${computerName()} removed this computer.` : undefined,
     );
     return this.state();
   }
