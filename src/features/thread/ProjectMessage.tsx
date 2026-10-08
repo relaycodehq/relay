@@ -22,6 +22,7 @@ import {
 import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn } from "../agent-turn/AgentTurn";
+import { AsyncQuestionCards } from "./AsyncQuestionCards";
 import { AgentError } from "../agents/AgentError";
 import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
@@ -364,6 +365,9 @@ export const Message = memo(function Message({
         )
       ) : null}
       {after}
+      {m.role === "assistant" && (
+        <AsyncQuestionCards message={m} chatId={chatId} />
+      )}
       {m.role === "assistant" && onSteer && (
         <WatchNotes
           agent={agentName(m.provider)}
@@ -425,9 +429,7 @@ export const Message = memo(function Message({
           Stopped · partial output kept
         </p>
       )}
-      {m.error && m.status !== "cancelled" && (
-        <AgentError error={m.error} />
-      )}
+      {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
       {onSignIn && m.signIn && (
         <SignIn provider={m.signIn} onSignIn={onSignIn} />
       )}

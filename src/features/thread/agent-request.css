@@ -199,3 +199,22 @@
   padding: 5px 10px;
   border-radius: 6px;
 }
+.agent-question-timing {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.async-question-cards {
+  margin-top: 16px;
+}
+.async-question-answered {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.async-question-answered summary {
+  cursor: pointer;
+}
+.async-question-answered p {
+  overflow-wrap: anywhere;
+}

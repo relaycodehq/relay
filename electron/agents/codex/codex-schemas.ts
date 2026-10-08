@@ -35,6 +35,18 @@ const itemSchema = z
     id: lenient(z.string()),
     clientId: lenient(z.string()),
     phase: lenient(z.string()),
+    delivery: lenient(z.literal("async")),
+    questions: z
+      .array(
+        z
+          .object({
+            title: z.string().trim().min(1).max(16000),
+            options: z.array(z.string().min(1).max(16000)).max(50).nullish(),
+          })
+          .loose(),
+      )
+      .max(10)
+      .nullish(),
     text: lenient(z.string()),
     review: lenient(z.string()),
     changes: z.unknown().optional(),

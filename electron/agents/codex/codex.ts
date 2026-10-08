@@ -234,6 +234,21 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         n.method === "item/agentMessage/delta"
       )
         stream.update(n.method, n.params);
+      if (
+        n.method === "item/completed" &&
+        n.params.item.type === "agentMessage" &&
+        n.params.item.delivery === "async" &&
+        n.params.item.id &&
+        n.params.item.questions?.length
+      )
+        options.onQuestions?.(
+          n.params.item.id,
+          n.params.item.questions.map((q, index) => ({
+            id: String(index),
+            question: q.title,
+            options: q.options?.map((label) => ({ label })),
+          })),
+        );
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)));
       return;
@@ -388,6 +403,12 @@ export async function runCodex(options: AgentOptions): Promise<string> {
         return result;
       }
       let started: CodexThreadStarted | undefined = connection.started;
+      // A hosted server can predate this Relay build. Enable the tool in its
+      // live process too, without closing the user's saved conversation.
+      if (started && options.onQuestions)
+        await transport.request("experimentalFeature/enablement/set", {
+          enablement: { send_message_to_user_async: true },
+        });
       if (!started) {
         await transport.request("initialize", {
           clientInfo: {
@@ -451,7 +472,12 @@ export async function runCodex(options: AgentOptions): Promise<string> {
           developerInstructions: instructions,
           config: {
             web_search: "disabled",
-            features: { apps: false, plugins: false, multi_agent: false },
+            features: {
+              apps: false,
+              plugins: false,
+              multi_agent: false,
+              send_message_to_user_async: !!options.onQuestions,
+            },
             ...mcpOverrides,
             ...relayServer,
           },

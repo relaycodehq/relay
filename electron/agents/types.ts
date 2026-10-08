@@ -3,6 +3,7 @@ import type {
   RuntimeMode,
   InteractionMode,
   AskAgentRequest,
+  AgentQuestion,
 } from "../../shared/agent-modes";
 import type {
   AgentActivity,
@@ -83,6 +84,8 @@ export interface AgentOptions {
   signal: AbortSignal;
   onText: (text: string) => void;
   onCommentary?: (id: string, text: string | null) => void;
+  /** Questions sent as messages, without holding up the agent's turn. */
+  onQuestions?: (id: string, questions: AgentQuestion[]) => void;
   onActivity?: (activity: AgentActivity) => void;
   /** Paths the agent's own file tools are writing, as it reported them. */
   onEdit?: (paths: string[]) => void;

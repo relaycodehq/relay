@@ -27,6 +27,7 @@ import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
 import type { ThreadTitles } from "./titles";
+import type { AgentQuestion } from "../../shared/agent-modes";
 
 /**
  * The first turn of a side conversation or a forked thread with the agent
@@ -263,6 +264,10 @@ export class TurnRunner {
         },
         onCommentary: (id: string, text: string | null) =>
           answer.commentary(id, text),
+        onQuestions: rules.side
+          ? undefined
+          : (id: string, questions: AgentQuestion[]) =>
+              answer.questions(id, questions),
         onEdit: (paths: string[]) => {
           for (const path of paths) edited.add(path);
         },

@@ -547,6 +547,10 @@ if (args.includes("--permission-prompt-tool")) {
       });
     } else if (m.method === "config/read")
       send({ id: m.id, result: { config: {} } });
+    else if (m.method === "experimentalFeature/enablement/set") {
+      record({ features: m.params.enablement });
+      send({ id: m.id, result: {} });
+    }
     // Codex 0.160 reads a thread's goal; these threads set none.
     else if (m.method === "thread/goal/get")
       send({ id: m.id, result: { goal: null } });
@@ -666,6 +670,49 @@ if (args.includes("--permission-prompt-tool")) {
           },
         });
         return;
+      }
+      const asyncPrompt = m.params.input
+        .filter((i) => i.type === "text")
+        .at(-1)
+        .text.split("\n")[0];
+      if (asyncPrompt.includes("fixture async question")) {
+        awaitingSteer = asyncPrompt.includes("live");
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "fixture-async-question",
+              type: "agentMessage",
+              phase: "commentary",
+              delivery: "async",
+              text: "Which visibility should I use? I'll keep checking the release while you decide.",
+              questions: [
+                {
+                  title: "Which visibility should I use?",
+                  options: ["Private while preparing", "Public now"],
+                },
+                { title: "Which account should own it?", options: null },
+              ],
+            },
+          },
+        });
+        // A later tool proves asking didn't stop the turn.
+        send({
+          method: "item/completed",
+          params: {
+            threadId: "fixture-thread",
+            item: {
+              id: "after-question",
+              type: "commandExecution",
+              command: "git status --short",
+              status: "completed",
+              commandActions: [],
+              aggregatedOutput: "",
+              exitCode: 0,
+            },
+          },
+        });
       }
       const titling = m.params.input[0].text;
       if (

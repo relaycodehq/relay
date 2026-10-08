@@ -128,6 +128,11 @@ export function chatHandlers(ctx: ApiContext) {
       (id, requestId, response) =>
         projectChats.respond(id, requestId, response),
     ),
+    answerProjectChatQuestion: takes(
+      [idSchema, idSchema, agentIdSchema, agentResponseSchema],
+      (id, messageId, itemId, response) =>
+        projectChats.answerQuestion(id, messageId, itemId, response),
+    ),
     cancelProjectChat: takes([idSchema], (id) => projectChats.cancel(id)),
     resolveStoppedWork: takes(
       [idSchema, z.enum(["resume", "dismiss"])],

@@ -8,6 +8,7 @@ interface AnswerParams {
     id?: string | null;
     type?: string;
     phase?: string | null;
+    delivery?: "async" | null;
     text?: string | null;
   };
 }
@@ -46,6 +47,7 @@ export class CodexAnswerStream {
       const entry = this.messages.get(id) ?? { text: "" };
       if (item.phase === "commentary" || item.phase === "final_answer")
         entry.phase = item.phase;
+      if (item.delivery === "async") entry.phase = "commentary";
       if (method === "item/completed" && typeof item.text === "string")
         entry.text = item.text;
       this.messages.set(id, entry);

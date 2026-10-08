@@ -123,6 +123,7 @@ const methods = [
   "rerunWorktreeSetup",
   "projectChatQueueAction",
   "respondProjectChat",
+  "answerProjectChatQuestion",
   "workingTree",
   "workingDiff",
   "gitAction",

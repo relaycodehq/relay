@@ -1,6 +1,36 @@
 import { expect, it } from "vitest";
 import { CodexAnswerStream } from "./answer-stream";
 
+it("keeps async messages out of the terminal answer even when their phase is final", () => {
+  const notes = new Map<string, string>();
+  const stream = new CodexAnswerStream(
+    () => {},
+    (id, text) => {
+      if (text !== null) notes.set(id, text);
+    },
+  );
+  stream.update("item/completed", {
+    item: {
+      id: "question",
+      type: "agentMessage",
+      phase: "final_answer",
+      delivery: "async",
+      text: "Which account?",
+    },
+  });
+  expect(stream.answer).toBe("");
+  expect(notes.get("question")).toBe("Which account?");
+  stream.update("item/completed", {
+    item: {
+      id: "answer",
+      type: "agentMessage",
+      phase: "final_answer",
+      text: "Checks passed.",
+    },
+  });
+  expect(stream.answer).toBe("Checks passed.");
+});
+
 it("keeps live commentary separate from the terminal answer as tools run", () => {
   const bodies: string[] = [];
   const commentary = new Map<string, string>();

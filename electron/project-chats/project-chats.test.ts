@@ -81,6 +81,104 @@ const input = (body: string) => ({
     fast: true,
   },
 });
+it("answers async Codex questions inside the running turn without interrupting or queueing", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture async question live"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages[1]?.questions).toHaveLength(1),
+  );
+  const current = await chats.get(chat.id);
+  const message = current.messages[1];
+  expect(message.status).toBe("streaming");
+  expect(message.trace?.some((e) => e.id === "after-question")).toBe(true);
+  expect(current.requests).toEqual([]);
+  expect(
+    (await chats.list(projectId)).find((c) => c.id === chat.id)?.waiting,
+  ).toBe(false);
+  const answers = { "0": ["Private while preparing"], "1": ["fixture-owner"] };
+  await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+    kind: "question",
+    answers,
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const answered = await chats.get(chat.id);
+  expect(
+    answered.messages.find((m) => m.id === message.id)?.questions?.[0].answers,
+  ).toEqual(answers);
+  expect(
+    answered.messages.some(
+      (m) => m.role === "user" && m.steered && m.body.includes("fixture-owner"),
+    ),
+  ).toBe(true);
+  expect(answered.queue ?? []).toEqual([]);
+  const calls = (await agentCalls())
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  expect(calls.filter((call) => call.turn)).toHaveLength(1);
+  expect(calls.some((call) => call.interrupt)).toBe(false);
+  expect(calls.find((call) => call.steer).steer).toMatchObject({
+    threadId: "fixture-thread",
+    expectedTurnId: "fixture-turn",
+    input: [
+      {
+        type: "text",
+        text: expect.stringContaining("Private while preparing"),
+      },
+    ],
+  });
+  expect(
+    calls.find((call) => call.thread).thread.config.features
+      .send_message_to_user_async,
+  ).toBe(true);
+  await expect(
+    chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+      kind: "question",
+      answers,
+    }),
+  ).rejects.toThrow("already been answered");
+}, 15000);
+
+it("keeps unanswered async questions across a restart and answers them as a follow-up", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex fixture async question finished"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const message = (await chats.get(chat.id)).messages[1];
+  expect(message.questions?.[0].questions).toEqual([
+    {
+      id: "0",
+      question: "Which visibility should I use?",
+      options: [{ label: "Private while preparing" }, { label: "Public now" }],
+    },
+    { id: "1", question: "Which account should own it?" },
+  ]);
+  await chats.dispose();
+  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
+    events.push(structuredClone(event)),
+  );
+  expect((await chats.get(chat.id)).messages[1].questions).toEqual(
+    message.questions,
+  );
+  await chats.answerQuestion(chat.id, message.id, "fixture-async-question", {
+    kind: "question",
+    answers: { "0": ["An unlisted choice"], "1": ["fixture-owner"] },
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const calls = (await agentCalls())
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const turns = calls.filter((call) => call.turn);
+  expect(turns).toHaveLength(2);
+  expect(turns[1].turn.input[0].text).toContain("An unlisted choice");
+  expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
+}, 15000);
 it("sends only messages the renderer doesn't hold at their current version", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));

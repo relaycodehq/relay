@@ -56,6 +56,7 @@ import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
+import { AsyncQuestions } from "./async-questions";
 
 /**
  * A project's chat threads, as the rest of the app sees them. Each part
@@ -78,6 +79,7 @@ export class ProjectChats {
   private queue: ChatQueue;
   private turns: ChatTurns;
   private control = threadControl();
+  private questions: AsyncQuestions;
   private disposing = false;
   private councils: Councils;
   private watchNotes: WatchReviews;
@@ -118,6 +120,9 @@ export class ProjectChats {
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
     };
     this.core = core;
+    this.questions = new AsyncQuestions(core, (id, input) =>
+      this.sendHeld(id, input),
+    );
     this.watchNotes = new WatchReviews(
       store,
       this.storage,
@@ -473,38 +478,44 @@ export class ProjectChats {
   }
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
-    return this.control(id, async () => {
-      if (this.disposing) throw new Error("Relay is closing.");
-      assertHere(await this.storage.load(id));
-      if (input.side || input.parentId) {
-        const chat = await this.storage.load(id);
-        if (input.side || replyRoot(chat.messages, input.parentId!).side)
-          return this.asides.ask(chat, input);
-      }
-      if (input.sendAt) return this.schedule.add(id, input);
-      // Queued, it would wait for the very goal it pauses or clears.
-      const asked = agentAsked(input);
-      const goal = asked && parseGoalCommand(asked.question);
-      const running = this.active.get(id);
-      if (
-        (goal?.type === "pause" || goal?.type === "clear") &&
-        !input.parentId &&
-        running?.goal &&
-        !running.stopping
-      )
-        return running.goal(goal.type);
-      // Sent right after a stop: it waits for the agent to let go, rather
-      // than queueing behind the answer the stop paused the queue for.
-      await this.active.finished(id);
-      if (
-        !this.active.has(id) &&
-        !this.councils.busy(await this.storage.load(id))
-      ) {
-        await this.turns.sendNow(id, input);
-        return this.queue.sentNow(id, input, fromRelay);
-      }
-      return this.queue.add(id, input);
-    });
+    return this.control(id, () => this.sendHeld(id, input, fromRelay));
+  }
+  /** A send whose caller already holds the thread's control. */
+  private async sendHeld(
+    id: string,
+    input: ProjectChatSend,
+    fromRelay = false,
+  ) {
+    if (this.disposing) throw new Error("Relay is closing.");
+    assertHere(await this.storage.load(id));
+    if (input.side || input.parentId) {
+      const chat = await this.storage.load(id);
+      if (input.side || replyRoot(chat.messages, input.parentId!).side)
+        return this.asides.ask(chat, input);
+    }
+    if (input.sendAt) return this.schedule.add(id, input);
+    // Queued, it would wait for the very goal it pauses or clears.
+    const asked = agentAsked(input);
+    const goal = asked && parseGoalCommand(asked.question);
+    const running = this.active.get(id);
+    if (
+      (goal?.type === "pause" || goal?.type === "clear") &&
+      !input.parentId &&
+      running?.goal &&
+      !running.stopping
+    )
+      return running.goal(goal.type);
+    // Sent right after a stop: it waits for the agent to let go, rather
+    // than queueing behind the answer the stop paused the queue for.
+    await this.active.finished(id);
+    if (
+      !this.active.has(id) &&
+      !this.councils.busy(await this.storage.load(id))
+    ) {
+      await this.turns.sendNow(id, input);
+      return this.queue.sentNow(id, input, fromRelay);
+    }
+    return this.queue.add(id, input);
   }
   queueAction(
     id: string,
@@ -639,6 +650,14 @@ export class ProjectChats {
     active.requests.respond(requestId, response);
     if (response.kind === "approval" && response.decision === "cancel")
       return this.cancel(id);
+  }
+  answerQuestion(
+    id: string,
+    messageId: string,
+    itemId: string,
+    response: AgentResponse,
+  ) {
+    return this.questions.answer(id, messageId, itemId, response);
   }
   async cancel(id: string) {
     const chat = this.storage.cached(id);
