@@ -115,18 +115,24 @@ export interface GitOptions {
 }
 /** Git's failure as the user should see it: its own message, no credentials. */
 export function gitError(e: unknown) {
-  const error = e as Error & { stderr?: string | Buffer; code?: unknown };
+  const error = e as Error & {
+    stderr?: string | Buffer;
+    stdout?: string | Buffer;
+    code?: unknown;
+  };
   // The executable went away since it was found; find it again next time.
   if (error.code === "ENOENT") {
     found = resolved = undefined;
     return new Error(missing);
   }
-  return new Error(
-    redactCredentials(String(error.stderr || "") || error.message).slice(
-      0,
-      3000,
-    ),
-  );
+  // `push --porcelain` puts the rejection reason on stdout; stderr often
+  // says only "failed to push some refs". Keep just its failed status rows.
+  const rejected = String(error.stdout || "").match(/^!\t.+$/gm) ?? [];
+  const message = [
+    ...rejected,
+    String(error.stderr || "").trim() || error.message,
+  ].join("\n");
+  return new Error(redactCredentials(message).slice(0, 3000));
 }
 /** Runs Git in `root`; a timeout as a number is the common case. */
 export async function git(

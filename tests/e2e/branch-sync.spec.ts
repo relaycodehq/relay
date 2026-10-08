@@ -116,11 +116,26 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
     git("add", ".");
     git("commit", "-qm", "Another local change");
     await writeFile(join(repo, "wip.md"), "not committed\n");
-    git("fetch", "-q", "upstream");
+    // The view still knows only our outgoing commit. A rejected push must
+    // fetch immediately and turn that same control into a rebase action.
+    const rejectedPush = page.getByRole("button", {
+      name: "Push 1 commit to upstream/review",
+    });
+    await rejectedPush.click();
+    await expect(page.locator(".composer-branch-error")).toContainText(
+      "Rebase onto upstream/review",
+    );
     const rebase = page.getByRole("button", {
       name: "Rebase 1 commit onto upstream/review",
     });
+    await expect(rebase).toBeEnabled();
+    await expect(rejectedPush).toHaveCount(0);
+    await screenshot(page, {
+      path: "test-results/screenshots/branch-sync-push-rejected.png",
+      animations: "disabled",
+    });
     await rebase.click();
+    await expect(page.locator(".composer-branch-error")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Push 1 commit to upstream/review" }),
     ).toBeVisible({ timeout: 15000 });

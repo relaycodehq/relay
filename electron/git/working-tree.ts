@@ -556,18 +556,43 @@ export async function performGitAction(
         const target = await pushDestination(root, state.branch);
         if (!target)
           throw new Error("Configure a Git push remote for this branch first.");
-        await git(
-          root,
-          [
-            "push",
-            "--porcelain",
-            // A branch fetching from one remote and pushing to another keeps tracking the first.
-            ...(target.tracks ? ["--set-upstream"] : []),
-            target.remote,
-            `HEAD:${target.ref}`,
-          ],
-          120000,
-        );
+        try {
+          await git(
+            root,
+            [
+              "push",
+              "--porcelain",
+              // A branch fetching from one remote and pushing to another keeps tracking the first.
+              ...(target.tracks ? ["--set-upstream"] : []),
+              target.remote,
+              `HEAD:${target.ref}`,
+            ],
+            120000,
+          );
+        } catch (e) {
+          if (
+            !(e instanceof Error) ||
+            !/\[rejected\].*\((fetch first|non-fast-forward)\)/.test(e.message)
+          )
+            throw e;
+          // A local status refresh can't discover remote commits. Fetch before
+          // reporting the failure so callers' refreshes offer Pull or Rebase.
+          try {
+            await git(
+              root,
+              ["fetch", "--prune", "--quiet", target.remote],
+              60000,
+            );
+          } catch {
+            // Keep the push failure if the remote also refuses the refresh.
+            throw e;
+          }
+          const fresh = await workingTree(root);
+          if (fresh.upstream !== target.label || !fresh.behind) throw e;
+          throw new Error(
+            `Remote has new commits. ${fresh.ahead ? "Rebase onto" : "Pull from"} ${target.label}, then push again.`,
+          );
+        }
       }
     }
     return workingTree(root);
