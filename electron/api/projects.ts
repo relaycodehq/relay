@@ -11,10 +11,13 @@ import {
   projectSettingsSchema,
 } from "../../shared/projects";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
-import { idSchema } from "../../shared/rooms";
 import { isSourceControlOn } from "../../shared/source-control";
-import type { Pull } from "../../shared/types";
-import { digestSchema, shaSchema, textSchema } from "../../shared/validation";
+import {
+  digestSchema,
+  idSchema,
+  shaSchema,
+  textSchema,
+} from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { imageMime } from "../../shared/project-files";
@@ -41,15 +44,23 @@ export function projectHandlers(ctx: ApiContext) {
     ci,
     store,
     pullRequestCreation,
-    requireClient,
+    clientFor,
     place,
   } = ctx;
+  /** The project's repository and the client for its host. */
+  async function projectRepo(projectId: string) {
+    const known = projects.get(projectId).repository;
+    if (!known)
+      throw new Error(
+        "Relay can't match this project to a GitHub or Gitea repository.",
+      );
+    const client = await clientFor(known);
+    return { client, repo: await projects.linked(projectId, client) };
+  }
   async function pullRequestPlace(where: string) {
     // A worktree thread's PR opens from its own branch.
     const { root, projectId, chatId } = await place(where);
-    const client = requireClient();
-    const repo = await projects.linked(projectId, client);
-    return { root, chatId, client, repo };
+    return { root, chatId, ...(await projectRepo(projectId)) };
   }
   return {
     projectIcon: takes([idSchema], async (id) =>
@@ -118,7 +129,7 @@ export function projectHandlers(ctx: ApiContext) {
         .scratchIds()
         .flatMap((id) => projectChats.list(id))
         .sort((a, b) => b.updated - a.updated),
-    linkProject: takes([idSchema], (id) => projects.link(id, requireClient())),
+    linkProject: takes([idSchema], (id) => projects.link(id, ctx.login.client)),
     projectCommands: takes(
       [idSchema, agentProviderSchema],
       async (id, provider) =>
@@ -257,12 +268,8 @@ export function projectHandlers(ctx: ApiContext) {
     projectPulls: takes(
       [idSchema, z.enum(["open", "closed", "all"]), pageSchema],
       async (id, state, page) => {
-        const client = requireClient();
-        const repo = await projects.linked(id, client);
-        const pulls = await client.page<Pull>(
-          `${client.repo(repo)}/pulls?state=${state}`,
-          page,
-        );
+        const { client, repo } = await projectRepo(id);
+        const pulls = await client.pulls(repo, state, page);
         return {
           ...pulls,
           items: pulls.items.map((p) => ({
@@ -271,6 +278,7 @@ export function projectHandlers(ctx: ApiContext) {
               name: repo.name,
               full_name: `${repo.owner}/${repo.name}`,
               owner: repo.owner,
+              ...(repo.server ? { server: repo.server } : {}),
             },
             pull_request: { merged: p.merged },
           })),

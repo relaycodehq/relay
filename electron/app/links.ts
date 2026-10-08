@@ -1,12 +1,8 @@
 import { app } from "electron";
-import { roomProtocol } from "../../shared/rooms";
 import type { AppWindow } from "./window";
 
 function isAppUrl(url: string) {
-  return (
-    url.length <= 16384 &&
-    (url.startsWith("relay:") || url.startsWith(roomProtocol + ":"))
-  );
+  return url.length <= 16384 && url.startsWith("relay:");
 }
 
 /** Relay links from the OS: a second launch, open-url, or the first launch's arguments. */

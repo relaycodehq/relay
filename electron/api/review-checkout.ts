@@ -29,20 +29,20 @@ import { takes, type ApiContext, type Handlers } from "./context";
 export function reviewCheckoutHandlers(ctx: ApiContext) {
   const {
     store,
-    liveSyncs,
-    requireClient,
+    requireServer,
+    clientFor,
     repoKey,
     linkedFolder,
     requireFolder,
   } = ctx;
 
   const checkoutRoot = (r: Repo) =>
-    validateRepo(requireFolder(r), requireClient().account.server, r);
+    validateRepo(requireFolder(r), requireServer(r), r);
 
   /** The PR's checkout, which must be at the head the page shows. */
   async function checkoutAt(r: PullRef, head: string) {
     const dir = requireFolder(r);
-    if ((await requireClient().pull(r)).head.sha !== head)
+    if ((await (await clientFor(r)).pull(r)).head.sha !== head)
       throw new Error(
         "This PR has new commits. Refresh it and check out the new head before editing.",
       );
@@ -65,7 +65,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
     ),
     folder: takes([repoSchema], (r) => {
       const dir = linkedFolder(r);
-      return dir ? inspectFolder(dir, requireClient().account.server, r) : null;
+      return dir ? inspectFolder(dir, requireServer(r), r) : null;
     }),
     linkFolder: takes([repoSchema], async (r) => {
       const result = await dialog.showOpenDialog(ctx.window.win!, {
@@ -75,14 +75,13 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       if (result.canceled) return null;
       const local = await inspectFolder(
         result.filePaths[0],
-        requireClient().account.server,
+        requireServer(r),
         r,
       );
       if (!local.remoteMatches)
         throw new Error(
-          "This folder’s Git remote does not match the Gitea project. Choose the correct repository.",
+          "This folder’s Git remote does not match this repository. Choose the correct repository.",
         );
-      await liveSyncs.stopWhere((_, root) => root === linkedFolder(r));
       await store.update((s) => {
         s.folders[repoKey(r)] = local.path;
       });
@@ -90,7 +89,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
     }),
     readLocalFile: takes(localFileArgs, async (r, head, path) => {
       const dir = await checkoutAt(r, head);
-      return readLocalFile(dir, requireClient().account.server, r, head, path);
+      return readLocalFile(dir, requireServer(r), r, head, path);
     }),
     saveLocalFile: takes(
       [...localFileArgs, digestSchema, textSchema],
@@ -98,7 +97,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
         const dir = await checkoutAt(r, head);
         return saveLocalFile(
           dir,
-          requireClient().account.server,
+          requireServer(r),
           r,
           head,
           path,
@@ -113,7 +112,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
         const dir = requireFolder(ref);
         const settings = store.aiSettings();
         await launchLineQuestion(
-          requireClient(),
+          await clientFor(ref),
           dir,
           app.getPath("userData"),
           ref,
@@ -134,7 +133,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
       ],
       async (r, head, path, line, side, comment) => {
         const dir = requireFolder(r);
-        const p = await requireClient().pull(r);
+        const p = await (await clientFor(r)).pull(r);
         if (p.head.sha !== head)
           throw new Error("This PR changed. Refresh before starting Codex.");
         await launchCodex(
@@ -146,7 +145,7 @@ export function reviewCheckoutHandlers(ctx: ApiContext) {
           line,
           side,
           comment,
-          requireClient().account.server,
+          requireServer(r),
         );
       },
     ),

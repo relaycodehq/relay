@@ -130,7 +130,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .locator('.diff-wrapper [data-additions] [data-line="13"]')
       .click({ position: { x: 60, y: 8 } });
     await page
-      .getByRole("button", { name: "Discuss in room", exact: true })
+      .getByRole("button", { name: "Discuss in thread", exact: true })
       .click();
     await expect(page.getByLabel("Message project")).toHaveText(
       /About src\/hooks\/useReview.ts:13/,

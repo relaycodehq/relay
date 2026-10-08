@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -8,7 +8,6 @@ import {
   Inbox,
   PanelLeft,
 } from "lucide-react";
-import { parseRoomInvitation } from "../../../shared/rooms";
 import type { Account, Bootstrap } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { TeaHint, TeaLogins } from "./TeaSignIn";
@@ -21,29 +20,18 @@ export function SignIn({
   savedServer,
   platform,
   onRestoreAction,
-  invitationUrl,
 }: {
   onConnected: (a: Account) => Promise<void>;
   loginRestore: Bootstrap["loginRestore"];
   savedServer?: string;
   platform: string;
   onRestoreAction: (action: "retry" | "cancel") => Promise<void>;
-  invitationUrl?: string;
 }) {
   // No built-in default: releases are public, and a work host doesn't belong in them.
   const [server, setServer] = useState(savedServer ?? ""),
     [token, setToken] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
-  useEffect(() => {
-    if (!invitationUrl || token) return;
-    try {
-      const project = parseRoomInvitation(invitationUrl).project;
-      if (project) setServer(project.server);
-    } catch {
-      /* Normal PR links continue through the existing sign-in flow. */
-    }
-  }, [invitationUrl, token]);
   const restoreAction = async (action: "retry" | "cancel") => {
     setBusy(true);
     setError(undefined);

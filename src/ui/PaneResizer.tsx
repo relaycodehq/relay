@@ -7,7 +7,7 @@ export function PaneResizer({
   min,
   max,
 }: {
-  pane: "sidebar" | "inbox" | "room" | "changes" | "files";
+  pane: "sidebar" | "inbox" | "changes" | "files";
   label?: string;
   initial: number;
   min: number;

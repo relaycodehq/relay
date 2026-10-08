@@ -1,5 +1,4 @@
 import { screenshot } from "../fixtures/screenshot";
-import { GiteaRepositoryVerifier } from "../../server/repository-access";
 import { openInbox, openPull } from "../fixtures/navigation";
 import {
   test,
@@ -8,24 +7,13 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import {
-  mkdtemp,
-  mkdir,
-  writeFile,
-  readFile,
-  rm,
-  realpath,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fixtureServer, newCode } from "../fixtures/gitea";
-import { RoomsDatabase, token } from "../../server/database";
-import { createRoomsServer } from "../../server/http";
 let root: string,
   origin: string,
-  rooms: ReturnType<typeof createRoomsServer>,
-  db: RoomsDatabase,
   fixture: Awaited<ReturnType<typeof fixtureServer>>;
 const apps: ElectronApplication[] = [],
   pages: Page[] = [],
@@ -48,15 +36,6 @@ test.beforeAll(async () => {
       "test-bob": { id: 102, login: "bob", full_name: "Bob" },
     },
   });
-  db = new RoomsDatabase(join(root, "rooms.sqlite"));
-  const setup = token();
-  rooms = createRoomsServer(
-    db,
-    setup,
-    new GiteaRepositoryVerifier([fixture.serverUrl]),
-  );
-  await new Promise<void>((r) => rooms.listen(0, "127.0.0.1", r));
-  const roomUrl = `http://127.0.0.1:${(rooms.address() as any).port}`;
   for (const person of ["alice", "bob"]) {
     const repo = join(root, person + "-repo");
     repos.push(repo);
@@ -73,9 +52,9 @@ test.beforeAll(async () => {
       git(repo, "push", "-qu", "origin", "review");
       fixture.setHead(git(repo, "rev-parse", "HEAD"));
     } else {
+      // Bob's clone only checks that Alice's push reached the remote.
       execFileSync("git", ["clone", "-q", "-b", "review", origin, repo]);
-      git(repo, "config", "user.name", person);
-      git(repo, "config", "user.email", person + "@example.invalid");
+      continue;
     }
     git(
       repo,
@@ -117,30 +96,10 @@ test.beforeAll(async () => {
     await page.reload();
     await openInbox(page);
     await openPull(page, /Make pull request reviews faster/);
-    if (person === "alice")
-      await page.evaluate(
-        async ({ roomUrl, setup }) =>
-          window.relay.saveRoomHosting({ server: roomUrl, secret: setup }),
-        { roomUrl, setup },
-      );
   }
-  await pages[0].evaluate(
-    ({ ref, roomUrl }) => window.relay.allowRoomAccess(ref, roomUrl),
-    { ref, roomUrl },
-  );
-  const invitation = await pages[0].evaluate(
-    (ref) => window.relay.roomInvite(ref),
-    ref,
-  );
-  await pages[1].evaluate(
-    (code) => window.relay.roomAcceptInvitation(code),
-    invitation.code,
-  );
 });
 test.afterAll(async () => {
   for (const app of apps) await app.close().catch(() => {});
-  await new Promise<void>((r) => rooms?.close(() => r()));
-  db?.close();
   await fixture?.close();
   await rm(root, { recursive: true, force: true });
 });
@@ -188,69 +147,4 @@ test("reviews local diffs, stages, commits and pushes only on explicit click", a
   await expect(modal).toBeHidden();
   expect(git(repos[0], "rev-list", "--count", "@{upstream}..HEAD")).toBe("0");
   git(repos[1], "pull", "--ff-only");
-});
-// Live sync's controls are in the PR room, which only opens in the standalone
-// review; with its folder linked, the PR now opens on its project's thread.
-// Back once PR rooms are reworked.
-test.fixme("two hidden desktops sync local edits, show a conflict and resolve it deliberately", async () => {
-  for (const page of pages) {
-    if (page === pages[1])
-      await page
-        .getByRole("button", { name: "Local changes", exact: true })
-        .click();
-    await page.getByRole("button", { name: "Live sync", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Enable / resume live sync", exact: true })
-      .click();
-    await expect(
-      page.getByRole("button", { name: "Pause live sync", exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Close dialog", exact: true })
-      .click();
-  }
-  await writeFile(join(repos[0], path), newCode + "\n// Shared from Alice\n");
-  await expect
-    .poll(() => readFile(join(repos[1], path), "utf8"), { timeout: 20000 })
-    .toContain("Shared from Alice");
-  expect(git(repos[1], "diff", "--cached")).toBe("");
-  // Stop both clocks so neither machine wins before both independent edits exist.
-  for (const page of pages)
-    await page.evaluate((ref) => window.relay.liveSyncStop(ref), ref);
-  await writeFile(
-    join(repos[0], path),
-    newCode + "\n// Alice concurrent edit\n",
-  );
-  await writeFile(join(repos[1], path), newCode + "\n// Bob concurrent edit\n");
-  await pages[0].evaluate((ref) => window.relay.liveSyncStart(ref), ref);
-  await pages[1].evaluate((ref) => window.relay.liveSyncStart(ref), ref);
-  const bob = pages[1];
-  await bob
-    .getByRole("button", { name: "1 sync conflicts", exact: true })
-    .click();
-  await bob.getByRole("button", { name: new RegExp(path + " Alice") }).click();
-  await expect(
-    bob.getByRole("button", { name: "Use shared version", exact: true }),
-  ).toBeVisible();
-  await expect(
-    bob.getByRole("dialog").locator("diffs-container"),
-  ).toBeVisible();
-  await screenshot(bob, {
-    path: resolve("test-results/screenshots/31-sync-conflict.png"),
-  });
-  await bob
-    .getByRole("button", { name: "Use shared version", exact: true })
-    .click();
-  await expect
-    .poll(() => readFile(join(repos[1], path), "utf8"))
-    .toContain("Alice concurrent edit");
-  expect(git(repos[1], "diff", "--cached")).toBe("");
-  for (const app of apps)
-    expect(
-      await app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().every(
-          (w) => !relaySeen(w) && !w.isFocused(),
-        ),
-      ),
-    ).toBe(true);
 });

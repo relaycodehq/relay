@@ -39,7 +39,7 @@ describe("AppImage desktop entry", () => {
     expect(writeAppImageEntry(input)).toBe(true);
     const content = readFileSync(entry, "utf8");
     expect(content).toContain(`Exec=${escapeExecArgument(input.appImage)} %U`);
-    expect(content).toContain("MimeType=x-scheme-handler/relay-room;");
+    expect(content).not.toContain("MimeType=");
     expect(content).toContain("StartupWMClass=relay-experimental\n");
     expect(content).not.toContain("NoDisplay");
     expect(readFileSync(join(input.iconDir, "icon.png"), "utf8")).toBe("png");

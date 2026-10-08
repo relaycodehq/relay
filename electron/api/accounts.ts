@@ -4,7 +4,7 @@ import {
   accountLabelSchema,
   accountProviderSchema,
 } from "../../shared/agent-accounts";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Claude Code and Codex accounts: Settings' list, and a thread's own pick. */
@@ -30,7 +30,11 @@ export function accountHandlers(ctx: ApiContext) {
       (provider, id) => accounts.remove(provider, id),
     ),
     moveAgentAccount: takes(
-      [accountProviderSchema, accountIdSchema, z.union([z.literal(-1), z.literal(1)])],
+      [
+        accountProviderSchema,
+        accountIdSchema,
+        z.union([z.literal(-1), z.literal(1)]),
+      ],
       (provider, id, by) => accounts.move(provider, id, by),
     ),
     useAgentAccount: takes(

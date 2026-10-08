@@ -58,11 +58,6 @@ def refresh(desktop):
         subprocess.run([command, str(desktop.parent)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    mime = shutil.which("xdg-mime")
-    if mime and desktop.exists():
-        subprocess.run([mime, "default", desktop.name, "x-scheme-handler/relay-room"], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
 
 def install(bundle, prefix, data_dir):
     app, binary, desktop = locations(prefix, data_dir)
@@ -79,7 +74,7 @@ def install(bundle, prefix, data_dir):
         f"Exec={desktop_command(app / NAME)} %U",
         f"Icon={NAME}",
         "Terminal=false", "Categories=Development;",
-        f"StartupWMClass={NAME}", "MimeType=x-scheme-handler/relay-room;",
+        f"StartupWMClass={NAME}",
         DESKTOP_MARKER, "",
     ])
     old_desktop = desktop.read_bytes() if desktop.exists() else None

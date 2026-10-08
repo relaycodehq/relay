@@ -65,10 +65,12 @@ export function openFrame(
   data: string | Uint8Array,
   codec: Codec,
 ): unknown {
-  if (typeof data === "string") return JSON.parse(channel.open(fromBase64Url(data)));
+  if (typeof data === "string")
+    return JSON.parse(channel.open(fromBase64Url(data)));
   const plain = channel.openBytes(data);
   const body = plain.subarray(1);
   if (plain[0] === raw) return JSON.parse(decodeUtf8Bytes(body));
-  if (plain[0] === deflated) return JSON.parse(decodeUtf8Bytes(codec.inflate(body)));
+  if (plain[0] === deflated)
+    return JSON.parse(decodeUtf8Bytes(codec.inflate(body)));
   throw new Error("Unknown frame.");
 }

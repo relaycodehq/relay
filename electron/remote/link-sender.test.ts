@@ -9,7 +9,15 @@ const answer = (
 ): RemoteEvent => ({
   kind: "message",
   chatId: "c",
-  message: { id: "m", role: "assistant", body, status, created: 1, provider: "claude", version: 1 },
+  message: {
+    id: "m",
+    role: "assistant",
+    body,
+    status,
+    created: 1,
+    provider: "claude",
+    version: 1,
+  },
 });
 
 /** A link where every frame costs `bytes`, as EDGE would make a big one feel. */
@@ -36,7 +44,10 @@ it("sends only the newest snapshot once a slow link has room again", () => {
   link.got(s(frames[0]));
   expect(frames).toHaveLength(2);
   expect(frames[1]).toMatchObject({
-    event: { kind: "messagePatch", patch: { body: { from: 3, text: " two three" } } },
+    event: {
+      kind: "messagePatch",
+      patch: { body: { from: 3, text: " two three" } },
+    },
   });
 });
 

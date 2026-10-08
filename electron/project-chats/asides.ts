@@ -5,9 +5,8 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { replyRoot } from "../../shared/projects";
-import { agentName } from "../../shared/agents";
+import { agentMention, agentName } from "../../shared/agents";
 import { agentAsked } from "../../shared/recipient";
-import { agentMention } from "../../shared/rooms";
 import { agentRuntime } from "../agents";
 import { streamingAnswer } from "./answer-recorder";
 import type { ChatCore } from "./core";

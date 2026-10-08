@@ -34,7 +34,8 @@ export function claudeOrigin(text: string) {
   }
 }
 
-const WRAPPED = /^\s*<(local-command-stdout|local-command-stderr|local-command-caveat|bash-stdout|bash-stderr|system-reminder)>/;
+const WRAPPED =
+  /^\s*<(local-command-stdout|local-command-stderr|local-command-caveat|bash-stdout|bash-stderr|system-reminder)>/;
 const INTERRUPTED = /^\[Request interrupted by user/;
 
 /**
@@ -74,7 +75,8 @@ export function claudePrompt(entry: Record<string, any>): string | undefined {
 export function claudeQueuedPrompt(entry: Record<string, any>) {
   const queued = entry.attachment;
   if (entry.type !== "attachment" || entry.isSidechain) return;
-  if (queued?.type !== "queued_command" || queued.commandMode !== "prompt") return;
+  if (queued?.type !== "queued_command" || queued.commandMode !== "prompt")
+    return;
   if (queued.origin && queued.origin.kind !== "human") return;
   return claudePrompt({ type: "user", message: { content: queued.prompt } });
 }
@@ -96,7 +98,10 @@ export async function claudeSummary(path: string) {
     (line) => {
       const entry = parsed(line);
       if (!entry) return;
-      if (entry.type === "custom-title" && typeof entry.customTitle === "string")
+      if (
+        entry.type === "custom-title" &&
+        typeof entry.customTitle === "string"
+      )
         custom = entry.customTitle;
       else if (entry.type === "ai-title" && typeof entry.aiTitle === "string")
         ai = entry.aiTitle;
@@ -133,7 +138,7 @@ export async function claudeHistory(path: string, session: string) {
   });
   const chain: Record<string, any>[] = [];
   const seen = new Set<string>();
-  for (let entry = last; entry && !seen.has(entry.uuid); ) {
+  for (let entry = last; entry && !seen.has(entry.uuid);) {
     seen.add(entry.uuid);
     chain.push(entry);
     entry = byId.get(entry.parentUuid ?? entry.logicalParentUuid);

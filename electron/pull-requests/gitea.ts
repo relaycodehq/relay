@@ -6,6 +6,7 @@ import type {
   Page,
   Pull,
   PullRef,
+  Repo,
   Review,
   ReviewComment,
   Draft,
@@ -13,6 +14,7 @@ import type {
 import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
 import { diffPaths } from "./diff-paths";
+import { filePair } from "./file-pair";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
@@ -24,6 +26,7 @@ export class ApiError extends Error {
     super(message);
   }
 }
+export type PullState = "open" | "closed" | "all";
 export type FetchRequest = (
   url: string,
   options: RequestInit,
@@ -227,61 +230,21 @@ export class Gitea {
     return this.contentsAt(p, file);
   }
   // The caller pins immutable blobs and checks the PR revision before/after a scan.
-  async contentsAt(
-    p: Pull,
-    file: ChangedFile,
-    signal?: AbortSignal,
-  ): Promise<FilePair> {
-    const r: PullRef = p,
-      head = p.head.sha,
-      base = p.merge_base;
-    const raw = async (
-      repo: { owner: string; name: string },
-      path: string,
-      sha: string,
-    ) =>
-      (
-        await this.request<string>(
-          `${this.repo(repo)}/raw/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(sha)}`,
-          { raw: true, limit: signal ? 128 * 1024 : MAX_FILE, signal },
-        )
-      ).data;
+  contentsAt(p: Pull, file: ChangedFile, signal?: AbortSignal) {
     const headRepo = p.head.repo
       ? { owner: p.head.repo.owner.login, name: p.head.repo.name }
-      : r;
-    const [old, next] = await Promise.all([
-      file.status === "added"
-        ? Promise.resolve(null)
-        : raw(r, file.previous_filename || file.filename, base),
-      file.status === "deleted"
-        ? Promise.resolve(null)
-        : raw(headRepo, file.filename, head),
-    ]);
-    const binary = [old, next].some(
-      (v) =>
-        v !== null &&
-        (v.includes("\0") ||
-          v.startsWith("version https://git-lfs.github.com/spec/v1")),
+      : p;
+    return filePair(
+      p,
+      file,
+      async (sha, path) =>
+        (
+          await this.request<string>(
+            `${this.repo(sha === p.head.sha ? headRepo : p)}/raw/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(sha)}`,
+            { raw: true, limit: signal ? 128 * 1024 : MAX_FILE, signal },
+          )
+        ).data,
     );
-    return {
-      old:
-        old === null
-          ? null
-          : {
-              name: file.previous_filename || file.filename,
-              contents: binary ? "" : old,
-              cacheKey: `${base}:${file.previous_filename || file.filename}`,
-            },
-      next:
-        next === null
-          ? null
-          : {
-              name: file.filename,
-              contents: binary ? "" : next,
-              cacheKey: `${head}:${file.filename}`,
-            },
-      binary,
-    };
   }
   async submit(
     r: PullRef,
@@ -342,6 +305,77 @@ export class Gitea {
         },
       })
     ).data;
+  }
+  /** A page of the repository's pulls, newest first. */
+  pulls(
+    r: Repo,
+    state: PullState,
+    page: number,
+    signal?: AbortSignal,
+    order: "updated" | "created" = "created",
+  ) {
+    return this.page<Pull>(
+      `${this.repo(r)}/pulls?state=${state}${order === "updated" ? "&sort=recentupdate" : ""}`,
+      page,
+      signal,
+    );
+  }
+  async repository(r: Repo) {
+    return (
+      await this.request<{
+        full_name: string;
+        default_branch: string;
+        clone_url: string;
+        ssh_url: string;
+      }>(this.repo(r))
+    ).data;
+  }
+  async branches(r: Repo) {
+    const values: { name: string }[] = [];
+    for (let page = 1; page <= 100; page++) {
+      const found = await this.page<{ name: string }>(
+        `${this.repo(r)}/branches`,
+        page,
+      );
+      values.push(...found.items);
+      if (!found.nextPage) return values;
+    }
+    throw new Error(
+      "This repository has too many branches to load safely. Open the PR in Gitea.",
+    );
+  }
+  /** The branch's tip, or null when the server has no such branch. */
+  async branchHead(r: Repo, branch: string) {
+    try {
+      return (
+        await this.request<{ commit: { id: string } }>(
+          `${this.repo(r)}/branches/${encodeURIComponent(branch)}`,
+        )
+      ).data.commit.id;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+  /** Gitea marks drafts by a `WIP:` title prefix, which a server may not recognise. */
+  async createPull(
+    r: Repo,
+    input: { head: string; base: string; title: string; body: string },
+    draft: boolean,
+  ) {
+    const pull = (
+      await this.request<Pull>(`${this.repo(r)}/pulls`, {
+        method: "POST",
+        body: {
+          ...input,
+          title:
+            draft && !/^(WIP:|\[WIP\])/i.test(input.title)
+              ? `WIP: ${input.title}`
+              : input.title,
+        },
+      })
+    ).data;
+    return { pull, draftIgnored: draft && !pull.draft };
   }
   static async connect(
     server: string,

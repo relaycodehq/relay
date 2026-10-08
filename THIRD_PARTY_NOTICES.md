@@ -923,14 +923,6 @@ Declared by the native modules above and compiled into the APK, besides React Na
 | org.jetbrains.kotlinx:kotlinx-coroutines-android | expo-clipboard, expo-image-picker, expo-modules-core |
 | org.jetbrains.kotlinx:kotlinx-coroutines-core | expo-clipboard, expo-image, expo-image-picker, expo-modules-core |
 
-### In the room server
-
-`dist-server/server.mjs`, in the room server archive and its Docker image.
-
-| Package | Version | Licence |
-| --- | --- | --- |
-| zod | 4.6.5 | MIT |
-
 ### Licence texts
 
 #### @anthropic-ai/claude-agent-sdk 0.3.276

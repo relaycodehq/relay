@@ -36,7 +36,9 @@ export function useThreadAccounts(chatId?: string, pinned?: Pinned) {
     of,
     /** More than one account to choose between. */
     several: (provider: string) =>
-      !!state && hasAccounts(provider) && accountsOf(state, provider).length > 1,
+      !!state &&
+      hasAccounts(provider) &&
+      accountsOf(state, provider).length > 1,
     /** Why the last switch didn't stick. */
     error,
     pick(provider: AccountProvider, id: string) {

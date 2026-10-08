@@ -123,7 +123,11 @@ export class TurnRunner {
     const account = hasAccounts(provider)
       ? accountFor(provider, chat.accounts?.[provider] ?? input.account)
       : undefined;
-    if (account && hasAccounts(provider) && chat.accounts?.[provider] !== account)
+    if (
+      account &&
+      hasAccounts(provider) &&
+      chat.accounts?.[provider] !== account
+    )
       chat.accounts = { ...chat.accounts, [provider]: account };
     if (rules.showsModel)
       void turnModel(provider, input, root).then((model) =>
@@ -196,7 +200,9 @@ export class TurnRunner {
           active.steer = control.steer;
           active.goal = control.goal;
         },
-        ...(!branch && chat.goal?.provider === provider ? { goal: chat.goal } : {}),
+        ...(!branch && chat.goal?.provider === provider
+          ? { goal: chat.goal }
+          : {}),
         onGoal: (goal: ThreadGoal | null) => {
           // A goal belongs to the main conversation; side ones run their own.
           if (branch || rules.side) return;
@@ -266,10 +272,7 @@ export class TurnRunner {
           ? { readOnly: true }
           : {}),
         // A started thread only gets the reading ones: no threads of threads.
-        ...(relayTools &&
-        !chat.thinker &&
-        !chat.reviewer &&
-        !rules.side
+        ...(relayTools && !chat.thinker && !chat.reviewer && !rules.side
           ? { relayTools }
           : {}),
         // The thread's running answer owns its requests; a side turn asks none.

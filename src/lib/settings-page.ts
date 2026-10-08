@@ -16,7 +16,6 @@ export type SettingsCategory =
   | "models"
   | "integrations"
   | "plugins"
-  | "rooms"
   | "phone"
   | "computers"
   | "dictation"

@@ -22,6 +22,9 @@ it("says why a phone isn't on the desktop's version", () => {
     "Newer than the 0.9.0 this Relay hands out",
   );
   expect(
-    phoneAppStatus({ ...app, update: { kind: "apk", version: "0.2.0" } }, "0.2.0"),
+    phoneAppStatus(
+      { ...app, update: { kind: "apk", version: "0.2.0" } },
+      "0.2.0",
+    ),
   ).toMatch(/needs a new APK/);
 });

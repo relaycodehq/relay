@@ -3,6 +3,8 @@ import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "../app/store";
 import { ApiError, type Gitea } from "../pull-requests/gitea";
+import type { PullHost } from "../pull-requests/host";
+import { GITHUB_SERVER } from "../../shared/source-control";
 import {
   projectTitle,
   type Project,
@@ -38,6 +40,20 @@ function repositoryFromRemote(
   if (!remote || !remoteOnHost(remote, new URL(server).hostname)) return null;
   const repo = repoOf(remote);
   return repo && { server, ...repo };
+}
+/** The github.com repository among a folder's remotes, `origin` first. */
+function githubRepository(remotes: string): Project["repository"] {
+  const rows = remotes
+    .split("\n")
+    .map((row) => row.split(/\s+/))
+    .sort((a, b) => Number(b[0] === "origin") - Number(a[0] === "origin"));
+  for (const [, raw] of rows) {
+    const remote = remoteUrl(raw ?? "");
+    const repo =
+      remote?.hostname.toLowerCase() === "github.com" && repoOf(remote);
+    if (repo) return { server: GITHUB_SERVER, ...repo };
+  }
+  return null;
 }
 const unique = (values: string[]) => [...new Set(values)];
 /** The root of the repository `dir` is in; null when it's in none. */
@@ -210,6 +226,12 @@ export class Projects {
         .filter((p) => !p.removed)
         .map((p) => withKind(this.named(p))),
     );
+    for (const p of projects)
+      if (!p.repository && !p.plain && !this.linkAttempts.has(p.id)) {
+        this.linkAttempts.add(p.id);
+        const linked = await this.linkGithub(p.id).catch(() => null);
+        if (linked) Object.assign(p, { repository: linked.repository });
+      }
     if (client)
       for (const p of projects)
         if (!p.repository && !p.plain) {
@@ -272,6 +294,10 @@ export class Projects {
     await this.store.update((s) => {
       (s.projects ??= []).push(project);
     });
+    if (repository) {
+      const github = await this.linkGithub(project.id).catch(() => null);
+      if (github) return withKind(github);
+    }
     if (client && repository) {
       try {
         return await this.link(project.id, client);
@@ -320,7 +346,26 @@ export class Projects {
       .filter((p) => p.scratch)
       .map((p) => p.id);
   }
-  async link(id: string, client: Gitea) {
+  /**
+   * Links a project whose remote is on github.com, from the remote alone:
+   * GitHub is one site, so there's no account to match it against first.
+   */
+  async linkGithub(id: string) {
+    const root = await this.root(id);
+    const repo = githubRepository(await git(root, ["remote", "-v"]));
+    if (!repo) return null;
+    await this.store.update((s) => {
+      s.projects!.find((p) => p.id === id)!.repository = repo;
+    });
+    return this.get(id);
+  }
+  async link(id: string, client: Gitea | null) {
+    const github = await this.linkGithub(id);
+    if (github) return withKind(github);
+    if (!client)
+      throw new Error(
+        "This folder has no github.com remote. Connect Gitea to match a Gitea one.",
+      );
     const root = await this.root(id),
       remotes = await git(root, ["remote", "-v"]);
     for (const row of remotes.split("\n")) {
@@ -430,17 +475,19 @@ export class Projects {
     });
     return { version: digest(contents) };
   }
-  async linked(id: string, client: Gitea) {
+  async linked(id: string, client: PullHost) {
     const p = this.get(id);
     if (!p.repository || p.repository.server !== client.account.server)
-      throw new Error("Connect this project to your Gitea account first.");
+      throw new Error(
+        "Relay can't match this project to a GitHub or Gitea repository.",
+      );
     const local = await inspectRepository(
       await this.root(id),
       client.account.server,
       p.repository,
     );
     if (!local.remoteMatches)
-      throw new Error("The clone no longer matches this Gitea repository.");
+      throw new Error("The clone no longer matches its repository's remote.");
     return p.repository;
   }
 }

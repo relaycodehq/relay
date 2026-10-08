@@ -51,47 +51,101 @@ const frames = Math.round((to - from) * fps);
 
 const work = mkdtempSync(join(tmpdir(), "reel-"));
 const scorePath = join(work, "score.wav");
-writeFileSync(scorePath, Buffer.from(await page.evaluate(() => window.reel.score()), "base64"));
+writeFileSync(
+  scorePath,
+  Buffer.from(await page.evaluate(() => window.reel.score()), "base64"),
+);
 
 const ffmpeg = spawn(
   "ffmpeg",
   [
-    "-y", "-loglevel", "error",
-    "-f", "image2pipe", "-framerate", String(fps * blur), "-c:v", "png", "-i", "-",
-    "-ss", String(from), "-t", String(to - from), "-i", scorePath,
+    "-y",
+    "-loglevel",
+    "error",
+    "-f",
+    "image2pipe",
+    "-framerate",
+    String(fps * blur),
+    "-c:v",
+    "png",
+    "-i",
+    "-",
+    "-ss",
+    String(from),
+    "-t",
+    String(to - from),
+    "-i",
+    scorePath,
     ...(blur > 1
-      ? ["-vf", `tmix=frames=${blur},select='eq(mod(n\\,${blur})\\,${blur - 1})',setpts=PTS-STARTPTS`, "-r", String(fps)]
+      ? [
+          "-vf",
+          `tmix=frames=${blur},select='eq(mod(n\\,${blur})\\,${blur - 1})',setpts=PTS-STARTPTS`,
+          "-r",
+          String(fps),
+        ]
       : []),
-    "-c:v", "libx264", "-preset", "slow", "-crf", "15", "-pix_fmt", "yuv420p",
-    "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
-    "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-shortest",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "slow",
+    "-crf",
+    "15",
+    "-pix_fmt",
+    "yuv420p",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-colorspace",
+    "bt709",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "256k",
+    "-movflags",
+    "+faststart",
+    "-shortest",
     out,
   ],
   { stdio: ["pipe", "inherit", "inherit"] },
 );
 const closed = new Promise((resolve, reject) => {
-  ffmpeg.on("close", (code) => (code ? reject(new Error(`ffmpeg exited ${code}`)) : resolve()));
+  ffmpeg.on("close", (code) =>
+    code ? reject(new Error(`ffmpeg exited ${code}`)) : resolve(),
+  );
 });
 
 const started = Date.now();
 for (let i = 0; i < frames; i++) {
   for (let sample = 0; sample < blur; sample++) {
-    await page.evaluate((t) => {
-      window.reel.seek(t);
-      // Two frames: one for layout and paint, one for the compositor to catch up.
-      return new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-    }, from + (i + (sample / blur) * 0.5) / fps);
-    const { data } = await devtools.send("Page.captureScreenshot", { format: "png", optimizeForSpeed: true });
+    await page.evaluate(
+      (t) => {
+        window.reel.seek(t);
+        // Two frames: one for layout and paint, one for the compositor to catch up.
+        return new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        );
+      },
+      from + (i + (sample / blur) * 0.5) / fps,
+    );
+    const { data } = await devtools.send("Page.captureScreenshot", {
+      format: "png",
+      optimizeForSpeed: true,
+    });
     if (!ffmpeg.stdin.write(Buffer.from(data, "base64")))
       await new Promise((drained) => ffmpeg.stdin.once("drain", drained));
   }
   if (i % fps === 0) {
     const each = (Date.now() - started) / (i + 1);
-    process.stdout.write(`\r${(from + i / fps).toFixed(0)}s of ${to.toFixed(0)}s, ${each.toFixed(0)} ms a frame, ${(((frames - i) * each) / 60000).toFixed(1)} min left  `);
+    process.stdout.write(
+      `\r${(from + i / fps).toFixed(0)}s of ${to.toFixed(0)}s, ${each.toFixed(0)} ms a frame, ${(((frames - i) * each) / 60000).toFixed(1)} min left  `,
+    );
   }
 }
 ffmpeg.stdin.end();
 await closed;
 await browser.close();
 rmSync(work, { recursive: true });
-console.log(`\n${out}: ${frames} frames, ${((Date.now() - started) / 60000).toFixed(1)} min`);
+console.log(
+  `\n${out}: ${frames} frames, ${((Date.now() - started) / 60000).toFixed(1)} min`,
+);

@@ -32,6 +32,7 @@ import { SelectionToolbar } from "./viewer/SelectionToolbar";
 import { FileChecks } from "./viewer/FileChecks";
 import { LineAnnotations, type NoteActions } from "./viewer/LineAnnotations";
 import { useDiffFind } from "./find/useDiffFind";
+import { pullHostName } from "../../../shared/source-control";
 
 interface Props extends NoteActions {
   /** A project thread's workspace, where blame is read instead of the PR's linked folder. */
@@ -204,7 +205,7 @@ export function DiffViewer({
             void api.openExternal(pull.html_url + "/files").catch(onError)
           }
         >
-          Open in Gitea
+          Open in {pullHostName(pull.html_url)}
         </button>
       </div>
     );

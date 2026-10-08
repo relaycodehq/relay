@@ -9,12 +9,12 @@ describe("repoOf", () => {
       owner: "Web",
       name: "web-store",
     });
-    expect(
-      repoOf(remoteUrl("git@git.example.com:Web/web-store.git")!),
-    ).toEqual({
-      owner: "Web",
-      name: "web-store",
-    });
+    expect(repoOf(remoteUrl("git@git.example.com:Web/web-store.git")!)).toEqual(
+      {
+        owner: "Web",
+        name: "web-store",
+      },
+    );
   });
 
   it("takes the last two segments when the host serves under a prefix", () => {
@@ -43,11 +43,7 @@ describe("isRemoteOf", () => {
       ),
     ).toBe(true);
     expect(
-      isRemoteOf(
-        "git@git.example.com:Web/Web-Store",
-        "git.example.com",
-        repo,
-      ),
+      isRemoteOf("git@git.example.com:Web/Web-Store", "git.example.com", repo),
     ).toBe(true);
   });
 

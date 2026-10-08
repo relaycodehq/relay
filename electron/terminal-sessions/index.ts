@@ -9,7 +9,12 @@ import {
   type TerminalSession,
   type TerminalSessionPick,
 } from "../../shared/terminal-sessions";
-import { claudeHistory, claudeOrigin, claudeSlug, claudeSummary } from "./claude";
+import {
+  claudeHistory,
+  claudeOrigin,
+  claudeSlug,
+  claudeSummary,
+} from "./claude";
 import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 import { FileCache, head } from "./scan";
@@ -130,11 +135,14 @@ export class TerminalSessions {
     const now = this.now();
     const claude = found.some(({ file }) => file.provider === "claude")
       ? await this.open(
-          (await this.homes()).flatMap((h) => (h.provider === "claude" ? [h.home] : [])),
+          (await this.homes()).flatMap((h) =>
+            h.provider === "claude" ? [h.home] : [],
+          ),
         ).catch(() => new Set<string>())
       : new Set<string>();
     return (file: File, id: string) =>
-      (file.provider === "claude" && claude.has(id)) || now - file.mtime < LIVE_WINDOW;
+      (file.provider === "claude" && claude.has(id)) ||
+      now - file.mtime < LIVE_WINDOW;
   }
 
   /**
@@ -142,8 +150,14 @@ export class TerminalSessions {
    * Most files in these folders are Relay's own sessions or another folder's,
    * so heads are read newest first until enough of them are this project's.
    */
-  private async candidates(roots: Set<string>, most: number, only?: TerminalSessionPick) {
-    const all = (await this.files(roots, only)).sort((a, b) => b.mtime - a.mtime);
+  private async candidates(
+    roots: Set<string>,
+    most: number,
+    only?: TerminalSessionPick,
+  ) {
+    const all = (await this.files(roots, only)).sort(
+      (a, b) => b.mtime - a.mtime,
+    );
     const out: { file: File; origin: NonNullable<Origin> }[] = [];
     for (let at = 0; at < all.length && out.length < most; at += BATCH) {
       const checked = await Promise.all(
@@ -155,7 +169,8 @@ export class TerminalSessions {
         })),
       );
       for (const { file, origin } of checked)
-        if (origin?.terminal && roots.has(origin.cwd)) out.push({ file, origin });
+        if (origin?.terminal && roots.has(origin.cwd))
+          out.push({ file, origin });
     }
     return out.slice(0, most);
   }
@@ -165,7 +180,8 @@ export class TerminalSessions {
     let { text, whole } = await head(file.path);
     let origin = claudeOrigin(text);
     // A long first prompt can push where it ran past the usual read.
-    if (!origin && !whole) origin = claudeOrigin((await head(file.path, 1024 * 1024)).text);
+    if (!origin && !whole)
+      origin = claudeOrigin((await head(file.path, 1024 * 1024)).text);
     return origin && { ...origin, id: basename(file.path, ".jsonl") };
   }
 
@@ -199,7 +215,11 @@ export class TerminalSessions {
       if (only && only.provider !== provider) continue;
       const dirs =
         provider === "claude"
-          ? [...new Set([...roots].map((r) => join(home, "projects", claudeSlug(r))))]
+          ? [
+              ...new Set(
+                [...roots].map((r) => join(home, "projects", claudeSlug(r))),
+              ),
+            ]
           : codexDays(join(home, "sessions"), this.now());
       for (const dir of dirs) {
         const at = await real(dir);
@@ -207,7 +227,8 @@ export class TerminalSessions {
         seen.add(at);
         const paths = await files(dir, (name) =>
           provider === "claude"
-            ? name.endsWith(".jsonl") && (!only || name === `${only.session}.jsonl`)
+            ? name.endsWith(".jsonl") &&
+              (!only || name === `${only.session}.jsonl`)
             : name.startsWith("rollout-") &&
               name.endsWith(".jsonl") &&
               (!only || name.endsWith(`-${only.session}.jsonl`)),
@@ -218,7 +239,14 @@ export class TerminalSessions {
         paths.forEach((path, i) => {
           const s = stats[i];
           if (s?.isFile())
-            out.push({ provider, account, home, path, mtime: s.mtimeMs, size: s.size });
+            out.push({
+              provider,
+              account,
+              home,
+              path,
+              mtime: s.mtimeMs,
+              size: s.size,
+            });
         });
       }
     }

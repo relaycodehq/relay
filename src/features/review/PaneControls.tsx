@@ -1,19 +1,15 @@
-import { Files, MessageSquare, RefreshCw } from "lucide-react";
+import { Files, RefreshCw } from "lucide-react";
 import { useShortcutLabel } from "../../lib/shortcuts";
 
 export function PaneControls({
   filesHidden,
   onToggleFiles,
   onRefresh,
-  roomOpen,
-  onToggleRoom,
 }: {
   filesHidden: boolean;
   onToggleFiles: () => void;
   /** Loads the PR afresh, for new commits and comments. */
   onRefresh: () => void;
-  roomOpen: boolean;
-  onToggleRoom?: () => void;
 }) {
   const filesKeys = useShortcutLabel("review-files");
   return (
@@ -36,18 +32,6 @@ export function PaneControls({
       >
         <Files size={17} />
       </button>
-      {onToggleRoom && (
-        <button
-          className={`icon-button ${roomOpen ? "active" : ""}`}
-          aria-label="Toggle PR room"
-          aria-controls="pr-room"
-          aria-pressed={roomOpen}
-          title={`${roomOpen ? "Hide" : "Show"} PR room`}
-          onClick={onToggleRoom}
-        >
-          <MessageSquare size={17} />
-        </button>
-      )}
     </div>
   );
 }

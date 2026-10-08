@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Settings → Computers, and handing threads to them. */

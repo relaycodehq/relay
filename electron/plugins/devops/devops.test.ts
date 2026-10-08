@@ -80,16 +80,16 @@ async function setup(
 }
 
 it("normalizes organization names and URLs", () => {
-  expect(organizationUrl("contoso")).toBe(
-    "https://dev.azure.com/contoso",
-  );
-  expect(organizationUrl("https://dev.azure.com/contoso/Software/_boards")).toBe(
-    "https://dev.azure.com/contoso",
-  );
+  expect(organizationUrl("contoso")).toBe("https://dev.azure.com/contoso");
+  expect(
+    organizationUrl("https://dev.azure.com/contoso/Software/_boards"),
+  ).toBe("https://dev.azure.com/contoso");
   expect(organizationUrl("https://contoso.visualstudio.com/Software")).toBe(
     "https://contoso.visualstudio.com",
   );
-  expect(() => organizationUrl("http://dev.azure.com/contoso")).toThrow(/https/);
+  expect(() => organizationUrl("http://dev.azure.com/contoso")).toThrow(
+    /https/,
+  );
 });
 
 it("turns work item HTML into plain text", () => {

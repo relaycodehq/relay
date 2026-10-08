@@ -5,7 +5,7 @@ export default defineConfig({
   tsconfig: "./tsconfig.json",
   test: {
     include: [
-      "{src,electron,shared,server}/**/*.test.{ts,tsx}",
+      "{src,electron,shared}/**/*.test.{ts,tsx}",
       "tests/unit/**/*.test.{ts,tsx}",
     ],
   },

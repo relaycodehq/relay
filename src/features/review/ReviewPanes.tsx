@@ -10,7 +10,7 @@ import type { PaneSlots } from "../../ui/WorkspacePanes";
 
 /**
  * A PR under review, on the Pull requests page or in a PR thread's pane: its
- * changed files, the page's room beside them, and the review.
+ * changed files and the review.
  */
 export function ReviewPanes({
   review,
@@ -21,7 +21,6 @@ export function ReviewPanes({
   bare,
   server,
   note,
-  room,
   paneControls,
   slots,
   workspace,
@@ -39,7 +38,6 @@ export function ReviewPanes({
   server: string;
   /** What the file list's footer says about the PR. */
   note?: ReactNode;
-  room?: ReactNode;
   paneControls: ReactNode;
   slots?: PaneSlots;
   /** A PR thread's workspace, where local changes and blame are read. */
@@ -62,7 +60,6 @@ export function ReviewPanes({
         note={note}
         onHide={onHideFiles}
       />
-      {room}
       <main className="review-main">
         {(pull.error || !pull.data || restoring) && (
           <header className="titlebar empty-titlebar">

@@ -454,7 +454,7 @@ export function GroupedFileList({
           )}
           <div className="group-dialog-actions">
             <span className="muted">
-              Saved locally · Gitea review stays unchanged
+              Saved locally · the review on the host stays unchanged
             </span>
             <button
               className="primary"

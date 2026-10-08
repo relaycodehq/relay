@@ -1261,34 +1261,24 @@
 .sb-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   padding: 8px 10px 10px;
   border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 .sb .sb-account {
   display: flex;
-  justify-content: flex-start;
-  gap: 9px;
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin-right: auto;
+  width: 32px;
   height: 32px;
-  padding: 0 6px;
+  padding: 0;
   font-size: 12.5px;
 }
 .sb .sb-account:hover {
   background: var(--hover);
-}
-.sb .sb-account.signed-in {
-  flex: none;
-  margin-right: auto;
-  width: 32px;
-  padding: 0;
-  justify-content: center;
-}
-.sb-account > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* Plain text like the agent update beside it; the background only answers hover. */
 .sb .sb-update {

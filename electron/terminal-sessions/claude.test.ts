@@ -114,8 +114,9 @@ it("turns a session into prompts and answers, with tool rows and commentary", ()
     message: messages[3]!.id,
     point: { thread: "s1", at: "assistant-14" },
   });
-  expect(messages.every((m, i) => !i || m.created > messages[i - 1]!.created))
-    .toBe(true);
+  expect(
+    messages.every((m, i) => !i || m.created > messages[i - 1]!.created),
+  ).toBe(true);
 });
 
 it("has nowhere to cut while the last turn is still going", () => {
@@ -133,7 +134,11 @@ it("marks an interrupted answer stopped", () => {
     type: "user",
     uuid: "int",
     parentUuid: "assistant-3",
-    message: { content: [{ type: "text", text: "[Request interrupted by user for tool use]" }] },
+    message: {
+      content: [
+        { type: "text", text: "[Request interrupted by user for tool use]" },
+      ],
+    },
   });
   const { messages } = claudeTranscript(entries, "s1");
   expect(messages[1]!.status).toBe("cancelled");
@@ -180,15 +185,18 @@ it("follows the session's current branch: a rewind drops, a compaction is crosse
         message: { content: "This session is being continued…" },
       },
       ...turn("after", "summary", "After compaction"),
-      { type: "system", subtype: "turn_duration", uuid: "dur", parentUuid: "after-a" },
+      {
+        type: "system",
+        subtype: "turn_duration",
+        uuid: "dur",
+        parentUuid: "after-a",
+      },
     );
     const path = await writeClaudeSession(home, "/repo", "s1", entries);
     const { messages, cut } = await claudeHistory(path, "s1");
-    expect(messages.filter((m) => m.role === "user").map((m) => m.body)).toEqual([
-      "Kept",
-      "Instead",
-      "After compaction",
-    ]);
+    expect(
+      messages.filter((m) => m.role === "user").map((m) => m.body),
+    ).toEqual(["Kept", "Instead", "After compaction"]);
     // A note after the last answer doesn't stop its turn counting as finished.
     expect(cut?.point.at).toBe("after-a");
   } finally {
@@ -208,20 +216,25 @@ it("shows what the user typed while Claude worked, and nothing else that queued"
     entries.splice(
       12,
       0,
-      claudeQueued("q-human", "assistant-11", "Use the other key", { kind: "human" }),
-      claudeQueued("q-task", "q-human", "<task-notification>done</task-notification>", {
-        kind: "task-notification",
+      claudeQueued("q-human", "assistant-11", "Use the other key", {
+        kind: "human",
       }),
+      claudeQueued(
+        "q-task",
+        "q-human",
+        "<task-notification>done</task-notification>",
+        {
+          kind: "task-notification",
+        },
+      ),
       claudeQueued("q-peer", "q-task", "from a peer", { kind: "peer" }),
     );
     entries[15] = { ...entries[15], parentUuid: "q-peer" };
     const path = await writeClaudeSession(home, "/repo", "s1", entries);
     const { messages, cut } = await claudeHistory(path, "s1");
-    expect(messages.filter((m) => m.role === "user").map((m) => m.body)).toEqual([
-      "First",
-      "Second",
-      "Use the other key",
-    ]);
+    expect(
+      messages.filter((m) => m.role === "user").map((m) => m.body),
+    ).toEqual(["First", "Second", "Use the other key"]);
     expect(messages.at(-1)?.body).toBe("Done two.");
     expect(cut?.point.at).toBe("assistant-14");
     // Counted as a prompt in the list, too.

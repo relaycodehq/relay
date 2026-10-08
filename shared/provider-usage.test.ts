@@ -147,7 +147,12 @@ describe("provider usage windows", () => {
     // Half the week gone: an even burn leaves 50%.
     const week = (usedPercent: number) =>
       presentWindow(
-        { kind: "weekly", usedPercent, resetsAt: now + WEEK_MS / 2, periodMs: WEEK_MS },
+        {
+          kind: "weekly",
+          usedPercent,
+          resetsAt: now + WEEK_MS / 2,
+          periodMs: WEEK_MS,
+        },
         now,
       );
     expect(paceGap(week(45))).toBe("5% ahead");

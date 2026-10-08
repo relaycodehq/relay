@@ -53,7 +53,7 @@ it("links the usual home into a profile, but never its sign-in", async () => {
 it("links what the usual home gained since, and keeps what the profile made its own", async () => {
   const profile = await prepareProfile("claude", "work");
   await rm(join(profile, "settings.json"));
-  await writeFile(join(profile, "settings.json"), "{ \"mine\": true }");
+  await writeFile(join(profile, "settings.json"), '{ "mine": true }');
   await mkdir(join(home, "skills"));
   await prepareProfile("claude", "work");
   expect((await lstat(join(profile, "skills"))).isSymbolicLink()).toBe(true);
@@ -75,11 +75,15 @@ it("removes a profile's links without touching what they point at", async () => 
 it("points the CLI at the profile and drops credentials it would prefer", () => {
   const env = accountEnv("claude", "work");
   expect(env.CLAUDE_CONFIG_DIR).toBe(profileDir("claude", "work"));
-  expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(profileDir("claude", "work"));
+  expect(env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(
+    profileDir("claude", "work"),
+  );
   expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   // The usual sign-in runs on Relay's environment as it is.
   expect(accountEnv("claude", "default").ANTHROPIC_API_KEY).toBe("sk-relay");
-  expect(accountEnv("codex", "work").CODEX_HOME).toBe(profileDir("codex", "work"));
+  expect(accountEnv("codex", "work").CODEX_HOME).toBe(
+    profileDir("codex", "work"),
+  );
 });
 
 it("refuses folder names that aren't account ids", () => {

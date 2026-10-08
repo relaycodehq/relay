@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
-import { idSchema } from "../../shared/rooms";
+import { idSchema } from "../../shared/validation";
 import { draftTerminalKey } from "../../shared/terminals";
 import { signInCommand } from "../agents/sign-in";
 import { projectTasks } from "../terminal/tasks";

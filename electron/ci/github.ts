@@ -1,14 +1,11 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { findExecutable } from "../platform/executables";
 import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
 import type { FetchRequest } from "../pull-requests/gitea";
+import { ghToken } from "../pull-requests/github";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
 import { statusRuns, type CommitStatus } from "./statuses";
 
-const exec = promisify(execFile);
 const API = "https://api.github.com";
 const MAX_JSON = 4 * 1024 * 1024;
 const MAX_CACHED = 200;
@@ -61,21 +58,6 @@ export function latestGithubRuns(runs: GithubRun[]) {
       !!seen.add(r.workflow_id),
   );
   return { head, runs: latest };
-}
-
-/** Borrows the `gh` CLI's login; without one, public repositories still read. */
-async function ghToken() {
-  try {
-    const gh = await findExecutable("gh");
-    const { stdout } = await exec(
-      gh,
-      ["auth", "token", "--hostname", "github.com"],
-      { timeout: 5000, encoding: "utf8" },
-    );
-    return stdout.trim() || null;
-  } catch {
-    return null;
-  }
 }
 
 export class GitHub {

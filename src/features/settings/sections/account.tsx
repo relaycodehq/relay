@@ -21,7 +21,7 @@ export function accountEntries({
       title: "Gitea account",
       description: account
         ? account.server
-        : "Connect to review pull requests and link projects to their remote.",
+        : "Connect to review pull requests on a Gitea server and link projects to it.",
       keywords: "sign in login token server connect",
       render: () =>
         account ? (

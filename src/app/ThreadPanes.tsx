@@ -35,7 +35,10 @@ export function ThreadChanges({
   view: ThreadView;
   opens: PaneOpens;
   review: {
+    /** Who Relay reviews as on the project's host; null until signed in. */
     account: Account | null;
+    github: boolean;
+    onRecheck: () => void;
     /** Asks the PR's thread about lines of its diff. */
     onDiscuss: (target: QuestionTarget, pr: Pull) => void;
     onConnect: () => void;
@@ -81,9 +84,25 @@ export function ThreadChanges({
         ) : (
           <div className="empty pane-empty">
             <GitPullRequest size={28} />
-            <h2>Connect your Git host</h2>
-            <p>We’ll match the repository using this folder’s Git remote.</p>
-            <button onClick={review.onConnect}>Connect Gitea</button>
+            {review.github ? (
+              <>
+                <h2>Sign in to GitHub</h2>
+                <p>
+                  Run <code>gh auth login</code> in a terminal; Relay reviews as
+                  that login.
+                </p>
+                <button onClick={review.onRecheck}>Check again</button>
+              </>
+            ) : (
+              <>
+                <h2>No pull request host</h2>
+                <p>
+                  Relay reviews pull requests on GitHub and Gitea. This folder
+                  has no github.com remote; for a Gitea one, connect Gitea.
+                </p>
+                <button onClick={review.onConnect}>Connect Gitea</button>
+              </>
+            )}
           </div>
         )
       ) : (

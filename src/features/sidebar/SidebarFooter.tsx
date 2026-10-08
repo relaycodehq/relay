@@ -31,17 +31,19 @@ export function SidebarFooter({
 }) {
   return (
     <div className="sb-footer">
-      <button
-        className={`sb-account ${account ? "signed-in" : ""}`}
-        title={account}
-        aria-label={account}
-        onClick={onAccount}
-      >
-        <span className="sb-avatar" aria-hidden>
-          {(account ?? "?").slice(0, 2).toUpperCase()}
-        </span>
-        {!account && <span>Connect Gitea</span>}
-      </button>
+      {/* Gitea is optional; without it there's nobody to show here. */}
+      {account && (
+        <button
+          className="sb-account"
+          title={account}
+          aria-label={account}
+          onClick={onAccount}
+        >
+          <span className="sb-avatar" aria-hidden>
+            {account.slice(0, 2).toUpperCase()}
+          </span>
+        </button>
+      )}
       <DevRestartButton />
       <UpdateButton />
       <CheckUpdatesButton />

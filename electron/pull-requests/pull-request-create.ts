@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Gitea, ApiError } from "./gitea";
+import type { PullHost } from "./host";
 import { currentBranch, git } from "../git/git";
 import { workingTree, serializeRepo } from "../git/working-tree";
 import { remoteUrl } from "../git/repository";
@@ -10,11 +10,7 @@ import type {
   CreatePullRequest,
   CreatedPullRequest,
 } from "../../shared/pull-request-create";
-interface RepositoryInfo {
-  default_branch: string;
-  clone_url: string;
-  ssh_url: string;
-}
+type RepositoryInfo = Awaited<ReturnType<PullHost["repository"]>>;
 interface SavedPlan {
   plan: PullRequestPlan;
   root: string;
@@ -38,25 +34,25 @@ const asBranchPull = (repo: Repo, p: Pull): BranchPull => ({
   base: p.base.ref,
   url: p.html_url,
 });
-async function allPages<T>(client: Gitea, path: string) {
-  const values: T[] = [];
+async function openPulls(client: PullHost, repo: Repo) {
+  const values: Pull[] = [];
   for (let page = 1; page <= 100; page++) {
-    const response = await client.page<T>(path, page);
+    const response = await client.pulls(repo, "open", page);
     values.push(...response.items);
     if (!response.nextPage) return values;
   }
   throw new Error(
-    "This repository has too many results to load safely. Open the PR in Gitea.",
+    "This repository has too many open PRs to load safely. Open the PR on its host.",
   );
 }
 export async function branchPulls(
   root: string,
-  client: Gitea,
+  client: PullHost,
   repo: Repo,
 ): Promise<BranchPull[]> {
   const branch = await currentBranch(root);
   if (!branch) return [];
-  return (await allPages<Pull>(client, `${client.repo(repo)}/pulls?state=open`))
+  return (await openPulls(client, repo))
     .filter(
       (p) =>
         p.head.ref === branch &&
@@ -65,18 +61,8 @@ export async function branchPulls(
     )
     .map((p) => asBranchPull(repo, p));
 }
-async function remoteHead(client: Gitea, repo: Repo, branch: string) {
-  try {
-    return (
-      await client.request<{ commit: { id: string } }>(
-        `${client.repo(repo)}/branches/${encodeURIComponent(branch)}`,
-      )
-    ).data.commit.id;
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
-    throw e;
-  }
-}
+const remoteHead = (client: PullHost, repo: Repo, branch: string) =>
+  client.branchHead(repo, branch);
 async function matchingRemote(root: string, info: RepositoryInfo) {
   const accepted = [identity(info.clone_url), identity(info.ssh_url)].filter(
     Boolean,
@@ -101,7 +87,7 @@ export class PullRequestCreation {
   private plans = new Map<string, SavedPlan>();
   async prepare(
     root: string,
-    client: Gitea,
+    client: PullHost,
     repo: Repo,
   ): Promise<PullRequestPlan> {
     const state = await workingTree(root);
@@ -114,8 +100,8 @@ export class PullRequestCreation {
         "Finish the current Git operation before opening a pull request.",
       );
     const [info, refs, existing, published] = await Promise.all([
-      client.request<RepositoryInfo>(client.repo(repo)).then((r) => r.data),
-      allPages<{ name: string }>(client, `${client.repo(repo)}/branches`),
+      client.repository(repo),
+      client.branches(repo),
       branchPulls(root, client, repo),
       remoteHead(client, repo, state.branch),
     ]);
@@ -173,7 +159,7 @@ export class PullRequestCreation {
   }
   async create(
     root: string,
-    client: Gitea,
+    client: PullHost,
     input: CreatePullRequest,
   ): Promise<CreatedPullRequest> {
     const saved = this.plans.get(input.planId);
@@ -218,10 +204,9 @@ export class PullRequestCreation {
           );
         if (!plan.remote || !saved.pushUrl)
           throw new Error(
-            "No push remote matches this Gitea repository. Configure a matching remote first.",
+            "No push remote matches this repository. Configure a matching remote first.",
           );
-        const info = (await client.request<RepositoryInfo>(client.repo(repo)))
-          .data;
+        const info = await client.repository(repo);
         const remote = await matchingRemote(root, info);
         if (remote?.name !== plan.remote || remote.url !== saved.pushUrl)
           throw new Error(
@@ -242,25 +227,21 @@ export class PullRequestCreation {
       try {
         if ((await remoteHead(client, repo, plan.branch)) !== plan.head)
           throw new Error(
-            "Gitea's branch does not match the commit in this preview. Refresh and try again.",
+            "The host's branch does not match the commit in this preview. Refresh and try again.",
           );
-        const p = (
-          await client.request<Pull>(`${client.repo(repo)}/pulls`, {
-            method: "POST",
-            body: {
-              head: plan.branch,
-              base: input.base,
-              title:
-                input.draft && !/^(WIP:|\[WIP\])/i.test(input.title)
-                  ? `WIP: ${input.title}`
-                  : input.title,
-              body: input.body,
-            },
-          })
-        ).data;
+        const { pull, draftIgnored } = await client.createPull(
+          repo,
+          {
+            head: plan.branch,
+            base: input.base,
+            title: input.title,
+            body: input.body,
+          },
+          input.draft,
+        );
         return (saved.result = {
-          pull: asBranchPull(repo, p),
-          ...(input.draft && !p.draft
+          pull: asBranchPull(repo, pull),
+          ...(draftIgnored
             ? {
                 warning:
                   "PR created, but this server did not recognize WIP: as a draft prefix. Check its draft status in Gitea.",

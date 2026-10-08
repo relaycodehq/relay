@@ -116,7 +116,14 @@ export function spokenInline(text: string): string {
 }
 
 // Said as words rather than letter by letter.
-const wordExtensions = new Set(["json", "yaml", "toml", "lock", "swift", "java"]);
+const wordExtensions = new Set([
+  "json",
+  "yaml",
+  "toml",
+  "lock",
+  "swift",
+  "java",
+]);
 
 /**
  * A file name or path in inline code as a person would say it: just the

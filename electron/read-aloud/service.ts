@@ -286,13 +286,11 @@ export class ReadAloud {
     } else if (notice.type === "loading")
       this.sessions.get(notice.id)?.sink({ type: "loading" });
     else if (notice.type === "audio")
-      this.sessions
-        .get(notice.id)
-        ?.sink({
-          type: "audio",
-          pcm: notice.pcm,
-          sampleRate: notice.sampleRate,
-        });
+      this.sessions.get(notice.id)?.sink({
+        type: "audio",
+        pcm: notice.pcm,
+        sampleRate: notice.sampleRate,
+      });
     else if (notice.type === "end") {
       const session = this.sessions.get(notice.id);
       this.sessions.delete(notice.id);

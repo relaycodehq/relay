@@ -22,7 +22,11 @@ const OWN: Record<AccountProvider, Set<string>> = {
 };
 /** Credentials a profile must not inherit from Relay's own environment. */
 const ENV_CREDENTIALS: Record<AccountProvider, string[]> = {
-  claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+  claude: [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+  ],
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"],
 };
 

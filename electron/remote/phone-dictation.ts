@@ -3,10 +3,7 @@ import type {
   DictationModelState,
   DictationRequest,
 } from "../../shared/dictation";
-import type {
-  PhoneDictation,
-  PhoneDictationHeard,
-} from "../../shared/remote";
+import type { PhoneDictation, PhoneDictationHeard } from "../../shared/remote";
 
 /** This computer's speech engine, as phones use it; see ../dictation/service. */
 export interface SpeechService {
