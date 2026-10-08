@@ -55,7 +55,7 @@ export async function answerRelayTools(
   chats: ProjectChats,
   hosts: AgentHosts | undefined,
   projects: AgentProjects,
-  previews: ThreadPreviews,
+  previews?: ThreadPreviews,
 ) {
   const started = new StartedThreads(chats, { projects, previews });
   if (hosts) {

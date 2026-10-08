@@ -249,6 +249,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const window = new AppWindow({
     closed: () => {},
     quitCancelled: () => {},
+    reloaded: () => {},
     rendererGone: () => {},
   });
   const agentUpdates = new AgentUpdates(() => {}, {

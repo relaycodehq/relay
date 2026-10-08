@@ -249,6 +249,18 @@ export class BrowserWindow {
   }
 }
 
+export class WebContentsView {
+  constructor() {
+    throw unavailable("A browser preview");
+  }
+}
+
+export const session = {
+  fromPartition: () => {
+    throw unavailable("Browser storage");
+  },
+};
+
 export class Tray {
   constructor() {
     throw unavailable("The menubar");

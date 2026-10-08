@@ -17,16 +17,22 @@ const boundsSchema = z
 
 /** The threads' previews: a browser each, over the panel. */
 export function previewHandlers(ctx: ApiContext) {
-  const { previews } = ctx;
+  const previews = () => {
+    if (!ctx.previews)
+      throw new Error("Browser previews aren't available on a headless Relay.");
+    return ctx.previews;
+  };
   return {
     openPreview: takes([idSchema, idSchema.nullable()], (projectId, chatId) =>
-      previews.open(projectId, chatId),
+      previews().open(projectId, chatId),
     ),
-    placePreview: takes([previewKeySchema, boundsSchema.nullable()], (key, bounds) =>
-      previews.place(key, bounds),
+    placePreview: takes(
+      [previewKeySchema, boundsSchema.nullable()],
+      (key, bounds) => previews().place(key, bounds),
     ),
-    navigatePreview: takes([previewKeySchema, z.url({ protocol: /^https?$/ }).max(8192)], (key, url) =>
-      previews.navigate(key, url),
+    navigatePreview: takes(
+      [previewKeySchema, z.url({ protocol: /^https?$/ }).max(8192)],
+      (key, url) => previews().navigate(key, url),
     ),
     previewAction: takes(
       [
@@ -42,9 +48,11 @@ export function previewHandlers(ctx: ApiContext) {
           "stopPicking",
         ]),
       ],
-      (key, action) => previews.act(key, action),
+      (key, action) => previews().act(key, action),
     ),
-    pickPreviewElement: takes([previewKeySchema], (key) => previews.pick(key)),
-    closePreview: takes([previewKeySchema], (key) => previews.close(key)),
+    pickPreviewElement: takes([previewKeySchema], (key) =>
+      previews().pick(key),
+    ),
+    closePreview: takes([previewKeySchema], (key) => previews().close(key)),
   };
 }

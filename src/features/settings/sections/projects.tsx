@@ -46,7 +46,7 @@ export function projectEntries(project: Project | undefined): SettingEntry[] {
     },
     {
       id: "project-dev-command",
-      category: "projects",
+      category: "project",
       section: "Preview",
       title: "Dev command",
       description:
@@ -64,7 +64,7 @@ export function projectEntries(project: Project | undefined): SettingEntry[] {
     } satisfies SettingEntry,
     {
       id: "project-dev-port",
-      category: "projects",
+      category: "project",
       section: "Preview",
       title: "Dev port",
       description:

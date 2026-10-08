@@ -60,7 +60,8 @@ export interface Services {
   agentUpdates: AgentUpdates;
   agentAccounts: AgentAccounts;
   projectAdding: ProjectAdding;
-  previews: ThreadPreviews;
+  /** Desktop browser views; absent when Relay runs headless. */
+  previews?: ThreadPreviews;
 }
 
 /** What a method's promise resolves to in the page. */
