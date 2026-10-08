@@ -14,7 +14,7 @@ it("puts the control socket in the home folder while its path fits", () => {
   );
   const deep = "/home/me/" + "nested/".repeat(20) + ".relay";
   expect(controlSocket(deep, "linux")).toMatch(
-    /^\/tmp\/relay-.+-[0-9a-f]{16}\.sock$/,
+    /^\/tmp\/relay-.+-[0-9a-f]{16}\/control\.sock$/,
   );
   expect(controlSocket("C:\\Users\\me\\.relay", "win32")).toMatch(
     /^\\\\\.\\pipe\\relay-[0-9a-f]{16}$/,

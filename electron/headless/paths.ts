@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { chmod, lstat, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -35,5 +36,21 @@ export function controlSocket(home: string, platform = process.platform) {
   // macOS allows 104 bytes for a socket path, Linux 108.
   return Buffer.byteLength(inHome) < 100
     ? inHome
-    : join("/tmp", `relay-${process.getuid?.() ?? "user"}-${id}.sock`);
+    : join(
+        "/tmp",
+        `relay-${process.getuid?.() ?? "user"}-${id}`,
+        "control.sock",
+      );
+}
+
+/** Creates a private directory, and secures an existing one before using it. */
+export async function privateDirectory(path: string) {
+  await mkdir(path, { recursive: true, mode: 0o700 });
+  const info = await lstat(path);
+  if (
+    !info.isDirectory() ||
+    (process.platform !== "win32" && info.uid !== process.getuid!())
+  )
+    throw new Error(`Relay needs a directory owned by this user: ${path}`);
+  if (process.platform !== "win32") await chmod(path, 0o700);
 }

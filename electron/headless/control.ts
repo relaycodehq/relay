@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+import { privateDirectory } from "./paths";
 import { chmod, rm } from "node:fs/promises";
 import {
   createConnection,
@@ -118,12 +120,25 @@ export async function serveControl(
   path: string,
   api: ControlApi,
 ): Promise<Server> {
-  if (process.platform !== "win32") await rm(path, { force: true });
+  if (process.platform !== "win32") {
+    await privateDirectory(dirname(path));
+    await rm(path, { force: true });
+  }
   const server = createServer((socket) => {
     readLines(socket, (text) => {
       let request: Request;
       try {
-        request = JSON.parse(text) as Request;
+        const value: unknown = JSON.parse(text);
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          throw new Error("Invalid request.");
+        const candidate = value as Partial<Request>;
+        if (
+          !Number.isSafeInteger(candidate.id) ||
+          typeof candidate.method !== "string" ||
+          !Array.isArray(candidate.params)
+        )
+          throw new Error("Invalid request.");
+        request = candidate as Request;
       } catch {
         socket.destroy();
         return;
@@ -159,10 +174,16 @@ export async function serveControl(
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(path, () => {
-      server.off("error", reject);
-      resolve();
-    });
+    const mask =
+      process.platform !== "win32" ? process.umask(0o077) : undefined;
+    try {
+      server.listen(path, () => {
+        server.off("error", reject);
+        resolve();
+      });
+    } finally {
+      if (mask !== undefined) process.umask(mask);
+    }
   });
   if (process.platform !== "win32") await chmod(path, 0o600);
   return server;
@@ -202,12 +223,24 @@ export function callControl<M extends ControlMethod>(
       done(() => reject(new Error("Relay closed the connection."))),
     );
     readLines(socket, (text) => {
-      const response = JSON.parse(text) as Response;
-      done(() =>
-        response.ok
-          ? resolve(response.value as Awaited<ReturnType<ControlApi[M]>>)
-          : reject(new Error(response.error)),
-      );
+      try {
+        const response: unknown = JSON.parse(text);
+        if (
+          !response ||
+          typeof response !== "object" ||
+          !("ok" in response) ||
+          typeof response.ok !== "boolean"
+        )
+          throw new Error("Invalid control response.");
+        const reply = response as Response;
+        done(() =>
+          reply.ok
+            ? resolve(reply.value as Awaited<ReturnType<ControlApi[M]>>)
+            : reject(new Error(reply.error)),
+        );
+      } catch (e) {
+        done(() => reject(e));
+      }
     });
     socket.once("connect", () =>
       socket.write(

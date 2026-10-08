@@ -73,7 +73,7 @@ import {
   type ThreadRow,
 } from "./control";
 import { onAppQuit, powerMonitor } from "./electron-stand-in";
-import { claimHome, readConfig, restartCode, spawnRelay } from "./launch";
+import { autoUpdateEnabled, claimHome, restartCode, spawnRelay } from "./launch";
 import { headlessPaths } from "./paths";
 import { headlessPower } from "./power";
 import { compressImage } from "./image";
@@ -99,7 +99,7 @@ const fetcher = (url: string | URL | Request, init?: RequestInit) =>
 export async function runDaemon({ home, port, name }: DaemonOptions) {
   const paths = headlessPaths(home);
   const startedAt = Date.now();
-  await claimHome(paths.pid);
+  const releaseHome = await claimHome(paths.pid);
   setComputerName(name);
   // Started this early, the login shell has usually answered before the first
   // CLI lookup waits for it.
@@ -358,9 +358,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   if (!process.env.RELAY_TEST_DATA) {
     agentUpdates.start();
     keepUpdated(updater, {
-      enabled: async () =>
-        (await readConfig(home).catch(() => ({ autoUpdate: true })))
-          .autoUpdate ?? true,
+      enabled: () => autoUpdateEnabled(home),
       busy: () => chats.working() > 0 || receiver.busy,
     });
   }
@@ -401,9 +399,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       keepAwake.dispose();
       dictation.stopWorker();
       readAloud.stopWorker();
-      await rm(paths.pid, { force: true });
       if (process.platform !== "win32")
         await rm(paths.control, { force: true });
+      await releaseHome();
       if (restart && process.env.RELAY_SERVICE) process.exit(restartCode);
       if (restart) spawnRelay(home, join(__dirname, "relay.cjs"));
       process.exit(0);

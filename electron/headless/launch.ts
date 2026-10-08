@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
-import { headlessPaths } from "./paths";
+import { headlessPaths, privateDirectory } from "./paths";
+import { lockPath } from "./lock";
 import { installedService, serviceHome, startService } from "./service";
 
 /** What a Relay run as a service exits with to be started again. */
@@ -28,7 +29,10 @@ export type HeadlessConfig = z.infer<typeof configSchema>;
 
 export async function readConfig(home: string): Promise<HeadlessConfig> {
   const text = await readFile(headlessPaths(home).config, "utf8").catch(
-    () => "{}",
+    (e: NodeJS.ErrnoException) => {
+      if (e.code === "ENOENT") return "{}";
+      throw e;
+    },
   );
   try {
     return configSchema.parse(JSON.parse(text));
@@ -39,9 +43,17 @@ export async function readConfig(home: string): Promise<HeadlessConfig> {
   }
 }
 
+/** A missing setting defaults on; unreadable or invalid config fails closed. */
+export async function autoUpdateEnabled(home: string) {
+  return (
+    (await readConfig(home).catch(() => ({ autoUpdate: false }))).autoUpdate ??
+    true
+  );
+}
+
 export async function saveConfig(home: string, patch: HeadlessConfig) {
   const next = { ...(await readConfig(home)), ...patch };
-  await mkdir(home, { recursive: true, mode: 0o700 });
+  await privateDirectory(home);
   await writeFile(
     headlessPaths(home).config,
     JSON.stringify(next, null, 2) + "\n",
@@ -87,7 +99,14 @@ async function answering(home: string, exited?: () => number | null) {
 export async function stopped(home: string, timeoutMs = 60_000) {
   const { pid } = headlessPaths(home);
   for (const until = Date.now() + timeoutMs; Date.now() < until;) {
-    if (!(await running(home).catch(() => null)) && !(await holding(pid)))
+    if (
+      !(await running(home).catch(() => null)) &&
+      !(await holding(pid)) &&
+      !(await lstat(`${pid}.lock`).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === "ENOENT") return null;
+        throw e;
+      }))
+    )
       return;
     await sleep(250);
   }
@@ -132,27 +151,38 @@ export function spawnRelay(home: string, script: string) {
   return child;
 }
 
-/**
- * One Relay per home folder: its pid file is made exclusively, and only a
- * file whose process is gone is taken over.
- */
+/** The lock owns the home; the PID file is only status, never a lock itself. */
 export async function claimHome(pidFile: string) {
-  await mkdir(dirname(pidFile), { recursive: true, mode: 0o700 });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      await writeFile(pidFile, `${process.pid}\n`, { mode: 0o600, flag: "wx" });
-      return;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-    }
-    const pid = await holding(pidFile);
-    if (pid && pid !== process.pid)
-      throw new AlreadyRunning(
-        `Relay is already running here (pid ${pid}). If it isn't, delete ${pidFile}.`,
-      );
-    await rm(pidFile, { force: true });
+  await privateDirectory(dirname(pidFile));
+  if (await holding(pidFile))
+    throw new AlreadyRunning("Relay is already running here.");
+  let release: () => Promise<void>;
+  try {
+    release = await lockPath(pidFile);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ELOCKED")
+      throw new AlreadyRunning("Another Relay is starting here.");
+    throw e;
   }
-  throw new Error(`Another Relay is starting here; see ${pidFile}.`);
+  try {
+    if (await holding(pidFile))
+      throw new AlreadyRunning("Relay is already running here.");
+    await writeFile(pidFile, `${process.pid}\n`, { mode: 0o600 });
+  } catch (e) {
+    await release();
+    throw e;
+  }
+  return async () => {
+    await rm(pidFile, { force: true });
+    await release();
+  };
+}
+
+/** Used by both setup and service install before handing Relay to its manager. */
+export async function stopForService(home: string) {
+  if (!(await running(home))) return;
+  await callControl(headlessPaths(home).control, "stop", { detach: true });
+  await stopped(home);
 }
 
 function alive(pid: number) {

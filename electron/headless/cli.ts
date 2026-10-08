@@ -30,12 +30,14 @@ import {
 import {
   AlreadyRunning,
   alreadyRunningCode,
+  autoUpdateEnabled,
   readConfig,
   restartCode,
   running,
   saveConfig,
   startDetached,
   stopped,
+  stopForService,
 } from "./launch";
 import { headlessPaths, relayHome } from "./paths";
 import { settingsCommand } from "./settings";
@@ -108,9 +110,12 @@ function parse(argv: string[]) {
       return next;
     };
     switch (name) {
-      case "--home":
-        flags.home = value();
+      case "--home": {
+        const home = value();
+        if (!home.trim()) throw new Usage("--home needs a nonempty path.");
+        flags.home = home;
         break;
+      }
       case "--port": {
         const port = Number(value());
         if (!Number.isInteger(port) || port < 1 || port > 65535)
@@ -515,9 +520,7 @@ async function status(home: string, flags: Flags) {
       .join(", "),
   ]);
   rows.push(["Agents", agentsLine(status.agents)]);
-  const { autoUpdate: auto = true } = await readConfig(home).catch(() => ({
-    autoUpdate: true,
-  }));
+  const auto = await autoUpdateEnabled(home);
   rows.push([
     "Updates",
     status.update.status === "off"
@@ -830,6 +833,7 @@ async function needRunning(home: string) {
 
 async function service(home: string, flags: Flags, [action]: string[]) {
   if (action === "install") {
+    await stopForService(home);
     const { kind, file, note } = await installService({
       node: stableNode(),
       script,
@@ -924,12 +928,7 @@ async function setup(home: string, flags: Flags) {
       flags.service &&
       (await yesNo("Start Relay with this computer, in the background?"))
     ) {
-      if (already) {
-        await callControl(headlessPaths(home).control, "stop", {
-          detach: true,
-        });
-        await stopped(home);
-      }
+      await stopForService(home);
       const { kind, note } = await installService({
         node: stableNode(),
         script,
