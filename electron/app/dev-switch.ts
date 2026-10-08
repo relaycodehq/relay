@@ -32,11 +32,14 @@ export async function devSwitchTo(path: string) {
 }
 
 /** IPC works on Windows too, without terminating Chromium or agent hosts. */
-export function listenDevSwitch(quit: Pick<Quit, "restart">) {
+export function listenDevSwitch(quit: Pick<Quit, "restart" | "stop">) {
   if (!process.env.RELAY_DEV_STALE || !process.send) return;
   process.on("message", (message) => {
-    if ((message as { type?: unknown })?.type !== "relay:dev-stop") return;
-    quit.restart(() => process.send?.({ type: "relay:dev-cancelled" }));
+    const request = message as { type?: unknown; detach?: unknown };
+    if (request?.type !== "relay:dev-stop") return;
+    const cancelled = () => process.send?.({ type: "relay:dev-cancelled" });
+    if (request.detach === false) quit.stop(cancelled);
+    else quit.restart(cancelled);
   });
-  process.send({ type: "relay:dev-ready" });
+  process.send({ type: "relay:dev-ready", restore: true });
 }

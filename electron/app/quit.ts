@@ -12,7 +12,7 @@ interface QuitSteps {
   /** Saves before services or hosts are torn down; a rejection keeps Relay open. */
   prepare(): Promise<unknown>;
   /** Resumes prepared services when the user keeps Relay open. */
-  cancelled(): void;
+  cancelled(): void | Promise<void>;
   /** Stops services once saving succeeded, or the user chose to discard. */
   shutDown(): Promise<unknown>;
   /** The last step, once nothing is left to save. */
@@ -32,24 +32,56 @@ export class Quit {
   detaching = false;
   private flushing = false;
   private asking = false;
-  private cancelled?: () => void;
+  private cancellations = new Set<() => void>();
+  private requested = false;
+  private cancelling = false;
 
   constructor(private steps: QuitSteps) {}
 
   /** A restart still lets the window and failed saves cancel the quit. */
   restart(cancelled?: () => void) {
-    this.cancelled = cancelled;
-    this.detaching = true;
+    this.request(true, cancelled);
+  }
+
+  /** Restore ends the live sessions instead of carrying them into older data. */
+  stop(cancelled?: () => void) {
+    this.request(false, cancelled);
+  }
+
+  private request(detach: boolean, cancelled?: () => void) {
+    if (this.cancelling) {
+      cancelled?.();
+      return;
+    }
+    // A quit already preparing must keep its original teardown mode.
+    if (
+      (this.requested || this.flushing || this.asking) &&
+      this.detaching !== detach
+    ) {
+      cancelled?.();
+      return;
+    }
+    if (cancelled) this.cancellations.add(cancelled);
+    if (this.requested) return;
+    this.requested = true;
+    this.detaching = detach;
     app.quit();
   }
 
-  cancel() {
+  async cancel() {
+    if (this.cancelling) return;
+    this.cancelling = true;
     this.detaching = false;
     this.confirmed = false;
-    const cancelled = this.cancelled;
-    this.cancelled = undefined;
-    this.steps.cancelled();
-    cancelled?.();
+    this.requested = false;
+    const cancelled = [...this.cancellations];
+    this.cancellations.clear();
+    try {
+      await this.steps.cancelled();
+    } finally {
+      this.cancelling = false;
+      for (const callback of cancelled) callback();
+    }
   }
 
   listen() {
@@ -77,6 +109,7 @@ export class Quit {
       return;
     }
     event.preventDefault();
+    if (this.cancelling) return;
     // Quitting ends Claude's sessions, and the background work they run.
     const tasks = this.confirmed || this.detaching ? [] : steps.runningTasks();
     if (tasks.length) {
