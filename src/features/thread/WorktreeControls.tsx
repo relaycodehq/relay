@@ -53,7 +53,11 @@ export function WorkspaceControl({
         onReveal={(path) =>
           void api.revealAgentWorktree(chat.id, path).catch(onError)
         }
-        onMove={() => worktree.setDialog("move")}
+        onMove={
+          !chat.agentWorktrees?.length
+            ? () => worktree.setDialog("move")
+            : undefined
+        }
       />
     );
   const { status } = worktree;
@@ -223,11 +227,7 @@ export function CheckoutControl({
           .join(", ")}`}
       >
         <FolderGit2 size={13} />
-        <span>
-          {worktrees.length === 1
-            ? folderName(latest.path)
-            : `${worktrees.length} worktrees`}
-        </span>
+        <span>{folderName(latest.path)}</span>
         <ChevronDown size={12} />
       </Menu.Trigger>
       <Menu.Portal>
@@ -245,7 +245,8 @@ export function CheckoutControl({
               Started in the project folder. The agent made{" "}
               {worktrees.length === 1 ? "this worktree" : "these worktrees"}{" "}
               itself; edits there aren't in the project folder until it merges
-              them.
+              them. Git, files and the terminal follow {folderName(latest.path)}
+              .
             </div>
             {worktrees.map((w) => (
               <Menu.Item
@@ -255,6 +256,9 @@ export function CheckoutControl({
                 onClick={() => onReveal(w.path)}
               >
                 <FolderGit2 size={14} />
+                {w.path === latest.path && (
+                  <Check size={12} aria-label="Current workspace" />
+                )}
                 <span>
                   <span>{folderName(w.path)}</span>
                   <small>

@@ -137,14 +137,18 @@ function ThreadBranch({
         {picker}
       </>
     );
-  if (worktree.branch)
+  if (worktree.inWorktree)
     return (
       <span
         className="composer-branch-trigger workspace-trigger static"
         title="This thread's worktree branch"
       >
         <GitBranch size={13} />
-        <MiddleTruncate text={worktree.branch} kind="branch" />
+        {worktree.branch ? (
+          <MiddleTruncate text={worktree.branch} kind="branch" />
+        ) : (
+          <span>Detached HEAD</span>
+        )}
       </span>
     );
   return picker;

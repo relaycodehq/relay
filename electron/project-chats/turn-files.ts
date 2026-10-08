@@ -1,5 +1,5 @@
 import { isAbsolute, join } from "node:path";
-import { turnImages } from "../../shared/projects";
+import { threadWorktree, turnImages } from "../../shared/projects";
 import { answerImagePaths } from "../../shared/answer-images";
 import {
   dropRevert,
@@ -72,12 +72,11 @@ export class TurnFiles {
   async path(chatId: string, messageId: string | null, path: string) {
     const chat = await this.core.storage.load(chatId);
     if (messageId === null)
-      return join(await this.worktrees.path(chatId), path);
+      return join(await this.worktrees.rootFor(chat.projectId, chatId), path);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message?.changes?.some((f) => f.path === path))
       throw new Error("This turn didn't change that file.");
-    const root =
-      chat.worktree?.path ?? (await this.core.projects.root(chat.projectId));
+    const root = await this.worktrees.terminalFolder(chat.projectId, chatId);
     return join(root, path);
   }
 
@@ -92,16 +91,21 @@ export class TurnFiles {
     return this.core.control(chatId, async () => {
       await this.core.storage.load(chatId);
       const chat = this.core.storage.cached(chatId)!;
-      if (!chat.worktree)
+      await this.worktrees.refreshAgentWorktrees(chat);
+      const worktree = threadWorktree(chat);
+      if (!chat.worktree && !worktree)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
-      if (chat.worktree && !(await worktreeExists(chat.worktree)))
+      if (
+        (chat.worktree || worktree) &&
+        !(await worktreeExists(chat.worktree ?? worktree!))
+      )
         throw new Error("This thread's worktree was removed.");
       // An agent editing the same folder would race the rollback.
       for (const id of this.core.active.ids()) {
         const other = this.core.storage.cached(id);
         if (
           other?.projectId === chat.projectId &&
-          other.worktree?.path === chat.worktree?.path
+          threadWorktree(other)?.path === worktree?.path
         )
           throw new Error(
             "Wait for the running answer to finish before rolling back files.",
@@ -114,8 +118,7 @@ export class TurnFiles {
           (mode === "revert") === !f.revertedBy,
       );
       if (!message || !files.length) return { conflicts: [] };
-      const root =
-        chat.worktree?.path ?? (await this.core.projects.root(chat.projectId));
+      const root = await this.worktrees.terminalFolder(chat.projectId, chatId);
       let moved: string[];
       if (mode === "revert") {
         const result = await revertTurn(

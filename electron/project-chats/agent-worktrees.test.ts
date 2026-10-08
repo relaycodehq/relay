@@ -1,12 +1,13 @@
 import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   addsWorktree,
   ownAgentWorktrees,
   watchAgentWorktrees,
+  recoverAgentWorktrees,
 } from "./agent-worktrees";
 import { gitExecutable } from "../git/git";
 import type {
@@ -101,7 +102,89 @@ it("shows a kept worktree's branch as it is now and drops removed ones", async (
   execFileSync("git", ["-C", a, "checkout", "-q", "--detach"]);
   git("worktree", "remove", b);
   await t.run(`git worktree remove ${b}`);
-  expect(t.worktrees).toEqual([{ path: a, at: expect.any(Number) }]);
+  expect(t.worktrees).toEqual([
+    { path: a, gitdir: "wt-a", at: expect.any(Number) },
+  ]);
+});
+
+it("keeps ownership when git repairs a worktree at a different path", async () => {
+  const t = thread();
+  const original = join(temp, "original");
+  const recovered = join(temp, "recovered");
+  git("worktree", "add", "-q", "-b", "feature", original);
+  await t.run(`git worktree add -b feature ${original}`);
+  await rename(original, recovered);
+  git("worktree", "repair", recovered);
+  await t.run(`git worktree repair ${recovered}`);
+  expect(t.worktrees).toEqual([
+    {
+      path: recovered,
+      branch: "feature",
+      gitdir: "original",
+      at: expect.any(Number),
+    },
+  ]);
+});
+
+it("recovers an older chat's missing association from creation history and stable Git identity", async () => {
+  const original = join(temp, "old-temp-folder");
+  const recovered = join(temp, "local-urls");
+  const other = join(temp, "another-chat");
+  git("worktree", "add", "-q", "-b", "local-urls", original);
+  git("worktree", "add", "-q", "-b", "other", other);
+  await rename(original, recovered);
+  git("worktree", "repair", recovered);
+  const chat = {
+    messages: [
+      {
+        created: 42,
+        trace: [
+          {
+            kind: "activity",
+            activity: ran(`git worktree add -b local-urls ${original}`),
+          },
+        ],
+      },
+    ],
+  } as unknown as ProjectChat;
+  expect(
+    await recoverAgentWorktrees(root, join(temp, "relay-worktrees"), chat),
+  ).toEqual([
+    {
+      path: recovered,
+      branch: "local-urls",
+      gitdir: "old-temp-folder",
+      at: 42,
+    },
+  ]);
+  chat.agentWorktrees = await recoverAgentWorktrees(
+    root,
+    join(temp, "relay-worktrees"),
+    chat,
+  );
+  expect(ownAgentWorktrees(chat)).toEqual(chat.agentWorktrees);
+  git("worktree", "remove", recovered);
+  expect(
+    await recoverAgentWorktrees(root, join(temp, "relay-worktrees"), chat),
+  ).toEqual([]);
+});
+
+it("doesn't lose ownership when another thread notices a worktree before its creation event arrives", async () => {
+  const t = thread();
+  const path = join(temp, "own");
+  git("worktree", "add", "-q", "-b", "own", path);
+  await t.run("git worktree list");
+  expect(t.paths()).toEqual([]);
+  await t.run(`git worktree add -b own ${path}`);
+  expect(t.paths()).toEqual([path]);
+});
+
+it("doesn't credit an attempted add of another chat's existing worktree", async () => {
+  const path = join(temp, "already-owned");
+  git("worktree", "add", "-q", "-b", "other", path);
+  const t = thread();
+  await t.run(`git worktree add -b mine ${path}`);
+  expect(t.paths()).toEqual([]);
 });
 
 it("matches the folder however the command spelled the path", () => {
@@ -114,6 +197,13 @@ it("matches the folder however the command spelled the path", () => {
   );
   expect(addsWorktree("git worktree add '/tmp/relay-audit'", path)).toBe(true);
   expect(addsWorktree("git worktree add /tmp/relay-audit-2", path)).toBe(false);
+  expect(addsWorktree("rg 'worktree add' /tmp/relay-audit", path)).toBe(false);
+  expect(
+    addsWorktree("git worktree add -b relay-audit /tmp/other main", path),
+  ).toBe(false);
+  expect(
+    addsWorktree("git worktree add /tmp/other; ls /tmp/relay-audit", path),
+  ).toBe(false);
   expect(addsWorktree("ls /tmp/relay-audit; git worktree list", path)).toBe(
     false,
   );

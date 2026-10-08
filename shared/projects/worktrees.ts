@@ -50,8 +50,28 @@ export const DEFAULT_WORKTREE_CLEANUP_DAYS: number | null = null;
 export interface AgentWorktree {
   path: string;
   branch?: string;
+  /** Git's stable worktree metadata name, retained when the folder moves. */
+  gitdir?: string;
+  pr?: { number: number; url: string };
   /** When Relay first saw it. */
   at: number;
+}
+
+/** The folder a thread's Git, files, terminal and agent follow. */
+export function threadWorktree(
+  chat:
+    | {
+        worktree?: ChatWorktree;
+        agentWorktrees?: AgentWorktree[];
+      }
+    | undefined,
+) {
+  if (chat?.worktree)
+    return chat.worktree.path && !chat.worktree.removedAt
+      ? chat.worktree
+      : undefined;
+  // An agent can make several; the newest is the thread's working folder.
+  return chat?.agentWorktrees?.at(-1);
 }
 export interface WorktreeStatus {
   branch?: string;

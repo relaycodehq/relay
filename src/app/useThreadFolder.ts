@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { workspaceId } from "../../shared/workspaces";
+import { threadWorktree } from "../../shared/projects";
 import { api } from "../lib/api";
 import { agentWorkingIn, worktreeThread } from "./thread-folder";
 import { useProjectChecks } from "../features/checks/useProjectChecks";
@@ -20,6 +21,7 @@ export function useThreadFolder({
   pull,
 }: Pick<ShellNavigation, "project" | "chat" | "chats" | "inbox" | "pull">) {
   const inWorktree = worktreeThread(chat);
+  const worktree = threadWorktree(inWorktree);
   const where = project ? workspaceId(project.id, inWorktree?.id) : "";
   // The one poller for the working tree: panes, pickers and the chat read this
   // cache. Every polling observer would run its own round of Git commands.
@@ -43,9 +45,9 @@ export function useThreadFolder({
     /** Workspace id: the checkout, or the thread's worktree. */
     where,
     /** For pane headers: which worktree they show. */
-    detail: inWorktree && {
+    detail: worktree && {
       text: "worktree",
-      title: `${inWorktree.worktree!.branch} · ${inWorktree.worktree!.path}`,
+      title: `${worktree.branch ?? "Detached HEAD"} · ${worktree.path}`,
     },
     tree: tree.data,
     checks,

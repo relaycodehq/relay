@@ -26,10 +26,13 @@ import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
 import { WorktreeSetup } from "./worktree-setup";
+import { threadWorktree } from "../../shared/projects";
+import { recoverAgentWorktrees } from "./agent-worktrees";
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
 export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
+  private refreshed = new Map<string, { at: number; pending: Promise<void> }>();
   constructor(
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */
@@ -39,6 +42,33 @@ export class ThreadWorktrees {
     this.setup = new WorktreeSetup(core);
   }
 
+  /** Reconcile on reads too: old chats can have missed the event that made or moved their worktree. */
+  async refreshAgentWorktrees(chat: ProjectChat) {
+    if (chat.worktree || chat.scope.kind !== "project") return;
+    const prior = this.refreshed.get(chat.id);
+    if (prior && Date.now() - prior.at < 5000) return prior.pending;
+    const pending = (async () => {
+      // Git can be unavailable while the conversation itself remains readable.
+      const worktrees = await this.core.projects
+        .root(chat.projectId)
+        .then((root) => recoverAgentWorktrees(root, this.folder, chat))
+        .catch(() => undefined);
+      if (!worktrees) return;
+      if (
+        JSON.stringify(worktrees) === JSON.stringify(chat.agentWorktrees ?? [])
+      )
+        return;
+      if (worktrees.length) chat.agentWorktrees = worktrees;
+      else delete chat.agentWorktrees;
+      await this.core.storage.save(chat);
+    })().catch((error) => {
+      this.refreshed.delete(chat.id);
+      throw error;
+    });
+    this.refreshed.set(chat.id, { at: Date.now(), pending });
+    await pending;
+  }
+
   /** Where a thread's agent works: its worktree, made with its first message, or the checkout. */
   async root(chat: ProjectChat, prompt?: string): Promise<string> {
     // A thinker reads whatever its thread works in, worktree included.
@@ -46,7 +76,10 @@ export class ThreadWorktrees {
       return this.root(await this.core.storage.load(chat.thinker.parent));
     const root = await this.core.projects.root(chat.projectId);
     const worktree = chat.worktree;
-    if (!worktree) return root;
+    if (!worktree) {
+      await this.refreshAgentWorktrees(chat);
+      return threadWorktree(chat)?.path ?? root;
+    }
     if (await worktreeExists(worktree)) return worktree.path!;
     chat.worktree =
       (await reattachWorktree(root, worktree)) ??
@@ -172,13 +205,12 @@ export class ThreadWorktrees {
 
   /** The worktrees a project's threads work in, for its process list. */
   folders(projectId: string) {
-    return (this.core.store.get().chats ?? []).flatMap((chat) =>
-      chat.projectId === projectId &&
-      chat.worktree?.path &&
-      !chat.worktree.removedAt
-        ? [{ path: chat.worktree.path, chatId: chat.id }]
-        : [],
-    );
+    return (this.core.store.get().chats ?? []).flatMap((chat) => {
+      const worktree = threadWorktree(chat);
+      return chat.projectId === projectId && worktree?.path
+        ? [{ path: worktree.path, chatId: chat.id }]
+        : [];
+    });
   }
 
   /** An agent is working in the project's checkout; worktree threads don't count. */
@@ -188,6 +220,7 @@ export class ThreadWorktrees {
       (chat) =>
         chat.projectId === projectId &&
         !chat.worktree &&
+        !threadWorktree(chat) &&
         this.core.active.has(chat.id),
     );
   }
@@ -383,7 +416,14 @@ export class ThreadWorktrees {
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
     const worktree = chat.worktree;
-    if (!worktree) return this.core.projects.root(projectId);
+    if (!worktree) {
+      await this.refreshAgentWorktrees(chat);
+      const agent = threadWorktree(chat);
+      if (!agent) return this.core.projects.root(projectId);
+      if (!(await worktreeExists(agent)))
+        throw new Error("This thread's worktree was removed.");
+      return agent.path!;
+    }
     if (
       worktree.removedAt ||
       (worktree.path && !(await worktreeExists(worktree)))
@@ -396,7 +436,10 @@ export class ThreadWorktrees {
 
   async worksInCheckout(projectId: string, id: string) {
     const chat = await this.core.storage.load(id);
-    return chat.projectId === projectId && !chat.worktree;
+    await this.refreshAgentWorktrees(chat);
+    return (
+      chat.projectId === projectId && !chat.worktree && !threadWorktree(chat)
+    );
   }
 
   /** Only paths Relay saw the thread's agent make, so the renderer can't open any folder. */
@@ -412,6 +455,13 @@ export class ThreadWorktrees {
     const chat = await this.core.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
+    if (!chat.worktree) {
+      await this.refreshAgentWorktrees(chat);
+      const agent = threadWorktree(chat);
+      if (!agent || !(await worktreeExists(agent)))
+        throw new Error("This thread's worktree was removed.");
+      return agent.path!;
+    }
     return this.path(id);
   }
 
@@ -423,6 +473,14 @@ export class ThreadWorktrees {
   }
 
   async recordPull(id: string, pr: { number: number; url: string }) {
+    const saved = await this.core.storage.load(id);
+    if (!saved.worktree) {
+      const agent = threadWorktree(saved);
+      if (!agent) throw new Error("This thread has no worktree.");
+      agent.pr = pr;
+      await this.core.storage.save(saved);
+      return;
+    }
     const { chat, worktree } = await this.of(id);
     worktree.pr = pr;
     await this.core.storage.save(chat);

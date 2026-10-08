@@ -444,11 +444,14 @@ export class ProjectChats {
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
+    await this.worktrees.refreshAgentWorktrees(chat);
     return { ...structuredClone(chat), requests: this.active.requests(id) };
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
-    const { messages, ...chat } = await this.storage.load(id);
+    const saved = await this.storage.load(id);
+    await this.worktrees.refreshAgentWorktrees(saved);
+    const { messages, ...chat } = saved;
     return {
       ...structuredClone(chat),
       messages: messages.map((m) =>

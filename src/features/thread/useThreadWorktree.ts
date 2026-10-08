@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatWorkspace, Project } from "../../../shared/projects";
+import { threadWorktree } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import {
   loadDraftWorkspace,
@@ -10,6 +11,7 @@ import {
 import type { ThreadHandle } from "./useThreadHandle";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { threadStorage } from "../../lib/thread-storage";
+import { workspaceId } from "../../../shared/workspaces";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -55,6 +57,13 @@ export function useThreadWorktree({
   });
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
+  const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;
+  // Read the shell's poll so external branch switches and detached HEAD stay honest.
+  const agentTree = useQuery({
+    queryKey: workingTreeKey(workspaceId(project.id, chat?.id)),
+    queryFn: () => api.projectWorkingTree(workspaceId(project.id, chat!.id)),
+    enabled: !!agentWorktree,
+  });
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<"remove" | "move">();
   useEffect(() => {
@@ -85,8 +94,13 @@ export function useThreadWorktree({
     setNewBranch,
     status,
     // Where this thread's files are: links in its answers resolve against it.
-    folder: live?.path ?? project.path,
-    branch: live?.branch,
+    folder: live?.path ?? agentWorktree?.path ?? project.path,
+    branch:
+      live?.branch ??
+      (agentTree.data
+        ? (agentTree.data.branch ?? undefined)
+        : agentWorktree?.branch),
+    inWorktree: !!live || !!agentWorktree,
     busy,
     /** The Remove or Move dialog, while one is open. */
     dialog,

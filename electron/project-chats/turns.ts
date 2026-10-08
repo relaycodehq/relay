@@ -6,7 +6,7 @@ import type {
   ProjectChatSend,
   ResumeSettings,
 } from "../../shared/projects";
-import { replyRoot, sentBy } from "../../shared/projects";
+import { replyRoot, sentBy, threadWorktree } from "../../shared/projects";
 import type { LineQuestion } from "../../shared/questions";
 import { agentAsked, sentAgent } from "../../shared/recipient";
 import { agentName, agents, helperProviders } from "../../shared/agents";
@@ -144,7 +144,8 @@ export class ChatTurns {
     try {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
-      if (!chat.worktree && !chat.thinker)
+      await this.worktrees.refreshAgentWorktrees(chat);
+      if (!chat.worktree && !threadWorktree(chat) && !chat.thinker)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       const root = await this.worktrees.root(chat, input.body);
       if (chat.messages.some((m) => m.id === input.id)) {
