@@ -90,3 +90,17 @@ it("routes CLI update checks and installs through the running daemon", async () 
   expect(JSON.parse(installed.stdout)).toMatchObject({ status: "installing" });
   expect(calls).toEqual([true, false]);
 });
+
+it("rejects a following flag as a missing option value before connecting", async () => {
+  const { cli } = await fixture();
+  for (const option of ["--home", "--name", "--project", "--port", "--lines"]) {
+    await expect(
+      run(process.execPath, [cli, "status", option, "--json"]),
+    ).rejects.toMatchObject({
+      code: 2,
+      stderr: expect.stringContaining(`${option} needs a value`),
+    });
+  }
+  const result = await run(process.execPath, [cli, "--name=-server", "--help"]);
+  expect(result.stdout).toContain("Options");
+});

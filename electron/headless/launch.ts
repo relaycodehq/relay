@@ -1,6 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
-import { lstat, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
@@ -52,15 +61,27 @@ export async function autoUpdateEnabled(home: string) {
 }
 
 export async function saveConfig(home: string, patch: HeadlessConfig) {
-  const next = { ...(await readConfig(home)), ...patch };
   await privateDirectory(home);
-  await writeFile(
-    headlessPaths(home).config,
-    JSON.stringify(next, null, 2) + "\n",
-    {
-      mode: 0o600,
-    },
-  );
+  const config = headlessPaths(home).config;
+  const release = await lockPath(config);
+  const temporary = `${config}.${randomUUID()}.tmp`;
+  try {
+    const next = { ...(await readConfig(home)), ...patch };
+    const file = await open(temporary, "wx", 0o600);
+    try {
+      await file.writeFile(JSON.stringify(next, null, 2) + "\n");
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    await rename(temporary, config);
+  } finally {
+    try {
+      await rm(temporary, { force: true });
+    } finally {
+      await release();
+    }
+  }
 }
 
 /** The running Relay's status, or null when none answers. */
@@ -122,8 +143,20 @@ export async function startDetached(
   home: string,
   script: string,
 ): Promise<{ status: DaemonStatus; via: "service" | "process" }> {
+  home = await realpath(home).catch(async (e: NodeJS.ErrnoException) => {
+    if (e.code !== "ENOENT") throw e;
+    await privateDirectory(home);
+    return realpath(home);
+  });
   const service = installedService();
-  if (service && (await serviceHome(service)) === home) {
+  const configured = service ? await serviceHome(service) : undefined;
+  const managedHome = configured
+    ? await realpath(configured).catch((e: NodeJS.ErrnoException) => {
+        if (e.code === "ENOENT") return undefined;
+        throw e;
+      })
+    : undefined;
+  if (service && managedHome === home) {
     await startService();
     return { status: await answering(home), via: "service" };
   }

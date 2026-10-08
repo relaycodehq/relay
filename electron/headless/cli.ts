@@ -3,7 +3,7 @@
 // The work itself happens on those; nothing here is a terminal UI for it.
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, openSync, readSync, statSync, closeSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { relayCommands } from "../app/open-folder";
@@ -106,7 +106,8 @@ function parse(argv: string[]) {
       : [arg];
     const value = () => {
       const next = inline ?? argv[++i];
-      if (next === undefined) throw new Usage(`${name} needs a value.`);
+      if (next === undefined || (inline === undefined && next.startsWith("-")))
+        throw new Usage(`${name} needs a value.`);
       return next;
     };
     switch (name) {
@@ -244,7 +245,13 @@ async function main(argv: string[]) {
     throw new Error(
       `Relay needs Node.js ${minimumNode} or newer; this is ${process.versions.node}.`,
     );
-  const home = resolve(flags.home ?? relayHome());
+  const requestedHome = resolve(flags.home ?? relayHome());
+  const home = await realpath(requestedHome).catch(
+    (e: NodeJS.ErrnoException) => {
+      if (e.code === "ENOENT") return requestedHome;
+      throw e;
+    },
+  );
   // The background Relay and everything it starts read their home from here.
   process.env.RELAY_HOME = home;
   switch (command) {
