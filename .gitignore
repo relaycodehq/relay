@@ -9,8 +9,6 @@ playwright-report/
 .DS_Store
 *.log
 *.sqlite*
-/t3code/
-/openusage/
 __pycache__/
 .claude/skills/
 .idea/
