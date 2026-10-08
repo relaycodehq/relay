@@ -6,6 +6,7 @@
 //
 // --host replaces the link's addresses, e.g. with the Android emulator's alias
 // for this computer. --seed starts two threads so the phone has something to show.
+// --projects N adds N more git projects, for screens that list them.
 // --images starts one whose answer embeds two screenshots, a missing file and a web image.
 // --theme <id> wears one of src/lib/themes' dark themes, e.g. tokyo-night.
 // --name <name> and --version <x.y.z> stand in for the computer's own, so two
@@ -38,6 +39,7 @@ const images = process.argv.includes("--images");
 const theme = arg("--theme");
 const name = arg("--name");
 const version = arg("--version");
+const extraProjects = Number(arg("--projects") ?? 0);
 
 const root = await realpath(
   await mkdtemp(join(tmpdir(), "relay-phone-desktop-")),
@@ -191,6 +193,47 @@ const pairing = await page.evaluate(
   },
   { seed, images },
 );
+const extraNames = [
+  "api",
+  "billing",
+  "docs-site",
+  "infra",
+  "ios-app",
+  "landing",
+  "mailer",
+  "metrics",
+  "search",
+  "shop",
+  "tools",
+  "web",
+];
+for (let i = 0; i < extraProjects; i++) {
+  const folder = join(
+    root,
+    extraNames[i % extraNames.length] + (i < extraNames.length ? "" : `-${i}`),
+  );
+  execFileSync("git", ["init", "-q", "-b", "main", folder]);
+  execFileSync("git", [
+    "-C",
+    folder,
+    "-c",
+    "user.name=Relay",
+    "-c",
+    "user.email=relay@example.com",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "Start",
+  ]);
+  await app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [folder],
+    });
+  }, folder);
+  await page.evaluate(() => window.relay.addProject());
+}
 let url = pairing.url;
 if (host) {
   const u = new URL(url);
